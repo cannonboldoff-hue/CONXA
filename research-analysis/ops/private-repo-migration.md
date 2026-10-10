@@ -8,7 +8,7 @@ The main migration is not a code visibility problem. It is an artifact hosting a
 
 ## Current Repo Touchpoints
 
-- Source remote: `https://github.com/Cannonbold2412/CONXA.git`.
+- Source remote: `https://github.com/cannonboldoff-hue/CONXA.git`.
 - Release build workflows (runtime is now a two-layer host/app split, not a single workflow):
   - `.github/workflows/build-runtime-host.yml` — builds the host exe (`conxa-runtime.exe` + `keytar.node`), tags `host-vX.Y.Z`, publishes to a GitHub Release. `permissions: contents: write`.
   - `.github/workflows/build-runtime-app.yml` — builds the obfuscated app-layer bundle (`conxa-app-*.zip`), tags `app-vX.Y.Z`, publishes to a GitHub Release. `permissions: contents: write`.
@@ -16,7 +16,7 @@ The main migration is not a code visibility problem. It is an artifact hosting a
   - `.github/workflows/promote-release.yml` — dev→stable promotion. Downloads the byte-verified dev artifact **from its GitHub Release URL**, re-uploads it under the clean stable tag (`gh release create`/`upload`), and POSTs the resulting manifest record (which embeds a fresh `https://github.com/$GITHUB_REPOSITORY/releases/download/$TARGET_VERSION/...` URL, built inline in the workflow) to the cloud's admin API. This is the **only** path by which prod receives a release, and it is hard-wired to GitHub Releases, not just defaulted via env var.
 - Default release URLs live in:
   - `.env.example`, `.env.prod.example`
-  - `conxa-cloud/backend/app/api/updates_routes.py` (all default URLs derive from `_GITHUB_REPO` = `CONXA_GITHUB_REPO` env var, default `Cannonbold2412/CONXA`, via `_release_url()`)
+  - `conxa-cloud/backend/app/api/updates_routes.py` (all default URLs derive from `_GITHUB_REPO` = `CONXA_GITHUB_REPO` env var, default `cannonboldoff-hue/CONXA`, via `_release_url()`)
 - Runtime and Studio artifacts currently default to GitHub Release download URLs:
   - `CONXA_RUNTIME_CDN_URL` (`.env.prod.example`/`.env.example` — legacy/base override)
   - `CONXA_STUDIO_WIN_URL`, `CONXA_STUDIO_LATEST_YML_URL` (Studio installer + electron-updater feed)
@@ -59,7 +59,7 @@ The main migration is not a code visibility problem. It is an artifact hosting a
 ## What Probably Does Not Need To Change
 
 - Local developer setup scripts use repo-local paths and public package registries, not public GitHub source downloads.
-- The local git remote URL can remain `https://github.com/Cannonbold2412/CONXA.git`; developers just need GitHub authentication and repo access.
+- The local git remote URL can remain `https://github.com/cannonboldoff-hue/CONXA.git`; developers just need GitHub authentication and repo access.
 - The installer download route is separate from GitHub repo visibility. Conxa Cloud already serves installer downloads from its own API surface.
 - The supported release path is Build Installer packaging, not a public `npx conxa install` or GitHub-published CLI flow.
 - Package manifests and lockfiles mostly reference public dependency metadata; those are not affected by making this source repo private.

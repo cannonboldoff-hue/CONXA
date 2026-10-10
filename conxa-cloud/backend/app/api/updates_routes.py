@@ -82,7 +82,7 @@ _NSIS_SHA256 = os.environ.get("CONXA_NSIS_SHA256", "")
 # The actual repo hosting release artifacts. Override via env on Render once a
 # dedicated org/repo is established. Default points at the monorepo where CI
 # publishes runtime and studio releases.
-_GITHUB_REPO = os.environ.get("CONXA_GITHUB_REPO", "Cannonbold2412/CONXA")
+_GITHUB_REPO = os.environ.get("CONXA_GITHUB_REPO", "cannonboldoff-hue/CONXA")
 
 
 def _release_url(version: str, filename: str) -> str:

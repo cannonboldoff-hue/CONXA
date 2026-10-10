@@ -2,42 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**Added working back and forward arrows to Conxa Execute — 2026-10-01**
-The top bar now has a left arrow and a right arrow that work like a web browser's. They step back and forward through the chats and pages you just visited, instead of just moving up and down the chat list. The arrows grey out when there is nowhere to go.
-— 2026-10-01
+**Copied the whole project to a second online home — 2026-10-10**
+The project's full history, every side line of work, and every past release label were copied to a second online storage location. Nearly all side work was already folded into the main version, so nothing needed combining. Two very old leftovers were deliberately left out because they would have brought back outdated work, like re-filing an old draft over the final copy.
+— 2026-10-10
 
-**Moved the Conxa logo to the top bar in Conxa Execute — 2026-10-01**
-The Conxa logo and name now sit at the very top-left of the window, next to the button that shows and hides the chat list. The little left and right arrows are gone because they were confusing, like two doors that led nowhere obvious. The chat list now starts straight with "New chat".
-— 2026-10-01
-
-**Fixed the run form in Conxa Execute showing no boxes to fill in — 2026-10-01**
-Opening a skill that needs details, like the list of files to transfer, showed "no declared inputs" and then failed because the details were missing. The form was like a clerk who couldn't read the order slip, so it handed over a blank one. It now reads the slip correctly and shows the right box for each detail: text, a dropdown, tick boxes, a date, or a hidden password. It also tells you which required boxes are empty before it starts.
-— 2026-10-01
-
-**Conxa Execute now greets you by your real first name — 2026-10-01**
-The word "Execute" is gone from the top-left corner, so it just says "Conxa". When you sign in, the app now also receives your first name, last name and photo from your account, instead of only a single combined name. The greeting uses that first name, like a receptionist who reads your badge rather than guessing from your email.
-— 2026-10-01
-
-**Stopped empty chats piling up in Conxa Execute and added the real logo — 2026-10-01**
-Clicking "New chat" over and over used to fill the left list with blank chats, like opening a new notebook every time you pick up a pen. Now a chat only shows up in the list once you actually send something, and clicking "New chat" on an already-blank chat just keeps you there. The top-left corner also shows the Conxa logo instead of a plain orange square.
-— 2026-10-01
-
-**Designed a calmer look for the Conxa Execute chat window — 2026-10-01**
-The Execute chat screen felt busy: every reply was labelled with the company name, the sign-in request was a long block of text, and the options menu was cramped. A new mockup shows it cleaner, like the Claude desktop app, in Conxa's own blue-green colours. A skill run now shows up as one tidy card with its steps and any warning, and sign-in shrinks to a single line once it is done. This is a design only; the app itself has not changed yet.
-— 2026-10-01
-
-**Switched the Conxa Execute mockup back to the app's current colours — 2026-10-01**
-The first version of the new chat design used the blue-green colours from the Conxa website. It now uses the same warm charcoal background and soft orange accent the Execute app already has. The cleaner layout stays the same, so the new design will feel familiar to people who already use the app.
-— 2026-10-01
-
-**Added photos and files to the Conxa Execute chat design — 2026-10-01**
-The new chat design had no way to share pictures or documents with Conxa. A new screen shows how it would work, the same way the Claude desktop app does it. You can drop receipts, screenshots, PDFs or spreadsheets into the chat, see them as small previews before sending, and remove any you added by mistake. Conxa then reads them and shows what it found, so you can check the details before it runs anything.
-— 2026-10-01
-
-**Built the new Conxa Execute chat design into the real app — 2026-10-01**
-The calmer chat design from this morning now runs in the actual Execute app, not just in a mockup. Each skill run shows up as one tidy card with how long it took, any files it downloaded, and any warning worth a look. There are new Search, Skills and Runs pages for finding old chats, starting a skill, and checking what ran. You can also drag files onto the chat, attach a screenshot or a snapshot of the in-app browser, rename a chat, and hide the browser panel when you don't need it.
-— 2026-10-01
-
-**Saved the recent date, redirect and spreadsheet improvements — 2026-10-01**
-Several finished improvements were sitting unsaved on one computer, like drafts that were never filed. They are now filed in four tidy groups: dates typed into plain boxes, pages that move on after a click, running a list of records one at a time, and the matching notes. This keeps the team's history clear and makes each change easy to find or undo.
-— 2026-10-01
+**Pointed the project at its new online home only — 2026-10-10**
+The project used to be linked to two online storage locations, the old one and the new one. It now links only to the new one, so every future save goes to the same place. The settings that tell the cloud service where to find app updates also name the new location now. The downloadable update files themselves still live in the old location, so it must stay online until they are copied over.
+— 2026-10-10
