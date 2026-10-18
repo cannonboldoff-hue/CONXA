@@ -177,6 +177,13 @@ def _reorder_by_timestamp(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def run_pipeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     bundle = get_policy_bundle()
     policy = bundle.data
+    # BUILD-38: answers the person gave while recording ("this value changes each run"). A no-op
+    # when there are none, so a recording without hints compiles exactly as before.
+    session_id = next((str((e.get("extras") or {}).get("session_id") or "") for e in events if (e.get("extras") or {}).get("session_id")), "")
+    if session_id:
+        from conxa_compile.recorder.hints import apply_to_events
+
+        events = apply_to_events(session_id, [dict(e) for e in events])
     validated: list[dict[str, Any]] = []
     for row in _reorder_by_timestamp(events):
         validated.append(RecordedEvent.model_validate(row).model_dump(mode="json"))

@@ -17,6 +17,9 @@ const readline = require("readline");
 const { pathToFileURL } = require("url");
 const { Bridge } = require("./bridge");
 const conxaEnv = require("./env");
+const nodeNet = require("net");
+const browserPanel = require("./browser_panel");
+const browserControl = require("./browser_control");
 
 // Local skill assets (screenshots, frames) are streamed from disk through this
 // scheme instead of being base64-inlined into every RPC response — see FIX.md.
@@ -37,6 +40,31 @@ const MAX_BACKEND_RESTARTS = 3;
 // for our node-launched dev wrapper. Pass the main-process packaging state
 // explicitly so the renderer can skip packaged-only bootstrap in dev.
 process.env.CONXA_ELECTRON_IS_PACKAGED = app.isPackaged ? "1" : "0";
+
+// BUILD-42: tests run in a browser panel inside this window instead of a separate Chromium. The runtime
+// attaches to this process over CDP (Playwright connectOverCDP), so Electron has to expose a debugging
+// port — on loopback only, and a random free one. --remote-debugging-port needs a concrete number
+// before app ready; the control channel started in whenReady is what hands the runtime views. The port
+// reaches every webContents in this app, not just the panel's, which is the price of the seam (Conxa
+// Execute pays the same one); recording and sign-in do not use it.
+function _freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = nodeNet.createServer();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    });
+  });
+}
+let _CDP_PORT = null;
+const _cdpPortReady = _freePort()
+  .then((port) => {
+    _CDP_PORT = port;
+    app.commandLine.appendSwitch("remote-debugging-port", String(port));
+    app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+  })
+  .catch(() => { _CDP_PORT = null; }); // no port → no panel; tests fall back to their own window
 
 // Enforce single instance so second-instance fires (required for Windows deep-link handling).
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -68,6 +96,16 @@ let mainWindow = null;
 let backend = null;
 let backendRestarts = 0;
 let bridge = null;
+
+// The engine's state as the renderer sees it: "running" | "restarting" | "stopped". "stopped" means the
+// automatic restarts ran out; the person restarts it from the notice (engine:restart). Workflows are
+// files on disk, so nothing is lost either way.
+let engineState = "running";
+const _engineTail = []; // last backend stderr lines, for "Copy diagnostics"
+function setEngineState(next) {
+  engineState = next;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("engine:status", { state: next });
+}
 
 // Forward electron-updater events to the renderer's update:status channel.
 // Registered once on first update:check so mainWindow is guaranteed to exist.
@@ -177,20 +215,35 @@ function startBackend() {
   rl.on("line", (line) => bridge.handleLine(line));
 
   const rlErr = readline.createInterface({ input: backend.stderr });
-  rlErr.on("line", (line) => console.error("[backend]", line));
+  rlErr.on("line", (line) => {
+    console.error("[backend]", line);
+    _engineTail.push(line);
+    if (_engineTail.length > 60) _engineTail.shift();
+  });
+
+  // A start that stays up for a minute is healthy: forget earlier crashes so three unrelated ones
+  // over a week don't add up to "could not be restarted".
+  const healthy = setTimeout(() => { backendRestarts = 0; }, 60000);
+  if (healthy.unref) healthy.unref();
+  setEngineState("running");
 
   backend.on("exit", (code) => {
+    clearTimeout(healthy);
     if (bridge) bridge.rejectAll(`backend exited (code ${code})`);
 
     if (backendRestarts < MAX_BACKEND_RESTARTS && !app.isQuitting) {
       backendRestarts += 1;
+      setEngineState("restarting");
       startBackend();
     } else if (!app.isQuitting) {
-      dialog.showErrorBox(
-        "Conxa Build Studio",
-        "The backend stopped unexpectedly and could not be restarted. " +
-          "Please restart the app. Logs are in the app data directory."
-      );
+      setEngineState("stopped");
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        dialog.showErrorBox(
+          "Conxa Build Studio",
+          "The backend stopped unexpectedly and could not be restarted. " +
+            "Please restart the app. Logs are in the app data directory."
+        );
+      }
     }
   });
 }
@@ -214,6 +267,32 @@ ipcMain.handle("python:cmd", async (_e, { type, payload }) => {
 });
 
 ipcMain.handle("open-external", (_e, url) => shell.openExternal(url));
+
+ipcMain.handle("engine:status", () => ({ state: engineState }));
+ipcMain.handle("engine:diagnostics", () => `Engine state: ${engineState}\n${_engineTail.join("\n")}`);
+ipcMain.handle("engine:restart", () => {
+  if (engineState !== "stopped") return false;
+  backendRestarts = 0;
+  setEngineState("restarting");
+  startBackend();
+  return true;
+});
+
+// ─── Embedded test browser (BUILD-42) ──────────────────────────────────────────
+// Bounds are the panel region's window-local rect from the renderer; a native view floats above the DOM,
+// so the renderer also hides it whenever a dialog is open (panel:hide).
+const _num = (v) => Math.max(0, Math.round(Number(v) || 0));
+ipcMain.handle("panel:bounds", (_e, { runId, tabId, rect }) => {
+  if (!runId || !tabId || !rect) return false;
+  browserPanel.setActiveBounds(runId, tabId, { x: _num(rect.x), y: _num(rect.y), width: _num(rect.width), height: _num(rect.height) });
+  return true;
+});
+ipcMain.handle("panel:hide", () => { browserPanel.hideAll(); return true; });
+ipcMain.handle("panel:select-tab", (_e, { runId, tabId }) => browserPanel.selectTab(runId, tabId));
+ipcMain.handle("panel:close-tab", async (_e, { runId, tabId }) => { await browserPanel.closeTab(runId, tabId); return true; });
+ipcMain.handle("panel:close-run", async (_e, { runId }) => { await browserPanel.closeRun(runId); return true; });
+ipcMain.handle("panel:navigate", (_e, { runId, tabId, action, url }) => browserPanel.navigate(runId, tabId, { action, url }));
+ipcMain.handle("panel:available", () => Boolean(process.env.CONXA_HOST_BROWSER_CDP && process.env.CONXA_HOST_CONTROL_URL));
 
 ipcMain.handle("dialog:save-installer", async (_e, srcPath) => {
   const { canceled, filePath } = await dialog.showSaveDialog({
@@ -413,12 +492,17 @@ function createWindow() {
     mainWindow.webContents.send("window:maximized", mainWindow.isMaximized());
   };
   mainWindow.on("maximize", sendMaximizeState);
+  browserPanel.init(mainWindow, {
+    onTabsChanged: (runId, tabs, meta) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("panel:tabs", { runId, tabs, ...meta });
+    },
+  });
   mainWindow.on("unmaximize", sendMaximizeState);
 }
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   if (process.platform === "win32") {
@@ -445,6 +529,20 @@ app.whenReady().then(() => {
     }
     return net.fetch(pathToFileURL(target).toString());
   });
+
+  // The runtime is spawned by the Python backend, which inherits this process's environment, so these two
+  // are all it needs to find the panel (see host_browser.js). Set before the backend starts. If anything
+  // below fails the variables stay unset and the runtime launches its own Chromium exactly as before.
+  await _cdpPortReady;
+  if (_CDP_PORT) {
+    try {
+      const { url } = await browserControl.start();
+      process.env.CONXA_HOST_BROWSER_CDP = `http://127.0.0.1:${_CDP_PORT}`;
+      process.env.CONXA_HOST_CONTROL_URL = url;
+    } catch (err) {
+      console.error("browser panel control channel failed to start; tests will open their own window", err);
+    }
+  }
 
   startBackend();
   createWindow();

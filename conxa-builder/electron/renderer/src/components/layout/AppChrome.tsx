@@ -1,70 +1,49 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useMatch } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBackendEvents } from '@/hooks/usePythonCmd'
+import { useShellShortcuts } from '@/hooks/useShellShortcuts'
+import { useConnection } from '@/hooks/useConnection'
+import { useConnectionStore } from '@/store/connectionStore'
+import { EngineStoppedNotice, OfflineBanner } from '@/components/shell/ConnectionStates'
+import { SettingsDialog } from '@/components/shell/SettingsDialog'
 import { useCompileStore } from '@/store/compileStore'
+import { useShellStore } from '@/store/shellStore'
+import { useThreadStore } from '@/store/threadStore'
+import { useRecordingStore } from '@/store/recordingStore'
+import type { RecordingRow } from '@/api/conversationApi'
+import { RecordingDialogs } from '@/components/shell/RecordingDialogs'
+import type { ThreadItem } from '@/lib/thread'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { BROWSER, INSPECTOR, NAV, resolveBrowserLayout, resolveLayout } from '@/lib/panels'
+import { useBrowserStore } from '@/store/browserStore'
+import { BrowserPane } from '@/components/shell/BrowserPane'
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar'
 import { PageHeaderProvider, usePageHeaderContext } from '@/contexts/PageHeaderContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import {
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  ListChecks,
-  PackageCheck,
-  PencilLine,
-  RefreshCw,
-  Settings,
-  UploadCloud,
-} from 'lucide-react'
+import { Sidebar } from '@/components/shell/Sidebar'
+import { PanelDivider } from '@/components/shell/PanelDivider'
+import { InspectorPane, InspectorStrip } from '@/components/shell/InspectorPane'
+import { SearchDialog } from '@/components/shell/SearchDialog'
+import { ArrowLeft, Globe, RefreshCw } from 'lucide-react'
 
-// Both rows a straight border line has to line up across: the sidebar's own
-// logo block (below) and this header row (further down). Keep them equal.
-const HEADER_ROW_HEIGHT = 'h-16'
-
-const SIDEBAR_KEY = 'conxa-sidebar-collapsed'
-
-// One button per stage of Workflows -> Human Edit -> Publish Skill Package ->
-// Build Installer, so the sidebar mirrors the flow itself instead of the
-// compiler's internal pipeline stages. Workflows is the app home — it owns
-// groups, workflow create/delete/search, and compile (each workflow's own
-// page owns Compile/Recompile — there is no standalone Compile page or nav
-// entry). There is no standalone Test Skill page either — testing happens
-// from a workflow's row on its group page (WorkflowTestRow), reached right
-// after Human Edit's Approve.
-const navGroups = [
-  {
-    label: 'Operate',
-    items: [
-      { to: '/workflows', label: 'Workflows', icon: ListChecks },
-      { to: '/human-edit', label: 'Human Edit', icon: PencilLine },
-      { to: '/publish', label: 'Publish Skill Package', icon: UploadCloud },
-      { to: '/build-installer', label: 'Build Installer', icon: PackageCheck },
-    ],
-  },
-] as const
-
-const settingsNavItem = { to: '/settings', label: 'Settings', icon: Settings } as const
+// The workspace header row lines up with the sidebar's brand row. Keep them equal.
+const HEADER_ROW_HEIGHT = 'h-14'
 
 // The current page's title/description, registered by its <PageHeader> via
-// PageHeaderContext, rendered here instead of the page repeating its own
-// header block.
+// PageHeaderContext, rendered here instead of the page repeating its own header block.
 function HeaderPageTitle() {
   const { header } = usePageHeaderContext()
-  // Always occupies the flex-1 slot (even empty) so trailing header controls
-  // stay pinned to the right regardless of whether a page has registered a
-  // header yet (e.g. during the initial render tick, or on chrome-only screens).
-  // Title and description share one line — this bar is a fixed height
-  // (HEADER_ROW_HEIGHT), not something a second line can grow.
+  // Always occupies the flex-1 slot (even empty) so trailing header controls stay pinned right.
   return (
     <div className="flex min-w-0 flex-1 items-baseline gap-2">
       {header ? (
         <>
-          <h1 className="shrink-0 truncate text-sm font-semibold text-white sm:text-base">{header.title}</h1>
+          <h1 className="shrink-0 truncate text-base font-semibold text-[var(--text-primary)]">{header.title}</h1>
           {header.description != null && header.description !== false ? (
-            <div className={cn('min-w-0 text-xs text-zinc-500', typeof header.description === 'string' && 'truncate')}>
+            <div className={cn('min-w-0 text-xs text-[var(--text-meta)]', typeof header.description === 'string' && 'truncate')}>
               {header.description}
             </div>
           ) : null}
@@ -74,162 +53,48 @@ function HeaderPageTitle() {
   )
 }
 
-/** Back-chevron at the true left edge of the bar, before the title — only
- * rendered when a page opts in via PageHeader's `onBack`. */
+/** Back-chevron at the true left edge of the bar — only when a page opts in via `onBack`. */
 function HeaderBackButton() {
   const { header } = usePageHeaderContext()
   if (!header?.onBack) return null
+  if (header.backLabel) {
+    return (
+      <Button type="button" variant="ghost" size="sm" className="shrink-0 gap-1.5 text-[var(--text-secondary)]" onClick={header.onBack}>
+        <ArrowLeft className="size-4" />
+        {header.backLabel}
+      </Button>
+    )
+  }
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      className="shrink-0 text-zinc-400 hover:bg-white/5 hover:text-white"
-      aria-label="Back"
-      onClick={header.onBack}
-    >
+    <Button type="button" variant="ghost" size="icon-sm" className="shrink-0 text-[var(--text-meta)]" aria-label="Back" onClick={header.onBack}>
       <ArrowLeft className="size-4" />
     </Button>
   )
 }
 
-// A page-supplied strip (e.g. a progress bar) laid over the header row's own
-// bottom edge — see PageHeader's `extra` prop. Absolutely positioned so it
-// adds no height of its own; the row stays exactly HEADER_ROW_HEIGHT tall.
-// Most pages never set this, so this renders nothing.
+// A page-supplied strip (e.g. a progress bar) laid over the header row's bottom edge.
 function HeaderExtra() {
   const { header } = usePageHeaderContext()
   if (!header?.extra) return null
   return <div className="absolute inset-x-0 bottom-0">{header.extra}</div>
 }
 
-// Page toolbar placed in this row — see PageHeader's `inlineActions`.
 function HeaderActions() {
   const { header } = usePageHeaderContext()
   if (!header?.actions) return null
   return <div className="flex shrink-0 items-center gap-2">{header.actions}</div>
 }
 
-const logoUrl = new URL('../../assets/conxa-icon.png', import.meta.url).href
-
-function ProductMark() {
-  return <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg" draggable={false} />
-}
-
-function SidebarNavLink({
-  item,
-  collapsed,
-}: {
-  item: (typeof navGroups)[number]['items'][number] | typeof settingsNavItem
-  collapsed: boolean
-}) {
-  const { pathname } = useLocation()
-  const Icon = item.icon
-  const active = pathname === item.to || pathname.startsWith(`${item.to}/`)
-
-  return (
-    <NavLink
-      to={item.to}
-      className={cn(
-        'group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm transition-colors',
-        'hover:border-white/8 hover:bg-white/[0.045] hover:text-white',
-        active ? 'border-white/10 bg-white/[0.07] text-white' : 'text-zinc-400',
-        collapsed && 'justify-center px-2.5',
-      )}
-      title={collapsed ? item.label : undefined}
-    >
-      <Icon className="size-4 shrink-0" />
-      <span className={cn('truncate', collapsed && 'hidden')}>{item.label}</span>
-    </NavLink>
-  )
-}
-
-function SidebarNav({ collapsed }: { collapsed: boolean }) {
-  return (
-    <nav className="space-y-1.5" aria-label="Primary">
-      {navGroups.map((group) => (
-        <div key={group.label} className="space-y-1.5">
-          <p className={cn('px-3 pt-3 text-[0.6875rem] font-medium text-zinc-500', collapsed && 'sr-only')}>
-            {group.label}
-          </p>
-          {group.items.map((item) => (
-            <SidebarNavLink key={item.to} item={item} collapsed={collapsed} />
-          ))}
-        </div>
-      ))}
-    </nav>
-  )
-}
-
-function DesktopSidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
-  return (
-    <aside
-      className={cn(
-        'hidden border-r border-white/8 bg-[#0d0f12] md:flex md:h-full md:min-h-0 md:flex-col md:transition-[width] md:duration-200',
-        collapsed ? 'md:w-20' : 'md:w-54',
-      )}
-    >
-      <div className={cn('flex items-center gap-3 border-b border-white/8 px-4', HEADER_ROW_HEIGHT)}>
-        <NavLink to="/workflows" className={cn('flex min-w-0 items-center gap-3', collapsed && 'justify-center')}>
-          <ProductMark />
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">Conxa</p>
-              <p className="truncate text-xs text-zinc-500">Build Studio</p>
-            </div>
-          )}
-        </NavLink>
-        {!collapsed && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="ml-auto text-zinc-400 hover:bg-white/5 hover:text-white"
-            onClick={() => setCollapsed(true)}
-            aria-label="Collapse sidebar"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-        )}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
-        {collapsed && (
-          <div className="mb-6 flex justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-zinc-400 hover:bg-white/5 hover:text-white"
-              onClick={() => setCollapsed(false)}
-              aria-label="Expand sidebar"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        )}
-        <SidebarNav collapsed={collapsed} />
-        <nav className="mt-auto border-t border-white/8 pt-3" aria-label="Settings">
-          <SidebarNavLink item={settingsNavItem} collapsed={collapsed} />
-        </nav>
-      </div>
-    </aside>
-  )
-}
-
-/** Refetches every active query on the page — placed just left of the user
- * widget so it reads as "refresh this screen's data" everywhere at once,
- * without each page wiring its own button. */
+/** Refetches every active query on the page, so each page needn't wire its own button. */
 function HeaderRefreshButton() {
   const qc = useQueryClient()
   const [spinning, setSpinning] = useState(false)
-
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon-sm"
-      className="shrink-0 text-zinc-400 hover:bg-white/5 hover:text-white"
+      className="shrink-0 text-[var(--text-meta)]"
       title="Refresh"
       aria-label="Refresh"
       onClick={async () => {
@@ -247,64 +112,218 @@ function HeaderRefreshButton() {
 }
 
 /**
- * The single app-wide subscription to backend compile events. It lives here, not
- * on the compile page, so a compile keeps reporting progress after the user
- * navigates away — and so the usage cards refresh the moment a credit is spent.
+ * The single app-wide subscription to backend compile events. It lives here, not on the
+ * compile page, so a compile keeps reporting progress after the user navigates away — and so
+ * the usage cards and the sidebar's status glyphs refresh the moment something changes.
  */
 function useCompileEventBridge() {
   const qc = useQueryClient()
   const applyEvent = useCompileStore((s) => s.applyEvent)
+  const threads = useThreadStore.getState()
 
   useBackendEvents((ev) => {
     applyEvent(ev)
     if (ev.phase === 'quota') qc.invalidateQueries({ queryKey: ['entitlements'] })
+    if (ev.phase === 'compile_done' || ev.phase === 'compile_error') {
+      qc.invalidateQueries({ queryKey: ['workflows'] })
+      qc.invalidateQueries({ queryKey: ['groups'] })
+      qc.invalidateQueries({ queryKey: ['lifecycles'] })
+    }
+    // Conversation threads (BUILD-37): the backend appends items and revises cards; the store
+    // only ever mirrors what it was told happened.
+    if (ev.phase === 'thread_item' && typeof ev.thread_id === 'string') {
+      threads.onItem(ev.thread_id, ev.item as ThreadItem)
+      if (ev.thread_id.startsWith('wf:')) {
+        qc.invalidateQueries({ queryKey: ['lifecycle', ev.thread_id.slice(3)] })
+        qc.invalidateQueries({ queryKey: ['lifecycles'] })
+        qc.invalidateQueries({ queryKey: ['workflows'] })
+      } else {
+        qc.invalidateQueries({ queryKey: ['chats'] })
+      }
+    } else if (ev.phase === 'recording_event' && typeof ev.session_id === 'string') {
+      useRecordingStore.getState().onRow(ev.session_id, ev.row as RecordingRow, Number(ev.count ?? 0))
+    } else if (ev.phase === 'thread_delta' && typeof ev.thread_id === 'string') {
+      threads.onDelta(ev.thread_id, String(ev.turn_id), String(ev.text ?? ''))
+    } else if (ev.phase === 'thread_turn' && typeof ev.thread_id === 'string') {
+      threads.onTurn(ev.thread_id, String(ev.turn_id), String(ev.status))
+    }
   })
 }
 
-export function AppChrome({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false)
+/** Hiding the browser never stops a test — the pill keeps it one click away. */
+function BrowserPill({ roomForPanel }: { roomForPanel: boolean }) {
+  const run = useBrowserStore((s) => s.run)
+  const folded = useBrowserStore((s) => s.folded)
+  const setFolded = useBrowserStore((s) => s.setFolded)
+  if (!run || (!folded && roomForPanel)) return null
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="shrink-0 gap-1.5"
+      title={roomForPanel ? 'Show the test browser' : 'Widen the window to show the test browser'}
+      disabled={!roomForPanel}
+      onClick={() => setFolded(false)}
+    >
+      <Globe className="size-3.5" />
+      {run.finished ? 'Show browser' : 'Test running · Show browser'}
+    </Button>
+  )
+}
+
+/** Keeps the store's window width current so panel layout can fold as the window narrows. */
+function useWindowWidth() {
+  const setWindowWidth = useShellStore((s) => s.setWindowWidth)
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [setWindowWidth])
+}
+
+function Shell({ children }: { children: ReactNode }) {
   useCompileEventBridge()
+  useShellShortcuts()
+  useWindowWidth()
+  useConnection()
+  const engine = useConnectionStore((c) => c.engine)
+  const engineDown = engine !== 'running'
 
+  // The embedded test browser: Electron tells us which views exist; we tell it where to draw them.
+  const setAvailable = useBrowserStore((b) => b.setAvailable)
+  const onTabs = useBrowserStore((b) => b.onTabs)
   useEffect(() => {
-    setCollapsed(window.localStorage.getItem(SIDEBAR_KEY) === 'true')
-  }, [])
+    let off: (() => void) | undefined
+    try {
+      void window.conxa.panel.available().then(setAvailable).catch(() => setAvailable(false))
+      off = window.conxa.panel.onTabs(onTabs)
+    } catch {
+      setAvailable(false) // an older preload: tests simply keep their own window
+    }
+    return () => off?.()
+  }, [setAvailable, onTabs])
 
-  useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_KEY, collapsed ? 'true' : 'false')
-  }, [collapsed])
+  const match = useMatch('/w/:workflowId')
+  // With the engine down the inspector has nothing to read, so it is hidden along with the workspace.
+  const workflowId = engineDown ? null : (match?.params.workflowId ?? null)
+  const s = useShellStore()
+  const browserRun = useBrowserStore((b) => b.run)
+  const browserFolded = useBrowserStore((b) => b.folded)
+  const browserWidth = useBrowserStore((b) => b.width)
+  const layout = resolveLayout({
+    windowWidth: s.windowWidth,
+    navWidth: s.navWidth,
+    inspectorWidth: s.inspectorWidth,
+    navCollapsed: s.navCollapsed,
+    inspectorAvailable: workflowId != null,
+    inspectorOpen: s.inspectorOpen && !(browserRun && !browserFolded),
+  })
+  const browser = browserRun ? resolveBrowserLayout({ windowWidth: s.windowWidth, navWidth: s.navWidth, navCollapsed: s.navCollapsed, preferredWidth: browserWidth }) : null
+  const browserShown = Boolean(browser && browser.mode === 'panel' && !browserFolded)
+  // While the browser is shown it takes the inspector's place (the inspector is its strip), and on a
+  // medium window it also folds navigation to the rail.
+  const rail = layout.navMode === 'rail' || (browserShown && browser?.navMode === 'rail')
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <div
+        className={cn('shrink-0 transition-[width] duration-200', engineDown && 'pointer-events-none opacity-60')}
+        aria-disabled={engineDown || undefined}
+        style={{ width: rail ? NAV.rail : layout.navWidth }}
+      >
+        <Sidebar rail={rail} />
+      </div>
+      {!rail && (
+        <PanelDivider
+          label="Resize navigation"
+          value={s.navWidth}
+          min={NAV.min}
+          max={NAV.max}
+          grow={1}
+          onChange={s.setNavWidth}
+          onNudge={s.nudgeNav}
+          onReset={s.resetNav}
+        />
+      )}
+
+      <PageHeaderProvider>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-base)]">
+            <div className={cn('relative flex items-center gap-3 px-4 sm:px-6', HEADER_ROW_HEIGHT)}>
+              <HeaderBackButton />
+              <HeaderPageTitle />
+              <HeaderActions />
+              <BrowserPill roomForPanel={browser?.mode === 'panel'} />
+              <HeaderRefreshButton />
+              <HeaderExtra />
+            </div>
+          </header>
+          <OfflineBanner />
+          <main className="min-h-0 flex-1 overflow-hidden">{engineDown ? <EngineStoppedNotice /> : children}</main>
+
+          {workflowId && layout.inspectorMode === 'sheet' && (
+            <div
+              className="absolute inset-y-0 right-0 z-40 border-l border-[var(--border-default)] anim-pop"
+              style={{ width: layout.inspectorWidth }}
+            >
+              <InspectorPane workflowId={workflowId} />
+            </div>
+          )}
+        </div>
+      </PageHeaderProvider>
+
+      {browserShown && browser && (
+        <BrowserPane width={browser.width} maxWidth={Math.max(BROWSER.min, Math.round(s.windowWidth * BROWSER.maxFraction))} />
+      )}
+
+      {workflowId && layout.inspectorMode === 'panel' && (
+        <>
+          <PanelDivider
+            label="Resize inspector"
+            value={s.inspectorWidth}
+            min={INSPECTOR.min}
+            max={INSPECTOR.max}
+            grow={-1}
+            onChange={s.setInspectorWidth}
+            onNudge={s.nudgeInspector}
+            onReset={s.resetInspector}
+          />
+          <div className="shrink-0" style={{ width: layout.inspectorWidth }}>
+            <InspectorPane workflowId={workflowId} />
+          </div>
+        </>
+      )}
+      {workflowId && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
+        <div className="shrink-0 border-l border-[var(--border-subtle)]" style={{ width: INSPECTOR.strip }}>
+          <InspectorStrip workflowId={workflowId} />
+        </div>
+      )}
+
+      <SearchDialog />
+      <SettingsDialog />
+      <RecordingDialogs />
+    </div>
+  )
+}
+
+export function AppChrome({ children }: { children: ReactNode }) {
+  const { identity } = useAuth()
 
   return (
     <TooltipProvider>
-      <div className="flex h-dvh flex-col overflow-hidden bg-[#0a0c0f] text-zinc-100">
-        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_40%),linear-gradient(180deg,_#0f1115_0%,_#090b0d_100%)]" />
-          <div
-            className="absolute inset-0 opacity-[0.18]"
-            style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-          />
-        </div>
-
+      <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
         <WindowTitleBar />
-
-        <div className="flex min-h-0 flex-1">
-          <DesktopSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
-
+        {/* Before sign-in there is nothing to navigate to — and the shell's data commands
+            need an identity — so only the title bar and the login surface render. */}
+        {identity ? (
+          <Shell>{children}</Shell>
+        ) : (
           <PageHeaderProvider>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <header className="sticky top-0 z-30 border-b border-white/8 bg-[#0b0d10]/88 backdrop-blur">
-                <div className={cn('relative flex items-center gap-3 px-4 sm:px-6', HEADER_ROW_HEIGHT)}>
-                  <HeaderBackButton />
-                  <HeaderPageTitle />
-                  <HeaderActions />
-                  <HeaderRefreshButton />
-                  <HeaderExtra />
-                </div>
-              </header>
-
-              <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-            </div>
+            <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
           </PageHeaderProvider>
-        </div>
+        )}
       </div>
     </TooltipProvider>
   )

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>General chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="chat" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <h1 style="margin: 0; font-size: 15px; font-weight: 600">Chat</h1>
+        <span style="font-size: 13px; color: #8e8e8e">Planning a refund workflow</span>
+        <button type="button" style="margin-left: auto; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Past chats</button>
+        <button type="button" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">New chat</button>
+      </header>
+
+      <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 28px 32px 12px">
+        <div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 22px">
+          <div style="display: flex; justify-content: flex-end">
+            <div style="max-width: 78%; background: #252525; border-radius: 14px; padding: 10px 14px; font-size: 15px; line-height: 1.6">Support approves refunds in the help desk, then someone re-types them into the billing portal. Could an agent do the billing part? Where do I start?</div>
+          </div>
+
+          <div style="display: flex; gap: 12px">
+            <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.65; min-width: 0">
+              <p style="margin: 0">Yes — that’s a good fit. The billing part is a fixed sequence of screens, which is what a recorded workflow handles well. I’d keep the approval in the help desk and only automate the refund itself.</p>
+              <p style="margin: 0">You’ll record it once: open the order, issue the refund, confirm. Afterwards I’ll ask which values change each time — almost certainly the order number and the amount — and whether a person should confirm before money moves.</p>
+              <p style="margin: 0; color: #a3a3a3">One thing to check first: Finance Ops already has a <a href="TestPassed.dc.html">Refund an order</a> workflow. If it refunds the full amount only, a new workflow for partial refunds makes sense; otherwise you may just need a new input.</p>
+
+              <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden; font-size: 14px; line-height: 1.5">
+                <div style="padding: 12px 16px; display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06)"><span style="font-weight: 600">Draft workflow</span><span style="font-size: 12px; color: #8e8e8e">Nothing is created until you confirm</span></div>
+                <dl style="margin: 0; padding: 12px 16px; display: grid; grid-template-columns: 120px minmax(0, 1fr); row-gap: 8px; column-gap: 12px">
+                  <dt style="color: #8e8e8e; font-size: 13px">Name</dt><dd style="margin: 0">Issue a partial refund</dd>
+                  <dt style="color: #8e8e8e; font-size: 13px">Group</dt><dd style="margin: 0">Finance Ops <span style="font-size: 12px; color: #4ade80">● Billing Portal signed in</span></dd>
+                  <dt style="color: #8e8e8e; font-size: 13px">Starting page</dt><dd style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #d4d2cf; padding-top: 2px">billing.example.com/orders</dd>
+                  <dt style="color: #8e8e8e; font-size: 13px">Task</dt><dd style="margin: 0; color: #d4d2cf">Find an order, refund part of it with a reason, confirm the refund shows as issued.</dd>
+                </dl>
+                <div style="display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); background: #222222">
+                  <a href="Recording.dc.html" style="height: 32px; padding: 0 14px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Create and start recording</a>
+                  <a href="NewWorkflow.dc.html" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Edit details first</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink: 0; display: flex; justify-content: center; padding: 8px 32px 20px">
+        <div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 6px">
+          <div style="background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px">
+            <textarea aria-label="Message" rows="1" placeholder="Ask anything about your workflows…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="font-size: 12px; color: #8e8e8e">General chat · can read your groups and workflow names, can’t change anything</span>
+              <button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2c2c2c; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button>
+            </div>
+          </div>
+          <span style="font-size: 11px; color: #8e8e8e; text-align: center">Chat replies use your workspace’s AI allowance.</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

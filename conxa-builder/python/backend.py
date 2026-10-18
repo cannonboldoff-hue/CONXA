@@ -62,6 +62,10 @@ from handlers.skill_packages import SkillPackagesMixin  # noqa: E402
 from handlers.runs import RunsMixin  # noqa: E402
 from handlers.legal import LegalMixin  # noqa: E402
 from handlers.copilot import CopilotMixin  # noqa: E402
+from handlers.conversation import ConversationMixin  # noqa: E402
+from handlers.workflow_flow import WorkflowFlowMixin  # noqa: E402
+from handlers.compile_flow import CompileFlowMixin  # noqa: E402
+from handlers.test_flow import TestFlowMixin  # noqa: E402
 from conxa_core.progress import set_event_sink  # noqa: E402
 
 # Compile-time sub-step logging (conxa_compile/compiler/build.py's
@@ -94,6 +98,9 @@ def _progress_event_sink(job_id: str, event: str, message: str, data: dict[str, 
     if "step_count" in data:
         payload["step_count"] = data["step_count"]
     _write(payload)
+    from handlers.protocol import notify_observer  # noqa: PLC0415
+
+    notify_observer(job_id, payload)
 
 
 set_event_sink(_progress_event_sink)
@@ -139,6 +146,10 @@ class Backend(
     RunsMixin,
     LegalMixin,
     CopilotMixin,
+    ConversationMixin,
+    WorkflowFlowMixin,
+    CompileFlowMixin,
+    TestFlowMixin,
 ):
     """JSON-RPC dispatcher. Command handlers (cmd_*) live in the handlers/
     package, grouped by domain and mixed in here; this class owns shared
@@ -209,6 +220,13 @@ class Backend(
             on_api_call=_on_api_call,
         )
         core_llm.set_router(client)
+        # Also scope it to this request's thread: each RPC runs on its own thread, so concurrent
+        # commands (a compile and a chat turn) each keep their own usage class and event sink.
+        # serve() runs every request on its own short-lived thread, so the scope dies with the
+        # request. A handler called directly on the main thread (tests, scripts) would leave it
+        # set for whoever runs next, so it only scopes on a worker thread.
+        if threading.current_thread() is not threading.main_thread():
+            core_llm.set_scoped_router(client)
 
     def _apply_vision_fallback_entitlement(self) -> None:
         """Fetch this workspace's vision_fallback_on_exhaustion capability and
@@ -307,7 +325,8 @@ class Backend(
     def _entitlement_error_message(self, code: str) -> str:
         messages = {
             "compile_credit_limit_exceeded": "Monthly compile credits are exhausted for this workspace.",
-            "human_edit_pool_exceeded": "Monthly AI Usage Credits are exhausted for this workspace.",
+            "human_edit_pool_exceeded": "Monthly AI credits are exhausted for this workspace.",
+            "ai_credits_exceeded": "Monthly AI credits are exhausted for this workspace.",
             "seat_limit_exceeded": "Seat limit reached for this workspace.",
             "machine_limit_exceeded": "This workspace's plan is limited to fewer build machines than are currently registered.",
             "execute_seat_limit_exceeded": "This workspace's Conxa Execute seat limit has been reached.",

@@ -67,7 +67,7 @@ class CopilotMixin:
         screenshot_path = (evidence.get("runtime_evidence") or {}).get("failure_screenshot_path")
 
         sink = _event_sink(rid)
-        self._install_proxy_router(sink=sink, usage_class="human_edit")
+        self._install_proxy_router(sink=sink, usage_class="ai_credits")
         try:
             result = copilot_turn(
                 skill_id=skill_id,
@@ -380,7 +380,7 @@ class CopilotMixin:
 
         _relay("Rebuilding skill package…")
         try:
-            self.cmd_build_skill_package({"skill_slug": workflow.slug}, rid)
+            self.cmd_build_skill_package({"skill_slug": workflow.slug, "for_test": True}, rid)
         except _CommandError as exc:
             _relay(f"Build failed: {exc.message}")
             raise

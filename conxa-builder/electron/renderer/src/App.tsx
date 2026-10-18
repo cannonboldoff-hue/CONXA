@@ -12,6 +12,7 @@ import { BootstrapScreen } from '@/pages/BootstrapScreen'
 import { UpdateRequiredScreen } from '@/pages/UpdateRequiredScreen'
 import { LegalGateScreen, type LegalStatus } from '@/pages/LegalGateScreen'
 import { fetchWorkflow } from '@/api/workflowsApi'
+import { useShellStore } from '@/store/shellStore'
 
 // Pages
 import { WorkflowListPage } from '@/pages/WorkflowListPage'
@@ -21,7 +22,11 @@ import { InspectorPage } from '@/pages/InspectorPage'
 import { HumanEditListPage } from '@/pages/HumanEditListPage'
 import { PublishPage } from '@/pages/PublishPage'
 import { BuildInstallerPage } from '@/pages/BuildInstallerPage'
-import { SettingsPage } from '@/pages/SettingsPage'
+import { ChatPage } from '@/pages/ChatPage'
+import { NewWorkflowPage } from '@/pages/NewWorkflowPage'
+import { FirstLaunchPage } from '@/pages/FirstLaunchPage'
+import { useShellData } from '@/hooks/useShellData'
+import { WorkflowConversationPage } from '@/pages/WorkflowConversationPage'
 
 // Studio-exclusive pages (keep existing)
 
@@ -127,9 +132,19 @@ function DeepLinkHandler() {
   return null
 }
 
-/** `/` has no id to route on — the group list (`/workflows`) is the home. */
+/** Settings is a popup now; `/settings` (old links, the updater) opens it over the home screen. */
+function OpenSettings() {
+  const setSettingsOpen = useShellStore((s) => s.setSettingsOpen)
+  useEffect(() => setSettingsOpen(true), [setSettingsOpen])
+  return <Navigate to="/" replace />
+}
+
+/** `/` has no id to route on — the group list (`/workflows`) is the home, unless there is nothing in
+ * the workspace yet: then the first-launch screen explains how to start. */
 function DefaultRedirect() {
-  return <Navigate to="/workflows" replace />
+  const { groups, loading, failed } = useShellData()
+  if (loading) return null
+  return <Navigate to={groups.length === 0 && !failed ? '/welcome' : '/workflows'} replace />
 }
 
 /** The per-workflow detail page was folded into its owning group's page (every
@@ -284,6 +299,11 @@ export function App() {
           <Routes>
             <Route path="/" element={<DefaultRedirect />} />
             <Route path="/workflows" element={<WorkflowListPage />} />
+            <Route path="/welcome" element={<FirstLaunchPage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/new" element={<NewWorkflowPage />} />
+            <Route path="/chat/:chatId" element={<ChatPage />} />
+            <Route path="/w/:workflowId" element={<WorkflowConversationPage />} />
             <Route path="/workflows/:workflowId" element={<WorkflowRedirect />} />
             <Route path="/workflows/:workflowId/inspector" element={<InspectorPage />} />
             <Route path="/groups/:groupId" element={<GroupPage />} />
@@ -292,7 +312,7 @@ export function App() {
             <Route path="/human-edit" element={<HumanEditListPage />} />
             <Route path="/publish" element={<PublishPage />} />
             <Route path="/build-installer" element={<BuildInstallerPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<OpenSettings />} />
             <Route path="*" element={<Navigate to="/workflows" replace />} />
           </Routes>
           </LegalGate>

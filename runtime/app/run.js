@@ -222,6 +222,27 @@ async function executeOneStep(ctx, state, steps, i) {
 
   if (state.hasExecutedStep && page === state.prevPage) await waitForPageLoad(page, state.prevStepType);
 
+  // RT-9 — Studio-only test guard. A caller that passes `_pause_before_irreversible` asks the run to
+  // stop, parked on the live page, BEFORE the first step the compiler marked `destructive` (send,
+  // submit, pay, delete, publish). It resumes only when the caller says so (`_guard_release`), which
+  // releases every later destructive step in the run at once. Like ai_review it is a planned pause,
+  // not a failure and not recovery: it never touches recovery_stage.js or retry_budget.js, and with
+  // no `guard` on ctx (every customer run, every MCP caller) this block is inert. A dry run already
+  // withholds destructive steps, so the guard has nothing to do there.
+  if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && step.destructive === true) {
+    if (state.loopDepth > 0) {
+      // A pause inside a for_each body would lose the loop's row cursor (the same reason a handover
+      // can't live there), so fail closed rather than run an irreversible step unguarded.
+      ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
+      throw stepFailure(step, i, new Error(
+        "Test stopped before a repeated step that can't be undone: the guard can't pause inside a loop. " +
+        "Turn the guard off to run it, or test it somewhere safe."
+      ), null, state.warnings);
+    }
+    const remaining = steps.slice(i).filter((s) => s && s.destructive === true).length;
+    throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining });
+  }
+
   // EXEC-13: ai_review is a planned pause (author-placed reasoning checkpoint), not a page
   // action and not a Tier 1-4 recovery candidate — it carries no selector/identity_bundle, so
   // it must never reach executeStep/HANDLERS or recoverStep. server.js validates a resumed
@@ -607,6 +628,7 @@ async function runForEachStep(ctx, state, step, page, i) {
 
   let processed = 0;
   let failed = 0;
+  state.loopDepth = (state.loopDepth || 0) + 1; // RT-9: the guard can't pause inside a loop body
   try {
     for (let idx = 0; idx < rowIds.length; idx++) {
       state.inputs[idKey] = rowIds[idx];
@@ -630,6 +652,7 @@ async function runForEachStep(ctx, state, step, page, i) {
       }
     }
   } finally {
+    state.loopDepth -= 1;
     if (hadId) state.inputs[idKey] = prevId; else delete state.inputs[idKey];
     if (hadIdx) state.inputs[idxKey] = prevIdx; else delete state.inputs[idxKey];
   }
@@ -650,7 +673,7 @@ async function runForEachStep(ctx, state, step, page, i) {
   ctx.tracker.emit("for_each_done", { si: i, processed, failed, total: rowIds.length });
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -761,6 +784,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   const ctx = {
     onStep, onPhase, cancelCheck, tracker: t, downloadQueue, dialogQueue,
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
+    guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)
   };
 
   for (let i = startFrom; i < steps.length; i++) {

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recording</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio{{titleSuffix}}</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px">
+        <a href="Group.dc.html" style="color: #a3a3a3; text-decoration: none">Finance Ops</a><span style="color: #6b6b6b">/</span><h1 style="margin: 0; font-size: 15px; font-weight: 600">Create invoice</h1>
+      </header>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 18px">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #4ade80">●</span><span style="color: #e8e6e3">Workflow created</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:00 PM</span></div>
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: {{signGlyphColor}}">{{signGlyph}}</span><span style="color: #e8e6e3">{{signEvent}}</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:01 PM</span></div>
+          <sc-if value="{{isRecording}}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #93b4e6">◐</span><span style="color: #e8e6e3">Recording started</span><span>on the invoice page</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:02 PM</span></div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; gap: 12px">
+          <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+            <sc-if value="{{isSignin}}" hint-placeholder-val="{{ true }}">
+              <p style="margin: 0; font-size: 15px; line-height: 1.65">Billing Portal needs you to sign in first. I’ve opened its sign-in page in the browser on the right — sign in as you normally do, including any two-step code, then press Done. Nothing is recorded yet.</p>
+              <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #a3a3a3">The sign-in is saved for all of Finance Ops, so the next workflow in this group skips this step.</p>
+            </sc-if>
+            <sc-if value="{{isRecording}}" hint-placeholder-val="{{ false }}">
+              <p style="margin: 0; font-size: 15px; line-height: 1.65; color: #d4d2cf">Signed in — you’re on the invoice page now. Do the task in the browser on the right; each action shows up here as it’s captured.</p>
+              <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden">
+                <div style="padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8e8e8e; border-bottom: 1px solid rgba(255,255,255,0.06)"><span>Captured so far · {{count}}</span><span style="margin-left: auto">Tab 1</span></div>
+                <ol style="margin: 0; padding: 6px 0; list-style: none; font-size: 13px">
+                  <sc-for list="{{actions}}" as="a" hint-placeholder-count="6">
+                    <li style="display: flex; align-items: center; gap: 10px; padding: 6px 14px; color: {{a.color}}">
+                      <span style="width: 18px; font-size: 12px; color: #8e8e8e; text-align: right">{{a.n}}</span>
+                      <span style="width: 56px; font-size: 11px; color: {{a.kindColor}}; border: 1px solid {{a.kindColor}}; border-radius: 4px; padding: 1px 4px; text-align: center; box-sizing: border-box">{{a.kind}}</span>
+                      <span style="flex: 1; min-width: 0">{{a.text}}</span>
+                      <sc-if value="{{a.isType}}" hint-placeholder-val="{{ false }}"><button type="button" aria-pressed="{{a.pressed}}" onClick="{{a.toggle}}" style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{a.vBorder}}; background: transparent; color: {{a.vColor}}; font: 500 11px Inter, sans-serif; white-space: nowrap">{{a.vLabel}}</button></sc-if>
+                    </li>
+                  </sc-for>
+                </ol>
+                <div style="padding: 8px 14px 10px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 12px; color: #8e8e8e">Mark a typed value “Changes each run” and Conxa won’t need to ask about it later.</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+      <div style="flex-shrink: 0; padding: 8px 24px 20px">
+        <div style="background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: #8e8e8e">{{composerNote}}</div>
+      </div>
+    </main>
+
+    <div role="separator" aria-orientation="vertical" aria-label="Resize browser panel" tabindex="0" style="width: 6px; flex-shrink: 0; background: #1a1a1a; border-left: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; cursor: col-resize"><span style="width: 2px; height: 28px; border-radius: 1px; background: rgba(255,255,255,0.22)"></span></div>
+
+    <section aria-label="Recording browser" style="width: 640px; flex-shrink: 0; display: flex; flex-direction: column; background: #1e1e1e; border-top: 2px solid {{panelEdge}}">
+      <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08)">
+        <sc-if value="{{isRecording}}" hint-placeholder-val="{{ false }}"><span style="width: 9px; height: 9px; border-radius: 5px; background: {{recDot}}"></span><span style="font-size: 13px; font-weight: 600">{{recLabel}}</span></sc-if>
+        <sc-if value="{{isSignin}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; color: #fbbf24">▲</span><span style="font-size: 13px; font-weight: 600">Sign in to Billing Portal</span></sc-if>
+        <span style="flex: 1; min-width: 0; height: 26px; border-radius: 7px; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 6px; padding: 0 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; overflow: hidden; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>{{url}}</span>
+        <sc-if value="{{isSignin}}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{cancelSignin}}" style="height: 32px; padding: 0 10px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Cancel</button>
+          <button type="button" onClick="{{done}}" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">I’m signed in — Done</button>
+        </sc-if>
+        <sc-if value="{{isRecording}}" hint-placeholder-val="{{ false }}">
+          <button type="button" onClick="{{togglePause}}" style="height: 32px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">{{pauseLabel}}</button>
+          <button type="button" style="height: 32px; padding: 0 10px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Discard</button>
+          <a href="Compiling.dc.html" style="height: 32px; padding: 0 14px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Finish and save</a>
+        </sc-if>
+      </div>
+      <div role="img" aria-label="Region where the live Chromium page is drawn by the app" style="flex: 1; min-height: 0; background: repeating-linear-gradient(135deg, #1c1c1c 0 14px, #202020 14px 28px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px">
+        <span style="font-size: 14px; color: #d4d2cf">Live Chromium view</span>
+        <span style="font-size: 12px; color: #8e8e8e; max-width: 340px; line-height: 1.5">{{regionNote}}</span>
+      </div>
+      <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #a3a3a3">
+        <span>{{footerNote}}</span>
+        <span style="margin-left: auto; color: #8e8e8e">Tab 1 of 1</span>
+      </div>
+    </section>
+
+    <div style="width: 44px; flex-shrink: 0; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 10px">
+      <button type="button" aria-label="Show workflow details" style="width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
+      <span title="{{stripTitle}}" style="font-size: 11px; color: {{stripColor}}">{{stripGlyph}}</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"startRecording":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: props.startRecording ? 'recording' : 'signin', paused: false, varies: { 4: true } };
+  }
+  renderVals() {
+    const rec = this.state.phase === 'recording';
+    const K = { open: '#9d7cd8', click: '#e88fb4', select: '#e88fb4', type: '#5b9bd5', dismiss: '#8e8e8e' };
+    const { paused, varies } = this.state;
+    const rows = [
+      ['open', 'Opened the new-invoice page'], ['dismiss', 'Closed the cookie banner'],
+      ['click', 'Clicked “Customer”'], ['select', 'Chose “Acme Retail”'],
+      ['type', 'Typed “PO-44821” into PO number'], ['click', 'Clicked “Add line item”'],
+      ['type', 'Typed “Annual license” into Description'], ['type', 'Typing into Quantity…'],
+    ];
+    const actions = rows.map(([kind, text], i) => {
+      const on = !!varies[i];
+      return {
+        n: i + 1, kind, text, kindColor: K[kind], color: i === rows.length - 1 ? '#a3a3a3' : '#e8e6e3',
+        isType: kind === 'type' && i < rows.length - 1, pressed: String(on),
+        vLabel: on ? '● Changes each run' : 'Changes each run?',
+        vColor: on ? '#e8e6e3' : '#8e8e8e', vBorder: on ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.10)',
+        toggle: () => this.setState({ varies: { ...varies, [i]: !on } }),
+      };
+    });
+    return {
+      isSignin: !rec, isRecording: rec, actions, count: rows.length - 1,
+      recDot: paused ? '#8e8e8e' : '#f87171',
+      recLabel: paused ? 'Paused · 01:42' : 'Recording · 01:42',
+      pauseLabel: paused ? 'Resume' : 'Pause',
+      togglePause: () => this.setState({ paused: !paused }),
+      titleSuffix: rec ? (paused ? ' · paused' : ' · recording') : '',
+      signGlyph: rec ? '●' : '▲', signGlyphColor: rec ? '#4ade80' : '#fbbf24',
+      signEvent: rec ? 'Signed in to Billing Portal · saved for Finance Ops' : 'Billing Portal needs sign-in — opened its sign-in page',
+      url: rec ? 'billing.example.com/invoices/new' : 'billing.example.com/login',
+      panelEdge: rec ? '#f87171' : '#fbbf24',
+      regionNote: rec
+        ? 'The real browser, inside Build Studio. You click and type here; every action is recorded.'
+        : 'The real browser, open on the sign-in page. Signing in is not recorded.',
+      footerNote: rec ? (paused ? 'Paused — nothing you do here is recorded' : 'Recording everything you do in this page') : 'Sign-in only — recording starts after Done',
+      composerNote: rec ? 'The conversation picks up when you finish recording.' : 'Waiting for you to sign in on the right.',
+      stripGlyph: rec ? '◐' : '▲', stripColor: rec ? '#93b4e6' : '#fbbf24', stripTitle: rec ? 'Recording' : 'Sign-in needed',
+      done: () => this.setState({ phase: 'recording' }),
+      cancelSignin: () => this.setState({ phase: 'signin' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

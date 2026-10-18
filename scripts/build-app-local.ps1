@@ -98,6 +98,7 @@ foreach ($entry in $manifest.files) {
   app_version = $appVersion
   min_host    = "0.0.0"
   built_at    = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  capabilities = @("test_guard")  # see build-runtime-app.yml
   files       = $hashes
 } | ConvertTo-Json -Depth 5 | Out-File -Encoding utf8 (Join-Path $versionDest "version.json")
 

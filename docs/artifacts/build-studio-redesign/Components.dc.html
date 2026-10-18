@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conversation components</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1640px; box-sizing: border-box; padding: 56px 72px; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600">Conversation components</h1>
+    <p style="margin: 0; font-size: 14px; color: #a3a3a3; max-width: 900px; line-height: 1.6">Everything that can appear in a workflow’s conversation. Prose is for explaining; cards are for anything with state. A card only shows a finished state once the backend command behind it has returned — until then it says what it is waiting for.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px">
+
+    <div style="display: flex; flex-direction: column; gap: 22px">
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Message roles</div>
+
+      <div style="display: flex; gap: 12px">
+        <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #d97757; color: #1a1a1a; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 12px; color: #8e8e8e">Conxa · 3:06 PM</div>
+          <div style="font-size: 15px; line-height: 1.65">I compiled 14 steps. Before you test it, I have three questions about values that may change between runs.</div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end">
+        <div style="max-width: 70%; background: #252525; border-radius: 14px; padding: 10px 14px; font-size: 15px; line-height: 1.6">The PO number is different every time. The customer usually is too.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 22px">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #4ade80">●</span><span style="color: #e8e6e3">Recording saved</span><span>14 actions · 2 min 31 s</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:02 PM</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #93b4e6">◐</span><span style="color: #e8e6e3">Applying your answer</span><span>Making “PO number” a runtime input…</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">now</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #f87171">✕</span><span style="color: #e8e6e3">Couldn’t apply</span><span>The workflow changed in Human Edit. <a href="#" style="color: #e8e6e3">Ask again</a></span></div>
+      </div>
+      <p style="margin: -8px 0 0; font-size: 12px; color: #8e8e8e; line-height: 1.5">Event rows are the system’s voice: one line, glyph, timestamp, threaded on a hairline. They record what actually happened and stay in history.</p>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e; margin-top: 6px">Live recording card</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 8px; height: 8px; border-radius: 4px; background: #f87171"></span>
+          <span style="font-size: 14px; font-weight: 600">Recording</span>
+          <span style="font-size: 13px; color: #a3a3a3">01:42 · 9 actions captured</span>
+          <span style="margin-left: auto; font-size: 12px; color: #8e8e8e">Chromium window · billing.example.com</span>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; background: #2c2c2c; border-radius: 8px; padding: 8px 10px">Last: typed “PO-44821” into PO number</div>
+        <div style="display: flex; gap: 8px">
+          <button type="button" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">Finish and save</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">Show browser</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif; margin-left: auto">Discard</button>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e; margin-top: 6px">Compile progress card</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 14px; font-weight: 600">Compiling</span><span style="font-size: 13px; color: #a3a3a3">usually under 2 minutes</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">Uses 1 compile credit · 37 left</span></div>
+        <div style="height: 4px; border-radius: 2px; background: #2c2c2c; overflow: hidden"><div style="width: 58%; height: 4px; background: #93b4e6"></div></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+          <div style="display: flex; gap: 10px"><span style="color: #4ade80; width: 14px">●</span><span>Cleaned up the recording</span><span style="margin-left: auto; color: #8e8e8e; font-size: 12px">14 actions kept, 3 merged</span></div>
+          <div style="display: flex; gap: 10px"><span style="color: #4ade80; width: 14px">●</span><span>Learned how to find each element</span><span style="margin-left: auto; color: #8e8e8e; font-size: 12px">14 of 14</span></div>
+          <div style="display: flex; gap: 10px"><span style="color: #93b4e6; width: 14px">◐</span><span>Understanding what each step is for</span></div>
+          <div style="display: flex; gap: 10px; color: #8e8e8e"><span style="width: 14px">○</span><span>Checking for values that change</span></div>
+          <div style="display: flex; gap: 10px; color: #8e8e8e"><span style="width: 14px">○</span><span>Saving the workflow</span></div>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e; margin-top: 6px">Actionable error card</div>
+      <div style="background: #252525; border: 1px solid rgba(248,113,113,0.35); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; gap: 10px; align-items: baseline"><span style="color: #f87171">✕</span><span style="font-size: 14px; font-weight: 600">Compile didn’t finish</span></div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #a3a3a3">Conxa Cloud stopped responding while I was reading your steps. Your recording is safe and no credit was used.</p>
+        <div style="display: flex; gap: 8px; margin-top: 2px"><button type="button" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">Try again</button><button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Show details</button></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 22px">
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Clarification — choose values that become inputs</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden">
+        <div style="padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 12px; color: #8e8e8e">Question 1 of 4</div>
+          <div style="font-size: 15px; font-weight: 600">Which of these should change each run?</div>
+          <div style="font-size: 13px; color: #a3a3a3">Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded.</div>
+        </div>
+        <div style="display: flex; flex-direction: column">
+          <label style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 14px"><input type="checkbox" checked style="accent-color: #d97757; width: 16px; height: 16px"><span style="width: 120px">Customer</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; flex: 1">Acme Retail</span><span style="font-size: 12px; color: #8e8e8e">Choice from list</span></label>
+          <label style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 14px"><input type="checkbox" checked style="accent-color: #d97757; width: 16px; height: 16px"><span style="width: 120px">PO number</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; flex: 1">PO-44821</span><span style="font-size: 12px; color: #8e8e8e">Text</span></label>
+          <label style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 14px"><input type="checkbox" style="accent-color: #d97757; width: 16px; height: 16px"><span style="width: 120px">Line item</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; flex: 1">Annual license</span><span style="font-size: 12px; color: #8e8e8e">Text</span></label>
+          <label style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 14px"><input type="checkbox" checked style="accent-color: #d97757; width: 16px; height: 16px"><span style="width: 120px">Due date</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; flex: 1">2026-11-15</span><span style="font-size: 12px; color: #8e8e8e">Date</span></label>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); background: #222222">
+          <button type="button" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">Make 3 inputs</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Keep all as recorded</button>
+          <span style="margin-left: auto; font-size: 12px; color: #8e8e8e">Or answer in the box below</span>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Clarification — single choice with consequence</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 15px; font-weight: 600">If the customer isn’t in the list, what should happen?</div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; border: 1px solid #d97757; background: rgba(217,119,87,0.08); font-size: 14px"><input type="radio" name="miss" checked style="accent-color: #d97757; margin-top: 3px"><span><span style="display: block">Stop and report it</span><span style="font-size: 12px; color: #a3a3a3">The run ends with a clear “customer not found” message.</span></span></label>
+          <label style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); font-size: 14px"><input type="radio" name="miss" style="accent-color: #d97757; margin-top: 3px"><span><span style="display: block">Pause and ask the person running it</span><span style="font-size: 12px; color: #a3a3a3">Adds a review checkpoint after “Choose the customer”.</span></span></label>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Answered — collapses to a receipt</div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; font-size: 13px"><span style="color: #4ade80">●</span><span style="color: #a3a3a3">Which values change each run?</span><span style="color: #e8e6e3">Customer, PO number, Due date</span><a href="#" style="margin-left: auto; font-size: 12px; color: #a3a3a3">Change</a></div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; font-size: 13px"><span style="color: #93b4e6">◐</span><span style="color: #a3a3a3">Dismiss the cookie banner?</span><span style="color: #e8e6e3">Yes — applying…</span></div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Workflow summary card</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 14px; font-weight: 600">Create invoice</span><span style="font-size: 12px; color: #8e8e8e">version 3 · updated 3:11 PM</span></div>
+        <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.75; color: #a3a3a3">
+          <li><span style="color: #e8e6e3">Open</span> the new-invoice page</li>
+          <li><span style="color: #e8e6e3">Pick</span> the customer <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e8a58c">{{inputCustomer}}</span></li>
+          <li><span style="color: #e8e6e3">Fill</span> PO number, line item, quantity, due date</li>
+          <li><span style="color: #e8e6e3">Save</span>, then <span style="color: #e8e6e3">send</span> — waits for your approval first</li>
+        </ol>
+        <div style="display: flex; gap: 16px; font-size: 12px; color: #8e8e8e; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px"><span>14 steps</span><span>3 inputs</span><span>Done when “Invoice sent” appears</span></div>
+      </div>
+
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Composer</div>
+      <div style="background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 10px 10px 10px 14px; display: flex; flex-direction: column; gap: 8px">
+        <textarea aria-label="Message" rows="1" placeholder="Ask about this workflow, or answer above…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span style="font-size: 12px; color: #a3a3a3; border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; padding: 3px 8px">Create invoice · step 9 selected</span>
+          <button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { inputCustomer: '{{customer}}' };
+  }
+}
+</script>
+</body>
+</html>

@@ -80,6 +80,119 @@ def _extract_ai_review_pause(result: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+_GUARD_META_KEY = "conxa/guard"
+_SESSION_EXPIRED_META_KEY = "conxa/session_expired"
+
+
+def _extract_guard_pause(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Pull {step_index, step_intent, remaining_irreversible, run_id} from an RT-9 guard pause
+    (runtime/app/server.js: the run stopped, parked, before a step that can't be undone), or None
+    when `result` isn't one. Only `_meta` is trusted — there is deliberately no prose fallback,
+    because the ai_review extractor above treats any "resume_from" text as a review pause."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    guard = meta.get(_GUARD_META_KEY)
+    if isinstance(guard, dict) and isinstance(guard.get("step_index"), int):
+        return {
+            "step_index": guard["step_index"],
+            "step_intent": str(guard.get("step_intent") or ""),
+            "remaining": int(guard.get("remaining_irreversible") or 0),
+            "run_id": str(guard.get("run_id") or ""),
+        }
+    return None
+
+
+def _extract_session_expired(result: dict[str, Any]) -> dict[str, Any] | None:
+    """The runtime stopped because a saved sign-in is no longer valid (not because a step broke).
+    Only `_meta` is trusted; an older engine sends plain text and so reads as an ordinary failure."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    info = meta.get(_SESSION_EXPIRED_META_KEY)
+    if isinstance(info, dict):
+        step = info.get("step_index")
+        return {"step_index": step if isinstance(step, int) else None, "run_id": str(info.get("run_id") or "")}
+    return None
+
+
+def _app_layer_supports(conxa_dir: Path, capability: str) -> bool:
+    """Does the staged app layer declare `capability` in its version.json? An older engine silently
+    ignores a Studio-only argument it doesn't know — for the test guard that would mean sending a
+    real invoice — so the Studio asks first and falls back to a dry-run preview."""
+    try:
+        meta = json.loads((conxa_dir / "conxa-app" / "current" / "version.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    caps = meta.get("capabilities") if isinstance(meta, dict) else None
+    return isinstance(caps, list) and capability in caps
+
+
+def _is_confirm_only_review_request(review: dict[str, Any]) -> bool:
+    from conxa_compile.editor.patch_gate import is_confirm_only_review
+
+    return is_confirm_only_review({"ai_review_output_schema": review.get("output_schema"), "ai_review_on_failure": "abort"})
+
+
+def _drive_runtime_pauses(
+    result: dict[str, Any],
+    run_args: dict[str, Any],
+    *,
+    call: Any,
+    cancel_run: Any,
+    answer_review: Any,
+    guard_hook: Any,
+    review_hook: Any,
+    guard_requested: bool,
+    previewed: bool,
+    mark: Any,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Keep calling the runtime until it stops pausing. Returns ``(final result, stopped_at)``.
+
+    Three kinds of pause: the RT-9 guard (a step that can't be undone — the person decides), a
+    confirm-only review (the workflow author's own "should a person confirm?" — the person answers,
+    and "yes" also releases the guard in the same resume so they are not asked twice), and an
+    ordinary ai_review (the sandbox model answers, as before). ``stopped_at`` is set when the person
+    ended the test (or said no); nothing past that point ran. Bounded, so a misbehaving answerer
+    fails the test loudly instead of looping while holding a parked browser open."""
+    pauses_seen = 0
+    while True:
+        # Guard first: the review extractor's prose fallback would misread any pause as a review.
+        guard = _extract_guard_pause(result)
+        if guard is not None:
+            decision = guard_hook(guard) if guard_hook is not None else "end_here"
+            if decision != "run_rest":
+                try:  # best effort: free the parked browser instead of waiting out its timeout
+                    cancel_run(guard["run_id"])
+                except Exception:  # noqa: BLE001
+                    pass
+                return result, guard
+            mark(f"Running the steps that can't be undone, from {guard['step_intent'] or 'here'}…")
+            run_args = {**run_args, "resume_from": guard["step_index"], "_guard_release": True}
+            result = call(run_args)
+            continue
+        review = _extract_ai_review_pause(result)
+        if review is None:
+            return result, None
+        pauses_seen += 1
+        if pauses_seen > _MAX_AI_REVIEW_PAUSES:
+            raise RuntimeError(
+                f"AI review paused {pauses_seen} times in one test run — stopping "
+                "instead of looping. Check the workflow for a review step whose answer "
+                "never satisfies a later step."
+            )
+        extra: dict[str, Any] = {}
+        if review_hook is not None and _is_confirm_only_review_request(review):
+            mark(f"Waiting for your confirmation at step {review['step_index'] + 1}…")
+            if not review_hook(review):
+                return result, {"step_index": review["step_index"], "step_intent": review.get("prompt", ""),
+                                "remaining": 0, "run_id": "", "declined": True}
+            answer = {"confirmed": True}
+            if guard_requested and not previewed:
+                extra["_guard_release"] = True
+        else:
+            mark(f"Answering AI review at step {review['step_index'] + 1}…")
+            answer = answer_review(review, result.get("content") or [])
+        run_args = {**run_args, "resume_from": review["step_index"], "review_results": {str(review["step_index"]): answer}, **extra}
+        result = call(run_args)
+
+
 def _review_context_from_content(content: list[Any]) -> tuple[str, tuple[str, str] | None]:
     """Split an ai_review pause's MCP content blocks into (joined text, last image). The LAST
     image block is always the current-page screenshot — buildReviewRequest pushes an optional
@@ -170,7 +283,7 @@ def _cancel_active_test_run(workflow_id: str) -> None:
 
 
 class WorkflowsMixin:
-    def cmd_create_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+    def cmd_create_workflow(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_core.storage.group_store import get_group
         from conxa_core.storage.workflow_store import create_workflow as _create
 
@@ -186,7 +299,14 @@ class WorkflowsMixin:
         if get_group(group_id) is None:
             raise _CommandError("group_not_found", f"No group {group_id}")
 
-        workflow = _create(name=name, target_url=target_url, group_id=group_id)
+        workflow = _create(
+            name=name, target_url=target_url, group_id=group_id,
+            task_description=str(payload.get("task_description") or "").strip()[:300],
+        )
+        # The workflow's conversation starts here, whoever created it (the form, a chat draft).
+        from conxa_compile.conversation.harness import log_event
+
+        log_event(f"wf:{workflow.id}", "Workflow created", glyph="ok", sink=_event_sink(rid), subject=name)
         return {"workflow": workflow.model_dump(mode="json")}
 
     def cmd_list_workflows(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
@@ -323,6 +443,9 @@ class WorkflowsMixin:
             version=version,
             only_workflow_id=only_workflow_id,
             realtime_sink=_event_sink(rid),
+            # A test build (for_test) isn't a release: it doesn't need the approval that the
+            # publish/installer paths require, because testing comes before approving.
+            require_signed_off=not bool(payload.get("for_test")),
         )
 
     def cmd_publish_skill_pack(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
@@ -569,8 +692,8 @@ class WorkflowsMixin:
     def _answer_ai_review(self, review: dict[str, Any], content: list[Any]) -> dict[str, Any]:
         """EXEC-13: Studio's stand-in answerer for an ai_review checkpoint when no MCP agent is
         present to answer it (see cmd_test_workflow's park/resume loop). Metered exactly like
-        every other Human Edit vision call — `usage_class="human_edit"` routes through
-        `ensure_human_edit_available`/`record_llm_usage` on the cloud proxy, no new entitlement
+        every other Human Edit vision call — `usage_class="ai_credits"` routes through
+        `ensure_ai_credits_available`/`record_llm_usage` on the cloud proxy, no new entitlement
         surface (conxa-cloud/backend/app/api/llm_proxy_routes.py::_meter_and_call).
 
         Tries the text-model route first (`call_llm`'s default for a task not in VISION_TASKS —
@@ -584,7 +707,7 @@ class WorkflowsMixin:
         from conxa_core.config import settings as _settings
         from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, QuotaExceeded
 
-        self._install_proxy_router(usage_class="human_edit")
+        self._install_proxy_router(usage_class="ai_credits")
 
         context_text, image = _review_context_from_content(content)
         prompt = str(review.get("prompt") or "")
@@ -642,6 +765,16 @@ class WorkflowsMixin:
         workspace_id = str(payload.get("workspace_id") or "").strip() or LOCAL_WORKSPACE_ID
         workflow_id = _safe_id(payload.get("workflow_id"), "workflow_id")
         inputs = payload.get("inputs") if isinstance(payload.get("inputs"), dict) else {}
+        # BUILD-40: options for the conversation's test run. All optional and all off by default, so
+        # every older caller (the group page, the copilot's verify) behaves exactly as before.
+        #   guard        — pause before the first step that can't be undone (RT-9) instead of running it
+        #   _phase_hook  — called with each runtime test_phase entry (step starts, with names)
+        #   _guard_hook  — called when the guard pauses; returns "run_rest" or "end_here"
+        #   _review_hook — called with a confirm-only ai_review request; returns True (yes) or False (no)
+        # The hooks are Python callables an in-process caller passes; a JSON caller cannot supply them.
+        guard_requested = bool(payload.get("guard"))
+        _hook = lambda name: payload.get(name) if callable(payload.get(name)) else None  # noqa: E731
+        phase_hook, guard_hook, review_hook = _hook("_phase_hook"), _hook("_guard_hook"), _hook("_review_hook")
 
         workflow = get_workflow(workflow_id)
         if workflow is None:
@@ -672,6 +805,11 @@ class WorkflowsMixin:
             sink({"kind": "workflow_test", "message": f"{message} (t+{time.monotonic() - _t0:.1f}s)"})
 
         def _phase_sink(entry: dict[str, Any]) -> None:
+            if phase_hook is not None:
+                try:
+                    phase_hook(entry)
+                except Exception:  # noqa: BLE001 — a progress mirror must never break the run
+                    pass
             _mark(f"[runtime] {entry.get('phase', '?')} (+{entry.get('ms', 0) / 1000:.1f}s in-runtime)")
             # EXEC-35: run_id first appears here (relayed from server.js's test_phase log lines),
             # seconds before call_runtime_tool returns — capture it so cmd_cancel_test_workflow has
@@ -783,6 +921,17 @@ class WorkflowsMixin:
                 # nothing is waiting on (AUTH-4) — Studio's own group-auth gate has already run.
                 "wait_for_auth": False,
             }
+            previewed = False
+            if guard_requested:
+                if _app_layer_supports(conxa_dir, "test_guard"):
+                    run_args["_pause_before_irreversible"] = True
+                else:
+                    # An engine that predates the guard would ignore the argument and run the
+                    # irreversible steps for real. Preview instead: every step is resolved, the ones
+                    # that can't be undone are checked but never acted on.
+                    run_args["dry_run"] = True
+                    previewed = True
+                    _mark("This engine predates the test guard — previewing instead: steps that can't be undone are checked but not run.")
             result = call_runtime_tool(
                 runtime_dir, "execute_skill", run_args,
                 conxa_dir=conxa_dir,
@@ -794,31 +943,17 @@ class WorkflowsMixin:
             # cloud proxy and resumes, exactly like a real agent would. Bounded (not `while True`)
             # so a misbehaving answerer fails the test loudly instead of looping forever holding
             # the parked browser/host-lock open.
-            pauses_seen = 0
-            while True:
-                review = _extract_ai_review_pause(result)
-                if review is None:
-                    break
-                pauses_seen += 1
-                if pauses_seen > _MAX_AI_REVIEW_PAUSES:
-                    raise RuntimeError(
-                        f"AI review paused {pauses_seen} times in one test run — stopping "
-                        "instead of looping. Check the workflow for a review step whose answer "
-                        "never satisfies a later step."
-                    )
-                _mark(f"Answering AI review at step {review['step_index'] + 1}…")
-                answer = self._answer_ai_review(review, result.get("content") or [])
-                run_args = {
-                    **run_args,
-                    "resume_from": review["step_index"],
-                    "review_results": {str(review["step_index"]): answer},
-                }
-                result = call_runtime_tool(
-                    runtime_dir, "execute_skill", run_args,
-                    conxa_dir=conxa_dir,
-                    env={"CONXA_DATA_DIR": str(test_data_dir)},
-                    phase_sink=_phase_sink,
-                )
+            result, stopped_at_guard = _drive_runtime_pauses(
+                result, run_args,
+                call=lambda args: call_runtime_tool(
+                    runtime_dir, "execute_skill", args, conxa_dir=conxa_dir,
+                    env={"CONXA_DATA_DIR": str(test_data_dir)}, phase_sink=_phase_sink),
+                cancel_run=lambda run_id: call_runtime_tool(
+                    runtime_dir, "cancel_execution", {"run_id": run_id}, conxa_dir=conxa_dir,
+                    env={"CONXA_DATA_DIR": str(test_data_dir)}),
+                answer_review=self._answer_ai_review, guard_hook=guard_hook, review_hook=review_hook,
+                guard_requested=guard_requested, previewed=previewed, mark=_mark,
+            )
             _mark("Runtime call finished")
         except (RuntimeToolError, RuntimeError) as exc:
             # Read before `finally` pops the tracked entry below.
@@ -838,7 +973,31 @@ class WorkflowsMixin:
                 if _test_run_id is None and tracked is not None:
                     _test_run_id = tracked.get("run_id")
 
+        if stopped_at_guard is not None:
+            # The person ended the test before a step that can't be undone (or declined its
+            # confirmation). Nothing real happened past this point, and it is NOT a pass: the last
+            # real result is left untouched, like a cancel.
+            sink({"kind": "workflow_test", "message": f"Test ended before {stopped_at_guard.get('step_intent') or 'a step that can’t be undone'}."})
+            return {
+                "status": "stopped_at_guard", "message": "Ended before a step that can't be undone.",
+                "company": company, "skill": workflow.slug, "run_id": _test_run_id,
+                "stopped_at": stopped_at_guard["step_index"], "stopped_intent": stopped_at_guard.get("step_intent"),
+                "declined": bool(stopped_at_guard.get("declined")),
+            }
+
         message = _runtime_result_text(result)
+        expired = _extract_session_expired(result)
+        if expired is not None:
+            # Paused, not failed: nothing in the workflow is wrong, so the last real test result stays
+            # as it was and nothing downstream (auto-fix) tries to "repair" a login.
+            sink({"kind": "workflow_test", "message": message})
+            return {"status": "needs_sign_in", "message": message, "company": company, "skill": workflow.slug,
+                    "run_id": _test_run_id, "failed_at": expired["step_index"]}
+        if previewed and message.startswith("Dry run complete"):
+            # A preview proves every target is still findable, but it never ran the irreversible
+            # steps, so it must not count as a passing test.
+            sink({"kind": "workflow_test", "message": message})
+            return {"status": "previewed", "message": message, "company": company, "skill": workflow.slug, "run_id": _test_run_id}
         if not message.startswith("Done."):
             failure = message or "Runtime test failed without a result message."
             # EXEC-35: a user-initiated cancel (see cmd_cancel_test_workflow) isn't a real

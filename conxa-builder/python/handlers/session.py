@@ -137,6 +137,28 @@ class SessionMixin:
     def cmd_whoami(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         return {"identity": self._auth_service().current_identity()}
 
+    def cmd_cloud_ping(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """Is Conxa Cloud reachable right now? Drives the offline banner and the sidebar connection dot.
+
+        Any HTTP answer, even an error status, means the network path works; only a failure to get one
+        (no route, DNS, timeout) counts as offline. Never raises — a ping that threw would itself look
+        like the engine being down.
+        """
+        import urllib.error
+        import urllib.request
+
+        started = time.monotonic()
+        try:
+            req = urllib.request.Request(f"{self._cloud_api_base()}/healthz")
+            req.add_header("X-Conxa-Client", os.environ.get("CONXA_PROXY_CLIENT", "build-studio"))
+            with urllib.request.urlopen(req, timeout=6):
+                pass
+        except urllib.error.HTTPError:
+            pass
+        except Exception as exc:
+            return {"online": False, "detail": type(exc).__name__}
+        return {"online": True, "ms": int((time.monotonic() - started) * 1000)}
+
     def cmd_start_recording(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         import re
         from pathlib import Path

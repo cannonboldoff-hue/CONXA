@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conxa_core.config import settings
-from conxa_core.db import db_set
+from conxa_core.db import db_get, db_set
 from app.main import app
 from app.services import llm_metering
 from app.services.entitlements import current_period, usage_key
@@ -813,3 +813,51 @@ def test_development_plan_is_unlimited(monkeypatch, tmp_path):
     assert entitlements.json()["meters"]["machines"]["unlimited"] is True
     assert reserve.status_code == 200, reserve.text
     assert reserve.json()["remaining_compile_credits"] is None
+
+
+def test_ai_credits_class_meters_into_the_shared_pool_and_legacy_counters_still_count(monkeypatch, tmp_path):
+    """CLOUD-25: "ai_credits" is the canonical class, "human_edit" a permanent alias. Both draw
+    from one pool, new usage is written under the new counters, and rows written before the
+    rename (human_edit_* counters) are still summed."""
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    from app.services.entitlements import record_llm_usage
+
+    _set_plan("free")
+    principal = Principal(
+        user_id="u1", workspace_id="wrk_local", workspace_slug="local", workspace_name="Local",
+        role="owner", email=None, name=None, auth_provider="local",
+    )
+    record_llm_usage(principal, usage_class="human_edit", input_tokens=100, output_tokens=50)
+    record_llm_usage(principal, usage_class="ai_credits", input_tokens=200, output_tokens=25)
+
+    meters = client.get("/api/v1/entitlements/current").json()["meters"]
+    assert meters["ai_usage_credits"]["used"] == 375
+
+    usage = db_get("entitlement_usage", usage_key("wrk_local", current_period()))
+    assert usage["ai_credits_input_tokens"] == 300  # the legacy alias is normalized on write
+    assert usage["ai_credits_requests"] == 2
+
+
+def test_ai_credits_pool_exhaustion_uses_the_new_error_code_only_for_the_new_class(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    monkeypatch.setattr(settings, "entitlements_enforce_human_edit", True)
+    _set_plan("free", human_edit_tokens=5)
+    db_set(
+        "entitlement_usage",
+        usage_key("wrk_local", current_period()),
+        {"workspace_id": "wrk_local", "period": current_period(), "ai_credits_input_tokens": 5, "ai_credits_output_tokens": 0},
+    )
+    new = client.post(
+        "/api/v1/llm/proxy/text",
+        json={"task": "selector_repair", "payload": {"prompt": "x"}, "usage_class": "ai_credits"},
+        headers=STUDIO_HEADER,
+    )
+    old = client.post(
+        "/api/v1/llm/proxy/text",
+        json={"task": "selector_repair", "payload": {"prompt": "x"}, "usage_class": "human_edit"},
+        headers=STUDIO_HEADER,
+    )
+    assert (new.status_code, new.json()["detail"]) == (402, "ai_credits_exceeded")
+    assert (old.status_code, old.json()["detail"]) == (402, "human_edit_pool_exceeded")

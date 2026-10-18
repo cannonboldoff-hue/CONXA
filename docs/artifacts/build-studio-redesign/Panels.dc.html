@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panel behaviour</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1500px; box-sizing: border-box; padding: 56px 72px; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 32px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600">Panel behaviour</h1>
+    <p style="margin: 0; font-size: 14px; color: #a3a3a3; line-height: 1.6; max-width: 980px">The workspace column never drops below 520 px. When something has to give, it gives in this order: inspector folds to its strip, navigation folds to its rail, then the inspector becomes a sheet over the workspace.</p>
+  </div>
+
+  <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+    <sc-for list="{{layouts}}" as="l" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="height: 150px; display: flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; overflow: hidden; font-size: 11px; color: #a3a3a3">
+          <sc-for list="{{l.cols}}" as="c" hint-placeholder-count="3">
+            <div style="flex: {{c.flex}}; background: {{c.bg}}; border-right: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; min-width: 0">{{c.label}}</div>
+          </sc-for>
+        </div>
+        <span style="font-size: 14px; font-weight: 500">{{l.title}}</span>
+        <span style="font-size: 12px; color: #a3a3a3; line-height: 1.5">{{l.note}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <section style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Sizes and memory</h2>
+      <div role="table" aria-label="Panel sizes" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; font-size: 13px">
+        <div role="row" style="display: grid; grid-template-columns: 1.2fr 0.8fr 1fr 1.3fr; gap: 12px; padding: 9px 14px; background: #1e1e1e; color: #8e8e8e; font-size: 12px"><span role="columnheader">Panel</span><span role="columnheader">Default</span><span role="columnheader">Drag range</span><span role="columnheader">Collapsed</span></div>
+        <sc-for list="{{sizes}}" as="s" hint-placeholder-count="4">
+          <div role="row" style="display: grid; grid-template-columns: 1.2fr 0.8fr 1fr 1.3fr; gap: 12px; padding: 10px 14px; border-top: 1px solid rgba(255,255,255,0.06)"><span role="cell">{{s.name}}</span><span role="cell" style="color: #a3a3a3">{{s.def}}</span><span role="cell" style="color: #a3a3a3">{{s.range}}</span><span role="cell" style="color: #a3a3a3">{{s.collapsed}}</span></div>
+        </sc-for>
+      </div>
+      <p style="margin: 0; font-size: 12px; color: #8e8e8e; line-height: 1.6">Widths and open/closed state are remembered per person on this computer. Double-click a divider to reset it. Dividers are focusable; arrow keys move them 16 px.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Keyboard</h2>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+        <sc-for list="{{keys}}" as="k" hint-placeholder-count="6">
+          <div style="display: flex; align-items: center; gap: 12px"><span style="min-width: 76px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #d4d2cf; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 2px 8px; text-align: center">{{k.k}}</span><span style="color: #a3a3a3">{{k.d}}</span></div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 16px; font-weight: 600">Test browser panel, start to finish</h2>
+    <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+      <sc-for list="{{flow}}" as="f" hint-placeholder-count="5">
+        <li style="border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #8e8e8e">{{f.n}}</span><span style="font-size: 14px; font-weight: 500">{{f.t}}</span><span style="font-size: 12px; color: #a3a3a3; line-height: 1.5">{{f.d}}</span></li>
+      </sc-for>
+    </ol>
+  </section>
+
+  <section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Living with a native browser view</h2>
+      <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: #d4d2cf">
+        <li>Nothing from the app can draw over the browser region. Menus that would overlap it open toward the workspace instead.</li>
+        <li>While a dialog is open, the browser region is hidden and shows “Browser hidden while this dialog is open”.</li>
+        <li>The region is resized by the app on every divider move and window resize; the page underneath reflows like any browser.</li>
+        <li>Popups and new tabs the site opens appear as tabs in the panel’s footer, never as stray windows.</li>
+        <li>If attaching the browser fails, the run falls back to its own window and the panel says so.</li>
+      </ul>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Interaction states</h2>
+      <div style="display: flex; flex-direction: column; gap: 6px; width: 264px; padding: 8px; background: #1e1e1e; border-radius: 10px; font-size: 13px">
+        <div style="height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #a3a3a3">Rest<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">slate text</span></div>
+        <div style="height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #e8e6e3; background: rgba(255,255,255,0.04)">Hover<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">4% tint</span></div>
+        <div style="height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #e8e6e3; background: rgba(255,255,255,0.07)">Selected<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">7% tint, no clay</span></div>
+        <div style="height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #e8e6e3; outline: 2px solid rgba(217,119,87,0.55); outline-offset: -2px">Keyboard focus<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">clay ring</span></div>
+        <div style="height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #6b6b6b">Unavailable<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">tooltip says why</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const N = '#1e1e1e', W = '#1a1a1a', B = '#232323';
+    const col = (label, flex, bg) => ({ label, flex, bg });
+    const layouts = [
+      { title: 'Wide · 1440 and up', note: 'Everything open. Inspector only on workflow screens.', cols: [col('Nav 264', 2.6, N), col('Workspace', 6, W), col('Inspector 320', 3.2, N)] },
+      { title: 'Test running', note: 'Browser takes the inspector’s place; inspector folds to a 44 px strip.', cols: [col('Nav', 2.6, N), col('Workspace 520+', 5, W), col('Browser 50%', 5, B), col('', 0.5, N)] },
+      { title: 'Medium · 1200–1439', note: 'Opening the browser also folds navigation to its 56 px rail.', cols: [col('', 0.6, N), col('Workspace', 5.5, W), col('Browser', 5.5, B), col('', 0.5, N)] },
+      { title: 'Narrow · 960–1199', note: 'Inspector opens as a sheet over the workspace. Minimum window: 960 × 640.', cols: [col('', 0.6, N), col('Workspace', 6, W), col('Inspector sheet', 3.6, '#262626')] },
+    ];
+    const sizes = [
+      { name: 'Navigation', def: '264', range: '220–320', collapsed: '56 rail · icons + status' },
+      { name: 'Inspector', def: '320', range: '280–400', collapsed: '44 strip · status glyph' },
+      { name: 'Browser panel', def: '50%', range: '480 – 70%', collapsed: 'Hidden; header pill “Show browser”' },
+      { name: 'Human Edit conversation', def: '340', range: '300–440', collapsed: 'Hidden; “Conversation” button' },
+    ];
+    const keys = [
+      { k: 'Ctrl K', d: 'Search workflows and groups' }, { k: 'Ctrl N', d: 'New workflow' },
+      { k: 'Ctrl \\', d: 'Fold or unfold navigation' }, { k: 'Ctrl .', d: 'Fold or unfold the inspector' },
+      { k: 'Ctrl E', d: 'Open Human Edit for this workflow' }, { k: 'Esc', d: 'Close a dialog or sheet — never stops a run' },
+    ];
+    const flow = [
+      { n: '1', t: 'Run test', d: 'Inputs are checked first. The panel slides in from the right in 220 ms while the test copy builds.' },
+      { n: '2', t: 'Watching', d: 'Live page on the right, plain progress on the left. Stop test sits on the run card.' },
+      { n: '3', t: 'Hidden', d: 'Hiding the panel never stops the run. A “Test running · Show browser” pill stays in the header.' },
+      { n: '4', t: 'Finished', d: 'The page stays on its final screen so you can check the result. Now it’s safe to click around.' },
+      { n: '5', t: 'Closed', d: 'Closing frees the browser and brings the inspector back. The result stays in the conversation.' },
+    ];
+    return { layouts, sizes, keys, flow };
+  }
+}
+</script>
+</body>
+</html>

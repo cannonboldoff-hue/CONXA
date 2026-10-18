@@ -419,7 +419,7 @@ class WorkflowEditorMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         if regenerate:
-            self._install_proxy_router(usage_class="human_edit")
+            self._install_proxy_router(usage_class="ai_credits")
         try:
             return preview_retarget(doc, step_index, bbox, regenerate=regenerate, nested_path=nested_path)
         except RetargetError as exc:
@@ -454,7 +454,7 @@ class WorkflowEditorMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         snapshot = copy.deepcopy(doc)
-        self._install_proxy_router(usage_class="human_edit")
+        self._install_proxy_router(usage_class="ai_credits")
         try:
             doc = apply_retarget(doc, step_index, payload, nested_path=nested_path)
         except RetargetError as exc:

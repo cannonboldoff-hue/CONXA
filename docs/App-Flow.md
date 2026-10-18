@@ -10,6 +10,7 @@
 1. [User Onboarding](#1-user-onboarding)
 2. [Build Studio Login](#2-build-studio-login)
 3. [Create a Workflow](#3-create-a-workflow)
+3a. [Conversation-led workflow (Build Studio, 2026-10)](#3a-conversation-led-workflow-build-studio-2026-10)
 4. [Group Page — Workflow Lifecycle Rail (Record, Compile, Review, Test)](#4-group-page--workflow-lifecycle-rail)
 5. [Pipeline & Compilation](#5-pipeline--compilation)
 6. [Workflow Editing (HumanEdit)](#6-workflow-editing-humanedit)
@@ -111,6 +112,36 @@ flowchart LR
 
 **Data created:** `Workflow` model with `status="needs_auth"`, `auth=null`, `workflows=[]`.  
 **Storage:** `data/workflows/{id}/workflow.json`
+
+---
+
+## 3a. Conversation-led workflow (Build Studio, 2026-10)
+
+Each workflow has one continuous conversation (`/w/<id>`); the group page and Human Edit remain as places to work, but the thread is where the person is told what happened and what to do next. Source: `docs/Build-Studio-Conversation-Plan.md`; mockups: `docs/artifacts/build-studio-redesign/`.
+
+```mermaid
+flowchart LR
+    N[New workflow<br/>name · group · start page · task] --> S{App signed in<br/>for the group?}
+    S -- no --> SI[Sign-in card<br/>Chromium window]
+    S -- yes --> R
+    SI --> R[Recording card<br/>live rows · Pause · Changes each run?]
+    R -- Finish --> C[Compile card<br/>real stages · queued · out of credits]
+    R -- Discard / browser closed --> R2[Record again · Save N actions]
+    C --> Q[Clarify questions<br/>one at a time, up to 5]
+    Q --> SUM[Summary card]
+    SUM --> T[Test inputs]
+    SUM --> E[Human Edit<br/>Test changes]
+    E --> T
+    T --> TR[Test running<br/>guard pauses before steps that can't be undone]
+    TR -- sign-in expired --> SX[Paused: sign in again, test again]
+    TR -- failed --> AF[Auto-fix ≤ 3 attempts<br/>one gated change + Undo]
+    AF --> TR
+    AF -- stops --> E
+    TR -- passed --> A[Approve<br/>never publishes]
+    A --> P[Publish page]
+```
+
+**What stays the same:** recording and sign-in still use their own Chromium window (only tests draw into Studio's browser panel); compiling and testing run on this computer; the cloud is used for the model proxy, credits and publishing. **Who decides:** the person approves; edits revoke approval; no step that can't be undone runs in a test unless a person allows it; Clarify answers and auto-fix changes go through the same gated edit commands as Human Edit. **When something is unavailable:** offline pauses compile/chat/publish, a stopped engine shows a restart notice, an expired sign-in pauses the test instead of failing it (see TRD §7.4b).
 
 ---
 

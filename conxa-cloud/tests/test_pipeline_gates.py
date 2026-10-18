@@ -26,6 +26,7 @@ def _make_workflow(
     *,
     skill_id: str | None = "skill-abc",
     edited_at: float | None = 1.0,
+    signed_off: bool | None = None,
     last_test_status: str = "never",
     last_test_error: str | None = None,
     name: str = "Test Workflow",
@@ -43,6 +44,8 @@ def _make_workflow(
         recorded_at=0.0,
         skill_id=skill_id,
         edited_at=edited_at,
+        # Approval is its own flag now; the old tests' "edited" workflows stand for approved ones.
+        signed_off=edited_at is not None if signed_off is None else signed_off,
         last_test_status=last_test_status,  # type: ignore[arg-type]
         last_test_error=last_test_error,
     )
@@ -88,6 +91,22 @@ class TestBuildSkillPackageGates:
         with pytest.raises(ValueError, match="sign off"):
             self._run_build([wf], tmp_path)
 
+    def test_edited_but_not_signed_off_is_refused(self, tmp_path: Path) -> None:
+        """edited_at moves on every skill write (even a fresh compile) — it is not approval."""
+        wf = _make_workflow(skill_id="skill-abc", edited_at=5.0, signed_off=False)
+        with pytest.raises(ValueError, match="sign off"):
+            self._run_build([wf], tmp_path)
+
+    def test_test_build_does_not_need_approval(self, tmp_path: Path) -> None:
+        """A workflow has to be testable before it can be approved."""
+        from conxa_compile.skill_package_builder import build_skill_package
+        wf = _make_workflow(skill_id="skill-abc", edited_at=5.0, signed_off=False)
+        pack = _make_pack()
+        with patch("conxa_compile.skill_package_builder.get_or_create_skill_pack", return_value=pack),              patch("conxa_compile.skill_package_builder.list_workflows", return_value=[wf]),              patch("conxa_compile.skill_package_builder.set_build", return_value=pack),              patch("conxa_compile.skill_package_builder._clean_stale_artifacts", side_effect=RuntimeError("past the gate")):
+            # Getting as far as the first build step proves the approval gate let it through.
+            with pytest.raises(RuntimeError, match="past the gate"):
+                build_skill_package("ws-1", company_name="Test Company", require_signed_off=False)
+
     def test_raises_partial_unedited(self, tmp_path: Path) -> None:
         """Mix of edited and unedited — should still raise."""
         wf_ok = _make_workflow(skill_id="skill-1", edited_at=1.0)
@@ -120,6 +139,18 @@ class TestInvalidateWorkflowTest:
         assert updated_wf.last_test_at is None
         assert updated_wf.edited_at is not None
         assert before <= updated_wf.edited_at <= after
+
+    def test_any_skill_write_revokes_approval(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """signed_off is the one approval truth: a later edit — by a person or an automatic
+        fix — means the workflow must be tested and approved again."""
+        wf = _make_workflow(skill_id="sk-1", edited_at=1.0, signed_off=True)
+        saved: list[Workflow] = []
+        monkeypatch.setattr("conxa_core.storage.workflow_store.list_workflows", lambda: [wf])
+        monkeypatch.setattr("conxa_core.storage.workflow_store.save_workflow", lambda w: saved.append(w) or w)
+
+        invalidate_workflow_test_by_skill("sk-1")
+
+        assert saved[0].signed_off is False
 
     def test_does_not_touch_unrelated_workflows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         wf_target = _make_workflow(skill_id="sk-target", last_test_status="passed")

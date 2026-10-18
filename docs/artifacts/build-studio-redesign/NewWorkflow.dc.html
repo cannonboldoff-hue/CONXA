@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New workflow</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="new" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; overflow-y: auto; display: flex; justify-content: center; padding: 56px 40px">
+      <form style="width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600">New workflow</h1>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #a3a3a3">Tell Conxa what you’re about to teach it. You’ll record the task right after this — no technical setup.</p>
+        </div>
+
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #d4d2cf">Name
+          <input value="{{name}}" onChange="{{setName}}" placeholder="e.g. Create invoice" style="height: 38px; box-sizing: border-box; border-radius: 10px; border: 1px solid {{nameBorder}}; background: #1a1a1a; color: #e8e6e3; padding: 0 12px; font: 14px Inter, sans-serif; outline: none">
+          <sc-if value="{{nameError}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #f87171">✕ Give it a name people will recognise in the list.</span></sc-if>
+        </label>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #d4d2cf">
+          <span id="grp-label">Group</span>
+          <div role="radiogroup" aria-labelledby="grp-label" style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+              <button type="button" role="radio" aria-checked="{{g.checked}}" onClick="{{g.pick}}" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid {{g.border}}; background: {{g.bg}}; color: #e8e6e3; font: 500 13px Inter, sans-serif">{{g.label}}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{isNewGroup}}" hint-placeholder-val="{{ false }}">
+            <input aria-label="New group name" placeholder="Group name, e.g. Procurement" style="height: 38px; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; padding: 0 12px; font: 14px Inter, sans-serif; outline: none; margin-top: 4px">
+            <span style="font-size: 12px; color: #8e8e8e">A new group starts with no sign-ins. You’ll add the app it uses on the next screen.</span>
+          </sc-if>
+        </div>
+
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #d4d2cf">Starting page
+          <input value="{{url}}" onChange="{{setUrl}}" placeholder="https://" style="height: 38px; box-sizing: border-box; border-radius: 10px; border: 1px solid {{urlBorder}}; background: #1a1a1a; color: #e8e6e3; padding: 0 12px; font: 13px 'JetBrains Mono', monospace; outline: none">
+          <sc-if value="{{urlError}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #f87171">✕ Enter the full address of the page where the task starts, like https://billing.example.com/invoices/new</span></sc-if>
+          <sc-if value="{{urlMatch}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #a3a3a3"><span style="color: #4ade80">●</span> Uses Billing Portal — already signed in for Finance Ops</span></sc-if>
+          <sc-if value="{{urlUnknown}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #a3a3a3"><span style="color: #fbbf24">▲</span> No sign-in saved for this site in {{groupName}}. The browser opens on its sign-in page first.</span></sc-if>
+        </label>
+
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #d4d2cf">What does the task do? <span style="color: #8e8e8e; font-size: 12px; margin-top: -4px">Optional — helps Conxa ask better questions afterwards</span>
+          <textarea rows="3" placeholder="e.g. Raise an invoice for a customer, add line items, and send it." style="resize: vertical; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; padding: 10px 12px; font: 14px/1.5 Inter, sans-serif; outline: none"></textarea>
+        </label>
+
+        <div style="display: flex; gap: 10px; align-items: center; padding-top: 4px">
+          <sc-if value="{{valid}}" hint-placeholder-val="{{ false }}">
+            <a href="Recording.dc.html" style="height: 38px; padding: 0 16px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 14px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Create and start recording</a>
+          </sc-if>
+          <sc-if value="{{invalid}}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{submit}}" style="height: 38px; padding: 0 16px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 14px Inter, sans-serif">Create and start recording</button>
+          </sc-if>
+          <a href="Group.dc.html" style="height: 38px; padding: 0 12px; border-radius: 10px; color: #a3a3a3; font-size: 14px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Cancel</a>
+          <span style="margin-left: auto; font-size: 12px; color: #8e8e8e">Opens the browser beside the conversation</span>
+        </div>
+      </form>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { name: 'Create invoice', url: '', group: 'Finance Ops', tried: false };
+  }
+  renderVals() {
+    const { name, url, group, tried } = this.state;
+    const nameOk = name.trim().length > 0;
+    const urlOk = /^https?:\/\/[^\s/]+\.[^\s/]+/.test(url.trim());
+    const valid = nameOk && urlOk;
+    const isNew = group === '+ New group';
+    const labels = ['Finance Ops', 'Customer Support', 'Onboarding', '+ New group'];
+    const groups = labels.map((label) => ({
+      label, checked: group === label ? 'true' : 'false',
+      border: group === label ? '#d97757' : 'rgba(255,255,255,0.10)',
+      bg: group === label ? 'rgba(217,119,87,0.10)' : 'transparent',
+      pick: () => this.setState({ group: label }),
+    }));
+    const matches = urlOk && url.includes('billing.example.com') && group === 'Finance Ops';
+    return {
+      name, url, groups, isNewGroup: isNew, valid, invalid: !valid,
+      groupName: isNew ? 'the new group' : group,
+      setName: (e) => this.setState({ name: e.target.value }),
+      setUrl: (e) => this.setState({ url: e.target.value }),
+      submit: () => this.setState({ tried: true }),
+      nameError: tried && !nameOk, urlError: tried && !urlOk,
+      nameBorder: tried && !nameOk ? '#f87171' : 'rgba(255,255,255,0.12)',
+      urlBorder: tried && !urlOk ? '#f87171' : 'rgba(255,255,255,0.12)',
+      urlMatch: matches, urlUnknown: urlOk && !matches,
+    };
+  }
+}
+</script>
+</body>
+</html>

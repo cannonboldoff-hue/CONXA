@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Group view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="group" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; overflow-y: auto; display: flex; justify-content: center; padding: 32px 40px">
+      <div style="width: 100%; max-width: 1040px; display: flex; flex-direction: column; gap: 28px">
+        <div style="display: flex; align-items: flex-end; gap: 16px">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600">Finance Ops</h1>
+            <span style="font-size: 13px; color: #a3a3a3">3 workflows · 1 in progress · 2 apps · <span style="color: #fbbf24">▲</span> 1 sign-in not checked recently</span>
+          </div>
+          <button type="button" aria-label="Group actions" style="height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Rename or delete</button>
+          <a href="NewWorkflow.dc.html" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New workflow</a>
+        </div>
+
+        <section style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: baseline; gap: 10px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Sign-ins</h2><span style="font-size: 13px; color: #8e8e8e">Every workflow in this group uses these. Sign in once here.</span><button type="button" style="margin-left: auto; height: 28px; padding: 0 10px; border-radius: 8px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">+ Add app</button></div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #1e1e1e">
+              <span style="color: #4ade80; font-size: 11px">●</span>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Billing Portal</span><span style="font-size: 12px; color: #8e8e8e; font-family: 'JetBrains Mono', monospace">billing.example.com</span></div>
+              <span style="font-size: 12px; color: #a3a3a3">Signed in · checked 4 min ago</span>
+              <button type="button" aria-label="Edit Billing Portal" style="width: 28px; height: 28px; border-radius: 7px; border: none; background: transparent; color: #8e8e8e"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid rgba(251,191,36,0.30); border-radius: 10px; background: #1e1e1e">
+              <span style="color: #fbbf24; font-size: 11px">▲</span>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Ledger Export</span><span style="font-size: 12px; color: #8e8e8e">Not checked in 6 days — may have expired</span></div>
+              <button type="button" style="height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">Check now</button>
+            </div>
+          </div>
+        </section>
+
+        <section style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <h2 style="margin: 0; font-size: 16px; font-weight: 600; margin-right: 8px">Workflows</h2>
+            <button type="button" aria-pressed="true" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #e8e6e3; font: 500 12px Inter, sans-serif">All 3</button>
+            <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #a3a3a3; font: 500 12px Inter, sans-serif">In progress 1</button>
+            <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #a3a3a3; font: 500 12px Inter, sans-serif">Needs a fix 1</button>
+            <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #a3a3a3; font: 500 12px Inter, sans-serif">Approved 1</button>
+          </div>
+          <div role="table" aria-label="Workflows in Finance Ops" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden">
+            <div role="row" style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) minmax(0, 1.1fr) minmax(0, 1.3fr) 90px; gap: 16px; padding: 10px 16px; font-size: 12px; color: #8e8e8e; background: #1e1e1e; border-bottom: 1px solid rgba(255,255,255,0.06)">
+              <span role="columnheader">Workflow</span><span role="columnheader">Where it is</span><span role="columnheader">Apps</span><span role="columnheader">Last test</span><span role="columnheader">Updated</span>
+            </div>
+            <a role="row" href="Clarify.dc.html" style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) minmax(0, 1.1fr) minmax(0, 1.3fr) 90px; gap: 16px; padding: 14px 16px; font-size: 14px; text-decoration: none; color: #e8e6e3; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: center">
+              <span role="cell" style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Create invoice</span><span style="font-size: 12px; color: #8e8e8e">13 steps · 3 inputs · in progress</span></span>
+              <span role="cell" style="font-size: 13px"><span style="color: #fbbf24">▲</span> Needs your answers</span>
+              <span role="cell" style="font-size: 12px; color: #a3a3a3">Billing Portal</span>
+              <span role="cell" style="font-size: 13px; color: #a3a3a3"><span style="color: #8e8e8e">○</span> Not tested yet</span>
+              <span role="cell" style="font-size: 12px; color: #8e8e8e">3:06 PM</span>
+            </a>
+            <a role="row" href="TestPassed.dc.html" style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) minmax(0, 1.1fr) minmax(0, 1.3fr) 90px; gap: 16px; padding: 14px 16px; font-size: 14px; text-decoration: none; color: #e8e6e3; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: center">
+              <span role="cell" style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Refund an order</span><span style="font-size: 12px; color: #8e8e8e">9 steps · 2 inputs</span></span>
+              <span role="cell" style="font-size: 13px"><span style="color: #4ade80">●</span> Approved · ready to publish</span>
+              <span role="cell" style="font-size: 12px; color: #a3a3a3">Billing Portal</span>
+              <span role="cell" style="font-size: 13px"><span style="color: #4ade80">●</span> Passed · Oct 15</span>
+              <span role="cell" style="font-size: 12px; color: #8e8e8e">Oct 15</span>
+            </a>
+            <a role="row" href="TestFailed.dc.html" style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) minmax(0, 1.1fr) minmax(0, 1.3fr) 90px; gap: 16px; padding: 14px 16px; font-size: 14px; text-decoration: none; color: #e8e6e3; align-items: center">
+              <span role="cell" style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Export monthly ledger</span><span style="font-size: 12px; color: #8e8e8e">11 steps · 1 input</span></span>
+              <span role="cell" style="font-size: 13px"><span style="color: #f87171">✕</span> Test failed — needs a fix</span>
+              <span role="cell" style="font-size: 12px; color: #a3a3a3">Billing Portal, Ledger Export</span>
+              <span role="cell" style="font-size: 13px"><span style="color: #f87171">✕</span> Failed at step 4 · 2:40 PM</span>
+              <span role="cell" style="font-size: 12px; color: #8e8e8e">2:40 PM</span>
+            </a>
+          </div>
+          <span style="font-size: 12px; color: #8e8e8e">Each workflow belongs to exactly one group and uses that group’s sign-ins. It’s listed here from the moment it’s created, with its status.</span>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

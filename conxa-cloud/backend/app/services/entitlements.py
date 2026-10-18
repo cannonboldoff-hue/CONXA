@@ -39,11 +39,27 @@ EXECUTE_GRANT_BY_USER_NS = "execute_grant_by_user"
 
 _DOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 
-ALLOWED_USAGE_CLASSES = {"compile", "human_edit", "execute_chat"}
+# "ai_credits" is the canonical name of the shared AI credits pool class (CLOUD-25).
+# "human_edit" is its legacy wire name, accepted permanently for already-installed Studios,
+# and normalized to "ai_credits" the moment a request is metered.
+ALLOWED_USAGE_CLASSES = {"compile", "ai_credits", "human_edit", "execute_chat"}
+LEGACY_USAGE_CLASS_ALIASES = {"human_edit": "ai_credits"}
 
-# usage classes that draw from the same AI Usage Credits pool/wallet as
-# human_edit — separate *counters* for reporting, not separate quotas.
-_POOL_USAGE_CLASSES = ("human_edit", "execute_chat")
+
+def normalize_usage_class(usage_class: str) -> str:
+    return LEGACY_USAGE_CLASS_ALIASES.get(usage_class, usage_class)
+
+
+def pool_exceeded_code(usage_class: str) -> str:
+    """The error code for an exhausted AI credits pool. Only callers that send the new
+    "ai_credits" class get the new code; legacy "human_edit" callers and Conxa Execute
+    ("execute_chat") keep the code their error mapping already knows."""
+    return "ai_credits_exceeded" if usage_class == "ai_credits" else "human_edit_pool_exceeded"
+
+# usage classes that draw from the same AI Usage Credits pool/wallet —
+# separate *counters* for reporting, not separate quotas. Legacy "human_edit" counters written
+# before CLOUD-25 are still summed, so no stored usage row needs migrating.
+_POOL_USAGE_CLASSES = ("ai_credits", "human_edit", "execute_chat")
 
 
 def _combined_pool_used(usage: dict[str, Any]) -> int:
@@ -453,6 +469,9 @@ def _usage_defaults(workspace_id: str, period: str) -> dict[str, Any]:
         "compile_input_tokens": 0,
         "compile_output_tokens": 0,
         "compile_requests": 0,
+        "ai_credits_input_tokens": 0,
+        "ai_credits_output_tokens": 0,
+        "ai_credits_requests": 0,
         "human_edit_input_tokens": 0,
         "human_edit_output_tokens": 0,
         "human_edit_requests": 0,
@@ -1312,10 +1331,12 @@ def _record_llm_usage_for_workspace(
 ) -> dict[str, Any]:
     limits = _limits_from_billing(billing)
     period, _reset_at = usage_window_for_billing(billing)
+    requested_class = usage_class
+    usage_class = normalize_usage_class(usage_class)
     with _locked_store(f"llm-usage:{workspace_id}:{period}") as store:
         usage = _get_usage(store, workspace_id, period)
         if usage_class in _POOL_USAGE_CLASSES:
-            # human_edit and execute_chat share one pool/quota/wallet — the
+            # ai_credits and execute_chat share one pool/quota/wallet — the
             # gate below checks their combined total; only the per-class
             # counter fields below are kept separate, for reporting.
             used = _combined_pool_used(usage)
@@ -1325,7 +1346,7 @@ def _record_llm_usage_for_workspace(
                 # Monthly pool exhausted — draw from the never-expiring wallet
                 # (one-time add-on purchases) when it can cover this request.
                 if not _spend_wallet(workspace_id, human_edit_tokens=incoming):
-                    raise EntitlementError("human_edit_pool_exceeded", 402)
+                    raise EntitlementError(pool_exceeded_code(requested_class), 402)
             usage[f"{usage_class}_input_tokens"] = int(usage.get(f"{usage_class}_input_tokens") or 0) + max(
                 0, int(input_tokens)
             )
@@ -1386,7 +1407,7 @@ def record_execute_pool_usage(workspace_id: str, *, input_tokens: int, output_to
 
 
 def _ensure_human_edit_available_for_billing(
-    billing: dict[str, Any], workspace_id: str, estimated_tokens: int = 0
+    billing: dict[str, Any], workspace_id: str, estimated_tokens: int = 0, usage_class: str = "ai_credits"
 ) -> None:
     limits = _limits_from_billing(billing)
     limit = limits["human_edit_tokens"]
@@ -1401,12 +1422,18 @@ def _ensure_human_edit_available_for_billing(
         # balance keeps the AI Usage Credits pool open past the monthly
         # allowance.
         if _wallet(billing)["human_edit_tokens"] <= 0:
-            raise EntitlementError("human_edit_pool_exceeded", 402)
+            raise EntitlementError(pool_exceeded_code(usage_class), 402)
 
 
-def ensure_human_edit_available(principal: Principal, *, estimated_tokens: int = 0) -> None:
+def ensure_ai_credits_available(
+    principal: Principal, *, estimated_tokens: int = 0, usage_class: str = "ai_credits"
+) -> None:
     billing = billing_for(principal)
-    _ensure_human_edit_available_for_billing(billing, principal.workspace_id, estimated_tokens)
+    _ensure_human_edit_available_for_billing(billing, principal.workspace_id, estimated_tokens, usage_class)
+
+
+# Pre-CLOUD-25 name, kept so existing imports and tests keep working.
+ensure_human_edit_available = ensure_ai_credits_available
 
 
 def ensure_execute_pool_available(workspace_id: str, *, estimated_tokens: int = 0) -> None:
@@ -1415,7 +1442,7 @@ def ensure_execute_pool_available(workspace_id: str, *, estimated_tokens: int = 
     ensure_human_edit_available, see record_execute_pool_usage for why this
     must not go through a synthetic Principal."""
     billing = billing_for_workspace(workspace_id)
-    _ensure_human_edit_available_for_billing(billing, workspace_id, estimated_tokens)
+    _ensure_human_edit_available_for_billing(billing, workspace_id, estimated_tokens, "execute_chat")
 
 
 def execute_pool_status(workspace_id: str) -> dict[str, Any]:

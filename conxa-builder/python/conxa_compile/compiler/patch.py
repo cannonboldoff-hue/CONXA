@@ -272,6 +272,23 @@ def _sync_recovery_deterministic(step: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _sync_destructive_from_consequence(step: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """A reviewer's (or the copilot's) edit of ``consequence`` must reach the runtime.
+
+    The runtime reads only ``step.destructive``, exported from ``identity_bundle.destructive``
+    (skill_package_builder_saved_skill.py) — never ``consequence``. Without this shadow sync,
+    marking a step irreversible in Human Edit changed the label and nothing else, so the test
+    guard and dry-run would still treat it as safe."""
+    if "consequence" not in patch:
+        return step
+    bundle = step.get("identity_bundle")
+    if not isinstance(bundle, dict):
+        return step
+    out = dict(step)
+    out["identity_bundle"] = {**bundle, "destructive": str(step.get("consequence") or "") == "irreversible"}
+    return out
+
+
 def sync_derived_step_fields(
     step: dict[str, Any], patch: dict[str, Any], *, sync_recovery: bool = True
 ) -> dict[str, Any]:
@@ -291,6 +308,7 @@ def sync_derived_step_fields(
     out = dict(step)
     _apply_top_level_step_fields(out, patch, sanitize_intent=False)
     out = _normalize_step_anchor_blocks(out)
+    out = _sync_destructive_from_consequence(out, patch)
     if sync_recovery:
         out = _sync_recovery_deterministic(out)
     return out

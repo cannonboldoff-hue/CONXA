@@ -15,6 +15,8 @@ type PageHeaderProps = {
   /** Shows a back-chevron at the true left edge of AppChrome's header row,
    * before the title. Most pages never set this. */
   onBack?: () => void
+  /** When set, the back control is a labelled button ("Back to conversation") instead of an icon. */
+  backLabel?: string
   /** Renders `actions` inside AppChrome's header row (after the title) instead
    * of a separate strip in the page body. */
   inlineActions?: boolean
@@ -25,14 +27,14 @@ type PageHeaderProps = {
  * Only renders something here when `leading` or `actions` are supplied — a
  * two-part strip that stays put in the body: standing information on the left,
  * page-level buttons on the right. */
-export function PageHeader({ title, description, leading, actions, className, extra, onBack, inlineActions }: PageHeaderProps) {
+export function PageHeader({ title, description, leading, actions, className, extra, onBack, backLabel, inlineActions }: PageHeaderProps) {
   const { setHeader } = usePageHeaderContext()
   const headerActions = inlineActions ? actions : undefined
 
   useEffect(() => {
-    setHeader({ title, description, extra, onBack, actions: headerActions })
+    setHeader({ title, description, extra, onBack, backLabel, actions: headerActions })
     return () => setHeader(null)
-  }, [title, description, extra, onBack, headerActions, setHeader])
+  }, [title, description, extra, onBack, backLabel, headerActions, setHeader])
 
   if (inlineActions || (!actions && !leading)) return null
 

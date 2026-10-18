@@ -48,6 +48,34 @@ contextBridge.exposeInMainWorld("conxa", {
     return () => ipcRenderer.removeListener("deep-link", listener);
   },
 
+  /** The local engine (Python backend): its state, a manual restart, and text to paste into a bug report. */
+  engine: {
+    status: () => ipcRenderer.invoke("engine:status"),
+    restart: () => ipcRenderer.invoke("engine:restart"),
+    diagnostics: () => ipcRenderer.invoke("engine:diagnostics"),
+    onStatus: (handler) => {
+      const listener = (_e, msg) => handler(msg);
+      ipcRenderer.on("engine:status", listener);
+      return () => ipcRenderer.removeListener("engine:status", listener);
+    },
+  },
+
+  /** Embedded test browser (BUILD-42). `available` is false when the debugging port couldn't be opened. */
+  panel: {
+    available: () => ipcRenderer.invoke("panel:available"),
+    setBounds: (payload) => ipcRenderer.invoke("panel:bounds", payload),
+    hide: () => ipcRenderer.invoke("panel:hide"),
+    selectTab: (payload) => ipcRenderer.invoke("panel:select-tab", payload),
+    closeTab: (payload) => ipcRenderer.invoke("panel:close-tab", payload),
+    closeRun: (payload) => ipcRenderer.invoke("panel:close-run", payload),
+    navigate: (payload) => ipcRenderer.invoke("panel:navigate", payload),
+    onTabs: (handler) => {
+      const listener = (_e, msg) => handler(msg);
+      ipcRenderer.on("panel:tabs", listener);
+      return () => ipcRenderer.removeListener("panel:tabs", listener);
+    },
+  },
+
   update: {
     check: () => ipcRenderer.invoke("update:check"),
     start: () => ipcRenderer.invoke("update:start"),

@@ -6,10 +6,10 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 20 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35 |
+| BUILD — Build Studio | 28 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43 |
 | EXEC — Execution & Recovery | 27 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46 |
-| CLOUD — Cloud | 9 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22 |
-| RT — Runtime | 4 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4 |
+| CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
+| RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 17 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 18, 19, 20, 21 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **88** | |
+| **Total** | **90** | |
 
 ---
 
-## BUILD — Build Studio (20 done)
+## BUILD — Build Studio (28 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -645,6 +645,61 @@ inferred from `outer_html`, not read directly.
 
 ---
 
+### BUILD-36 — Build Studio shell: groups-first navigation, inspector, resizable panels (conversation redesign, Phase 1)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **Description:** First phase of the conversation-led Build Studio redesign (plan: [`docs/Build-Studio-Conversation-Plan.md`](docs/Build-Studio-Conversation-Plan.md)). Replaced `AppChrome`'s page-per-feature layout with the three-column shell.
+- **What fixed it:** new sidebar (Chat, New workflow Ctrl N, Publish with count, Ctrl K search, Chats, Groups listing every workflow with a status glyph, footer credits), a workflow inspector, resizable panels with remembered widths, folding rules and keyboard map from the `Panels` mockup (`lib/panels.ts`, node-tested), one status/step-type vocabulary (`lib/status.ts`, node-tested), new tokens in `globals.css` and the five `DESIGN.md` amendments, plus `/chat` and `/w/:workflowId` routes. Old pages still work inside the shell.
+- **Verified:** `npm run typecheck`, `npm run lint` (0 errors), `npm test` (23 tests), `npm run build:renderer`; the shell was walked in a browser against a stubbed backend (sidebar, inspector, Ctrl K, rail and strip folds) — **not yet in the real Electron app**, and the narrow-window sheet mode is covered by unit tests only.
+- **Deferred on purpose:** Chats list and the conversation itself (BUILD-37); the New workflow screen replacing the interim dialog (BUILD-38); Settings as a popup, connection state (BUILD-43); step-type chips still use the old colours until BUILD-41. The Publish badge counts signed-off workflows until BUILD-37 supplies the real count. Inter is listed first but not bundled, so machines without it fall back to the system font.
+
+### BUILD-37 — Workflow lifecycle, conversation thread store and chat harness (conversation redesign, Phase 2)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** `conxa_compile/conversation/` — deterministic lifecycle derived from existing data, append-only thread store (workflow threads beside the workflow, chats under `data/chats/`), context pack under a token budget with pinned facts, and one harness (deterministic card routing, streamed replies, gated proposals as Apply/Undo cards, per-thread queue and cancel, rolling summaries). RPCs in `handlers/conversation.py`; renderer: `Conversation` view, cards, `threadStore`, real Chat and workflow pages, sidebar Chats list, backend-driven glyphs and inspector rows. Prerequisites folded in: per-context scoped LLM router, `signed_off` as the only approval truth (revoked by any skill write; build gate checks it; test builds skip it), `consequence` edits now reach `identity_bundle.destructive`.
+- **Verified:** `pytest -q tests` (new `test_conversation.py`, `test_conversation_handlers.py`; the only failures are the already-failing numpy subprocess test and timing-flaky ones that pass alone); `npm run typecheck/lint/test`; the conversation walked in a browser against a scripted stub backend (cards, Apply, streaming, Stop). **Not yet run against a live model** — the new LLM tasks live in the shared engine and need the cloud redeployed.
+- **Deferred on purpose:** the Human Edit copilot panel is still the floating one; it moves onto the thread in BUILD-41. The Publish badge still counts signed-off workflows.
+
+### BUILD-38 — Conversation recording: pause/resume, “changes each run?” hints, live action rows (conversation redesign, Phase 3)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** recorder `pause()/resume()` (payloads stamped at enqueue time), an `event_hook` feeding a live “Captured so far” list with plain-language rows (`recorder/plain.py`), per-session `hints.json` read by `run_pipeline` and honoured by the compiler only for “stays as recorded”; `handlers/workflow_flow.py` drives sign-in then recording from the conversation (cards `sign_in` and `recording`, browser-closed detection, discard); a full New workflow screen (`/new`) replacing the interim dialog; renderer cards, recording store, and the file-picker / JS-dialog bridge for recording sessions a card is watching.
+- **Verified:** new `test_recording_conversation.py` and `test_flow_conversation.py` (fake sessions); existing recorder tests green; `npm run typecheck/lint/test`; sign-in and live-recording cards walked in a browser against a stub. **Not exercised:** a real sign-in and a real recording against a live site; `events.jsonl`'s shape was not changed by this work (the hints live beside it).
+- **Known limit:** text typed into a field while paused shows up in that field's next `type` event (see TRD §6.6). Recording still uses its own Chromium window.
+
+### BUILD-39 — Compile card: real stages, queue, and workflow summary card (conversation redesign, Phase 4)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** `handlers/compile_flow.py` + `conversation/{compile_progress,compile_queue,clarify}.py`. Finishing a recording starts a compile that waits in a single-slot queue (real position) and drives one `compile` card from the compiler's own events (four honest stages); queued, out-of-credits, failed and deferred are their own states; on success Clarify asks up to five questions one at a time (BUILD-32's first five kinds — see its remaining-slice entry in `TODO.md`), each answered through existing gated mutations; then a workflow summary card whose counts add up. `patch_gate` gained the confirm-only `ai_review` exemption (TRD §11.3). Renderer: `CompileCard`, `ClarifyQuestionCard`, `WorkflowSummaryCard`.
+- **Verified:** new `test_compile_clarify.py` (progress, queue, generation, planning) and `test_compile_flow.py` (end to end through the real `cmd_patch_step` / `cmd_insert_step` / `cmd_update_workflow_inputs`, skip leaves the skill byte-identical, stale answers fail cleanly, queue position, out-of-credits and failure states), plus gate tests; `npm run typecheck/lint`. **Not exercised:** a real compile against the cloud and a live model. The compile card has four rows, not the mockup's five, on purpose (the second opinion is one observable pass).
+
+### BUILD-40 — Test guard, auto-fix loop and approval flow (conversation redesign, Phase 5)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** `handlers/test_flow.py`, `_drive_runtime_pauses` in `handlers/workflows.py`, `conversation/studio_settings.py`; renderer `TestInputsCard`, `TestRunCard`, `AutofixCard`, a Settings switch. A test pauses before any step that can't be undone (Run the last N for real / End the test here = passed up to X, not a pass), a confirm-only review is answered by the person and a yes also releases the guard in the same resume, an engine without the `test_guard` capability is previewed instead of run, a failure says what ran and only claims "nothing was sent" when true, the auto-fix loop (≤3 attempts, one gated change at a time, `source="auto_fix"`, Undo, guard always on, Stop, Resume, Human Edit) runs after a failure, and Approve is a separate human action that never publishes.
+- **Verified:** `test_test_flow.py` (the pause loop with a fake runtime for every pause kind, the card states, the three-attempt cap, stop, approval) plus the earlier conversation suites (90 tests); `npm run typecheck/lint/test`. **Not exercised:** a real sandbox run against a real runtime and site — the guard's runtime half is unit-tested with a mocked page (`runtime/test/unit/test_guard.js`), the Studio half with a fake runtime, so the two have not yet met in one live run. Requires a new `app-vX.Y.Z` release before the guard is available to installed Studios (until then they preview).
+
+### BUILD-41 — Human Edit restyle inside the shell (conversation redesign, Phase 6)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** `Back to conversation` (labelled header button via `PageHeader.backLabel`), **Test changes** as the primary action when opened from a conversation (saves the open step, posts the test card, returns — approval is not offered here), wizard labels Element / How it's found / Validation, step rows lead with the step's name and carry an action-type chip (pink for click/select), and the floating copilot is replaced by `EditConversationPanel` — the workflow's own thread scoped to the selected step, resizable and hideable, reloading the editor when a change card is applied or undone. The old `components/copilot/*` UI was deleted; `copilotStore` stays because the step list still reads its dirty guard.
+- **Verified:** `npm run typecheck`, `npm run lint`. **Not exercised:** Human Edit in the running app (it needs a compiled workflow); the layout wrapper and the panel were checked by the type system only. `cmd_copilot_verify` and the other copilot commands remain in the backend, unused by the UI.
+- **Left on purpose:** the legacy Approve button when Human Edit is opened from the old group page (retiring it is BUILD-45); advanced selector editors keep their technical labels under Advanced.
+
+### BUILD-42 — Embedded browser panel, spike first (conversation redesign, Phase 7)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** tests now draw their browser inside Build Studio's window. `conxa-builder/electron/browser_panel.js` + `browser_control.js` (Studio's copy of Execute's seam), `main.js` (loopback CDP port, control server, `CONXA_HOST_BROWSER_CDP` / `CONXA_HOST_CONTROL_URL` exported before the backend starts, so the runtime's existing `host_browser.js` takes the borrowed-view path), `preload.js` (`panel` API), renderer `BrowserPane`, `browserStore` and the browser layout rules in `lib/panels.ts`. A finished run keeps its page until the person closes it. Details: `docs/TRD.md` §4.7a.
+- **Decision on recording and sign-in:** they stay in their own Chromium window. Not an empirical spike: the recorder needs `record_video_dir`, context-level bindings and `storageState()`, which an Electron CDP context cannot provide. Written down in §4.7a so it is not re-litigated.
+- **Verified:** `npm run typecheck`, `npm run lint`, `npm test` (panel layout tests), and a scratch real-Electron run (12/12): control-channel auth, Playwright `connectOverCDP` finding the view by its marker URL, navigate and type, popup becomes a tab, silent download claimed by URL, `run_end` keeps the page, `closeRun` frees it. **Not verified:** a full skill replay through the packaged Studio, which needs a compiled workflow and a live site.
+
+### BUILD-43 — System states, offline/engine-stopped handling, Settings popup, first launch (conversation redesign, Phase 8)
+**Resolved:** 2026-10-18
+- **Category:** Builder
+- **What fixed it:** the States tiles that did not exist yet — offline banner plus sidebar connection line (`cloud_ping`, `useConnection`), engine stopped / restarting notice with Restart and Copy diagnostics (`main.js` engine state, `engine:*` IPC), sign-in expired during a test as a pause instead of a failure (runtime `conxa/session_expired` tag, `needs_sign_in` status and card, lifecycle ▲), the unsaved-change prompt when leaving Human Edit (data router + `UnsavedChangeGuard`), Settings as a popup (Account / Usage / Testing / About, “AI credits”), and the first-launch page with its readiness checks. The remaining tiles had shipped with earlier phases. Docs: TRD §7.4b, App-Flow §3a, UI-UX-Brief §14, Backend-Schema §5.12, Implementation-Plan 1.16.
+- **Verified:** `test_test_flow.py` (29 incl. the new expiry, auto-fix-never-starts, flag-clearing and `cloud_ping` tests), full `pytest -q tests` (1829 pass; the two failures are the known `test_compile_path_has_no_numpy` subprocess import and the timing-sensitive `test_llm_router_backoff`, both untouched by this work), runtime `npm test` (868 pass), renderer `typecheck` / `lint` (0 errors) / `npm test` (27). **Not exercised:** the shell in a running, signed-in Studio (offline, engine stop and restart, Settings popup, first launch, the unsaved-change prompt) — it needs a Clerk sign-in. The runtime tag is only checked by syntax and by the Studio-side extractor; it needs the next `app-vX.Y.Z` build.
+- **Left on purpose:** see BUILD-45.
+
 ## EXEC — Execution & Recovery (27 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
@@ -1021,7 +1076,7 @@ inferred from `outer_html`, not read directly.
 
 ---
 
-## CLOUD — Cloud (9 done)
+## CLOUD — Cloud (10 done)
 
 ### CLOUD-6 — Settings UI: BYOK panel, machine device list, billing add-on control, trial banner
 **Resolved:** 2026-08-22
@@ -1149,7 +1204,13 @@ inferred from `outer_html`, not read directly.
 
 ---
 
-## RT — Runtime (4 done)
+### CLOUD-25 — Rename the `human_edit` usage class to `ai_credits` everywhere
+**Resolved:** 2026-10-18
+- **Category:** Cloud
+- **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
+- **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
+
+## RT — Runtime (5 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1236,6 +1297,12 @@ no-regression on encrypted-only/raw-only/neither). Docs: `docs/TRD.md` §5.3, `d
 Updater.md` §1.3.
 
 ---
+
+### RT-9 — Studio-only `_pause_before_irreversible`: pause a test before the first destructive step, release or end on the person's word
+**Resolved:** 2026-10-18
+- **Category:** Runtime
+- **What fixed it:** `run.js` (guard in `executeOneStep`, `state.loopDepth` so it fails closed inside a loop), `server.js` (park + `_meta["conxa/guard"]`, a release-resume that adopts the guard's park and refuses an expired one, step info on `test_phase` log lines), `tool_defs.js`, and a `capabilities: ["test_guard"]` entry written by `build-runtime-app.yml`, `scripts/build-app-local.ps1` and the dev `version.json`. Inert without the argument; never touches `recovery_stage.js` / `retry_budget.js`; app layer only, `MIN_HOST` unchanged. **Needs a new `app-vX.Y.Z` tag to ship.**
+- **Verified:** new `runtime/test/unit/test_guard.js` (7 tests) and the whole runtime unit suite (868 pass). While running it, found the runtime was unloadable at HEAD: commit `ac367ed` had deleted two lines from `runtime/app/date_picker.js` (the `FORMAT_TOKEN_RE` constant and the `formatForDisplay` header), a syntax error that broke every runtime test and the app layer; restored exactly those two lines from `ee83fec`. **Not exercised:** the gate replay (`gate_replay.js`) needs the built host exe.
 
 ## PROD — Product (3 done)
 

@@ -31,8 +31,8 @@ def _wf(**overrides) -> Workflow:
         (dict(recording_status="compiled", skill_id="skill_1"), "needs_review"),
         # Signed off via the new field, no test run yet.
         (dict(recording_status="compiled", skill_id="skill_1", signed_off=True), "needs_test"),
-        # Legacy sign-off shim: edited_at set but signed_off never backfilled.
-        (dict(recording_status="compiled", skill_id="skill_1", edited_at=123.0), "needs_test"),
+        # edited_at moves on every skill write (even a fresh compile), so it is NOT approval.
+        (dict(recording_status="compiled", skill_id="skill_1", edited_at=123.0), "needs_review"),
         # Signed off, tested, but the test failed.
         (
             dict(recording_status="compiled", skill_id="skill_1", signed_off=True, last_test_status="failed"),

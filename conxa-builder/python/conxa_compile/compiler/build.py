@@ -1159,7 +1159,15 @@ def _build_signals(
 
 def _derive_input_binding(ev: dict[str, Any], policy: dict[str, Any]) -> tuple[Any, str | None]:
     """Delegate to derive_input_binding with priority signals (label_text → placeholder → aria_label → value pattern → input_type)."""
-    return derive_input_binding(ev, policy)
+    value, binding = derive_input_binding(ev, policy)
+    # BUILD-38: the person said, while recording, that this typed value stays exactly as recorded.
+    # That is their meaning, not a selector — it keeps the literal and drops the input. Absent a
+    # hint (the usual case) nothing changes.
+    if binding and (ev.get("extras") or {}).get("user_varies") is False:
+        raw = (ev.get("action") or {}).get("value")
+        if isinstance(raw, str) and raw:
+            return raw, None
+    return value, binding
 
 
 def _build_validation(ev: dict[str, Any], state_diff: dict[str, Any], policy: dict[str, Any]) -> ValidationBlock:

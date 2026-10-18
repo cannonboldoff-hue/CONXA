@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test failed, auto-fix</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px">
+        <a href="Group.dc.html" style="color: #a3a3a3; text-decoration: none">Finance Ops</a><span style="color: #6b6b6b">/</span><h1 style="margin: 0; font-size: 15px; font-weight: 600">Create invoice</h1>
+      </header>
+
+      <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 24px 32px 12px">
+        <div style="width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 22px">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #8e8e8e">○</span><span style="color: #e8e6e3">Test browser closed</span><span>the page at the failure is kept with the result</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:24 PM</span></div>
+          </div>
+
+          <div style="background: #252525; border: 1px solid rgba(248,113,113,0.35); border-radius: 10px; overflow: hidden">
+            <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; align-items: baseline; gap: 10px"><span style="color: #f87171">✕</span><span style="font-size: 15px; font-weight: 600">Attempt 1 failed at “Choose the customer” (step 4)</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">1 min 12 s</span></div>
+              <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #d4d2cf">The customer list didn’t appear within 5 seconds, so the step couldn’t find “Acme Retail”. The page was still showing a loading spinner when it gave up.</p>
+            </div>
+            <div style="display: flex; gap: 14px; padding: 0 16px 14px">
+              <div role="img" aria-label="Screenshot of the page when the step failed" style="width: 220px; height: 130px; flex-shrink: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: repeating-linear-gradient(135deg, #202020 0 10px, #232323 10px 20px); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #8e8e8e; text-align: center; padding: 8px; box-sizing: border-box">[Page at the moment of failure]</div>
+              <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #a3a3a3">
+                <span><span style="color: #4ade80">●</span> Steps 1–3 passed</span>
+                <span><span style="color: #f87171">✕</span> Step 4 tried 3 ways to find the list, no AI used</span>
+                <span><span style="color: #8e8e8e">○</span> Steps 5–15 didn’t run</span>
+                <span style="color: #d4d2cf; margin-top: 4px">Nothing was saved or sent in Billing Portal.</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px">
+            <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+            <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+              <p style="margin: 0; font-size: 15px; line-height: 1.65">I’ll fix this and test again on my own, up to 3 attempts — then I stop and ask you. Re-tests always pause before the steps that can’t be undone, so nothing real is sent without your OK. Every change shows up here, and you can undo it.</p>
+
+              <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 14px; font-weight: 600">Fixing and re-testing</span><span style="font-size: 12px; color: #8e8e8e">Attempt {{attempt}} of 3</span>
+                  <sc-if value="{{canStop}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{stop}}" style="margin-left: auto; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 12px Inter, sans-serif">Stop</button></sc-if>
+                </div>
+                <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+                  <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5">
+                    <span style="width: 14px; flex-shrink: 0; text-align: center; color: {{r.color}}">{{r.glyph}}</span>
+                    <span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="color: #e8e6e3">{{r.title}}</span><span style="color: #a3a3a3">{{r.body}}</span></span>
+                    <sc-if value="{{r.hasUndo}}" hint-placeholder-val="{{ false }}"><span style="display: flex; gap: 10px; font-size: 12px"><a href="HumanEdit.dc.html">View change</a><a href="#">Undo</a></span></sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{isWaiting}}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; gap: 8px; align-items: center; padding-left: 24px">
+                    <button type="button" onClick="{{allow}}" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">Run the last 3 steps for real</button>
+                    <button type="button" onClick="{{endHere}}" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">End the test here</button>
+                  </div>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{isPassed}}" hint-placeholder-val="{{ false }}">
+                <div style="background: #252525; border: 1px solid rgba(74,222,128,0.30); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+                  <div style="display: flex; align-items: baseline; gap: 10px"><span style="color: #4ade80">●</span><span style="font-size: 15px; font-weight: 600">Test passed on attempt 2</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">1 min 41 s</span></div>
+                  <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #d4d2cf">All 15 steps ran and the “Invoice sent” message appeared. One change was made: “Choose the customer” now waits for the customer list. Approving is still up to you.</p>
+                  <div style="display: flex; gap: 8px"><a href="TestPassed.dc.html" style="height: 32px; padding: 0 14px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Review and approve</a><button type="button" onClick="{{replay}}" style="height: 32px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Replay prototype</button></div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{isStopped}}" hint-placeholder-val="{{ false }}">
+                <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+                  <div style="display: flex; align-items: baseline; gap: 10px"><span style="color: #8e8e8e">○</span><span style="font-size: 15px; font-weight: 600">Auto-fix stopped</span></div>
+                  <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #d4d2cf">Changes made so far are kept and listed above. The workflow stays marked “needs a fix” in Finance Ops until a test passes.</p>
+                  <div style="display: flex; gap: 8px"><button type="button" onClick="{{replay}}" style="height: 32px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">Resume auto-fix</button><a href="HumanEdit.dc.html" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Fix it myself in Human Edit</a></div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink: 0; display: flex; justify-content: center; padding: 8px 32px 20px">
+        <div style="width: 100%; max-width: 720px; background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px">
+          <textarea aria-label="Message" rows="1" placeholder="Tell Conxa what you saw — it uses this in the next fix…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+          <div style="display: flex; align-items: center"><span style="font-size: 12px; color: #a3a3a3; border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; padding: 3px 8px">Auto-fix · Choose the customer</span><button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2c2c2c; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+    <dc-import name="Inspector" stage="{{inspStage}}" hint-size="320px,860px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 0, stopped: false };
+  }
+  componentDidMount() {
+    this.t = setInterval(() => {
+      const { phase, stopped } = this.state;
+      // Phase 3 is the pause before the irreversible steps: only the person moves it on.
+      if (stopped || phase === 3 || phase >= 5) return;
+      this.setState({ phase: phase + 1 });
+    }, 2200);
+  }
+  componentWillUnmount() { clearInterval(this.t); }
+  renderVals() {
+    const { phase, stopped } = this.state;
+    const R = (glyph, color, title, body, hasUndo) => ({ glyph, color, title, body, hasUndo: !!hasUndo });
+    const rows = [];
+    rows.push(phase === 0
+      ? R('◐', '#93b4e6', 'Finding the cause…', 'Comparing the failed page with your recording')
+      : R('●', '#4ade80', 'Cause found', 'The customer list loads about a second slower than when you recorded'));
+    if (phase >= 1) rows.push(R('●', '#4ade80', 'Changed “Choose the customer”', 'It now waits up to 15 seconds for the customer list before choosing “Acme Retail”', true));
+    if (phase === 2) rows.push(R('◐', '#93b4e6', 'Testing again', 'Step 4 of 15 · Choose the customer'));
+    if (phase >= 3) rows.push(phase === 3
+      ? R('▲', '#fbbf24', 'Paused before “Send invoice”', 'Steps 1–12 passed. The last 3 steps send a real invoice and can’t be undone, so the re-test waits for you.')
+      : R('●', '#4ade80', 'You allowed the last 3 steps', 'Steps 1–12 had passed before they ran'));
+    if (phase === 4) rows.push(R('◐', '#93b4e6', 'Testing again', 'Step 14 of 15 · Confirm send'));
+    if (phase >= 5) rows.push(R('●', '#4ade80', 'Test finished', 'All 15 steps passed'));
+    if (stopped) rows.push(R('○', '#8e8e8e', 'Stopped by you', phase === 4 ? 'Cancelled while sending — check Billing Portal' : phase >= 2 ? 'Ended before “Send invoice” — nothing was sent' : 'No test was started'));
+    const running = !stopped && phase < 5 && phase !== 3;
+    return {
+      rows, attempt: phase >= 2 ? 2 : 1, canStop: running,
+      isWaiting: !stopped && phase === 3,
+      isPassed: !stopped && phase >= 5, isStopped: stopped,
+      inspStage: stopped ? 'failed' : phase >= 5 ? 'passed' : phase >= 2 ? 'testing' : 'failed',
+      allow: () => this.setState({ phase: 4 }),
+      endHere: () => this.setState({ stopped: true }),
+      stop: () => this.setState({ stopped: true }),
+      replay: () => this.setState({ phase: 0, stopped: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>System states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1500px; box-sizing: border-box; padding: 56px 72px; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 600">System states</h1>
+    <p style="margin: 0; font-size: 14px; color: #a3a3a3; line-height: 1.6; max-width: 980px">Each tile shows what the person sees, then how the three areas respond. Left = navigation, Center = workspace, Right = inspector. Every state ends with a way forward.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <sc-for list="{{tiles}}" as="t" hint-placeholder-count="12">
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">{{t.title}}</h2>
+        <div style="height: 150px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; background: #1e1e1e; padding: 14px; display: flex; flex-direction: column; gap: 8px; justify-content: center">
+          <div style="display: flex; gap: 10px; align-items: baseline"><span style="color: {{t.glyphColor}}; font-size: 12px">{{t.glyph}}</span><span style="font-size: 14px; font-weight: 600">{{t.head}}</span></div>
+          <span style="font-size: 13px; line-height: 1.55; color: #a3a3a3">{{t.body}}</span>
+          <div style="display: flex; gap: 8px; margin-top: 2px">
+            <span style="height: 28px; padding: 0 12px; border-radius: 8px; background: #d97757; color: #1a1a1a; font-size: 12px; font-weight: 500; display: flex; align-items: center">{{t.primary}}</span>
+            <sc-if value="{{t.hasSecondary}}" hint-placeholder-val="{{ true }}"><span style="height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 12px; font-weight: 500; display: flex; align-items: center">{{t.secondary}}</span></sc-if>
+          </div>
+        </div>
+        <dl style="margin: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 4px 10px; font-size: 12px; line-height: 1.5">
+          <dt style="color: #8e8e8e">Left</dt><dd style="margin: 0; color: #d4d2cf">{{t.left}}</dd>
+          <dt style="color: #8e8e8e">Center</dt><dd style="margin: 0; color: #d4d2cf">{{t.center}}</dd>
+          <dt style="color: #8e8e8e">Right</dt><dd style="margin: 0; color: #d4d2cf">{{t.right}}</dd>
+        </dl>
+      </section>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const G = { ok: ['●', '#4ade80'], warn: ['▲', '#fbbf24'], fail: ['✕', '#f87171'], run: ['◐', '#93b4e6'], none: ['○', '#8e8e8e'] };
+    const T = (title, g, head, body, primary, secondary, left, center, right) => ({
+      title, glyph: G[g][0], glyphColor: G[g][1], head, body, primary, secondary, hasSecondary: !!secondary, left, center, right,
+    });
+    const tiles = [
+      T('Loading and restoring', 'run', 'Opening Create invoice…', 'Grey placeholder lines in the shape of the last messages, never a spinner over a blank page. History loads newest-first.', 'Jump to latest', '',
+        'Groups render from the last saved list, then refresh quietly.', 'Skeleton of 3 messages; composer usable at once.', 'Skeleton rows for details; actions disabled until loaded.'),
+      T('Offline', 'fail', 'You’re offline', 'Recording, Human Edit and local tests still work. Compiling, chat and publishing wait until Conxa Cloud is back.', 'Try again', 'What still works',
+        'Connection dot turns ✕; Publish shows “waiting to connect”.', 'One slim banner above the conversation; composer says replies will wait.', 'Compile and Approve show why they’re paused.'),
+      T('Engine stopped', 'fail', 'Build Studio’s engine stopped', 'The local process that records and compiles quit unexpectedly. Your workflows are saved on this computer.', 'Restart engine', 'Copy diagnostics',
+        'Stays visible but read-only.', 'Replaced by this notice until restart succeeds.', 'Hidden.'),
+      T('Recording discarded', 'none', 'Recording discarded', 'Nothing was saved. The workflow is still here with its name and starting page.', 'Record again', '',
+        'Workflow keeps its ○ not-started glyph.', 'Event row in history plus a fresh Record card.', 'Lifecycle returns to Record.'),
+      T('Browser panel closed mid-recording', 'warn', 'The browser closed before you finished', '9 actions were captured. Save them if the task was complete, or start over.', 'Save 9 actions', 'Discard',
+        'No change.', 'Card replaces the live recording bar.', 'Lifecycle stays on Record.'),
+      T('Compile failed', 'fail', 'Compile didn’t finish', 'Conxa Cloud stopped responding while reading your steps. Your recording is safe and no credit was used.', 'Try again', 'Show details',
+        'Workflow glyph ✕.', 'Error card in the conversation; history keeps the attempt.', 'Compile row ✕ with the time; Test disabled with reason.'),
+      T('Out of compile credits', 'warn', 'No compile credits left', 'Your recording is saved. Compiling resumes when credits are added — nothing is lost.', 'Add credits', 'Compile later',
+        'Account row shows 0 credits in amber.', 'Card instead of the progress card.', 'Compile row ▲ “waiting for credits”.'),
+      T('Waiting for another compile', 'run', 'Next in line', '“Assign training” is compiling. Only one compiles at a time — yours starts automatically after it.', 'Open the other one', '',
+        'Both workflows show ◐.', 'Queued card with position, no fake progress bar.', 'Compile row “queued”.'),
+      T('Sign-in expired during a test', 'warn', 'Billing Portal needs you to sign in', 'The test is paused, not failed. Sign in in the browser panel and it continues on its own.', 'Show browser', 'Cancel test',
+        'Group gets ▲.', 'Run card switches to “waiting for sign-in”.', 'App row ▲; Stop test still available.'),
+      T('Test stopped by you', 'none', 'Test stopped at step 7', 'Steps 1–6 ran. Step 6 saved a draft — check Billing Portal if you need to remove it.', 'Run again', 'Open Human Edit',
+        'Workflow glyph returns to its previous state.', 'Result card with what did and didn’t run.', 'Last test “stopped by you”.'),
+      T('Leaving Human Edit with unsaved change', 'warn', 'Save the change to step 4?', 'You edited the description but haven’t saved it. Everything else is already saved.', 'Save and leave', 'Discard',
+        'Navigation waits for the answer.', 'Small confirm dialog; Esc keeps editing.', 'Not shown in Human Edit.'),
+      T('Creating a group', 'none', 'New group', 'A name field appears in place in the sidebar. Enter creates it; Esc cancels. Sign-ins are added from the group page.', 'Create group', 'Cancel',
+        'Inline row under Groups, focused.', 'Opens the new group’s empty page after creation.', 'Hidden.'),
+    ];
+    return { tiles };
+  }
+}
+</script>
+</body>
+</html>

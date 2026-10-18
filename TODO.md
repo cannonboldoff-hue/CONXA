@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 15 |
 | P1 — Blocking / Foundational | 3 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 37 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 40 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
 | P4 — Low Urgency, Opportunistic | 38 |
-| **Total** | **113** |
+| **Total** | **116** |
 
 ---
 
@@ -1148,34 +1148,22 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
   scope (a) above, which is about notifying the *workspace/vendor* — still open. Scopes (b) and
   (c) are also still open.
 
-### BUILD-32 — Compile asks the reviewer a few clarifying questions instead of silently guessing
+### BUILD-32 — Compile asks the reviewer a few clarifying questions instead of silently guessing (remaining slice)
 - **Category:** Builder
-- **Description:** the compiler's second opinion (**BUILD-25**) already decides, on its own, things
-  only the recorder's author actually knows: is a typed value fixed or a per-run input, is a popup
-  always dismissable or a one-off, was that the 3rd row or "the row matching X". Low-confidence
-  guesses are applied silently and only caught if a reviewer happens to notice. File uploads are the
-  sharpest case: the recorded file path lives on the builder's machine and will not exist on the
-  customer's, so a compiled-as-fixed upload fails on every install.
-- **Scope:** (a) after compile, surface low-confidence decisions as multiple-choice question cards in
-  Human Review, anchored to the step they affect — never block the compile, unanswered questions keep
-  the compiler's default; (b) ask only when genuinely uncertain, capped at ~3–5 per workflow;
-  (c) every answer applies through the existing Human Review mutations (make input / keep fixed /
-  mark optional), no new editing path. Example questions: "Upload `invoice.pdf` every time, or ask
-  for the file each run?" (default: input, prefilled with the recorded name as a hint); "You typed
-  'Acme Corp' — always this, or ask each run?"; "A cookie popup appeared — always dismiss if present,
-  or one-off?"; "You picked 13 Sep 2026 — always this date, today, or ask each run?"; "You picked the
-  3rd row — always the 3rd row, or the row matching its text?".
-- **Constraint:** the row-style question changes the step's target, so its answer choices must be
-  selector options `IdentityBundle`/`selector_grammar.py` already produced — an answer can never
-  cause the LLM to write a selector string (Key Invariants).
-- **Suggested first slice:** file-upload input vs. fixed, and fixed value vs. input only — these two
-  cover most real breakage.
-- **Dependencies:** BUILD-25 (confidence of each applied decision must be kept, not just the result).
-- **Complexity:** M for the first slice; L for the full question set.
-- **Success criteria:** a recorded file upload is never shipped as a hardcoded local path without the
-  reviewer having seen a question about it; a workflow with no uncertain decisions shows no questions.
+- **Status (2026-10-18):** the machinery and the first five question kinds shipped with BUILD-39 (`conversation/clarify.py`, `handlers/compile_flow.py`): file upload (ask each run vs. fixed path), a step that can't be undone (confirm first), typed values (fixed vs. input), recorder-flagged pop-ups (always dismiss vs. one-off), and "how do we know it worked" (makes an existing compiler-written text/URL/state check required). Cap 5, one at a time, never blocking, answers only through existing gated mutations, questions stored in `clarify.json` so an unanswered compile is byte-identical.
+- **Still open:** (a) the **row-style** question ("always the 3rd row, or the row matching its text?") — its answer changes the step's target, so the choices must be selector options `IdentityBundle`/`selector_grammar.py` already produced; needs an API that lists them per step; (b) the **date** question (fixed date / today / ask each run); (c) "**if the item is missing**" (stop and report vs. pause and ask) — needs a step kind that fails or branches on an absent item, which doesn't exist; an `ai_review` after the failing step can never run; (d) free-text answers only map onto single-choice questions (a tick-list asks you to tick); (e) "Change" on an answered question opens Human Edit rather than re-asking.
+- **Complexity:** M for (a)+(b); (c) needs runtime design.
 
-## P2 Discovered Items (2 remaining) (2026-09-02 mega-workflow dev-mode investigation)
+### BUILD-45 — Follow-ups from the conversation redesign's last phase
+- **Category:** Builder
+- **Items:** (a) a test paused by an expired sign-in should *resume by itself* after the person signs in (the mockup's “Show browser / continues on its own”); today Studio keeps `wait_for_auth` false and asks for a re-test, and the group does not get its own ▲; (b) offline the composer is disabled rather than holding a message to send later (“replies will wait”); (c) the legacy Approve button in Human Edit and the old group page's record/compile/test rows still exist beside the conversation — retire them once the conversation has been used on a real workflow; (d) the sidebar's empty-workspace variant (mockup `FirstLaunch`) is the ordinary sidebar with its hint text; (e) engine-stop and offline were never exercised in a running, signed-in Studio (the shell needs a Clerk sign-in) — only through unit tests, type checks and a real-Electron check of the panel seam.
+- **Complexity:** S each; (a) M.
+
+### BUILD-44 — Small items found while mapping the conversation redesign
+- **Category:** Builder
+- **Items:** `get_step_screenshot` (copilot retrieval) returns a path that is pasted into the prompt but the image is never attached; one `insert_overlay_branch` accept leaves several undo entries (structural ops collapse to one); possible double bounding-box offset for relayed child-frame events (`bridge.js` plus `session.py::_finalize_payload_sync`, **unverified**); `Done.md` reuses ids BUILD-31 and BUILD-33.
+  Found in Phase 5: the failure card can't show the page at the moment of failure (the evidence screenshot lives under the sandbox folder, which the `conxa-asset://` protocol doesn't serve); the compile card's "N compile credits left" assumes the `quota` event's `remaining` key (not confirmed against `/usage/compile/commit`); a confirm-only review can be edited into a free-form one afterwards without the gate re-checking the destructive step after it; the guard cannot pause inside a `for_each` body (it fails the test instead); the stop/decision of a paused test lives only in memory (a Studio restart mid-pause leaves the parked browser to time out).
+- **Complexity:** S each.
 
 ### COMPILE-1 — `collapse_date_picker_runs` leaves an orphaned raw day-click when the same date field is date-picked twice in one recording
 - **Category:** Compiler Correctness

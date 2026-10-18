@@ -179,6 +179,9 @@ jobs:
             app_version  = $env:APP_VERSION
             min_host     = $env:MIN_HOST
             built_at     = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+            # What this app layer can do beyond the base contract; Build Studio reads it before relying on
+            # a Studio-only argument (RT-9's test guard) so an older engine can't silently ignore it.
+            capabilities = @("test_guard")
             files        = $hashes
           } | ConvertTo-Json -Depth 5
           $meta | Out-File -Encoding UTF8 dist-app/version.json

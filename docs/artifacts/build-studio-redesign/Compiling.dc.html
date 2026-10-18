@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compiling</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px">
+        <a href="Group.dc.html" style="color: #a3a3a3; text-decoration: none">Finance Ops</a><span style="color: #6b6b6b">/</span><h1 style="margin: 0; font-size: 15px; font-weight: 600">Create invoice</h1>
+      </header>
+
+      <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 24px 32px 12px">
+        <div style="width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 20px">
+          <button type="button" aria-expanded="false" style="align-self: flex-start; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #a3a3a3; font: 13px Inter, sans-serif"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>Earlier · created, signed in, recorded</button>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 22px">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #4ade80">●</span><span style="color: #e8e6e3">Recording saved</span><span>14 actions · 2 min 31 s · 1 tab</span><a href="#" style="font-size: 12px; color: #a3a3a3">View screenshots</a><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:04 PM</span></div>
+          </div>
+
+          <div style="display: flex; gap: 12px">
+            <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+            <div style="display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 0">
+              <p style="margin: 0; font-size: 15px; line-height: 1.65">Got it — 14 actions. I’m compiling them into steps that can find the right buttons and fields again, even when the page shifts a little. I’ll ask you a few things once that’s done.</p>
+              <div style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 14px; font-weight: 600">Compiling</span><span style="font-size: 13px; color: #a3a3a3">0:48 so far</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">Uses 1 compile credit · 37 left</span></div>
+                <div role="progressbar" aria-label="Compile progress" aria-valuenow="58" aria-valuemin="0" aria-valuemax="100" style="height: 4px; border-radius: 2px; background: #2c2c2c; overflow: hidden"><div style="width: 58%; height: 4px; background: #93b4e6"></div></div>
+                <div style="display: flex; flex-direction: column; gap: 7px; font-size: 13px">
+                  <div style="display: flex; gap: 10px"><span style="color: #4ade80; width: 14px">●</span><span>Cleaned up the recording</span><span style="margin-left: auto; color: #8e8e8e; font-size: 12px">14 actions became 13 steps</span></div>
+                  <div style="display: flex; gap: 10px"><span style="color: #4ade80; width: 14px">●</span><span>Learned how to find each element</span><span style="margin-left: auto; color: #8e8e8e; font-size: 12px">13 of 13</span></div>
+                  <div style="display: flex; gap: 10px"><span style="color: #93b4e6; width: 14px">◐</span><span>Understanding what each step is for</span><span style="margin-left: auto; color: #8e8e8e; font-size: 12px">9 of 13 done</span></div>
+                  <div style="display: flex; gap: 10px; color: #8e8e8e"><span style="width: 14px">○</span><span>Spotting values that may change between runs</span></div>
+                  <div style="display: flex; gap: 10px; color: #8e8e8e"><span style="width: 14px">○</span><span>Saving the workflow</span></div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px">
+                  <span style="font-size: 12px; color: #8e8e8e">You can leave this screen — the sidebar shows when it’s done.</span>
+                  <a href="Clarify.dc.html" style="margin-left: auto; font-size: 12px; color: #a3a3a3">Skip ahead (prototype)</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink: 0; display: flex; justify-content: center; padding: 8px 32px 20px">
+        <div style="width: 100%; max-width: 720px; background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px">
+          <textarea aria-label="Message" rows="1" placeholder="Ask about the recording while it compiles…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+          <div style="display: flex; align-items: center"><span style="font-size: 12px; color: #8e8e8e">Create invoice · compiling</span><button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2c2c2c; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+    <dc-import name="Inspector" stage="compiling" hint-size="320px,860px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

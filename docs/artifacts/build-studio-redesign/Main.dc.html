@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Design system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1640px; box-sizing: border-box; padding: 64px 72px; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 40px">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 28px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="width: 28px; height: 28px; border-radius: 8px; background: {{accent}}; display: flex; align-items: center; justify-content: center; color: #1a1a1a; font-weight: 600; font-size: 15px">C</div>
+        <span style="font-size: 13px; color: #8e8e8e">Conxa Build Studio · redesign</span>
+      </div>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1.25">The Workbench, made conversational</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #a3a3a3; max-width: 760px">Keeps the existing tokens: three flat charcoal steps, one clay accent, Inter, no shadows. Adds what a conversation-led workspace needs: a reading column, message roles, event rows, a fourth surface step for cards inside the conversation, and an in-progress status.</p>
+    </div>
+    <div style="display: flex; gap: 8px; font-size: 12px; color: #8e8e8e">
+      <span style="border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; padding: 4px 8px">Dark only (as today)</span>
+      <span style="border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; padding: 4px 8px">WCAG 2.1 AA</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+
+    <section style="display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Surfaces</h2>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 56px; height: 36px; border-radius: 8px; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.10)"></div><div style="font-size: 13px">Base <span style="color: #8e8e8e; font-family: 'JetBrains Mono', monospace; font-size: 12px">#1a1a1a</span><div style="font-size: 12px; color: #8e8e8e">Conversation, workspace</div></div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 56px; height: 36px; border-radius: 8px; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.10)"></div><div style="font-size: 13px">Sidebar <span style="color: #8e8e8e; font-family: 'JetBrains Mono', monospace; font-size: 12px">#1e1e1e</span><div style="font-size: 12px; color: #8e8e8e">Left nav, inspector, browser panel chrome</div></div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 56px; height: 36px; border-radius: 8px; background: #252525; border: 1px solid rgba(255,255,255,0.10)"></div><div style="font-size: 13px">Surface <span style="color: #8e8e8e; font-family: 'JetBrains Mono', monospace; font-size: 12px">#252525</span><div style="font-size: 12px; color: #8e8e8e">Cards in the conversation, user messages</div></div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 56px; height: 36px; border-radius: 8px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.14)"></div><div style="font-size: 13px">Raised <span style="color: #d97757; font-size: 11px; font-weight: 500">new</span> <span style="color: #8e8e8e; font-family: 'JetBrains Mono', monospace; font-size: 12px">#2c2c2c</span><div style="font-size: 12px; color: #8e8e8e">Fields and rows nested inside a card, popovers</div></div></div>
+        <div style="display: flex; gap: 8px; margin-top: 4px; font-size: 12px; color: #8e8e8e">
+          <span style="flex: 1; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px">Border subtle 8%</span>
+          <span style="flex: 1; border-top: 1px solid rgba(255,255,255,0.10); padding-top: 6px">Default 10%</span>
+          <span style="flex: 1; border-top: 1px solid rgba(255,255,255,0.18); padding-top: 6px">Strong 18% · hover</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Text and accent</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+        <div style="display: flex; justify-content: space-between"><span style="color: #e8e6e3">Primary · Warm ivory #e8e6e3</span><span style="color: #8e8e8e">13.4 : 1</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #a3a3a3">Secondary · #a3a3a3</span><span style="color: #8e8e8e">7.4 : 1</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #8e8e8e">Meta · Slate #8e8e8e</span><span style="color: #8e8e8e">5.4 : 1</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #6b6b6b">Disabled only · #6b6b6b</span><span style="color: #8e8e8e">not for reading</span></div>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #8e8e8e">Proposed change: Iron gray #5a5a5a (2.6 : 1) is retired for text. Slate becomes the floor for anything a person must read; a lighter #a3a3a3 carries AI prose secondary lines.</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: stretch">
+        <div style="flex: 1; border-radius: 10px; background: {{accent}}; color: #1a1a1a; padding: 12px; font-size: 13px; font-weight: 500">Conxa clay<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400">#d97757</div></div>
+        <div style="flex: 1; border-radius: 10px; background: #e08565; color: #1a1a1a; padding: 12px; font-size: 13px; font-weight: 500">Hover<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400">#e08565</div></div>
+        <div style="flex: 1; border-radius: 10px; background: rgba(217,119,87,0.12); color: #e8a58c; padding: 12px; font-size: 13px; font-weight: 500">Tint 12%<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400">selection</div></div>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #8e8e8e">One accent rule holds: clay marks the single next action in view — the inspector's primary button, the composer's send, the one actionable answer in a question card. Never status.</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Status vocabulary</h2>
+      <p style="margin: 0; font-size: 12px; color: #8e8e8e">Shape plus color, never color alone. Same glyphs in sidebar, inspector, cards and the group table.</p>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px"><span style="color: #4ade80; width: 14px; text-align: center">●</span><span style="flex: 1">Ready · passed · connected</span><span style="color: #8e8e8e; font-size: 12px">#4ade80</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px"><span style="color: #fbbf24; width: 14px; text-align: center">▲</span><span style="flex: 1">Needs you · warnings · unverified sign-in</span><span style="color: #8e8e8e; font-size: 12px">#fbbf24</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px"><span style="color: #f87171; width: 14px; text-align: center">✕</span><span style="flex: 1">Failed · expired · error</span><span style="color: #8e8e8e; font-size: 12px">#f87171</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px"><span style="color: #93b4e6; width: 14px; text-align: center">◐</span><span style="flex: 1">In progress · recording · compiling <span style="color: #d97757; font-size: 11px; font-weight: 500">new</span></span><span style="color: #8e8e8e; font-size: 12px">#93b4e6</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px"><span style="color: #8e8e8e; width: 14px; text-align: center">○</span><span style="flex: 1">Not started · draft</span><span style="color: #8e8e8e; font-size: 12px">#8e8e8e</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Type</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px">
+        <div><div style="font-size: 24px; font-weight: 600; line-height: 1.25">Create invoice</div><div style="font-size: 12px; color: #8e8e8e">Headline 24 / 600 — screen title, max size in app</div></div>
+        <div><div style="font-size: 16px; font-weight: 600">Which values change each run?</div><div style="font-size: 12px; color: #8e8e8e">Title 16 / 600 — card and section titles</div></div>
+        <div><div style="font-size: 15px; line-height: 1.65">I watched 14 steps and found five values you typed.</div><div style="font-size: 12px; color: #8e8e8e">Conversation 15 / 1.65 — AI and user prose <span style="color: #d97757; font-weight: 500">new</span></div></div>
+        <div><div style="font-size: 14px; line-height: 1.5">Starting page, steps, runtime inputs</div><div style="font-size: 12px; color: #8e8e8e">Body 14 / 400 — UI text, fields, rows</div></div>
+        <div><div style="font-size: 12px; font-weight: 500; color: #a3a3a3">Compiled 3:04 PM · 2 warnings</div><div style="font-size: 12px; color: #8e8e8e">Label 12 / 500 — meta, timestamps (11 min)</div></div>
+        <div><div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3">billing.example.com/invoices/new</div><div style="font-size: 12px; color: #8e8e8e">Mono 12 — URLs, recorded values, {{braceInputs}}</div></div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Controls</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 10px; border: none; background: {{accent}}; color: #1a1a1a; font: 500 13px Inter, sans-serif">Test workflow</button>
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; font: 500 13px Inter, sans-serif">Human Edit</button>
+          <button type="button" style="height: 34px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; color: #a3a3a3; font: 500 13px Inter, sans-serif">Cancel</button>
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 10px; border: none; background: rgba(248,113,113,0.10); color: #f87171; font: 500 13px Inter, sans-serif">Delete</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: #8e8e8e">
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 10px; border: none; background: #e08565; color: #1a1a1a; font: 500 13px Inter, sans-serif">Hover</button>
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 10px; border: none; background: {{accent}}; color: #1a1a1a; font: 500 13px Inter, sans-serif; outline: 2px solid rgba(217,119,87,0.55); outline-offset: 2px">Focus</button>
+          <button type="button" disabled style="height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: #1e1e1e; color: #6b6b6b; font: 500 13px Inter, sans-serif">Disabled</button>
+          <span>Focus ring: 2px clay 55%, offset 2</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #a3a3a3">Workflow name<input value="Create invoice" style="height: 34px; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; padding: 0 10px; font: 14px Inter, sans-serif"></label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #a3a3a3">Focused<input value="billing.exa" style="height: 34px; box-sizing: border-box; border-radius: 10px; border: 1px solid #d97757; background: #1a1a1a; color: #e8e6e3; padding: 0 10px; font: 14px Inter, sans-serif; box-sizing: border-box; outline: 3px solid rgba(217,119,87,0.25)"></label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #a3a3a3">Error<input value="billing" style="height: 34px; box-sizing: border-box; border-radius: 10px; border: 1px solid #f87171; background: #1a1a1a; color: #e8e6e3; padding: 0 10px; font: 14px Inter, sans-serif"><span style="color: #f87171">✕ Enter a full address, like https://…</span></label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #6b6b6b">Disabled<input disabled value="Finance Ops" style="height: 34px; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); background: #1e1e1e; color: #6b6b6b; padding: 0 10px; font: 14px Inter, sans-serif"></label>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600">Spacing, radii, motion</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; font-size: 13px">
+        <div style="display: flex; align-items: flex-end; gap: 10px">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 4px; height: 4px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">4</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 8px; height: 8px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">8</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 12px; height: 12px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">12</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 16px; height: 16px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">16</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 24px; height: 24px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">24</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 32px; height: 32px; background: #8e8e8e"></div><span style="font-size: 11px; color: #8e8e8e">32</span></div>
+          <div style="display: flex; gap: 8px; margin-left: auto">
+            <div style="width: 32px; height: 32px; border: 1px solid #8e8e8e; border-radius: 6px"></div>
+            <div style="width: 32px; height: 32px; border: 1px solid #8e8e8e; border-radius: 8px"></div>
+            <div style="width: 32px; height: 32px; border: 1px solid #8e8e8e; border-radius: 10px"></div>
+            <div style="width: 32px; height: 32px; border: 1px solid #8e8e8e; border-radius: 14px"></div>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: #8e8e8e; line-height: 1.6">Radii 6 chips · 8 rows · 10 controls and cards · 14 composer and dialogs.</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.5; color: #a3a3a3">
+          <div><span style="color: #e8e6e3">Pop</span> 150ms ease-out-expo, overlays (existing .anim-pop)</div>
+          <div><span style="color: #e8e6e3">Panel</span> 220ms ease-out-expo, inspector and browser panel slide; width tracks the drag with no animation</div>
+          <div><span style="color: #e8e6e3">Stream</span> message text types in; cards fade in 120ms once their data exists, never before</div>
+          <div><span style="color: #e8e6e3">Reduced motion</span> every transition collapses to instant</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 16px; font-weight: 600">Layout frame</h2>
+    <div style="display: flex; height: 300px; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden; font-size: 12px; color: #a3a3a3">
+      <div style="width: 200px; background: #1e1e1e; border-right: 1px solid rgba(255,255,255,0.08); padding: 14px; display: flex; flex-direction: column; gap: 6px"><span style="color: #e8e6e3; font-weight: 500">Navigation</span><span>264 default · 220–320 drag · 56 rail</span><span>Chat, New workflow, Publish, Groups; workspace name opens Settings</span></div>
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: 14px; gap: 10px; background: #1a1a1a">
+        <span style="color: #e8e6e3; font-weight: 500">Workspace</span>
+        <div style="width: 60%; flex: 1; border-left: 1px dashed rgba(255,255,255,0.18); border-right: 1px dashed rgba(255,255,255,0.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center"><span>Reading column</span><span>max 760, min 520</span><span>composer pinned bottom, same width</span></div>
+      </div>
+      <div style="width: 230px; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.08); padding: 14px; display: flex; flex-direction: column; gap: 6px"><span style="color: #e8e6e3; font-weight: 500">Inspector</span><span>320 default · 280–400</span><span>Workflow views only. Collapses to a 44px strip.</span></div>
+      <div style="width: 300px; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.14); padding: 14px; display: flex; flex-direction: column; gap: 6px"><span style="color: #e8e6e3; font-weight: 500">Browser panel</span><span>Enters from the right during a test run. Replaces the inspector’s slot; inspector folds to its strip.</span><span>Default 50% of workspace · min 480 · max 70%.</span></div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#d97757","options":["#d97757","#c96f4f","#e08565"]},"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#d97757', braceInputs: '{{input}} tokens' };
+  }
+}
+</script>
+</body>
+</html>

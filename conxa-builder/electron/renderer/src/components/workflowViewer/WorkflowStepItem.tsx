@@ -2,6 +2,7 @@ import type { DragEvent, KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { stepTypeColor } from '@/lib/status'
 import type { StepEditorDTO } from '@/types/workflow'
 import { RECORDING_SCREENSHOT_DRAG_MIME } from '@/api/workflowApi'
 import { BoxSelect, GitBranch, GripVertical, Repeat, Trash2 } from 'lucide-react'
@@ -104,8 +105,16 @@ export function WorkflowStepItem({
           {step.step_index + 1}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate leading-6" title={step.human_readable_description}>
-            {compactStepLabel(step.human_readable_description)}
+          <span className="flex items-center gap-2 leading-6" title={step.human_readable_description}>
+            <span className="min-w-0 truncate">{compactStepLabel(step.human_readable_description)}</span>
+            {step.action_type ? (
+              <span
+                className="shrink-0 rounded-[4px] border px-1.5 text-[0.6875rem] font-medium capitalize leading-4"
+                style={{ borderColor: stepTypeColor(step.action_type), color: stepTypeColor(step.action_type) }}
+              >
+                {step.action_type.replace(/_/g, ' ')}
+              </span>
+            ) : null}
           </span>
           {bboxState || step.branch_summary || step.for_each_summary ? (
             <span className="mt-1.5 flex flex-wrap gap-1.5">

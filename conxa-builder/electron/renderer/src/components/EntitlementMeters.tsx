@@ -10,9 +10,9 @@ const LABELS: Record<EntitlementMeterKey, string> = {
   execute_seats: 'Execute Seats',
   compile_credits: 'Compile credits',
   // "human_edit_tokens" is the legacy wire name — kept only for as long as
-  // the backend dual-emits it; "ai_usage_credits" is what's shown.
-  human_edit_tokens: 'AI Usage Credits',
-  ai_usage_credits: 'AI Usage Credits',
+  // the backend dual-emits it; both are shown as "AI credits".
+  human_edit_tokens: 'AI credits',
+  ai_usage_credits: 'AI credits',
 }
 
 const ICONS: Record<EntitlementMeterKey, LucideIcon> = {

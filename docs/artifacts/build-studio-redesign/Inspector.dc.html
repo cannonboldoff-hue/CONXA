@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workflow inspector</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<aside aria-label="Workflow details" style="width: 320px; height: 860px; box-sizing: border-box; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.08); color: #e8e6e3; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <div style="padding: 14px 16px 14px 20px; display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Create invoice</span>
+      <a href="Group.dc.html" style="font-size: 12px; color: #a3a3a3; text-decoration: none">Finance Ops</a>
+    </div>
+    <button type="button" aria-label="More workflow actions" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+    <button type="button" aria-label="Collapse details panel" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 20px">
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #252525; font-size: 13px">
+      <span style="color: {{statusColor}}">{{statusGlyph}}</span><span>{{statusText}}</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e; margin-bottom: 6px">Lifecycle</div>
+      <sc-for list="{{stages}}" as="s" hint-placeholder-count="8">
+        <a href="{{s.href}}" style="display: flex; align-items: center; gap: 10px; height: 26px; text-decoration: none; font-size: 13px; color: {{s.color}}; font-weight: {{s.weight}}"><span style="width: 14px; text-align: center; font-size: 11px; color: {{s.glyphColor}}">{{s.glyph}}</span><span style="flex: 1">{{s.label}}</span><span style="font-size: 12px; color: #8e8e8e; font-weight: 400">{{s.note}}</span></a>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+      <div style="font-size: 12px; font-weight: 500; color: #8e8e8e">Details</div>
+      <div style="display: flex; flex-direction: column; gap: 3px"><span style="font-size: 12px; color: #8e8e8e">Starting page</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #d4d2cf; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">billing.example.com/invoices/new</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; color: #8e8e8e">Apps it uses <span style="color: #8e8e8e">· signed in for the whole group</span></span>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px"><span style="color: {{appColor}}; font-size: 11px">{{appGlyph}}</span><span style="flex: 1">Billing Portal</span><span style="font-size: 12px; color: #a3a3a3">{{appText}}</span></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <div style="display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: #252525; border-radius: 8px"><span style="font-size: 12px; color: #8e8e8e">Steps</span><span>{{steps}}</span></div>
+        <div style="display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: #252525; border-radius: 8px"><span style="font-size: 12px; color: #8e8e8e">Runtime inputs</span><span>{{inputs}}</span></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; gap: 8px"><span style="color: #8e8e8e">Compile</span><span style="text-align: right"><span style="color: {{compileColor}}; font-size: 11px">{{compileGlyph}}</span> {{compileText}}</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 8px"><span style="color: #8e8e8e">Last test</span><span style="text-align: right"><span style="color: {{testColor}}; font-size: 11px">{{testGlyph}}</span> {{testText}}</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 8px"><span style="color: #8e8e8e">Package</span><span style="text-align: right; color: #a3a3a3">{{packageText}}</span></div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 20px 18px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 8px">
+    <sc-if value="{{showStop}}" hint-placeholder-val="{{ false }}">
+      <button type="button" style="height: 36px; border-radius: 10px; border: 1px solid rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); color: #f87171; font: 500 13px Inter, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Stop test</button>
+    </sc-if>
+    <sc-if value="{{showTest}}" hint-placeholder-val="{{ true }}">
+      <a href="TestInputs.dc.html" aria-disabled="{{testDisabled}}" style="height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: {{testBtnColor}}; font: 500 13px Inter, sans-serif; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>{{testLabel}}</a>
+    </sc-if>
+    <a href="HumanEdit.dc.html" aria-disabled="{{editDisabled}}" style="height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: {{editBtnColor}}; font: 500 13px Inter, sans-serif; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Human Edit</a>
+    <span style="font-size: 12px; color: #8e8e8e; text-align: center; line-height: 1.4">{{actionHint}}</span>
+  </div>
+</aside>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"stage":{"editor":"enum","options":["auth","recording","compiling","clarify","ready","edit","testing","failed","passed"],"default":"clarify"},"$preview":{"width":320,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const stage = this.props.stage ?? 'clarify';
+    const G = { ok: ['●', '#4ade80'], warn: ['▲', '#fbbf24'], fail: ['✕', '#f87171'], run: ['◐', '#93b4e6'], none: ['○', '#8e8e8e'] };
+    const cur = { auth: 1, recording: 2, compiling: 3, clarify: 4, ready: 6, edit: 5, testing: 6, failed: 6, passed: 7 }[stage];
+    const names = [
+      ['Describe', 'NewWorkflow.dc.html'], ['Configure', 'Recording.dc.html'], ['Record', 'Recording.dc.html'],
+      ['Compile', 'Compiling.dc.html'], ['Clarify', 'Clarify.dc.html'], ['Edit', 'HumanEdit.dc.html'],
+      ['Test', 'TestInputs.dc.html'], ['Approve', 'TestPassed.dc.html'],
+    ];
+    const curNote = { auth: 'sign-in needed', recording: 'in progress', compiling: 'in progress', clarify: '3 open', ready: 'next', edit: 'optional', testing: 'running', failed: 'failed', passed: 'your call' }[stage];
+    const curKind = stage === 'failed' ? 'fail' : (stage === 'auth' || stage === 'clarify' || stage === 'passed' || stage === 'edit' || stage === 'ready') ? 'warn' : 'run';
+    const stages = names.map(([label, href], i) => {
+      const kind = i < cur ? 'ok' : i === cur ? curKind : 'none';
+      return { label, href, glyph: G[kind][0], glyphColor: G[kind][1], color: i <= cur ? '#e8e6e3' : '#8e8e8e', weight: i === cur ? 600 : 400, note: i === cur ? curNote : (i === 5 && i < cur ? 'skipped' : '') };
+    });
+    const S = {
+      auth: ['warn', 'Waiting for sign-in to Billing Portal'],
+      recording: ['run', 'Recording in a Chromium window'],
+      compiling: ['run', 'Compiling — about a minute left'],
+      clarify: ['warn', 'Compiled — 3 questions need you'],
+      ready: ['warn', 'Ready to test'],
+      edit: ['warn', 'Edited — test again before approving'],
+      testing: ['run', 'Test running · Enter PO number'],
+      failed: ['fail', 'Test failed at “Choose the customer”'],
+      passed: ['ok', 'Test passed — not yet approved'],
+    }[stage];
+    const compiled = cur >= 4;
+    const app = stage === 'auth' ? ['warn', 'Sign-in needed'] : ['ok', 'Checked 4 min ago'];
+    const comp = stage === 'compiling' ? ['run', 'In progress'] : compiled ? ['warn', '2 warnings'] : ['none', 'Not yet'];
+    const test = { testing: ['run', 'Running now'], failed: ['fail', 'Failed · 3:24 PM'], passed: ['ok', 'Passed · 3:31 PM'] }[stage] || (stage === 'edit' ? ['fail', 'Failed · 3:24 PM'] : ['none', 'Never run']);
+    const testing = stage === 'testing';
+    const testDisabled = !compiled;
+    const hints = {
+      auth: 'Testing unlocks after the first compile.',
+      recording: 'Finish the recording to continue.',
+      compiling: 'Testing unlocks when compiling finishes.',
+      clarify: 'You can test now; open questions use your recorded values.',
+      ready: 'The conversation has the test form open.',
+      edit: 'Changes save as you make them.',
+      testing: 'Stopping ends the run in a few seconds.',
+      failed: 'Conxa is fixing it — follow along in the conversation.',
+      passed: 'A passed test doesn’t publish anything.',
+    };
+    return {
+      statusGlyph: G[S[0]][0], statusColor: G[S[0]][1], statusText: S[1], stages,
+      appGlyph: G[app[0]][0], appColor: G[app[0]][1], appText: app[1],
+      steps: cur >= 5 ? '15' : compiled ? '13' : (stage === 'compiling' ? '14 actions recorded' : '—'),
+      inputs: cur >= 5 ? '3' : compiled ? '3 so far' : '—',
+      compileGlyph: G[comp[0]][0], compileColor: G[comp[0]][1], compileText: comp[1],
+      testGlyph: G[test[0]][0], testColor: G[test[0]][1], testText: test[1],
+      packageText: stage === 'passed' ? 'Built for test · not published' : compiled ? 'Rebuilt when you test' : '—',
+      showStop: testing, showTest: !testing,
+      testLabel: stage === 'failed' || stage === 'passed' || stage === 'edit' ? 'Test again' : 'Test workflow',
+      testDisabled: testDisabled ? 'true' : 'false', testBtnColor: testDisabled ? '#6b6b6b' : '#e8e6e3',
+      editDisabled: compiled ? 'false' : 'true', editBtnColor: compiled ? '#e8e6e3' : '#6b6b6b',
+      actionHint: hints[stage],
+    };
+  }
+}
+</script>
+</body>
+</html>

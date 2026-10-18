@@ -1,1 +1,1 @@
-{ "min_host": "0.0.0", "app_version": "v0.0.0-dev" }
+{ "min_host": "0.0.0", "app_version": "v0.0.0-dev", "capabilities": ["test_guard"] }

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test running</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px">
+        <a href="Group.dc.html" style="color: #a3a3a3; text-decoration: none">Finance Ops</a><span style="color: #6b6b6b">/</span><h1 style="margin: 0; font-size: 15px; font-weight: 600">Create invoice</h1>
+      </header>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 18px">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #93b4e6">◐</span><span style="color: #e8e6e3">Test started</span><span>PO-44821 · Acme Retail</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:22 PM</span></div>
+        </div>
+        <div role="status" aria-live="polite" style="background: #252525; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden">
+          <div style="padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="font-size: 14px; font-weight: 600">Step {{curN}} of 15</span><span style="font-size: 13px; color: #a3a3a3">{{elapsed}}</span>
+            <button type="button" onClick="{{toggle}}" style="margin-left: auto; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); color: #f87171; font: 500 12px Inter, sans-serif">Stop test</button>
+          </div>
+          <div role="progressbar" aria-label="Test progress" aria-valuenow="{{curN}}" aria-valuemin="0" aria-valuemax="15" style="height: 3px; background: #2c2c2c"><div style="width: {{pct}}; height: 3px; background: #93b4e6"></div></div>
+          <ol style="margin: 0; padding: 8px 0; list-style: none; font-size: 13px">
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+              <li style="display: flex; align-items: center; gap: 10px; padding: 5px 14px; color: {{r.color}}"><span style="width: 14px; text-align: center; font-size: 11px; color: {{r.glyphColor}}">{{r.glyph}}</span><span style="flex: 1; min-width: 0">{{r.text}}</span><span style="font-size: 12px; color: #8e8e8e">{{r.note}}</span></li>
+            </sc-for>
+          </ol>
+          <div style="padding: 8px 14px 12px; font-size: 12px; color: #8e8e8e; border-top: 1px solid rgba(255,255,255,0.06)">Plain-language progress. <a href="#" style="color: #a3a3a3">Technical log</a><span style="float: right">Prototype: <a href="TestFailed.dc.html" style="color: #a3a3a3">see a failure</a> · <a href="TestPassed.dc.html" style="color: #a3a3a3">see a pass</a></span></div>
+        </div>
+      </div>
+      <div style="flex-shrink: 0; padding: 8px 24px 20px">
+        <div style="background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px">
+          <textarea aria-label="Message" rows="1" placeholder="Ask about what it’s doing…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+          <div style="display: flex; align-items: center"><span style="font-size: 12px; color: #8e8e8e">Create invoice · test running</span><button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2c2c2c; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+
+    <div role="separator" aria-orientation="vertical" aria-label="Resize browser panel" tabindex="0" style="width: 6px; flex-shrink: 0; background: #1a1a1a; border-left: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; cursor: col-resize"><span style="width: 2px; height: 28px; border-radius: 1px; background: rgba(255,255,255,0.22)"></span></div>
+
+    <section aria-label="Test browser" style="width: 600px; flex-shrink: 0; display: flex; flex-direction: column; background: #1e1e1e">
+      <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08)">
+        <span style="font-size: 13px; font-weight: 600">Test browser</span>
+        <span style="font-size: 12px; color: #93b4e6">◐ live</span>
+        <span style="flex: 1; min-width: 0; height: 26px; border-radius: 7px; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 6px; padding: 0 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; overflow: hidden; white-space: nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>billing.example.com/invoices/new</span>
+        <button type="button" aria-label="Open in its own window" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+        <button type="button" aria-label="Hide browser panel — the test keeps running" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div role="img" aria-label="Region where the live Chromium page is drawn by the app" style="flex: 1; min-height: 0; margin: 0; background: repeating-linear-gradient(135deg, #1c1c1c 0 14px, #202020 14px 28px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px">
+        <span style="font-size: 14px; color: #d4d2cf">Live Chromium view</span>
+        <span style="font-size: 12px; color: #8e8e8e; max-width: 320px; line-height: 1.5">The real test browser is drawn into this region by the app — a native browser view, not a picture. Nothing else can be layered on top of it.</span>
+      </div>
+      <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #a3a3a3">
+        <span style="color: #fbbf24">▲</span>Clicking in the page while it runs can throw the test off.
+        <span style="margin-left: auto; color: #8e8e8e">Tab 1 of 1</span>
+      </div>
+    </section>
+
+    <div style="width: 44px; flex-shrink: 0; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 10px">
+      <button type="button" aria-label="Show workflow details" style="width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
+      <span title="Test running" style="font-size: 11px; color: #93b4e6">◐</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { n: 6, stopped: false };
+  }
+  componentDidMount() {
+    this.t = setInterval(() => {
+      if (this.state.stopped) return;
+      this.setState({ n: this.state.n >= 9 ? 6 : this.state.n + 1 });
+    }, 1600);
+  }
+  componentWillUnmount() { clearInterval(this.t); }
+  renderVals() {
+    const n = this.state.n;
+    const pre = [
+      ['●', '#4ade80', 'Built a fresh test copy', '4 s'],
+      ['●', '#4ade80', 'Opened Chromium with the Finance Ops sign-in', ''],
+    ];
+    const steps = [
+      'Opened the new-invoice page', 'Closed the cookie banner', 'Opened the customer picker',
+      'Chose Acme Retail', 'Checked the customer exists', 'Entered the PO number', 'Added a line item',
+      'Entered the description', 'Entered the quantity', 'Set the due date',
+    ];
+    const rows = pre.map(([glyph, glyphColor, text, note]) => ({ glyph, glyphColor, text, note, color: '#a3a3a3' }));
+    steps.slice(0, n + 1).forEach((text, i) => {
+      const done = i < n;
+      rows.push({
+        glyph: done ? '●' : '◐', glyphColor: done ? '#4ade80' : '#93b4e6',
+        text: (i + 1) + '. ' + (done ? text : text.replace(/^Entered/, 'Entering').replace(/^Added/, 'Adding').replace(/^Set/, 'Setting')),
+        note: done ? '' : 'now', color: done ? '#d4d2cf' : '#e8e6e3',
+      });
+    });
+    return {
+      rows, curN: n + 1, pct: Math.round(((n + 1) / 15) * 100) + '%',
+      elapsed: this.state.stopped ? 'Stopping…' : '0:' + String(18 + n * 3).padStart(2, '0') + ' elapsed',
+      toggle: () => this.setState({ stopped: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

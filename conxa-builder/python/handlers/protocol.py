@@ -63,9 +63,25 @@ def _emit_event(req_id: str | None, **fields: Any) -> None:
     _write({"type": "event", "id": req_id, **fields})
 
 
+# BUILD-39: a command that wants to watch another command's progress (the compile card mirrors
+# cmd_compile's own events) registers an observer under that command's request id. Both the
+# per-command event sink below and backend.py's compile sub-step sink feed it.
+JOB_OBSERVERS: dict[str, Callable[[dict[str, Any]], None]] = {}
+
+
+def notify_observer(req_id: str | None, entry: dict[str, Any]) -> None:
+    obs = JOB_OBSERVERS.get(req_id or "")
+    if obs is not None:
+        try:
+            obs(entry)
+        except Exception:  # noqa: BLE001 — a progress mirror must never break the command it watches
+            pass
+
+
 def _event_sink(req_id: str | None) -> Callable[[dict[str, Any]], None]:
     def sink(entry: dict[str, Any]) -> None:
         _emit_event(req_id, **entry)
+        notify_observer(req_id, entry)
     return sink
 
 

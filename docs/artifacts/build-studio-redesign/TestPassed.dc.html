@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Test passed</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px">
+        <a href="Group.dc.html" style="color: #a3a3a3; text-decoration: none">Finance Ops</a><span style="color: #6b6b6b">/</span><h1 style="margin: 0; font-size: 15px; font-weight: 600">Create invoice</h1>
+      </header>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,0.10); margin-left: 11px; padding-left: 18px">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #4ade80">●</span><span style="color: #e8e6e3">Accepted change to “Choose the customer”</span><span>waits for the customer list</span><span style="margin-left: auto; font-size: 12px; color: #8e8e8e">3:27 PM</span></div>
+        </div>
+
+        <div style="background: #252525; border: 1px solid rgba(74,222,128,0.30); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: baseline; gap: 10px"><span style="color: #4ade80">●</span><span style="font-size: 15px; font-weight: 600">Test passed</span><span style="font-size: 13px; color: #a3a3a3">15 of 15 steps · 1 min 48 s</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #a3a3a3">
+            <span><span style="color: #4ade80">●</span> <span style="color: #e8e6e3">“Invoice sent” appeared</span> — the check you chose passed</span>
+            <span><span style="color: #4ade80">●</span> Paused at “Ask a person before sending” — you confirmed, which also let the 3 steps that can’t be undone run</span>
+            <span><span style="color: #4ade80">●</span> No recovery needed, no AI used during the run</span>
+            <span><span style="color: #4ade80">●</span> <span style="color: #e8e6e3">First passing test</span> — now marked tested in Finance Ops</span>
+          </div>
+          <div style="padding: 10px 12px; border-radius: 8px; background: #2c2c2c; font-size: 13px; line-height: 1.5; color: #d4d2cf">Because you let the last steps run, this test sent a real invoice to Acme Retail. Delete it in Billing Portal if it was test data.</div>
+        </div>
+
+        <div style="display: flex; gap: 12px">
+          <div style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">C</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+            <sc-if value="{{notApproved}}" hint-placeholder-val="{{ true }}">
+              <p style="margin: 0; font-size: 15px; line-height: 1.65">It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.</p>
+              <div style="display: flex; gap: 8px; align-items: center">
+                <button type="button" onClick="{{approve}}" style="height: 34px; padding: 0 14px; border-radius: 10px; border: none; background: #d97757; color: #1a1a1a; font: 500 13px Inter, sans-serif">{{approveLabel}}</button>
+                <a href="TestInputs.dc.html" style="height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Test with other inputs</a>
+              </div>
+            </sc-if>
+            <sc-if value="{{approved}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #a3a3a3"><span style="color: #4ade80">●</span><span style="color: #e8e6e3">Approved</span><span>by you · version 4</span></div>
+              <p style="margin: 0; font-size: 15px; line-height: 1.65">Approved. Finance Ops now has 2 approved workflows waiting in the next release. Publish when the whole group is ready.</p>
+              <a href="#" style="align-self: flex-start; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); color: #e8e6e3; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Open Publish</a>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+      <div style="flex-shrink: 0; padding: 8px 24px 20px">
+        <div style="background: #252525; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px">
+          <textarea aria-label="Message" rows="1" placeholder="Ask about this workflow…" style="resize: none; border: none; background: transparent; color: #e8e6e3; font: 15px Inter, sans-serif; outline: none; padding: 0"></textarea>
+          <div style="display: flex; align-items: center"><span style="font-size: 12px; color: #8e8e8e">Create invoice</span><button type="button" aria-label="Send" style="margin-left: auto; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2c2c2c; color: #8e8e8e; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+
+    <div role="separator" aria-orientation="vertical" aria-label="Resize browser panel" tabindex="0" style="width: 6px; flex-shrink: 0; background: #1a1a1a; border-left: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; cursor: col-resize"><span style="width: 2px; height: 28px; border-radius: 1px; background: rgba(255,255,255,0.22)"></span></div>
+    <section aria-label="Test browser" style="width: 560px; flex-shrink: 0; display: flex; flex-direction: column; background: #1e1e1e">
+      <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08)">
+        <span style="font-size: 13px; font-weight: 600">Test browser</span>
+        <span style="font-size: 12px; color: #4ade80">● finished</span>
+        <span style="flex: 1; min-width: 0; height: 26px; border-radius: 7px; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; padding: 0 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a3a3a3; overflow: hidden; white-space: nowrap">billing.example.com/invoices/[id]</span>
+        <button type="button" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 12px Inter, sans-serif">Close browser</button>
+      </div>
+      <div role="img" aria-label="Region where the finished test page stays open" style="flex: 1; min-height: 0; background: repeating-linear-gradient(135deg, #1c1c1c 0 14px, #202020 14px 28px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px">
+        <span style="font-size: 14px; color: #d4d2cf">Live Chromium view</span>
+        <span style="font-size: 12px; color: #8e8e8e; max-width: 300px; line-height: 1.5">Stays on the final page so you can check the result yourself. You can click around now — the run is over.</span>
+      </div>
+    </section>
+    <div style="width: 44px; flex-shrink: 0; background: #1e1e1e; border-left: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 10px">
+      <button type="button" aria-label="Show workflow details" style="width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: #8e8e8e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
+      <span title="Test passed" style="font-size: 11px; color: #4ade80">●</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { s: 'idle' };
+  }
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const s = this.state.s;
+    return {
+      notApproved: s !== 'done', approved: s === 'done',
+      approveLabel: s === 'saving' ? 'Approving…' : 'Approve for packaging',
+      approve: () => {
+        if (s !== 'idle') return;
+        this.setState({ s: 'saving' });
+        this.t = setTimeout(() => this.setState({ s: 'done' }), 900);
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

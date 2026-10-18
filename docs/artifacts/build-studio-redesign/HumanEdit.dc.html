@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Human Edit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="wf-invoice" hint-size="264px,860px"></dc-import>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative">
+      <header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px 0 8px; border-bottom: 1px solid rgba(255,255,255,0.08)">
+        <a href="Clarify.dc.html" style="height: 32px; padding: 0 10px 0 6px; border-radius: 8px; color: #a3a3a3; font-size: 13px; text-decoration: none; display: flex; align-items: center; gap: 4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to conversation</a><span style="color: #6b6b6b">/</span>
+        <h1 style="margin: 0; font-size: 16px; font-weight: 600; color: #ffffff">Create invoice</h1>
+        <span style="font-size: 14px; color: #71717a">15 steps <span style="color: #fbbf24">· review recommended</span></span>
+        <div style="margin-left: auto; display: flex; gap: 6px; align-items: center">
+          <button type="button" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: transparent; color: #e8e6e3; font: 500 12px Inter, sans-serif">Workflow plan</button>
+          <button type="button" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: transparent; color: #e8e6e3; font: 500 12px Inter, sans-serif">Input variables</button>
+          <button type="button" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.10); background: transparent; color: #e8e6e3; font: 500 12px Inter, sans-serif">More</button>
+          <button type="button" aria-label="Undo" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #a3a3a3"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+          <button type="button" aria-label="Redo" disabled style="width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #5a5a5a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+          <a href="TestInputs.dc.html" title="Approving happens in the conversation after a passing test" style="height: 32px; padding: 0 14px; border-radius: 10px; background: #d97757; color: #1a1a1a; font-size: 13px; font-weight: 500; text-decoration: none; display: flex; align-items: center">Test changes</a>
+        </div>
+      </header>
+
+      <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr)">
+        <div style="border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; min-height: 0">
+          <div style="display: flex; align-items: center; padding: 14px 16px 8px"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #71717a; flex: 1">STEPS</span><button type="button" style="border: none; background: transparent; color: #d97757; font: 500 13px Inter, sans-serif">+ Add step</button></div>
+          <ol style="margin: 0; padding: 0 8px 12px; list-style: none; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{steps}}" as="s" hint-placeholder-count="12">
+              <li><button type="button" onClick="{{s.pick}}" aria-current="{{s.current}}" style="width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid {{s.border}}; background: {{s.bg}}; color: #e8e6e3; font: 13px Inter, sans-serif; text-align: left">
+                <span style="display: flex; align-items: center; gap: 8px; width: 100%"><span style="width: 18px; font-size: 12px; color: #71717a">{{s.n}}</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.label}}</span><span style="font-size: 10px; color: #fbbf24">{{s.flag}}</span></span>
+                <span style="display: flex; gap: 6px; padding-left: 26px"><span style="font-size: 11px; color: {{s.kindColor}}; border: 1px solid {{s.kindColor}}; border-radius: 4px; padding: 0 6px">{{s.kind}}</span></span>
+              </button></li>
+            </sc-for>
+          </ol>
+        </div>
+
+        <div style="min-width: 0; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; color: #71717a">Step {{selN}} · {{selKind}}</span>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: #ffffff">Is this the right element?</h2>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+            <span style="display: flex; align-items: center; gap: 8px"><span style="width: 22px; height: 22px; border-radius: 11px; background: #d97757; color: #1a1a1a; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">1</span>Element</span>
+            <span style="width: 32px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+            <span style="display: flex; align-items: center; gap: 8px; color: #a3a3a3"><span style="width: 22px; height: 22px; border-radius: 11px; border: 1px solid rgba(255,255,255,0.18); font-size: 12px; display: flex; align-items: center; justify-content: center">2</span>How it’s found</span>
+            <span style="width: 32px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+            <span style="display: flex; align-items: center; gap: 8px; color: #a3a3a3"><span style="width: 22px; height: 22px; border-radius: 11px; border: 1px solid rgba(255,255,255,0.18); font-size: 12px; display: flex; align-items: center; justify-content: center">3</span>Validation</span>
+          </div>
+          <p style="margin: 0; font-size: 13px; color: #a3a3a3; line-height: 1.6">The highlighted box is what this step acts on. If it’s right, continue; otherwise draw a new box around the correct element.</p>
+          <div role="img" aria-label="Recorded screenshot of this step with the target element outlined" style="height: 340px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.10); background: repeating-linear-gradient(135deg, #202020 0 12px, #232323 12px 24px); display: flex; align-items: center; justify-content: center; position: relative">
+            <span style="font-size: 13px; color: #8e8e8e">[Recording screenshot from step {{selN}}]</span>
+            <div style="position: absolute; left: 32%; top: 40%; width: 34%; height: 46px; border: 2px solid #d97757; border-radius: 6px"></div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+            <span style="font-size: 12px; color: #71717a">Box 312 × 46</span>
+            <button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">Draw a new box</button>
+            <button type="button" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">View recording screenshots</button>
+            <button type="button" style="margin-left: auto; height: 32px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; font: 500 13px Inter, sans-serif">Yes, continue</button>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #d4d2cf">Description
+            <input value="Choose the customer from the customer list" style="height: 36px; box-sizing: border-box; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #1a1a1a; color: #e8e6e3; padding: 0 12px; font: 14px Inter, sans-serif; outline: none">
+          </label>
+          <details style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; font-size: 13px; color: #a3a3a3"><summary style="cursor: pointer; color: #d4d2cf">Advanced</summary><p style="margin: 8px 0 0">Selectors, frame context, anchors and element fingerprint.</p></details>
+        </div>
+      </div>
+
+      <button type="button" aria-label="Open Conxa Copilot" style="position: absolute; right: 24px; bottom: 24px; width: 48px; height: 48px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.14); background: #252525; color: #e8e6e3; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 3 };
+  }
+  renderVals() {
+    const K = { navigate: '#9d7cd8', click: '#e88fb4', select: '#e88fb4', type: '#5b9bd5', try_dismiss: '#8e8e8e', if_present: '#8e8e8e', ai_review: '#8e8e8e' };
+    const raw = [
+      ['navigate', 'Open the new-invoice page', ''], ['try_dismiss', 'Close cookie banner if shown', ''],
+      ['click', 'Open the customer picker', ''], ['select', 'Choose the customer {{customer}}', '▲'],
+      ['if_present', 'Stop if customer is missing', ''], ['type', 'Enter PO number {{po_number}}', ''],
+      ['click', 'Add a line item', ''], ['type', 'Description “Annual license”', ''],
+      ['type', 'Quantity “12”', ''], ['type', 'Due date {{due_date}}', ''],
+      ['click', 'Save draft', ''], ['ai_review', 'Ask a person before sending', ''],
+      ['click', 'Send invoice', '▲'], ['click', 'Confirm send', ''], ['click', 'Close the confirmation', ''],
+    ];
+    const sel = this.state.sel;
+    const steps = raw.map(([kind, label, flag], i) => ({
+      n: i + 1, kind, label, flag, kindColor: K[kind],
+      bg: i === sel ? 'rgba(217,119,87,0.12)' : 'transparent',
+      border: i === sel ? 'rgba(217,119,87,0.35)' : 'transparent',
+      current: i === sel ? 'step' : 'false',
+      pick: () => this.setState({ sel: i }),
+    }));
+    return { steps, selN: sel + 1, selKind: raw[sel][0] };
+  }
+}
+</script>
+</body>
+</html>

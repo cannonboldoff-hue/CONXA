@@ -299,6 +299,13 @@ class RecordingSession:
     _seq: int = 0
     _materialized: list[RecordedEvent] = field(default_factory=list)
     _pending_payloads: SimpleQueue = field(default_factory=SimpleQueue)
+    # BUILD-38: pause/resume. While paused, payloads are stamped at enqueue time (not at drain
+    # time — the queue can lag behind the page by a few ticks, and a resume must not replay what
+    # happened during the pause) and dropped by _consume_payload_sync.
+    _paused: bool = False
+    # Optional callback(event: RecordedEvent) fired after each event is materialized, so the
+    # Studio can show a live "captured so far" list. Never raises into the recorder.
+    event_hook: Any = None
     _last_enqueue_at: float = 0.0
     _last_storage_state_save_at: float = 0.0
     _last_url_sweep_at: float = 0.0
@@ -1265,6 +1272,8 @@ class RecordingSession:
             # clicks, which skip this call entirely, always worked fine). Deferred to
             # _consume_payload_sync, which runs from the plain pump-loop drain, not from
             # inside a callback the dispatcher is still in the middle of delivering.
+            if self._paused:
+                payload_copy["_paused"] = True
             self._pending_payloads.put((payload_copy, src_page, src_frame))
             self._last_enqueue_at = time.monotonic()
             if src_page is not None and str((payload_copy.get("action") or {}).get("action") or "") in self._INTERACTION_ACTIONS:
@@ -1381,6 +1390,10 @@ class RecordingSession:
     def _consume_payload_sync(
         self, payload: dict[str, Any], src_page: Any | None = None, src_frame: Any | None = None
     ) -> None:
+        # BUILD-38: a payload that arrived while paused is dropped, not recorded — and not
+        # replayed on resume, which is why the flag is stamped at enqueue time.
+        if payload.pop("_paused", False):
+            return
         # Frame-chain/geometry extraction needs Playwright sync-API calls (walking the
         # ancestor chain via frame.evaluate()); safe here since this runs from the plain
         # pump-loop drain, never from inside the expose_binding callback that first received
@@ -1414,6 +1427,12 @@ class RecordingSession:
                 self._materialized.append(event)
         self._rewrite_events_jsonl(session_dir)
         metrics.inc("events_captured")
+        hook = self.event_hook
+        if hook is not None:
+            try:
+                hook(event)
+            except Exception:  # noqa: BLE001 — a UI callback must never break recording
+                pass
 
     A11Y_CAPTURE_TIMEOUT_MS = 2000
 
@@ -1668,6 +1687,8 @@ class RecordingSession:
             payload = self._make_synthetic_payload(kind, value_str, src_page)
             if tab_key is not None:
                 payload["_tab_key"] = tab_key
+            if self._paused:
+                payload["_paused"] = True
             self._pending_payloads.put((payload, src_page, None))
             self._last_enqueue_at = time.monotonic()
         except Exception as exc:  # noqa: BLE001
@@ -2542,12 +2563,21 @@ class RecordingSession:
             "session_id": self.session_id,
             "browser_open": self.browser_open,
             "event_count": event_count,
+            "paused": self._paused,
             "ended_by_user": self.ended_by_user,
             "binding_errors": self.binding_errors,
             "reached_wait_url": self.reached_wait_url,
             "auth_captured": self.auth_captured,
             "current_url": self.current_url,
         }
+
+    def pause(self) -> None:
+        """Stop recording what the person does in the browser. Nothing is captured while paused,
+        and nothing captured before is touched. The video keeps running."""
+        self._paused = True
+
+    def resume(self) -> None:
+        self._paused = False
 
     def snapshot_events(self) -> list[dict[str, Any]]:
         with self._lock:

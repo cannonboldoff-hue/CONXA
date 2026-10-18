@@ -269,6 +269,7 @@ export function createWorkflow(body: {
   group_id?: string
   protected_url?: string
   protected_url_marker_text?: string
+  task_description?: string
 }): Promise<{ workflow: Workflow }> {
   return cmd<{ workflow: Workflow }>('create_workflow', body)
 }

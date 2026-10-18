@@ -1069,6 +1069,12 @@ async function _handleTool(name, args, extra) {
       });
     }
 
+    // RT-9: Studio-only test guard — pause (parked) before the first step the compiler marked
+    // `destructive`, resume with `_guard_release`. Read from the top-level args (never from a
+    // per-run entry): customer and agent callers never set these, so for them both stay false.
+    const _guardPause = args._pause_before_irreversible === true;
+    const _guardRelease = args._guard_release === true;
+
     // EXEC-21: a handover step needs a person to actually see and click something — there is no
     // window for that in a headless run. Force one open rather than deadlocking on a banner
     // nobody can see; watch was already resolved above, before we could know what's in the pack.
@@ -1101,7 +1107,7 @@ async function _handleTool(name, args, extra) {
     // stops being useful, not because it "looks unused" — its consumer is a text-matching regex,
     // not a caller in this file.
     const _t0 = Date.now();
-    const _phase = (phase) => log("info", "test_phase", { run_id: _runId, phase, ms: Date.now() - _t0 });
+    const _phase = (phase, extra) => log("info", "test_phase", { run_id: _runId, phase, ms: Date.now() - _t0, ...(extra || {}) });
     const exec = {
       runId:           _runId,
       slug:            primary.entry.slug,
@@ -1431,6 +1437,35 @@ async function _handleTool(name, args, extra) {
       _park = handoverPark;
       primary.inputs[`__handover_done_${primary.resumeFrom}`] = true;
       _runTracker.emit("handover_resumed", { si: primary.resumeFrom });
+    }
+
+    // RT-9: resuming a guard pause. Like the hand-over resume above there is no answer to
+    // validate — the caller either releases the held destructive steps (adopt the parked page and
+    // run on from the step) or ends the test (the park just times out). A release with no live park
+    // is refused outright: restarting on a fresh page would run the irreversible step against a page
+    // that is nowhere near where the workflow had got to.
+    // (A release that rides along with an ai_review answer — a person's "yes" to a confirm-only
+    // review also lets the steps behind it through — is handled by the review resume above, which
+    // adopts the review's own park; this block is only for a park the guard itself created.)
+    if (_guardRelease && !_resumeReviewStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
+      const guardPark = _getParkedRecovery(_parkKey);
+      if (!guardPark || guardPark.guardStepIndex !== primary.resumeFrom) {
+        appendRecoveryEvent({ event: "guard_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
+        _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc: "guard_resume_refused" });
+        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+        runRegistry.end(_runId);
+        await _receiptFlush;
+        await _tracker.flush();
+        _tracker.destroy();
+        return err(
+          `The pause before step ${primary.resumeFrom + 1} has expired or was never opened. Run the test again ` +
+          `to restart it from the beginning.`
+        );
+      }
+      clearTimeout(guardPark.timer);
+      _setParkedRecovery(_parkKey, null);
+      _park = guardPark;
+      appendRecoveryEvent({ event: "guard_released", slug: primary.entry.slug, step_index: primary.resumeFrom });
     }
 
     // PROD-18: every surviving path (fresh run or an adopted park) crosses here exactly
@@ -1777,7 +1812,9 @@ async function _handleTool(name, args, extra) {
 
         try {
           const result = await runPlan(page, steps, inputs, startAt, entry.slug, {
-            onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`); },
+            // `step`/`intent`/`destructive` ride along so Build Studio's test card can name each step as it
+            // starts (RT-9) — extra fields on a diagnostic log line, ignored by every other reader.
+            onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`, { step: i, step_total: steps.length, intent: steps[i]?.intent || null, destructive: steps[i]?.destructive === true }); },
             onPhase:       _phase,
             cancelCheck:   _execCancelled,
             tracker:       _runTracker,
@@ -1793,6 +1830,7 @@ async function _handleTool(name, args, extra) {
             dryRun,
             isResume: isResuming,
             context: _context, // EXEC-21: handover needs the browser context to arm its banner
+            guard: _guardPause ? { pause: true, released: _guardRelease } : undefined, // RT-9
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
           if (result && Array.isArray(result.warnings)) {
@@ -2027,7 +2065,10 @@ async function _handleTool(name, args, extra) {
           : (_effAgentEnabled && failedAt !== null
               ? ` Once signed in, call execute_skill again for "${(runErr.fromEntry || primary.entry).slug}" with resume_from: ${failedAt}.`
               : ` Once signed in, call execute_skill again to run this skill.`);
-        return err(`${runErr.message}${resumeHint} (run_id: ${_runId})`);
+        // `_meta` lets a programmatic caller (Build Studio's test) tell "the saved sign-in expired" from
+        // a step failure without parsing prose; the text is unchanged for every other client.
+        return { ...err(`${runErr.message}${resumeHint} (run_id: ${_runId})`),
+          _meta: { "conxa/session_expired": { run_id: _runId, step_index: failedAt } } };
       }
 
       // EXEC-13: ai_review reached this step for the first time (not a resume) — this is a
@@ -2053,6 +2094,33 @@ async function _handleTool(name, args, extra) {
           reviewResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
         return reviewResp;
+      }
+
+      // RT-9: the test guard reached a step that can't be undone. Park the live page exactly like
+      // the ai_review pause above (same park shape, same TTL, same fingerprint) and tell the caller
+      // what it is about to do — no recovery state, no retry budget, nothing sent yet.
+      if (runErr.guardPause) {
+        const _guardPage = runErr.page || page;
+        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
+        if (timer.unref) timer.unref();
+        _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
+          page: _guardPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, guardStepIndex: runErr.stepIndex, timer,
+          pageFingerprint: await capturePageFingerprint(_guardPage),
+          leaseKey: _leaseKey, hostRelease: _hostRelease,
+          attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
+        appendRecoveryEvent({ event: "guard_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
+        log("info", "guard_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
+        _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "guard" });
+        const guardIntent = (runErr.step && (runErr.step.intent || runErr.step.type)) || `step ${runErr.stepIndex + 1}`;
+        return {
+          content: [{
+            type: "text",
+            text: `Paused before "${guardIntent}" (step ${runErr.stepIndex + 1}), which can't be undone. ` +
+              `${runErr.remaining} step(s) from here on can't be undone. Call execute_skill again with resume_from = ${runErr.stepIndex} and ` +
+              `_guard_release = true to run them for real, or stop here. (run_id: ${_runId})`,
+          }],
+          _meta: { "conxa/guard": { step_index: runErr.stepIndex, step_intent: guardIntent, remaining_irreversible: runErr.remaining, run_id: _runId } },
+        };
       }
 
       // EXEC-21 (hand-over shape): reached this step for the first time (not a resume) and the

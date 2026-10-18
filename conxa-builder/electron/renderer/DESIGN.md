@@ -7,9 +7,13 @@ colors:
   charcoal-base: "#1a1a1a"
   charcoal-sidebar: "#1e1e1e"
   charcoal-surface: "#252525"
+  charcoal-raised: "#2c2c2c"
   warm-ivory: "#e8e6e3"
+  soft-gray: "#a3a3a3"
   slate-gray: "#8e8e8e"
-  iron-gray: "#5a5a5a"
+  iron-gray: "#6b6b6b"
+  action-pink: "#e88fb4"
+  progress-blue: "#93b4e6"
   recovery-green: "#4ade80"
   caution-amber: "#fbbf24"
   alert-red: "#f87171"
@@ -82,7 +86,7 @@ components:
 
 **Creative North Star: "The Workbench"**
 
-Build Studio is a craftsman's workspace, not a showroom. Every surface sits at one of three flat charcoal steps — base, sidebar, surface — and nothing on screen competes for attention except the single clay-orange accent, reserved for the one action currently worth taking: the primary CTA, a selected item, an active tab. Depth comes from a hairline border and a shift in background tone, never a shadow; a workbench doesn't need theatrical lighting, it needs every tool exactly where the operator expects it.
+Build Studio is a craftsman's workspace, not a showroom. Every surface sits at one of three flat charcoal steps — base, sidebar, surface — and nothing on screen competes for attention except the single clay-orange accent, reserved for the one action currently worth taking: the primary CTA — the one next action in view. Selection is a neutral tint, not clay. Depth comes from a hairline border and a shift in background tone, never a shadow; a workbench doesn't need theatrical lighting, it needs every tool exactly where the operator expects it.
 
 That restraint is deliberate given who's standing at the bench: a non-technical operator recording a workflow needs the UI to stay legible and low-anxiety, while a technical operator debugging a failed compile needs exact, trustworthy status information. The system resolves that tension by keeping color meaningful rather than decorative — status is never color-only (see the StatusDot pattern in §6) — and by keeping typography and spacing plain enough that nothing reads as "designed for effect."
 
@@ -90,7 +94,7 @@ This system explicitly rejects two things: legacy RPA/dev-tooling density (raw c
 
 **Key Characteristics:**
 - Three flat charcoal steps (#1a1a1a → #1e1e1e → #252525), no shadows, ever.
-- One accent color, Conxa Clay, spent only on the current primary action or selection.
+- One accent color, Conxa Clay, spent only on the single next action in view. Selection is a 7% neutral tint.
 - Status is shape-plus-color, never color alone (StatusDot's glyph pattern).
 - Inter throughout, small and quiet — the UI gets out of the way of the data it's showing.
 - Categorical action colors (click/type/navigate/etc.) are a separate, deliberately distinct palette from the brand accent — see §2.
@@ -100,24 +104,29 @@ This system explicitly rejects two things: legacy RPA/dev-tooling density (raw c
 A near-monochrome charcoal workspace with one warm accent held in reserve for the current primary action.
 
 ### Primary
-- **Conxa Clay** (#d97757): The brand accent. Primary CTA fill, active/selected-state background tint (`rgba(217,119,87,0.12)`), and focus rings. Never used for anything but "this is the current, primary action."
+- **Conxa Clay** (#d97757): The brand accent. Primary CTA fill and focus rings. Never used for anything but "this is the current, primary action." (Amended 2026-10-18: it no longer tints selected items — selection is `rgba(255,255,255,0.07)`.)
 - **Clay Hover** (#e08565): Hover state for clay-filled elements — a touch lighter and warmer, not a different hue.
 
 ### Neutral
 - **Charcoal Base** (#1a1a1a): Page background — the deepest, most-resting surface.
 - **Charcoal Sidebar** (#1e1e1e): Navigation/sidebar background — one step up from base.
-- **Charcoal Surface** (#252525): Cards, panels, and raised content areas — the lightest neutral surface at rest.
+- **Charcoal Surface** (#252525): Cards, panels, and raised content areas — the lightest neutral surface at rest. Cards in the conversation and user messages sit here.
+- **Charcoal Raised** (#2c2c2c, added 2026-10-18): a fourth step for fields and rows nested inside a card, and popovers. Never a page background.
 - **Warm Ivory** (#e8e6e3): Primary text. Warm off-white, not pure white — keeps the whole palette in one temperature family.
-- **Slate Gray** (#8e8e8e): Secondary text — labels, supporting copy, inactive action badges.
-- **Iron Gray** (#5a5a5a): Muted/disabled text and the least-important supporting content.
+- **Soft Gray** (#a3a3a3, 7.4:1): secondary prose — AI-written supporting lines.
+- **Slate Gray** (#8e8e8e, 5.4:1): meta text — labels, timestamps, inactive action badges. The floor for anything a person must read.
+- **Iron Gray** (#6b6b6b): disabled only, never for text a person needs to read. (Amended 2026-10-18: the former #5a5a5a was 2.6:1 and is retired for text.)
 
 ### Status
 - **Recovery Green** (#4ade80): Published / synced / healthy state.
 - **Caution Amber** (#fbbf24): Unpublished changes / needs-attention state.
 - **Alert Red** (#f87171): Compile error / failed state.
+- **Progress Blue** (#93b4e6, added 2026-10-18): in progress — recording, compiling, running.
+
+Glyph vocabulary, identical in the sidebar, inspector, cards and group table: `●` ready/passed, `▲` needs you, `✕` failed, `◐` in progress, `○` not started. Defined once in `renderer/src/lib/status.ts`.
 
 ### Named Rules
-**The One Accent Rule.** Conxa Clay marks exactly one thing per screen: the current primary action or the currently-selected item. It is never used decoratively, and never doubles as a status color — status has its own green/amber/red vocabulary, kept visually distinct from the brand accent so "this is active" and "this is healthy" never get confused.
+**The One Accent Rule.** Conxa Clay marks exactly one thing per screen: the single next action in view (the inspector's primary button, the composer's send, the one actionable answer in a question card). It is never used decoratively, and never doubles as a status color — status has its own green/amber/red vocabulary, kept visually distinct from the brand accent so "this is active" and "this is healthy" never get confused.
 
 ## 3. Typography
 
@@ -154,8 +163,8 @@ None. This system is intentionally flat.
 - **Destructive:** Low-opacity Alert Red fill (`bg-destructive/10`), full-strength red text — never a solid red button.
 
 ### Chips / Badges
-- **Action badge:** Transparent background, 1px border in the action's category color, 4px radius, 11px text, capitalized. Category colors are their own small palette (`click`/`select` → Conxa Clay via `var(--accent)`, `type` → #5b9bd5 blue, `navigate` → #9d7cd8 purple, `scroll`/`hover` → grays) — deliberately separate from the brand accent so action-type identity doesn't compete with "this is the primary action."
-- **Status glyph (StatusDot):** Not a filled badge — a small glyph whose *shape* changes with status (`●` published, `▲` unpublished, `○` error) in addition to its color, so status is never carried by hue alone. This is the system's signature accessibility pattern; carry the shape-plus-color rule into any new status indicator.
+- **Action badge:** Transparent background, 1px border in the action's category color, 4px radius, 11px text, capitalized. Category colors are their own small palette (`click`/`select` → pink #e88fb4 (amended 2026-10-18 — clay is never a step-type colour), `type` → #5b9bd5 blue, `navigate` → #9d7cd8 purple, `scroll`/`hover` → grays) — deliberately separate from the brand accent so action-type identity doesn't compete with "this is the primary action."
+- **Status glyph (StatusDot):** Not a filled badge — a small glyph whose *shape* changes with status (`●` ready, `▲` needs you, `✕` failed, `◐` in progress, `○` not started) in addition to its color, so status is never carried by hue alone. This is the system's signature accessibility pattern; carry the shape-plus-color rule into any new status indicator.
 
 ### Cards / Containers
 - **Corner Style:** 8px radius (`{rounded.md}`).
@@ -170,7 +179,7 @@ None. This system is intentionally flat.
 - **Error / Disabled:** Alert Red ring/border for invalid state; 50% opacity + no pointer events when disabled.
 
 ### Navigation
-- **Sidebar:** Charcoal Sidebar background, Slate Gray link color at rest, Warm Ivory + subtle background tint on hover/active — no underline, no clay accent unless the item is the current primary action.
+- **Sidebar:** Charcoal Sidebar background, Slate Gray link color at rest, Warm Ivory with a 4% tint on hover and a 7% tint when selected — no underline, no clay.
 
 ### Overlay Motion (signature interaction)
 Radix-driven popovers, dialogs, and tooltips use a shared `.anim-pop` entrance/exit: 150ms ease-out-expo pop-in (`scale(0.96) → scale(1)`, slight upward slide), 110ms ease-in pop-out. `prefers-reduced-motion` collapses both to near-instant (0.01ms). Any new overlay component should reuse `.anim-pop` rather than inventing a new transition.
@@ -178,7 +187,7 @@ Radix-driven popovers, dialogs, and tooltips use a shared `.anim-pop` entrance/e
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** spend Conxa Clay on exactly one thing per screen: the current primary action or selection (The One Accent Rule).
+- **Do** spend Conxa Clay on exactly one thing per screen: the single next action in view (The One Accent Rule).
 - **Do** signal status with shape and color together, never color alone — follow StatusDot's glyph pattern for any new status indicator.
 - **Do** keep depth to a tone-step-plus-border; never introduce a box-shadow (The Flat Workbench Rule).
 - **Do** keep every text role in Inter, capped at 1.5rem — this is a precision tool, not a marketing page (The No-Shout Rule).

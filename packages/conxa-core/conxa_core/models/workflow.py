@@ -68,6 +68,9 @@ class Workflow(BaseModel):
     target_url: str
     protected_url: str = ""
     protected_url_marker_text: str = ""
+    # One optional sentence from the New workflow form — what the task does. Context for
+    # Clarify and the chat; never used to compile.
+    task_description: str = ""
     status: Literal["needs_auth", "ready", "error"] = "needs_auth"
     created_at: float = 0.0
     updated_at: float = 0.0

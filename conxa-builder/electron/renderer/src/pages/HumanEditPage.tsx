@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { HumanEditPoolBadge } from '@/components/EntitlementMeters'
-import type { WorkflowResponse, WorkflowRevalidationResponse } from '@/types/workflow'
+import type { WorkflowResponse } from '@/types/workflow'
 import {
   deleteStep,
   errorMessage,
@@ -22,14 +22,16 @@ import {
   undoWorkflow,
 } from '@/api/workflowApi'
 import { fetchWorkflows, normalizeWorkflowList } from '@/api/workflowsApi'
-import { CopilotLauncher } from '@/components/copilot/CopilotLauncher'
-
-const COPILOT_ENABLED = true
+import { EditConversationPanel } from '@/components/conversation/EditConversationPanel'
+import { flowTestPrepare } from '@/api/conversationApi'
+import { useShellData } from '@/hooks/useShellData'
+import { compactStepLabel } from '@/lib/workflowViewerHelpers'
 import { RecordingScreenshotsPanel } from '@/components/RecordingScreenshotsPanel'
 import { WorkflowPlanPanel } from '@/components/WorkflowPlanPanel'
 import { ReviewQuestionsDialog } from '@/components/ReviewQuestionsDialog'
 import { DiagnosticsPanel } from '@/components/DiagnosticsPanel'
 import { WorkflowViewer } from '@/components/WorkflowViewer'
+import { UnsavedChangeGuard } from '@/components/UnsavedChangeGuard'
 import { InlineRetargetFlow, type InlineRetargetFlowHandle } from '@/components/retarget/InlineRetargetFlow'
 import { SuggestionsInlinePanel } from '@/components/SuggestionsPanel'
 import { ParameterizationInlinePanel } from '@/components/ParameterizationDrawer'
@@ -102,6 +104,14 @@ export function HumanEditPage() {
   const [searchParams] = useSearchParams()
   const fromPath = searchParams.get('from') ? decodeURIComponent(searchParams.get('from')!) : null
   const qc = useQueryClient()
+  // The workflow this skill belongs to — Human Edit's conversation is that workflow's own thread, so
+  // what is said and decided here is on the same page as everything else that happened to it.
+  const { workflowsById } = useShellData()
+  const convWorkflow = useMemo(
+    () => [...workflowsById.values()].find((w) => w.workflow.skill_id === skillId)?.workflow ?? null,
+    [workflowsById, skillId],
+  )
+  const fromConversation = Boolean(convWorkflow && fromPath?.startsWith('/w/'))
   const [flowStatus, setFlowStatus] = useState('Load a saved skill to edit, or go home to record a new one.')
   const [resumePick, setResumePick] = useState('')
   const [manualSkillId, setManualSkillId] = useState('')
@@ -252,15 +262,12 @@ export function HumanEditPage() {
     }
   }, [skillId, canUndo, onWorkflowUpdated, setHistoryState])
 
-  // BUILD-26: accept delegates server-side to cmd_patch_step, so its response is shaped exactly
-  // like a manual StepConfigForm save — same onWorkflowUpdated/setHistoryState pair.
-  const onCopilotProposalAccepted = useCallback(
-    (result: WorkflowRevalidationResponse) => {
-      onWorkflowUpdated(result.workflow)
-      if (result.can_undo !== undefined) setHistoryState(result.can_undo, result.can_redo ?? false)
-    },
-    [onWorkflowUpdated, setHistoryState],
-  )
+  // A change card in the conversation was applied or undone — those commands write the skill
+  // directly, so reload the editor's copy (and its undo/redo flags) rather than guess.
+  const onConversationChanged = useCallback(() => {
+    if (!skillId) return
+    void qc.invalidateQueries({ queryKey: ['workflow', skillId] })
+  }, [qc, skillId])
 
   const handleRedo = useCallback(async () => {
     if (!skillId || !canRedo) return
@@ -370,6 +377,25 @@ export function HumanEditPage() {
     } catch (err) {
       toast.error(errorMessage(err, 'Could not add action'))
     }
+  }
+
+  // From a workflow's conversation the primary action is Test changes: save the open step, put the test
+  // card in the thread, and go back. Approval is not offered here — it follows a passing test, in the
+  // conversation. (Reached from the group page instead, the legacy Approve below still applies.)
+  const testChanges = async () => {
+    if (!skillId || !convWorkflow) return
+    const savedOk = await (stepEditorRef.current?.submitIfDirty() ?? Promise.resolve(true))
+    if (!savedOk || useEditorStore.getState().dirtySteps.size > 0) {
+      toast.error('Save the open step first — fix any errors or tap Save step, then test.')
+      return
+    }
+    try {
+      await flowTestPrepare(convWorkflow.id)
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not start a test — please try again.'))
+      return
+    }
+    navigate(`/w/${convWorkflow.id}`)
   }
 
   const approveWorkflow = async () => {
@@ -808,6 +834,7 @@ export function HumanEditPage() {
         </div>
       }
       onBack={() => (fromPath ? navigate(fromPath) : void goToOwnerGroup())}
+      backLabel={fromConversation ? 'Back to conversation' : undefined}
       inlineActions
       actions={
         <div className="flex items-center gap-2.5">
@@ -950,13 +977,17 @@ export function HumanEditPage() {
                 variant="brand"
                 size="sm"
                 className="ring-brand-ring/50 h-9 gap-1.5 px-4 text-sm font-semibold ring-1"
-                onClick={() => void approveWorkflow()}
+                onClick={() => void (fromConversation ? testChanges() : approveWorkflow())}
               >
                 <BadgeCheck className="size-4" aria-hidden />
-                Approve
+                {fromConversation ? 'Test changes' : 'Approve'}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Sign off this workflow — builds the package and returns to its group</TooltipContent>
+            <TooltipContent>
+              {fromConversation
+                ? 'Save this step and test the workflow — you approve it from the conversation once a test passes'
+                : 'Sign off this workflow — builds the package and returns to its group'}
+            </TooltipContent>
           </Tooltip>
           </div>
         </div>
@@ -965,9 +996,10 @@ export function HumanEditPage() {
     {skillId && (
       <ReviewQuestionsDialog skillId={skillId} wf={wf} onWorkflowUpdated={onWorkflowUpdated} />
     )}
+    <div className="flex min-h-0 flex-1 border-t border-white/8">
     <div
       ref={splitPaneRef}
-        className="relative grid flex-1 min-h-0 w-full min-w-0 grid-cols-1 overflow-hidden border-t border-white/8 md:min-h-0 md:[grid-template-columns:var(--workflow-pane-width)_minmax(0,1fr)] md:items-stretch"
+        className="relative grid flex-1 min-h-0 w-full min-w-0 grid-cols-1 overflow-hidden md:min-h-0 md:[grid-template-columns:var(--workflow-pane-width)_minmax(0,1fr)] md:items-stretch"
         style={splitPaneStyle}
       >
         <WorkflowViewer
@@ -1006,6 +1038,15 @@ export function HumanEditPage() {
           screenshotCount={screenshotsTool.count}
         />
       </div>
+    {convWorkflow && (
+      <EditConversationPanel
+        workflowId={convWorkflow.id}
+        title={convWorkflow.name}
+        stepName={currentStep ? compactStepLabel(currentStep.human_readable_description) : undefined}
+        onWorkflowChanged={onConversationChanged}
+      />
+    )}
+    </div>
     </div>
     <Dialog
       open={activeTool !== null}
@@ -1122,7 +1163,7 @@ export function HumanEditPage() {
         )}
       </DialogContent>
     </Dialog>
-    {COPILOT_ENABLED && <CopilotLauncher skillId={skillId} onProposalAccepted={onCopilotProposalAccepted} />}
+    <UnsavedChangeGuard save={() => stepEditorRef.current?.submitIfDirty() ?? Promise.resolve(true)} />
     </TooltipProvider>
   )
 }

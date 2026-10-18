@@ -34,7 +34,7 @@ from app.services.entitlements import (
     compile_pool_for,
     current_entitlements,
     ensure_execute_pool_available,
-    ensure_human_edit_available,
+    ensure_ai_credits_available,
     ensure_trial_active,
     execute_chat_access_for,
     record_execute_pool_usage,
@@ -153,9 +153,9 @@ def _meter_and_call(request: Request, body: ProxyBody, *, vision: bool) -> dict[
             ensure_execute_pool_available(org_id, estimated_tokens=input_tokens)
         except EntitlementError as exc:
             raise entitlement_http_error(exc) from exc
-    elif usage_class == "human_edit":
+    elif usage_class in ("ai_credits", "human_edit"):
         try:
-            ensure_human_edit_available(principal, estimated_tokens=input_tokens)
+            ensure_ai_credits_available(principal, estimated_tokens=input_tokens, usage_class=usage_class)
         except EntitlementError as exc:
             raise entitlement_http_error(exc) from exc
 
@@ -260,9 +260,9 @@ def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> Str
             ensure_execute_pool_available(org_id, estimated_tokens=input_tokens)
         except EntitlementError as exc:
             raise entitlement_http_error(exc) from exc
-    elif usage_class == "human_edit":
+    elif usage_class in ("ai_credits", "human_edit"):
         try:
-            ensure_human_edit_available(principal, estimated_tokens=input_tokens)
+            ensure_ai_credits_available(principal, estimated_tokens=input_tokens, usage_class=usage_class)
         except EntitlementError as exc:
             raise entitlement_http_error(exc) from exc
 

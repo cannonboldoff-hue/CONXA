@@ -135,7 +135,7 @@ def test_answer_ai_review_uses_text_route_and_meters_as_human_edit(monkeypatch):
     answer = backend._answer_ai_review(_review(schema), content)
 
     assert answer == {"answer": "no", "why": "page looks fine"}
-    assert backend.installed_usage_class == "human_edit"
+    assert backend.installed_usage_class == "ai_credits"
     assert calls[0][0] == "ai_review"
     assert calls[0][1]["image_base64"] == "shot-b64"
 

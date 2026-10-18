@@ -133,8 +133,14 @@ def copilot_turn(
     screenshot_path: str | None = None,
     model: str | None = None,
     on_delta: Callable[[str], None] | None = None,
+    user_text: str | None = None,
 ) -> dict[str, Any]:
     """One turn of the Human Review copilot conversation.
+
+    ``user_text`` (BUILD-37): a caller that already assembled the whole context under its own
+    token budget — the conversation harness — passes it here and ``evidence`` / ``transcript`` /
+    ``message`` are not re-flattened. Everything after that (retrieval rounds, the screenshot,
+    gating by the caller) is unchanged.
 
     Two calls, not one (BUILD-26 stage c): a streamed ``copilot_reply`` call produces the prose
     the reviewer reads live via ``on_delta`` (skipped — falls back to the non-streamed reply
@@ -158,7 +164,7 @@ def copilot_turn(
     exhausted") instead of the panel going silently mute — the same carve-out
     `region_selector_vision.py` makes.
     """
-    base_user_text = _base_user_text(evidence, transcript, message)
+    base_user_text = user_text if user_text is not None else _base_user_text(evidence, transcript, message)
 
     payload: dict[str, Any] = {"user_text": base_user_text}
     image_b64 = _encode_screenshot(screenshot_path)

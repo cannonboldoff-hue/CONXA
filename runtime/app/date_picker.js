@@ -36,7 +36,9 @@ function pad2(n) {
 /** Render `parsed` through a compile-time-inferred format template ("MM/DD/YYYY"). Returns null
  * when there's no format to render through — the caller falls back to the grid strategy instead
  * of guessing a separator/order. */
-  
+const FORMAT_TOKEN_RE = /YYYY|YY|MMMM|MMM|MM|M|DD|D/g;
+
+function formatForDisplay(parsed, displayFormat) {
   if (!displayFormat || !parsed) return null;
   return displayFormat.replace(FORMAT_TOKEN_RE, (token) => {
     switch (token) {

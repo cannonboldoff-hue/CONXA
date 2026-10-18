@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings popup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#141414}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; overflow: hidden; position: relative">
+  <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; background: #161616; border-bottom: 1px solid rgba(255,255,255,0.06)">
+    <span style="flex: 1; text-align: center; font-size: 12px; color: #8e8e8e">Conxa Build Studio</span>
+    <button type="button" aria-label="Minimize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">—</button>
+    <button type="button" aria-label="Maximize" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">□</button>
+    <button type="button" aria-label="Close" style="width: 46px; height: 40px; border: none; background: transparent; color: #8e8e8e">✕</button>
+  </div>
+  <div style="flex: 1; min-height: 0; display: flex">
+    <dc-import name="Sidebar" active="chat" hint-size="264px,860px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; justify-content: center; padding: 40px">
+      <div style="width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 14px; opacity: 0.5">
+        <div style="height: 14px; width: 60%; border-radius: 4px; background: #252525"></div>
+        <div style="height: 14px; width: 85%; border-radius: 4px; background: #252525"></div>
+        <div style="height: 14px; width: 40%; border-radius: 4px; background: #252525"></div>
+      </div>
+    </main>
+  </div>
+
+  <a href="Chat.dc.html" aria-label="Close settings" style="position: absolute; inset: 0; background: rgba(0,0,0,0.55)"></a>
+
+  <div role="dialog" aria-modal="true" aria-labelledby="settings-title" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 800px; height: 560px; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; display: flex; overflow: hidden">
+    <nav aria-label="Settings sections" style="width: 210px; flex-shrink: 0; background: #1a1a1a; border-right: 1px solid rgba(255,255,255,0.08); padding: 18px 10px; display: flex; flex-direction: column; gap: 2px">
+      <h2 id="settings-title" style="margin: 0 0 12px 10px; font-size: 16px; font-weight: 600">Settings</h2>
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button type="button" onClick="{{t.pick}}" aria-current="{{t.current}}" style="height: 34px; padding: 0 10px; border-radius: 8px; border: none; background: {{t.bg}}; color: {{t.color}}; font: 14px Inter, sans-serif; text-align: left">{{t.label}}</button>
+      </sc-for>
+    </nav>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="height: 56px; flex-shrink: 0; display: flex; align-items: center; padding: 0 12px 0 28px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-size: 15px; font-weight: 600; flex: 1">{{heading}}</span>
+        <a href="Chat.dc.html" aria-label="Close" style="width: 32px; height: 32px; border-radius: 8px; color: #a3a3a3; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></a>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px">
+
+        <sc-if value="{{isAccount}}" hint-placeholder-val="{{ true }}">
+          <p style="margin: 0; font-size: 13px; color: #a3a3a3">The account you are signed in with on this machine.</p>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px">
+            <div style="width: 44px; height: 44px; border-radius: 22px; background: #2c2c2c; border: 1px solid rgba(255,255,255,0.12); font-size: 15px; font-weight: 500; display: flex; align-items: center; justify-content: center">JD</div>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 15px; font-weight: 500">[Your name]</span>
+              <span style="font-size: 13px; color: #a3a3a3">[you@company.com]</span>
+              <span style="font-size: 13px; color: #8e8e8e">[Workspace name]</span>
+            </div>
+            <button type="button" style="height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif; display: flex; align-items: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Sign out</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isUsage}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; font-size: 13px; color: #a3a3a3">What this workspace has used so far.</p>
+          <sc-for list="{{meters}}" as="m" hint-placeholder-count="2">
+            <div style="padding: 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; display: flex; flex-direction: column; gap: 10px">
+              <div style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 14px; font-weight: 500">{{m.name}}</span><span style="margin-left: auto; font-size: 13px; color: #a3a3a3">{{m.used}}</span></div>
+              <div role="progressbar" aria-label="{{m.name}}" aria-valuenow="{{m.pctNum}}" aria-valuemin="0" aria-valuemax="100" style="height: 6px; border-radius: 3px; background: #2c2c2c; overflow: hidden"><div style="width: {{m.pct}}; height: 6px; background: #8e8e8e"></div></div>
+              <span style="font-size: 12px; color: #8e8e8e">{{m.note}}</span>
+            </div>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{isAbout}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; font-size: 13px; color: #a3a3a3">Details to include when you contact support.</p>
+          <dl style="margin: 0; display: grid; grid-template-columns: 150px minmax(0, 1fr); row-gap: 14px; font-size: 14px">
+            <dt style="color: #a3a3a3">Product</dt><dd style="margin: 0">Conxa Build Studio</dd>
+            <dt style="color: #a3a3a3">Description</dt><dd style="margin: 0">Offline AI-native workflow recorder &amp; compiler</dd>
+            <dt style="color: #a3a3a3">Version</dt><dd style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px">[version]</dd>
+            <dt style="color: #a3a3a3">Software update</dt>
+            <dd style="margin: 0; display: flex; align-items: center; gap: 12px">
+              <span style="color: #d4d2cf">{{updateText}}</span>
+              <button type="button" onClick="{{check}}" style="height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e8e6e3; font: 500 13px Inter, sans-serif">{{checkLabel}}</button>
+            </dd>
+          </dl>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'account', upd: 'idle' };
+  }
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const { tab, upd } = this.state;
+    const defs = [['account', 'Account'], ['usage', 'Usage'], ['about', 'About']];
+    const tabs = defs.map(([id, label]) => ({
+      label, current: tab === id ? 'page' : 'false',
+      bg: tab === id ? 'rgba(255,255,255,0.07)' : 'transparent',
+      color: tab === id ? '#e8e6e3' : '#a3a3a3',
+      pick: () => this.setState({ tab: id }),
+    }));
+    const meters = [
+      { name: 'Compile credits', used: '[used] of [limit]', pct: '38%', pctNum: 38, note: 'Used each time a recording is compiled.' },
+      { name: 'Human Edit pool', used: '[used] of [limit]', pct: '22%', pctNum: 22, note: 'Used by AI-assisted edits and the Copilot in Human Edit.' },
+    ];
+    return {
+      tabs, meters, heading: defs.find((d) => d[0] === tab)[1],
+      isAccount: tab === 'account', isUsage: tab === 'usage', isAbout: tab === 'about',
+      updateText: upd === 'checking' ? 'Checking...' : upd === 'done' ? 'You’re up to date.' : '',
+      checkLabel: upd === 'checking' ? 'Checking...' : 'Check for updates',
+      check: () => {
+        this.setState({ upd: 'checking' });
+        clearTimeout(this.t);
+        this.t = setTimeout(() => this.setState({ upd: 'done' }), 900);
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

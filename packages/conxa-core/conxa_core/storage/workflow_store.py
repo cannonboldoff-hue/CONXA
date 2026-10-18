@@ -131,6 +131,7 @@ def create_workflow(
     workspace_id: str = "",
     owner_user_id: str = "local",
     group_id: str = "",
+    task_description: str = "",
 ) -> Workflow:
     import re
     from conxa_core.storage.group_store import ensure_default_group
@@ -151,6 +152,7 @@ def create_workflow(
         target_url=target_url,
         protected_url=protected_url,
         protected_url_marker_text=protected_url_marker_text,
+        task_description=task_description,
         status="needs_auth",
         created_at=now,
         updated_at=now,
@@ -288,7 +290,11 @@ def clear_recording(workflow_id: str) -> Workflow | None:
 
 
 def invalidate_workflow_test_by_skill(skill_id: str) -> None:
-    """Reset last_test_* and bump edited_at on any workflow that references this skill_id."""
+    """Reset last_test_* and bump edited_at on any workflow that references this skill_id.
+
+    Also revokes approval: ``signed_off`` is the one truth for "a person approved this", so any
+    later change to the skill — by a person or by an automatic fix — means it must be tested and
+    approved again before the next release."""
     now = time.time()
     for workflow in list_workflows():
         if workflow.skill_id == skill_id:
@@ -296,6 +302,7 @@ def invalidate_workflow_test_by_skill(skill_id: str) -> None:
             workflow.last_test_error = None
             workflow.last_test_at = None
             workflow.edited_at = now
+            workflow.signed_off = False
             save_workflow(workflow)
 
 

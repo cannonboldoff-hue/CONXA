@@ -65,11 +65,18 @@
   --bg-base: #1a1a1a;
   --bg-sidebar: #1e1e1e;
   --bg-surface: #252525;
+  /* Fourth step: fields and rows nested inside a card, popovers (conversation redesign). */
+  --bg-raised: #2c2c2c;
   --bg-hover: rgba(255,255,255,0.04);
-  --bg-selected: rgba(217,119,87,0.12);
+  /* Selected = a 7% neutral tint; clay marks the one primary action, never selection. */
+  --bg-selected: rgba(255,255,255,0.07);
   --text-primary: #e8e6e3;
-  --text-secondary: #8e8e8e;
-  --text-muted: #5a5a5a;
+  --text-secondary: #a3a3a3;
+  /* Slate is the floor for anything a person must read. */
+  --text-meta: #8e8e8e;
+  /* Disabled only — #5a5a5a is 2.6:1 and is retired for readable text. */
+  --text-muted: #6b6b6b;
+  --blue: #93b4e6;
   --green: #4ade80;
   --amber: #fbbf24;
   --red: #f87171;
@@ -77,7 +84,7 @@
 }
 
 @theme inline {
-  --font-sans: system-ui, sans-serif;
+  --font-sans: Inter, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

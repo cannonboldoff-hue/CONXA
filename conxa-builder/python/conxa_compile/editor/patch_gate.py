@@ -271,6 +271,43 @@ def _validate_for_each_source(step: dict[str, Any], raw_patch: Any) -> None:
         raise ValueError("for_each_requires_exactly_one_row_source")
 
 
+# `enum: [true]` is what makes "no" end the run: an ai_review answer that doesn't satisfy the
+# schema is re-asked a bounded number of times and then `on_failure: abort` applies, whereas a
+# valid `{confirmed: false}` would simply be bound and the run would carry on.
+CONFIRM_ONLY_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["confirmed"],
+    "properties": {"confirmed": {"type": "boolean", "enum": [True]}},
+}
+
+
+def is_confirm_only_review(step: dict[str, Any]) -> bool:
+    """A review step whose only acceptable answer is "yes" and whose "no" ends the run.
+
+    EXEC-13 refuses a destructive step directly after an ``ai_review`` because a model's free
+    answer must never supply *what* a destructive step acts on. A confirm-only review (schema
+    exactly ``{confirmed: boolean (only true allowed)}``, ``on_failure == "abort"``) can only gate *whether* the next
+    step runs, never what it acts on, so Clarify's "a person confirms before sending" is allowed
+    to sit directly before the step it guards (BUILD-39). TRD §11.3."""
+    schema = step.get("ai_review_output_schema")
+    if not isinstance(schema, dict):
+        return False
+    props = schema.get("properties")
+    if not isinstance(props, dict) or set(props) != {"confirmed"}:
+        return False
+    confirmed = props.get("confirmed")
+    if (
+        not isinstance(confirmed, dict)
+        or confirmed.get("type") != "boolean"
+        or confirmed.get("enum") != [True]
+        or set(confirmed) - {"type", "enum", "description"}
+    ):
+        return False
+    if set(schema.get("required") or []) != {"confirmed"}:
+        return False
+    return str(step.get("ai_review_on_failure") or "abort").strip().lower() == "abort"
+
+
 def validate_editor_patch(
     step: dict[str, Any],
     patch: dict[str, Any],
@@ -472,7 +509,7 @@ def validate_editor_patch(
         # declared run input or a recorded literal a binding can be built from — route through a
         # conditional (EXEC-1) instead: let the review gate WHETHER the destructive step runs,
         # not WHAT it acts on.
-        if previous_step is not None and action_name(previous_step).lower() == "ai_review":
+        if previous_step is not None and action_name(previous_step).lower() == "ai_review"                 and not is_confirm_only_review(previous_step):
             raise ValueError("destructive_step_cannot_directly_follow_ai_review")
 
         # PROD-3: when the compiler detected this step's target sits inside a repeating

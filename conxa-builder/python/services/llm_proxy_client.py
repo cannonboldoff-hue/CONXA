@@ -245,9 +245,18 @@ class LLMProxyClient:
                 ) from exc
             if exc.code == 429:
                 raise QuotaExceeded("Monthly LLM quota reached") from exc
+            if detail_str == "invalid_usage_class" and self._usage_class == "ai_credits":
+                # An older cloud that predates CLOUD-25 doesn't know "ai_credits" yet. Fall back
+                # to its legacy name once; the choice sticks for this client's lifetime.
+                self._usage_class = "human_edit"
+                return self._post(
+                    kind, task, payload, timeout_ms,
+                    error_detail=error_detail, _retried=_retried, _retry_count=_retry_count, on_delta=on_delta,
+                )
             if detail_str in {
                 "compile_credit_limit_exceeded",
                 "human_edit_pool_exceeded",
+                "ai_credits_exceeded",
                 "machine_limit_exceeded",
                 "execute_seat_limit_exceeded",
                 "trial_expired",

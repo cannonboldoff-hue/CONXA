@@ -110,3 +110,28 @@ def test_401_still_retries_and_entitlement_codes_still_raise(monkeypatch):
         raised = exc
     assert raised is not None
     assert raised.code == "trial_expired"
+
+
+def test_ai_credits_falls_back_to_legacy_class_on_an_older_cloud(monkeypatch):
+    """CLOUD-25: a cloud that predates the rename answers 400 invalid_usage_class for
+    "ai_credits". The client retries once as "human_edit" and keeps using it."""
+    sent: list[str] = []
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return json.dumps({"text": "ok"}).encode("utf-8")
+
+    def fake_urlopen(req, timeout=None):
+        usage_class = json.loads(req.data.decode("utf-8"))["usage_class"]
+        sent.append(usage_class)
+        if usage_class == "ai_credits":
+            raise _http_error(400, {"detail": "invalid_usage_class"})
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = LLMProxyClient("http://cloud.local", token_provider=lambda: "tok", usage_class="ai_credits")
+    client.route_text("copilot_reply", {"user_text": "x"}, 30_000, error_detail=[])
+    client.route_text("copilot_reply", {"user_text": "x"}, 30_000, error_detail=[])
+
+    assert sent == ["ai_credits", "human_edit", "human_edit"]

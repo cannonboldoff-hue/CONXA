@@ -18,7 +18,7 @@ import { makeCandidateId, useRetargetStore } from '@/store/retargetStore'
 import { useEditorStore } from '@/store/editorStore'
 import { cn } from '@/lib/utils'
 
-const PHASE_LABELS = ['Element', 'Selectors', 'Check'] as const
+const PHASE_LABELS = ['Element', 'How it’s found', 'Validation'] as const
 type Phase = 1 | 2 | 3
 
 /** "Step N · Go to a page" style eyebrow label — same words used in Add step's menu categories

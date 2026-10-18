@@ -60,7 +60,7 @@ class VisualMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         snapshot = copy.deepcopy(doc)
-        self._install_proxy_router(usage_class="human_edit")
+        self._install_proxy_router(usage_class="ai_credits")
         try:
             doc = apply_recording_event_visual_to_step_or_raise(
                 doc, step_index, event_index, frame_label=frame_label, nested_path=nested_path
@@ -103,7 +103,7 @@ class VisualMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         snapshot = copy.deepcopy(doc)
-        self._install_proxy_router(usage_class="human_edit")
+        self._install_proxy_router(usage_class="ai_credits")
         try:
             doc = apply_step_frame_or_raise(doc, step_index, frame_label, nested_path=nested_path)
         except EntitlementBlocked as exc:
@@ -159,7 +159,7 @@ class VisualMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         snapshot = copy.deepcopy(doc)
-        self._install_proxy_router(usage_class="human_edit")
+        self._install_proxy_router(usage_class="ai_credits")
         try:
             doc = update_step_visual_bbox_and_regenerate_anchors_or_raise(doc, step_index, bbox)
         except EntitlementBlocked as exc:

@@ -944,3 +944,39 @@ The Execute desktop app (`conxa-execute/app/renderer/src/`) is built from the th
 | Runs | The latest 50 runs from chat and forms: status filter, time, duration, source. A row expands to show the result text, **Open chat** and **Remove from list** |
 
 Not built on purpose: the Attach board's editable "Run N times" review table (the AI still proposes batches in plain text), PDF reading, and a per-step run timeline.
+
+## 12. Build Studio shell (conversation redesign, Phase 1, 2026-10-18)
+
+The page-per-feature layout is replaced by a three-column shell (design source: `docs/artifacts/build-studio-redesign/`, plan: [`Build-Studio-Conversation-Plan.md`](Build-Studio-Conversation-Plan.md)). The conversation, recording, Clarify, test and system-state cards are described in §12–14 below.
+
+- **Navigation (264 px, 220-320, folds to a 56 px rail):** Chat, New workflow (Ctrl N), Publish with a neutral count badge, Search (Ctrl K), Chats, then Groups. Every workflow appears in its group from the moment it is created, with a status glyph and a short note for unfinished ones. Footer: Settings, workspace, compile credits and AI credits used.
+- **Inspector (320 px, 280-400, folds to a 44 px strip; workflow screens only):** lifecycle rows (Sign in, Record, Compile, Review, Test, Approve), details, and Human Edit. Clarify and Edit rows join when their backend exists.
+- **Folding order:** inspector to strip, then navigation to rail, then the inspector becomes a sheet over the workspace; the workspace never drops below 520 px (`lib/panels.ts`). Dividers are focusable (arrow keys move 16 px) and double-click resets. Widths and open state are remembered per computer.
+- **Keyboard:** Ctrl K search, Ctrl N new workflow, Ctrl \ fold navigation, Ctrl . fold inspector, Ctrl E Human Edit for the open workflow. Esc closes dialogs and never stops a run.
+- **Status vocabulary:** `●` ready, `▲` needs you, `✕` failed, `◐` in progress, `○` not started, always shape plus colour (`lib/status.ts`). Until the lifecycle derivation lands (BUILD-37) the glyph comes from the existing workflow stage.
+- **Interim pieces:** `/w/:workflowId` is a placeholder that links to the group page and Human Edit; `/chat` is a placeholder; New workflow is a small dialog. Known UX gap: the Publish badge counts signed-off workflows, not yet "approved and unpublished".
+
+### 12.1 Test browser panel (BUILD-42)
+
+When a test runs with **Show browser** on, the inspector folds to a strip and a browser column opens beside the conversation: a tab strip, back / forward / reload, an address field, a **live** / **finished** marker, and a close button. The page stays on the final screen after the run so the person can check the result; closing the panel (or starting another test) frees it. Hiding the panel folds it to a strip and does not stop the run. While a dialog or sheet is open the page is hidden (a native view cannot be drawn over). Recording and sign-in still open a separate Chromium window.
+
+## 13. Human Edit inside the conversation shell (conversation redesign, Phase 6, 2026-10-18)
+
+Human Edit keeps its job and its panes; it adopts the shell and the conversation.
+
+- **Header:** "Back to conversation" (a labelled button, not an icon) when Human Edit was opened from a workflow's conversation (`?from=/w/<id>`); the primary button there is **Test changes** — it saves the open step, posts the test card into the thread and goes back. There is no Approve here: approval follows a passing test, in the conversation. Reached from the old group page instead, the legacy **Approve** remains until that flow is retired (BUILD-45).
+- **Wizard:** Element → **How it's found** → **Validation** (was Element → Selectors → Check). The raw selector editors live under the Advanced disclosure; "Selectors" no longer names a step of the primary flow.
+- **Step rows:** the step's name leads (the number stays as a small secondary badge) and each carries a type chip in the action's colour — pink for click/select, blue for type, purple for navigate, grey for scroll/hover; clay is never a step-type colour.
+- **Conversation pane (replaces the floating copilot):** the workflow's own thread, 340 px (300–440, drag or arrow keys, double-click resets), hideable to a 44 px strip, scoped to the selected step (the composer says which). A proposed change is a card with the exact change and Apply / Undo, through the same gates as before; applying or undoing one reloads the editor. The old copilot launcher, panel and verify card were removed; their history is imported into the thread once.
+
+
+## 14. System states, Settings and first launch (conversation redesign, Phase 8, 2026-10-18)
+
+Every state ends with a way forward. Built before this phase: loading skeletons (never a spinner over a blank page), recording discarded, browser closed mid-recording, compile failed, out of credits, waiting for another compile, test stopped by you, and creating a group inline in the sidebar. Added in this phase:
+
+- **Offline.** A slim banner under the header: “You’re offline — compiling, chat and publishing wait until Conxa Cloud is back”, with **Try again** and **What still works**. The sidebar footer shows `✕ Offline`; Publish says “waiting to connect”; the composer is disabled with its reason; compile cards' **Try again** / **Compile now** are disabled. Recording, Human Edit, local tests and Approve keep working.
+- **Engine stopped.** The workspace is replaced by “Build Studio’s engine stopped” (workflows are saved on this computer) with **Restart engine** and **Copy diagnostics**; navigation stays visible but dimmed and inert, the inspector is hidden. During the automatic restart the same panel reads “Restarting…”.
+- **Sign-in expired during a test.** The test card pauses (▲ “A sign-in expired during the test”): nothing failed in the workflow and no automatic fix is tried; the person signs in again from the group page and tests again. (The mockup resumes by itself after sign-in; Studio does not — see TRD §7.4b.)
+- **Leaving Human Edit with an unsaved change.** A small confirm: “Save the change to step N?” — **Save and leave**, **Discard**, **Keep editing** (Esc).
+- **Settings** is a 800×560 popup over the current screen (left list: Account, Usage, Testing, About). Usage shows the meters with the single **AI credits** name; Testing holds the auto-fix switch. The old full page is gone; `/settings` opens the popup.
+- **First launch** (`/welcome`, shown when the workspace has no groups): headline, the three steps (Record it once / Answer a few questions / Test, then approve), **New workflow** and **Plan one in chat first**, and a “This computer” list — signed in, recording browser (with **Install now** when missing), local test runner. A failing check explains itself and never blocks the page.

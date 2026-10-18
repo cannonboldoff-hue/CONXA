@@ -49,8 +49,14 @@ def build_skill_package(
     version: str = "0.1.0",
     only_workflow_id: str | None = None,
     realtime_sink: Callable[[dict[str, Any]], None] | None = None,
+    require_signed_off: bool = True,
 ) -> dict[str, Any]:
     """Compile workflow(s) into the shared local package directory.
+
+    ``require_signed_off=True`` (default — publish/installer paths): every workflow built must
+    have been approved by a person (``Workflow.signed_off``). A *test* build (the conversation's
+    "Test it", the copilot's verify) passes False: a workflow has to be testable before it can be
+    approved, and approval itself is the human action that follows a pass.
 
     ``only_workflow_id=None`` (default for an explicit full-workspace rebuild):
     compiles every workflow in the workspace, as before.
@@ -77,10 +83,10 @@ def build_skill_package(
     uncompiled = [w.name for w in workflows if not w.skill_id]
     if uncompiled:
         raise ValueError(f"Compile these workflows before building: {', '.join(uncompiled)}")
-    unedited = [w.name for w in workflows if not w.edited_at]
-    if unedited:
+    unapproved = [w.name for w in workflows if not w.signed_off] if require_signed_off else []
+    if unapproved:
         raise ValueError(
-            f"Open the editor and sign off on these workflows before building: {', '.join(unedited)}"
+            f"Open the editor and sign off on these workflows before building: {', '.join(unapproved)}"
         )
 
     def _log(msg: str, **extra: Any) -> None:

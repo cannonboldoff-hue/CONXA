@@ -53,6 +53,24 @@ declare global {
         onMaximizeChange: (handler: (isMaximized: boolean) => void) => () => void;
       };
       onDeepLink: (handler: (url: string) => void) => () => void;
+      /** The local engine (Python backend). */
+      engine: {
+        status: () => Promise<{ state: 'running' | 'restarting' | 'stopped' }>;
+        restart: () => Promise<boolean>;
+        diagnostics: () => Promise<string>;
+        onStatus: (handler: (msg: { state: 'running' | 'restarting' | 'stopped' }) => void) => () => void;
+      };
+      /** Embedded test browser (BUILD-42). */
+      panel: {
+        available: () => Promise<boolean>;
+        setBounds: (p: { runId: string; tabId: string; rect: { x: number; y: number; width: number; height: number } }) => Promise<boolean>;
+        hide: () => Promise<boolean>;
+        selectTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
+        closeTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
+        closeRun: (p: { runId: string }) => Promise<boolean>;
+        navigate: (p: { runId: string; tabId: string; action: 'back' | 'forward' | 'reload' | 'stop' | 'load'; url?: string }) => Promise<boolean>;
+        onTabs: (handler: (msg: { runId: string; tabs: { id: string; active: boolean; label: string; url: string; canGoBack: boolean; canGoForward: boolean; loading: boolean }[]; finished?: boolean; closed?: boolean }) => void) => () => void;
+      };
       update: {
         check: () => Promise<UpdateCheckResult>;
         start: () => Promise<void>;

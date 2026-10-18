@@ -41,9 +41,9 @@ def derive_workflow_stage(wf: Any, active_job: dict[str, Any] | None = None) -> 
     if not wf.skill_id:
         return "ready_to_compile"
 
-    # Legacy shim: workflows signed off before the `signed_off` field existed
-    # only have `edited_at` set. Treat either as "approved" for this derivation.
-    approved = bool(wf.signed_off) or bool(wf.edited_at)
+    # `signed_off` is the only approval truth (BUILD-37): `edited_at` moves on every skill write,
+    # including a fresh compile, so reading it as "approved" made any edit look like an approval.
+    approved = bool(wf.signed_off)
 
     if not approved:
         return "needs_review"

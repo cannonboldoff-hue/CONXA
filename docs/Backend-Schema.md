@@ -1896,8 +1896,15 @@ Dashboard: the "Build Studio Devices" card on `conxa-cloud/frontend/src/Settings
 **Renamed 2026-09-16 — `human_edit_tokens` → "AI Usage Credits".** Customer-visible label only; the
 wire response now dual-emits `ai_usage_credits` (canonical) alongside the legacy `human_edit_tokens`
 key (deprecated, kept only until already-installed Build Studio Electron builds have auto-updated
-past this change — see `docs/TRD.md` §13.5). Internal storage keys, the `usage_class="human_edit"`
-string, and the `human_edit_pool_exceeded` error code are all unchanged — zero migration.
+past this change — see `docs/TRD.md` §13.5). Internal storage keys and the wallet key
+`human_edit_tokens` are unchanged — zero migration. **CLOUD-25 (2026-10-18)** then renamed the usage
+class itself: `usage_class="ai_credits"` is canonical, `"human_edit"` stays a permanent alias for
+already-installed Studios and is normalized to `ai_credits` when metered. New counters are written as
+`ai_credits_{input_tokens,output_tokens,requests}`; reads still sum the legacy `human_edit_*` counters,
+so no stored monthly row is migrated. An exhausted pool answers 402 `ai_credits_exceeded` to callers
+that sent `ai_credits`, and the unchanged `human_edit_pool_exceeded` to legacy `human_edit` and
+`execute_chat` callers. A new Studio that gets `400 invalid_usage_class` from an older cloud retries once
+as `human_edit`.
 
 **Added 2026-09-16 — `execute_seats`.** New numeric meter: people a workspace has granted Conxa
 Execute access to via `POST /entitlements/execute-grants` below, independent of Build Studio org
@@ -2128,11 +2135,11 @@ Cashfree webhook endpoint. When `cashfree_webhook_secret` is configured, the sig
   "task": "anchor_vision",
   "payload": {},
   "timeout_ms": 120000,
-  "usage_class": "human_edit"
+  "usage_class": "ai_credits"
 }
 ```
 
-Allowed `usage_class` values are `compile` and `human_edit`. Missing `usage_class` defaults to `compile`.
+Allowed `usage_class` values are `compile`, `ai_credits` (canonical; also covers every Studio chat, Clarify, auto-fix and Human Edit call), `human_edit` (legacy alias of `ai_credits`) and `execute_chat`. Missing `usage_class` defaults to `compile`.
 
 **`POST /api/v1/llm/proxy/text/stream` and `/vision/stream`** (BUILD-26 stage c) — same request
 body as above, for a task that wants its reply streamed (currently only `copilot_reply`). Response
@@ -2664,6 +2671,35 @@ The document text itself is frozen in `conxa-cloud/backend/app/legal/{terms,priv
 Returns `{"accepted": true, "record": {…}}`. The client IP is taken from the first `x-forwarded-for` hop (Render fronts the app with a proxy), and the machine identifier from the `X-Conxa-Machine` header Build Studio already sends. **409 `legal_version_mismatch`** if the submitted version or either document hash does not match what the server serves — a client can never record acceptance of text this server did not hand it. Idempotent: a repeat POST returns the first row unchanged.
 
 **`GET /api/v1/legal/acceptances`** — admin-only (`require_admin`), every acceptance row for the caller's workspace. This is the evidence export.
+
+### 5.12 Conversation commands (BUILD-37, 2026-10-18)
+
+Studio stdio RPC (`handlers/conversation.py`), not cloud HTTP. Thread ids are `wf:<workflow_id>` or `chat:<chat_id>`.
+
+| Command | Payload | Result |
+|---|---|---|
+| `chat_list` / `chat_create{title?}` / `chat_rename{chat_id,title}` / `chat_delete{chat_id}` | | `{chats}` / `{chat}` / `{chat}` / `{deleted}` |
+| `thread_load{thread_id, before?, limit?}` | `before` = index into the folded list | `{items, start, total, has_more, cursor, thread_id}` + `chat` or `{workflow, lifecycle}` |
+| `thread_turn{thread_id, message?, turn_id?, anchor?, card_id?, choice?, action?}` | a message, or an answer to a card | `{turn_id, status: done or cancelled, reply, items[, result]}` |
+| `thread_cancel{turn_id}` | | `{cancelled}` |
+| `card_action{thread_id, card_id, action, payload?}` | `pending_change`: apply / undo / dismiss; `draft_workflow`: create / create_and_record / edit_details / dismiss; `error`: retry | `{ok, ...}`; draft: `{workflow_id, start_recording}` or `{needs, open_form}` |
+| `get_lifecycle{workflow_id}` / `list_lifecycles` / `count_publishable` | | `{lifecycle}` / `{lifecycles}` / `{count}` |
+
+Events (id = request id): `thread_item{thread_id, item}` (an appended item, or a card's new revision), `thread_delta{thread_id, turn_id, text}`, `thread_turn{thread_id, turn_id, status: started or queued}`.
+
+`lifecycle = {stage, substate, glyph (ok, warn, fail, run or none), note, allowed_actions, rows[{label,kind,note}]}`. Item shape: `{id, ts, kind, ...}`; cards add `card_id, revision, card_type, state, refs, ...`. Card types so far: `pending_change` (`proposal`, `preview`, `why`, `undo_steps`, `applied_version`), `draft_workflow` (`draft{name,group,starting_page,task}`), `error` (`code`, `body`).
+
+**Sign-in and recording commands (BUILD-38).** `flow_begin{workflow_id}` (sign in first if an app the workflow uses has no saved sign-in, else record; reports `already` if one is running), `flow_sign_in_done{workflow_id, card_id, force?}` (saves the sign-in for the group, then goes on to recording; an unconfirmed sign-in keeps the window open and revises the card with a `note`), `flow_sign_in_cancel`, `flow_pause_recording`, `flow_resume_recording`, `flow_finish_recording` (also “Save N actions” after a closed browser), `flow_discard_recording`, `flow_set_varies{session_id, sequence, varies: true|false|null}`, `recording_rows{session_id}` → `{rows, varies, paused}`. Each wraps the existing `start_group_app_auth` / `finish_group_app_auth` / `start_recording` / `stop_recording` / `cancel_recording` and writes its card and event row only after the wrapped command returned. Event `recording_event{session_id, workflow_id, row{sequence, kind, text, value, can_vary, tab}, count}` (not persisted). Cards: `sign_in` (`waiting`, `saved`, `cancelled`; fields `app_name`, `login_url`, `group_name`, `note`, `can_force`) and `recording` (`recording`, `paused`, `saving`, `saved`, `discarded`, `browser_closed`; fields `started_at`, `host`, `count`, `duration_seconds`, `warnings`). `create_workflow` accepts `task_description` and writes the thread's first event (“Workflow created”). New file: `data/sessions/<session_id>/hints.json`.
+
+**Compile and Clarify (BUILD-39 / BUILD-32).** `flow_compile{workflow_id}` (also started in the background by `flow_finish_recording`; pass `auto_compile: false` to opt out). Cards: `compile` (`queued` with `position`, `ahead_name`, `ahead_workflow_id`; `running`/`done` with `rows[{key,label,status,detail}]`, `credits_left`, `step_count`; `out_of_credits`; `failed` with `error`, `failed_stage`, `refunded`; `deferred`; actions `retry`, `compile_later`), `clarify_question` (`question_id`, `question_kind` = upload | confirm | values | popup | done_when, `title`, `body`, `choices[{id,label,detail,selected}]`, `multi`, `index`, `total`; states `open`, `applying`, `answered` + `receipt`, `skipped`, `failed` + `error`; `card_action` `choose` with `payload {choice}` or `{selected: [...]}`, and `skip`), `workflow_summary` (`summary{name, version, recorded_actions, steps, added_steps, inputs, uncertain, step_names, done_when}`). `data/workflows/<id>/clarify.json`: `{skill_id, version, recorded_actions, added_steps, step_count_at_compile, questions[{id, kind, title, body, choices, multi, step_keys, status, answer, receipt, card_id}]}`. Edit-log `source` gains `"clarify"` (and, later, `"auto_fix"`). The compile sub-step event `compile_log` is forwarded to observers with `step_index`.
+
+**Test, auto-fix and approval (BUILD-40).** `flow_test_prepare{workflow_id}` (posts or reuses the open `test_inputs` card), `flow_test_run{workflow_id, card_id, inputs, guard (default true), show_browser}` (runs in the background; refuses missing required inputs with `inputs_required` and a second concurrent test with `test_in_progress`), `flow_test_decision{workflow_id, decision: run_rest|yes|end_here}` (answers a paused test; `not_waiting` if nothing is), `flow_test_stop`, `flow_approve{workflow_id, card_id}` (needs a passing card and `last_test_status == passed`, else `not_passed` / `test_required`), `flow_autofix_stop`, `flow_autofix_resume`, `get_studio_settings` / `set_studio_settings{autofix_enabled}`. `cmd_test_workflow` gains optional `guard` plus in-process hooks (`_phase_hook`, `_guard_hook`, `_review_hook`) and a new result status `stopped_at_guard` / `previewed` (neither is a pass and neither writes `last_test_*`); `cmd_build_skill_package` gains `for_test` (skips the sign-off gate). Cards: `test_inputs` (`inputs[{id,label,type,options,required,value}]`, `irreversible[]`, `irreversible_count`, `guard`, `show_browser`, `version`, `step_count`; states `open` → `submitted`), `test_run` (`rows[{index,name,status,destructive}]`, `attempt`, `auto`, `guard`, `step_total`; states `running`, `waiting_guard` (`paused_before`, `remaining`, `ran`), `waiting_confirm` (`prompt`), `passed` (`steps_ran`, `seconds`, `irreversible_ran`, `approved`, `approved_version`), `failed` (`error`, `failed_step`, `nothing_sent`), `ended_before_irreversible`, `stopped`, `previewed`), `autofix` (`attempt`, `max_attempts`, `phase`, `changes[{card_id,title}]`, `reason`; states `running`, `passed`, `stopped`). Runtime: `execute_skill` accepts `_pause_before_irreversible` and `_guard_release` (Studio only); the pause result carries `_meta["conxa/guard"] = {step_index, step_intent, remaining_irreversible, run_id}`; the app layer's `version.json` gains `capabilities: ["test_guard"]`. Edit-log `source` `"auto_fix"`.
+
+**Connection and states (BUILD-43).** `cloud_ping` → `{online: bool, ms?: int, detail?: str}` (never raises). `cmd_test_workflow` result status `needs_sign_in` (`message`, `run_id`, `failed_at`) when the runtime's response carries `_meta["conxa/session_expired"] = {run_id, step_index}`; the `test_run` card gains state `needs_sign_in` (`steps_ran`, `seconds`, `detail`; `actions: ["test_again"]`), the lifecycle substate `sign_in_expired` (stage `test`, ▲) while the runtime-state flag `sign_in_expired` is set, and `flow_test_run` never starts auto-fix for it. Electron IPC (not backend commands): `engine:status` → `{state: running|restarting|stopped}` (also pushed as an event), `engine:restart` → bool, `engine:diagnostics` → text; exposed as `window.conxa.engine`.
+
+New LLM tasks (shared engine `conxa_core/llm/client.py`, so the cloud must be deployed with it): `studio_chat_reply` (streamed prose), `chat_map_answer`, `thread_summarize`, `studio_chat_actions` (JSON).
+
+New data: `Workflow.task_description`; `data/workflows/<id>/thread.jsonl`; `data/workflows/<id>/clarify.json` (BUILD-32 questions and answers — deliberately outside the skill document); `data/chats/<chat_id>.jsonl` and `data/chats/index.json`.
 
 ---
 

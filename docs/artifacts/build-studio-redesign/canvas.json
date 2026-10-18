@@ -1,0 +1,43 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-17T10:00:00Z"},
+  "title": "Build Studio Redesign",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 1640, "title": "Design system"},
+    "Components.dc.html": {"x": 1520, "y": 0, "w": 1440, "h": 1640, "title": "Conversation components"},
+    "Sidebar.dc.html": {"x": 3040, "y": 0, "w": 264, "h": 860, "title": "Sidebar (shared)"},
+    "Inspector.dc.html": {"x": 3384, "y": 0, "w": 320, "h": 860, "title": "Inspector (shared)"},
+    "FirstLaunch.dc.html": {"x": 0, "y": 2000, "w": 1440, "h": 900, "title": "01 First launch", "is_interactive": true},
+    "Chat.dc.html": {"x": 1520, "y": 2000, "w": 1440, "h": 900, "title": "02 General chat", "is_interactive": true},
+    "Group.dc.html": {"x": 3040, "y": 2000, "w": 1440, "h": 900, "title": "03 Group view", "is_interactive": true},
+    "NewWorkflow.dc.html": {"x": 4560, "y": 2000, "w": 1440, "h": 900, "title": "04 New workflow", "is_interactive": true},
+    "Recording.dc.html": {"x": 0, "y": 3300, "w": 1440, "h": 900, "title": "05 Sign in, then record (built-in browser)", "is_interactive": true},
+    "Compiling.dc.html": {"x": 1520, "y": 3300, "w": 1440, "h": 900, "title": "06 Compiling", "is_interactive": true},
+    "Clarify.dc.html": {"x": 3040, "y": 3300, "w": 1440, "h": 900, "title": "07 Clarify", "is_interactive": true},
+    "HumanEdit.dc.html": {"x": 0, "y": 4600, "w": 1440, "h": 900, "title": "08 Human Edit", "is_interactive": true},
+    "TestInputs.dc.html": {"x": 1520, "y": 4600, "w": 1440, "h": 900, "title": "09 Test · inputs", "is_interactive": true},
+    "TestRunning.dc.html": {"x": 3040, "y": 4600, "w": 1440, "h": 900, "title": "10 Test · running", "is_interactive": true},
+    "TestFailed.dc.html": {"x": 4560, "y": 4600, "w": 1440, "h": 900, "title": "11 Test · failed → auto-fix and re-test", "is_interactive": true},
+    "TestPassed.dc.html": {"x": 6080, "y": 4600, "w": 1440, "h": 900, "title": "12 Test · passed", "is_interactive": true},
+    "States.dc.html": {"x": 0, "y": 5900, "w": 1440, "h": 1500, "title": "13 System states"},
+    "Panels.dc.html": {"x": 1520, "y": 5900, "w": 1440, "h": 1500, "title": "14 Panel behaviour"},
+    "Settings.dc.html": {"x": 3040, "y": 5900, "w": 1440, "h": 900, "title": "15 Settings popup", "is_interactive": true}
+  },
+  "order": [
+    "Main.dc.html", "Components.dc.html", "Sidebar.dc.html", "Inspector.dc.html",
+    "FirstLaunch.dc.html", "Chat.dc.html", "Group.dc.html", "NewWorkflow.dc.html",
+    "Recording.dc.html", "Compiling.dc.html", "Clarify.dc.html",
+    "HumanEdit.dc.html", "TestInputs.dc.html", "TestRunning.dc.html", "TestFailed.dc.html", "TestPassed.dc.html",
+    "States.dc.html", "Panels.dc.html", "Settings.dc.html"
+  ],
+  "notes": {
+    "rowA": {"x": 0, "y": -300, "text": "Foundations — tokens, conversation parts, shared shell pieces", "kind": "title1", "maxW": 3704},
+    "rowB": {"x": 0, "y": 1700, "text": "Shell, chat, groups and creating a workflow", "kind": "title1", "maxW": 6000},
+    "rowC": {"x": 0, "y": 3000, "text": "Describe → Configure → Record → Compile → Clarify", "kind": "title1", "maxW": 4480},
+    "rowD": {"x": 0, "y": 4300, "text": "Edit → Test → Approve", "kind": "title1", "maxW": 7520},
+    "rowE": {"x": 0, "y": 5600, "text": "States, panel behaviour and settings", "kind": "title1", "maxW": 4480}
+  },
+  "designSystems": []
+}

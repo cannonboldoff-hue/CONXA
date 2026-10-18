@@ -224,6 +224,45 @@ def test_destructive_step_cannot_directly_follow_ai_review():
         validate_editor_patch(step, {"intent": "Delete the record"}, {}, previous_step=_ai_review_step())
 
 
+def _confirm_review(**over) -> dict:
+    step = {
+        "action": "ai_review",
+        "ai_review_prompt": "Send the invoice?",
+        "ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}},
+        "ai_review_on_failure": "abort",
+    }
+    step.update(over)
+    return step
+
+
+def test_a_confirm_only_review_may_directly_precede_a_destructive_step():
+    """BUILD-39: a yes/no that ends the run on "no" can only gate WHETHER the step runs."""
+    validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_review())
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        # a free-form answer could carry WHAT to act on
+        {"ai_review_output_schema": {"type": "object", "required": ["customer"], "properties": {"customer": {"type": "string"}}}},
+        # extra fields beside the boolean
+        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}, "who": {"type": "string"}}}},
+        # a string, not a boolean
+        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "string"}}}},
+        # a bare boolean lets "no" through as a valid answer, so the run would carry on
+        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}}}},
+        # "no" must end the run, not be swallowed
+        {"ai_review_on_failure": "continue"},
+        {"ai_review_on_failure": "use_default", "ai_review_default_value": {"confirmed": True}},
+        # no schema at all
+        {"ai_review_output_schema": None},
+    ],
+)
+def test_anything_wider_than_confirm_only_is_still_refused(over):
+    with pytest.raises(ValueError, match="destructive_step_cannot_directly_follow_ai_review"):
+        validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_review(**over))
+
+
 def test_destructive_step_after_a_non_ai_review_step_is_allowed():
     step = _destructive_click_step()
     previous = {"action": {"action": "click"}, "intent": "Open the record"}

@@ -64,12 +64,12 @@ def _plan_features(tier: str) -> list[str]:
 
     def _tokens(n: int | None) -> str:
         if n is None:
-            return "Unlimited Human Edit tokens/month"
+            return "Unlimited AI credits/month"
         if n == 0:
-            return "Contracted Human Edit token reserve"
+            return "Contracted AI credits reserve"
         if n >= 1_000_000:
-            return f"{n // 1_000_000}M Human Edit tokens/month"
-        return f"{n // 1_000}K Human Edit tokens/month"
+            return f"{n // 1_000_000}M AI credits/month"
+        return f"{n // 1_000}K AI credits/month"
 
     def _distribution(dist: str, white_label: bool) -> str:
         if dist != "external":
@@ -446,7 +446,7 @@ def list_addons() -> dict[str, Any]:
                 "period": "one-time",
                 "features": [
                     f"+{info['compile_credits']} compile credits (never expire)",
-                    f"+{info['human_edit_tokens']:,} Human Edit tokens (never expire)",
+                    f"+{info['human_edit_tokens']:,} AI credits (never expire)",
                     "Used after your monthly allowance runs out",
                 ],
             }

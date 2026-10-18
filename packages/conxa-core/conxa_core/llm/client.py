@@ -146,6 +146,51 @@ def _resolved_model(task: str, payload: dict[str, Any]) -> Any:
     return payload.get("model") or settings.llm_text_model
 
 
+_STUDIO_RULES = (
+    "Rules you never break: you do not write selectors, element addresses or code for the "
+    "workflow; you only explain, ask, and — when asked — propose changes that the Studio checks "
+    "before anything is applied. Never claim something happened (a recording, a compile, a test, "
+    "an approval) unless the context says it did. Refer to steps by their name, never only by "
+    "number. Be brief and concrete; plain prose, no markdown headings."
+)
+
+_STUDIO_CHAT_SYSTEMS: dict[str, str] = {
+    # Streamed prose (no JSON contract — see copilot_reply for why).
+    "studio_chat_reply": (
+        "You are the assistant inside Conxa Build Studio, an app where a person records a task "
+        "once in a real browser and it becomes a workflow that other people's AI agents can run. "
+        "The user message carries the current context (state of the workflow, decisions already "
+        "made, a compact step digest, earlier conversation) followed by the person's latest "
+        "message. Answer that message directly. " + _STUDIO_RULES
+    ),
+    # JSON: sorts an answer typed in free text onto one of a question card's allowed choices.
+    "chat_map_answer": (
+        "A question card is open with a fixed list of allowed choices. Read the person's free-"
+        "text reply and decide which single allowed choice it means. Return ONLY a JSON object: "
+        "{\"choice\": \"<one of the allowed choice ids, or \"unclear\">\", \"note\": \"<=15 words\"}. "
+        "If the reply is ambiguous, off-topic, or asks a question instead of answering, choose "
+        "\"unclear\". Never invent an id that is not in the list."
+    ),
+    # JSON: folds older conversation turns into a short rolling summary.
+    "thread_summarize": (
+        "Summarize the older part of a conversation between a person and the Build Studio "
+        "assistant so it can be dropped from the context. Keep: what was asked, what was "
+        "decided, what is still open, names of workflows and steps. Drop pleasantries. Do not "
+        "restate facts that appear in a PINNED FACTS block. At most 180 words. Return ONLY a "
+        "JSON object: {\"summary\": \"...\"}."
+    ),
+    # JSON: in general Chat only — does the conversation call for drafting a workflow?
+    "studio_chat_actions": (
+        "You read a general-chat conversation inside Conxa Build Studio. If the person has "
+        "agreed on a concrete task worth recording as a workflow, return a draft; otherwise "
+        "return null. Return ONLY a JSON object: {\"draft_workflow\": null | {\"name\": str, "
+        "\"group\": str (an existing group name from the context, or \"\"), \"starting_page\": "
+        "str (a full https:// address, or \"\" if unknown), \"task\": str (one sentence)}}. "
+        "Never draft a workflow the person has not shown intent to create."
+    ),
+}
+
+
 def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
     data = payload.get("input")
     prompt = payload.get("prompt")
@@ -751,6 +796,14 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                 ],
             },
         ]
+    if task in _STUDIO_CHAT_SYSTEMS:
+        # Build Studio's conversation harness (BUILD-37): general Chat and each workflow's
+        # thread. The Studio builds the whole context (lifecycle, pinned facts, digest, rolling
+        # summary, recent turns) into user_text every turn, because this call path is stateless.
+        return [
+            {"role": "system", "content": _STUDIO_CHAT_SYSTEMS[task]},
+            {"role": "user", "content": str(payload.get("user_text") or "")},
+        ]
     if task == "execute_chat":
         # Conxa Execute's multi-turn tool-calling chat — the one task whose
         # payload already IS an OpenAI-shaped messages array (system prompt +
@@ -806,6 +859,13 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         # A small structured answer (yes/no + a short reason, or similar) — same order as
         # region_selector's handful of candidates.
         body["max_tokens"] = 1024
+    if task == "studio_chat_reply":
+        # Streamed prose: same headroom as copilot_reply, for the same hidden-reasoning reason.
+        body["max_tokens"] = 16384
+    if task in ("chat_map_answer", "studio_chat_actions"):
+        body["max_tokens"] = 1024
+    if task == "thread_summarize":
+        body["max_tokens"] = 2048
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     # Tool-calling passthrough — only execute_chat's caller-built payload ever

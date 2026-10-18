@@ -1322,7 +1322,7 @@ class TestSavedSkillJsonBuild:
             name="Delete Database",
             session_id="workflow-session",
             skill_id="skill_saved",
-            edited_at=1,
+            edited_at=1, signed_off=True,
             target_url="https://dashboard.render.com",
             protected_url="https://dashboard.render.com/",
         )
@@ -1401,13 +1401,13 @@ class TestSavedSkillJsonBuild:
         unrelated_wf = SimpleNamespace(
             id="wf_unrelated", workspace_id=workspace_id, group_id="grp_sales",
             slug="upload_8_files", name="Upload 8 files", session_id="s1",
-            skill_id="skill_unrelated", edited_at=1,
+            skill_id="skill_unrelated", edited_at=1, signed_off=True,
             target_url="https://filebin.net/wn8n9o7mlzkvpvcl", protected_url="",
         )
         render_wf = SimpleNamespace(
             id="wf_render", workspace_id=workspace_id, group_id="grp_sales",
             slug="sync_contact_to_crm", name="Sync contact to CRM", session_id="s2",
-            skill_id="skill_render", edited_at=1,
+            skill_id="skill_render", edited_at=1, signed_off=True,
             target_url="https://dashboard.render.com", protected_url="https://dashboard.render.com/",
         )
 
@@ -1477,7 +1477,7 @@ class TestSavedSkillJsonBuild:
         render_wf = SimpleNamespace(
             id="wf_render", workspace_id=workspace_id, group_id="grp_sales",
             slug="sync_contact_to_crm", name="Sync contact to CRM", session_id="s2",
-            skill_id="skill_render", edited_at=1,
+            skill_id="skill_render", edited_at=1, signed_off=True,
             target_url="https://dashboard.render.com", protected_url="https://dashboard.render.com/",
         )
 
@@ -1517,7 +1517,7 @@ class TestSavedSkillJsonBuild:
         wf = SimpleNamespace(
             id="wf_render", workspace_id="wrk_test", group_id="grp_sales",
             slug="sync_contact_to_crm", name="Sync contact to CRM", session_id="s2",
-            skill_id="skill_render", edited_at=1,
+            skill_id="skill_render", edited_at=1, signed_off=True,
             target_url="https://dashboard.render.com", protected_url="https://dashboard.render.com/",
         )
         skill = {

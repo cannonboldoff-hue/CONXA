@@ -303,3 +303,31 @@ def test_real_selector_edit_rebuilds_identity_bundle() -> None:
     signals = merged["identity_bundle"]["signals"]
     assert [s["selector"] for s in signals] == ["#new-selector"]
     assert signals[0]["source"] == "user"
+
+
+# --- BUILD-37: consequence edits must reach the runtime's destructive flag --------------------
+
+def test_consequence_edit_syncs_identity_bundle_destructive() -> None:
+    step = {
+        "action": {"action": "click"},
+        "consequence": "irreversible",
+        "identity_bundle": {"destructive": False, "signals": []},
+        "validation": {"wait_for": {"type": "none", "timeout": 5000}},
+    }
+    marked = sync_derived_step_fields(step, {"consequence": "irreversible"})
+    assert marked["identity_bundle"]["destructive"] is True
+    assert marked["identity_bundle"]["signals"] == []  # nothing else in the bundle moves
+
+    cleared = sync_derived_step_fields({**marked, "consequence": "reversible"}, {"consequence": "reversible"})
+    assert cleared["identity_bundle"]["destructive"] is False
+
+
+def test_unrelated_edit_leaves_destructive_alone() -> None:
+    step = {
+        "action": {"action": "click"},
+        "consequence": "reversible",
+        "identity_bundle": {"destructive": True, "signals": []},  # e.g. set by the compiler
+        "validation": {"wait_for": {"type": "none", "timeout": 5000}},
+    }
+    out = sync_derived_step_fields(step, {"intent": "renamed"})
+    assert out["identity_bundle"]["destructive"] is True
