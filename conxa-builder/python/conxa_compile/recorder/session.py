@@ -333,6 +333,9 @@ class RecordingSession:
     reached_wait_url: bool = False
     auth_mode: bool = False  # skip bridge/events — only capture storage state
     capture_hover: bool = False  # opt-in per recording — hover signals are noisy, off by default
+    # auth_mode only: screen rect {x, y, width, height} (DIPs) to open the login window at, so
+    # Studio can dock it beside the Applications column. None = the browser's own default placement.
+    window_rect: dict | None = None
     # auth_mode only: set the moment a storage-state save actually succeeds, so the
     # caller can tell "browser closed after a session was saved" from "closed with
     # nothing captured" (see cmd_finish_group_app_auth). Distinct from reached_wait_url,
@@ -2186,6 +2189,14 @@ class RecordingSession:
             ctx_kwargs: dict[str, Any] = {}
             if has_storage_state:
                 ctx_kwargs["storage_state"] = self.storage_state_path
+            if self.auth_mode and self.window_rect:
+                r = self.window_rect
+                launch_args += [
+                    f"--window-position={int(r['x'])},{int(r['y'])}",
+                    f"--window-size={int(r['width'])},{int(r['height'])}",
+                ]
+                # Let the page fill the window instead of Playwright's fixed 1280x720 emulation.
+                ctx_kwargs["no_viewport"] = True
             if not self.auth_mode:
                 # Video recording is mandatory for non-auth sessions. Confirmed not the (sole)
                 # cause of recording-window flicker — disabling it during investigation did not
@@ -2598,6 +2609,7 @@ class SessionRegistry:
         wait_for_url: str = "",
         auth_mode: bool = False,
         capture_hover: bool = False,
+        window_rect: dict | None = None,
     ) -> RecordingSession:
         sid = str(uuid.uuid4())
         sess = RecordingSession(
@@ -2608,6 +2620,7 @@ class SessionRegistry:
             wait_for_url=wait_for_url,
             auth_mode=auth_mode,
             capture_hover=capture_hover,
+            window_rect=window_rect,
         )
         self._sessions[sid] = sess
         return sess

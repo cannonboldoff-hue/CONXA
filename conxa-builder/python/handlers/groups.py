@@ -31,6 +31,19 @@ WORKFLOW_PREVIEW_LIMIT = 3
 _VERIFIED_TTL_S = 600
 
 
+def _window_rect(raw: Any) -> dict[str, int] | None:
+    """The screen rect the renderer wants the login window docked at, or None for the browser's
+    default placement. Anything malformed or implausibly small is dropped rather than raised —
+    a bad rect must never block signing in."""
+    if not isinstance(raw, dict):
+        return None
+    try:
+        rect = {k: int(raw[k]) for k in ("x", "y", "width", "height")}
+    except (KeyError, TypeError, ValueError):
+        return None
+    return rect if rect["width"] >= 400 and rect["height"] >= 300 else None
+
+
 def _has_captured_session(auth_path: Path) -> bool:
     """Cheap validity check for a just-finished auth recording: does the saved
     storage state actually contain a session, not just an empty shell? Distinct
@@ -395,6 +408,7 @@ class GroupsMixin:
                 storage_state_autosave_path=str(auth_path),
                 wait_for_url=app.success_url,
                 auth_mode=True,
+                window_rect=_window_rect(payload.get("window_rect")),
             )
             try:
                 self._loop.run(sess.start())

@@ -113,11 +113,15 @@ export function getGroupAuthStatus(groupId: string): Promise<GroupAuthStatus> {
   return cmd('get_group_auth_status', { group_id: groupId })
 }
 
+/** Screen rect (CSS px, as window.screenX/Y report them) to open the login window at. */
+export type WindowRect = { x: number; y: number; width: number; height: number }
+
 export function startGroupAppAuth(
   groupId: string,
   appId: string,
+  windowRect?: WindowRect,
 ): Promise<{ session_id: string; group_id: string; app_id: string; login_url: string }> {
-  return cmd('start_group_app_auth', { group_id: groupId, app_id: appId })
+  return cmd('start_group_app_auth', { group_id: groupId, app_id: appId, ...(windowRect ? { window_rect: windowRect } : {}) })
 }
 
 /** P0 (Application Authentication Recording): while the login window is still open, this first
