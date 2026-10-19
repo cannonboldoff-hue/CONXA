@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createGroup, fetchGroup } from '@/api/groupsApi'
+import { fetchGroup } from '@/api/groupsApi'
 import { createWorkflow } from '@/api/workflowsApi'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { NewGroupDialog } from '@/components/NewGroupDialog'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,6 @@ import { useShellData } from '@/hooks/useShellData'
 import { useShellStore } from '@/store/shellStore'
 import { cn } from '@/lib/utils'
 
-const NEW_GROUP = '__new__'
 const URL_RE = /^https?:\/\/[^\s/]+\.[^\s/]+/
 
 function hostOf(url: string): string {
@@ -24,15 +23,35 @@ function hostOf(url: string): string {
   }
 }
 
+/** A workflow needs a group to live in, so with none yet the group dialog opens first. */
+function GroupRequired() {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+        <div>
+          <p className="text-sm font-medium text-[var(--text-primary)]">Create a group first</p>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            Every workflow lives in a group, which holds the sign-ins its workflows share. Create one, then record your first workflow in it.
+          </p>
+        </div>
+        <Button type="button" variant="brand" onClick={() => setOpen(true)}>Create a group</Button>
+        <NewGroupDialog open={open} onOpenChange={setOpen} />
+      </div>
+    </div>
+  )
+}
+
 /**
  * New workflow: name, group, starting page, an optional sentence about the task. A workflow
- * belongs to exactly one group from the moment it exists. "Create and start recording" creates
- * it and opens its conversation, which signs in first if the app has no saved sign-in.
+ * belongs to exactly one existing group from the moment it exists — with no groups yet this page
+ * sends the user to create one first. "Create and start recording" creates the workflow and opens
+ * its conversation, which signs in first if the app has no saved sign-in.
  */
 export function NewWorkflowPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { groups } = useShellData()
+  const { groups, loading, failed } = useShellData()
   const draft = useShellStore((s) => s.newWorkflowDraft)
   const setDraft = useShellStore((s) => s.setNewWorkflowDraft)
 
@@ -40,7 +59,6 @@ export function NewWorkflowPage() {
   const [url, setUrl] = useState(draft?.starting_page ?? '')
   const [task, setTask] = useState(draft?.task ?? '')
   const [groupId, setGroupId] = useState('')
-  const [newGroupName, setNewGroupName] = useState('')
   const [tried, setTried] = useState(false)
 
   useEffect(() => {
@@ -50,26 +68,22 @@ export function NewWorkflowPage() {
     else if (groups[0]) setGroupId(groups[0].group.id)
   }, [groups, groupId, draft])
 
-  const isNewGroup = groupId === NEW_GROUP || (groups.length === 0 && !groupId)
-  const groupName = isNewGroup ? newGroupName.trim() || 'the new group' : groups.find((g) => g.group.id === groupId)?.group.name ?? ''
-  const groupQ = useQuery({ queryKey: ['group', groupId], queryFn: () => fetchGroup(groupId), enabled: Boolean(groupId) && !isNewGroup })
+  const groupName = groups.find((g) => g.group.id === groupId)?.group.name ?? ''
+  const groupQ = useQuery({ queryKey: ['group', groupId], queryFn: () => fetchGroup(groupId), enabled: Boolean(groupId) })
 
   const nameOk = name.trim().length > 0
   const urlOk = URL_RE.test(url.trim())
-  const groupOk = isNewGroup ? newGroupName.trim().length > 0 : Boolean(groupId)
+  const groupOk = Boolean(groupId)
 
   // Does an app in the chosen group already cover this site, and is it signed in?
   const match = useMemo(() => {
     const host = hostOf(url)
-    if (!urlOk || !host || isNewGroup) return null
+    if (!urlOk || !host) return null
     return groupQ.data?.group.apps.find((a) => [a.login_url, a.success_url].some((u) => hostOf(u) === host)) ?? null
-  }, [url, urlOk, isNewGroup, groupQ.data])
+  }, [url, urlOk, groupQ.data])
 
   const create = useMutation({
-    mutationFn: async () => {
-      const gid = isNewGroup ? (await createGroup(newGroupName.trim())).group.id : groupId
-      return createWorkflow({ name: name.trim(), target_url: url.trim(), group_id: gid, task_description: task.trim() })
-    },
+    mutationFn: () => createWorkflow({ name: name.trim(), target_url: url.trim(), group_id: groupId, task_description: task.trim() }),
     onSuccess: ({ workflow }) => {
       qc.invalidateQueries({ queryKey: ['workflows'] })
       qc.invalidateQueries({ queryKey: ['groups'] })
@@ -83,9 +97,11 @@ export function NewWorkflowPage() {
   const radio = (on: boolean) =>
     cn('flex cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2 text-sm', on ? 'border-white/25 bg-white/[0.07]' : 'border-[var(--border-default)] hover:bg-white/[0.04]')
 
+  // Only when both lists answered — a failed read means "unknown", not "no groups".
+  if (!loading && !failed && groups.length === 0) return <GroupRequired />
+
   return (
     <>
-      <PageHeader title="New workflow" />
       <div className="h-full overflow-y-auto">
         <form className="mx-auto max-w-[36rem] space-y-6 px-4 py-8" onSubmit={(e) => { e.preventDefault(); submit() }}>
           <p className="text-[0.9375rem] leading-[1.65] text-[var(--text-secondary)]">
@@ -107,25 +123,15 @@ export function NewWorkflowPage() {
                   {g.group.name}
                 </label>
               ))}
-              <label className={radio(isNewGroup)}>
-                <input type="radio" name="group" className="accent-white" checked={isNewGroup} onChange={() => setGroupId(NEW_GROUP)} />
-                New group
-              </label>
             </div>
-            {isNewGroup && (
-              <div className="mt-2">
-                <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Group name" aria-label="New group name" aria-invalid={tried && !groupOk} />
-                {tried && !groupOk && <p className={err}>✕ Name the new group.</p>}
-                <p className="mt-1 text-xs text-[var(--text-meta)]">A new group starts with no sign-ins. You’ll add the app it uses on the next screen.</p>
-              </div>
-            )}
+            {tried && !groupOk && <p className={err}>✕ Choose a group.</p>}
           </fieldset>
 
           <div>
             <Label htmlFor="nw-url">Starting page</Label>
             <Input id="nw-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://billing.example.com/invoices/new" aria-invalid={tried && !urlOk} disabled={create.isPending} className="mt-1.5 font-mono text-sm" />
             {tried && !urlOk && <p className={err}>✕ Enter the full address of the page where the task starts, like https://billing.example.com/invoices/new</p>}
-            {urlOk && !isNewGroup && groupQ.data && (
+            {urlOk && groupQ.data && (
               <p className="mt-1.5 flex items-start gap-1.5 text-xs text-[var(--text-secondary)]">
                 {match?.captured_at ? (
                   <><StatusGlyph kind="ok" /> Uses {match.name} — already signed in for {groupName}</>

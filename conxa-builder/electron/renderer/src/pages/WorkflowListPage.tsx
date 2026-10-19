@@ -1,75 +1,26 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { createGroup, fetchGroups, type GroupSummary } from '@/api/groupsApi'
+import { useQuery } from '@tanstack/react-query'
+import { fetchGroups, type GroupSummary } from '@/api/groupsApi'
 import { UsageCards } from '@/components/EntitlementMeters'
+import { NewGroupDialog } from '@/components/NewGroupDialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { WorkflowStage } from '@/components/StagePath'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { FolderKanban, Plus } from 'lucide-react'
 
-function NewGroupDialog() {
-  const navigate = useNavigate()
+function NewGroupButton() {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [error, setError] = useState('')
-
-  const mutation = useMutation({
-    mutationFn: () => createGroup(name),
-    onSuccess: (data) => {
-      setOpen(false)
-      setName('')
-      setError('')
-      navigate(`/groups/${encodeURIComponent(data.group.id)}`)
-    },
-    onError: (e: Error) => setError(e.message),
-  })
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="brand">
-          <Plus className="size-4" />
-          New Group
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
-        <DialogHeader>
-          <DialogTitle className="text-white">New Group</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Label className="text-zinc-300">Group name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && mutation.mutate()}
-              placeholder="e.g. Sales"
-              className="border-white/10 bg-white/5 text-zinc-100"
-              disabled={mutation.isPending}
-            />
-            <p className="text-xs text-zinc-500">
-              A business domain — e.g. Sales, Marketing. It groups both workflows and the applications they need to sign in to.
-            </p>
-          </div>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <Button className="w-full" variant="brand" onClick={() => mutation.mutate()} disabled={!name || mutation.isPending}>
-            {mutation.isPending ? 'Creating…' : 'Create Group'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Button size="sm" variant="brand" onClick={() => setOpen(true)}>
+        <Plus className="size-4" />
+        New Group
+      </Button>
+      <NewGroupDialog open={open} onOpenChange={setOpen} />
+    </>
   )
 }
 
@@ -235,7 +186,7 @@ export function WorkflowListPage() {
       actions={
         <>
           <UsageCards />
-          <NewGroupDialog />
+          <NewGroupButton />
         </>
       }
     />
@@ -287,7 +238,7 @@ export function WorkflowListPage() {
                 A group is a business domain like Sales or Support. It holds your workflows and the logins they need.
               </p>
             </div>
-            <NewGroupDialog />
+            <NewGroupButton />
           </div>
         </div>
       ) : (
