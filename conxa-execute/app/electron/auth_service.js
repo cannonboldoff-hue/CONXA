@@ -211,14 +211,23 @@ function claimsFromTokens(tokens) {
   }
 }
 
+// CONXA_DEV_SKIP_AUTH=1 skips Clerk login entirely — unpackaged dev runs only, never honored in a
+// packaged build. Mirrors Build Studio's auth_service.py flag of the same name.
+function devSkipAuth() {
+  return !app.isPackaged && ["1", "true", "yes"].includes((process.env.CONXA_DEV_SKIP_AUTH || "").trim().toLowerCase());
+}
+
+function devLogin() {
+  const userinfo = { sub: "dev-user", name: "Dev User", email: "dev@conxa.local" };
+  saveTokens({ access_token: "dev-bypass-token", refresh_token: "", exp: Date.now() / 1000 + 86400 * 365, userinfo });
+  return claimsFromTokens({ userinfo });
+}
+
 async function login() {
+  if (devSkipAuth()) return devLogin();
   if (!clerkDomain() || !clientId()) {
     // ponytail: dev-only bypass, real Clerk app not wired up yet — remove once CONXA_EXECUTE_CLERK_DOMAIN/CLIENT_ID are set
-    if (!require("electron").app.isPackaged) {
-      const userinfo = { sub: "dev-user", name: "Dev User", email: "dev@conxa.local" };
-      saveTokens({ access_token: "dev-bypass-token", refresh_token: "", exp: Date.now() / 1000 + 86400 * 365, userinfo });
-      return claimsFromTokens({ userinfo });
-    }
+    if (!app.isPackaged) return devLogin();
     throw new Error("auth_not_configured");
   }
   const { verifier, challenge } = pkcePair();
@@ -299,7 +308,7 @@ async function getToken() {
 
 async function currentIdentity() {
   const cached = loadTokens();
-  if (!cached) return null;
+  if (!cached) return devSkipAuth() ? devLogin() : null;
   try {
     await getToken();
   } catch (err) {

@@ -37,7 +37,13 @@ function waitForRenderer(url, timeoutMs) {
   const env = {
     ...process.env,
     CONXA_RENDERER_URL: rendererUrl,
+    // Dev lane skips Clerk login by default (same as scripts/conxa.ps1); set to 0 to test real login.
+    CONXA_DEV_SKIP_AUTH: process.env.CONXA_DEV_SKIP_AUTH || "1",
   };
+  // The dev bypass token is not a Clerk JWT, so only a local backend (SKILL_AUTH_REQUIRED=false) accepts it.
+  if (["1", "true", "yes"].includes(env.CONXA_DEV_SKIP_AUTH) && !env.CONXA_EXECUTE_API_BASE_URL) {
+    env.CONXA_EXECUTE_API_BASE_URL = "http://127.0.0.1:8000";
+  }
   delete env.ELECTRON_RUN_AS_NODE;
 
   const child = spawn(process.execPath, [require.resolve("electron/cli"), "."], {

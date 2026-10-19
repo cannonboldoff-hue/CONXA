@@ -31,7 +31,17 @@ async function authedFetch(path, options = {}) {
 
 /** { contexts: [{workspace_id, workspace_name, kind, credits_remaining}], active_workspace_id } */
 async function getContexts() {
-  const resp = await authedFetch("/api/v1/execute/contexts");
+  // Bounded: the app's first screen waits on this call, and fetch() has no timeout of its own — an
+  // unreachable server used to leave the window blank forever instead of reaching the error screen.
+  let resp;
+  try {
+    resp = await authedFetch("/api/v1/execute/contexts", { signal: AbortSignal.timeout(15_000) });
+  } catch (e) {
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`CONXA's servers didn't respond (${baseUrl()}).`);
+    }
+    throw e;
+  }
   const data = await resp.json();
   if (!resp.ok) throw new Error(data.detail || `execute_api_http_${resp.status}`);
   return data;
