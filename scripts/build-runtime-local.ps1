@@ -70,7 +70,8 @@ try {
     # the env var; without it the dev exe simply can't verify signed manifests
     # (fine for Test Skill, which runs with self-update skipped).
     if ($env:CONXA_MANIFEST_PUBLIC_KEY) { $pkg.ed25519_public_key = $env:CONXA_MANIFEST_PUBLIC_KEY }
-    ($pkg | ConvertTo-Json -Depth 10) | Out-File -Encoding utf8 $pkgPath
+    # No-BOM write: Windows PowerShell 5.1's `Out-File -Encoding utf8` prepends a BOM, which pkg's JSON.parse rejects.
+    [System.IO.File]::WriteAllText($pkgPath, ($pkg | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
 
     Write-Host "-- building conxa-runtime.exe (this takes a minute) --------------"
     npm run build:win
