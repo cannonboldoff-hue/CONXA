@@ -13,8 +13,7 @@ import { useShellData } from '@/hooks/useShellData'
 /**
  * A workflow's home: one continuous conversation carrying everything that happens to it.
  * Recording, compile, Clarify, tests and approval arrive as cards in later phases (BUILD-38
- * onward); until then the group page still records, compiles and tests, and a quiet bar here
- * says so.
+ * onward). A quiet bar links to Human Edit once the workflow has a compiled skill.
  */
 export function WorkflowConversationPage() {
   const { workflowId } = useParams<{ workflowId: string }>()
@@ -78,13 +77,13 @@ export function WorkflowConversationPage() {
         }
       />
       <div className="flex h-full min-h-0 flex-col">
-        <div className="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-meta)]">
-          <div className="mx-auto flex max-w-[44rem] flex-wrap items-center gap-x-3">
-            <span>Record, compile and test from</span>
-            <Link className="text-[var(--text-secondary)] underline-offset-2 hover:underline" to={`/groups/${workflow.group_id}`}>the group page</Link>
-            {editHref && <Link className="text-[var(--text-secondary)] underline-offset-2 hover:underline" to={editHref}>Human Edit</Link>}
+        {editHref && (
+          <div className="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-meta)]">
+            <div className="mx-auto flex max-w-[44rem] flex-wrap items-center gap-x-3">
+              <Link className="text-[var(--text-secondary)] underline-offset-2 hover:underline" to={editHref}>Human Edit</Link>
+            </div>
           </div>
-        </div>
+        )}
         <div className="min-h-0 flex-1">
           <Conversation
             key={workflow.id}

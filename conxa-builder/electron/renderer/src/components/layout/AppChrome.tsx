@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { useMatch } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBackendEvents } from '@/hooks/usePythonCmd'
@@ -27,30 +27,15 @@ import { Sidebar } from '@/components/shell/Sidebar'
 import { PanelDivider } from '@/components/shell/PanelDivider'
 import { InspectorPane, InspectorStrip } from '@/components/shell/InspectorPane'
 import { SearchDialog } from '@/components/shell/SearchDialog'
-import { ArrowLeft, Globe, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Globe } from 'lucide-react'
 
 // The workspace header row lines up with the sidebar's brand row. Keep them equal.
 const HEADER_ROW_HEIGHT = 'h-14'
 
-// The current page's title/description, registered by its <PageHeader> via
-// PageHeaderContext, rendered here instead of the page repeating its own header block.
-function HeaderPageTitle() {
-  const { header } = usePageHeaderContext()
-  // Always occupies the flex-1 slot (even empty) so trailing header controls stay pinned right.
-  return (
-    <div className="flex min-w-0 flex-1 items-baseline gap-2">
-      {header ? (
-        <>
-          <h1 className="shrink-0 truncate text-base font-semibold text-[var(--text-primary)]">{header.title}</h1>
-          {header.description != null && header.description !== false ? (
-            <div className={cn('min-w-0 text-xs text-[var(--text-meta)]', typeof header.description === 'string' && 'truncate')}>
-              {header.description}
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </div>
-  )
+// Keeps the flex-1 slot so trailing header controls stay pinned right. The page title itself
+// (registered by <PageHeader> via PageHeaderContext) is drawn in the window title bar.
+function HeaderSpacer() {
+  return <div className="min-w-0 flex-1" />
 }
 
 /** Back-chevron at the true left edge of the bar — only when a page opts in via `onBack`. */
@@ -85,29 +70,21 @@ function HeaderActions() {
   return <div className="flex shrink-0 items-center gap-2">{header.actions}</div>
 }
 
-/** Refetches every active query on the page, so each page needn't wire its own button. */
-function HeaderRefreshButton() {
-  const qc = useQueryClient()
-  const [spinning, setSpinning] = useState(false)
+/** The workspace header row — omitted unless the page registers a back button, actions or an extra strip, or a test browser is hidden. */
+function HeaderBar({ roomForPanel }: { roomForPanel: boolean }) {
+  const { header } = usePageHeaderContext()
+  const run = useBrowserStore((b) => b.run)
+  if (!header?.onBack && !header?.actions && !header?.extra && !run) return null
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      className="shrink-0 text-[var(--text-meta)]"
-      title="Refresh"
-      aria-label="Refresh"
-      onClick={async () => {
-        setSpinning(true)
-        try {
-          await qc.refetchQueries({ type: 'active' })
-        } finally {
-          setSpinning(false)
-        }
-      }}
-    >
-      <RefreshCw className={cn('size-4', spinning && 'animate-spin')} />
-    </Button>
+  <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-base)]">
+    <div className={cn('relative flex items-center gap-3 px-4 sm:px-6', HEADER_ROW_HEIGHT)}>
+      <HeaderBackButton />
+      <HeaderSpacer />
+      <HeaderActions />
+      <BrowserPill roomForPanel={roomForPanel} />
+      <HeaderExtra />
+    </div>
+  </header>
   )
 }
 
@@ -248,18 +225,8 @@ function Shell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <PageHeaderProvider>
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-base)]">
-            <div className={cn('relative flex items-center gap-3 px-4 sm:px-6', HEADER_ROW_HEIGHT)}>
-              <HeaderBackButton />
-              <HeaderPageTitle />
-              <HeaderActions />
-              <BrowserPill roomForPanel={browser?.mode === 'panel'} />
-              <HeaderRefreshButton />
-              <HeaderExtra />
-            </div>
-          </header>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <HeaderBar roomForPanel={browser?.mode === 'panel'} />
           <OfflineBanner />
           <main className="min-h-0 flex-1 overflow-hidden">{engineDown ? <EngineStoppedNotice /> : children}</main>
 
@@ -271,8 +238,7 @@ function Shell({ children }: { children: ReactNode }) {
               <InspectorPane workflowId={workflowId} />
             </div>
           )}
-        </div>
-      </PageHeaderProvider>
+      </div>
 
       {browserShown && browser && (
         <BrowserPane width={browser.width} maxWidth={Math.max(BROWSER.min, Math.round(s.windowWidth * BROWSER.maxFraction))} />
@@ -313,6 +279,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider>
+      <PageHeaderProvider>
       <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
         <WindowTitleBar />
         {/* Before sign-in there is nothing to navigate to — and the shell's data commands
@@ -320,11 +287,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
         {identity ? (
           <Shell>{children}</Shell>
         ) : (
-          <PageHeaderProvider>
-            <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-          </PageHeaderProvider>
+          <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
         )}
       </div>
+      </PageHeaderProvider>
     </TooltipProvider>
   )
 }

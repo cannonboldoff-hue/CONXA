@@ -20,6 +20,8 @@ type PageHeaderProps = {
   /** Renders `actions` inside AppChrome's header row (after the title) instead
    * of a separate strip in the page body. */
   inlineActions?: boolean
+  /** Compact controls drawn in the window title bar itself, right of the page title. */
+  titleBarActions?: ReactNode
 }
 
 /** Registers this page's title/description into AppChrome's sticky top bar
@@ -27,14 +29,14 @@ type PageHeaderProps = {
  * Only renders something here when `leading` or `actions` are supplied — a
  * two-part strip that stays put in the body: standing information on the left,
  * page-level buttons on the right. */
-export function PageHeader({ title, description, leading, actions, className, extra, onBack, backLabel, inlineActions }: PageHeaderProps) {
+export function PageHeader({ title, description, leading, actions, className, extra, onBack, backLabel, inlineActions, titleBarActions }: PageHeaderProps) {
   const { setHeader } = usePageHeaderContext()
   const headerActions = inlineActions ? actions : undefined
 
   useEffect(() => {
-    setHeader({ title, description, extra, onBack, backLabel, actions: headerActions })
+    setHeader({ title, description, extra, onBack, backLabel, actions: headerActions, titleBarActions })
     return () => setHeader(null)
-  }, [title, description, extra, onBack, backLabel, headerActions, setHeader])
+  }, [title, description, extra, onBack, backLabel, headerActions, titleBarActions, setHeader])
 
   if (inlineActions || (!actions && !leading)) return null
 

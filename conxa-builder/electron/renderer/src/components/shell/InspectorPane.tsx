@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getLifecycle } from '@/api/conversationApi'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
@@ -108,9 +108,6 @@ export function InspectorPane({ workflowId }: { workflowId: string }) {
             >
               Human Edit
             </Button>
-            <Link to={`/groups/${w.workflow.group_id}`} className="block text-center text-xs text-[#a3a3a3] underline-offset-2 hover:text-[#e8e6e3] hover:underline">
-              Record, compile and test on the group page
-            </Link>
           </section>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Square } from 'lucide-react'
+import { ArrowDown, ArrowUp, ShieldCheck, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AssistantMessage, EventRow, ThreadSkeleton, UserMessage } from '@/components/conversation/parts'
 import { cardComponent } from '@/components/conversation/cards'
@@ -31,12 +31,18 @@ function Composer({
   placeholder,
   note,
   disabledReason,
+  hero,
+  prefill,
   onSend,
 }: {
   threadId: string
   placeholder: string
   note?: ReactNode
   disabledReason?: string
+  /** The larger, centred composer of an empty thread; its note sits beneath the box. */
+  hero?: boolean
+  /** Text to drop into the box (e.g. a starter idea); a new object each time it should apply. */
+  prefill?: { text: string } | null
   onSend: (text: string) => void | Promise<void>
 }) {
   const t = useThreadStore(selectThread(threadId))
@@ -52,6 +58,16 @@ function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`
   }, [text])
 
+  useEffect(() => {
+    if (!prefill) return
+    setText(prefill.text)
+    const el = ref.current
+    if (el) {
+      el.focus()
+      el.setSelectionRange(prefill.text.length, prefill.text.length)
+    }
+  }, [prefill])
+
   const submit = () => {
     const v = text.trim()
     if (!v || disabledReason) return
@@ -60,14 +76,19 @@ function Composer({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[44rem] px-4 pb-4 pt-2">
+    <div className={cn('mx-auto w-full max-w-[44rem]', hero ? 'px-0' : 'px-4 pb-4 pt-2')}>
       {t.error && !busy && <p className="mb-2 text-xs text-status-error">✕ {t.error}</p>}
       {t.queued && <p className="mb-2 text-xs text-[var(--text-meta)]">Waiting for the previous reply to finish…</p>}
-      <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-raised)] p-2.5 focus-within:border-[var(--border-default)] focus-within:ring-2 focus-within:ring-brand/55">
+      <div
+        className={cn(
+          'rounded-[14px] border border-[var(--border-default)] p-2.5 transition-[border-color,box-shadow] focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand/20',
+          hero ? 'bg-[var(--bg-surface)]' : 'bg-[var(--bg-raised)]',
+        )}
+      >
         <textarea
           ref={ref}
           value={text}
-          rows={1}
+          rows={hero ? 3 : 1}
           disabled={Boolean(disabledReason)}
           aria-label="Message"
           placeholder={disabledReason ?? placeholder}
@@ -78,10 +99,17 @@ function Composer({
               submit()
             }
           }}
-          className="block max-h-[180px] w-full resize-none bg-transparent px-1.5 py-1 text-[0.9375rem] leading-[1.6] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-meta)]"
+          className={cn(
+            'block max-h-[180px] w-full resize-none bg-transparent text-[0.9375rem] leading-[1.6] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-meta)]',
+            hero ? 'min-h-[84px] px-2 pb-1 pt-1.5' : 'px-1.5 py-1',
+          )}
         />
         <div className="mt-1 flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-meta)]">{note}</span>
+          {hero ? (
+            <span className="min-w-0 flex-1 truncate text-right text-xs text-[var(--text-meta)]">Enter to send · Shift+Enter for new line</span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-meta)]">{note}</span>
+          )}
           {busy ? (
             <Button type="button" variant="outline" size="sm" onClick={() => cancel(threadId)} aria-label="Stop the reply">
               <Square className="size-3" /> Stop
@@ -93,6 +121,12 @@ function Composer({
           )}
         </div>
       </div>
+      {hero && note && (
+        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-xs text-[var(--text-meta)]">
+          <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
+          <span>{note}</span>
+        </p>
+      )}
     </div>
   )
 }
@@ -111,10 +145,16 @@ export function Conversation({
   anchor,
   virtual,
   tail,
+  centerWhenEmpty,
+  emptyBelow,
   onSend,
 }: {
   threadId: string
   empty?: ReactNode
+  /** While the thread is empty, centre `empty` and a larger composer instead of pinning it to the bottom. */
+  centerWhenEmpty?: boolean
+  /** Shown under the centred composer; `fill` drops text into it. */
+  emptyBelow?: (fill: (text: string) => void) => ReactNode
   placeholder?: string
   composerNote?: ReactNode
   disabledReason?: string
@@ -157,8 +197,28 @@ export function Conversation({
     if (el.scrollTop < 40 && t.hasMore) void loadOlder(threadId)
   }
 
+  const [prefill, setPrefill] = useState<{ text: string } | null>(null)
   const ready = t.loaded || Boolean(virtual)
   const showEmpty = ready && items.length === 0 && !t.streaming
+  const composerProps = {
+    threadId,
+    placeholder,
+    note: composerNote,
+    disabledReason: disabledReason ?? (offline ? 'You’re offline — replies need Conxa Cloud. Try again when the connection is back.' : undefined),
+    onSend: onSend ?? ((text: string) => send(threadId, text, anchor)),
+  }
+
+  if (centerWhenEmpty && showEmpty && !t.turnId) {
+    return (
+      <div className="h-full min-h-0 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-[47.5rem] flex-col gap-9 px-6 pb-12 pt-[12vh]">
+          {empty}
+          <Composer {...composerProps} hero prefill={prefill} />
+          {emptyBelow?.((text) => setPrefill({ text }))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -197,13 +257,7 @@ export function Conversation({
           </Button>
         )}
       </div>
-      <Composer
-        threadId={threadId}
-        placeholder={placeholder}
-        note={composerNote}
-        disabledReason={disabledReason ?? (offline ? 'You’re offline — replies need Conxa Cloud. Try again when the connection is back.' : undefined)}
-        onSend={onSend ?? ((text) => send(threadId, text, anchor))}
-      />
+      <Composer {...composerProps} />
     </div>
   )
 }

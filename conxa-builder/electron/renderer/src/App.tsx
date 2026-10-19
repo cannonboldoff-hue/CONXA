@@ -139,12 +139,12 @@ function OpenSettings() {
   return <Navigate to="/" replace />
 }
 
-/** `/` has no id to route on — the group list (`/workflows`) is the home, unless there is nothing in
- * the workspace yet: then the first-launch screen explains how to start. */
+/** `/` has no id to route on — new chat is the home, unless there is nothing in the workspace yet:
+ * then the first-launch screen explains how to start. The group list is still one click away at `/workflows`. */
 function DefaultRedirect() {
   const { groups, loading, failed } = useShellData()
   if (loading) return null
-  return <Navigate to={groups.length === 0 && !failed ? '/welcome' : '/workflows'} replace />
+  return <Navigate to={groups.length === 0 && !failed ? '/welcome' : '/chat'} replace />
 }
 
 /** The per-workflow detail page was folded into its owning group's page (every

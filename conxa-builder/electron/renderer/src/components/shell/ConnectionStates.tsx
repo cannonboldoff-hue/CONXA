@@ -81,21 +81,20 @@ export function EngineStoppedNotice() {
   )
 }
 
-/** The sidebar footer's connection dot: shape plus words, never colour alone. */
-export function ConnectionLine() {
+/** The connection dot beside the profile name: shape plus a hover explanation, never colour alone. */
+export function ConnectionDot() {
   const engine = useConnectionStore((s) => s.engine)
   const cloud = useConnectionStore((s) => s.cloud)
   const kind = engine !== 'running' || cloud === 'offline' ? 'fail' : cloud === 'unknown' ? 'none' : 'ok'
   const label =
-    engine === 'stopped' ? 'Engine stopped'
-    : engine === 'restarting' ? 'Engine restarting'
-    : cloud === 'offline' ? 'Offline'
-    : cloud === 'unknown' ? 'Connecting…'
-    : 'Connected'
+    engine === 'stopped' ? 'Engine stopped — the local engine that records and compiles has quit'
+    : engine === 'restarting' ? 'Engine restarting — the local engine is starting again'
+    : cloud === 'offline' ? 'Offline — Conxa Cloud can’t be reached; compiling, chat and publishing wait'
+    : cloud === 'unknown' ? 'Connecting to Conxa Cloud…'
+    : 'Connected — the local engine is running and Conxa Cloud is reachable'
   return (
-    <p className="flex items-center gap-1.5">
+    <span className="flex size-6 shrink-0 items-center justify-center" title={label} role="status" aria-label={label}>
       <StatusGlyph kind={kind} label={label} />
-      <span>{label}</span>
-    </p>
+    </span>
   )
 }
