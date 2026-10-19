@@ -1,16 +1,15 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addGroupApp,
   checkGroupAppAuth,
-  deleteGroup,
   fetchGroup,
-  renameGroup,
   type GroupApp,
 } from '@/api/groupsApi'
-import { createWorkflow, fetchSkillPack, fetchSkillPackVersions, updateWorkflow, type SkillPackBuild, type Workflow } from '@/api/workflowsApi'
-import { GroupAuthWizard } from '@/components/GroupAuthWizard'
+import { fetchSkillPack, fetchSkillPackVersions, updateWorkflow, type SkillPackBuild, type Workflow } from '@/api/workflowsApi'
+import { GroupAuthWizard, type SignInSession } from '@/components/GroupAuthWizard'
+import { SignInPane } from '@/components/SignInPane'
 import { RecordWorkflowDialog } from '@/components/RecordWorkflowDialog'
 import { DeleteWorkflowButton } from '@/components/DeleteWorkflowButton'
 import { UsageCards } from '@/components/EntitlementMeters'
@@ -28,16 +27,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatCompileEta, useCompileEtaSeconds, useCompileStore } from '@/store/compileStore'
+import { useShellStore } from '@/store/shellStore'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { FolderKanban, Layers, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { FolderKanban, Layers, Loader2, Pencil, Plus } from 'lucide-react'
 
 function AddAppDialog({ groupId }: { groupId: string }) {
   const qc = useQueryClient()
@@ -67,8 +66,8 @@ function AddAppDialog({ groupId }: { groupId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="icon-sm" variant="outline" title="Add application">
-          <Plus className="size-3.5" />
+        <Button size="sm" variant="ghost" className="text-[#e8e6e3]">
+          <Plus className="size-3.5" /> Add app
         </Button>
       </DialogTrigger>
       <DialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
@@ -94,52 +93,20 @@ function AddAppDialog({ groupId }: { groupId: string }) {
   )
 }
 
-function NewWorkflowDialog({ groupId }: { groupId: string }) {
-  const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [targetUrl, setTargetUrl] = useState('')
-  const [error, setError] = useState('')
-
-  const mutation = useMutation({
-    mutationFn: () => createWorkflow({ name, target_url: targetUrl, group_id: groupId }),
-    onSuccess: () => {
-      setOpen(false)
-      setName('')
-      setTargetUrl('')
-      setError('')
-      qc.invalidateQueries({ queryKey: ['group', groupId] })
-    },
-    onError: (e: Error) => setError(e.message),
-  })
-
+/** Opens the full New workflow page with this group preselected. */
+function NewWorkflowButton({ groupName }: { groupName: string }) {
+  const navigate = useNavigate()
+  const setDraft = useShellStore((s) => s.setNewWorkflowDraft)
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="size-4" /> New Workflow
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
-        <DialogHeader>
-          <DialogTitle className="text-white">New Workflow</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Label className="text-zinc-300">Workflow name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Create a lead" className="border-white/10 bg-white/5 text-zinc-100" disabled={mutation.isPending} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-zinc-300">Target URL</Label>
-            <Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} placeholder="https://app.example.com" className="border-white/10 bg-white/5 text-zinc-100" disabled={mutation.isPending} />
-          </div>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <Button className="w-full" onClick={() => mutation.mutate()} disabled={!name || !targetUrl || mutation.isPending}>
-            {mutation.isPending ? 'Creating…' : 'Create Workflow'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <Button
+      variant="brand"
+      onClick={() => {
+        setDraft({ group: groupName })
+        navigate('/new')
+      }}
+    >
+      <Plus className="size-4" /> New workflow
+    </Button>
   )
 }
 
@@ -443,9 +410,27 @@ function WorkflowRow({
 export function GroupPage() {
   const { groupId } = useParams<{ groupId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Set by NewGroupDialog's "Create group & sign in": start Connect as soon as the page opens.
+  const autoConnect = Boolean((location.state as { autoConnect?: boolean } | null)?.autoConnect)
   const qc = useQueryClient()
-  const [renaming, setRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState('')
+  // Browser pane: open while a Connect window is up, then briefly shows "connected".
+  const [signIn, setSignIn] = useState<SignInSession | null>(null)
+  const [connectedApp, setConnectedApp] = useState<string | null>(null)
+  const dockRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (connectedApp === null) return
+    const t = window.setTimeout(() => setConnectedApp(null), 2500)
+    return () => window.clearTimeout(t)
+  }, [connectedApp])
+  const paneOpen = signIn !== null || connectedApp !== null
+  // Where Chromium should open: the pane's region, in screen coordinates.
+  const getWindowRect = () => {
+    const el = dockRef.current
+    if (!el) return undefined
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(window.screenX + r.x), y: Math.round(window.screenY + r.y), width: Math.round(r.width), height: Math.round(r.height) }
+  }
 
   const q = useQuery({
     queryKey: ['group', groupId],
@@ -456,23 +441,6 @@ export function GroupPage() {
     queryKey: ['skill-pack'],
     queryFn: fetchSkillPack,
     staleTime: 10_000,
-  })
-
-  const renameMut = useMutation({
-    mutationFn: () => renameGroup(groupId!, renameValue),
-    onSuccess: () => {
-      setRenaming(false)
-      qc.invalidateQueries({ queryKey: ['group', groupId] })
-      qc.invalidateQueries({ queryKey: ['groups'] })
-    },
-  })
-
-  const deleteGroupMut = useMutation({
-    mutationFn: () => deleteGroup(groupId!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['groups'] })
-      navigate('/workflows')
-    },
   })
 
   // Bounded probe of every captured app's session at once — "ready" (a session file
@@ -506,7 +474,6 @@ export function GroupPage() {
   }
 
   const { group, auth, workflows } = q.data
-  const isDefault = group.name === 'Default'
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['group', groupId] })
     qc.invalidateQueries({ queryKey: ['groups'] })
@@ -523,102 +490,100 @@ export function GroupPage() {
         ]
           .filter(Boolean)
           .join(' · ')}
-        inlineActions
-        actions={
-          <>
-            <UsageCards />
-            {!isDefault && (
-              <Dialog open={renaming} onOpenChange={(v) => { setRenaming(v); if (v) setRenameValue(group.name) }}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline">Rename</Button>
-                </DialogTrigger>
-                <DialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
-                  <DialogHeader><DialogTitle className="text-white">Rename group</DialogTitle></DialogHeader>
-                  <div className="space-y-4 pt-2">
-                    <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="border-white/10 bg-white/5 text-zinc-100" />
-                    <Button className="w-full" onClick={() => renameMut.mutate()} disabled={!renameValue || renameMut.isPending}>Save</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-            {!isDefault && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="hover:border-red-500/30 hover:bg-red-500/[0.06] hover:text-red-400">
-                    <Trash2 className="size-3.5" /> Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-white">Delete &ldquo;{group.name}&rdquo;?</AlertDialogTitle>
-                    <AlertDialogDescription className="text-zinc-400">
-                      Workflows in this group move to Default. Captured app sessions are removed.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="border-white/10 bg-white/5 text-zinc-200">Cancel</AlertDialogCancel>
-                    <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={() => deleteGroupMut.mutate()}>Delete</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-            <NewWorkflowDialog groupId={group.id} />
-          </>
-        }
+        // Usage meters sit in the window title bar; Rename/Delete live in the sidebar's "…" menu
+        // on this group's row (GroupMenu), so the page body starts straight at the content.
+        titleBarActions={<UsageCards />}
       />
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 min-h-0 flex-col gap-6 overflow-y-auto px-4 py-6 sm:px-6 lg:flex-row lg:overflow-hidden">
-        {/* ── Applications column ── */}
-        <section className="flex shrink-0 flex-col self-start overflow-hidden rounded-xl border border-white/8 bg-white/[0.02] lg:w-[26rem] lg:self-auto">
-          <div className="flex shrink-0 items-center justify-between border-b border-white/8 px-4 py-3.5">
-            <span className="text-[0.6875rem] font-medium text-zinc-400">Applications</span>
-            <AddAppDialog groupId={group.id} />
+      <div className="mx-auto flex w-full max-w-7xl flex-1 min-h-0 flex-col gap-6 overflow-y-auto px-4 py-6 sm:px-6 lg:flex-row lg:gap-8 lg:overflow-hidden">
+        {/* ── Applications column — open, not boxed: the list itself is the content ── */}
+        <section aria-labelledby="group-apps-heading" className="flex shrink-0 flex-col lg:w-[26rem]">
+          <div className="shrink-0 px-1">
+            <h2 id="group-apps-heading" className="text-base font-semibold text-[#e8e6e3]">Applications</h2>
+            <p className="mt-1 text-sm text-[#a3a3a3]">Sign in once so workflows in this group can run on your behalf.</p>
           </div>
-          {group.apps.length > 0 && (
-            // Answers "is this group blocked?" without counting rows.
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/8 px-4 py-2.5 text-xs">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <span aria-hidden className={cn('shrink-0 text-[13px] leading-none', auth.ready ? 'text-status-ok' : 'text-status-warn')}>
+          <div className="mt-5 flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-1 pb-2.5">
+            {group.apps.length > 0 ? (
+              // Answers "is this group blocked?" without counting rows.
+              <div className="flex min-w-0 items-center gap-1.5 text-xs">
+                <span aria-hidden className={cn('shrink-0 text-[11px] leading-none', auth.ready ? 'text-status-ok' : 'text-status-warn')}>
                   {auth.ready ? '●' : '▲'}
                 </span>
-                <span className={cn('truncate', auth.ready ? 'text-status-ok' : 'text-status-warn')}>
+                <span className="truncate text-[#a3a3a3]">
                   {auth.ready
-                    ? 'All apps connected'
+                    ? 'All apps signed in'
                     : `${auth.apps_total - auth.apps_authenticated} of ${auth.apps_total} still need signing in`}
                 </span>
               </div>
-              <button
-                type="button"
-                title="Re-probe every connected app's session right now"
-                className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
-                disabled={checkAllMut.isPending}
-                onClick={() => checkAllMut.mutate()}
-              >
-                {checkAllMut.isPending ? <Loader2 className="size-3 animate-spin" /> : 'Check all'}
-              </button>
-            </div>
-          )}
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            {group.apps.length === 0 ? (
-              <p className="py-4 text-center text-xs text-zinc-600">No applications yet. Add one to start authenticating this group.</p>
             ) : (
-              <GroupAuthWizard groupId={group.id} onAllAuthenticated={refresh} editable />
+              <span className="text-xs text-[#8e8e8e]">No apps yet</span>
             )}
+            <div className="flex shrink-0 items-center gap-1">
+              {group.apps.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Re-probe every connected app's session right now"
+                  className="text-[#8e8e8e] hover:text-[#e8e6e3]"
+                  disabled={checkAllMut.isPending}
+                  onClick={() => checkAllMut.mutate()}
+                >
+                  {checkAllMut.isPending ? <Loader2 className="size-3 animate-spin" /> : 'Check all'}
+                </Button>
+              )}
+              <AddAppDialog groupId={group.id} />
+            </div>
+          </div>
+          <div className="-mx-2 min-h-0 flex-1 overflow-y-auto pt-2">
+            {group.apps.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-[#8e8e8e]">Add the apps this group's workflows use — you'll sign in to each one once.</p>
+            ) : (
+              <GroupAuthWizard
+                groupId={group.id}
+                onAllAuthenticated={refresh}
+                editable
+                autoStart={autoConnect}
+                onAutoStarted={() => navigate(location.pathname, { replace: true, state: null })}
+                getWindowRect={getWindowRect}
+                onSession={(sess) => {
+                  setSignIn(sess)
+                  if (sess) setConnectedApp(null)
+                }}
+                onConnected={(name) => setConnectedApp(name)}
+              />
+            )}
+          </div>
+          {/* The page's one next action, placed where sign-in leads to it. */}
+          <div className="mt-4 flex shrink-0 items-center gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-[#1e1e1e] p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[#e8e6e3]">Record a workflow</p>
+              <p className="mt-0.5 text-xs text-[#a3a3a3]">
+                {group.apps.length > 0 && !auth.ready ? 'Finish signing in above first.' : 'Uses the sessions signed in above.'}
+              </p>
+            </div>
+            <NewWorkflowButton groupName={group.name} />
           </div>
         </section>
 
+        {paneOpen && <SignInPane session={signIn} connectedApp={connectedApp} regionRef={dockRef} />}
+
         {/* ── Workflows column ── */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', paneOpen ? 'hidden' : 'flex')}>
           {workflows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-white/8 py-16 text-center">
               <div className="rounded-full border border-white/8 bg-white/[0.03] p-4">
                 <Layers className="size-7 text-zinc-700" />
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-400">No workflows yet</p>
-                <p className="mt-1 max-w-sm text-xs text-zinc-600">Create a workflow in this group to start automating.</p>
+                <p className="text-sm font-medium text-zinc-400">
+                  {group.apps.length > 0 && !auth.ready ? `Sign in to ${group.apps.length === 1 ? group.apps[0]!.name : 'your apps'} first` : 'No workflows yet'}
+                </p>
+                <p className="mt-1 max-w-sm text-xs text-zinc-600">
+                  {group.apps.length > 0 && !auth.ready
+                    ? `Workflows in ${group.name} need a signed-in session before you can record them.`
+                    : 'Create a workflow in this group to start automating.'}
+                </p>
               </div>
-              <NewWorkflowDialog groupId={group.id} />
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/8 bg-white/[0.02]">

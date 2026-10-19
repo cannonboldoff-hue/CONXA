@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   cancelGroupAppAuth,
@@ -9,6 +9,7 @@ import {
   updateGroupApp,
   startGroupAppAuth,
   type GroupAppStatus,
+  type WindowRect,
 } from '@/api/groupsApi'
 import { getWorkflowRecordingStatus } from '@/api/workflowsApi'
 import { cn } from '@/lib/utils'
@@ -22,14 +23,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Check, Loader2, Pencil, RotateCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Check, Loader2, MoreHorizontal, Pencil, RotateCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
 
 type AppState = 'idle' | 'launching' | 'waiting' | 'unconfirmed' | 'captured' | 'failed'
+
+/** What the group page's browser pane shows while one app's sign-in window is open. */
+export type SignInSession = { appName: string; loginUrl: string; phase: 'launching' | 'waiting' | 'unconfirmed' | 'failed' }
 
 /** Edit-in-place dialog for a group app's name/login URL/success URL. */
 function EditAppDialog({
@@ -98,10 +102,20 @@ function EditAppDialog({
   )
 }
 
-/** Confirm-then-remove for a single group app. */
-function RemoveAppButton({ groupId, app }: { groupId: string; app: GroupAppStatus }) {
+/** Confirm-then-remove for a single group app, opened from the row's "More" menu. */
+function RemoveAppDialog({
+  groupId,
+  app,
+  open,
+  onOpenChange,
+}: {
+  groupId: string
+  app: GroupAppStatus
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
   const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
+  const setOpen = onOpenChange
   const mutation = useMutation({
     mutationFn: () => removeGroupApp(groupId, app.id),
     onSuccess: () => {
@@ -113,11 +127,6 @@ function RemoveAppButton({ groupId, app }: { groupId: string; app: GroupAppStatu
   })
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button size="icon-sm" variant="outline" title={`Remove ${app.name}`} className="border-white/10 bg-white/[0.04] text-zinc-500 hover:border-red-500/30 hover:bg-red-500/[0.06] hover:text-red-400">
-          <Trash2 className="size-3.5" />
-        </Button>
-      </AlertDialogTrigger>
       <AlertDialogContent className="border-white/10 bg-[#0d0f12] text-zinc-100">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-white">Remove &ldquo;{app.name}&rdquo;?</AlertDialogTitle>
@@ -133,6 +142,24 @@ function RemoveAppButton({ groupId, app }: { groupId: string; app: GroupAppStatu
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+/** One row of a popover "More" menu. */
+export function MenuItem({ icon, danger, disabled, onSelect, children }: { icon: ReactNode; danger?: boolean; disabled?: boolean; onSelect: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onSelect}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[0.8125rem] outline-none hover:bg-white/[0.06] focus-visible:bg-white/[0.06] disabled:opacity-50 [&_svg]:size-3.5',
+        danger ? 'text-red-400' : 'text-[#e8e6e3]',
+      )}
+    >
+      {icon}
+      {children}
+    </button>
   )
 }
 
@@ -156,11 +183,27 @@ export function GroupAuthWizard({
   onAllAuthenticated,
   editable = false,
   appIds,
+  autoStart = false,
+  onAutoStarted,
+  getWindowRect,
+  onSession,
+  onConnected,
 }: {
   groupId: string
   onAllAuthenticated: () => void
   editable?: boolean
   appIds?: string[]
+  /** Open Connect for the first app that still needs signing in, once the app list has loaded —
+   * used right after "Create group & sign in" so the person lands mid-sign-in. Fires at most once. */
+  autoStart?: boolean
+  onAutoStarted?: () => void
+  /** Where to open the login window (group page: docked over its browser pane). Read once the
+   * sign-in has been requested and the pane has had a frame to lay out. */
+  getWindowRect?: () => WindowRect | undefined
+  /** Fires as the active sign-in changes (null when none is open). */
+  onSession?: (s: SignInSession | null) => void
+  /** Fires when an app's session was saved. */
+  onConnected?: (appName: string) => void
 }) {
   const qc = useQueryClient()
   const statusQ = useQuery({
@@ -177,14 +220,28 @@ export function GroupAuthWizard({
 
   const [activeAppId, setActiveAppId] = useState<string | null>(null)
   const [editingAppId, setEditingAppId] = useState<string | null>(null)
+  const [removingAppId, setRemovingAppId] = useState<string | null>(null)
+  const [menuAppId, setMenuAppId] = useState<string | null>(null)
   const [appState, setAppState] = useState<AppState>('idle')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const allDoneRef = useRef(onAllAuthenticated)
   allDoneRef.current = onAllAuthenticated
+  const onConnectedRef = useRef(onConnected)
+  onConnectedRef.current = onConnected
+  const onSessionRef = useRef(onSession)
+  onSessionRef.current = onSession
 
   const startMut = useMutation({
-    mutationFn: (appId: string) => startGroupAppAuth(groupId, appId),
+    mutationFn: async (appId: string) => {
+      let rect: WindowRect | undefined
+      if (getWindowRect) {
+        // onMutate has just asked the page to draw its pane; give it two frames to lay out.
+        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+        rect = getWindowRect()
+      }
+      return startGroupAppAuth(groupId, appId, rect)
+    },
     onMutate: (appId) => {
       setActiveAppId(appId)
       setAppState('launching')
@@ -215,6 +272,7 @@ export function GroupAuthWizard({
       }
       setAppState('captured')
       setSessionId(null)
+      onConnectedRef.current?.(statusQ.data?.apps.find((a) => a.id === activeAppId)?.name ?? '')
       qc.setQueryData(['group-auth-status', groupId], data.auth)
       qc.invalidateQueries({ queryKey: ['groups'] })
       qc.invalidateQueries({ queryKey: ['group', groupId] })
@@ -268,6 +326,24 @@ export function GroupAuthWizard({
     recStatusQ.data?.browser_open,
   ])
 
+  // Mirror the open sign-in to the page so it can draw the browser pane around the login window.
+  const activeApp = statusQ.data?.apps.find((a) => a.id === activeAppId)
+  const phase = appState === 'launching' || appState === 'waiting' || appState === 'unconfirmed' || appState === 'failed' ? appState : null
+  useEffect(() => {
+    onSessionRef.current?.(activeApp && phase ? { appName: activeApp.name, loginUrl: activeApp.login_url, phase } : null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeApp?.name, activeApp?.login_url, phase])
+
+  const autoStartedRef = useRef(false)
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current || !statusQ.data) return
+    autoStartedRef.current = true
+    const first = statusQ.data.apps.find((a) => a.state !== 'ready' && (!appIds || appIds.includes(a.id)))
+    if (first) startMut.mutate(first.id)
+    onAutoStarted?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, statusQ.data])
+
   function retry(appId: string) {
     startMut.mutate(appId)
   }
@@ -303,9 +379,10 @@ export function GroupAuthWizard({
   const apps = statusQ.data.apps
   const visibleApps = appIds ? apps.filter((a) => appIds.includes(a.id)) : apps
   const editingApp = editingAppId ? apps.find((a) => a.id === editingAppId) ?? null : null
+  const removingApp = removingAppId ? apps.find((a) => a.id === removingAppId) ?? null : null
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       {visibleApps.map((app: GroupAppStatus) => {
         const isActive = activeAppId === app.id
         const isReady = app.state === 'ready' && !isActive
@@ -315,22 +392,17 @@ export function GroupAuthWizard({
         const isChecking = checkingAppId === app.id
         const isUnverified = isReady && !app.verified
         return (
+          // Flat rows, not boxed cards: only the app being signed in to is lifted, so the
+          // eye lands on the one row that needs you. Status lives in the glyph + caption.
           <div
             key={app.id}
-            className={cn(
-              'rounded-lg border p-4',
-              isReady
-                ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
-                : isExpired
-                  ? 'border-red-500/20 bg-red-500/[0.04]'
-                  : 'border-white/8 bg-white/[0.03]',
-            )}
+            className={cn('rounded-xl px-3 py-3 transition-colors', isActive ? 'bg-white/[0.05]' : 'hover:bg-white/[0.025]')}
           >
-            {/* Row 1: status glyph + name + actions, all on one line */}
+            {/* Row 1: status glyph + name/URL + actions */}
             <div className="flex items-center gap-3">
               <span
                 className={cn(
-                  'flex size-7 shrink-0 items-center justify-center rounded-full',
+                  'flex size-8 shrink-0 items-center justify-center rounded-lg',
                   isReady && app.verified
                     ? 'bg-emerald-500/15 text-emerald-400'
                     : isUnverified || isUnconfirmed
@@ -350,7 +422,10 @@ export function GroupAuthWizard({
                   <ShieldCheck className="size-3.5" />
                 )}
               </span>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">{app.name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-[#e8e6e3]">{app.name}</p>
+                <p className="truncate font-mono text-[11px] text-[#8e8e8e]" title={app.login_url}>{app.login_url.replace(/^https?:\/\//, '')}</p>
+              </div>
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 {isUnverified ? (
                   <Button
@@ -388,61 +463,67 @@ export function GroupAuthWizard({
                   </Button>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => startMut.mutate(app.id)} disabled={!!activeAppId}>
-                    {isExpired ? 'Reconnect' : 'Connect'}
+                    {isExpired ? 'Sign in again' : 'Sign in'}
                   </Button>
                 )}
                 {editable && !isActive && (
-                  <>
-                    {/* Recheck: same headless probe as the "Check now" text button above, but
-                        available for an already-verified ready session, which has no other way
-                        to be manually re-probed on demand — "Check now" only shows once
-                        `checked_at` goes stale, and this is intentionally the ready+verified
-                        case alone, not "captured at all": isUnverified already has "Check now"
-                        in the primary-action slot, and isExpired already has "Reconnect" there,
-                        so this icon would just be a redundant, confusing second checker. */}
-                    {isReady && !isUnverified && (
-                      <Button
-                        size="icon-sm"
-                        variant="outline"
-                        title={`Recheck ${app.name}`}
-                        className="border-white/10 bg-white/[0.04] text-zinc-500 hover:text-white"
-                        disabled={isChecking}
-                        onClick={() => checkMut.mutate(app.id)}
-                      >
-                        <RotateCw className={cn('size-3.5', isChecking && 'animate-spin')} />
+                  <Popover open={menuAppId === app.id} onOpenChange={(v) => setMenuAppId(v ? app.id : null)}>
+                    <PopoverTrigger asChild>
+                      <Button size="icon-sm" variant="ghost" aria-label={`More options for ${app.name}`} className="text-[#8e8e8e] hover:text-[#e8e6e3]">
+                        <MoreHorizontal className="size-4" />
                       </Button>
-                    )}
-                    <Button size="icon-sm" variant="outline" title={`Edit ${app.name}`} className="border-white/10 bg-white/[0.04] text-zinc-500 hover:text-white" onClick={() => setEditingAppId(app.id)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <RemoveAppButton groupId={groupId} app={app} />
-                  </>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-44 p-1">
+                      {/* Recheck: same headless probe as "Check now", for an already-verified
+                          ready session, which has no other way to be re-probed on demand.
+                          isUnverified already has "Check now" in the primary slot, and
+                          isExpired has "Reconnect", so neither gets it here. */}
+                      {isReady && !isUnverified && (
+                        <MenuItem icon={<RotateCw />} disabled={isChecking} onSelect={() => { setMenuAppId(null); checkMut.mutate(app.id) }}>
+                          Check sign-in
+                        </MenuItem>
+                      )}
+                      <MenuItem icon={<Pencil />} onSelect={() => { setMenuAppId(null); setEditingAppId(app.id) }}>
+                        Edit
+                      </MenuItem>
+                      <MenuItem icon={<Trash2 />} danger onSelect={() => { setMenuAppId(null); setRemovingAppId(app.id) }}>
+                        Remove
+                      </MenuItem>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             </div>
-            {/* Row 2: target URL + contextual status, indented under the name */}
-            <div className="pl-10">
-              <p className="break-all font-mono text-[11px] text-zinc-500">{app.login_url}</p>
+            {/* Row 2: contextual status, indented under the name */}
+            <div className="pl-11 empty:hidden">
               {isActive && appState === 'waiting' && (
-                <p className="mt-0.5 text-[11px] text-sky-300">Sign in, then click Done.</p>
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-[#a3a3a3]">
+                  <Loader2 className="size-3 animate-spin text-[#93b4e6] motion-reduce:animate-none" />
+                  Sign in in the browser window, then click Done.
+                </p>
+              )}
+              {isChecking && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-[#a3a3a3]">
+                  <Loader2 className="size-3 animate-spin motion-reduce:animate-none" /> Checking sign-in…
+                </p>
               )}
               {isUnconfirmed && (
-                <p className="mt-0.5 text-[11px] text-amber-300">
+                <p className="mt-1.5 text-xs text-amber-300">
                   {error || "Couldn't confirm you're signed in yet. Finish signing in and click Done again, or Save anyway."}
                 </p>
               )}
               {isFailed && (
-                <p className="mt-0.5 text-[11px] text-red-300">{error || app.last_error || 'Login failed.'}</p>
+                <p className="mt-1.5 text-xs text-red-300">{error || app.last_error || 'Login failed.'}</p>
               )}
               {isExpired && (
-                <p className="mt-0.5 text-[11px] text-red-300">Session expired — sign in again.</p>
+                <p className="mt-1.5 text-xs text-red-300">Session expired — sign in again.</p>
               )}
               {isUnverified && (
-                <p className="mt-0.5 text-[11px] text-amber-300">Not verified recently — may have expired.</p>
+                <p className="mt-1.5 text-xs text-amber-300">Not verified recently — may have expired.</p>
               )}
               {/* Amber, not red: the sign-in itself worked and is saved — it is the success URL that is suspect. */}
               {isReady && app.detect_warning && (
-                <p className="mt-0.5 text-[11px] text-amber-300">{app.detect_warning}</p>
+                <p className="mt-1.5 text-xs text-amber-300">{app.detect_warning}</p>
               )}
             </div>
           </div>
@@ -450,6 +531,9 @@ export function GroupAuthWizard({
       })}
       {editable && editingApp && (
         <EditAppDialog groupId={groupId} app={editingApp} open={!!editingApp} onOpenChange={(v) => !v && setEditingAppId(null)} />
+      )}
+      {editable && removingApp && (
+        <RemoveAppDialog groupId={groupId} app={removingApp} open={!!removingApp} onOpenChange={(v) => !v && setRemovingAppId(null)} />
       )}
     </div>
   )
