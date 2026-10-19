@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Signed in — session saved</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0;background:#1a1a1a;font-family:Inter,system-ui,sans-serif;color:#e8e6e3;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.win{width:1280px;height:800px;display:flex;flex-direction:column;background:#1a1a1a;position:relative;overflow:hidden}
+.tb{height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.ib{width:32px;height:32px;border:0;background:transparent;color:#a3a3a3;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.tbtn{height:28px;padding:0 10px;border:0;background:transparent;color:#8e8e8e;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;border-radius:8px}
+.body{flex:1;display:flex;min-height:0}
+.sb{width:240px;flex:none;background:#1e1e1e;border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;padding:10px 8px}
+.nav{width:100%;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#e8e6e3;font-size:13px;text-align:left}
+.nav span.k{margin-left:auto;font-size:11px;color:#8e8e8e}
+.lbl{font-size:11px;font-weight:500;color:#8e8e8e;padding:0 10px}
+.hint{font-size:12px;line-height:1.5;color:#8e8e8e;padding:0 10px}
+.btn{height:32px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#1a1a1a;color:#e8e6e3;font-size:13px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.clay{background:#d97757;border-color:#d97757;color:#1a1a1a}
+.btn:disabled{color:#6b6b6b;border-color:rgba(255,255,255,.08)}
+.sk{background:#e3e1dc;border-radius:6px}
+</style>
+</helmet>
+<div class="win">
+  <div class="tb">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600">
+        <span style="width:22px;height:22px;border-radius:6px;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">C</span>Conxa
+      </div>
+      <button class="ib" aria-label="Toggle sidebar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M10 5v14"/></svg></button>
+      <button class="ib" aria-label="Back"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="ib" aria-label="Forward"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="ib" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+      <button class="tbtn" style="color:#e8e6e3;background:rgba(255,255,255,.07)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M14 5v14"/></svg>Browser</button>
+      <button class="ib" aria-label="Minimise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button class="ib" aria-label="Maximise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      <button class="ib" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+  <div class="body">
+    <aside class="sb">
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H10l-4 4v-4H4z"/></svg>Chat</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New workflow<span class="k">Ctrl N</span></button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 19h14"/></svg>Publish</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg>Build Installer</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search<span class="k">Ctrl K</span></button>
+      <div style="height:22px"></div>
+      <div class="lbl">Chats</div>
+      <div class="hint" style="margin-top:6px">General conversations appear here.</div>
+      <div style="height:20px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-right:6px">
+        <div class="lbl">Groups</div>
+        <button class="ib" aria-label="New group" style="width:26px;height:26px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <button class="nav" style="margin-top:6px;background:rgba(255,255,255,.07)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>Sales
+        <span class="k" style="display:inline-flex;align-items:center;gap:5px;color:#4ade80"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><path d="M5 12l5 5 9-10"/></svg>Connected</span></button>
+      <div class="hint" style="padding-left:38px;margin-top:4px">No workflows yet</div>
+      <div style="margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding:14px 8px 4px;display:flex;align-items:center;gap:12px">
+        <span style="width:36px;height:36px;border-radius:50%;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:500">DU</span>
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:500">Dev User</span><span style="font-size:12px;color:#8e8e8e">Local workspace</span></div>
+      </div>
+    </aside>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="height:64px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid rgba(255,255,255,.08)">
+        <div style="display:flex;align-items:baseline;gap:12px">
+          <h1 style="margin:0;font-size:20px;font-weight:600">Sales</h1>
+          <span style="font-size:13px;color:#8e8e8e">1 of 1 app connected</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" disabled>Rename</button>
+          <button class="btn" disabled>Delete</button>
+          <button class="btn" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New Workflow</button>
+        </div>
+      </header>
+
+      <div style="flex:1;display:flex;padding:24px;min-height:0">
+        <section aria-labelledby="apps-h" style="width:316px;flex:none;align-self:flex-start;background:#252525;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px">
+            <h2 id="apps-h" style="margin:0;font-size:13px;font-weight:600">Applications</h2>
+            <button class="ib" aria-label="Add application" disabled style="border:1px solid rgba(255,255,255,.08);color:#6b6b6b"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          </div>
+          <div style="padding:0 14px 14px">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);border-radius:10px">
+              <span style="width:32px;height:32px;border-radius:50%;background:#252525;display:inline-flex;align-items:center;justify-content:center;color:#4ade80"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font-size:14px;font-weight:600">Github</span>
+                <span style="font-size:12px;color:#4ade80">Signed in · session saved</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div aria-hidden="true" style="width:56px;flex:none;align-self:flex-start;height:84px;display:flex;align-items:center;justify-content:center;color:#e8e6e3">
+          <svg class="ico" viewBox="0 0 24 24" style="opacity:.25"><path d="M9 6l6 6-6 6"/></svg>
+          <svg class="ico" viewBox="0 0 24 24" style="opacity:.55;margin-left:-8px"><path d="M9 6l6 6-6 6"/></svg>
+          <svg class="ico" viewBox="0 0 24 24" style="margin-left:-8px"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+
+        <section aria-label="Conxa browser" style="flex:1;min-width:0;display:flex;flex-direction:column;background:#252525;border:1px solid rgba(255,255,255,.12);border-radius:14px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#2c2c2c;border-bottom:1px solid rgba(255,255,255,.08)">
+            <span style="width:26px;height:26px;border-radius:50%;border:1.5px solid #4ade80;color:#4ade80;display:inline-flex;align-items:center;justify-content:center;flex:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px"><path d="M5 12l5 5 9-10"/></svg></span>
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+              <span style="font-size:13px;font-weight:600">Github is connected</span>
+              <span style="font-size:12px;color:#a3a3a3">Session saved on this computer only. Closing in 3s.</span>
+            </div>
+            <button class="btn">Keep open</button>
+            <button class="btn clay">Close browser</button>
+          </div>
+          <div style="background:#1e1e1e;padding:8px 10px 0;display:flex;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:#252525;border-radius:8px 8px 0 0;font-size:12px;width:200px">
+              <span style="width:10px;height:10px;border-radius:50%;background:#8e8e8e"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Dashboard</span>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;color:#8e8e8e"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#252525;border-bottom:1px solid rgba(255,255,255,.08)">
+            <button class="ib" aria-label="Back" style="width:28px;height:28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <button class="ib" aria-label="Forward" style="width:28px;height:28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+            <button class="ib" aria-label="Reload" style="width:28px;height:28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+            <div style="flex:1;height:30px;border-radius:15px;background:#1a1a1a;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:12px;color:#a3a3a3">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>github.com
+            </div>
+          </div>
+          <div style="flex:1;background:#f4f3f0;padding:32px 40px;display:flex;flex-direction:column;gap:20px;color:#1a1a1a">
+            <div style="font-size:20px;font-weight:600">Dashboard</div>
+            <div style="display:flex;gap:16px">
+              <div class="sk" style="flex:1;height:96px"></div><div class="sk" style="flex:1;height:96px"></div><div class="sk" style="flex:1;height:96px"></div>
+            </div>
+            <div class="sk" style="height:16px;width:60%"></div>
+            <div class="sk" style="height:16px;width:80%"></div>
+            <div class="sk" style="height:16px;width:45%"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New tab stays inside Conxa</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141414;font-family:Inter,system-ui,sans-serif;color:#e8e6e3;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+button{cursor:pointer}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+@keyframes pulse{50%{opacity:.35}}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ib{width:32px;height:32px;border:0;background:transparent;color:#a3a3a3;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.ev{display:flex;align-items:center;gap:10px;font-size:14px;color:#8e8e8e}
+.ev b{font-weight:500;color:#e8e6e3}
+.ev .ln{flex:1;height:1px;background:rgba(255,255,255,.08)}
+.ev time{font-size:12px}
+.tab{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 12px;border:0;border-radius:8px 8px 0 0;font-size:12px;width:210px;text-align:left}
+.tag{width:44px;flex:none;font-size:10px;color:#a3a3a3;border:1px solid rgba(255,255,255,.14);border-radius:4px;padding:1px 0;text-align:center}
+</style>
+</helmet>
+<div style="width:1280px;height:800px;display:flex;flex-direction:column;background:#1a1a1a;overflow:hidden">
+  <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 16px;border-bottom:1px solid rgba(255,255,255,.08)">
+    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600">Github to Drive files Handoff
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="color:#8e8e8e"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span style="margin-left:6px;height:22px;padding:0 9px;border-radius:11px;background:rgba(248,113,113,.12);color:#f87171;font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:#f87171"></span>Recording</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="ib" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+      <button aria-pressed="true" style="height:28px;padding:0 10px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8e6e3;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M12 5v14"/></svg>Browser</button>
+      <button class="ib" aria-label="Minimise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button class="ib" aria-label="Maximise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      <button class="ib" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <main style="width:460px;flex:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.08)">
+      <div style="padding:10px 24px;font-size:13px;color:#8e8e8e;border-bottom:1px solid rgba(255,255,255,.06)">Sales <span style="color:#6b6b6b">/</span> <span style="color:#e8e6e3">Github to Drive files Handoff</span></div>
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+        <div class="ev"><span style="color:#f87171">●</span><b>Recording started</b>· github.com<span class="ln"></span><time>3:04 AM</time></div>
+        <div class="ev"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;color:#93b4e6"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M4 10h16M12 3v3"/></svg><b>New tab opened</b>· drive.google.com<span class="ln"></span><time>3:06 AM</time></div>
+        <div style="display:flex;gap:12px">
+          <span style="width:26px;height:26px;flex:none;border-radius:7px;background:#2c2c2c;border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center">C</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+            <span style="font-size:12px;color:#8e8e8e">Conxa · 3:06 AM</span>
+            <p style="margin:0;font-size:15px;line-height:1.6">Drive opened in a new tab — it’s right here as Tab 2, not a separate window. Keep going; I’ll remember which tab each step happened on.</p>
+            <div style="background:#212121;border:1px solid rgba(255,255,255,.10);border-radius:12px;overflow:hidden">
+              <div style="padding:10px 14px;display:flex;align-items:center;font-size:12px;color:#8e8e8e;border-bottom:1px solid rgba(255,255,255,.06)">Captured so far · 8<span style="margin-left:auto">2 tabs</span></div>
+              <ol style="margin:0;padding:4px 0;list-style:none;font-size:13px;color:#d4d2cf">
+                <li style="display:flex;align-items:center;gap:10px;padding:6px 14px"><span style="width:14px;font-size:12px;color:#8e8e8e;text-align:right">4</span><span class="tag">Tab 1</span><span style="flex:1">Clicked “Releases”</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:6px 14px"><span style="width:14px;font-size:12px;color:#8e8e8e;text-align:right">5</span><span class="tag">Tab 1</span><span style="flex:1">Downloaded “handoff-q3-report.pdf”</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:6px 14px"><span style="width:14px;font-size:12px;color:#8e8e8e;text-align:right">6</span><span class="tag">Tab 1</span><span style="flex:1">Clicked “Open in Drive”</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:6px 14px"><span style="width:14px;font-size:12px;color:#8e8e8e;text-align:right">7</span><span class="tag" style="color:#93b4e6;border-color:rgba(147,180,230,.45)">Tab 2</span><span style="flex:1">Opened Drive · “Sales handoffs”</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:6px 14px;color:#ffffff"><span style="width:14px;font-size:12px;color:#8e8e8e;text-align:right">8</span><span class="tag" style="color:#93b4e6;border-color:rgba(147,180,230,.45)">Tab 2</span><span style="flex:1">Clicked “Upload files”</span></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 20px 20px">
+        <div style="border:1px solid rgba(255,255,255,.10);background:#212121;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#6b6b6b">
+          The conversation picks up when you finish recording
+          <span style="width:28px;height:28px;border-radius:8px;background:#2c2c2c"></span>
+        </div>
+      </div>
+    </main>
+
+    <section aria-label="Built-in browser" style="flex:1;min-width:0;display:flex;flex-direction:column;background:#1e1e1e;border-top:2px solid #f87171">
+      <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;border-bottom:1px solid rgba(255,255,255,.08)">
+        <span style="width:9px;height:9px;border-radius:50%;background:#f87171;animation:pulse 1.6s ease-in-out infinite"></span>
+        <span style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">Recording · 02:16</span>
+        <span style="flex:1"></span>
+        <a href="Focus.dc.html" aria-label="Widen the browser" class="ib" style="text-decoration:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></a>
+        <button type="button" style="height:32px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#e8e6e3;font-size:13px;font-weight:500">Pause</button>
+        <button type="button" style="height:32px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:#a3a3a3;font-size:13px;font-weight:500">Discard</button>
+        <a href="Finished.dc.html" style="height:32px;padding:0 14px;border-radius:10px;background:#d97757;color:#1a1a1a;font-size:13px;font-weight:500;text-decoration:none;display:flex;align-items:center;gap:8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Finish and save</a>
+      </div>
+      <div role="tablist" aria-label="Browser tabs" style="background:#1a1a1a;padding:8px 10px 0;display:flex;gap:4px;align-items:flex-end">
+        <button role="tab" aria-selected="false" class="tab" style="background:transparent;color:#a3a3a3">
+          <span style="width:10px;height:10px;border-radius:50%;background:#6b6b6b"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Releases · acme/handoff-files</span>
+        </button>
+        <button role="tab" aria-selected="true" class="tab" style="background:#252525;color:#e8e6e3;box-shadow:inset 0 2px 0 #93b4e6">
+          <span style="width:10px;height:10px;border-radius:50%;background:#93b4e6"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sales handoffs – Drive</span>
+          <span style="font-size:10px;font-weight:600;color:#1a1a1a;background:#93b4e6;border-radius:4px;padding:1px 5px">New</span>
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#252525;border-bottom:1px solid rgba(255,255,255,.08)">
+        <button class="ib" aria-label="Back" disabled style="width:28px;height:28px;color:#555"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="ib" aria-label="Forward" disabled style="width:28px;height:28px;color:#555"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <button class="ib" aria-label="Reload" style="width:28px;height:28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+        <div style="flex:1;height:30px;border-radius:15px;background:#1a1a1a;display:flex;align-items:center;gap:8px;padding:0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3a3a3">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>drive.google.com/drive/folders/sales-handoffs
+        </div>
+      </div>
+      <div style="flex:1;min-height:0;background:#f4f3f0;display:flex;color:#1a1a1a">
+        <div style="width:170px;flex:none;padding:18px 14px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:#57606a">
+          <span style="height:36px;border-radius:18px;background:#ffffff;border:1px solid #d6d4cf;display:flex;align-items:center;padding:0 16px;color:#1a1a1a;font-weight:500">+ New</span>
+          <span style="padding:6px 10px">My Drive</span><span style="padding:6px 10px;background:#e6e4df;border-radius:14px;color:#1a1a1a">Shared drives</span><span style="padding:6px 10px">Recent</span>
+        </div>
+        <div style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+          <span style="font-size:18px;font-weight:500">Sales handoffs</span>
+          <div style="flex:1;border:2px dashed #b9b6af;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#ffffff">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:28px;height:28px;color:#57606a"><path d="M12 16V5M7 10l5-5 5 5M5 19h14"/></svg>
+            <span style="font-size:14px">Drop files here</span>
+            <span style="position:relative;height:36px;padding:0 16px;border-radius:8px;background:#1a1a1a;color:#ffffff;font-size:13px;font-weight:500;display:flex;align-items:center;outline:2px solid #d97757;outline-offset:4px">Upload files</span>
+          </div>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:#a3a3a3">
+        Pop-ups and new windows from the site open as tabs here
+        <span style="margin-left:auto;color:#8e8e8e">Tab 2 of 2</span>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

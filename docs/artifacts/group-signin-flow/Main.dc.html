@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Create group — name it</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0;background:#1a1a1a;font-family:Inter,system-ui,sans-serif;color:#e8e6e3;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+button{cursor:pointer}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.win{width:1280px;height:800px;display:flex;flex-direction:column;background:#1a1a1a;position:relative;overflow:hidden}
+.tb{height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.ib{width:32px;height:32px;border:0;background:transparent;color:#a3a3a3;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.tbtn{height:28px;padding:0 10px;border:0;background:transparent;color:#8e8e8e;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;border-radius:8px}
+.body{flex:1;display:flex;min-height:0}
+.sb{width:240px;flex:none;background:#1e1e1e;border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;padding:10px 8px}
+.nav{width:100%;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#e8e6e3;font-size:13px;text-align:left}
+.nav span.k{margin-left:auto;font-size:11px;color:#8e8e8e}
+.lbl{font-size:11px;font-weight:500;color:#8e8e8e;padding:0 10px}
+.hint{font-size:12px;line-height:1.5;color:#8e8e8e;padding:0 10px}
+.btn{height:32px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#1a1a1a;color:#e8e6e3;font-size:13px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.clay{background:#d97757;border-color:#d97757;color:#1a1a1a}
+</style>
+</helmet>
+<div class="win">
+  <div class="tb">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600">
+        <span style="width:22px;height:22px;border-radius:6px;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">C</span>Conxa
+      </div>
+      <button class="ib" aria-label="Toggle sidebar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M10 5v14"/></svg></button>
+      <button class="ib" aria-label="Back"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="ib" aria-label="Forward"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="ib" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+      <button class="tbtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M14 5v14"/></svg>Browser</button>
+      <button class="ib" aria-label="Minimise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button class="ib" aria-label="Maximise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      <button class="ib" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+  <div class="body">
+    <aside class="sb">
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H10l-4 4v-4H4z"/></svg>Chat</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New workflow<span class="k">Ctrl N</span></button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 19h14"/></svg>Publish</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg>Build Installer</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search<span class="k">Ctrl K</span></button>
+      <div style="height:22px"></div>
+      <div class="lbl">Chats</div>
+      <div class="hint" style="margin-top:6px">General conversations appear here.</div>
+      <div style="height:20px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-right:6px">
+        <div class="lbl">Groups</div>
+        <button class="ib" aria-label="New group" style="width:26px;height:26px;color:#e8e6e3;background:rgba(255,255,255,.07)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div class="hint" style="margin-top:6px">Groups hold workflows that share sign-ins — like everything you do in one billing app.</div>
+      <div style="margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding:14px 8px 4px;display:flex;align-items:center;gap:12px">
+        <span style="width:36px;height:36px;border-radius:50%;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:500">DU</span>
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:500">Dev User</span><span style="font-size:12px;color:#8e8e8e">Local workspace</span></div>
+      </div>
+    </aside>
+    <main style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px">
+      <div style="font-size:15px;font-weight:600;color:#a3a3a3">Pick a group, or create one</div>
+      <div style="font-size:13px;color:#8e8e8e">Groups keep your workflows and sign-ins together.</div>
+    </main>
+  </div>
+
+  <div style="position:absolute;left:0;top:0;right:0;bottom:0;background:rgba(10,10,10,.66);display:flex;align-items:center;justify-content:center">
+    <div role="dialog" aria-labelledby="dlg-title" style="width:540px;background:#252525;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:6px"><div style="flex:1;height:3px;border-radius:2px;background:#e8e6e3"></div><div style="flex:1;height:3px;border-radius:2px;background:#3d3d3d"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:500"><span style="color:#e8e6e3">Step 1 of 2 · Name</span><span style="color:#8e8e8e">Next · Sign-ins</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <h2 id="dlg-title" style="margin:0;font-size:22px;font-weight:600;line-height:1.25">Name your group</h2>
+        <p style="margin:0;font-size:14px;line-height:1.5;color:#a3a3a3">A group holds workflows that share the same sign-ins — like everything you do in your billing app.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label for="group-name" style="font-size:12px;font-weight:500;color:#a3a3a3">Group name</label>
+        <input id="group-name" type="text" value="Sales" readonly style="height:42px;padding:0 14px;border-radius:10px;border:1px solid #d97757;outline:3px solid rgba(217,119,87,.28);background:#2c2c2c;color:#e8e6e3;font-size:14px">
+        <span style="font-size:12px;color:#8e8e8e">For example: Billing, Support, Onboarding</span>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;padding-top:4px">
+        <button class="btn" style="height:38px;padding:0 16px">Cancel</button>
+        <button class="btn clay" style="height:38px;padding:0 16px">Next: sign-ins<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

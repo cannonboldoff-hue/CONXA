@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sidebar — expanded</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#1a1a1a}
+a{color:#a3a3a3;text-decoration:none}a:hover{color:#e8e6e3}
+button{font:inherit}
+</style>
+</helmet>
+<aside aria-label="Navigation" style="width: 264px; height: 880px; box-sizing: border-box; display: flex; flex-direction: column; background: #1e1e1e; border-right: 1px solid rgba(255,255,255,0.08); font-family: Inter, system-ui, sans-serif; font-size: 14px; color: #e8e6e3">
+
+<!-- Workspace -->
+<div style="display: flex; align-items: center; gap: 4px; padding: 14px 12px 10px">
+<div style="flex: 1; min-width: 0; display: flex; align-items: center; height: 40px; padding: 0 10px; font-weight: 600">Build Studio</div>
+<button type="button" aria-label="Collapse sidebar" style="width: 32px; height: 32px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: #8e8e8e; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+</button>
+</div>
+
+<!-- Primary -->
+<nav aria-label="Primary" style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px">
+<button type="button" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a3a3; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+<span>New workflow</span>
+</button>
+<button type="button" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a3a3; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+<span>Search</span>
+<span style="margin-left: auto; font-size: 11px; color: #8e8e8e">Ctrl K</span>
+</button>
+<a href="#chat" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 8px; color: #a3a3a3">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+<span>Chat</span>
+</a>
+<a href="#publish" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 8px; color: #a3a3a3">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+<span>Publish</span>
+<span aria-label="3 ready to publish" style="margin-left: auto; font-size: 12px; color: #8e8e8e">3</span>
+</a>
+<a href="#installer" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 8px; color: #a3a3a3">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>
+<span>Build installer</span>
+</a>
+</nav>
+
+<!-- Groups -->
+<section aria-label="Groups" style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 12px 12px">
+<div style="display: flex; align-items: center; height: 28px; padding: 0 4px 0 10px">
+<h2 style="margin: 0; font-size: 12px; font-weight: 500; color: #8e8e8e">Groups</h2>
+<button type="button" aria-label="Create a group" style="margin-left: auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: #8e8e8e; cursor: pointer">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+</button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 1px; margin-top: 2px">
+<button type="button" aria-expanded="true" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #e8e6e3; cursor: pointer; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+<span style="flex: 1">Billing app</span>
+</button>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px">
+<li><a href="#w1" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px 0 30px; border-radius: 8px; color: #a3a3a3; font-size: 13px"><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Issue refund</span></a></li>
+<li><a href="#w2" aria-current="page" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px 0 30px; border-radius: 8px; background: rgba(255,255,255,0.07); color: #e8e6e3; font-size: 13px"><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Export monthly invoices</span><span aria-label="Needs you" style="font-size: 10px; color: #fbbf24">▲</span></a></li>
+<li><a href="#w3" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px 0 30px; border-radius: 8px; color: #a3a3a3; font-size: 13px"><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Update customer plan</span><span aria-label="In progress" style="font-size: 10px; color: #93b4e6">◐</span></a></li>
+<li><a href="#w4" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px 0 30px; border-radius: 8px; color: #a3a3a3; font-size: 13px"><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Download tax report</span></a></li>
+</ul>
+
+<button type="button" aria-expanded="false" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a3a3; cursor: pointer; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+<span style="flex: 1">Support desk</span>
+</button>
+<button type="button" aria-expanded="false" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a3a3; cursor: pointer; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+<span style="flex: 1">HR onboarding</span>
+<span aria-label="1 failed" style="font-size: 10px; color: #f87171">✕</span>
+</button>
+<button type="button" aria-expanded="false" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a3a3; cursor: pointer; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+<span style="flex: 1">Month-end close</span>
+</button>
+</div>
+</section>
+
+<!-- Account -->
+<div style="flex-shrink: 0; padding: 10px 12px 14px">
+<button type="button" aria-label="Jordan Lee, synced to cloud, open settings" style="width: 100%; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: #e8e6e3; cursor: pointer; text-align: left">
+<span aria-hidden="true" style="position: relative; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #2c2c2c; font-size: 11px; font-weight: 600">JL<span style="position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; border: 2px solid #1e1e1e"></span></span>
+<span style="flex: 1; min-width: 0; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Jordan Lee</span>
+<span style="font-size: 12px; color: #8e8e8e">142 credits</span>
+</button>
+</div>
+</aside>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":264,"height":880}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

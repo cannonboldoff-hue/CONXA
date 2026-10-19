@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Browser docks in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141414;font-family:Inter,system-ui,sans-serif;color:#e8e6e3;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+button{cursor:pointer}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes load{0%{width:8%}100%{width:72%}}
+.spin{animation:spin 1s linear infinite}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ib{width:32px;height:32px;border:0;background:transparent;color:#a3a3a3;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.ev{display:flex;align-items:center;gap:10px;font-size:14px;color:#8e8e8e}
+.ev b{font-weight:500;color:#e8e6e3}
+.ev .ln{flex:1;height:1px;background:rgba(255,255,255,.08)}
+.ev time{font-size:12px}
+.sk{border-radius:4px;background:#e2e0db}
+</style>
+</helmet>
+<div style="width:1280px;height:800px;display:flex;flex-direction:column;background:#1a1a1a;overflow:hidden">
+  <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 16px;border-bottom:1px solid rgba(255,255,255,.08)">
+    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600">Github to Drive files Handoff
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="color:#8e8e8e"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/></svg></div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="ib" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button>
+      <button aria-pressed="true" style="height:28px;padding:0 10px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8e6e3;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M12 5v14"/></svg>Browser</button>
+      <button class="ib" aria-label="Minimise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button class="ib" aria-label="Maximise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      <button class="ib" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <main style="width:460px;flex:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.08)">
+      <div style="padding:10px 24px;font-size:13px;color:#8e8e8e;border-bottom:1px solid rgba(255,255,255,.06)">Sales <span style="color:#6b6b6b">/</span> <span style="color:#e8e6e3">Github to Drive files Handoff</span></div>
+      <div style="flex:1;min-height:0;padding:24px;display:flex;flex-direction:column;gap:18px">
+        <div class="ev"><span style="color:#4ade80">●</span><b>Workflow created</b><span class="ln"></span><time>3:04 AM</time></div>
+        <div class="ev"><svg class="ico spin" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px;color:#93b4e6"><path d="M12 4a8 8 0 1 0 8 8"/></svg><b>Opening github.com</b><span class="ln"></span><time>3:04 AM</time></div>
+        <div style="display:flex;gap:12px">
+          <span style="width:26px;height:26px;flex:none;border-radius:7px;background:#2c2c2c;border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center">C</span>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:12px;color:#8e8e8e">Conxa · 3:04 AM</span>
+            <p style="margin:0;font-size:15px;line-height:1.6">I’m opening github.com in the browser on the right. Recording starts by itself once the page has loaded — I’ll say when.</p>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 20px 20px">
+        <div style="border:1px solid rgba(255,255,255,.10);background:#212121;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#6b6b6b">
+          The conversation picks up when you finish recording
+          <span style="width:28px;height:28px;border-radius:8px;background:#2c2c2c"></span>
+        </div>
+      </div>
+    </main>
+
+    <section aria-label="Built-in browser" style="flex:1;min-width:0;display:flex;flex-direction:column;background:#1e1e1e;border-top:2px solid #93b4e6">
+      <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;border-bottom:1px solid rgba(255,255,255,.08)">
+        <svg class="ico spin" viewBox="0 0 24 24" aria-hidden="true" style="color:#93b4e6"><path d="M12 4a8 8 0 1 0 8 8"/></svg>
+        <span style="font-size:13px;font-weight:600">Getting ready</span>
+        <span style="font-size:12px;color:#a3a3a3">Recording starts when the page loads</span>
+        <span style="flex:1"></span>
+        <button type="button" style="height:32px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#a3a3a3;font-size:13px;font-weight:500">Cancel</button>
+        <a href="Recording.dc.html" style="height:32px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);color:#6b6b6b;font-size:13px;font-weight:500;text-decoration:none;display:flex;align-items:center;gap:8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Finish and save</a>
+      </div>
+      <div style="background:#1a1a1a;padding:8px 10px 0;display:flex;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:#252525;border-radius:8px 8px 0 0;font-size:12px;width:210px">
+          <svg class="ico spin" viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;color:#8e8e8e"><path d="M12 4a8 8 0 1 0 8 8"/></svg><span style="flex:1;white-space:nowrap;overflow:hidden;color:#a3a3a3">Loading…</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#252525;position:relative">
+        <button class="ib" aria-label="Back" disabled style="width:28px;height:28px;color:#555"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="ib" aria-label="Forward" disabled style="width:28px;height:28px;color:#555"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <button class="ib" aria-label="Stop loading" style="width:28px;height:28px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+        <div style="flex:1;height:30px;border-radius:15px;background:#1a1a1a;display:flex;align-items:center;gap:8px;padding:0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3a3a3">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>github.com
+        </div>
+        <span aria-hidden="true" style="position:absolute;left:0;bottom:0;height:2px;width:46%;background:#93b4e6;animation:load 2.4s ease-out infinite"></span>
+      </div>
+      <div aria-hidden="true" style="flex:1;background:#f4f3f0;padding:0;display:flex;flex-direction:column">
+        <div style="height:56px;background:#ffffff;border-bottom:1px solid #e2e0db;display:flex;align-items:center;gap:14px;padding:0 24px">
+          <span class="sk" style="width:28px;height:28px;border-radius:50%"></span><span class="sk" style="width:220px;height:28px;border-radius:8px"></span><span style="flex:1"></span><span class="sk" style="width:70px;height:12px"></span>
+        </div>
+        <div style="padding:28px 32px;display:flex;flex-direction:column;gap:14px">
+          <span class="sk" style="width:260px;height:20px"></span>
+          <span class="sk" style="width:420px;height:12px"></span>
+          <div style="margin-top:12px;border:1px solid #e2e0db;border-radius:8px;background:#ffffff;display:flex;flex-direction:column">
+            <div style="height:44px;border-bottom:1px solid #eceae5;display:flex;align-items:center;padding:0 16px"><span class="sk" style="width:180px;height:12px"></span></div>
+            <div style="height:40px;border-bottom:1px solid #eceae5;display:flex;align-items:center;padding:0 16px"><span class="sk" style="width:140px;height:10px"></span></div>
+            <div style="height:40px;border-bottom:1px solid #eceae5;display:flex;align-items:center;padding:0 16px"><span class="sk" style="width:200px;height:10px"></span></div>
+            <div style="height:40px;display:flex;align-items:center;padding:0 16px"><span class="sk" style="width:110px;height:10px"></span></div>
+          </div>
+        </div>
+      </div>
+      <div style="height:34px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:#8e8e8e">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Using the saved Sales sign-in for Github
+        <span style="margin-left:auto">Tab 1 of 1</span>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

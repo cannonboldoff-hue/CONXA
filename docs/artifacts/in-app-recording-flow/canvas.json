@@ -1,0 +1,21 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-20T03:20:00Z" },
+  "title": "In-app recording flow",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html":      { "x": 0,    "y": 0,   "w": 1280, "h": 800, "title": "1 · New workflow — Create and start recording", "is_interactive": true },
+    "Opening.dc.html":   { "x": 1360, "y": 0,   "w": 1280, "h": 800, "title": "2 · Browser docks in — starting page loads", "is_interactive": true },
+    "SignIn.dc.html":    { "x": 2720, "y": 0,   "w": 1280, "h": 800, "title": "3 · Sign-in needed — handled in the panel, not recorded", "is_interactive": true },
+    "Recording.dc.html": { "x": 4080, "y": 0,   "w": 1280, "h": 800, "title": "4 · Recording — act in the built-in browser", "is_interactive": true },
+    "NewTab.dc.html":    { "x": 0,    "y": 920, "w": 1280, "h": 800, "title": "5 · Site opens a new tab — it stays inside Conxa", "is_interactive": true },
+    "Focus.dc.html":     { "x": 1360, "y": 920, "w": 1280, "h": 800, "title": "6 · Wide browser — conversation folds to a rail", "is_interactive": true },
+    "Finished.dc.html":  { "x": 2720, "y": 920, "w": 1280, "h": 800, "title": "7 · Finish and save — browser closes, compile begins" }
+  },
+  "order": ["Main.dc.html", "Opening.dc.html", "SignIn.dc.html", "Recording.dc.html", "NewTab.dc.html", "Focus.dc.html", "Finished.dc.html"],
+  "notes": {
+    "title": { "x": 0, "y": -300, "text": "Recording in the built-in browser", "kind": "title1", "maxW": 5360 }
+  },
+  "designSystems": []
+}

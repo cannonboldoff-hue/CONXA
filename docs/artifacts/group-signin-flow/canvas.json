@@ -1,0 +1,20 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-19T14:30:00Z" },
+  "title": "Group Sign-in Flow",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html":        { "x": 0,    "y": 0,   "w": 1280, "h": 800, "title": "1 · Create group — name it" },
+    "AddApps.dc.html":     { "x": 1360, "y": 0,   "w": 1280, "h": 800, "title": "2 · Create group — add sign-ins" },
+    "NeedsSignIn.dc.html": { "x": 2720, "y": 0,   "w": 1280, "h": 800, "title": "3 · Group page — needs sign-in" },
+    "Connecting.dc.html":  { "x": 0,    "y": 920, "w": 1280, "h": 800, "title": "4 · Connect — browser opens left to right" },
+    "Connected.dc.html":   { "x": 1360, "y": 920, "w": 1280, "h": 800, "title": "5 · Signed in — session saved" },
+    "Ready.dc.html":       { "x": 2720, "y": 920, "w": 1280, "h": 800, "title": "6 · Group ready to record" }
+  },
+  "order": ["Main.dc.html", "AddApps.dc.html", "NeedsSignIn.dc.html", "Connecting.dc.html", "Connected.dc.html", "Ready.dc.html"],
+  "notes": {
+    "title": { "x": 0, "y": -300, "text": "Group sign-in flow", "kind": "title1", "maxW": 4000 }
+  },
+  "designSystems": []
+}

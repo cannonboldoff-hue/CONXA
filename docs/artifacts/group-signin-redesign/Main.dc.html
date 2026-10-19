@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales group — sign in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#1a1a19}
+a{color:#a8c7fa}a:hover{color:#d3e3fd}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid #a8c7fa;outline-offset:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 0.9s linear infinite}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; display: flex; flex-direction: column; background: #1a1a19; color: #ecebe6; font-family: 'Geist', system-ui, sans-serif; font-size: 14px; line-height: 1.45; box-sizing: border-box; overflow: hidden">
+
+  <!-- Title bar -->
+  <header style="height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 20px; box-sizing: border-box">
+    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0">
+      <a href="#" style="color: #a3a29b; text-decoration: none">Conxa</a>
+      <span aria-hidden="true" style="color: #5c5b55">/</span>
+      <a href="#" style="color: #a3a29b; text-decoration: none">Groups</a>
+      <span aria-hidden="true" style="color: #5c5b55">/</span>
+      <button type="button" aria-label="Sales group options" style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; margin-left: -4px; border: 0; border-radius: 8px; background: transparent; color: #ecebe6; font-size: 14px; font-weight: 500">
+        Sales
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+    </nav>
+    <div style="flex: 1"></div>
+    <span style="font-size: 12px; color: #a3a29b; white-space: nowrap">Compile &amp; AI credits · Unlimited</span>
+    <div style="display: flex; align-items: center; gap: 2px; margin-left: 8px">
+      <button type="button" aria-label="Hide browser" aria-pressed="true" style="width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #2b2a27; color: #ecebe6">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+      </button>
+      <button type="button" aria-label="Sync" style="width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5M3 21v-5h5"></path></svg>
+      </button>
+      <span aria-hidden="true" style="width: 1px; height: 16px; background: #34332f; margin: 0 8px"></span>
+      <button type="button" aria-label="Minimize" style="width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: #a3a29b">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M1 6h10"></path></svg>
+      </button>
+      <button type="button" aria-label="Maximize" style="width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: #a3a29b">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9" rx="1"></rect></svg>
+      </button>
+      <button type="button" aria-label="Close" style="width: 40px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: #a3a29b">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="m1.5 1.5 9 9M10.5 1.5l-9 9"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div style="flex: 1; min-height: 0; display: flex; flex-wrap: wrap; gap: 0; padding: 0 12px 12px 0; box-sizing: border-box">
+
+    <!-- Left: applications -->
+    <section aria-labelledby="apps-h" style="flex: 0 1 520px; min-width: 320px; display: flex; flex-direction: column; padding: 28px 40px 20px 40px; box-sizing: border-box; height: 100%">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div>
+          <h1 id="apps-h" style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em">Applications</h1>
+          <p style="margin: 6px 0 0; color: #a3a29b; font-size: 14px">Sign in once so workflows in this group can run on your behalf.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-bottom: 12px; border-bottom: 1px solid #2e2d2a">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #a3a29b">
+          <span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: {{statusDot}}"></span>
+          {{statusText}}
+        </span>
+        <div style="display: flex; gap: 4px">
+          <button type="button" style="height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #a3a29b; font-size: 13px">Check all</button>
+          <button type="button" style="height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #ecebe6; font-size: 13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            Add app
+          </button>
+        </div>
+      </div>
+
+      <ul style="list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+        <!-- GitHub: active -->
+        <li style="padding: 14px; margin: 0 -14px; border-radius: 12px; background: {{ghRowBg}}">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span aria-hidden="true" style="width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; border-radius: 8px; background: #2e2d2a; color: #ecebe6; font-size: 13px; font-weight: 600">G</span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 14px; font-weight: 500">GitHub</div>
+              <div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8982; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">github.com/login</div>
+            </div>
+            <sc-if value="{{ ghPending }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; gap: 6px">
+                <button type="button" onClick="{{ cancel }}" style="height: 32px; padding: 0 12px; border: 1px solid #3a3935; border-radius: 8px; background: transparent; color: #ecebe6; font-size: 13px">Cancel</button>
+                <button type="button" onClick="{{ done }}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: #ecebe6; color: #1a1a19; font-size: 13px; font-weight: 500">Done</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ ghConnected }}" hint-placeholder-val="{{ false }}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8fd0a4">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                Signed in
+              </span>
+            </sc-if>
+          </div>
+          <sc-if value="{{ ghPending }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; align-items: center; gap: 8px; margin: 12px 0 0 44px; font-size: 13px; color: #a3a29b">
+              <svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a8c7fa" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>
+              Sign in in the browser on the right, then click Done.
+            </div>
+          </sc-if>
+        </li>
+
+        <!-- Google: not connected -->
+        <li style="padding: 14px; margin: 0 -14px; border-radius: 12px">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span aria-hidden="true" style="width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; border-radius: 8px; background: #2e2d2a; color: #ecebe6; font-size: 13px; font-weight: 600">G</span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 14px; font-weight: 500">Google</div>
+              <div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8982; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">accounts.google.com</div>
+            </div>
+            <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a3935; border-radius: 8px; background: transparent; color: #ecebe6; font-size: 13px">Sign in</button>
+            <button type="button" aria-label="More options for Google" style="width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
+            </button>
+          </div>
+        </li>
+      </ul>
+
+      <div style="flex: 1"></div>
+
+      <!-- Next step -->
+      <div style="display: flex; align-items: center; gap: 16px; padding: 16px; border: 1px solid #2e2d2a; border-radius: 14px; background: #201f1d">
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 14px; font-weight: 500">Record a workflow</div>
+          <div style="font-size: 13px; color: #a3a29b; margin-top: 2px">Uses the sessions signed in above.</div>
+        </div>
+        <button type="button" style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 14px; border: 0; border-radius: 10px; background: #ecebe6; color: #1a1a19; font-size: 13px; font-weight: 500; white-space: nowrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          New workflow
+        </button>
+      </div>
+    </section>
+
+    <!-- Right: embedded browser -->
+    <section aria-label="Browser" style="flex: 999 1 560px; min-width: 0; height: 100%; display: flex; flex-direction: column; border: 1px solid #2e2d2a; border-radius: 14px; background: #232321; overflow: hidden">
+      <!-- tab strip -->
+      <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px">
+        <div style="height: 30px; max-width: 240px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; border-radius: 8px; background: #2f2e2b; font-size: 13px">
+          <span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #5c5b55; flex-shrink: 0"></span>
+          <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Sign in to GitHub</span>
+          <button type="button" aria-label="Close tab" style="width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #a3a29b">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8"></path></svg>
+          </button>
+        </div>
+        <button type="button" aria-label="New tab" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+        <div style="flex: 1"></div>
+        <button type="button" aria-label="Expand browser" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+        </button>
+        <button type="button" aria-label="Close browser" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8"></path></svg>
+        </button>
+      </div>
+      <!-- address bar -->
+      <div style="height: 40px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px 6px">
+        <button type="button" aria-label="Back" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        </button>
+        <button type="button" aria-label="Forward" disabled style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #5c5b55">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
+        </button>
+        <button type="button" aria-label="Reload" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #a3a29b">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"></path><path d="M21 3v5h-5"></path></svg>
+        </button>
+        <div style="flex: 1; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-left: 6px; border-radius: 8px; background: #1a1a19; font-size: 13px; color: #d6d5cf">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a3a29b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+          github.com/login
+        </div>
+      </div>
+      <!-- status line -->
+      <div style="flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid #2e2d2a; background: {{bannerBg}}; font-size: 13px; color: #d6d5cf">
+        <sc-if value="{{ ghPending }}" hint-placeholder-val="{{ true }}">
+          <svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a8c7fa" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>
+          <span>Waiting for you to sign in to <strong style="font-weight: 500; color: #ecebe6">GitHub</strong></span>
+        </sc-if>
+        <sc-if value="{{ ghConnected }}" hint-placeholder-val="{{ false }}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fd0a4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+          <span>GitHub session saved. You can close this tab.</span>
+        </sc-if>
+      </div>
+      <!-- site viewport (placeholder for the live page) -->
+      <div style="flex: 1; min-height: 0; background: #ffffff; color: #1f2328; display: flex; justify-content: center; overflow: auto">
+        <div style="width: 340px; padding: 72px 0 40px; display: flex; flex-direction: column; gap: 16px">
+          <div aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; background: #1f2328; align-self: center"></div>
+          <h2 style="margin: 8px 0 8px; font-size: 22px; font-weight: 400; text-align: center">Sign in</h2>
+          <label for="u" style="font-size: 14px; font-weight: 500">Username or email address</label>
+          <input id="u" type="text" style="height: 38px; margin-top: -10px; padding: 0 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; font-family: inherit">
+          <div style="display: flex; justify-content: space-between; align-items: baseline">
+            <label for="p" style="font-size: 14px; font-weight: 500">Password</label>
+            <a href="#" style="font-size: 12px; color: #0969da; text-decoration: none">Forgot password?</a>
+          </div>
+          <input id="p" type="password" style="height: 38px; margin-top: -10px; padding: 0 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; font-family: inherit">
+          <button type="button" style="height: 40px; border: 0; border-radius: 6px; background: #1f883d; color: #ffffff; font-size: 14px; font-weight: 500">Sign in</button>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #59636e; text-align: center">The site you sign in to renders here, live.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { connected: false };
+  }
+  renderVals() {
+    const c = this.state.connected;
+    return {
+      ghPending: !c,
+      ghConnected: c,
+      ghRowBg: c ? 'transparent' : '#232321',
+      bannerBg: c ? '#1f2a22' : '#1f2329',
+      statusDot: '#e0a458',
+      statusText: c ? '1 of 2 still needs signing in' : '2 of 2 still need signing in',
+      done: () => this.setState({ connected: true }),
+      cancel: () => this.setState({ connected: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

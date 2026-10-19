@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New workflow form</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141414;font-family:Inter,system-ui,sans-serif;color:#e8e6e3;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input,textarea{font-family:inherit}
+button{cursor:pointer}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ib{width:32px;height:32px;border:0;background:transparent;color:#a3a3a3;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+.nav{width:100%;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#e8e6e3;font-size:13px;text-align:left}
+.nav span.k{margin-left:auto;font-size:11px;color:#8e8e8e}
+.lbl{font-size:11px;font-weight:500;color:#8e8e8e;padding:0 10px}
+.fld{height:40px;width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#1a1a1a;color:#e8e6e3;padding:0 12px;font-size:14px;outline:none}
+</style>
+</helmet>
+<div style="width:1280px;height:800px;display:flex;flex-direction:column;background:#1a1a1a;overflow:hidden">
+  <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 16px;border-bottom:1px solid rgba(255,255,255,.08)">
+    <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600">
+      <span style="width:22px;height:22px;border-radius:6px;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px">C</span>New workflow
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="ib" aria-label="Minimise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button class="ib" aria-label="Maximise"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      <button class="ib" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+  <div style="flex:1;display:flex;min-height:0">
+    <aside style="width:240px;flex:none;background:#1e1e1e;border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;padding:10px 8px">
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H10l-4 4v-4H4z"/></svg>Chat</button>
+      <button class="nav" style="background:rgba(255,255,255,.07)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New workflow<span class="k">Ctrl N</span></button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 19h14"/></svg>Publish</button>
+      <button class="nav"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search<span class="k">Ctrl K</span></button>
+      <div style="height:22px"></div>
+      <div class="lbl">Groups</div>
+      <button class="nav" style="margin-top:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>Sales<span class="k" style="color:#4ade80">●</span></button>
+      <div style="font-size:12px;color:#8e8e8e;padding:2px 10px 0 38px">No workflows yet</div>
+      <div style="margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding:14px 8px 4px;display:flex;align-items:center;gap:12px">
+        <span style="width:36px;height:36px;border-radius:50%;background:#2c2c2c;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:500">DU</span>
+        <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:500">Dev User</span><span style="font-size:12px;color:#8e8e8e">Local workspace</span></div>
+      </div>
+    </aside>
+
+    <main style="flex:1;min-width:0;display:flex;justify-content:center;gap:40px;padding:48px 40px;overflow-y:auto">
+      <form style="width:520px;flex:none;display:flex;flex-direction:column;gap:20px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <h1 style="margin:0;font-size:24px;font-weight:600">New workflow</h1>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#a3a3a3">Tell Conxa what you’re about to teach it. You’ll record it right after this.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="wf-name" style="font-size:13px;color:#d4d2cf">Name</label>
+          <input id="wf-name" class="fld" value="Github to Drive files Handoff">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span id="wf-grp" style="font-size:13px;color:#d4d2cf">Group</span>
+          <div role="radiogroup" aria-labelledby="wf-grp" style="display:flex;gap:6px">
+            <button type="button" role="radio" aria-checked="true" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid #d97757;background:rgba(217,119,87,.10);color:#e8e6e3;font-size:13px;font-weight:500">Sales</button>
+            <button type="button" role="radio" aria-checked="false" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.10);background:transparent;color:#e8e6e3;font-size:13px;font-weight:500">+ New group</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="wf-url" style="font-size:13px;color:#d4d2cf">Starting page</label>
+          <input id="wf-url" class="fld" value="https://github.com" style="font-family:'JetBrains Mono',monospace;font-size:13px">
+          <span style="font-size:12px;color:#a3a3a3"><span style="color:#4ade80">●</span> Sales is already signed in to Github — recording starts on this page.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="wf-desc" style="font-size:13px;color:#d4d2cf">What does the task do? <span style="color:#8e8e8e;font-size:12px">Optional</span></label>
+          <textarea id="wf-desc" rows="3" style="resize:none;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#1a1a1a;color:#e8e6e3;padding:10px 12px;font-size:14px;line-height:1.5;outline:none">Download the latest release files from a repo and upload them to the shared Drive folder.</textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;padding-top:4px">
+          <a href="Opening.dc.html" style="height:40px;padding:0 16px;border-radius:10px;background:#d97757;color:#1a1a1a;font-size:14px;font-weight:500;text-decoration:none;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#1a1a1a"></span>Create and start recording</a>
+          <button type="button" style="height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#a3a3a3;font-size:14px;font-weight:500">Cancel</button>
+        </div>
+      </form>
+
+      <aside aria-labelledby="next-h" style="width:300px;flex:none;align-self:flex-start;margin-top:60px;background:#212121;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px">
+        <h2 id="next-h" style="margin:0;font-size:13px;font-weight:600">What happens next</h2>
+        <div role="img" aria-label="The Conxa window splits: conversation on the left, browser on the right" style="height:112px;border-radius:10px;border:1px solid rgba(255,255,255,.10);background:#1a1a1a;display:flex;overflow:hidden">
+          <div style="width:38%;padding:10px;display:flex;flex-direction:column;gap:6px;border-right:1px solid rgba(255,255,255,.08)">
+            <span style="height:6px;width:70%;border-radius:3px;background:#3a3a3a"></span>
+            <span style="height:6px;width:90%;border-radius:3px;background:#2e2e2e"></span>
+            <span style="height:6px;width:55%;border-radius:3px;background:#2e2e2e"></span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column">
+            <div style="height:18px;background:#2a2a2a;display:flex;align-items:center;gap:5px;padding:0 8px;border-top:2px solid #f87171"><span style="width:6px;height:6px;border-radius:50%;background:#f87171"></span><span style="height:5px;width:40px;border-radius:3px;background:#4a4a4a"></span></div>
+            <div style="flex:1;background:#efeeea"></div>
+          </div>
+        </div>
+        <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5;color:#d4d2cf">
+          <li style="display:flex;gap:10px"><span style="width:20px;height:20px;flex:none;border-radius:50%;background:#2c2c2c;font-size:11px;display:inline-flex;align-items:center;justify-content:center">1</span>A browser opens inside this window, on github.com. No separate window pops up.</li>
+          <li style="display:flex;gap:10px"><span style="width:20px;height:20px;flex:none;border-radius:50%;background:#2c2c2c;font-size:11px;display:inline-flex;align-items:center;justify-content:center">2</span>Do the task there. Each action appears in the conversation as it’s captured.</li>
+          <li style="display:flex;gap:10px"><span style="width:20px;height:20px;flex:none;border-radius:50%;background:#2c2c2c;font-size:11px;display:inline-flex;align-items:center;justify-content:center">3</span>Press Finish and save. The browser closes and Conxa builds the workflow.</li>
+        </ol>
+      </aside>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
