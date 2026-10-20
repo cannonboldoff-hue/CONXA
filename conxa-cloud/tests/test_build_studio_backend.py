@@ -525,7 +525,8 @@ def test_finish_group_app_auth_marks_group_and_workflows_ready(backend, monkeypa
     app_id = group.apps[0].id
     workflow = create_workflow("Example Workflow", "https://example.test", group_id=group.id)
 
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = False  # RecordingSession always has it; False = the user closed the window by hand
@@ -580,7 +581,8 @@ def test_finish_group_app_auth_has_no_warning_when_success_url_was_reached(backe
     group = create_group("Sales")
     group = add_app(group.id, "Example", "https://example.test/login", "https://example.test/dashboard")
     app_id = group.apps[0].id
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = True
@@ -665,7 +667,8 @@ def test_finish_group_app_auth_fails_when_saved_state_has_no_session(backend, mo
     group = create_group("Sales")
     group = add_app(group.id, "Example", "https://example.test/login", "https://example.test/dashboard")
     app_id = group.apps[0].id
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = False  # RecordingSession always has it; False = the user closed the window by hand
@@ -709,7 +712,8 @@ def test_finish_group_app_auth_saves_a_definition_that_passes_self_test(backend,
     group = create_group("Sales")
     group = add_app(group.id, "Example", "https://example.test/login", "")
     app_id = group.apps[0].id
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     learned = {"version": 1, "probe_url": "https://example.test/login", "signed_out": {}, "signed_in": {}, "session_keys": []}
 
@@ -767,7 +771,8 @@ def test_finish_group_app_auth_reconnect_keeps_still_valid_definition_unchanged(
     app_id = group.apps[0].id
     existing = {"version": 1, "probe_url": "https://example.test/login", "signed_out": {}, "signed_in": {}, "session_keys": []}
     set_group_app_auth_definition(group.id, app_id, existing)
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = False
@@ -823,7 +828,8 @@ def test_finish_group_app_auth_hand_closed_leaves_existing_definition_untouched(
     app_id = group.apps[0].id
     existing = {"version": 1, "probe_url": "https://example.test/login", "signed_out": {}, "signed_in": {}, "session_keys": []}
     set_group_app_auth_definition(group.id, app_id, existing)
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = False
@@ -919,7 +925,8 @@ def test_finish_group_app_auth_force_skips_learning_and_saves_with_no_definition
     group = create_group("Sales")
     group = add_app(group.id, "Example", "https://example.test/login", "")
     app_id = group.apps[0].id
-    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.json"
+    # Where the sign-in browser saves while it runs; finishing promotes it to {app_id}.json.
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
 
     class FakeSession:
         reached_wait_url = False
@@ -1585,3 +1592,56 @@ def test_create_group_succeeds_when_cloud_raises(backend, monkeypatch, tmp_path)
     monkeypatch.setattr(b, "_cloud_json", boom)
     result = b.cmd_create_group({"name": "Sales"}, "rid")
     assert result["group"]["name"] == "Sales"
+
+
+def _signin_fixture(b, monkeypatch, tmp_path, saved_cookie):
+    """A group app with a working saved sign-in, and a sign-in browser (fake) that wrote its pending file."""
+    from conxa_core.config import settings
+    from conxa_core.storage.group_store import add_app, create_group, set_group_app_auth
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    group = create_group("Sales")
+    group = add_app(group.id, "Example", "https://example.test/login", "https://example.test/dashboard")
+    app_id = group.apps[0].id
+    auth_dir = tmp_path / "groups" / group.id / "auth"
+    auth_dir.mkdir(parents=True, exist_ok=True)
+    saved, pending = auth_dir / f"{app_id}.json", auth_dir / f"{app_id}.pending.json"
+    saved.write_text(json.dumps({"cookies": [{"name": "session", "value": saved_cookie}], "origins": []}), encoding="utf-8")
+    set_group_app_auth(group.id, app_id, str(saved))
+
+    class FakeSession:
+        reached_wait_url = False
+        browser_open = False
+        storage_state_autosave_path = str(pending)
+
+        async def stop(self):
+            pending.write_text(json.dumps({"cookies": [{"name": "half", "value": "done"}], "origins": []}), encoding="utf-8")
+
+    class FakeRegistry:
+        def get(self, session_id):
+            return FakeSession() if session_id == "sess-1" else None
+
+        def pop(self, session_id):
+            return None
+
+    monkeypatch.setitem(b.cmd_finish_group_app_auth.__globals__, "_recorder_registry", FakeRegistry())
+    return group, app_id, saved, pending
+
+
+def test_cancelling_a_sign_in_never_touches_the_saved_one(backend, monkeypatch, tmp_path):
+    """Cancel used to tear the browser down onto the app's saved file, replacing a working sign-in
+    with whatever the half-finished one held."""
+    b, _out = backend
+    group, app_id, saved, pending = _signin_fixture(b, monkeypatch, tmp_path, "working")
+    b.cmd_cancel_group_app_auth({"session_id": "sess-1"}, "rid")
+    assert json.loads(saved.read_text(encoding="utf-8"))["cookies"][0]["value"] == "working"
+    assert not pending.exists()
+
+
+def test_finishing_a_sign_in_promotes_its_pending_file(backend, monkeypatch, tmp_path):
+    b, _out = backend
+    group, app_id, saved, pending = _signin_fixture(b, monkeypatch, tmp_path, "old")
+    b.cmd_finish_group_app_auth({"session_id": "sess-1", "group_id": group.id, "app_id": app_id}, "rid")
+    assert json.loads(saved.read_text(encoding="utf-8"))["cookies"][0]["name"] == "half"
+    assert not pending.exists()

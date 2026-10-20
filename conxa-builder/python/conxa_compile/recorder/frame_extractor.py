@@ -51,7 +51,11 @@ def _find_ffmpeg() -> str | None:
     if pw_env and pw_env != "0":
         candidate_roots.append(Path(pw_env))
     # Common default locations
-    for default in ("/opt/pw-browsers", str(Path.home() / ".cache" / "ms-playwright")):
+    # (Windows installs browsers under %LOCALAPPDATA%\ms-playwright.)
+    defaults = ["/opt/pw-browsers", str(Path.home() / ".cache" / "ms-playwright")]
+    if os.environ.get("LOCALAPPDATA"):
+        defaults.append(str(Path(os.environ["LOCALAPPDATA"]) / "ms-playwright"))
+    for default in defaults:
         p = Path(default)
         if p.is_dir() and p not in candidate_roots:
             candidate_roots.append(p)

@@ -13,14 +13,25 @@ Cards: ``sign_in`` (waiting → saved | cancelled) and ``recording``
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 from handlers.protocol import _CommandError, _emit_event, _event_sink, _safe_id
 from handlers.session import _recorder_registry
 
 _WATCH_INTERVAL_S = 1.0
+_SIGN_IN_WATCH_INTERVAL_S = 1.5
+_sign_in_finish_lock = threading.Lock()
+# A login-shaped path: the runtime's LOGIN_PATH_RE / AUTH_FAILURE_URL_RE plus the single-sign-on
+# hops a sign-in passes through. Being on one means the person is still signing in.
+_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|auth|oauth2?|sso|logout|session-expired)(/|$)", re.I)
+
+
+def _looks_like_login_page(url: str) -> bool:
+    return bool(_LOGIN_PATH_RE.search(urlsplit(url).path or "/"))
 
 
 def _thread(workflow_id: str) -> str:
@@ -43,13 +54,15 @@ class WorkflowFlowMixin:
         return workflow
 
     def _flow_missing_apps(self, workflow: Any) -> list[Any]:
-        """Apps this workflow's own URLs resolve to that nobody has signed in to yet."""
-        from conxa_core.storage.group_store import apps_for_workflow, get_group
+        """Apps in the workflow's group that must be signed in before recording — never connected,
+        or a saved sign-in that has expired. The same check the record command gates on."""
+        from conxa_core.storage.group_store import get_group
+        from handlers.session import group_apps_needing_sign_in
 
         group = get_group(workflow.group_id) if workflow.group_id else None
         if group is None:
             return []
-        return [a for a in apps_for_workflow(group.apps, workflow.target_url, workflow.protected_url) if not a.captured_at]
+        return group_apps_needing_sign_in(group)
 
     def _flow_say(self, workflow_id: str, text: str, sink: Any) -> None:
         from conxa_compile.conversation import harness, thread_store as ts
@@ -93,44 +106,109 @@ class WorkflowFlowMixin:
         group = get_group(workflow.group_id)
         group_name = group.name if group else "this group"
         runtime_state.set_flags(workflow.id, signing_in=True, recording_discarded=False)
-        harness.log_event(_thread(workflow.id), f"{app.name} needs sign-in — opened its sign-in page", glyph="warn", sink=sink)
+        expired = bool(app.captured_at)
+        harness.log_event(_thread(workflow.id),
+                          f"{app.name} {'sign-in expired' if expired else 'needs sign-in'} — opened its sign-in page",
+                          glyph="warn", sink=sink)
+        embedded = bool(started.get("embedded"))
+        where = "in the browser on the right" if embedded else "in a browser window"
+        why = "your saved sign-in has expired, so sign in again" if expired else "you need to sign in first"
         self._flow_say(
             workflow.id,
-            f"{app.name} needs you to sign in first. I’ve opened its sign-in page in a browser window — sign in as you "
-            f"normally do, including any two-step code, then press Done. Nothing is recorded yet. The sign-in is saved "
-            f"for all of {group_name}, so the next workflow in this group skips this step.",
+            f"Before recording: {app.name} — {why}. I’ve opened its sign-in page {where} — sign in as you "
+            f"normally do, including any two-step code. I’ll notice when you’re in and carry on by myself "
+            f"(or press “I’m signed in”). Nothing is recorded yet. The sign-in "
+            f"is saved for all of {group_name}, so the next workflow in this group skips this step.",
             sink,
         )
         card = harness.post_card(
             _thread(workflow.id), "sign_in", "waiting", sink=sink,
-            refs={"group_id": workflow.group_id, "app_id": app.id, "session_id": started["session_id"]},
+            refs={"group_id": workflow.group_id, "app_id": app.id, "session_id": started["session_id"],
+                  "embedded": embedded},
             app_name=app.name, login_url=started.get("login_url") or app.login_url, group_name=group_name,
             actions=["done", "cancel"],
         )
+        threading.Thread(target=self._flow_watch_sign_in, args=(workflow.id, card["card_id"], started["session_id"]),
+                         daemon=True).start()
         return {"next": "sign_in", "card_id": card["card_id"]}
 
     def cmd_flow_sign_in_done(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """“I’m signed in — Done.” Saves the sign-in for the whole group, then goes straight on to
-        recording. If the sign-in can’t be confirmed yet the window stays open and the card says why."""
-        from conxa_compile.conversation import harness, runtime_state
-
+        recording. If the sign-in can’t be confirmed yet the window stays open and the card says why.
+        Usually not needed: _flow_watch_sign_in does this by itself once the person signs in."""
         workflow = self._flow_workflow(payload)
-        sink = _event_sink(rid)
         card = self._flow_card(workflow.id, str(payload.get("card_id") or ""))
-        refs = card.get("refs") or {}
-        result = self.cmd_finish_group_app_auth(
-            {"session_id": refs.get("session_id"), "group_id": refs.get("group_id"), "app_id": refs.get("app_id"),
-             "force": bool(payload.get("force"))}, rid,
-        )
-        if result.get("confirmed") is False:
-            harness.update_card(_thread(workflow.id), card["card_id"], note=str(result.get("reason") or ""), can_force=True, sink=sink)
-            return {"next": "sign_in", "confirmed": False, "reason": result.get("reason")}
-        harness.update_card(_thread(workflow.id), card["card_id"], state="saved", note="", actions=[], sink=sink)
-        runtime_state.set_flags(workflow.id, signing_in=False)
-        harness.log_event(_thread(workflow.id), f"Signed in to {card.get('app_name') or 'the app'}", glyph="ok", sink=sink)
+        return self._flow_finish_sign_in(workflow, card["card_id"], rid, force=bool(payload.get("force")), auto=False)
+
+    def _flow_finish_sign_in(self, workflow: Any, card_id: str, rid: str | None, *, force: bool, auto: bool) -> dict[str, Any]:
+        """Confirm and save the sign-in, then open the next app's sign-in or the recording. Shared by
+        the button and the watcher; one at a time, and a no-op once the card is no longer waiting,
+        so the two can never both finish the same sign-in."""
+        from conxa_compile.conversation import harness, runtime_state
         from conxa_core.storage.workflow_store import get_workflow
 
-        return self._flow_open_recording(get_workflow(workflow.id) or workflow, rid, sink)
+        sink = _event_sink(rid)
+        with _sign_in_finish_lock:
+            card = self._flow_card(workflow.id, card_id)
+            if card.get("state") != "waiting":
+                return {"next": "sign_in", "already": True}
+            refs = card.get("refs") or {}
+            result = self.cmd_finish_group_app_auth(
+                {"session_id": refs.get("session_id"), "group_id": refs.get("group_id"), "app_id": refs.get("app_id"),
+                 "force": force}, rid or "",
+            )
+            if result.get("confirmed") is False:
+                # An automatic check that came too early stays quiet — the person is still signing in.
+                if not auto:
+                    harness.update_card(_thread(workflow.id), card_id, note=str(result.get("reason") or ""), can_force=True, sink=sink)
+                return {"next": "sign_in", "confirmed": False, "reason": result.get("reason")}
+            harness.update_card(_thread(workflow.id), card_id, state="saved", note="", actions=[], sink=sink)
+            runtime_state.set_flags(workflow.id, signing_in=False)
+        harness.log_event(_thread(workflow.id), f"Signed in to {card.get('app_name') or 'the app'}"
+                          + (" — detected automatically" if auto else ""), glyph="ok", sink=sink)
+        return self._flow_open_recording(get_workflow(workflow.id) or workflow, rid or "", sink)
+
+    def _flow_watch_sign_in(self, workflow_id: str, card_id: str, session_id: str) -> None:
+        """Finish the sign-in by itself once the person has signed in, so nobody has to press
+        “I’m signed in”. Signed in = the sign-in tab reached the app's success page, or it was on a
+        login page and has since left it for a page that isn't one. Each such page is checked once
+        with the same confirmation the button runs (it compares the live session against a signed-out
+        one, so a page that only looks done is not taken as signed in); a check that comes too early
+        is silent and the next page change tries again. The button stays as the fallback."""
+        from conxa_compile.conversation import thread_store as ts
+        from conxa_compile.recorder.frame_utils import is_blank_url
+
+        seen_login = False
+        tried: set[str] = set()
+        while True:
+            time.sleep(_SIGN_IN_WATCH_INTERVAL_S)
+            card = ts.get_card(_thread(workflow_id), card_id)
+            if card is None or card.get("state") != "waiting":
+                return
+            sess = _recorder_registry.get(session_id)
+            if sess is None or not sess.browser_open:
+                return
+            url = str(getattr(sess, "current_url", "") or "")
+            if not url.startswith(("http://", "https://")) or is_blank_url(url):
+                continue
+            if _looks_like_login_page(url):
+                seen_login = True
+                continue
+            page = url.split("#")[0].split("?")[0]
+            if not (seen_login or getattr(sess, "reached_wait_url", False)) or page in tried:
+                continue
+            tried.add(page)
+            try:
+                from conxa_core.storage.workflow_store import get_workflow
+
+                workflow = get_workflow(workflow_id)
+                if workflow is None:
+                    return
+                result = self._flow_finish_sign_in(workflow, card_id, None, force=False, auto=True)
+            except Exception:  # noqa: BLE001 — never crash the watcher; the button still works
+                continue
+            if result.get("confirmed") is not False:
+                return
 
     def cmd_flow_sign_in_cancel(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.conversation import harness, runtime_state
@@ -178,11 +256,13 @@ class WorkflowFlowMixin:
                                 recording_discarded=False)
         host = (workflow.target_url or "").split("//")[-1].split("/")[0]
         harness.log_event(_thread(workflow_id), "Recording started", glyph="run", sink=sink, subject=host or None)
-        self._flow_say(workflow_id, "Do the task in the browser window; each action shows up here as it’s captured. "
+        embedded = bool(started.get("embedded"))
+        where = "the browser on the right" if embedded else "the browser window"
+        self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
                        "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
         card = harness.post_card(
             _thread(workflow_id), "recording", "recording", sink=sink,
-            refs={"session_id": session_id}, started_at=time.time(), host=host, count=0,
+            refs={"session_id": session_id, "embedded": embedded}, started_at=time.time(), host=host, count=0,
             actions=["pause", "finish", "discard"], warnings=started.get("warnings") or [],
         )
         threading.Thread(target=self._flow_watch_recording, args=(workflow_id, session_id, card["card_id"]), daemon=True).start()
@@ -193,7 +273,7 @@ class WorkflowFlowMixin:
         was captured instead of leaving the conversation waiting on a window that is gone."""
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
 
-        sink = None
+        sink = _event_sink(None)  # no request to answer: a broadcast the renderer applies to the thread
         while True:
             time.sleep(_WATCH_INTERVAL_S)
             card = ts.get_card(_thread(workflow_id), card_id)

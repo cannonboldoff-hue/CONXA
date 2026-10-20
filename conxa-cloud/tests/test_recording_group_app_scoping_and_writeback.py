@@ -1,8 +1,7 @@
-"""cmd_start_recording only gates on the apps a workflow's own URLs actually
-resolve to (mirrors skill_package_builder.py's required_apps), and every
-workflow recording writes each app's refreshed session back to its own saved
-file (see FIX.md 2026-08-16) instead of throwing away rotated cookies or a
-mid-recording re-login."""
+"""cmd_start_recording gates on EVERY app in the workflow's group being connected and not
+expired (AUTH-16 — the runtime's rule; a workflow that starts on one app routinely crosses
+into another), and every workflow recording writes each app's refreshed session back to its
+own saved file (see FIX.md 2026-08-16) without vouching for it — the next gate re-checks."""
 
 from __future__ import annotations
 
@@ -88,27 +87,45 @@ def _age_checked_at(group_id, app_id, seconds_ago):
     return _gs.save_group(group)
 
 
-def test_unrelated_group_app_does_not_gate_recording(isolated_data_dir, monkeypatch):
+def test_unconnected_app_the_start_url_does_not_match_still_gates_recording(isolated_data_dir, monkeypatch):
+    """The reported bug: a workflow that starts on GitHub and uploads to Drive. Only GitHub
+    matched the start URL, so recording opened with Drive signed out."""
     group = create_group("Sales", workspace_id="wrk_local")
-    # Slack is never connected — under the old all-apps gate this alone would
-    # block recording for a workflow that never touches Slack at all.
     group = add_app(group.id, "Slack", "https://slack.test/login", "https://slack.test/")
     group, render_id = _captured_app(
         isolated_data_dir, group.id, "Render", "https://render.test/login", "https://render.test/", '{"cookies": [], "origins": []}'
     )
-    reloaded = get_group(group.id)
-    slack = next(a for a in reloaded.apps if a.name == "Slack")
-    assert not slack.captured_at  # sanity: Slack really is unconnected
-
     workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
 
+    created = []
     monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "ready")
+    monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: created.append(1) or _FakeSess())
+
+    h = _Harness()
+    with pytest.raises(_CommandError) as exc_info:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert exc_info.value.code == "auth_required"
+    assert "Slack" in exc_info.value.message
+    assert created == []  # the browser never opened
+
+
+def test_recording_starts_once_every_group_app_is_signed_in(isolated_data_dir, monkeypatch):
+    group = create_group("Sales", workspace_id="wrk_local")
+    group, _ = _captured_app(
+        isolated_data_dir, group.id, "Slack", "https://slack.test/login", "https://slack.test/", '{"cookies": [], "origins": []}'
+    )
+    group, _ = _captured_app(
+        isolated_data_dir, group.id, "Render", "https://render.test/login", "https://render.test/", '{"cookies": [], "origins": []}'
+    )
+    workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
+
     monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: _FakeSess())
     monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
 
     h = _Harness()
     result = h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
     assert result["session_id"] == "sess1"
+    assert "warnings" not in result
 
 
 def test_missing_required_app_still_gates_recording(isolated_data_dir, monkeypatch):
@@ -123,17 +140,16 @@ def test_missing_required_app_still_gates_recording(isolated_data_dir, monkeypat
     assert "Render" in exc_info.value.message
 
 
-def test_workflow_with_no_matching_app_records_with_no_gate(isolated_data_dir, monkeypatch):
+def test_workflow_on_an_unmatched_site_is_still_gated(isolated_data_dir, monkeypatch):
     group = create_group("Sales", workspace_id="wrk_local")
     add_app(group.id, "Render", "https://render.test/login", "https://render.test/")
     workflow = create_workflow("Scrape a public page", "https://public.test/page", group_id=group.id)
 
-    monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: _FakeSess())
-    monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
-
     h = _Harness()
-    result = h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
-    assert result["session_id"] == "sess1"
+    with pytest.raises(_CommandError) as exc_info:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert exc_info.value.code == "auth_required"
+    assert "Render" in exc_info.value.message
 
 
 def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_data_dir):
@@ -169,6 +185,7 @@ def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_d
     after = after_group.apps[0]
     assert after.captured_at is not None and after.captured_at >= before
     assert after.last_error == ""
+    assert after.checked_at is None  # written back, not verified — the next gate re-checks
 
     saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
     assert saved["cookies"] == [{"name": "session", "domain": "render.test", "path": "/", "value": "new"}]
@@ -206,10 +223,9 @@ def test_expired_required_app_blocks_recording(isolated_data_dir, monkeypatch):
     assert "expired" in exc_info.value.message
 
 
-def test_expired_sibling_app_warns_but_does_not_block(isolated_data_dir, monkeypatch):
-    """Recording seeds every captured app (not just required ones), so an expired
-    sibling is a real risk — but the user is present in the recorder window, so it
-    should warn, not hard-block, unlike an expired REQUIRED app above."""
+def test_expired_sibling_app_blocks_recording(isolated_data_dir, monkeypatch):
+    """An expired app the start URL doesn't match is just as fatal mid-recording as one it
+    does — it used to only warn, and the recording opened signed out of it."""
     group = create_group("Sales", workspace_id="wrk_local")
     group, render_id = _captured_app(
         isolated_data_dir, group.id, "Render", "https://render.test/login", "https://render.test/", '{"cookies": [], "origins": []}'
@@ -225,14 +241,42 @@ def test_expired_sibling_app_warns_but_does_not_block(isolated_data_dir, monkeyp
         return "expired" if app.name == "Slack" else "ready"
 
     monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", _probe)
-    monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: _FakeSess())
-    monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
 
     h = _Harness()
-    result = h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
-    assert result["session_id"] == "sess1"
-    assert result.get("warnings")
-    assert "Slack" in result["warnings"][0]
+    with pytest.raises(_CommandError) as exc_info:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert exc_info.value.code == "auth_required"
+    assert "Slack" in exc_info.value.message
+    assert "Render" not in exc_info.value.message
+
+
+def test_a_discarded_recording_does_not_clear_an_expired_verdict(isolated_data_dir, monkeypatch):
+    """Ending a recording copies the browser's cookies back. That used to stamp every app
+    verified, so the next record click skipped the check and opened signed out."""
+    group = create_group("Sales", workspace_id="wrk_local")
+    group, slack_id = _captured_app(
+        isolated_data_dir, group.id, "Slack", "https://slack.test/login", "https://slack.test/",
+        json.dumps({"cookies": [{"name": "s", "domain": "slack.test", "path": "/", "value": "dead"}], "origins": []}),
+    )
+    _age_checked_at(group.id, slack_id, 700)
+    workflow = create_workflow("Create a lead", "https://slack.test/app", group_id=group.id)
+    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+
+    h = _Harness()
+    with pytest.raises(_CommandError):
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+
+    merged_dir = isolated_data_dir / "workflows" / workflow.id
+    merged_dir.mkdir(parents=True, exist_ok=True)
+    (merged_dir / "merged_group_state.json").write_text(
+        json.dumps({"cookies": [{"name": "s", "domain": "slack.test", "path": "/", "value": "still-dead"}], "origins": []}),
+        encoding="utf-8",
+    )
+    _refresh_group_app_sessions(workflow.id)
+
+    with pytest.raises(_CommandError) as exc_info:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert "Slack" in exc_info.value.message
 
 
 def test_recently_checked_app_is_not_reprobed(isolated_data_dir, monkeypatch):

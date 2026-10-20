@@ -13,6 +13,7 @@ Pillow>=11.1.0   # <11.1 imports numpy at runtime (PIL/_typing.py); see FIX.md 2
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 imageio-ffmpeg>=0.5.1
+websockets>=12.0   # recorder/screencast_video.py: raw CDP socket for in-panel recording video
 
 # OS credential storage — used by auth_service.py to store Clerk tokens securely
 keyring>=25.0.0

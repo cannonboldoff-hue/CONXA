@@ -193,6 +193,11 @@ class Settings(BaseSettings):
     snapshot_surrounding_text_radius_px: int = 200
     snapshot_capture_a11y: bool = True
     snapshot_retention_days: int = 30
+    # Record and sign in inside Build Studio's own browser panel instead of a separate Chromium
+    # window, when Electron offers one (CONXA_HOST_BROWSER_CDP + CONXA_HOST_CONTROL_URL). On since
+    # the side-by-side equivalence check passed (docs/archive/spikes/in-app-recording-2026-10.md);
+    # SKILL_RECORD_IN_PANEL=false brings the separate window back.
+    record_in_panel: bool = True
     # Interval for the background GC that prunes expired selector-cache entries
     # and old session-snapshot blobs. 0 disables the scheduler (e.g. tests, local).
     gc_interval_secs: int = 6 * 60 * 60

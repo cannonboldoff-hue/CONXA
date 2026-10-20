@@ -118,8 +118,39 @@ def _mark_signed_in(group):
     from conxa_core.storage.group_store import get_group, save_group
 
     g = get_group(group.id)
-    g.apps[0].captured_at = time.time()
+    state = settings.data_dir / f"{g.apps[0].id}.json"
+    state.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
+    g.apps[0].captured_at = g.apps[0].checked_at = time.time()
+    g.apps[0].storage_state_path = str(state)
     save_group(g)
+
+
+def test_begin_with_an_expired_sign_in_asks_for_it_again_before_recording(env, monkeypatch):
+    b, _reg, group, wf, calls, _st, _out = env
+    from conxa_core.storage.group_store import get_group, save_group
+
+    _mark_signed_in(group)
+    g = get_group(group.id)
+    g.apps[0].checked_at = time.time() - 3600  # past the gate's trust window, so it re-checks
+    save_group(g)
+    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+
+    res = b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    assert res["next"] == "sign_in"
+    assert [c[0] for c in calls] == ["start_auth"]  # no recording started
+    assert "Billing Portal sign-in expired — opened its sign-in page" in _events(wf.id)
+
+
+def test_begin_asks_for_an_app_the_start_url_does_not_match(env):
+    """The reported case: start on one app, use another later. Every group app gates."""
+    b, _reg, group, wf, calls, _st, _out = env
+    from conxa_core.storage.group_store import add_app
+
+    _mark_signed_in(group)
+    add_app(group.id, "Drive", "https://accounts.drive.test/login", "https://drive.test/")
+    res = b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    assert res["next"] == "sign_in"
+    assert calls[0][0] == "start_auth" and _cards(wf.id, "sign_in")[0]["app_name"] == "Drive"
 
 
 def test_begin_with_no_saved_sign_in_opens_the_sign_in_page_and_records_nothing(env):
@@ -244,3 +275,54 @@ def test_live_rows_are_emitted_while_recording_and_varies_hints_are_kept(env, mo
     assert b.cmd_flow_set_varies({"session_id": "rec1", "sequence": 4, "varies": True}, "r")["varies"] == {"4": True}
     assert b.cmd_recording_rows({"session_id": "rec1"}, "r")["varies"] == {"4": True}
     assert b.cmd_flow_set_varies({"session_id": "rec1", "sequence": 4, "varies": None}, "r")["varies"] == {}
+
+
+def _wait_for(pred, timeout=3.0):
+    end = time.time() + timeout
+    while time.time() < end:
+        if pred():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_signing_in_is_detected_without_pressing_the_button(env, monkeypatch):
+    b, reg, group, wf, calls, st, _out = env
+    monkeypatch.setattr("handlers.workflow_flow._SIGN_IN_WATCH_INTERVAL_S", 0.01)
+    b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    sess = reg.sessions["auth1"]
+    sess.current_url = "https://billing.example.test/login?next=/home"
+    time.sleep(0.2)
+    assert "finish_auth" not in [c[0] for c in calls]  # still on the login page: nothing to check
+
+    st["confirmed"] = True
+    _mark_signed_in(group)  # what the real finish command persists
+    sess.current_url = "https://billing.example.test/home"
+    assert _wait_for(lambda: _cards(wf.id, "sign_in")[0]["state"] == "saved")
+    assert _wait_for(lambda: bool(_cards(wf.id, "recording")))
+    assert "Signed in to Billing Portal — detected automatically" in _events(wf.id)
+    assert [c[0] for c in calls].count("finish_auth") == 1
+
+
+def test_an_early_automatic_check_is_silent_and_not_repeated_on_the_same_page(env, monkeypatch):
+    b, reg, _group, wf, calls, _st, _out = env
+    monkeypatch.setattr("handlers.workflow_flow._SIGN_IN_WATCH_INTERVAL_S", 0.01)
+    b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    sess = reg.sessions["auth1"]
+    sess.current_url = "https://billing.example.test/login"
+    time.sleep(0.1)
+    sess.current_url = "https://billing.example.test/consent?step=1"  # not signed in yet (confirmed=False)
+    assert _wait_for(lambda: "finish_auth" in [c[0] for c in calls])
+    time.sleep(0.2)
+    assert [c[0] for c in calls].count("finish_auth") == 1  # once per page, not every tick
+    card = _cards(wf.id, "sign_in")[0]
+    assert card["state"] == "waiting" and not card.get("note")  # no "couldn't confirm" for an automatic try
+
+
+def test_no_automatic_check_before_the_login_page_was_seen(env, monkeypatch):
+    b, reg, _group, wf, calls, _st, _out = env
+    monkeypatch.setattr("handlers.workflow_flow._SIGN_IN_WATCH_INTERVAL_S", 0.01)
+    b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    reg.sessions["auth1"].current_url = "https://billing.example.test/home"
+    time.sleep(0.2)
+    assert "finish_auth" not in [c[0] for c in calls]

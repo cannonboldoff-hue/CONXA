@@ -9,6 +9,7 @@ conxa_core.storage.group_store.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,16 @@ def _window_rect(raw: Any) -> dict[str, int] | None:
     except (KeyError, TypeError, ValueError):
         return None
     return rect if rect["width"] >= 400 and rect["height"] >= 300 else None
+
+
+_PENDING_SUFFIX = ".pending.json"
+
+
+def _pending_auth_path(group_id: str, app_id: str) -> Path:
+    """Where an in-progress sign-in saves, beside the app's saved sign-in `<app_id>.json`."""
+    from conxa_core.storage.group_store import group_auth_dir
+
+    return group_auth_dir(group_id) / f"{app_id}{_PENDING_SUFFIX}"
 
 
 def _has_captured_session(auth_path: Path) -> bool:
@@ -379,7 +390,7 @@ class GroupsMixin:
         so the recorder can self-detect the login and the renderer can poll
         get_recording_status for reached_wait_url instead of asking the user
         to close the browser manually."""
-        from conxa_core.storage.group_store import get_group, group_auth_dir
+        from conxa_core.storage.group_store import get_group
 
         with self._rec_lock:
             if self._active_recording is not None:
@@ -402,13 +413,22 @@ class GroupsMixin:
             if app is None:
                 raise _CommandError("app_not_found", f"No app {app_id} in group {group_id}")
 
-            auth_path = group_auth_dir(group_id) / f"{app_id}.json"
+            # The sign-in saves into a pending file, promoted over the app's saved sign-in only when
+            # it finishes (cmd_finish_group_app_auth). Saving straight into the real file let a
+            # cancelled or half-done sign-in overwrite a working one.
+            pending_path = _pending_auth_path(group_id, app_id)
+            pending_path.unlink(missing_ok=True)
             sess = _recorder_registry.create(
                 start_url=app.login_url,
-                storage_state_autosave_path=str(auth_path),
+                storage_state_autosave_path=str(pending_path),
                 wait_for_url=app.success_url,
                 auth_mode=True,
+                # Only the separate-window fallback uses a screen rect; in the panel the view
+                # fills whatever region the renderer reports.
                 window_rect=_window_rect(payload.get("window_rect")),
+                label=app.name,
+                # False from a caller with nowhere to draw the panel's view (a dialog).
+                in_panel=payload.get("in_panel") is not False,
             )
             try:
                 self._loop.run(sess.start())
@@ -416,7 +436,14 @@ class GroupsMixin:
                 _recorder_registry.pop(sess.session_id)
                 raise _CommandError("recorder_launch_failed", str(exc)) from exc
             self._active_recording = sess.session_id
-            return {"session_id": sess.session_id, "group_id": group_id, "app_id": app_id, "login_url": app.login_url}
+            return {
+                "session_id": sess.session_id,
+                "group_id": group_id,
+                "app_id": app_id,
+                "login_url": app.login_url,
+                # True = the sign-in is a view in Studio's browser panel (run id = session_id).
+                "embedded": bool(getattr(sess, "embedded", False)),
+            }
 
     def cmd_finish_group_app_auth(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """Stop a group-app login session and persist the captured state — the user's Done click
@@ -430,8 +457,10 @@ class GroupsMixin:
         it byte-identical instead of overwriting it with a freshly re-learned one (AUTH-15 — a
         pure session refresh must never look like the site's sign-in setup changed). A definition
         that fails the self-test does NOT end the session — the login window stays open and the
-        renderer shows why, so the user can keep signing in and click Done again (spec §3: only
-        the user's own Done ends this, never an automatic detection). Passing `force: true`
+        renderer shows why, so the user can keep signing in and click Done again. A page change alone
+        never ends a sign-in; this confirmation does, whether the user's Done asked for it or the
+        conversation's watcher did once the person left the login page (workflow_flow.py's
+        _flow_watch_sign_in). Passing `force: true`
         (the renderer's "Save anyway" action) skips straight to saving the session with no
         definition, falling back to the runtime's generic detection ladder for this app.
         A browser closed by hand (no learning possible — nothing left to observe) saves the
@@ -486,10 +515,13 @@ class GroupsMixin:
         _recorder_registry.pop(session_id)
 
         auth_path = group_auth_dir(group_id) / f"{app_id}.json"
-        if not _has_captured_session(auth_path):
+        pending_path = _pending_auth_path(group_id, app_id)
+        if not _has_captured_session(pending_path):
+            pending_path.unlink(missing_ok=True)
             message = "You closed the login window before signing in — nothing was saved."
             set_group_app_error(group_id, app_id, message)
             raise _CommandError("auth_capture_failed", message)
+        os.replace(pending_path, auth_path)
 
         group = set_group_app_auth(group_id, app_id, str(auth_path))
         if group is None:
@@ -514,6 +546,10 @@ class GroupsMixin:
         if sess is not None:
             self._loop.run(sess.stop())
             _recorder_registry.pop(session_id)
+            # A cancelled sign-in saves nothing: drop its pending file, never touching the saved one.
+            pending = str(getattr(sess, "storage_state_autosave_path", "") or "")
+            if pending.endswith(_PENDING_SUFFIX):
+                Path(pending).unlink(missing_ok=True)
         with self._rec_lock:
             if self._active_recording == session_id:
                 self._active_recording = None

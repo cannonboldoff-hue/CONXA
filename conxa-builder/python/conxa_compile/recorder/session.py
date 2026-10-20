@@ -31,6 +31,7 @@ from conxa_core.sanitize import scrub_surrogates as _sanitize_surrogates
 from conxa_core.storage import snapshots as snapshot_store
 
 
+from conxa_compile.recorder import host_view
 from conxa_compile.recorder.dialog_server import DIALOG_OVERRIDE_SCRIPT_TEMPLATE, DialogSyncServer
 from conxa_compile.recorder.frame_utils import (
     _frame_context_and_offset_sync,
@@ -43,6 +44,7 @@ from conxa_compile.recorder.frame_utils import (
     format_startup_error,
     is_blank_url,
 )
+from conxa_compile.recorder.screencast_video import ScreencastVideo
 
 # Both is_connected() and context.pages have been observed to read "gone" for
 # several real seconds — not just one flaky tick — while the browser is still
@@ -69,6 +71,10 @@ _NO_PAGES_GRACE_TICKS = 20  # ~20s at the check's ~1s cadence
 # it's pending — a forgotten Studio modal must not be able to wedge a recording forever.
 # ponytail: fixed timeout, not configurable — raise it if a real workflow needs longer.
 _JS_DIALOG_TIMEOUT_S = 120.0
+
+# Embedded recording: how long a download keeps the dispatcher turning before it is recorded, so
+# the click that started it (held by bridge.js for up to click_settle_max_ms) lands first.
+_DOWNLOAD_CLICK_GRACE_S = 0.75
 
 
 def url_matches_pattern(url: str, pattern: str, *, exclude_prefix: str = "") -> bool:
@@ -336,6 +342,25 @@ class RecordingSession:
     # auth_mode only: screen rect {x, y, width, height} (DIPs) to open the login window at, so
     # Studio can dock it beside the Applications column. None = the browser's own default placement.
     window_rect: dict | None = None
+    # What the browser panel titles this run's view (the app's name for a sign-in).
+    label: str = ""
+    # Record inside Build Studio's browser panel (host_view.py) instead of launching Chromium.
+    # Decided once, in SessionRegistry.create. What changes when True, all in this file:
+    #   - the page is a panel view found by marker; the context is Electron's one shared CDP
+    #     context, so only the run's own pages (_run_page_ids, from the panel's `targets`) are
+    #     recorded, and the binding + scripts are installed per run page, never context-wide;
+    #   - video is our own screencast per tab (screencast_video.py), not record_video_dir;
+    #   - storage state is seeded/captured through the run's pages (host_view), not the context;
+    #   - teardown disconnects and asks the panel to close the run instead of closing a browser;
+    #   - a sign-in (auth_mode) is a `signin` run at the pane's own size, and learn_auth's LIVE
+    #     capture uses a background tab of the run (_embedded_live_observation_sync).
+    embedded: bool = False
+    _run_page_ids: set[int] = field(default_factory=set)
+    _foreign_page_ids: set[int] = field(default_factory=set)
+    _page_target_ids: dict[int, str] = field(default_factory=dict)
+    _run_pages_open: set[int] = field(default_factory=set)
+    _screencasts: dict[int, ScreencastVideo] = field(default_factory=dict)
+    _dialog_script: str = ""
     # auth_mode only: set the moment a storage-state save actually succeeds, so the
     # caller can tell "browser closed after a session was saved" from "closed with
     # nothing captured" (see cmd_finish_group_app_auth). Distinct from reached_wait_url,
@@ -513,6 +538,33 @@ class RecordingSession:
         if self._dialog_server is not None:
             self._dialog_server.stop()
             self._dialog_server = None
+        if self.embedded:
+            # The views are the panel's: stop the videos while their pages still exist, then
+            # disconnect (browser.close() on a CDP connection only disconnects, and drops the
+            # run pages' scripts with it) and ask the panel to close the run.
+            try:
+                self._finalize_video_file_sync()
+            except Exception as exc:  # noqa: BLE001
+                self.binding_errors.append(f"video_finalize_error: {exc!s}")
+            self._context = None
+            if self._browser is not None:
+                try:
+                    self._browser.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                self._browser = None
+            if self._playwright is not None:
+                self._playwright.stop()
+                self._playwright = None
+            host_view.release(self.session_id)
+            self._page = None
+            self._nav_cdp_sessions.clear()
+            self._nav_history_state.clear()
+            self._nav_check_pages.clear()
+            self._nav_committed_at.clear()
+            self._nav_same_document.clear()
+            self._last_interaction_at.clear()
+            return
         if self._context is not None:
             self._context.close()
             self._context = None
@@ -555,6 +607,9 @@ class RecordingSession:
         session_dir = self.data_root / "sessions" / self.session_id
         if not session_dir.is_dir():
             raise RuntimeError(f"session_dir missing at finalize: {session_dir}")
+        if self.embedded:
+            self._finalize_screencasts_sync(session_dir)
+            return
 
         target = session_dir / "recording.webm"
         webm_files = [
@@ -621,6 +676,141 @@ class RecordingSession:
         if videos:
             (session_dir / "videos.json").write_text(json.dumps(videos, indent=2), encoding="utf-8")
 
+    # ── Embedded (browser panel) recording ─────────────────────────────────────────────────────
+
+    def _finalize_screencasts_sync(self, session_dir: Path) -> None:
+        """Embedded counterpart of the rename above: each tab's screencast already wrote its file
+        under its final name (recording.webm for tab_0, recording-<tab>.webm otherwise), so this
+        only stops them and writes the same videos.json contract frame_extractor reads."""
+        videos: dict[str, dict[str, Any]] = {}
+        errors: list[str] = []
+        for key, rec in list(self._screencasts.items()):
+            try:
+                rec.stop()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{rec.out_path.name}: {exc!s}")
+                continue
+            tab_id = self._tab_ids.get(key) or ("tab_0" if rec.out_path.name == "recording.webm" else None)
+            if tab_id and rec.out_path.is_file():
+                videos[tab_id] = {"file": rec.out_path.name, "start_wall_ms": rec.start_wall_ms}
+        self._screencasts.clear()
+        if videos:
+            (session_dir / "videos.json").write_text(json.dumps(videos, indent=2), encoding="utf-8")
+        if errors or not videos:
+            raise RuntimeError("; ".join(errors) or f"no recording video produced in {session_dir}")
+
+    def _start_screencast_sync(self, page: Any, file_name: str) -> ScreencastVideo:
+        from conxa_compile.recorder.frame_extractor import _find_ffmpeg
+
+        ffmpeg = _find_ffmpeg()
+        if not ffmpeg:
+            raise RuntimeError("ffmpeg not available — install Playwright's browsers (it ships ffmpeg)")
+        target = self._page_target_ids.get(id(page)) or host_view.target_id(self._context, page)
+        self._page_target_ids[id(page)] = target
+        session_dir = self.data_root / "sessions" / self.session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        rec = ScreencastVideo(
+            host_view.page_ws_url(target),
+            session_dir / file_name,
+            ffmpeg,
+            scale_fn=lambda: host_view.control("scale", timeout_s=1.0, runId=self.session_id)["scale"],
+        )
+        rec.start()
+        self._screencasts[id(page)] = rec
+        return rec
+
+    def _adopt_run_page_sync(self, page: Any) -> None:
+        """Make `page` one of the recording's pages: the bridge's binding and scripts go on THIS
+        page only (context-wide ones would also reach Studio's own window and other runs' views),
+        plus the listeners _on_context_page attaches in the launched path. A page adopted after
+        its first document loaded gets the binding at once (expose_binding reaches existing
+        frames) and the bridge from _ensure_bridge_installed_sync's backstop — the same path a
+        launched popup's first document takes."""
+        key = id(page)
+        self._run_page_ids.add(key)
+        self._run_pages_open.add(key)
+        page.on("close", lambda _p: self._on_run_page_closed(key))
+        if self.auth_mode:
+            return  # a sign-in records nothing: membership and "closed" are all it needs
+        page.expose_binding("__skillReport", self._binding_sink_sync)
+        page.add_init_script(self._bridge_script)
+        page.add_init_script(self._dialog_script)
+        self._attach_page_listeners(page)
+
+    def _on_run_page_closed(self, key: int) -> None:
+        # The panel closes a run whose last tab closed (the person closed it, or Studio did):
+        # that is this recording's "browser closed", seen at once rather than after the
+        # no-pages grace period.
+        self._run_pages_open.discard(key)
+        if not self._run_pages_open:
+            self._on_browser_disconnected()
+
+    def _classify_pages_sync(self, pages: list[Any]) -> list[Any]:
+        """The subset of Electron's pages that belong to this recording. A page is looked up once
+        (its devtools target id against the panel's list for this run) and remembered either way;
+        a lookup that fails leaves it unknown for the next call to retry."""
+        unknown = [p for p in pages if id(p) not in self._run_page_ids and id(p) not in self._foreign_page_ids]
+        if unknown:
+            try:
+                ours = host_view.run_target_ids(self.session_id)
+            except Exception as exc:  # noqa: BLE001
+                self.binding_errors.append(f"panel_targets_error: {exc!s}")
+                ours = None
+            for page in unknown if ours is not None else []:
+                try:
+                    target = host_view.target_id(self._context, page)
+                except Exception:  # noqa: BLE001 — closing or not yet attached: retry next time
+                    continue
+                if target not in ours:
+                    self._foreign_page_ids.add(id(page))
+                    continue
+                self._page_target_ids[id(page)] = target
+                try:
+                    self._adopt_run_page_sync(page)
+                    self._page = page  # a newly opened tab becomes the active one, as in _on_context_page
+                except Exception as exc:  # noqa: BLE001
+                    self.binding_errors.append(f"adopt_page_error: {exc!s}")
+        return [p for p in pages if id(p) in self._run_page_ids]
+
+    def _start_embedded_sync(self) -> None:
+        """Embedded counterpart of the launch + new_context + new_page block in
+        _run_sync_recorder: attach to a panel view and set it up the way that block sets up a
+        launched context. Video starts here, before the first navigation, as record_video_dir's
+        does from context creation. A sign-in (auth_mode) gets a panel view at the panel's own
+        size and nothing else — no bridge, dialog override or video, as in the launched path."""
+        browser, context, page, _tab = host_view.acquire(
+            self._playwright,
+            self.session_id,
+            kind="signin" if self.auth_mode else "record",
+            label=self.label,
+            viewport=None if self.auth_mode else host_view.RECORD_VIEWPORT,
+        )
+        self._browser, self._context, self._page = browser, context, page
+        self._browser.on("disconnected", lambda _: self._on_browser_disconnected())
+        self.browser_open = True
+        try:
+            self._page_target_ids[id(page)] = host_view.target_id(context, page)
+            if self.storage_state_path and Path(self.storage_state_path).is_file():
+                state = json.loads(Path(self.storage_state_path).read_text(encoding="utf-8"))
+                host_view.seed_storage_state(context, page, state)
+            if self.auth_mode:
+                self._adopt_run_page_sync(page)
+                return
+            self._video_session_start = time.monotonic()
+            self._bridge_script = _load_bridge_script(self.capture_hover)
+            self._dialog_server = DialogSyncServer(
+                on_opened=self._on_dialog_server_opened,
+                on_answered=self._on_dialog_server_answered,
+                on_timed_out=self._on_dialog_server_timed_out,
+            )
+            self._dialog_script = DIALOG_OVERRIDE_SCRIPT_TEMPLATE.replace("{PORT}", str(self._dialog_server.port))
+            self._adopt_run_page_sync(page)
+            rec = self._start_screencast_sync(page, "recording.webm")
+            self._video_session_start_wall_ms = rec.start_wall_ms
+        except Exception:
+            host_view.release(self.session_id)
+            raise
+
     def _compute_event_timestamp_ms(self, action: dict[str, Any], tab_id: str | None = None) -> int | None:
         """Convert ISO 8601 action.timestamp to ms offset from that tab's own video start.
 
@@ -668,7 +858,18 @@ class RecordingSession:
         try:
             path = Path(self.storage_state_autosave_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            self._context.storage_state(path=str(path))
+            if self.embedded:
+                # context.storage_state() would read Electron's default session, not the run's.
+                previous = None
+                if path.is_file():
+                    try:
+                        previous = json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        previous = None
+                state = host_view.capture_state(self._context, self._open_pages_sync(), previous)
+                path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            else:
+                self._context.storage_state(path=str(path))
             self._last_storage_state_save_at = now
             if self.auth_mode:
                 self.auth_captured = True
@@ -721,11 +922,14 @@ class RecordingSession:
             return None, "Nothing was captured to learn from yet."
 
         try:
-            live_page = self._context.new_page()
-            try:
-                live_obs = _navigate_and_observe_sync(live_page, self._context, login_url)
-            finally:
-                live_page.close()
+            if self.embedded:
+                live_obs = self._embedded_live_observation_sync(login_url)
+            else:
+                live_page = self._context.new_page()
+                try:
+                    live_obs = _navigate_and_observe_sync(live_page, self._context, login_url)
+                finally:
+                    live_page.close()
         except Exception as exc:  # noqa: BLE001
             return None, f"Couldn't check the signed-in page just now: {exc}"
 
@@ -750,6 +954,23 @@ class RecordingSession:
             return None, reason
         return definition, ""
 
+    def _embedded_live_observation_sync(self, login_url: str) -> dict:
+        """The LIVE capture in the panel: Electron can't open a page over CDP, so the panel adds
+        a background tab to the sign-in run (same partition, same session) and this observes it.
+        Its cookie names come from that partition, not context.cookies() (Electron's default
+        session — see host_view.py)."""
+        created = host_view.control("new_tab", runId=self.session_id, label="Checking sign-in", focus=False)
+        try:
+            page = host_view.find_page_by_marker(self._context, created["markerUrl"])
+            obs = _navigate_and_observe_sync(page, self._context, login_url)
+            obs["cookie_names"] = [c["name"] for c in host_view.page_cookies(self._context, page)]
+            return obs
+        finally:
+            try:
+                host_view.control("close_view", runId=self.session_id, tabId=created["tabId"])
+            except Exception:  # noqa: BLE001 — the run may already be closing
+                pass
+
     async def learn_auth(self, login_url: str, existing: dict | None = None) -> tuple[dict | None, str]:
         """Cross-thread entry point for cmd_finish_group_app_auth (handlers/groups.py), called
         from the Backend's own asyncio loop while the login browser is still open — same
@@ -769,14 +990,29 @@ class RecordingSession:
         self._learn_auth_pending = None
         return self._learn_auth_result
 
+    def _idle_sync(self, seconds: float) -> None:
+        """The pump loop's pause between ticks. Playwright's sync API only takes in the browser's
+        events (a navigation, a new page) while this thread is inside a Playwright call; a recording
+        makes plenty each tick, but a sign-in makes none, so its page.url stayed on the login page
+        forever — nothing saved on leaving it, success_url never matched, and the conversation could
+        never notice the person had signed in. Waiting through the page keeps the events flowing."""
+        if self.auth_mode and self._page is not None:
+            try:
+                self._page.wait_for_timeout(seconds * 1000)
+                return
+            except Exception:  # noqa: BLE001 — the page closed under us: a plain pause
+                pass
+        time.sleep(seconds)
+
     def _open_pages_sync(self) -> list[Any]:
         if self._context is None:
             return []
         try:
-            return [page for page in self._context.pages if not page.is_closed()]
+            pages = [page for page in self._context.pages if not page.is_closed()]
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"page_list_error: {exc!s}")
             return []
+        return self._classify_pages_sync(pages) if self.embedded else pages
 
     def _active_page_sync(self) -> Any | None:
         if self._page is not None:
@@ -824,10 +1060,22 @@ class RecordingSession:
                 else:
                     opened_by = "user"
             video_path: str | None = None
-            try:
-                video_path = page.video.path() if page.video else None
-            except Exception:  # noqa: BLE001
-                video_path = None
+            video_start_wall_ms = int(time.time() * 1000)
+            if self.embedded:
+                # tab_0's video started before its first navigation (_start_embedded_sync).
+                rec = self._screencasts.get(key)
+                try:
+                    if rec is None:
+                        rec = self._start_screencast_sync(page, f"recording-{tab_id}.webm")
+                    video_path = str(rec.out_path)
+                    video_start_wall_ms = rec.start_wall_ms
+                except Exception as exc:  # noqa: BLE001
+                    self.binding_errors.append(f"screencast_start_error:{tab_id}: {exc!s}")
+            else:
+                try:
+                    video_path = page.video.path() if page.video else None
+                except Exception:  # noqa: BLE001
+                    video_path = None
             try:
                 page_url = page.url
             except Exception:  # noqa: BLE001
@@ -837,7 +1085,7 @@ class RecordingSession:
                 "opened_by": opened_by,
                 "opener_tab": opener_tab,
                 "last_url": str(page_url or "").strip(),
-                "video_start_wall_ms": int(time.time() * 1000),
+                "video_start_wall_ms": video_start_wall_ms,
                 "video_path": video_path,
             }
             self._ensure_nav_history_session_sync(page)
@@ -983,6 +1231,10 @@ class RecordingSession:
                 kind = "browser_forward"
             to_url = str(cur["entries"][cur_index]) if 0 <= cur_index < len(cur["entries"]) else ""
             from_url = str(prev["entries"][prev_index]) if 0 <= prev_index < len(prev["entries"]) else ""
+            if from_url and is_blank_url(from_url):
+                # A panel tab starts on its internal marker page (about:blank?conxa_run=...); the
+                # recording should say what a browser would — the tab was blank.
+                from_url = "about:blank"
             if not kind:
                 # Not a Back/Forward. If the page itself never asked to navigate (no
                 # Page.frameRequestedNavigation since the last check), the browser did this on
@@ -1797,7 +2049,10 @@ class RecordingSession:
                     self._taken_download_names,
                 )
                 dest = self._downloads_dir / name
-                download.save_as(str(dest))
+                if self.embedded:
+                    self._save_panel_download_sync(download.url, dest, src_page)
+                else:
+                    download.save_as(str(dest))
                 if not dest.exists():
                     raise FileNotFoundError(f"download did not land on disk: {dest}")
                 self._fsync_path(dest)
@@ -1822,6 +2077,41 @@ class RecordingSession:
             self._enqueue_synthetic("download_observed", json.dumps(payload), src_page=src_page)
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"download_event_error: {exc!s}")
+
+    def _save_panel_download_sync(self, url: str, dest: Path, src_page: Any | None) -> None:
+        """A panel run's download is saved by Electron, never by Playwright: the panel hands over
+        the finished file (same as the runtime's EXEC-46 path).
+
+        The click that started the download must be recorded BEFORE download_observed — the
+        compiler reads "the next step is download_observed" as "this click downloads". bridge.js
+        holds a click's report until the DOM settles (click_settle_max_ms, 250 ms by default), and
+        Electron announces a download sooner than a launched Chromium does, so the report is often
+        still in flight here. Waiting keeps Playwright's dispatcher turning (as download.save_as()
+        does) for at least _DOWNLOAD_CLICK_GRACE_S after the download began, which delivers it."""
+        started = time.monotonic()
+        done = threading.Event()
+        errors: list[Exception] = []
+
+        def _save() -> None:
+            try:
+                host_view.control(
+                    "save_download", timeout_s=125.0,
+                    runId=self.session_id, url=url, dest=str(dest), timeoutMs=120000,
+                )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+            finally:
+                done.set()
+
+        threading.Thread(target=_save, daemon=True, name="panel-download").start()
+        pump = src_page or self._page
+        while not done.is_set() or time.monotonic() - started < _DOWNLOAD_CLICK_GRACE_S:
+            try:
+                pump.wait_for_timeout(50)
+            except Exception:  # noqa: BLE001 — the page closed: just wait
+                done.wait(0.05)
+        if errors:
+            raise errors[0]
 
     def _on_file_chooser(self, chooser: Any) -> None:
         """Suppresses the native OS file picker and asks the Studio to show its own,
@@ -1996,6 +2286,8 @@ class RecordingSession:
         (i.e. every dialog answered during the recording) needs its own fresh grant, or Windows
         silently no-ops the activation with no error anywhere, and Studio is left looking
         permanently pinned on top of the recording browser."""
+        if self.embedded:
+            return  # the page is a view inside Studio's own window — nothing to raise
         import sys as _sys
         if _sys.platform == "win32":
             try:
@@ -2178,72 +2470,77 @@ class RecordingSession:
             if not self.auth_mode:
                 self._downloads_dir = self.data_root / "sessions" / self.session_id / "downloads"
                 self._downloads_dir.mkdir(parents=True, exist_ok=True)
-            launch_args = [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--disable-session-crashed-bubble",
-                "--disable-infobars",
-                "--no-first-run",
-            ]
-            has_storage_state = bool(self.storage_state_path and Path(self.storage_state_path).is_file())
-            ctx_kwargs: dict[str, Any] = {}
-            if has_storage_state:
-                ctx_kwargs["storage_state"] = self.storage_state_path
-            if self.auth_mode and self.window_rect:
-                r = self.window_rect
-                launch_args += [
-                    f"--window-position={int(r['x'])},{int(r['y'])}",
-                    f"--window-size={int(r['width'])},{int(r['height'])}",
-                ]
-                # Let the page fill the window instead of Playwright's fixed 1280x720 emulation.
-                ctx_kwargs["no_viewport"] = True
-            if not self.auth_mode:
-                # Video recording is mandatory for non-auth sessions. Confirmed not the (sole)
-                # cause of recording-window flicker — disabling it during investigation did not
-                # eliminate the flicker, which came from the periodic storage_state autosave
-                # instead (see the pump-loop comment further down). Safe to keep enabled.
-                session_dir = self.data_root / "sessions" / self.session_id
-                session_dir.mkdir(parents=True, exist_ok=True)
-                ctx_kwargs["record_video_dir"] = str(session_dir)
-                ctx_kwargs["record_video_size"] = {"width": 1280, "height": 720}
-            self._browser = self._playwright.chromium.launch(headless=False, args=launch_args)
-            self._context = self._browser.new_context(**ctx_kwargs)
-            self._browser.on("disconnected", lambda _: self._on_browser_disconnected())
-            self.browser_open = True
-            # Allow Chromium to steal the foreground on Windows despite focus-lock
-            if _sys.platform == "win32":
-                try:
-                    import ctypes
-                    ctypes.windll.user32.AllowSetForegroundWindow(-1)
-                except Exception:
-                    pass
-            if not self.auth_mode:
-                import time as _time
-                self._video_session_start = _time.monotonic()
-                self._video_session_start_wall_ms = int(_time.time() * 1000)
-                self._bridge_script = _load_bridge_script(self.capture_hover)
-                self._context.expose_binding("__skillReport", self._binding_sink_sync)
-                self._context.add_init_script(self._bridge_script)
-                dialog_server = DialogSyncServer(
-                    on_opened=self._on_dialog_server_opened,
-                    on_answered=self._on_dialog_server_answered,
-                    on_timed_out=self._on_dialog_server_timed_out,
-                )
-                self._dialog_server = dialog_server
-                self._context.add_init_script(
-                    DIALOG_OVERRIDE_SCRIPT_TEMPLATE.replace("{PORT}", str(dialog_server.port))
-                )
-                self._context.on("page", self._on_context_page)
-                self._page = self._context.new_page()
+            if self.embedded:
+                # Build Studio's own browser panel instead of a Chromium window (host_view.py).
+                self._start_embedded_sync()
             else:
-                self._page = self._context.new_page()
+                launch_args = [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--disable-session-crashed-bubble",
+                    "--disable-infobars",
+                    "--no-first-run",
+                ]
+                has_storage_state = bool(self.storage_state_path and Path(self.storage_state_path).is_file())
+                ctx_kwargs: dict[str, Any] = {}
+                if has_storage_state:
+                    ctx_kwargs["storage_state"] = self.storage_state_path
+                if self.auth_mode and self.window_rect:
+                    r = self.window_rect
+                    launch_args += [
+                        f"--window-position={int(r['x'])},{int(r['y'])}",
+                        f"--window-size={int(r['width'])},{int(r['height'])}",
+                    ]
+                    # Let the page fill the window instead of Playwright's fixed 1280x720 emulation.
+                    ctx_kwargs["no_viewport"] = True
+                if not self.auth_mode:
+                    # Video recording is mandatory for non-auth sessions. Confirmed not the (sole)
+                    # cause of recording-window flicker — disabling it during investigation did not
+                    # eliminate the flicker, which came from the periodic storage_state autosave
+                    # instead (see the pump-loop comment further down). Safe to keep enabled.
+                    session_dir = self.data_root / "sessions" / self.session_id
+                    session_dir.mkdir(parents=True, exist_ok=True)
+                    ctx_kwargs["record_video_dir"] = str(session_dir)
+                    ctx_kwargs["record_video_size"] = {"width": 1280, "height": 720}
+                self._browser = self._playwright.chromium.launch(headless=False, args=launch_args)
+                self._context = self._browser.new_context(**ctx_kwargs)
+                self._browser.on("disconnected", lambda _: self._on_browser_disconnected())
+                self.browser_open = True
+                # Allow Chromium to steal the foreground on Windows despite focus-lock
+                if _sys.platform == "win32":
+                    try:
+                        import ctypes
+                        ctypes.windll.user32.AllowSetForegroundWindow(-1)
+                    except Exception:
+                        pass
+                if not self.auth_mode:
+                    import time as _time
+                    self._video_session_start = _time.monotonic()
+                    self._video_session_start_wall_ms = int(_time.time() * 1000)
+                    self._bridge_script = _load_bridge_script(self.capture_hover)
+                    self._context.expose_binding("__skillReport", self._binding_sink_sync)
+                    self._context.add_init_script(self._bridge_script)
+                    dialog_server = DialogSyncServer(
+                        on_opened=self._on_dialog_server_opened,
+                        on_answered=self._on_dialog_server_answered,
+                        on_timed_out=self._on_dialog_server_timed_out,
+                    )
+                    self._dialog_server = dialog_server
+                    self._context.add_init_script(
+                        DIALOG_OVERRIDE_SCRIPT_TEMPLATE.replace("{PORT}", str(dialog_server.port))
+                    )
+                    self._context.on("page", self._on_context_page)
+                    self._page = self._context.new_page()
+                else:
+                    self._page = self._context.new_page()
             try:
                 self._page.goto(self.start_url, wait_until="load", timeout=30000)
                 self._remember_page_url_sync(self._page)
             except Exception as goto_err:
                 self.binding_errors.append(f"navigation_error: {goto_err!s}")
             try:
-                self._page.bring_to_front()
+                if not self.embedded:
+                    self._page.bring_to_front()
             except Exception:
                 pass
             if not self.auth_mode:
@@ -2353,9 +2650,10 @@ class RecordingSession:
                             self._remember_current_url(current_url)
                             if self._url_matches_wait_target(current_url):
                                 self._autosave_storage_state_sync(force=True)
-                                # reached_wait_url is a passive UI hint only, no longer an
-                                # auto-stop trigger — spec P0 §3: only the user's own Done click
-                                # (cmd_finish_group_app_auth) ends an auth-mode session, so a
+                                # reached_wait_url is a passive hint only, never an auto-stop
+                                # trigger — only cmd_finish_group_app_auth's confirmation ends an
+                                # auth-mode session (asked for by Done, or by the conversation's
+                                # watcher, which treats this as a cue to check), so a
                                 # transient page that merely LOOKS like success_url (a redirect
                                 # hop, an MFA interstitial that briefly matches) can't close the
                                 # window out from under a login the human hasn't finished yet.
@@ -2502,7 +2800,7 @@ class RecordingSession:
                                 "streak": self._no_pages_streak,
                             })
                         self._no_pages_streak = 0
-                time.sleep(0.2)
+                self._idle_sync(0.2)
 
             if self._pending_dialog is not None:
                 # Recording was stopped (browser closed, Save clicked, etc.) while a dialog sat
@@ -2610,6 +2908,8 @@ class SessionRegistry:
         auth_mode: bool = False,
         capture_hover: bool = False,
         window_rect: dict | None = None,
+        label: str = "",
+        in_panel: bool = True,
     ) -> RecordingSession:
         sid = str(uuid.uuid4())
         sess = RecordingSession(
@@ -2621,6 +2921,8 @@ class SessionRegistry:
             auth_mode=auth_mode,
             capture_hover=capture_hover,
             window_rect=window_rect,
+            label=label,
+            embedded=bool(in_panel and settings.record_in_panel and host_view.available()),
         )
         self._sessions[sid] = sess
         return sess

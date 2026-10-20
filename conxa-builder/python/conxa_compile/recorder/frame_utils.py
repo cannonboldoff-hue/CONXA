@@ -215,7 +215,8 @@ _LOGIN_URL_PATTERNS = ("login", "signin", "sign-in", "auth", "sso", "oauth", "se
 
 def is_blank_url(url: str) -> bool:
     value = str(url or "").strip().lower()
-    return not value or value in {"about:blank", "chrome://newtab/"}
+    # about:blank?... is still a blank page — the browser panel's marker URL is one (host_view.py).
+    return not value or value in {"about:blank", "chrome://newtab/"} or value.startswith(("about:blank?", "about:blank#"))
 
 
 def classify_login_flow(events: list[RecordedEvent]) -> str:

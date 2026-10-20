@@ -299,6 +299,20 @@ def set_group_app_auth(group_id: str, app_id: str, storage_state_path: str) -> W
     return save_group(group)
 
 
+def mark_group_app_unverified(group_id: str, app_id: str) -> WorkflowGroup | None:
+    """The app's saved session was rewritten from a browser we never checked (a recording's
+    write-back), so the next gate must probe it again. Unlike set_group_app_auth this is not a
+    fresh login: it never vouches for the session or clears an expired verdict."""
+    group = get_group(group_id)
+    if group is None:
+        return None
+    app = _find_app(group, app_id)
+    if app is None:
+        return None
+    app.checked_at = None
+    return save_group(group)
+
+
 def set_group_app_auth_definition(group_id: str, app_id: str, definition: dict[str, Any] | None) -> WorkflowGroup | None:
     """Sets auth_definition directly. Unlike update_app's **fields (which skips None values on
     purpose — right for an ordinary partial edit), this allows clearing a definition back to
