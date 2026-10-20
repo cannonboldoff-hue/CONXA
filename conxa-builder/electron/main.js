@@ -289,6 +289,7 @@ ipcMain.handle("panel:bounds", (_e, { runId, tabId, rect }) => {
 });
 ipcMain.handle("panel:hide", () => { browserPanel.hideAll(); return true; });
 ipcMain.handle("panel:select-tab", (_e, { runId, tabId }) => browserPanel.selectTab(runId, tabId));
+ipcMain.handle("panel:new-tab", (_e, { runId, url }) => browserPanel.personTab(runId, { url }));
 ipcMain.handle("panel:close-tab", async (_e, { runId, tabId }) => { await browserPanel.closeTab(runId, tabId); return true; });
 ipcMain.handle("panel:close-run", async (_e, { runId }) => { await browserPanel.closeRun(runId); return true; });
 ipcMain.handle("panel:navigate", (_e, { runId, tabId, action, url }) => browserPanel.navigate(runId, tabId, { action, url }));
@@ -495,6 +496,13 @@ function createWindow() {
   browserPanel.init(mainWindow, {
     onTabsChanged: (runId, tabs, meta) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("panel:tabs", { runId, tabs, ...meta });
+    },
+    // A browser key pressed inside the page that only the renderer can act on (Ctrl+L: the address
+    // bar). The page's view has the keyboard, so Studio's own window takes it back first.
+    onShortcut: (runId, action) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.focus();
+      mainWindow.webContents.send("panel:shortcut", { runId, action });
     },
   });
   mainWindow.on("unmaximize", sendMaximizeState);

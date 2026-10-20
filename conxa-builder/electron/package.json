@@ -15,9 +15,10 @@
     "typecheck": "tsc --noEmit -p renderer/tsconfig.json",
     "lint": "eslint .",
     "test:bridge": "node test/bridge.test.js",
+    "test:panel": "node --test test/browser_panel.test.js",
     "test:release-state": "node --experimental-strip-types --test test/releaseState.test.mjs",
     "test:shell": "node --experimental-strip-types --test test/panels.test.mjs test/status.test.mjs test/thread.test.mjs",
-    "test": "npm run test:bridge && npm run test:release-state && npm run test:shell"
+    "test": "npm run test:bridge && npm run test:panel && npm run test:release-state && npm run test:shell"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

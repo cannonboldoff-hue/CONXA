@@ -5,11 +5,17 @@
  * Execute's: bound to 127.0.0.1 only, a random per-process token so nothing else on the machine can
  * drive it blind, JSON in and out.
  *
- *   new_view      { runId, label? }          -> { markerUrl, tabId }   first tab of a test run
+ *   new_view      { runId, label?, kind?, viewport? } -> { markerUrl, tabId }   first tab of a run;
+ *                 kind "test" (default) | "record" | "signin", viewport { width, height } fixes the page size
  *   new_tab       { runId, label?, focus? }  -> { markerUrl, tabId }   a tab_open step's later tab
  *   close_view    { runId, tabId }           -> { ok: true }           destroy ONE view
  *   run_end       { runId }                  -> { ok: true }           the run finished — the view stays
+ *   close_run     { runId }                  -> { ok: true }           destroy every view, wipe the partition
+ *   scale         { runId }                  -> { scale }              how much the page is shrunk to fit
+ *   targets       { runId }                  -> { targets: [{ tabId, targetId, opener }] }  record/signin runs
  *   save_download { runId, url, dest, timeoutMs? } -> { ok: true }
+ *
+ * The recorder (Python) calls this too, for record and sign-in runs (CONXA_HOST_CONTROL_URL).
  */
 const http = require("http");
 const crypto = require("crypto");
@@ -56,16 +62,19 @@ function start() {
   });
 }
 
-async function dispatch({ op, runId, tabId, label, focus, url, dest, timeoutMs }) {
+async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, dest, timeoutMs }) {
   if (!runId) throw new Error("missing runId");
   switch (op) {
-    case "new_view": return panel.newView(runId, { label });
+    case "new_view": return panel.newView(runId, { label, kind, viewport });
     case "new_tab": return panel.newTab(runId, { label, focus });
     case "close_view":
       if (!tabId) throw new Error("missing tabId");
       await panel.closeTab(runId, tabId);
       return { ok: true };
     case "run_end": await panel.runEnd(runId); return { ok: true };
+    case "close_run": await panel.closeRun(runId); return { ok: true };
+    case "scale": return panel.scaleOf(runId);
+    case "targets": return panel.targetsOf(runId);
     case "save_download":
       if (!url || !dest) throw new Error("missing url or dest");
       return panel.saveDownload(runId, url, dest, timeoutMs);

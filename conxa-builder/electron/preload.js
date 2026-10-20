@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("conxa", {
     setBounds: (payload) => ipcRenderer.invoke("panel:bounds", payload),
     hide: () => ipcRenderer.invoke("panel:hide"),
     selectTab: (payload) => ipcRenderer.invoke("panel:select-tab", payload),
+    newTab: (payload) => ipcRenderer.invoke("panel:new-tab", payload),
     closeTab: (payload) => ipcRenderer.invoke("panel:close-tab", payload),
     closeRun: (payload) => ipcRenderer.invoke("panel:close-run", payload),
     navigate: (payload) => ipcRenderer.invoke("panel:navigate", payload),
@@ -73,6 +74,12 @@ contextBridge.exposeInMainWorld("conxa", {
       const listener = (_e, msg) => handler(msg);
       ipcRenderer.on("panel:tabs", listener);
       return () => ipcRenderer.removeListener("panel:tabs", listener);
+    },
+    /** A browser key pressed inside the page that the renderer acts on: { runId, action: "focus-address" }. */
+    onShortcut: (handler) => {
+      const listener = (_e, msg) => handler(msg);
+      ipcRenderer.on("panel:shortcut", listener);
+      return () => ipcRenderer.removeListener("panel:shortcut", listener);
     },
   },
 
