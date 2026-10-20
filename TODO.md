@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 15 |
 | P1 — Blocking / Foundational | 3 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 40 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 43 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
-| P4 — Low Urgency, Opportunistic | 38 |
-| **Total** | **116** |
+| P4 — Low Urgency, Opportunistic | 37 |
+| **Total** | **118** |
 
 ---
 
@@ -415,7 +415,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (34 remaining)
+## P2 — High Value, Do Soon (37 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1165,6 +1165,24 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
   Found in Phase 5: the failure card can't show the page at the moment of failure (the evidence screenshot lives under the sandbox folder, which the `conxa-asset://` protocol doesn't serve); the compile card's "N compile credits left" assumes the `quota` event's `remaining` key (not confirmed against `/usage/compile/commit`); a confirm-only review can be edited into a free-form one afterwards without the gate re-checking the destructive step after it; the guard cannot pause inside a `for_each` body (it fails the test instead); the stop/decision of a paused test lives only in memory (a Studio restart mid-pause leaves the parked browser to time out).
 - **Complexity:** S each.
 
+### RT-10 — The hand-over banner is installed on the whole host browser, not just the run's pages
+- **Category:** Runtime / Isolation
+- **Description:** `runtime/app/handover.js` arms its "Done" banner with `context.exposeBinding("__conxaHandoverDone")` + `context.addInitScript(_bannerScript(...))`. When the runtime borrows a view from Conxa Execute or Build Studio's test panel (`host_browser.js`), Playwright's one context is the host app's default CDP context, which holds the app's own window and other runs' views — so the banner script and binding reach every page in the host process, including the app UI, until the runtime disconnects. Found while building BUILD-46 (`Done.md`; the recorder's embedded mode installs its bridge per run page for exactly this reason, TRD §4.7a).
+- **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
+- **Complexity:** S–M.
+
+### BUILD-48 — In-app recording: follow-ups after BUILD-46
+- **Category:** Builder
+- **Items:** (1) a manual end-to-end pass in a running, signed-in Studio on a real site needing sign-in (sign-in in the panel, record across a site-opened tab, pause/resume, widen, Finish → compile, check `frames/`, test replay, Group page Connect) — the pieces are tested separately and in a real-Electron harness, not together in the packaged app. (2) `localStorage` of an origin whose sign-in tab already closed keeps the previous save's copy (same limit as AUTH-20). (3) Playwright's own mouse input misses on a shrunk (scale < 1) page — only human input is used while recording today, but anything that drives the record view programmatically must account for the scale. (4) A popup adopted after its first document loads gets the dialog override only from its next navigation (alerts on that first document take the CDP dialog path). (5) If the person leaves the Group page mid-Connect, the sign-in view has nowhere to be drawn until they come back. (6) A slow download hand-off blocks the recorder loop: in 1 of 3 Gate B re-runs the panel took ~6 s to hand over the file, the popup opened meanwhile was adopted late, and the first click inside it was not recorded. Claim the download off the pump thread (or keep pumping while waiting, as `_save_panel_download_sync` already does for its first 0.75 s).
+- **Complexity:** S each; (1) M.
+
+### BUILD-47 — Two ordering races in the recorder's event stream (launched and embedded alike)
+- **Category:** Builder / Recorder Correctness
+- **Description:** Found running the same scripted session four times with today's launched recorder (Gate B of BUILD-46, now in `Done.md`): (1) `download_observed` was recorded after the *next* click in 2 of 4 runs — `bridge.js` holds a click's report until the DOM settles (up to `click_settle_max_ms`), and the download event can overtake it; the compiler reads "the step after this click is `download_observed`" as "this click downloads", so the click loses that meaning and a later, unrelated click gains it. The embedded path now waits `_DOWNLOAD_CLICK_GRACE_S` for the click; the launched path does not. (2) The synthetic `popup` event is stamped with the popup's own tab only when the pump has registered that tab before the event is drained (`_tab_key`); otherwise it falls back to the opener — 1 of 4 runs got the popup's tab, and the compiled step order around `tab_open`/`popup` changes with it.
+- **Why required:** recordings of the same actions compile differently from run to run; (1) can attach a download to the wrong click.
+- **Suggested fix:** order synthetic events against bridge payloads by their own timestamps (or hold a synthetic until the page's pending click reports have drained), and resolve the popup's tab deterministically before the `popup` event is materialized.
+- **Complexity:** M.
+
 ### COMPILE-1 — `collapse_date_picker_runs` leaves an orphaned raw day-click when the same date field is date-picked twice in one recording
 - **Category:** Compiler Correctness
 - **Description:** Discovered live-testing `mega-workflow` in dev mode. Recording the same date-of-birth field twice in one session (once via calendar prev/next arrows, once via the month/year `<select>` dropdowns), with an unrelated field typed in between the two, produces two clean `date_pick` steps as expected — but also leaves one extra, un-collapsed raw `click` step for the FIRST picked day-cell (`text="6"`, aria-label "Choose Thursday, September 6th, 2007"), positioned *after* the second `date_pick` in execution order. By the time this orphan step runs, the calendar has already been reopened and renavigated by the second `date_pick`, so the cell it targets no longer exists on the currently-displayed month — the runtime correctly reports "Element not found" and requests self-healing recovery. `conxa_compile/compiler/date_picker.py::collapse_date_picker_runs` scans linearly for consecutive events sharing a `date_context.grid` selector; the interleaved unrelated field (no `date_context`) correctly closes the first run, and a second run for the second date-pick opens correctly — but the raw day-click event for the *first* pick, verified present in the raw session recording (`identity_bundle.fingerprint.aria_label` = "Choose Thursday, September 6th, 2007", role `gridcell`, `react-datepicker__day` classes — unambiguously a real day-cell), was not classified with `date_context.role == "day"` at the point the pass scanned it and so fell through to `out.append(steps[i])` (an ordinary click) instead of being absorbed into the first `date_pick`. Root cause of *why* that one event's `date_context` didn't classify as a day-cell (a `bridge.js::buildDateContext`/`_cellIsoDate` question) was not run down — worth tracing with a fresh, minimal repro (two date-picks on one field, unrelated field typed in between) before attempting a fix.
@@ -1447,7 +1465,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 ---
 
-## P4 — Low Urgency, Opportunistic (38 remaining)
+## P4 — Low Urgency, Opportunistic (37 remaining)
 
 ### AUTH-10 — A same-host app whose success page is public could pass the signed-out-baseline check while actually signed out
 - **Category:** Execution & Recovery / Authentication
@@ -1456,12 +1474,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** S–M (would need a stronger baseline signal — e.g. an authenticated marker check similar to AUTH-8's `accountNameProbe`, run against the app's actual landing page — if a real site is ever shown to need it).
 - **Partially mitigated by AUTH-13 (`Done.md`):** an app whose sign-in was *learned* (has a saved `auth_definition`) is not exposed to this gap by construction — the definition is built from a genuine LIVE-vs-OUT contrast and self-tested (OUT must not evaluate "yes") before it's ever saved. This item stays open for the app that has no learned definition yet (never connected under the new flow, or force-saved past a failed self-test) and still falls back to the plain baseline compare.
 - **Also narrowed by AUTH-15 (`Done.md`):** the generic check now treats a login segment at ANY path depth as login-shaped (`LOGIN_PATH_RE`), which closes the case where a signed-out probe lands on a login-*shaped* page that merely differs from the baseline (Google's `/v3/signin/accountchooser`). What remains open is only the truly public, non-login-shaped success page described above.
-
-### AUTH-16 — The recording gate still scopes by the apps a workflow's URLs touch, while the runtime now gates on the whole group
-- **Category:** Build Studio / Authentication
-- **Description:** AUTH-14 (`Done.md`) made a group the unit of sign-in at run time — every app must be signed in. `handlers/session.py::cmd_start_recording` still narrows the record-time gate with `apps_for_workflow` (only apps the workflow's own URLs match must be connected; a non-matching workflow just gets an `auth_scope_warning`; an expired sibling only warns). A person can therefore record in a half-connected group and only meet the missing app at the first run's pre-flight. Align it: require every group app to be captured and not expired before recording. That also deletes `auth_scope_warning`, `expired_sibling_names` and their `workflowsApi.ts`/UI plumbing.
-- **Why required:** one rule at both gates; removes the last consumer of the per-workflow matcher in a gating role (it stays for the group page's platform chips and `unclaimed_hosts`).
-- **Complexity:** S–M (handler, UI copy, `conxa-cloud/tests/test_recording_group_app_scoping_and_writeback.py`).
 
 ### AUTH-17 — A signed-out Google Drive lands on a marketing page that `isAuthFailure` doesn't recognise
 - **Category:** Execution & Recovery / Authentication

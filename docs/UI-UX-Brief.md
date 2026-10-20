@@ -959,7 +959,21 @@ The page-per-feature layout is replaced by a three-column shell (design source: 
 
 ### 12.1 Test browser panel (BUILD-42)
 
-When a test runs with **Show browser** on, the inspector folds to a strip and a browser column opens beside the conversation: a tab strip, back / forward / reload, an address field, a **live** / **finished** marker, and a close button. The page stays on the final screen after the run so the person can check the result; closing the panel (or starting another test) frees it. Hiding the panel folds it to a strip and does not stop the run. While a dialog or sheet is open the page is hidden (a native view cannot be drawn over). Recording and sign-in still open a separate Chromium window.
+When a test runs with **Show browser** on, the inspector folds to a strip, the left navigation steps aside entirely, and a browser column opens beside the conversation (60 % of the window by default, draggable between 480 px and 75 %; the room navigation gave up goes to the browser). It works like Chrome: a tab strip with each site's icon, title and ×, and **+** for a new tab; back / forward / reload (stop while loading); an address bar that takes a site or a search; right-click menus; and Chrome's keys (Ctrl+T, Ctrl+W, Ctrl+L, Ctrl+Tab, Ctrl+1–9, Ctrl+R, Alt+←/→). A status row above the tabs carries the **live** / **finished** marker (or the sign-in / recording state, §12.2), and a finished test has a close button. The page stays on the final screen after the run so the person can check the result; closing the panel (or starting another test) frees it. Hiding the panel folds it to a strip and does not stop the run; hiding or closing it brings navigation back exactly as it was. While the browser is open, the navigation toggle (title bar, Ctrl \) brings navigation back as its rail for that run only — the person's own navigation setting is never changed. The same applies to recording and sign-in (§12.2). While a dialog or sheet is open the page is hidden (a native view cannot be drawn over).
+
+### 12.2 Recording and sign-in in the browser panel (BUILD-46, 2026-10-20)
+
+Design: `docs/artifacts/in-app-recording-flow/` (7 screens). "Create and start recording" no longer opens a separate window; the same browser column docks in on the right.
+
+- **New workflow form:** the button's hint reads "Records inside Conxa — no separate window", and a **What happens next** card lists the steps (sign in first only when the site has no saved sign-in).
+- **Getting ready:** blue top edge and a load bar until the site's first page is up.
+- **Sign-in:** amber edge, "Sign in to {App}", a **Not recorded** chip; footer **I'm signed in** / Cancel (and **Save anyway** when the check couldn't confirm). The conversation card carries the same buttons. Pressing the button is rarely needed: once the sign-in tab leaves the login page the conversation confirms the sign-in itself and moves on ("Signed in to {App} — detected automatically"); an automatic check that comes too early is silent.
+- **Recording:** red pulsing dot, "Recording · mm:ss", a red edge; footer shows how many actions were captured and the last one, plus Discard / Pause (Resume) / **Finish and save**. Paused: grey edge and dot, footer "nothing you do in the browser is recorded". The title bar shows a Recording / Paused chip, and its Browser button shows whether the panel is open.
+- **Tabs:** with more than one tab, a tab strip sits above the address bar; a tab the site opened carries a **New** badge until it has been looked at; the footer reads "Tab x of n".
+- **Widen:** the header's widen button gives the browser the room and folds the conversation to a 64 px rail (captured count, tab chips, **Show conversation**).
+- **Group page Connect:** the sign-in page is drawn inside the page's own sign-in pane, not the right-hand column.
+- **Deliberate deviations from the mockups** (a native view floats above every element): the paused state lives in the edge, header and footer instead of an overlay on the page, and no "captured" outline is drawn into the page (it would also land in the video compile reads).
+- **Fallback:** with no panel, or from a dialog that has nowhere to draw it (the run gate, the older record dialog), recording and sign-in open the separate Chromium window as before.
 
 ## 13. Human Edit inside the conversation shell (conversation redesign, Phase 6, 2026-10-18)
 

@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 28 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43 |
+| BUILD — Build Studio | 29 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46 |
 | EXEC — Execution & Recovery | 27 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -15,14 +15,14 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 1 | TEST-6 |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 17 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 18, 19, 20, 21 |
+| AUTH — Authentication | 18 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **90** | |
+| **Total** | **92** | |
 
 ---
 
-## BUILD — Build Studio (28 done)
+## BUILD — Build Studio (29 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -699,6 +699,12 @@ inferred from `outer_html`, not read directly.
 - **What fixed it:** the States tiles that did not exist yet — offline banner plus sidebar connection line (`cloud_ping`, `useConnection`), engine stopped / restarting notice with Restart and Copy diagnostics (`main.js` engine state, `engine:*` IPC), sign-in expired during a test as a pause instead of a failure (runtime `conxa/session_expired` tag, `needs_sign_in` status and card, lifecycle ▲), the unsaved-change prompt when leaving Human Edit (data router + `UnsavedChangeGuard`), Settings as a popup (Account / Usage / Testing / About, “AI credits”), and the first-launch page with its readiness checks. The remaining tiles had shipped with earlier phases. Docs: TRD §7.4b, App-Flow §3a, UI-UX-Brief §14, Backend-Schema §5.12, Implementation-Plan 1.16.
 - **Verified:** `test_test_flow.py` (29 incl. the new expiry, auto-fix-never-starts, flag-clearing and `cloud_ping` tests), full `pytest -q tests` (1829 pass; the two failures are the known `test_compile_path_has_no_numpy` subprocess import and the timing-sensitive `test_llm_router_backoff`, both untouched by this work), runtime `npm test` (868 pass), renderer `typecheck` / `lint` (0 errors) / `npm test` (27). **Not exercised:** the shell in a running, signed-in Studio (offline, engine stop and restart, Settings popup, first launch, the unsaved-change prompt) — it needs a Clerk sign-in. The runtime tag is only checked by syntax and by the Studio-side extractor; it needs the next `app-vX.Y.Z` build.
 - **Left on purpose:** see BUILD-45.
+
+### BUILD-46 — Record (and sign in) inside Build Studio's own browser panel
+**Resolved:** 2026-10-20
+- **Category:** Builder
+- **What fixed it:** "Create and start recording" and every sign-in now use a browser drawn inside Studio instead of a separate Chromium window, reversing BUILD-42's "stays in its own window" decision after a proof-first spike (`docs/archive/spikes/in-app-recording-2026-10.md`, Gates A and B). Panel run kinds and a fixed 1280×720 record page (`browser_panel.js`, `browser_control.js`); video rebuilt from CDP screencast frames into the same `recording*.webm` + `videos.json` contract (`recorder/screencast_video.py`); the recorder's embedded mode with per-page bridge/scripts, panel-owned page membership, CDP-session cookies and storage capture, a background-tab LIVE check for learn_auth (`recorder/host_view.py`, `RecordingSession.embedded`); the design's panel states — getting ready, sign-in, recording, paused, tab strip with New badge, widen to a conversation rail, title-bar chip, What-happens-next card (`BrowserPane.tsx`, `useNativeViewRegion.ts`, `browserStore.flow`, `FlowCards.tsx`, `NewWorkflowPage.tsx`, `SignInPane.tsx`). On by default (`SKILL_RECORD_IN_PANEL`); dialogs pass `in_panel: false` and keep the window. Docs: TRD §4.7/§4.7a/§6.1/§6.4, App-Flow, UI-UX-Brief §12.2, Build-Studio-Conversation-Plan, CLAUDE.md.
+- **Verified:** Gate B (same scripted session, launched vs embedded: events, frames, compiled steps equivalent); a real-Electron sign-in run (live check in a background tab, saved state holds the run's cookie + localStorage and nothing from the Studio window, run closed on stop); Gate B re-run three times after the sign-in changes (12/12 events twice; once a slow download hand-off cost a popup click, BUILD-48 item 6); `pytest -q tests` (all pass except the known timing-sensitive `test_llm_router_backoff`, which also flakes when run alone); Electron `npm test` (27), renderer typecheck, lint and production build. **Not exercised:** the whole flow in a running, signed-in Studio — tracked with the known limits as BUILD-48.
 
 ## EXEC — Execution & Recovery (27 done)
 
@@ -1469,7 +1475,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (17 done)
+## AUTH — Authentication (18 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -1562,6 +1568,14 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Category:** Execution & Recovery / Authentication
 - **Description:** Run Test of *Github to Drive File Handoff* (group Enterprise) failed at step 6 (Drive "New") with "Google's saved sign-in expired mid-run" twice in a row, although pre-flight reported `2/2_valid` and Google had been re-Connected seconds earlier; the second run skipped validation entirely (`ttl_cached:2`). The learned definition (AUTH-13) already judged the dead session correctly (verdict `no`) but was never in the stale pack — which defect (1) now prevents. Fixing (1) then made the same `sign_in_setup_stale` error reappear on a plain Reconnect of an unchanged app, which defect (4) fixes.
 - **Complexity:** M — three small, independent fixes plus the investigation; one further same-day fix for the regression defect (1) introduced.
+
+### AUTH-16 — The recording gate still scopes by the apps a workflow's URLs touch, while the runtime now gates on the whole group
+**Resolved:** 2026-10-20
+- **Resolution:** Reported as "Start Recording opened with Google Drive signed out" on the Github-to-Drive workflow. Two defects composed: the gate only required GitHub (the start URL), so Google's confirmed-expired probe became a card warning and recording started; and every recording's write-back (`_refresh_group_app_sessions` -> `set_group_app_auth`) stamped each app freshly verified, clearing Google's expired verdict so the next click didn't even warn. Fixed with one shared check, `handlers/session.py::group_apps_needing_sign_in(group)` (every group app: never connected, or a probe past the 600 s TTL says expired), used by `cmd_start_recording` (raises `auth_required` before any browser opens) and by the conversation flow (`_flow_missing_apps`, which now also opens sign-in for an EXPIRED app, one app after another, and only then records). The write-back now calls the new `group_store.mark_group_app_unverified` (clears `checked_at` only). `auth_scope_warning`/`expired_sibling_names` and their `workflowsApi.ts`/`RecordWorkflowDialog.tsx` plumbing are deleted. Tests: `test_recording_group_app_scoping_and_writeback.py` (rewritten for the whole-group rule, plus `test_a_discarded_recording_does_not_clear_an_expired_verdict`), `test_flow_conversation.py` (an expired app and a start-URL-unmatched app both open sign-in first).
+- **Category:** Build Studio / Authentication
+- **Description:** AUTH-14 (`Done.md`) made a group the unit of sign-in at run time — every app must be signed in. `handlers/session.py::cmd_start_recording` still narrows the record-time gate with `apps_for_workflow` (only apps the workflow's own URLs match must be connected; a non-matching workflow just gets an `auth_scope_warning`; an expired sibling only warns). A person can therefore record in a half-connected group and only meet the missing app at the first run's pre-flight. Align it: require every group app to be captured and not expired before recording. That also deletes `auth_scope_warning`, `expired_sibling_names` and their `workflowsApi.ts`/UI plumbing.
+- **Why required:** one rule at both gates; removes the last consumer of the per-workflow matcher in a gating role (it stays for the group page's platform chips and `unclaimed_hosts`).
+- **Complexity:** S–M (handler, UI copy, `conxa-cloud/tests/test_recording_group_app_scoping_and_writeback.py`).
 
 ### AUTH-18 — Sign-in tab jumped back to the first login page after typing the Google email
 **Resolved:** 2026-09-25

@@ -165,3 +165,35 @@ Starting a new chat used to show a short heading at the top and a small message 
 **Designed recording inside Build Studio instead of a pop-up browser — 2026-10-20**
 Pressing "Create and start recording" used to open a separate browser window, which was easy to lose behind other windows. The new design opens the browser inside Build Studio, on the right side of the conversation, so you can see each step being captured as you go. Sign-ins, new tabs a website opens, pausing and finishing all happen in that same panel. This is a design mock-up for now; the app itself hasn't changed yet.
 — 2026-10-20
+
+**Proved Build Studio's own browser can record, with video — 2026-10-20**
+Before moving recording into the browser panel inside Build Studio, we tested every piece it depends on: capturing clicks in every part of a page, pop-up tabs, a fixed desktop page size, saving sign-ins, and the step-by-step video. Everything worked, and the video's timing came out slightly more accurate than today's separate-window recorder. The video-making piece is now built into the app, ready for the next step, but recording still uses the separate window for now.
+— 2026-10-20
+
+**Build Studio's browser panel can now host recordings and sign-ins — 2026-10-20**
+The browser panel inside Build Studio used to be built only for test runs. It can now also hold a recording or a sign-in, always showing websites at the same desktop size and shrinking the picture to fit the panel. When a website opens a pop-up, it now appears as a tab in the panel and stays linked to the page that opened it, which sign-in pop-ups rely on. Recording itself still opens the separate window until the next step is finished.
+— 2026-10-20
+
+**Recording can now run inside Build Studio's own browser — behind a switch — 2026-10-20**
+The recorder can now capture a workflow inside the browser panel in Build Studio instead of a separate window, including the step-by-step video. We recorded the same session both ways and compared everything the app builds from it: the captured steps, the pictures for each step and the finished workflow all matched. Along the way we fixed a download being recorded before the click that started it. It stays switched off until the recording screens are finished.
+— 2026-10-20
+
+**Recording and signing in now happen inside Build Studio, not in a pop-up window — 2026-10-20**
+After you fill in a new workflow and press "Create and start recording", the website now opens in a browser on the right side of Build Studio instead of a separate window. If the site needs you to sign in first, you sign in right there, then recording starts. You can pause, widen the browser, and finish from the same place, and a red "Recording" badge stays at the top so you always know it's on. Signing in from a group's page also happens inside that page now.
+— 2026-10-20
+
+**The browser now gets more room when it opens — 2026-10-20**
+When the browser opens inside Build Studio, the menu on the left now slides out of the way so the browser can be bigger. This happens for tests, sign-ins and recordings alike. When you hide or close the browser, the menu comes back exactly as it was. If you need the menu while the browser is open, the menu button at the top brings back a slim version of it.
+— 2026-10-20
+
+**The browser inside Build Studio now works like Chrome — 2026-10-20**
+The browser inside Build Studio had no way to open or close tabs yourself, and you couldn't type a website into it. Now it has a proper tab bar with a plus button and a close button on each tab, an address bar where you can type a website or just search, and a right-click menu for copy, paste and opening links in a new tab. The usual keyboard shortcuts work too, like Ctrl+T for a new tab and Ctrl+W to close one. Anything you do this way while recording is captured as part of the workflow.
+— 2026-10-20
+
+**Recording now makes sure you're signed in to every app first — 2026-10-20**
+Pressing Start Recording could open the browser while you were signed out of an app the workflow needed later, like Google Drive in a workflow that starts on GitHub. Studio only checked the app the workflow starts on, and throwing away a recording also wrongly marked every sign-in as freshly checked. Now Studio checks every app in the workflow's group before the browser opens, and asks you to sign in to each one that's missing or expired, one after another. Recording only starts once they're all signed in, so you never find out halfway through.
+— 2026-10-20
+
+**Signing in inside Studio now shows the page and finishes by itself — 2026-10-20**
+When Studio asked you to sign in to an app, the browser on the right could stay completely blank, so there was nothing to sign in to. That's fixed, and you no longer have to press "I'm signed in": Studio notices the moment you've signed in and goes straight on to the next app or the recording. Cancelling a sign-in also used to wipe the sign-in you had saved before; now it leaves it alone.
+— 2026-10-20
