@@ -1,12 +1,15 @@
-import type { Ref } from 'react'
+import type { RefObject } from 'react'
 import type { SignInSession } from '@/components/GroupAuthWizard'
+import { useNativeViewRegion } from '@/components/shell/useNativeViewRegion'
+import { activeTab, useBrowserStore } from '@/store/browserStore'
 import { cn } from '@/lib/utils'
 import { Check, Loader2, Lock, ShieldAlert } from 'lucide-react'
 
 /**
- * The group page's browser pane. Sign-in itself happens in Chromium, which Studio opens docked
- * over `regionRef`'s rect (see GroupAuthWizard's `getWindowRect`) — this component owns the status
- * strip and the region the window sits on, and says so plainly if the window isn't covering it.
+ * The group page's browser pane. With Studio's browser panel, the sign-in is a panel view drawn
+ * into `regionRef` (session.runId set) and the right-hand browser pane stays closed; without it,
+ * Chromium opens docked over the region's screen rect (GroupAuthWizard's `getWindowRect`). This
+ * component owns the status strip and the region either one sits on.
  */
 export function SignInPane({
   session,
@@ -15,10 +18,14 @@ export function SignInPane({
 }: {
   session: SignInSession | null
   connectedApp: string | null
-  regionRef: Ref<HTMLDivElement>
+  regionRef: RefObject<HTMLDivElement>
 }) {
   const connected = !session && connectedApp !== null
   const phase = session?.phase
+  const runId = session?.runId ?? null
+  const panelRun = useBrowserStore((s) => s.run)
+  const run = runId && panelRun?.runId === runId ? panelRun : null
+  useNativeViewRegion(regionRef, run, activeTab(run))
 
   const tone = connected ? 'ok' : phase === 'failed' ? 'error' : phase === 'unconfirmed' ? 'warn' : 'run'
   const title = connected
@@ -76,7 +83,7 @@ export function SignInPane({
       </header>
       <div ref={regionRef} className="relative min-h-0 flex-1 bg-[#1a1a1a]">
         <div className="absolute inset-0 flex animate-in flex-col items-center justify-center gap-1.5 px-6 text-center fade-in duration-300 motion-reduce:animate-none">
-          <p className="text-sm text-[#a3a3a3]">{connected ? 'Browser closed.' : 'The sign-in browser opens here.'}</p>
+          <p className="text-sm text-[#a3a3a3]">{connected ? 'Browser closed.' : 'The sign-in page opens here.'}</p>
         </div>
       </div>
     </section>

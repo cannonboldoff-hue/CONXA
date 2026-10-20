@@ -120,8 +120,12 @@ export function startGroupAppAuth(
   groupId: string,
   appId: string,
   windowRect?: WindowRect,
-): Promise<{ session_id: string; group_id: string; app_id: string; login_url: string }> {
-  return cmd('start_group_app_auth', { group_id: groupId, app_id: appId, ...(windowRect ? { window_rect: windowRect } : {}) })
+  /** False when the caller has no region to draw the panel's view in (a dialog): the sign-in
+   *  then opens its own window. */
+  inPanel = true,
+  /** embedded = the sign-in is a view in Studio's browser panel, run id = session_id. */
+): Promise<{ session_id: string; group_id: string; app_id: string; login_url: string; embedded?: boolean }> {
+  return cmd('start_group_app_auth', { group_id: groupId, app_id: appId, in_panel: inPanel, ...(windowRect ? { window_rect: windowRect } : {}) })
 }
 
 /** P0 (Application Authentication Recording): while the login window is still open, this first

@@ -95,38 +95,33 @@ export const PANELS_STORAGE_KEY = 'conxa-shell-panels'
 
 // ── the embedded test browser (BUILD-42) ────────────────────────────────────────────────────
 
-/** Browser panel: 50 % of the window by default, never under 480 px, never over 70 %. */
-/** Below this width, opening the browser also folds navigation to its rail (the Panels spec's medium band). */
-export const MEDIUM_WINDOW = 1440
-
-export const BROWSER = { min: 480, defFraction: 0.5, maxFraction: 0.7 } as const
+/** Browser panel: 60 % of the window by default, never under 480 px, never over 75 %. */
+export const BROWSER = { min: 480, defFraction: 0.6, maxFraction: 0.75 } as const
 
 export type BrowserLayout = {
   /** 'panel' = shown beside the conversation; 'hidden' = no room (the header pill offers it back). */
   mode: 'panel' | 'hidden'
   width: number
-  /** The browser takes the inspector's place, so the inspector is always its 44 px strip while it is shown. */
-  navMode: 'full' | 'rail'
+  /** Navigation steps aside while the browser is shown ('hidden'); 'rail' when the person brought
+   *  it back. The browser also takes the inspector's place (the inspector is its 44 px strip). */
+  navMode: 'rail' | 'hidden'
 }
 
 /**
- * Where the test browser goes. It takes the inspector's place (the inspector folds to its strip);
- * on a medium window (under 1440) opening it also folds navigation to its 56 px rail; the workspace
- * never drops below WORKSPACE_MIN — on a wide window the browser simply takes less than half — and if
- * the browser can't have its 480 px even then it is hidden rather than squeezing the conversation.
+ * Where the browser goes. Opening it hides navigation entirely and the browser takes that room too
+ * (the person's own navigation setting is untouched, so hiding the browser brings navigation back as
+ * it was). `navShown` = the person asked for navigation while the browser is open: it comes back as
+ * the 56 px rail. The workspace never drops below WORKSPACE_MIN, and if the browser can't have its
+ * 480 px even then it is hidden rather than squeezing the conversation.
  */
 export function resolveBrowserLayout(i: {
   windowWidth: number
-  navWidth: number
-  navCollapsed: boolean
+  navShown?: boolean
   preferredWidth?: number | null
 }): BrowserLayout {
-  const navWidth = clamp(i.navWidth, NAV.min, NAV.max)
   const want = clamp(i.preferredWidth ?? i.windowWidth * BROWSER.defFraction, BROWSER.min, Math.max(BROWSER.min, i.windowWidth * BROWSER.maxFraction))
-  let navMode: BrowserLayout['navMode'] = i.navCollapsed ? 'rail' : 'full'
-  const room = () => i.windowWidth - (navMode === 'rail' ? NAV.rail : navWidth) - INSPECTOR.strip - WORKSPACE_MIN
-  if (i.windowWidth < MEDIUM_WINDOW && navMode === 'full') navMode = 'rail'
-  const available = room()
+  const navMode: BrowserLayout['navMode'] = i.navShown ? 'rail' : 'hidden'
+  const available = i.windowWidth - (navMode === 'rail' ? NAV.rail : 0) - INSPECTOR.strip - WORKSPACE_MIN
   if (available < BROWSER.min) return { mode: 'hidden', width: 0, navMode }
   return { mode: 'panel', width: Math.round(Math.min(want, available)), navMode }
 }

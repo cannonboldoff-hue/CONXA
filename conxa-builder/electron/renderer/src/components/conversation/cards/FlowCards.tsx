@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import {
   flowDiscardRecording,
   flowFinishRecording,
@@ -12,31 +10,27 @@ import {
 import { Button } from '@/components/ui/button'
 import { CardShell } from '@/components/conversation/parts'
 import type { CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
+import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
 import { selectSession, useRecordingStore } from '@/store/recordingStore'
+import { useBrowserStore, type FlowControls } from '@/store/browserStore'
 import { stepTypeColor, type StatusKind } from '@/lib/status'
 import { cn } from '@/lib/utils'
 
 const workflowIdOf = (threadId: string) => threadId.replace(/^wf:/, '')
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** Run a flow command: on failure, say so instead of leaving the card looking stuck. */
-function useFlowAction(threadId: string) {
-  const qc = useQueryClient()
-  const [busy, setBusy] = useState(false)
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true)
-    try {
-      await fn()
-    } catch (e) {
-      toast.error(errMsg(e))
-    } finally {
-      setBusy(false)
-      qc.invalidateQueries({ queryKey: ['lifecycle', workflowIdOf(threadId)] })
-      qc.invalidateQueries({ queryKey: ['lifecycles'] })
-      qc.invalidateQueries({ queryKey: ['workflows'] })
-    }
-  }
-  return { busy, run }
+type Refs = { session_id?: string; embedded?: boolean } | undefined
+
+/** While a card's sign-in or recording lives in Studio's browser panel, mirror its controls there. */
+function usePanelControls(controls: FlowControls | null) {
+  const setFlow = useBrowserStore((s) => s.setFlow)
+  const clearFlow = useBrowserStore((s) => s.clearFlow)
+  const key = controls ? JSON.stringify(controls) : ''
+  useEffect(() => {
+    if (!controls) return
+    setFlow(controls)
+    return () => clearFlow(controls.cardId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, setFlow, clearFlow])
 }
 
 /** A step-type chip: 1px border in the action's category colour, 4px radius, 11px text. */
@@ -49,25 +43,32 @@ export function KindChip({ kind }: { kind: string }) {
   )
 }
 
-/** Sign in to an app the workflow uses. Nothing is recorded until the person says they're signed in. */
+/** Sign in to an app the workflow uses. Nothing is recorded until the sign-in is confirmed — by
+ *  itself once the person is in (the backend watches the sign-in tab), or by the button. */
 export function SignInCard({ threadId, item }: CardProps) {
   const wf = workflowIdOf(threadId)
-  const { busy, run } = useFlowAction(threadId)
+  const { busy, run } = useFlowAction(wf)
   const state = String(item.state)
   const note = typeof item.note === 'string' ? item.note : ''
   const app = String(item.app_name ?? 'the app')
   const glyph: StatusKind = state === 'saved' ? 'ok' : state === 'waiting' ? 'warn' : 'none'
+  const refs = item.refs as Refs
+  usePanelControls(
+    state === 'waiting' && refs?.embedded && refs.session_id
+      ? { runId: refs.session_id, workflowId: wf, cardId: String(item.card_id), kind: 'signin', state, appName: app, note, canForce: item.can_force === true }
+      : null,
+  )
 
   return (
     <CardShell
       glyph={glyph}
       title={state === 'saved' ? `Signed in to ${app}` : `Sign in to ${app}`}
-      meta={state === 'saved' ? 'Saved for the whole group' : state === 'cancelled' ? 'Cancelled' : 'Sign-in only — recording starts after Done'}
+      meta={state === 'saved' ? 'Saved for the whole group' : state === 'cancelled' ? 'Cancelled' : 'Sign-in only — recording starts by itself once you’re signed in'}
       footer={
         state === 'waiting' ? (
           <>
             <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowSignInDone(wf, String(item.card_id)))}>
-              I’m signed in — Done
+              I’m signed in
             </Button>
             {item.can_force === true && (
               <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowSignInDone(wf, String(item.card_id), true))}>
@@ -109,8 +110,9 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 export function RecordingCard({ threadId, item }: CardProps) {
   const wf = workflowIdOf(threadId)
   const cardId = String(item.card_id)
-  const sessionId = String((item.refs as { session_id?: string } | undefined)?.session_id ?? '')
-  const { busy, run } = useFlowAction(threadId)
+  const refs = item.refs as Refs
+  const sessionId = String(refs?.session_id ?? '')
+  const { busy, run } = useFlowAction(wf)
   const state = String(item.state)
   const live = state === 'recording' || state === 'paused'
   const session = useRecordingStore(selectSession(sessionId))
@@ -129,6 +131,12 @@ export function RecordingCard({ threadId, item }: CardProps) {
   const last = session.rows[session.rows.length - 1]
   const glyph: StatusKind = state === 'saved' ? 'ok' : live ? 'run' : state === 'browser_closed' ? 'warn' : 'none'
   const warnings = Array.isArray(item.warnings) ? (item.warnings as string[]) : []
+  const inPanel = refs?.embedded === true
+  usePanelControls(
+    live && inPanel && sessionId
+      ? { runId: sessionId, workflowId: wf, cardId, kind: 'record', state, startedAt: typeof item.started_at === 'number' ? item.started_at : undefined, count, last: last?.text }
+      : null,
+  )
 
   const title =
     state === 'saved' ? 'Recording saved'
@@ -179,7 +187,7 @@ export function RecordingCard({ threadId, item }: CardProps) {
           <p className="text-xs text-[var(--text-meta)]">
             {state === 'paused'
               ? 'Paused — nothing you do in the browser is recorded.'
-              : `Recording everything you do in the browser window${item.host ? ` · ${String(item.host)}` : ''}`}
+              : `Recording everything you do in ${inPanel ? 'the browser on the right' : 'the browser window'}${item.host ? ` · ${String(item.host)}` : ''}`}
           </p>
           {last && <p className="mt-1 text-xs text-[var(--text-secondary)]">Last: {last.text}</p>}
           {warnings.map((w) => <p key={w} className="mt-1 text-xs text-status-warn">▲ {w}</p>)}

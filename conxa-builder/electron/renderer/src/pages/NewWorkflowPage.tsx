@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useShellData } from '@/hooks/useShellData'
 import { useShellStore } from '@/store/shellStore'
+import { useBrowserStore } from '@/store/browserStore'
 import { cn } from '@/lib/utils'
 
 const URL_RE = /^https?:\/\/[^\s/]+\.[^\s/]+/
@@ -82,6 +83,10 @@ export function NewWorkflowPage() {
     return groupQ.data?.group.apps.find((a) => [a.login_url, a.success_url].some((u) => hostOf(u) === host)) ?? null
   }, [url, urlOk, groupQ.data])
 
+  // Studio's own browser panel is open for recording (Electron could open its debugging port).
+  const inPanel = useBrowserStore((s) => s.available)
+  const needsSignIn = Boolean(urlOk && groupQ.data && !match?.captured_at)
+
   const create = useMutation({
     mutationFn: () => createWorkflow({ name: name.trim(), target_url: url.trim(), group_id: groupId, task_description: task.trim() }),
     onSuccess: ({ workflow }) => {
@@ -136,7 +141,7 @@ export function NewWorkflowPage() {
                 {match?.captured_at ? (
                   <><StatusGlyph kind="ok" /> Uses {match.name} — already signed in for {groupName}</>
                 ) : (
-                  <><StatusGlyph kind="warn" /> No sign-in saved for this site in {groupName}. The browser opens on its sign-in page first.</>
+                  <><StatusGlyph kind="warn" /> No sign-in saved for this site in {groupName}. The browser opens on its sign-in page first — sign in there, and recording starts after.</>
                 )}
               </p>
             )}
@@ -148,12 +153,24 @@ export function NewWorkflowPage() {
             <Textarea id="nw-task" value={task} onChange={(e) => setTask(e.target.value)} rows={3} disabled={create.isPending} className="mt-1.5" />
           </div>
 
+          {inPanel && (
+            <section aria-label="What happens next" className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-raised)] p-4">
+              <h3 className="text-xs font-medium text-[var(--text-meta)]">What happens next</h3>
+              <ol className="mt-2 space-y-1.5 text-sm text-[var(--text-secondary)]">
+                {needsSignIn && <li><span className="mr-2 tabular-nums text-[var(--text-meta)]">·</span>A browser opens on the right, inside Conxa, on the sign-in page. Sign in — nothing is recorded yet.</li>}
+                <li><span className="mr-2 tabular-nums text-[var(--text-meta)]">·</span>{needsSignIn ? 'Then recording starts on your starting page.' : 'A browser opens on the right, inside Conxa, on your starting page, and recording starts.'}</li>
+                <li><span className="mr-2 tabular-nums text-[var(--text-meta)]">·</span>Do the task as you normally would. Each action shows up in the conversation as it’s captured.</li>
+                <li><span className="mr-2 tabular-nums text-[var(--text-meta)]">·</span>Press Finish and save when you’re done. You can pause or widen the browser at any time.</li>
+              </ol>
+            </section>
+          )}
+
           {create.isError && <p className="text-sm text-status-error">✕ {(create.error as Error).message}</p>}
 
           <div className="flex items-center gap-2">
             <Button type="submit" variant="brand" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create and start recording'}</Button>
             <Button type="button" variant="ghost" disabled={create.isPending} onClick={() => { setDraft(null); navigate(-1) }}>Cancel</Button>
-            <span className="ml-auto text-xs text-[var(--text-meta)]">Opens the recording browser in its own window</span>
+            <span className="ml-auto text-xs text-[var(--text-meta)]">{inPanel ? 'Records inside Conxa — no separate window' : 'Opens the recording browser in its own window'}</span>
           </div>
         </form>
       </div>

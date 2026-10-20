@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { BROWSER, INSPECTOR, NAV, resolveBrowserLayout, resolveLayout } from '@/lib/panels'
-import { useBrowserStore } from '@/store/browserStore'
+import { paneRun, useBrowserStore } from '@/store/browserStore'
 import { BrowserPane } from '@/components/shell/BrowserPane'
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar'
 import { PageHeaderProvider, usePageHeaderContext } from '@/contexts/PageHeaderContext'
@@ -27,7 +27,7 @@ import { Sidebar } from '@/components/shell/Sidebar'
 import { PanelDivider } from '@/components/shell/PanelDivider'
 import { InspectorPane, InspectorStrip } from '@/components/shell/InspectorPane'
 import { SearchDialog } from '@/components/shell/SearchDialog'
-import { ArrowLeft, Globe } from 'lucide-react'
+import { ArrowLeft, Globe, MessageSquare } from 'lucide-react'
 
 // The workspace header row lines up with the sidebar's brand row. Keep them equal.
 const HEADER_ROW_HEIGHT = 'h-14'
@@ -149,6 +149,41 @@ function BrowserPill({ roomForPanel }: { roomForPanel: boolean }) {
   )
 }
 
+/** The conversation folded beside a widened browser: what has been captured, the tabs, and the way back. */
+function ConversationRail() {
+  const flow = useBrowserStore((b) => b.flow)
+  const run = useBrowserStore((b) => b.run)
+  const setWide = useBrowserStore((b) => b.setWide)
+  return (
+    <aside aria-label="Conversation (folded)" className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-[var(--border-subtle)] bg-[var(--bg-base)] py-3">
+      <Button variant="ghost" size="icon-sm" aria-label="Show conversation" title="Show conversation" onClick={() => setWide(false)}>
+        <MessageSquare className="size-4" />
+      </Button>
+      {flow?.kind === 'record' && (
+        <div className="flex flex-col items-center text-center" title="Actions captured so far">
+          <span className="text-base font-semibold tabular-nums text-[var(--text-primary)]">{flow.count ?? 0}</span>
+          <span className="text-[0.625rem] text-[var(--text-meta)]">captured</span>
+        </div>
+      )}
+      {run && run.tabs.length > 1 && (
+        <div className="flex flex-col items-center gap-1">
+          {run.tabs.map((t, i) => (
+            <button
+              key={t.id}
+              type="button"
+              title={t.label || t.url}
+              onClick={() => window.conxa.panel.selectTab({ runId: run.runId, tabId: t.id })}
+              className={cn('w-10 rounded-[6px] py-0.5 text-[0.6875rem] tabular-nums', t.active ? 'bg-white/[0.07] text-[var(--text-primary)]' : 'text-[var(--text-meta)] hover:bg-white/[0.04]')}
+            >
+              Tab {i + 1}
+            </button>
+          ))}
+        </div>
+      )}
+    </aside>
+  )
+}
+
 /** Keeps the store's window width current so panel layout can fold as the window narrows. */
 function useWindowWidth() {
   const setWindowWidth = useShellStore((s) => s.setWindowWidth)
@@ -186,9 +221,11 @@ function Shell({ children }: { children: ReactNode }) {
   // With the engine down the inspector has nothing to read, so it is hidden along with the workspace.
   const workflowId = engineDown ? null : (match?.params.workflowId ?? null)
   const s = useShellStore()
-  const browserRun = useBrowserStore((b) => b.run)
+  const browserRun = useBrowserStore((b) => paneRun(b))
   const browserFolded = useBrowserStore((b) => b.folded)
   const browserWidth = useBrowserStore((b) => b.width)
+  const browserWide = useBrowserStore((b) => b.wide)
+  const navShownByPerson = useBrowserStore((b) => b.navShown)
   const layout = resolveLayout({
     windowWidth: s.windowWidth,
     navWidth: s.navWidth,
@@ -197,22 +234,27 @@ function Shell({ children }: { children: ReactNode }) {
     inspectorAvailable: workflowId != null,
     inspectorOpen: s.inspectorOpen && !(browserRun && !browserFolded),
   })
-  const browser = browserRun ? resolveBrowserLayout({ windowWidth: s.windowWidth, navWidth: s.navWidth, navCollapsed: s.navCollapsed, preferredWidth: browserWidth }) : null
+  const browser = browserRun ? resolveBrowserLayout({ windowWidth: s.windowWidth, navShown: navShownByPerson, preferredWidth: browserWidth }) : null
   const browserShown = Boolean(browser && browser.mode === 'panel' && !browserFolded)
-  // While the browser is shown it takes the inspector's place (the inspector is its strip), and on a
-  // medium window it also folds navigation to the rail.
+  // Wide: the browser takes the room and the conversation folds to a 64 px rail (kept mounted).
+  const wide = browserShown && browserWide
+  // While the browser is shown it takes the inspector's place (the inspector is its strip) and
+  // navigation steps aside entirely, unless the person brought it back (then it is the rail). Hiding
+  // or closing the browser brings navigation back exactly as it was.
+  const navHidden = browserShown && browser?.navMode === 'hidden'
   const rail = layout.navMode === 'rail' || (browserShown && browser?.navMode === 'rail')
 
   return (
     <div className="flex min-h-0 flex-1">
       <div
-        className={cn('shrink-0 transition-[width] duration-200', engineDown && 'pointer-events-none opacity-60')}
+        // `invisible` (visibility: hidden) also keeps a stepped-aside sidebar out of the tab order.
+        className={cn('shrink-0 overflow-hidden transition-[width] duration-200', engineDown && 'pointer-events-none opacity-60', navHidden && 'invisible')}
         aria-disabled={engineDown || undefined}
-        style={{ width: rail ? NAV.rail : layout.navWidth }}
+        style={{ width: navHidden ? 0 : rail ? NAV.rail : layout.navWidth }}
       >
-        <Sidebar rail={rail} />
+        <Sidebar rail={rail || navHidden} />
       </div>
-      {!rail && (
+      {!rail && !navHidden && (
         <PanelDivider
           label="Resize navigation"
           value={s.navWidth}
@@ -225,7 +267,8 @@ function Shell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {wide && <ConversationRail />}
+      <div className={cn('relative min-h-0 min-w-0 flex-1 flex-col', wide ? 'hidden' : 'flex')}>
           <HeaderBar roomForPanel={browser?.mode === 'panel'} />
           <OfflineBanner />
           <main className="min-h-0 flex-1 overflow-hidden">{engineDown ? <EngineStoppedNotice /> : children}</main>
@@ -241,7 +284,7 @@ function Shell({ children }: { children: ReactNode }) {
       </div>
 
       {browserShown && browser && (
-        <BrowserPane width={browser.width} maxWidth={Math.max(BROWSER.min, Math.round(s.windowWidth * BROWSER.maxFraction))} />
+        <BrowserPane width={browser.width} maxWidth={Math.max(BROWSER.min, Math.round(s.windowWidth * BROWSER.maxFraction))} wide={wide} />
       )}
 
       {workflowId && layout.inspectorMode === 'panel' && (

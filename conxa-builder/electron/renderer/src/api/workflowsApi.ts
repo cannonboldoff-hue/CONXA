@@ -299,16 +299,15 @@ export function startWorkflowRecord(
   session_id: string
   workflow_id: string
   downloads_dir?: string
-  /** Non-blocking: a sibling app in this workflow's group looks signed out, but it
-   * isn't required by this specific workflow, so recording started anyway. See
-   * cmd_start_recording's expired_sibling_names handling. */
-  warnings?: string[]
 }> {
   return cmd('start_recording', {
     workflow_id: workflowId,
     auth_mode: false,
     url_variables: urlVariables ?? {},
     capture_hover: captureHover,
+    // This dialog stays open while recording, and a dialog hides the browser panel — so this
+    // path keeps its own browser window.
+    in_panel: false,
   })
 }
 

@@ -8,6 +8,7 @@ import {
   parsePanels,
   type PersistedPanels,
 } from '@/lib/panels'
+import { browserOpen, useBrowserStore } from '@/store/browserStore'
 
 // Storage can be empty, blocked or throw (private window, cleared site data) — the shell must
 // render correctly without it, so every access is wrapped.
@@ -79,7 +80,13 @@ export const useShellStore = create<ShellState>((set, get) => {
       update({ inspectorWidth: clamp(get().inspectorWidth + dir * ARROW_STEP, INSPECTOR.min, INSPECTOR.max) }),
     resetNav: () => update({ navWidth: NAV.def }),
     resetInspector: () => update({ inspectorWidth: INSPECTOR.def }),
-    toggleNav: () => update({ navCollapsed: !get().navCollapsed }),
+    toggleNav: () => {
+      // While the browser is open navigation steps aside; the toggle brings it back (or away again)
+      // for that run only, leaving the person's own setting for when the browser goes.
+      const browser = useBrowserStore.getState()
+      if (browserOpen(browser)) browser.setNavShown(!browser.navShown)
+      else update({ navCollapsed: !get().navCollapsed })
+    },
     toggleInspector: () => update({ inspectorOpen: !get().inspectorOpen }),
     setSearchOpen: (searchOpen) => set({ searchOpen }),
     setSettingsOpen: (settingsOpen, tab) => set(tab ? { settingsOpen, settingsTab: tab } : { settingsOpen }),

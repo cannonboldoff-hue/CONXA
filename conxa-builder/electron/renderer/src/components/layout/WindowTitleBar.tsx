@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Copy, Info, Minus, PanelLeft, PanelRight, Refres
 import { usePageHeaderContext } from '@/contexts/PageHeaderContext'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShellStore } from '@/store/shellStore'
-import { useBrowserStore } from '@/store/browserStore'
+import { browserOpen, useBrowserStore } from '@/store/browserStore'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +101,8 @@ export function WindowTitleBar() {
   const browserRun = useBrowserStore((b) => b.run)
   const browserFolded = useBrowserStore((b) => b.folded)
   const setBrowserFolded = useBrowserStore((b) => b.setFolded)
+  const browserOnScreen = useBrowserStore(browserOpen)
+  const recording = useBrowserStore((b) => (b.flow?.kind === 'record' ? (b.flow.state === 'paused' ? 'paused' : 'recording') : null))
 
   useEffect(() => {
     let mounted = true
@@ -124,7 +126,9 @@ export function WindowTitleBar() {
     <div className="app-region-drag flex h-10 shrink-0 select-none items-center bg-[var(--bg-base)] text-zinc-200">
       <div
         className="flex h-full shrink-0 items-center gap-1 bg-[var(--bg-sidebar)] px-3"
-        style={{ width: navCollapsed ? undefined : navWidth }}
+        // Lines up with the full sidebar below; while the browser is open the sidebar steps aside
+        // (or is only its rail), so this shrinks to its content too.
+        style={{ width: navCollapsed || browserOnScreen ? undefined : navWidth }}
       >
         <img src={logoUrl} alt="" className="mr-1 size-5 shrink-0 rounded-[5px]" draggable={false} />
         <span className="mr-2 truncate text-sm font-semibold text-white">Conxa</span>
@@ -157,13 +161,30 @@ export function WindowTitleBar() {
         <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
       </ChromeIconButton>
 
+      {recording && (
+        <span
+          role="status"
+          className="mr-2 flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--border-default)] px-2 py-0.5 text-xs text-zinc-300"
+        >
+          <span
+            aria-hidden
+            className={cn('size-1.5 rounded-full', recording === 'paused' ? 'bg-[#8e8e8e]' : 'animate-pulse bg-[#f87171] motion-reduce:animate-none')}
+          />
+          {recording === 'paused' ? 'Paused' : 'Recording'}
+        </span>
+      )}
+
       <Button
         type="button"
         variant="ghost"
         size="sm"
         disabled={!browserRun}
-        title="Test browser"
-        className="app-region-no-drag mr-2 gap-1.5 text-zinc-400 hover:bg-white/8 hover:text-white disabled:opacity-40"
+        aria-pressed={Boolean(browserRun && !browserFolded)}
+        title={browserFolded ? 'Show the browser' : 'Hide the browser'}
+        className={cn(
+          'app-region-no-drag mr-2 gap-1.5 text-zinc-400 hover:bg-white/8 hover:text-white disabled:opacity-40',
+          browserRun && !browserFolded && 'bg-white/[0.07] text-white',
+        )}
         onClick={() => setBrowserFolded(!browserFolded)}
       >
         <PanelRight className="size-4" />

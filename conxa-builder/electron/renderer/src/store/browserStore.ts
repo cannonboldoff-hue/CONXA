@@ -1,7 +1,39 @@
 import { create } from 'zustand'
 
-export type PanelTab = { id: string; active: boolean; label: string; url: string; canGoBack: boolean; canGoForward: boolean; loading: boolean }
-export type PanelRun = { runId: string; tabs: PanelTab[]; finished: boolean }
+export type PanelTab = {
+  id: string
+  active: boolean
+  label: string
+  url: string
+  canGoBack: boolean
+  canGoForward: boolean
+  loading: boolean
+  opener?: string | null
+  /** initial = the run's first tab; site = the page opened it; person = +, Ctrl+T or a menu. */
+  openedBy?: 'initial' | 'site' | 'person'
+  favicon?: string | null
+}
+/** test = the runtime's test run; record / signin = the recorder's (fixed 1280x720 page for record). */
+export type PanelRunKind = 'test' | 'record' | 'signin'
+export type PanelRun = { runId: string; tabs: PanelTab[]; finished: boolean; kind: PanelRunKind }
+
+/** The conversation's live sign-in or recording card, mirrored so the browser pane can carry its
+ *  controls. Published by the card while it is live; `runId` is the recorder session the panel
+ *  run belongs to. */
+export type FlowControls = {
+  runId: string
+  workflowId: string
+  cardId: string
+  kind: 'record' | 'signin'
+  /** recording | paused (record) · waiting (signin) */
+  state: string
+  startedAt?: number
+  appName?: string
+  note?: string
+  canForce?: boolean
+  count?: number
+  last?: string
+}
 
 type Store = {
   /** Whether Electron could open the debugging port. False → tests keep their own window. */
@@ -12,10 +44,21 @@ type Store = {
   folded: boolean
   /** The width the person dragged to, if they did. */
   width: number | null
+  /** The browser takes the room and the conversation folds to a rail. */
+  wide: boolean
+  /** Navigation hides while the browser is on screen; true = the person brought it back (as the
+   *  rail) for this run. Never touches their own navigation setting, so it returns when the browser goes. */
+  navShown: boolean
+  flow: FlowControls | null
   setAvailable: (a: boolean) => void
-  onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean }) => void
+  onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind }) => void
   setFolded: (f: boolean) => void
   setWidth: (w: number | null) => void
+  setWide: (w: boolean) => void
+  setNavShown: (v: boolean) => void
+  setFlow: (f: FlowControls) => void
+  /** Drops the card's controls, unless another card has published since. */
+  clearFlow: (cardId: string) => void
 }
 
 export const useBrowserStore = create<Store>((set) => ({
@@ -23,16 +66,31 @@ export const useBrowserStore = create<Store>((set) => ({
   run: null,
   folded: false,
   width: null,
+  wide: false,
+  navShown: false,
+  flow: null,
   setAvailable: (available) => set({ available }),
-  onTabs: ({ runId, tabs, finished, closed }) =>
+  onTabs: ({ runId, tabs, finished, closed, kind }) =>
     set((s) => {
-      if (closed || tabs.length === 0) return s.run?.runId === runId ? { run: null, folded: false } : s
+      if (closed || tabs.length === 0) return s.run?.runId === runId ? { run: null, folded: false, wide: false, navShown: false } : s
       // A new run replaces a finished one, and shows itself even if the last one was folded.
       const isNewRun = s.run?.runId !== runId
-      return { run: { runId, tabs, finished: Boolean(finished) }, folded: isNewRun ? false : s.folded }
+      return { run: { runId, tabs, finished: Boolean(finished), kind: kind ?? 'test' }, folded: isNewRun ? false : s.folded, wide: isNewRun ? false : s.wide, navShown: isNewRun ? false : s.navShown }
     }),
-  setFolded: (folded) => set({ folded }),
+  setFolded: (folded) => set(folded ? { folded, wide: false, navShown: false } : { folded }),
   setWidth: (width) => set({ width }),
+  setWide: (wide) => set({ wide }),
+  setNavShown: (navShown) => set({ navShown }),
+  setFlow: (flow) => set({ flow }),
+  clearFlow: (cardId) => set((s) => (s.flow?.cardId === cardId ? { flow: null } : s)),
 }))
 
 export const activeTab = (run: PanelRun | null): PanelTab | null => run?.tabs.find((t) => t.active) ?? run?.tabs[0] ?? null
+
+/** The run the right-hand pane shows, if any. A sign-in shows there only when the conversation owns
+ *  it; one started from the Group page is drawn in that page's own sign-in pane instead. */
+export const paneRun = (s: Pick<Store, 'run' | 'flow'>): PanelRun | null =>
+  s.run && (s.run.kind !== 'signin' || s.run.runId === s.flow?.runId) ? s.run : null
+
+/** Whether the browser pane is open on screen (not folded away). */
+export const browserOpen = (s: Pick<Store, 'run' | 'flow' | 'folded'>): boolean => paneRun(s) !== null && !s.folded

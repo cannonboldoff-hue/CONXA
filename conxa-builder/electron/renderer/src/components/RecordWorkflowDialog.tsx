@@ -40,7 +40,6 @@ export function RecordWorkflowDialog({
   const captureHover = false
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [siblingWarnings, setSiblingWarnings] = useState<string[]>([])
 
   // A recorded page's native alert/confirm/prompt is held open (not auto-dismissed — see
   // recorder/session.py's _on_dialog) until answered here, so the human sees the real box
@@ -57,7 +56,7 @@ export function RecordWorkflowDialog({
   const varPattern = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g
   const requiredVars = Array.from(workflowStartUrl.matchAll(varPattern), (m) => m[1])
 
-  // Recording is pre-flight-gated on the workflow's required app(s) being authenticated
+  // Recording is pre-flight-gated on every app in the workflow's group being authenticated
   // (see handlers/session.py's cmd_start_recording) — an auth_required failure means the
   // browser never launched. Rather than just showing the error text, surface the wizard
   // right here so the user can fix it and retry without leaving this dialog.
@@ -70,9 +69,6 @@ export function RecordWorkflowDialog({
       setActiveSession(data.session_id)
       setError('')
       setAuthBlocked(false)
-      // Non-blocking: a sibling app the recorder seeded (but this workflow doesn't
-      // require) looks signed out — recording started anyway, just flag it.
-      setSiblingWarnings(data.warnings ?? [])
     },
     onError: (e: Error) => {
       setError(e.message)
@@ -96,7 +92,6 @@ export function RecordWorkflowDialog({
       onOpenChange(false)
       setStep(1)
       setActiveSession(null)
-      setSiblingWarnings([])
       onRecorded()
     },
     onError: (e: Error) => {
@@ -114,7 +109,6 @@ export function RecordWorkflowDialog({
     onSettled: () => {
       setActiveSession(null)
       setError('')
-      setSiblingWarnings([])
       onRecorded()
     },
   })
@@ -328,9 +322,6 @@ export function RecordWorkflowDialog({
               </p>
             </div>
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
-            {siblingWarnings.map((w, i) => (
-              <p key={i} className="text-xs text-amber-300">{w}</p>
-            ))}
             {!finalizeMut.isPending && (
               <div className="flex gap-2">
                 <Button

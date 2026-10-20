@@ -13,6 +13,7 @@ import {
 } from '@/api/groupsApi'
 import { getWorkflowRecordingStatus } from '@/api/workflowsApi'
 import { cn } from '@/lib/utils'
+import { useBrowserStore } from '@/store/browserStore'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -33,7 +34,8 @@ import { Check, Loader2, MoreHorizontal, Pencil, RotateCw, ShieldAlert, ShieldCh
 type AppState = 'idle' | 'launching' | 'waiting' | 'unconfirmed' | 'captured' | 'failed'
 
 /** What the group page's browser pane shows while one app's sign-in window is open. */
-export type SignInSession = { appName: string; loginUrl: string; phase: 'launching' | 'waiting' | 'unconfirmed' | 'failed' }
+/** `runId` is set when the sign-in is a view in Studio's browser panel rather than its own window. */
+export type SignInSession = { appName: string; loginUrl: string; phase: 'launching' | 'waiting' | 'unconfirmed' | 'failed'; runId?: string }
 
 /** Edit-in-place dialog for a group app's name/login URL/success URL. */
 function EditAppDialog({
@@ -224,6 +226,8 @@ export function GroupAuthWizard({
   const [menuAppId, setMenuAppId] = useState<string | null>(null)
   const [appState, setAppState] = useState<AppState>('idle')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [embedded, setEmbedded] = useState(false)
+  const panelAvailable = useBrowserStore((s) => s.available)
   const [error, setError] = useState('')
   const allDoneRef = useRef(onAllAuthenticated)
   allDoneRef.current = onAllAuthenticated
@@ -235,12 +239,15 @@ export function GroupAuthWizard({
   const startMut = useMutation({
     mutationFn: async (appId: string) => {
       let rect: WindowRect | undefined
-      if (getWindowRect) {
+      // With the browser panel the sign-in is drawn into the page's pane — no screen rect needed.
+      if (getWindowRect && !panelAvailable) {
         // onMutate has just asked the page to draw its pane; give it two frames to lay out.
         await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
         rect = getWindowRect()
       }
-      return startGroupAppAuth(groupId, appId, rect)
+      // Only a host page (getWindowRect) has a region for the panel's view; inside a dialog the
+      // view would be hidden for the dialog's whole life, so there the sign-in keeps its window.
+      return startGroupAppAuth(groupId, appId, rect, Boolean(getWindowRect))
     },
     onMutate: (appId) => {
       setActiveAppId(appId)
@@ -249,6 +256,7 @@ export function GroupAuthWizard({
     },
     onSuccess: (data) => {
       setSessionId(data.session_id)
+      setEmbedded(Boolean(data.embedded))
       setAppState('waiting')
     },
     onError: (e: Error) => {
@@ -330,9 +338,10 @@ export function GroupAuthWizard({
   const activeApp = statusQ.data?.apps.find((a) => a.id === activeAppId)
   const phase = appState === 'launching' || appState === 'waiting' || appState === 'unconfirmed' || appState === 'failed' ? appState : null
   useEffect(() => {
-    onSessionRef.current?.(activeApp && phase ? { appName: activeApp.name, loginUrl: activeApp.login_url, phase } : null)
+    const runId = embedded && sessionId ? sessionId : undefined
+    onSessionRef.current?.(activeApp && phase ? { appName: activeApp.name, loginUrl: activeApp.login_url, phase, runId } : null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeApp?.name, activeApp?.login_url, phase])
+  }, [activeApp?.name, activeApp?.login_url, phase, embedded, sessionId])
 
   const autoStartedRef = useRef(false)
   useEffect(() => {

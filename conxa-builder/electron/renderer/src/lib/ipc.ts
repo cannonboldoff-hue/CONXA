@@ -1,5 +1,7 @@
 /** Typed wrapper over the preload `window.conxa` bridge. */
 
+import type { PanelRunKind, PanelTab } from '@/store/browserStore';
+
 export interface CmdSuccess<T> {
   ok: true;
   result: T;
@@ -66,10 +68,13 @@ declare global {
         setBounds: (p: { runId: string; tabId: string; rect: { x: number; y: number; width: number; height: number } }) => Promise<boolean>;
         hide: () => Promise<boolean>;
         selectTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
+        /** A tab the person opens (+, Ctrl+T, "Open link in new tab"), blank or on `url`. */
+        newTab: (p: { runId: string; url?: string }) => Promise<{ tabId: string }>;
         closeTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
         closeRun: (p: { runId: string }) => Promise<boolean>;
-        navigate: (p: { runId: string; tabId: string; action: 'back' | 'forward' | 'reload' | 'stop' | 'load'; url?: string }) => Promise<boolean>;
-        onTabs: (handler: (msg: { runId: string; tabs: { id: string; active: boolean; label: string; url: string; canGoBack: boolean; canGoForward: boolean; loading: boolean }[]; finished?: boolean; closed?: boolean }) => void) => () => void;
+        navigate: (p: { runId: string; tabId: string; action: 'back' | 'forward' | 'reload' | 'hard-reload' | 'stop' | 'load'; url?: string }) => Promise<boolean>;
+        onTabs: (handler: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind }) => void) => () => void;
+        onShortcut: (handler: (msg: { runId: string; action: 'focus-address' }) => void) => () => void;
       };
       update: {
         check: () => Promise<UpdateCheckResult>;
