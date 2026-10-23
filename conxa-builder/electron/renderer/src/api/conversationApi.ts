@@ -111,7 +111,7 @@ export const flowCompile = (workflowId: string) => cmd<{ ok: boolean }>('flow_co
 export const flowTestPrepare = (workflowId: string) => cmd<{ ok: boolean; card_id?: string }>('flow_test_prepare', { workflow_id: workflowId })
 export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<string, string>, guard: boolean, showBrowser: boolean) =>
   cmd<{ ok: boolean }>('flow_test_run', { workflow_id: workflowId, card_id: cardId, inputs, guard, show_browser: showBrowser })
-export const flowTestDecision = (workflowId: string, decision: 'run_rest' | 'yes' | 'end_here') =>
+export const flowTestDecision = (workflowId: string, decision: 'run_rest' | 'yes' | 'end_here' | `fork:${string}`) =>
   cmd<{ ok: boolean }>('flow_test_decision', { workflow_id: workflowId, decision })
 export const flowTestStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_test_stop', { workflow_id: workflowId })
 export const flowApprove = (workflowId: string, cardId: string) =>

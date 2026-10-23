@@ -486,6 +486,41 @@ def _branch_info(
     return summary, []
 
 
+def _fork_info(step: dict[str, Any]) -> dict[str, Any] | None:
+    """Read-only projection of SkillStep.outcome_fork for the editor (no nested step DTOs: option
+    bodies are edited only through the fork mutations, never patched in place)."""
+    fork = step.get("outcome_fork")
+    if not isinstance(fork, dict) or not fork.get("states"):
+        return None
+    clean = fork.get("clean") if isinstance(fork.get("clean"), dict) else {}
+    states = []
+    for st in fork.get("states") or []:
+        if not isinstance(st, dict):
+            continue
+        sig = st.get("signature") if isinstance(st.get("signature"), dict) else {}
+        states.append({
+            "id": st.get("id"),
+            "title": sig.get("title") or "",
+            "policy": dict(st.get("policy") or {}),
+            "options": [
+                {
+                    "id": o.get("id"),
+                    "label": o.get("label"),
+                    "role": o.get("role"),
+                    "recorded": bool(o.get("recorded")),
+                    "step_count": len(o.get("steps") or []),
+                }
+                for o in st.get("options") or [] if isinstance(o, dict)
+            ],
+        })
+    return {
+        "timeout_ms": fork.get("timeout_ms"),
+        "unknown_policy": fork.get("unknown_policy") or "ask_human",
+        "clean_observed": bool(clean.get("observed")),
+        "states": states,
+    }
+
+
 def _for_each_info(
     skill_id: str,
     step: dict[str, Any],
@@ -657,6 +692,7 @@ def step_to_dto(
         branch_steps=branch_steps,
         for_each_summary=for_each_summary,
         for_each_steps=for_each_steps,
+        fork_summary=_fork_info(step),
         optional_hint=step.get("optional_hint") if isinstance(step.get("optional_hint"), dict) else None,
     )
 

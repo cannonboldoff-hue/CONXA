@@ -275,7 +275,8 @@ class SessionMixin:
                 # back its session up to disk before the new one replaces it as
                 # the workflow's active session (set_recording below).
                 backup_path: str | None = None
-                if workflow.session_id:
+                # A variant is a SECOND take beside the primary: nothing to back up, nothing replaced.
+                if workflow.session_id and not payload.get("variant_of"):
                     try:
                         backup_path = _backup_previous_recording(workflow_id, workflow.session_id)
                     except OSError:
@@ -361,7 +362,21 @@ class SessionMixin:
                 result["downloads_dir"] = str(downloads_dir)
             if backup_path:
                 result["previous_recording_backup"] = backup_path
-            if workflow_id:
+            variant_of = str(payload.get("variant_of") or "").strip()
+            if workflow_id and variant_of:
+                # A variant recording complements the workflow's own recording: it must never
+                # replace it, reset its compile/test status, or (on stop/cancel) clear it.
+                from conxa_core.storage.workflow_store import add_variant
+
+                sess.variant_of = variant_of
+                updated = add_variant(workflow_id, sess.session_id, variant_of)
+                if updated is None:
+                    self._loop.run(sess.stop())
+                    _recorder_registry.pop(sess.session_id)
+                    raise _CommandError("workflow_not_found", f"No workflow {workflow_id}")
+                result["workflow_id"] = updated.id
+                result["variant_of"] = variant_of
+            elif workflow_id:
                 from conxa_core.storage.workflow_store import set_recording
 
                 updated = set_recording(workflow_id, sess.session_id)
@@ -415,6 +430,7 @@ class SessionMixin:
         """
         session_id = _safe_id(payload.get("session_id"), "session_id")
         sess = _recorder_registry.get(session_id)
+        is_variant = bool(getattr(sess, "variant_of", None))
         if sess is not None:
             self._loop.run(sess.stop())
             _recorder_registry.pop(session_id)
@@ -424,11 +440,15 @@ class SessionMixin:
 
         workflow_id_raw = str(payload.get("workflow_id") or "").strip()
         if workflow_id_raw:
-            from conxa_core.storage.workflow_store import clear_recording
+            from conxa_core.storage.workflow_store import clear_recording, remove_variant
 
             workflow_id = _safe_id(workflow_id_raw, "workflow_id")
             _refresh_group_app_sessions(workflow_id)
-            clear_recording(workflow_id)
+            if is_variant:
+                # Cancelling a variant must leave the workflow's own recording exactly as it was.
+                remove_variant(workflow_id, session_id)
+            else:
+                clear_recording(workflow_id)
         return {"ok": True}
 
     def cmd_stop_recording(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
@@ -448,10 +468,28 @@ class SessionMixin:
         # (session.py's forced autosave right before its teardown) already wrote
         # the file on the correct thread, so nothing else needs to touch it here.
         events = sess.snapshot_events()
+        is_variant = bool(getattr(sess, "variant_of", None))
         self._loop.run(sess.stop())
         with self._rec_lock:
             if self._active_recording == session_id:
                 self._active_recording = None
+        if workflow_id and is_variant:
+            # A variant never touches the workflow's own recording, hosts or duration.
+            from conxa_core.storage.workflow_store import remove_variant
+
+            workflow_id = _safe_id(workflow_id, "workflow_id")
+            _refresh_group_app_sessions(workflow_id)
+            if len(events) == 0:
+                remove_variant(workflow_id, session_id)
+                raise _CommandError("empty_recording", "No workflow actions were recorded.")
+            return {
+                "session_id": session_id,
+                "event_count": len(events),
+                "workflow_id": workflow_id,
+                "status": "variant_recorded",
+                "variant_of": getattr(sess, "variant_of", ""),
+                "workflow_kind": "workflow",
+            }
         if workflow_id:
             from conxa_core.storage.workflow_store import clear_recording, get_workflow, save_workflow
 

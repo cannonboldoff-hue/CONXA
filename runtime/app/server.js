@@ -606,6 +606,11 @@ function _buildReviewRequest(page, step, stepIndex, resolvedEntry, opts) {
   return buildReviewRequest(page, step, stepIndex, resolvedEntry, { skillPacksDir: SKILL_PACKS_DIR, ...opts });
 }
 
+// Outcome-fork pause/resume: a popup decision only a person can make. Same reasoning for its own
+// module as ai_review above -- a planned pause, never recovery -- and a human (not a model)
+// answers it; see fork_pause.js's header.
+const { validateForkAnswer, buildForkRequest } = require("./fork_pause");
+
 // EXEC-21 (hand-over shape): the human sibling of ai_review above, same reasoning for staying
 // its own module — a hand-over is a planned pause, not a failure, and must never touch
 // recovery_stage.js's escalation state or retry_budget.js's map. See handover.js's header for
@@ -1400,6 +1405,69 @@ async function _handleTool(name, args, extra) {
       }
     }
 
+    // Outcome-fork resume: a person answered "which option for this popup?". Like a hand-over there
+    // is no page-drift refusal (the person may have clicked in the page themselves; run.js looks
+    // again), but like ai_review an unusable answer gets a bounded re-ask rather than a failure.
+    // A call that names an outcome_fork step AND carries an answer, with no matching fork park,
+    // is refused outright: restarting on a fresh page would answer a popup that is not there.
+    // A guard pause parked AT a fork's index (a destructive option, test guard on) is a different
+    // park and falls through to the guard resume below.
+    const _forkAnswerKey = String(primary.resumeFrom);
+    const _forkAnswered = resolved.length === 1 && primary.isResume
+      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "outcome_fork"
+      && Object.prototype.hasOwnProperty.call(primary.reviewResults || {}, _forkAnswerKey);
+    const _peekForkPark = _forkAnswered ? _getParkedRecovery(_parkKey) : null;
+    const _resumeForkStep = !!(_forkAnswered && _peekForkPark && _peekForkPark.forkStepIndex === primary.resumeFrom);
+    if (_forkAnswered && !_resumeForkStep) {
+      appendRecoveryEvent({ event: "fork_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
+      _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc: "fork_resume_refused" });
+      if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+      runRegistry.end(_runId);
+      await _receiptFlush;
+      await _tracker.flush();
+      _tracker.destroy();
+      return err(
+        `The popup decision for step ${primary.resumeFrom + 1} has expired or was never opened. Call ` +
+        `execute_skill again for "${primary.entry.slug}" without resume_from to restart the skill from the beginning.`
+      );
+    }
+    if (_resumeForkStep) {
+      const forkPark = _peekForkPark;
+      const validation = validateForkAnswer(primary.reviewResults[_forkAnswerKey], forkPark.forkChoices || []);
+      if (!validation.valid) {
+        if (!checkReviewRetry(primary.entry.slug, primary.resumeFrom)) {
+          clearReviewRetry(primary.entry.slug, primary.resumeFrom);
+          await _discardPark(_parkKey, "fork_retry_exhausted");
+          if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+          runRegistry.end(_runId);
+          await _receiptFlush;
+          await _tracker.flush();
+          _tracker.destroy();
+          return err(
+            `The popup decision at step ${primary.resumeFrom + 1} did not get a usable answer after ` +
+            `${REVIEW_RETRY_MAX} attempt(s): ${validation.errors.join("; ")}. Call execute_skill again without ` +
+            `resume_from to restart the skill from the beginning.`
+          );
+        }
+        // Re-ask against the current page; the park (and its TTL) stays alive.
+        const forkResp = await buildForkRequest(forkPark.page, primary.resumeFrom, forkPark.forkInfo || { choices: [] }, {
+          validationErrors: validation.errors,
+        });
+        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+        runRegistry.end(_runId);
+        await _tracker.flush();
+        _tracker.destroy();
+        return forkResp;
+      }
+      clearTimeout(forkPark.timer);
+      _setParkedRecovery(_parkKey, null);
+      _park = forkPark;
+      clearReviewRetry(primary.entry.slug, primary.resumeFrom);
+      primary.inputs[`__fork_choice_${primary.resumeFrom}`] = validation.choice;
+      appendRecoveryEvent({ event: "fork_answered", slug: primary.entry.slug, step_index: primary.resumeFrom, choice: validation.choice });
+      _runTracker.emit("fork_answered", { si: primary.resumeFrom });
+    }
+
     // EXEC-21: resuming a hand-over pause — the human sibling of the ai_review resume above.
     // Two differences from review, both because a hand-over has no structured answer to
     // validate: (1) there is nothing to re-ask for, so a call naming a handover step with no
@@ -1447,7 +1515,7 @@ async function _handleTool(name, args, extra) {
     // (A release that rides along with an ai_review answer — a person's "yes" to a confirm-only
     // review also lets the steps behind it through — is handled by the review resume above, which
     // adopts the review's own park; this block is only for a park the guard itself created.)
-    if (_guardRelease && !_resumeReviewStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
+    if (_guardRelease && !_resumeReviewStep && !_resumeForkStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
       const guardPark = _getParkedRecovery(_parkKey);
       if (!guardPark || guardPark.guardStepIndex !== primary.resumeFrom) {
         appendRecoveryEvent({ event: "guard_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
@@ -2094,6 +2162,31 @@ async function _handleTool(name, args, extra) {
           reviewResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
         return reviewResp;
+      }
+
+      // Outcome fork: the popup needs a person's decision. A PLANNED pause, parked exactly like the
+      // ai_review one above (same park shape, TTL and fingerprint), with the valid choices stored on
+      // the park so the answer can be checked against what was actually offered. No recovery state,
+      // no retry budget -- nothing has been clicked.
+      if (runErr.forkPause) {
+        const _forkPage = runErr.page || page;
+        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
+        if (timer.unref) timer.unref();
+        _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
+          page: _forkPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, forkStepIndex: runErr.stepIndex, timer,
+          forkChoices: (runErr.info.choices || []).map((c) => c.id), forkInfo: runErr.info,
+          pageFingerprint: await capturePageFingerprint(_forkPage),
+          leaseKey: _leaseKey, hostRelease: _hostRelease,
+          attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
+        await closeExtraTabs(_openedTabs, _forkPage);
+        appendRecoveryEvent({ event: "fork_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
+        log("info", "fork_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
+        _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "fork" });
+        const forkResp = await buildForkRequest(_forkPage, runErr.stepIndex, runErr.info, {});
+        if (forkResp && Array.isArray(forkResp.content)) {
+          forkResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
+        }
+        return forkResp;
       }
 
       // RT-9: the test guard reached a step that can't be undone. Park the live page exactly like

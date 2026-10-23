@@ -26,6 +26,7 @@ from conxa_compile.compiler.date_picker import collapse_date_picker_runs, conver
 from conxa_compile.compiler.navigation_effects import fold_action_caused_navigations, generalize_url_pattern
 from conxa_compile.compiler.upload_binding import apply_bindings_to_compiled_steps
 from conxa_compile.compiler.loop_suggestion import detect_download_upload_loop_candidates
+from conxa_compile.compiler.outcome_fork import build_outcome_forks
 from conxa_compile.compiler.virtualized import detect_virtualized_container
 from conxa_compile.compiler.recovery_policy import (
     default_recovery_block,
@@ -1548,6 +1549,12 @@ def _build_step(
         asset_session_id=session_root.name,
         default_frame_label=chosen_frame,
     )
+    # The popup this action was made inside, with every button it offered (recorder dialog_context).
+    # Transient: compiler/outcome_fork.py reads it to decide whether this step is a decision
+    # ("Replace / Keep both / Cancel") and always strips it again, so popup message text never
+    # outlives compilation.
+    if isinstance(ev.get("dialog_context"), dict):
+        signals = {**signals, "dialog_context": ev["dialog_context"]}
     value, input_binding = _derive_input_binding(ev, policy)
     # Multiple-choice controls (radio/select/ARIA radiogroup/listbox -- checkbox groups are
     # handled separately by collapse_choice_group_runs, a post-pass below since one group spans
@@ -1894,6 +1901,12 @@ def compile_skill_package(
     # above) can now be upgraded to a run-input reference — this needs the full, deduplicated
     # set of declared inputs across the workflow, which only exists after the two calls above.
     upgrade_entity_binding_identifiers(steps, collect_input_literal_values(cleaned_events, pol))
+    # A run of clicks made inside one decision popup ("file already exists: Replace / Keep both /
+    # Cancel") becomes ONE outcome_fork step instead of a replayed click or a try_dismiss. After
+    # bindings (the fork copies finished steps) and before the report, the second opinion and the
+    # step keys, so everything downstream sees the final shape. Steps with no dialog_context
+    # (every older recording) pass through untouched.
+    steps = build_outcome_forks(steps, sid)
 
     _compile_log(
         "compile_phase",

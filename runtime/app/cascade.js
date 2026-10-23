@@ -28,6 +28,7 @@ const learnedDismissals = require("./learned_dismissals");
 const { evalOn } = require("./page_eval");
 const pageScripts = require("./page_scripts");
 const { recordOverlayObservation } = require("./overlay_capture");
+const { isDecisionDialog } = require("./fork");
 
 const INTERACTIVE_STEP_TYPES = new Set([
   "click", "dblclick", "right_click",
@@ -270,6 +271,24 @@ async function layer1Ladder(page, step, inputs, slug, stepIndex, primarySelector
         await scrollRoots[0].locator(primarySelector).first().scrollIntoViewIfNeeded({ timeout: SECONDARY_ACTION_TIMEOUT_MS });
       }
     } else if (remedy === "dismiss-overlay") {
+      // A popup that is asking the person to CHOOSE (Replace / Keep both / Cancel, Discard / Keep
+      // editing ...) is not in the way of the workflow, it is part of it -- and Escape, a generic
+      // close button, or a learned dismissal would each quietly pick "cancel" on their behalf.
+      // Refuse all three, say why, and leave the step failing as an INTERCEPTED click so it
+      // escalates (Tier B / a person) instead of acting. Consent banners and plain close-me popups
+      // are not decision dialogs and keep the zero-token known-pattern dismissal below.
+      try {
+        const live = await evalOn(page, pageScripts.dialogProbe);
+        if (live && isDecisionDialog(live)) {
+          if (primaryErr) {
+            primaryErr.unknownOverlay = true;
+            primaryErr.decisionDialog = { title: live.title, buttons: (live.controls || []).map((c) => c.name || c.text).filter(Boolean) };
+          }
+          appendRecoveryEvent({ event: "tier1_dismiss_refused_decision_dialog", slug, step_index: stepIndex,
+            title: live.title, buttons: (live.controls || []).map((c) => c.name || c.text).filter(Boolean) });
+          return false;
+        }
+      } catch (_) {}
       // Historical remedy first, unchanged: Escape closes OS-style dialogs.
       await page.keyboard.press("Escape").catch(() => {});
       // EXEC-5 known-pattern ladder: a never-recorded popup is usually built from one of a

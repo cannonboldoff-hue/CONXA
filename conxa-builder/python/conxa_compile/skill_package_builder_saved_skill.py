@@ -440,6 +440,85 @@ def _saved_for_each_step(step: dict[str, Any]) -> dict[str, Any] | None:
     return _copy_saved_common(step, out)
 
 
+_FORK_POLICY_MODES = frozenset({"auto", "by_input", "ask_human", "stop"})
+
+
+def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
+    """Outcome-fork step -- reads SkillStep.outcome_fork and serializes every option body the way
+    _saved_branch_step does, into the shape runtime/app/fork.js + run.js::runForkStep consume.
+
+    Safety lives here as well as in the runtime: an option with no runnable steps is dropped (a
+    fork must never offer a choice it cannot carry out), a policy naming a dropped option falls
+    back to ask_human rather than silently doing something else, and a fork with no runnable
+    option at all vanishes from execution.json (same "None => step is dropped" contract as every
+    other action). The popup's message text is never copied -- only its title, button labels and
+    value-free message tokens."""
+    fork = step.get("outcome_fork") if isinstance(step.get("outcome_fork"), dict) else {}
+    states_out: list[dict[str, Any]] = []
+    for raw_state in fork.get("states") or []:
+        if not isinstance(raw_state, dict) or not raw_state.get("id"):
+            continue
+        options_out: list[dict[str, Any]] = []
+        for raw_opt in raw_state.get("options") or []:
+            if not isinstance(raw_opt, dict) or not raw_opt.get("id"):
+                continue
+            body = _saved_branch_steps_list(raw_opt.get("steps"))
+            if not body:
+                continue
+            options_out.append({
+                "id": str(raw_opt["id"]),
+                "label": str(raw_opt.get("label") or raw_opt["id"]),
+                "role": str(raw_opt.get("role") or "neutral"),
+                "steps": body,
+            })
+        if not options_out:
+            continue
+        option_ids = {o["id"] for o in options_out}
+        policy = dict(raw_state.get("policy") or {})
+        mode = str(policy.get("mode") or "ask_human")
+        if mode not in _FORK_POLICY_MODES:
+            mode = "ask_human"
+        if mode == "auto" and policy.get("option_id") not in option_ids:
+            mode = "ask_human"
+        out_policy: dict[str, Any] = {"mode": mode}
+        if mode == "auto":
+            out_policy["option_id"] = policy["option_id"]
+            out_policy["author_approved"] = bool(policy.get("author_approved"))
+        elif mode == "by_input":
+            out_policy["input"] = str(policy.get("input") or "")
+            if policy.get("suggested") in option_ids:
+                out_policy["suggested"] = policy["suggested"]
+        elif mode == "ask_human":
+            if policy.get("suggested") in option_ids:
+                out_policy["suggested"] = policy["suggested"]
+        else:
+            out_policy["message"] = str(policy.get("message") or "")
+        sig = raw_state.get("signature") if isinstance(raw_state.get("signature"), dict) else {}
+        states_out.append({
+            "id": str(raw_state["id"]),
+            "kind": str(raw_state.get("kind") or "dialog"),
+            "signature": {
+                "title": str(sig.get("title") or ""),
+                "button_labels": [str(x) for x in sig.get("button_labels") or []],
+                "message_tokens": [str(x) for x in sig.get("message_tokens") or []],
+                "container_selector": str(sig.get("container_selector") or ""),
+            },
+            "options": options_out,
+            "policy": out_policy,
+        })
+    if not states_out:
+        return None
+    clean = fork.get("clean") if isinstance(fork.get("clean"), dict) else {}
+    out: dict[str, Any] = {
+        "type": "outcome_fork",
+        "timeout_ms": int(fork.get("timeout_ms") or 4000),
+        "unknown_policy": "stop" if fork.get("unknown_policy") == "stop" else "ask_human",
+        "clean": {"observed": bool(clean.get("observed"))},
+        "states": states_out,
+    }
+    return _copy_saved_common(step, out)
+
+
 def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None:
     action = normalize_action_kind(_step_action_name(step))
     if not is_supported_action(action):
@@ -611,6 +690,9 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
 
     if action == "for_each":
         return _saved_for_each_step(step)
+
+    if action == "outcome_fork":
+        return _saved_fork_step(step)
 
     return None
 
@@ -1090,6 +1172,12 @@ def _build_workflow_from_saved_skill(
                 # failing the whole build.
                 if on_warning:
                     on_warning(f"Step {raw_index}: drag-and-drop isn't supported and was removed from the skill.")
+                continue
+            if normalize_action_kind(action) == "outcome_fork":
+                # A fork none of whose options can run (every body step was unexportable) has
+                # nothing safe to offer. Same drop-and-warn shape as the cases around it.
+                if on_warning:
+                    on_warning(f"Step {raw_index}: the popup decision has no runnable choices and was removed from the skill.")
                 continue
             if normalize_action_kind(action) == "ai_review":
                 # EXEC-13: an inserted-but-unconfigured AI Review step (blank prompt — see

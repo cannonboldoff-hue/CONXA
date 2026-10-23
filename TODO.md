@@ -686,6 +686,21 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** S — dashboard clicks plus one manual verification pass, no further code expected unless verification surfaces a bug.
 - **Success criteria:** a real person can sign into a packaged Conxa Execute build, see their correct personal/team contexts, and successfully run a skill through the chat composer with the cost landing on the right workspace's AI Usage Credits.
 
+### EXEC-44 — Outcome forks: follow-ups after the first release (popups that need a decision)
+- **Category:** Execution & Recovery / Builder
+- **Description:** The first release (2026-10-24, `docs/TRD.md` §11.4) turns a recorded decision popup ("file already exists: Replace / Keep both / Cancel") into an `outcome_fork` step with a per-state policy, asks the author about it in Clarify, can compare a second "no popup" recording with the first, pauses for a person on a risky or unrecognised popup, and refuses to auto-dismiss decision popups. Not built yet:
+  1. **Native `alert`/`confirm`/`prompt` forks.** They need the dialog pre-armed before the triggering click (EXEC-29), so a native dialog still compiles to its own `dialog_accept`/`dialog_dismiss` step and is never forked.
+  2. **Late popups.** A popup that opens after the fork's watch window (1.5–8 s) is only caught by the INTERCEPTED path on a later step, which now refuses to dismiss it. Keeping the fork's signature armed for the next two steps would catch it as a known state.
+  3. **Insertable forks in Human Edit.** Forks only come from a recording; a vendor can't add one by hand or edit an option's steps in the UI (only `set_fork_policy`).
+  4. **Learn forks from field data.** `fork_unknown` / `fork_paused` telemetry could suggest "this popup keeps appearing for customers — add it as a state" in the dashboard.
+  5. **Popup screenshot on the Studio test card** (`waiting_fork`) and a second `fork_variant` offer when a workflow has several forks.
+  6. **Server-level pause/resume test.** `_resumeForkStep` / the fork park in `runtime/app/server.js` is covered by `fork_pause.js` + `runForkStep` unit tests and the Studio driver tests, but not by an in-process `server.js` test (none exists for `_resumeReviewStep` either).
+  7. **Real-app check.** Re-record a Google Drive upload with an existing file and run it through Claude Desktop with the file present and absent (the manual verification in the plan).
+- **Why required:** the first release deliberately keeps the safe default (fail closed to a person) everywhere it is incomplete, which costs interruptions rather than correctness.
+- **Dependencies:** item 1 depends on EXEC-29's dialog pre-arm; item 4 on the tracking/drift dashboards.
+- **Complexity:** M overall; each item is independent.
+- **Success criteria:** a workflow recorded against a popup that sometimes appears runs unattended on the paths the author approved, and every other path ends with a person's decision — never a silent Replace, Delete or Cancel.
+
 ### UPD-1 — True skill-pack cryptographic signing
 - **Category:** Auto Updates
 - **Description:** Today, only the runtime/app *update manifest* is Ed25519-signed (`manifest_signer.py`, verified by `runtime/manifest_manager.js`). Individual skill packs still rely on the bearer `sync_token` model (per-company, minted at publish time, embedded in `pack.json`) rather than a publisher signature over a per-pack Merkle manifest, as originally specced in the research corpus's `04-architecture/07-skill-pack.md` Part 2.

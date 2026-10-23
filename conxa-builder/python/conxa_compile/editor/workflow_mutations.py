@@ -8,6 +8,7 @@ structural mutations. Calls into workflow_dto.py for revalidation
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 from conxa_compile.compiler.action_policy import no_recovery_block
@@ -197,6 +198,153 @@ def reorder_branch_steps(document: dict[str, Any], step_index: int, new_order: l
         raise ValueError("invalid_reorder_permutation")
     reordered = [dict(nested[i]) for i in new_order]
     return _save_branch_body_steps(document, step_index, reordered)
+
+
+def set_fork_policy(
+    document: dict[str, Any], step_index: int, state_id: str, policy: dict[str, Any]
+) -> dict[str, Any]:
+    """The author's decision for one popup state of an outcome fork -- the ONLY writer of a state's
+    ``policy`` and so of ``author_approved`` (patch_gate refuses a generic patch to a fork, and the
+    compiler always writes ``author_approved: false``).
+
+    ``policy`` is one of ``{"mode": "auto", "option_id"}`` (the author picked an option to run every
+    time; picking it here IS the approval, including for a consequential one), ``{"mode":
+    "by_input"[, "input"]}`` (the person running it chooses per run: declares a select input whose
+    options are the option labels plus "ask", default "ask"), ``{"mode": "ask_human"}`` or
+    ``{"mode": "stop"[, "message"]}``. A state the author has answered is marked ``reviewed`` so it
+    is never asked about again."""
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+    step = dict(steps[step_index])
+    action = step.get("action")
+    if (action.get("action") if isinstance(action, dict) else action) != "outcome_fork":
+        raise ValueError("step_is_not_an_outcome_fork")
+    fork = dict(step.get("outcome_fork") or {})
+    states = [dict(s) for s in fork.get("states") or [] if isinstance(s, dict)]
+    state = next((s for s in states if s.get("id") == state_id), None)
+    if state is None:
+        raise ValueError("fork_state_not_found")
+    options = [o for o in state.get("options") or [] if isinstance(o, dict)]
+
+    mode = str((policy or {}).get("mode") or "")
+    new_policy: dict[str, Any]
+    if mode == "auto":
+        option_id = str(policy.get("option_id") or "")
+        if option_id not in {o.get("id") for o in options}:
+            raise ValueError("fork_option_not_found")
+        new_policy = {"mode": "auto", "option_id": option_id, "author_approved": True}
+    elif mode == "by_input":
+        input_id = re.sub(r"[^a-z0-9_]+", "_", str(policy.get("input") or "on_popup").lower()).strip("_") or "on_popup"
+        new_policy = {"mode": "by_input", "input": input_id}
+        recorded = next((o.get("id") for o in options if o.get("recorded")), None)
+        if recorded:
+            new_policy["suggested"] = recorded
+    elif mode == "ask_human":
+        recorded = next((o.get("id") for o in options if o.get("recorded")), None)
+        new_policy = {"mode": "ask_human", **({"suggested": recorded} if recorded else {})}
+    elif mode == "stop":
+        new_policy = {"mode": "stop", "message": str(policy.get("message") or f"Needs a decision: {(state.get('signature') or {}).get('title') or 'a popup'}")}
+    else:
+        raise ValueError("fork_policy_mode_invalid")
+    new_policy["reviewed"] = True
+    state["policy"] = new_policy
+    fork["states"] = [state if s.get("id") == state_id else s for s in states]
+    step["outcome_fork"] = fork
+
+    inputs = [dict(i) for i in doc.get("inputs") or [] if isinstance(i, dict)]
+    if mode == "by_input":
+        input_id = new_policy["input"]
+        spec = {
+            "id": input_id,
+            "type": "select",
+            "options": [str(o.get("label") or o.get("id")) for o in options] + ["ask"],
+            "default": "ask",
+            "optional": True,
+        }
+        inputs = [i for i in inputs if str(i.get("id") or "").lower() != input_id.lower()] + [spec]
+        _validate_skill_inputs(inputs)
+        # The step names the input it reads, so "this input is unused" never flags it.
+        step["input_binding"] = input_id
+        step["value"] = "{{" + input_id + "}}"
+    elif step.get("input_binding") and not any(
+        s.get("policy", {}).get("mode") == "by_input" for s in fork["states"]
+    ):
+        step["input_binding"] = None
+        step["value"] = None
+    doc["inputs"] = inputs
+
+    steps[step_index] = step
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    _invalidate_compile_report(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
+def apply_variant_observation(
+    document: dict[str, Any], step_index: int, session_id: str, observation: dict[str, Any]
+) -> dict[str, Any]:
+    """Fold what a variant recording showed into an outcome fork WITHOUT recompiling.
+
+    ``observation`` is compiler/variant_align.py::compare_variant's result. A clean path the variant
+    observed flips ``clean.observed``; a decision popup only the variant saw becomes a new state.
+    Anything in ``unexplained`` is deliberately ignored here -- it is reported to the author, never
+    merged. Existing states, their policies and the author's other edits are untouched, which is
+    exactly why this is a mutation on the saved skill and not a second compile."""
+    from conxa_compile.compiler.outcome_fork import state_from_dialog
+    from conxa_core.models.skill_spec import SkillStep
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+    step = dict(steps[step_index])
+    action = step.get("action")
+    if (action.get("action") if isinstance(action, dict) else action) != "outcome_fork":
+        raise ValueError("step_is_not_an_outcome_fork")
+    fork = dict(step.get("outcome_fork") or {})
+    states = [dict(s) for s in fork.get("states") or [] if isinstance(s, dict)]
+
+    if observation.get("clean_observed"):
+        clean = dict(fork.get("clean") or {})
+        seen = [x for x in clean.get("observed_in") or [] if x != session_id] + [session_id]
+        fork["clean"] = {"observed": True, "observed_in": seen}
+
+    template_dict = next(
+        (o["steps"][0] for s in states for o in s.get("options") or [] if isinstance(o, dict) and o.get("steps")), None
+    )
+    if template_dict is not None:
+        template = SkillStep.model_validate(template_dict)
+        used = {str(s.get("id")) for s in states}
+        for ctx in observation.get("new_dialogs") or []:
+            new_state = state_from_dialog(ctx, template, session_id, used)
+            if new_state is not None:
+                states.append(new_state)
+                used.add(new_state["id"])
+    fork["states"] = states
+    step["outcome_fork"] = fork
+    steps[step_index] = step
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    _invalidate_compile_report(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
 
 
 def confirm_optional_interstitial(

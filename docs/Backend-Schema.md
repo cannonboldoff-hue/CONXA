@@ -911,6 +911,34 @@ pending dialog.
 - **Not covered:** `beforeunload` confirmations (unhandled on both record and replay) and
   dialogs shown inside the auth-capture browser — see `TODO.md` EXEC-25/EXEC-26.
 
+### 3.4j Outcome fork: `outcome_fork` + `dialog_context`
+
+`SkillStep.outcome_fork` (`dict`) holds the known states of an app after an action and a policy for each; empty for ordinary steps. Mechanism: `docs/TRD.md` §11.4.
+
+```python
+outcome_fork: dict   # {timeout_ms, unknown_policy, clean, states}
+# clean:  {observed: bool, observed_in: [session_id]}
+# states: [{ id, kind: "dialog", observed_in: [session_id],
+#            signature: {title, button_labels, message_tokens, container_selector},
+#            options:   [{ id, label, role: "dismiss"|"consequential"|"neutral", recorded: bool, steps: [saved-step dicts] }],
+#            policy:    {mode:"auto", option_id, author_approved, reviewed?}
+#                     |  {mode:"by_input", input, suggested?, reviewed?}
+#                     |  {mode:"ask_human", suggested?, reviewed?}
+#                     |  {mode:"stop", message, reviewed?} }]
+```
+
+- `policy.author_approved` is written **only** by `set_fork_policy`; the compiler always writes `false`. A consequential option under `auto` without it pauses at run time.
+- `policy.reviewed` marks a state the author has answered (so Clarify never asks again).
+- `by_input` declares a `select` input named `policy.input` (options = option labels + `ask`, default `ask`) and sets the fork step's `input_binding`/`value` to it.
+- `message_tokens` are value-free words (quoted text and digits stripped); the popup's message never ships.
+- The execution form (`execution.json`) is `{type:"outcome_fork", timeout_ms, unknown_policy, clean:{observed}, states:[{id, kind, signature, options:[{id,label,role,steps}], policy}]}` (`skill_package_builder_saved_skill.py::_saved_fork_step`); an option with no runnable steps, or a fork with none, is dropped with a warning. Older runtimes fail loudly on the unknown type — bump `required_runtime` for packs containing one.
+
+`RecordedEvent.dialog_context` (optional; absent on older recordings): `{kind: "dom"|"native", container_signal, role, title, message (≤300, compile-time only), has_fields, buttons: [{tag, role, name, text, testid, id, chosen}] (≤8)}`.
+
+`Workflow.variant_session_ids`: `[{session_id, fork_step_key, recorded_at}]` — extra takes of the same task showing a different outcome. Never the workflow's own recording; cleared when the workflow is re-recorded.
+
+Studio RPCs: `set_fork_policy {skill_id, step_index, state_id, policy}`, `apply_variant {workflow_id, session_id, fork_step_key}`, `start_recording {…, variant_of}`, `flow_test_decision {decision: "fork:<choice>"}`.
+
 ### 3.4i Iteration: `for_each` (EXEC-38)
 
 `SkillStep.for_each` (`dict`) is the "for each row matching X, do steps A-C" iteration payload —
@@ -1430,6 +1458,12 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `for_each_start` | (EXEC-38) A for_each loop began — row enumeration finished | `si`, `total` (rows found), `cap` (effective max_iterations after clamping) |
 | `for_each_row_fail` | (EXEC-38) One row's loop body failed | `si`, `row_index`, `continued` (whether `on_row_error: "continue"` let the loop proceed) |
 | `for_each_done` | (EXEC-38) A for_each loop finished (success or a `stop`-mode failure that halted it) | `si`, `processed`, `failed`, `total` |
+| `fork_observed` | (Outcome fork) The fork step looked at the page | `si`, `st` (`clean`, `unknown`, or the matched state id) |
+| `fork_clean` | (Outcome fork) No popup appeared — the clean path | `si` |
+| `fork_unknown` | (Outcome fork) A popup appeared that no state recognises | `si` |
+| `fork_decided` | (Outcome fork) A policy or a person chose what to do | `si`, `st`, `opt` (option id/label, when one ran), `mode` (`run` \| `stop` \| `handled_in_page`), `src` (`policy` \| `input` \| `human`) |
+| `fork_paused` | (Outcome fork) The step stopped to ask a person | `si`, `st` |
+| `fork_answered` | (Outcome fork) A person's answer was accepted on resume | `si` |
 | `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
 | `park_resumed` | A parked run resumed execution on the same live page it paused on | `si` |
 | `handover_resumed` | (EXEC-21) A parked hand-over's self-driven resume completed | `si` |

@@ -245,6 +245,29 @@ class WorkflowEditorMixin:
         result.update(self._history_flags(skill_id))
         return result
 
+    def cmd_set_fork_policy(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """The author's decision for one popup state of an outcome fork. Structural mutation (the
+        fork's policy is not patchable) and the only place a policy gains ``author_approved``."""
+        import copy
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_compile.editor.workflow_mutations import set_fork_policy
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        step_index = int(payload.get("step_index") or 0)
+        policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else {}
+        doc = read_skill(skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        self._push_undo(skill_id, copy.deepcopy(doc))
+        try:
+            doc = set_fork_policy(doc, step_index, str(payload.get("state_id") or ""), policy)
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Could not set the popup decision: {exc}") from exc
+        write_skill(skill_id, doc)
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        return result
+
     def cmd_validate_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         from conxa_core.storage.json_store import read_skill
         from conxa_compile.editor.workflow_mutations import validate_skill_document

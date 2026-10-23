@@ -258,6 +258,7 @@ def set_recording(workflow_id: str, session_id: str) -> Workflow | None:
     workflow.session_id = session_id
     workflow.recorded_at = time.time()
     workflow.recording_status = "recorded"
+    workflow.variant_session_ids = []  # variants complemented the take that was just replaced
     workflow.skill_id = None
     workflow.compile_status = None
     workflow.compile_min_confidence = None
@@ -267,6 +268,27 @@ def set_recording(workflow_id: str, session_id: str) -> Workflow | None:
     workflow.last_test_status = "never"
     workflow.last_test_at = None
     workflow.last_test_error = None
+    return save_workflow(workflow)
+
+
+def add_variant(workflow_id: str, session_id: str, fork_step_key: str) -> Workflow | None:
+    """Attach a variant recording (a second take showing a different outcome) WITHOUT touching the
+    primary recording or any compile/test status -- unlike set_recording."""
+    workflow = get_workflow(workflow_id)
+    if workflow is None:
+        return None
+    workflow.variant_session_ids = [v for v in workflow.variant_session_ids if v.get("session_id") != session_id] + [
+        {"session_id": session_id, "fork_step_key": fork_step_key, "recorded_at": time.time()}
+    ]
+    return save_workflow(workflow)
+
+
+def remove_variant(workflow_id: str, session_id: str) -> Workflow | None:
+    """Forget a variant (cancelled, empty, or already applied). Leaves the primary alone."""
+    workflow = get_workflow(workflow_id)
+    if workflow is None:
+        return None
+    workflow.variant_session_ids = [v for v in workflow.variant_session_ids if v.get("session_id") != session_id]
     return save_workflow(workflow)
 
 

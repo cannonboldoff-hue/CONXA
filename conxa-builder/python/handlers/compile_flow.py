@@ -156,10 +156,21 @@ class CompileFlowMixin:
             clarify.step_name(steps[i]) for i, r in enumerate(report.get("steps") or [])
             if isinstance(r, dict) and r.get("warnings") and i < len(steps)
         ][:2]
+        def fork_copy(payload: dict[str, Any]) -> str | None:
+            # Wording only; falls back to the deterministic title on any failure.
+            from conxa_compile.llm.fork_question_copy import friendly_fork_question
+
+            text = friendly_fork_question(
+                payload["popup_title"], buttons=payload["buttons"], message_hint=payload["message_hint"],
+                fallback=payload["fallback"],
+            )
+            return text if text != payload["fallback"] else None
+
         questions = clarify.generate_questions(
             doc,
             source_lookup=lambda s: find_source_event(s, doc),
             answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
+            fork_copy=fork_copy,
         )
         clarify_store.save(workflow_id, {
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
@@ -225,10 +236,55 @@ class CompileFlowMixin:
         else:
             text = f"Here’s the workflow, saved as version {summary['version']}."
         harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=text))
+        self._flow_offer_variants(workflow_id, doc, sink)
         harness.post_card(
             _thread(workflow_id), "workflow_summary", "open", sink=sink, summary=summary,
             answered=len(answered), actions=["test", "review"] if summary["uncertain"] else ["test"],
         )
+
+    def _flow_offer_variants(self, workflow_id: str, doc: dict[str, Any], sink: Any) -> None:
+        """For each popup decision whose "no popup" case was never seen, offer to record that case.
+        Optional and skippable: the workflow already handles an absent popup safely (it just
+        carries on), the second take only turns that assumption into something observed."""
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.conversation import clarify, harness
+
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        keys = step_keys(steps)
+        for key, step in zip(keys, steps):
+            if clarify._action_name(step) != "outcome_fork":
+                continue
+            fork = step.get("outcome_fork") or {}
+            if (fork.get("clean") or {}).get("observed"):
+                continue
+            states = fork.get("states") or []
+            title = ((states[0].get("signature") or {}).get("title") if states else "") or "the popup"
+            harness.post_card(
+                _thread(workflow_id), "fork_variant", "open", sink=sink, refs={"fork_step_key": key},
+                title=title, actions=["record", "skip"],
+            )
+            return  # one offer at a time keeps the conversation calm
+
+    def _card_fork_variant(self, thread_id: str, card: dict[str, Any], action: str,
+                           body: dict[str, Any], rid: str, sink: Any) -> dict[str, Any]:
+        from conxa_compile.conversation import harness
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow_id = thread_id.replace("wf:", "", 1)
+        if card.get("state") != "open":
+            return {"ok": False, "code": "not_open", "message": "This was already answered."}
+        if action == "skip":
+            harness.update_card(thread_id, card["card_id"], sink=sink, state="skipped", actions=[])
+            return {"ok": True}
+        if action != "record":
+            raise _CommandError("card_action_unsupported", f"This card can’t “{action}”.")
+        workflow = get_workflow(workflow_id)
+        if workflow is None:
+            raise _CommandError("workflow_not_found", "That workflow isn’t available any more.")
+        key = str((card.get("refs") or {}).get("fork_step_key") or "")
+        harness.update_card(thread_id, card["card_id"], sink=sink, state="recording", actions=[])
+        self._flow_open_recording(workflow, rid, sink, variant_of=key)
+        return {"ok": True}
 
     # ── clarify answers ─────────────────────────────────────────────────────────────────────
 
@@ -311,6 +367,11 @@ class CompileFlowMixin:
                     "ai_review_on_failure": "abort"}}, rid)
                 self._log_edit("insert_step", skill_id, before, source="clarify", proposal_id=None)
                 added += 1
+            elif kind == "set_fork_policy":
+                self.cmd_set_fork_policy(
+                    {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "state_id": op["state_id"],
+                     "policy": op["policy"]}, rid)
+                self._log_edit("set_fork_policy", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "confirm_optional":
                 self.cmd_confirm_optional_interstitial(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "keep_as_step": bool(op.get("keep_as_step"))}, rid)

@@ -42,6 +42,9 @@ HANDOVER_ALLOWED_KEYS = frozenset({
 })
 BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"})
 FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"})
+# An outcome fork's states/options/policy change only through the set_fork_policy mutation (the
+# sole writer of policy.author_approved). A generic patch may rename the step and nothing else.
+FORK_ALLOWED_KEYS = frozenset({"intent", "semantic_description"})
 DEFAULT_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "target", "frame", "validation", "recovery", "value", "input_binding",
 })
@@ -473,6 +476,10 @@ def validate_editor_patch(
             raise ValueError("branch_step_allows_only_target_branch_intent_validation_recovery_frame")
         if "branch" in patch:
             _validate_branch_patch(act, patch.get("branch"))
+    if act == "outcome_fork":
+        invalid_keys = sorted(set(patch) - FORK_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError("outcome_fork_step_allows_only_intent_and_description")
     if act == "for_each":
         invalid_keys = sorted(set(patch) - FOR_EACH_ALLOWED_KEYS)
         if invalid_keys:

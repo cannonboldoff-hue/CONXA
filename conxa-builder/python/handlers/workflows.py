@@ -81,7 +81,31 @@ def _extract_ai_review_pause(result: dict[str, Any]) -> dict[str, Any] | None:
 
 
 _GUARD_META_KEY = "conxa/guard"
+_FORK_META_KEY = "conxa/fork"
+_FORK_STOP = "__stop__"
 _SESSION_EXPIRED_META_KEY = "conxa/session_expired"
+
+
+def _extract_fork_pause(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Pull the question from an outcome-fork pause (a popup that needs a PERSON to decide), or None
+    when `result` isn't one. Only `_meta` is trusted, and this MUST be checked before
+    _extract_ai_review_pause: the fork's prose also contains "resume_from: N", which the review
+    extractor's text fallback would misread as an ai_review question and hand to the model --
+    exactly what a human-only decision must never reach."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    fork = meta.get(_FORK_META_KEY)
+    if isinstance(fork, dict) and isinstance(fork.get("step_index"), int):
+        choices = [c for c in fork.get("choices") or [] if isinstance(c, dict) and c.get("id")]
+        return {
+            "step_index": fork["step_index"],
+            "title": str(fork.get("title") or ""),
+            "message": str(fork.get("message") or ""),
+            "reason": str(fork.get("reason") or ""),
+            "unknown": bool(fork.get("unknown")),
+            "suggested": fork.get("suggested"),
+            "choices": [{"id": str(c["id"]), "label": str(c.get("label") or c["id"]), "role": str(c.get("role") or "")} for c in choices],
+        }
+    return None
 
 
 def _extract_guard_pause(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -142,10 +166,12 @@ def _drive_runtime_pauses(
     guard_requested: bool,
     previewed: bool,
     mark: Any,
+    fork_hook: Any = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Keep calling the runtime until it stops pausing. Returns ``(final result, stopped_at)``.
 
-    Three kinds of pause: the RT-9 guard (a step that can't be undone — the person decides), a
+    Four kinds of pause: a popup decision (an outcome fork -- only the person decides, never the
+    model; with no one to ask the test ends there), the RT-9 guard (a step that can't be undone — the person decides), a
     confirm-only review (the workflow author's own "should a person confirm?" — the person answers,
     and "yes" also releases the guard in the same resume so they are not asked twice), and an
     ordinary ai_review (the sandbox model answers, as before). ``stopped_at`` is set when the person
@@ -165,6 +191,23 @@ def _drive_runtime_pauses(
                 return result, guard
             mark(f"Running the steps that can't be undone, from {guard['step_intent'] or 'here'}…")
             run_args = {**run_args, "resume_from": guard["step_index"], "_guard_release": True}
+            result = call(run_args)
+            continue
+        fork = _extract_fork_pause(result)
+        if fork is not None:
+            pauses_seen += 1
+            if pauses_seen > _MAX_AI_REVIEW_PAUSES:
+                raise RuntimeError(
+                    f"A popup decision paused {pauses_seen} times in one test run — stopping instead of looping."
+                )
+            mark(f"Waiting for your decision on “{fork['title'] or 'a popup'}”…")
+            choice = fork_hook(fork) if fork_hook is not None else _FORK_STOP
+            valid = {c["id"] for c in fork["choices"]}
+            if choice not in valid or choice == _FORK_STOP:
+                return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
+                                "remaining": 0, "run_id": "", "declined": True}
+            run_args = {**run_args, "resume_from": fork["step_index"],
+                        "review_results": {str(fork["step_index"]): {"choice": choice}}}
             result = call(run_args)
             continue
         review = _extract_ai_review_pause(result)
@@ -775,6 +818,7 @@ class WorkflowsMixin:
         guard_requested = bool(payload.get("guard"))
         _hook = lambda name: payload.get(name) if callable(payload.get(name)) else None  # noqa: E731
         phase_hook, guard_hook, review_hook = _hook("_phase_hook"), _hook("_guard_hook"), _hook("_review_hook")
+        fork_hook = _hook("_fork_hook")  # called with a popup-decision question; returns a choice id
 
         workflow = get_workflow(workflow_id)
         if workflow is None:
@@ -952,7 +996,7 @@ class WorkflowsMixin:
                     runtime_dir, "cancel_execution", {"run_id": run_id}, conxa_dir=conxa_dir,
                     env={"CONXA_DATA_DIR": str(test_data_dir)}),
                 answer_review=self._answer_ai_review, guard_hook=guard_hook, review_hook=review_hook,
-                guard_requested=guard_requested, previewed=previewed, mark=_mark,
+                guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
             )
             _mark("Runtime call finished")
         except (RuntimeToolError, RuntimeError) as exc:

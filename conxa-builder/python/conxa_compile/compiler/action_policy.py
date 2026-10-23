@@ -22,6 +22,9 @@ NO_RECOVERY_ACTION_TYPES = frozenset({
     # Conditional/branch primitives (EXEC-1): best-effort probe + nested body — never escalate
     # to Tier 1-4 recovery. See CLAUDE.md Key Invariants.
     "if_present", "try_dismiss", "wait_for_one_of",
+    # Outcome fork: its options run with full recovery on their own steps; the fork step itself
+    # has nothing to re-locate and must not be scored or retried as an element action.
+    "outcome_fork",
 })
 ELEMENT_ACTION_TOTAL_ATTEMPTS = 2
 NAVIGATE_CHECK_TOTAL_ATTEMPTS = 3

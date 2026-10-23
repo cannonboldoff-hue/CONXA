@@ -995,3 +995,14 @@ Every state ends with a way forward. Built before this phase: loading skeletons 
 - **Leaving Human Edit with an unsaved change.** A small confirm: “Save the change to step N?” — **Save and leave**, **Discard**, **Keep editing** (Esc).
 - **Settings** is a 800×560 popup over the current screen (left list: Account, Usage, Testing, About). Usage shows the meters with the single **AI credits** name; Testing holds the auto-fix switch. The old full page is gone; `/settings` opens the popup.
 - **First launch** (`/welcome`, shown when the workspace has no groups): headline, the three steps (Record it once / Answer a few questions / Test, then approve), **New workflow** and **Plan one in chat first**, and a “This computer” list — signed in, recording browser (with **Install now** when missing), local test runner. A failing check explains itself and never blocks the page.
+
+
+---
+
+## Addendum: popup decisions (outcome forks, 2026-10-24)
+
+Three small additions to the conversation-led Build Studio (TRD §11.4):
+
+- **Clarify "fork" question** (`ClarifyQuestionCard`, no new component): title "When “<popup>” appears, what should this workflow do?" (the line may be reworded by a model; the choices never are). Choices: each button of the popup (the one recorded is marked, a risky one says picking it here lets it run without asking), "Let the person running it choose each time", "Pause and ask me each time", "Stop the run".
+- **`fork_variant` card** (`ForkVariantCard`): optional "Record what happens when “<popup>” does NOT appear?" with *Record it now* / *Skip*. Recording reuses the normal recording card; finishing it posts a plain-language comparison and leaves the first recording untouched. Known issue: only one such offer is shown per compile.
+- **Test card `waiting_fork` state** (`TestRunCard`): "A popup needs your decision: “<popup>”" with one button per choice (the recorded one labelled "what you chose when recording") and *End the test here*. Known issue: no screenshot of the popup is shown on the card yet.

@@ -204,7 +204,9 @@ function overlayNoteText(overlay, resumeKey) {
     `accept/confirm/agree/submit/delete/pay/subscribe or any other commit-style control; the ` +
     `runtime refuses those regardless. If the overlay is asking you to commit to something ` +
     `(confirm, accept, pay, delete) rather than merely blocking the view, it is not incidental — ` +
-    `do not dismiss it, stop and tell the user instead.`;
+    `do not dismiss it, stop and tell the user instead. A popup that offers several buttons to ` +
+    `choose between (for example Replace / Keep both / Cancel) is always such a decision: the ` +
+    `runtime will not dismiss it even if you nominate it, so ask the user which button to press.`;
 }
 
 // EXEC-30 — the PREVIOUS round's dismiss nomination was refused. Tell the agent why, the same

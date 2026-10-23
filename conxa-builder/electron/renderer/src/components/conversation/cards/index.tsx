@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import { RecordingCard, SignInCard } from '@/components/conversation/cards/FlowCards'
-import { ClarifyQuestionCard, CompileCard, WorkflowSummaryCard } from '@/components/conversation/cards/CompileClarifyCards'
+import { ClarifyQuestionCard, CompileCard, ForkVariantCard, WorkflowSummaryCard } from '@/components/conversation/cards/CompileClarifyCards'
 import { AutofixCard, TestInputsCard, TestRunCard } from '@/components/conversation/cards/TestCards'
 import {
   DraftWorkflowCard,
@@ -20,6 +20,7 @@ export const CARD_REGISTRY: Record<string, ComponentType<CardProps>> = {
   recording: RecordingCard,
   compile: CompileCard,
   clarify_question: ClarifyQuestionCard,
+  fork_variant: ForkVariantCard,
   workflow_summary: WorkflowSummaryCard,
   test_inputs: TestInputsCard,
   test_run: TestRunCard,

@@ -116,3 +116,56 @@ def test_absent_observations_stay_none() -> None:
     assert event.branch_hint is None
     assert event.optionality is None
     assert event.post_condition is None
+
+
+DIALOG_CONTEXT = {
+    "kind": "dom",
+    "container_signal": "[role=\"dialog\"]",
+    "role": "dialog",
+    "title": "Upload options",
+    "message": "report.pdf already exists in this location.",
+    "has_fields": False,
+    "buttons": [
+        {"tag": "button", "role": "button", "name": "Replace", "text": "Replace", "chosen": True},
+        {"tag": "button", "role": "button", "name": "Keep both", "text": "Keep both", "chosen": False},
+        {"tag": "button", "role": "button", "name": "Cancel", "text": "Cancel", "chosen": False},
+    ],
+}
+
+
+def test_dialog_context_survives_finalization() -> None:
+    event = _finalize(_bridge_payload(dialog_context=DIALOG_CONTEXT))
+
+    assert event.dialog_context is not None, "dialog_context was dropped at finalization"
+    assert [b.name for b in event.dialog_context.buttons] == ["Replace", "Keep both", "Cancel"]
+    assert [b.name for b in event.dialog_context.buttons if b.chosen] == ["Replace"]
+
+
+def test_dialog_context_survives_the_pipeline_round_trip() -> None:
+    # run_pipeline re-validates through RecordedEvent and drops undeclared fields, so this
+    # fails if the model field is ever removed even when finalization still passes it through.
+    from conxa_core.models.events import RecordedEvent
+
+    event = _finalize(_bridge_payload(dialog_context=DIALOG_CONTEXT))
+    again = RecordedEvent.model_validate(event.model_dump())
+
+    assert again.dialog_context is not None
+    assert again.dialog_context.title == "Upload options"
+
+
+def test_legacy_event_without_dialog_context_stays_none() -> None:
+    assert _finalize(_bridge_payload()).dialog_context is None
+
+
+def test_native_dialog_events_carry_a_dialog_context() -> None:
+    import json
+
+    sess = RecordingSession(session_id="native-dialog")
+    value = json.dumps({"type": "confirm", "message": "Delete this file?"})
+    payload = sess._make_synthetic_payload("dialog_dismiss", value)
+    ctx = payload["dialog_context"]
+
+    assert ctx["kind"] == "native" and ctx["message"] == "Delete this file?"
+    assert [(b["name"], b["chosen"]) for b in ctx["buttons"]] == [("OK", False), ("Cancel", True)]
+    # an ordinary synthetic event (a download) gets none
+    assert "dialog_context" not in sess._make_synthetic_payload("download_observed", "{}")

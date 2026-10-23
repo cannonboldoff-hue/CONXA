@@ -1459,6 +1459,8 @@
     // this never changes compiled behavior on its own (see build.py), only surfaces a suggestion.
     let branchHint = null;
     try { branchHint = buildBranchHint(el); } catch (_e) {}
+    let dialogContext = null;
+    try { dialogContext = buildDialogContext(el); } catch (_e) {}
     // Custom date-picker detection (only meaningful on click/select — see buildDateContext).
     let dateContext = null;
     if (actionKind === "click" || actionKind === "select") {
@@ -1516,6 +1518,7 @@
       branch_hint: branchHint,
       date_context: dateContext,
       choice_context: choiceContext,
+      dialog_context: dialogContext,
       // Evidence for post-condition classification at finalize (finalizeStateWithAfter) — never
       // serialized: state_probe (including the raw `el` ref) is deleted before report().
       state_probe: {
@@ -1649,7 +1652,7 @@
 
   function _queryOpenDialog() {
     try {
-      return document.querySelector('[role="dialog"],[aria-modal="true"]');
+      return document.querySelector('[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open]');
     } catch (_e) {
       return null;
     }
@@ -1753,10 +1756,68 @@
     if (!node || node.nodeType !== 1 || !node.getAttribute) return null;
     const role = (node.getAttribute("role") || "").toLowerCase();
     const ariaModal = (node.getAttribute("aria-modal") || "").toLowerCase();
-    if (role === "dialog" || ariaModal === "true") return "dialog";
+    if (role === "dialog" || role === "alertdialog" || ariaModal === "true") return "dialog";
+    if (node.tagName === "DIALOG" && node.hasAttribute("open")) return "dialog";
     const haystack = `${node.id || ""} ${node.className || ""}`.toLowerCase();
     if (_OPTIONAL_BANNER_TOKENS.test(haystack)) return "banner";
     return null;
+  }
+
+  /** Full picture of the dialog `el` sits inside: title, message and EVERY visible button, with the
+   * clicked one marked. Observation only. Lets the compiler tell a decision ("Replace / Keep both /
+   * Cancel") from a dismissable popup instead of seeing just the one winning click. Null when `el`
+   * is not inside a dialog-strength container (banners are deliberately not described here). */
+  function buildDialogContext(el) {
+    let container = null;
+    let cur = el;
+    for (let depth = 0; depth < 10 && cur && cur.nodeType === 1; depth++) {
+      if (_optionalContainerStrength(cur) === "dialog") { container = cur; break; }
+      const tag = cur.tagName ? cur.tagName.toLowerCase() : "";
+      if (tag === "body" || tag === "html") break;
+      cur = cur.parentElement;
+    }
+    if (!container) return null;
+    const clean = (t) => String(t || "").replace(/\s+/g, " ").trim();
+    let title = "";
+    const labelledBy = container.getAttribute("aria-labelledby");
+    if (labelledBy) {
+      const t = document.getElementById(labelledBy.split(/\s+/)[0]);
+      if (t) title = clean(t.textContent);
+    }
+    if (!title) title = clean(container.getAttribute("aria-label"));
+    if (!title) {
+      const h = container.querySelector("h1,h2,h3,h4,[role=heading]");
+      if (h) title = clean(h.textContent);
+    }
+    const btnNodes = Array.from(container.querySelectorAll("button,[role=button],input[type=button],input[type=submit]"))
+      .filter(isVisibleElement)
+      .slice(0, 8);
+    const buttons = btnNodes.map((b) => {
+      const text = clean(b.textContent || b.value);
+      return {
+        tag: b.tagName.toLowerCase(),
+        role: b.getAttribute("role") || "button",
+        name: clean(b.getAttribute("aria-label")) || text,
+        text: text.slice(0, 80),
+        testid: b.getAttribute("data-testid") || "",
+        id: b.id || "",
+        chosen: b === el || b.contains(el),
+      };
+    });
+    if (!buttons.length) return null;
+    const message = clean(container.textContent).slice(0, 300);
+    const hasFields = !!container.querySelector(
+      "input:not([type=button]):not([type=submit]):not([type=hidden]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable=true]"
+    );
+    return {
+      kind: "dom",
+      container_signal: buildDialogSignal(container) || "",
+      role: container.getAttribute("role") || (container.tagName === "DIALOG" ? "dialog" : ""),
+      title: title.slice(0, 120),
+      message,
+      has_fields: hasFields,
+      buttons,
+    };
   }
 
   /** Walk up from el (bounded) looking for a dialog/consent-banner container. Returns

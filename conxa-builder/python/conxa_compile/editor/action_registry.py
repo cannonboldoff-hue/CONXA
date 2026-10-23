@@ -78,6 +78,11 @@ ACTION_KIND_ORDER = (
     # event" reasoning as the branch primitives above). Authored the same way branch bodies are
     # — wrap N existing steps into a body — one level deep only.
     "for_each",
+    # Outcome fork: "after the previous action the app is in one of several known states, each
+    # with its own policy" (compiler/outcome_fork.py). Built only from a recorded decision dialog,
+    # so deliberately NOT in INSERTABLE_ACTIONS: a vendor edits its policy through the
+    # set_fork_policy mutation, never by patching or hand-inserting one.
+    "outcome_fork",
 )
 
 MARKER_ACTIONS = frozenset(
@@ -216,6 +221,7 @@ ACTION_LABELS = {
     "try_dismiss": "Try dismiss",
     "wait_for_one_of": "Wait for one of",
     "for_each": "For each row",
+    "outcome_fork": "Popup decision",
 }
 
 CATEGORIES = {
@@ -249,6 +255,7 @@ CATEGORIES = {
     "try_dismiss": "conditional",
     "wait_for_one_of": "conditional",
     "for_each": "iteration",
+    "outcome_fork": "conditional",
 }
 
 VALUE_LABELS = {

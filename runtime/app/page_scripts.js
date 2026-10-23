@@ -280,6 +280,56 @@ function inventoryEntryForElement(el) {
   return { tag, type: type || undefined, role: role || undefined, text: text || undefined, id, "data-testid": dt };
 }
 
+// Outcome forks — what dialog (if any) is open right now. Queries the dialog elements directly
+// instead of hit-testing like overlayProbe: a fork asks "is a decision dialog showing?" and a
+// full-screen backdrop can sit on top of the dialog itself under elementFromPoint. Like every
+// function in this file it is re-parsed standalone in the page realm, so it closes over nothing.
+// Returns null when no visible dialog is open, else the TOPMOST (last in DOM order) one as
+// { title, text, controls: [{ tag, role, name, text, testid, id }] }.
+function dialogProbe() {
+  const SEL = 'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]';
+  const clean = (t) => String(t || "").replace(/\s+/g, " ").trim();
+  function visible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const cs = window.getComputedStyle(el);
+    return cs.visibility !== "hidden" && cs.display !== "none";
+  }
+  const dialogs = Array.from(document.querySelectorAll(SEL)).filter(visible);
+  if (!dialogs.length) return null;
+  const dlg = dialogs[dialogs.length - 1];
+  let title = "";
+  const labelledBy = dlg.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const t = document.getElementById(labelledBy.split(/\s+/)[0]);
+    if (t) title = clean(t.textContent);
+  }
+  if (!title) title = clean(dlg.getAttribute("aria-label"));
+  if (!title) {
+    const h = dlg.querySelector("h1,h2,h3,h4,[role=heading]");
+    if (h) title = clean(h.textContent);
+  }
+  const controls = Array.from(dlg.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]'))
+    .filter(visible)
+    .slice(0, 8)
+    .map((el) => {
+      const text = clean(el.innerText || el.value);
+      return {
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute("role") || "button",
+        name: clean(el.getAttribute("aria-label")) || text,
+        text: text.slice(0, 80),
+        testid: el.getAttribute("data-testid") || "",
+        id: el.id || "",
+      };
+    });
+  const hasFields = !!dlg.querySelector(
+    'input:not([type="button"]):not([type="submit"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"]'
+  );
+  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields };
+}
+
 // EXEC-30 — live overlay probe. domInventory() truncates at 50 entries IN DOM ORDER, so a modal
 // appended late to <body> can be cut out entirely even though it is the only thing blocking the
 // step. This answers "is something sitting on top of the page right now" directly, independent of
@@ -510,6 +560,7 @@ module.exports = {
   domInventory,
   inventoryEntryForElement,
   overlayProbe,
+  dialogProbe,
   INVENTORY_SELECTOR,
   scrollVirtualContainerStep,
   scrollDominantScrollableElement,

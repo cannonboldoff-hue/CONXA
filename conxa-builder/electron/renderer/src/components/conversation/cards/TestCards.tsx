@@ -218,6 +218,40 @@ export function TestRunCard({ threadId, item }: CardProps) {
     )
   }
 
+  if (state === 'waiting_fork') {
+    // A popup the workflow can't decide for itself (an unreviewed Replace/Delete, "ask me", or one it
+    // was never taught). Only a person answers this; the choices are exactly what the page offered.
+    const fork = (item.fork ?? {}) as { title?: string; message?: string; suggested?: string | null; choices?: { id: string; label: string; role?: string }[] }
+    const choices = (fork.choices ?? []).filter((c) => c.id !== '__stop__')
+    return (
+      <CardShell
+        glyph="warn"
+        title={`A popup needs your decision${fork.title ? `: “${fork.title}”` : ''}`}
+        meta={`${plural(rows.filter((r) => r.status === 'done').length, 'step')} passed`}
+        footer={
+          <>
+            {choices.map((c) => (
+              <Button
+                key={c.id}
+                variant={c.role === 'consequential' ? 'outline' : 'brand'}
+                size="sm"
+                disabled={busy}
+                onClick={() => run(() => flowTestDecision(wf, `fork:${c.id}`))}
+              >
+                {c.label}{c.id === fork.suggested ? ' (what you chose when recording)' : ''}
+              </Button>
+            ))}
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowTestDecision(wf, 'end_here'))}>End the test here</Button>
+          </>
+        }
+      >
+        {fork.message ? <p>{fork.message}</p> : null}
+        <p className="mt-2 text-xs text-[var(--text-secondary)]">The test is paused on the page. Nothing has been changed yet.</p>
+        <div className="mt-3">{rowList}</div>
+      </CardShell>
+    )
+  }
+
   if (state === 'failed') {
     return (
       <CardShell

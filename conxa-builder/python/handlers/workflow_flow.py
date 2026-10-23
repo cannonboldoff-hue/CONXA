@@ -227,12 +227,15 @@ class WorkflowFlowMixin:
 
     # ── recording ───────────────────────────────────────────────────────────────────────────
 
-    def _flow_open_recording(self, workflow: Any, rid: str, sink: Any) -> dict[str, Any]:
+    def _flow_open_recording(self, workflow: Any, rid: str, sink: Any, variant_of: str = "") -> dict[str, Any]:
+        """Open the recording browser. ``variant_of`` (an outcome fork's step key) makes it a
+        VARIANT take: a second recording of the same task showing a different outcome, which never
+        replaces the workflow's own recording (see cmd_start_recording / cmd_apply_variant)."""
         from conxa_compile.conversation import harness, runtime_state
         from conxa_compile.recorder.plain import describe_event
 
         try:
-            started = self.cmd_start_recording({"workflow_id": workflow.id}, rid)
+            started = self.cmd_start_recording({"workflow_id": workflow.id, **({"variant_of": variant_of} if variant_of else {})}, rid)
         except _CommandError as exc:
             if exc.code == "auth_required":
                 missing = self._flow_missing_apps(workflow)
@@ -258,11 +261,17 @@ class WorkflowFlowMixin:
         harness.log_event(_thread(workflow_id), "Recording started", glyph="run", sink=sink, subject=host or None)
         embedded = bool(started.get("embedded"))
         where = "the browser on the right" if embedded else "the browser window"
-        self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
-                       "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
+        if variant_of:
+            self._flow_say(workflow_id, f"Record it once more in {where}, this time so the popup does NOT appear "
+                           "(for example, upload a file that isn’t there yet). Then press Finish — I’ll compare it with your "
+                           "first recording; your first recording isn’t touched.", sink)
+        else:
+            self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
+                           "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
         card = harness.post_card(
             _thread(workflow_id), "recording", "recording", sink=sink,
-            refs={"session_id": session_id, "embedded": embedded}, started_at=time.time(), host=host, count=0,
+            refs={"session_id": session_id, "embedded": embedded, **({"variant_of": variant_of} if variant_of else {})},
+            started_at=time.time(), host=host, count=0,
             actions=["pause", "finish", "discard"], warnings=started.get("warnings") or [],
         )
         threading.Thread(target=self._flow_watch_recording, args=(workflow_id, session_id, card["card_id"]), daemon=True).start()
@@ -335,6 +344,9 @@ class WorkflowFlowMixin:
         sid, _sess = self._flow_session(card)
         if card.get("state") not in ("recording", "paused", "browser_closed"):
             raise _CommandError("not_recording", "This recording was already finished.")
+        variant_of = str((card.get("refs") or {}).get("variant_of") or "")
+        if variant_of:
+            return self._flow_finish_variant(workflow, card, sid, variant_of, rid, sink)
         harness.update_card(_thread(workflow.id), card["card_id"], state="saving", actions=[], sink=sink)
         try:
             result = self.cmd_stop_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
@@ -356,6 +368,87 @@ class WorkflowFlowMixin:
             self._flow_start_compile(workflow.id)
         return {"ok": True, "event_count": count, "session_id": sid}
 
+    def cmd_apply_variant(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """Learn from a variant recording ("the case where the popup does NOT appear") and fold it
+        into the workflow's outcome fork. No compile, no credit, no model call: the two takes are
+        compared by rule (compiler/variant_align.py) and only what the fork explains is applied.
+        Everything else is returned as ``unexplained`` for the author to read, never merged."""
+        import copy
+        from conxa_compile.compiler.variant_align import compare_variant, normalize_events
+        from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
+        from conxa_compile.editor.workflow_mutations import apply_variant_observation
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_core.storage.session_events import read_session_events
+        from conxa_core.storage.workflow_store import remove_variant
+
+        workflow = self._flow_workflow(payload)
+        session_id = _safe_id(payload.get("session_id"), "session_id")
+        fork_step_key = str(payload.get("fork_step_key") or "")
+        if not workflow.skill_id or not workflow.session_id:
+            raise _CommandError("not_compiled", "Compile this workflow before recording another way it can go.")
+        doc = read_skill(workflow.skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {workflow.skill_id}")
+        try:
+            step_index = resolve_step_index(doc, fork_step_key)
+        except ProposalError as exc:
+            raise _CommandError(exc.code, exc.message) from exc
+        step = ((doc.get("skills") or [{}])[0].get("steps") or [])[step_index]
+        states = [s for s in ((step.get("outcome_fork") or {}).get("states") or []) if isinstance(s, dict)]
+        known = [((s.get("signature") or {}).get("container_selector") or "", (s.get("signature") or {}).get("title") or "") for s in states]
+
+        def load(sid: str) -> list[dict[str, Any]]:
+            raw = [e if isinstance(e, dict) else e.model_dump(mode="json") for e in read_session_events(sid)]
+            try:
+                return normalize_events(raw)
+            except Exception:  # noqa: BLE001 -- compare the raw take rather than fail the whole feature
+                return raw
+
+        observation = compare_variant(load(workflow.session_id), load(session_id), known)
+        applied = bool(observation["clean_observed"] or observation["new_dialogs"])
+        if applied:
+            self._push_undo(workflow.skill_id, copy.deepcopy(doc))
+            try:
+                doc = apply_variant_observation(doc, step_index, session_id, observation)
+            except ValueError as exc:
+                raise _CommandError(str(exc), f"Could not apply the new recording: {exc}") from exc
+            write_skill(workflow.skill_id, doc)
+        remove_variant(workflow.id, session_id)
+        return {"ok": True, "applied": applied, "clean_observed": observation["clean_observed"],
+                "new_popups": len(observation["new_dialogs"]), "unexplained": observation["unexplained"]}
+
+    def _flow_finish_variant(self, workflow: Any, card: dict[str, Any], sid: str, variant_of: str, rid: str, sink: Any) -> dict[str, Any]:
+        """Finish a variant take: compare it with the first recording and fold what it shows into the
+        outcome fork. No compile, no credit, and the first recording is never touched."""
+        from conxa_compile.conversation import harness, runtime_state
+
+        thread = _thread(workflow.id)
+        harness.update_card(thread, card["card_id"], state="saving", actions=[], sink=sink)
+        try:
+            stopped = self.cmd_stop_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
+            learned = self.cmd_apply_variant({"workflow_id": workflow.id, "session_id": sid, "fork_step_key": variant_of}, rid)
+        except _CommandError as exc:
+            runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
+            harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
+            harness.log_event(thread, "Nothing was learned from that recording", glyph="none", sink=sink, subject=exc.message)
+            raise
+        runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
+        count = int(stopped.get("event_count") or 0)
+        harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
+        lines = []
+        if learned["clean_observed"]:
+            lines.append("Now I’ve seen it go through with no popup, so that case is covered too.")
+        if learned["new_popups"]:
+            lines.append(f"It also showed {learned['new_popups']} other popup{'s' if learned['new_popups'] != 1 else ''}, which I’ve added to the workflow — check what each should do in Human Edit.")
+        if not learned["applied"]:
+            lines.append("Nothing in it changed the workflow.")
+        if learned["unexplained"]:
+            lines.append("These differences are NOT added, because they aren’t about the popup: " + "; ".join(learned["unexplained"][:3]))
+        harness.log_event(thread, "Compared with your first recording", glyph="ok", sink=sink,
+                          subject=f"{count} action{'s' if count != 1 else ''}")
+        self._flow_say(workflow.id, " ".join(lines) + " Your first recording and your answers are unchanged.", sink)
+        return {"ok": True, "event_count": count, "session_id": sid, **{k: learned[k] for k in ("applied", "clean_observed", "new_popups", "unexplained")}}
+
     def cmd_flow_discard_recording(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.conversation import harness, runtime_state
 
@@ -363,8 +456,9 @@ class WorkflowFlowMixin:
         sink = _event_sink(rid)
         card = self._flow_card(workflow.id, str(payload.get("card_id") or ""))
         sid, _sess = self._flow_session(card)
+        is_variant = bool((card.get("refs") or {}).get("variant_of"))
         self.cmd_cancel_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
-        runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=True)
+        runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=not is_variant)
         harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", actions=[], sink=sink)
         harness.log_event(_thread(workflow.id), "Recording discarded", glyph="none", sink=sink,
                           subject="Nothing was saved")

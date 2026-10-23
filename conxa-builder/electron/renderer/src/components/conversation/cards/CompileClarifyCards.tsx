@@ -295,3 +295,43 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
     </CardShell>
   )
 }
+
+/** Offer to record the other way a popup decision can go. Optional: skipping leaves the workflow as it is. */
+export function ForkVariantCard({ threadId, item }: CardProps) {
+  const act = useThreadStore((s) => s.act)
+  const [busy, setBusy] = useState(false)
+  const state = String(item.state)
+  const title = String(item.title ?? 'the popup')
+
+  const send = async (action: string) => {
+    setBusy(true)
+    const r = await act(threadId, String(item.card_id), action)
+    setBusy(false)
+    if (r && r.ok === false && r.message) toast.error(r.message)
+  }
+
+  if (state === 'skipped') {
+    return <div className="flex items-center gap-2.5 text-sm"><StatusGlyph kind="none" /><span className="text-[var(--text-secondary)]">Didn’t record the case without “{title}”.</span></div>
+  }
+  if (state === 'recording') {
+    return <div className="flex items-center gap-2.5 text-sm"><StatusGlyph kind="run" /><span className="text-[var(--text-primary)]">Recording the case without “{title}”…</span></div>
+  }
+  return (
+    <CardShell
+      glyph="warn"
+      title={`Record what happens when “${title}” does NOT appear?`}
+      meta="Optional"
+      footer={
+        <>
+          <Button variant="brand" size="sm" disabled={busy} onClick={() => send('record')}>Record it now</Button>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => send('skip')}>Skip</Button>
+        </>
+      }
+    >
+      <p className="leading-[1.6]">
+        First make it so the popup won’t show, for example by uploading a file that isn’t in the folder yet. I’ll compare it with your first
+        recording, which stays exactly as it is. If you skip, the workflow just carries on when the popup doesn’t show.
+      </p>
+    </CardShell>
+  )
+}

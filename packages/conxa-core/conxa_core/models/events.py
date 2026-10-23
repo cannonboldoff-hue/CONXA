@@ -35,7 +35,7 @@ ActionKind = Literal[
     "wait", "assert", "screenshot",
     # conditional / branch (EXEC-1): optional interstitials — probe + nested step body, never
     # escalate to recovery. See CLAUDE.md Key Invariants.
-    "if_present", "try_dismiss", "wait_for_one_of",
+    "if_present", "try_dismiss", "wait_for_one_of", "outcome_fork",
     # legacy
     "focus", "check",
 ]
@@ -236,6 +236,35 @@ class ChoiceContext(BaseModel):
     options: list[ChoiceOption] = Field(default_factory=list)
 
 
+class DialogButton(BaseModel):
+    """One visible button of a decision dialog, in the same descriptor shape the runtime's
+    overlayProbe uses (tag/role/name/text/testid/id) so a later fork can address it."""
+
+    tag: str = ""
+    role: str = ""
+    name: str = ""
+    text: str = ""
+    testid: str = ""
+    id: str = ""
+    chosen: bool = False     # true for the button the person actually clicked while recording
+
+
+class DialogContext(BaseModel):
+    """Full picture of a dialog the recorded action sat inside (or opened): its title, message and
+    EVERY button, not just the one clicked. Without it the compiler can only see the winning
+    click, so a decision ("Replace / Keep both / Cancel") is indistinguishable from a dismissable
+    popup and the recorded choice would replay silently. Absent (None) on every older recording.
+    ``message`` is compile-time evidence only and must never be shipped in a skill pack."""
+
+    kind: Literal["dom", "native"] = "dom"
+    container_signal: str = ""
+    role: str = ""
+    title: str = ""
+    message: str = Field(default="", max_length=300)
+    has_fields: bool = False     # editable inputs inside -> a form, not a decision
+    buttons: list[DialogButton] = Field(default_factory=list, max_length=8)
+
+
 class PostCondition(BaseModel):
     """Post-condition distillation (recording-next-steps.md Priority 1): a small structured
     classification of the before/after delta already captured for this event, computed by plain
@@ -335,6 +364,7 @@ class RecordedEvent(BaseModel):
     # Multiple-choice control detection (see ChoiceContext). Optional — absent on recordings made
     # before this existed, and on every non-MCQ action regardless of recording age.
     choice_context: ChoiceContext | None = None
+    dialog_context: DialogContext | None = None
 
     # Phase 2: compile-time signals for LLM-based selector generation (REQUIRED).
     # Recordings without these cannot validate; must be re-recorded.

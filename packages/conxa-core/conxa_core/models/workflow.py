@@ -77,6 +77,12 @@ class Workflow(BaseModel):
     # The single recording this workflow holds (inlined — no inner list).
     session_id: str | None = None
     recorded_at: float | None = None
+    # Extra recordings of the SAME task made to show a different outcome (outcome forks: "record the
+    # case where the popup does not appear"). Each is {session_id, fork_step_key, recorded_at}.
+    # Never the workflow's own recording -- `session_id` above stays the primary -- and discarded
+    # whenever the primary is re-recorded (a variant only means something against the take it was
+    # recorded to complement).
+    variant_session_ids: list[dict[str, Any]] = Field(default_factory=list)
     recording_status: Literal["recorded", "compiled", "error"] | None = None
     # How long the human took to perform the workflow once, live (last event
     # timestamp minus first), computed at stop_recording time. Feeds the Cloud

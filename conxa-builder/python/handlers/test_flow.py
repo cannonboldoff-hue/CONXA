@@ -215,11 +215,28 @@ class TestFlowMixin:
                 return True
             return False
 
+        def fork_hook(fork: dict[str, Any]) -> str:
+            """A popup that needs a decision: show the choices and wait for the person. Never answered
+            by a model. Returns a choice id, or "__stop__" when they end the test."""
+            settle()
+            push(state="waiting_fork", fork={"title": fork.get("title"), "message": fork.get("message"),
+                                             "choices": fork.get("choices"), "suggested": fork.get("suggested"),
+                                             "unknown": fork.get("unknown")},
+                 actions=["fork_choose", "end_here"])
+            harness.log_event(thread, "Paused — a popup needs your decision", glyph="warn", sink=sink,
+                              subject=str(fork.get("title") or "a popup"))
+            decision = wait_decision("fork")
+            if decision.startswith("fork:"):
+                push(state="running", fork=None, actions=["stop"])
+                return decision[len("fork:"):]
+            return "__stop__"
+
         try:
             self._tf_ensure_built(workflow, rid)
             result = self.cmd_test_workflow(
                 {"workflow_id": workflow_id, "inputs": inputs, "headless": not show_browser, "guard": guard,
-                 "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook}, rid)
+                 "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook,
+                 "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
             return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started)
         except Exception as exc:  # noqa: BLE001
@@ -288,11 +305,12 @@ class TestFlowMixin:
     # ── decisions, stop, approve ────────────────────────────────────────────────────────────
 
     def cmd_flow_test_decision(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
-        """The person's answer while a test is paused: run_rest / yes / end_here."""
+        """The person's answer while a test is paused: run_rest / yes / end_here, or fork:<choice id>
+        for a popup decision."""
         workflow_id = _safe_id(payload.get("workflow_id"), "workflow_id")
         decision = str(payload.get("decision") or "")
-        if decision not in ("run_rest", "yes", "end_here"):
-            raise _CommandError("invalid_input", "decision must be run_rest, yes or end_here")
+        if decision not in ("run_rest", "yes", "end_here") and not (decision.startswith("fork:") and len(decision) > 5):
+            raise _CommandError("invalid_input", "decision must be run_rest, yes, end_here or fork:<choice>")
         with _waiters_lock:
             w = _waiters.get(workflow_id)
             if w is None:

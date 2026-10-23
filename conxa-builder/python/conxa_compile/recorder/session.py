@@ -1889,7 +1889,7 @@ class RecordingSession:
         # this line. Copy through only when present, so an older bridge that does not send them
         # still validates.
         for observation in ("branch_hint", "date_context", "choice_context",
-                            "optionality", "post_condition"):
+                            "optionality", "post_condition", "dialog_context"):
             value = payload.get(observation)
             if value is not None:
                 body[observation] = value
@@ -1909,7 +1909,7 @@ class RecordingSession:
                 page_url = page.url
         except Exception:  # noqa: BLE001
             pass
-        return {
+        payload = {
             "action": {
                 "action": kind,
                 "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
@@ -1927,6 +1927,40 @@ class RecordingSession:
             "ancestors": [],
             "surrounding_text": "",
             "dom_signature_short": "",
+        }
+        if kind in ("dialog_accept", "dialog_dismiss"):
+            ctx = self._native_dialog_context(kind, value_str)
+            if ctx:
+                payload["dialog_context"] = ctx
+        return payload
+
+    @staticmethod
+    def _native_dialog_context(kind: str, value_str: str) -> dict[str, Any] | None:
+        """DialogContext for a native alert/confirm/prompt. Its message is carried inside the
+        event's JSON value; the two possible buttons are OK and Cancel, with the answer given
+        marked as chosen."""
+        try:
+            data = __import__("json").loads(value_str or "{}")
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        accepted = kind == "dialog_accept"
+        dtype = str(data.get("type") or "")
+
+        def _btn(name: str, chosen: bool) -> dict[str, Any]:
+            return {"tag": "button", "role": "button", "name": name, "text": name, "chosen": chosen}
+
+        buttons = [_btn("OK", accepted)]
+        if dtype in ("confirm", "prompt"):
+            buttons.append(_btn("Cancel", not accepted))
+        return {
+            "kind": "native",
+            "role": "alertdialog",
+            "title": dtype,
+            "message": str(data.get("message") or "")[:300],
+            "has_fields": dtype == "prompt",
+            "buttons": buttons,
         }
 
     def _enqueue_synthetic(

@@ -307,6 +307,31 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
         ]
+    if task == "fork_question_copy":
+        # Compile-time: rewrite the question a workflow author is asked about a popup that
+        # needs a decision ("file already exists: Replace / Keep both / Cancel") into plain,
+        # friendly words. Copy only: the choices, what each does, and what the workflow will
+        # actually do are all decided by code (compiler/outcome_fork.py, conversation/
+        # clarify.py) -- see llm/fork_question_copy.py for the deterministic fallback. The model
+        # may only rephrase; it never adds, removes or renames a choice.
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "You write ONE short, friendly question for a non-technical person who "
+                    "just recorded a browser automation. While recording, a popup appeared "
+                    "(`input.popup_title`, with `input.message_hint` describing it and "
+                    "`input.buttons` listing its buttons). They are being asked what the "
+                    "automation should do the next time that popup shows up. Mention what the "
+                    "popup is about, using only `input.popup_title`, `input.message_hint` and "
+                    "`input.buttons`. Never invent a button, never name an action that is not "
+                    "in `input.buttons`, never include file names or personal data. Plain "
+                    "words, one or two short sentences, end with a question mark. Return "
+                    "strict JSON with key: text (string)."
+                ),
+            },
+            {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
+        ]
     if task == "recovery_resolve":
         # Runtime tier 3: locate one element on current DOM given semantic description.
         return [

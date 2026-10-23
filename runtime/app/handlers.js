@@ -931,7 +931,7 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
 // is never one of these by the time executeStep runs — this set only matters if something calls
 // executeStep directly, bypassing run.js (a test harness, say), where the correct behavior is
 // still "do nothing" rather than the throw below.
-const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each"]);
+const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each", "outcome_fork"]);
 
 async function executeStep(page, step, inputs, ctx = {}) {
   const handler = HANDLERS[step.type];

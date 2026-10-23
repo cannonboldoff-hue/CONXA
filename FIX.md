@@ -197,3 +197,25 @@ Pressing Start Recording could open the browser while you were signed out of an 
 **Signing in inside Studio now shows the page and finishes by itself — 2026-10-20**
 When Studio asked you to sign in to an app, the browser on the right could stay completely blank, so there was nothing to sign in to. That's fixed, and you no longer have to press "I'm signed in": Studio notices the moment you've signed in and goes straight on to the next app or the recording. Cancelling a sign-in also used to wipe the sign-in you had saved before; now it leaves it alone.
 — 2026-10-20
+
+**Started teaching recordings to remember the whole popup, not just the button you pressed — 2026-10-24**
+When a popup like "this file already exists" appeared during recording, the system only remembered the one button you clicked. We added the empty slot where the popup's title, message and every button will be saved, so a later step can tell a real choice from a harmless popup. Nothing changes for users yet, because the recorder does not fill the slot in yet.
+
+**The recorder now saves the whole popup when you click inside one — 2026-10-24**
+When you press a button in a popup such as "this file already exists", the recording now keeps the popup's title, its message and every button it offered, and marks the one you pressed. Browser alert boxes get the same treatment. Nothing about how workflows run has changed yet. This is the groundwork that lets the next steps tell a real decision apart from a harmless popup.
+
+
+**Workflows now understand "this file already exists" and other pop-ups that need a decision — 2026-10-24**
+Before, if a pop-up asked "Replace, Keep both or Cancel?" while you recorded, the workflow quietly pressed whatever button you had pressed, every time, even if that was "Replace". Now it treats the pop-up as a real choice. A harmless choice you made is repeated, but anything that could overwrite or delete things stops and asks a person first, and a pop-up it has never seen is never answered on its own.
+
+**You can now tell a workflow what to do when a pop-up appears — 2026-10-24**
+After a recording, Build Studio asks one plain question per decision pop-up: always press one button, let the person running it choose each time, pause and ask, or stop. Pressing a risky button there is what lets it run without asking. Until you answer, risky choices wait for a person.
+
+**You can record the "no pop-up" case without losing your first recording — 2026-10-24**
+If a pop-up only appeared because a file already existed, you can now record the task again with a new file so no pop-up shows. Build Studio compares the two recordings and learns that the pop-up is optional, without recompiling anything, using any credits, or touching your first recording or your answers.
+
+**Testing a workflow now asks you when a pop-up needs a decision — 2026-10-24**
+During a test, a pop-up that needs a choice shows up on the test card with a button for each option. Only you can answer it; the AI helper is never asked to pick. If you end the test there, nothing more runs.
+
+**The workflow can no longer close a "choose one" pop-up by accident — 2026-10-24**
+When a click was blocked by an unexpected pop-up, the safety net used to press Escape or a close button, which on a "Replace or Cancel?" box quietly cancels the whole action. Now it leaves pop-ups that ask you to choose alone, and still clears cookie banners and plain "close this" notices as before.

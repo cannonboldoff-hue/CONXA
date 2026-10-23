@@ -233,7 +233,10 @@ def archive_flagged_steps(
     keys = step_keys(steps)
     for i, (step, key) in enumerate(zip(steps, keys)):
         finding = flagged.get(key)
-        if finding is None or _step_causes_observed_effect(steps, i):
+        # An outcome fork has no page effect of its own to observe (its job is the branch it
+        # takes), which is exactly what flag_noise reads as "did nothing". Never archive one.
+        is_fork = (step.action.get("action") if isinstance(step.action, dict) else step.action) == "outcome_fork"
+        if finding is None or is_fork or _step_causes_observed_effect(steps, i):
             kept.append(step)
             continue
         archived.append({

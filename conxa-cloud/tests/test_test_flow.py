@@ -24,6 +24,7 @@ from handlers.protocol import _CommandError  # noqa: E402
 from handlers.workflows import (  # noqa: E402
     _app_layer_supports,
     _drive_runtime_pauses,
+    _extract_fork_pause,
     _extract_guard_pause,
     _extract_session_expired,
     _is_confirm_only_review_request,
@@ -471,3 +472,53 @@ def test_cloud_ping_reports_offline_instead_of_raising(env, monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Resp())
     out = b.cmd_cloud_ping({}, "r")
     assert out["online"] is True and isinstance(out["ms"], int)
+
+
+# ── popup decisions (outcome forks): a person answers, never the model ───────────────────────
+
+
+def _fork_result(step=4, unknown=False):
+    return {
+        "content": [{"type": "text", "text": f"ASK THE USER. resume_from: {step} is what the review extractor would grab."}],
+        "_meta": {"conxa/fork": {
+            "step_index": step, "title": "Upload options", "message": "report.pdf already exists.",
+            "reason": "consequential_unapproved", "unknown": unknown, "suggested": "replace", "requires_human": True,
+            "choices": [{"id": "replace", "label": "Replace", "role": "consequential"},
+                        {"id": "keep_both", "label": "Keep both", "role": "neutral"},
+                        {"id": "__stop__", "label": "Stop the run", "role": "stop"}],
+        }},
+    }
+
+
+def test_a_fork_pause_is_read_from_meta_only():
+    assert _extract_fork_pause(_fork_result())["step_index"] == 4
+    assert _extract_fork_pause(_fork_result())["choices"][0]["id"] == "replace"
+    assert _extract_fork_pause({"content": [{"type": "text", "text": "resume_from: 4"}]}) is None
+
+
+def test_the_persons_choice_resumes_the_fork_step_with_that_choice():
+    c = Calls([DONE])
+    result, stopped = c.drive(_fork_result(step=4), fork_hook=lambda f: "keep_both")
+    assert result is DONE and stopped is None
+    assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 4, "review_results": {"4": {"choice": "keep_both"}}}]
+
+
+def test_a_fork_pause_never_reaches_the_model_answerer():
+    asked = []
+    c = Calls([DONE])
+    c.drive(_fork_result(), fork_hook=lambda f: "keep_both", answer_review=lambda r, content: asked.append(r) or {"answer": "x"})
+    assert asked == []
+
+
+def test_with_no_one_to_ask_the_test_ends_at_the_popup_and_the_model_is_not_consulted():
+    asked = []
+    c = Calls([])
+    result, stopped = c.drive(_fork_result(), fork_hook=None, answer_review=lambda r, content: asked.append(r))
+    assert stopped["declined"] is True and c.args == [] and asked == []
+
+
+def test_choosing_stop_or_an_unlisted_choice_ends_the_test_without_resuming():
+    for answer in ("__stop__", "delete_everything"):
+        c = Calls([])
+        _, stopped = c.drive(_fork_result(), fork_hook=lambda f, a=answer: a)
+        assert stopped["declined"] is True and c.args == []

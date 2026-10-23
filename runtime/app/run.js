@@ -26,6 +26,7 @@ const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs
 
 const { appendRecoveryEvent } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
+const fork = require("./fork");
 const {
   PAGE_LOAD_TIMEOUT_MS,
   RUN_RETENTION_MS,
@@ -52,6 +53,7 @@ const {
   verifyStep,
   hasRequiredAssertion,
   needsStateChangedBaseline,
+  pollNegative,
 } = require("./assertions");
 const {
   baseSelector,
@@ -92,7 +94,7 @@ const checkRetryBudget = _checkRetryBudget;
 const NAVIGATION_STEP_TYPES = new Set([
   "navigate", "browser_back", "browser_forward", "click", "dblclick", "right_click",
   "keyboard_shortcut",
-  "if_present", "try_dismiss", "wait_for_one_of",
+  "if_present", "try_dismiss", "wait_for_one_of", "outcome_fork",
   "tab_open", "tab_switch", "popup",
 ]);
 
@@ -230,12 +232,14 @@ async function executeOneStep(ctx, state, steps, i) {
   // no `guard` on ctx (every customer run, every MCP caller) this block is inert. A dry run already
   // withholds destructive steps, so the guard has nothing to do there.
   if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && step.destructive === true) {
-    if (state.loopDepth > 0) {
+    if (state.loopDepth > 0 || state.forkDepth > 0) {
       // A pause inside a for_each body would lose the loop's row cursor (the same reason a handover
-      // can't live there), so fail closed rather than run an irreversible step unguarded.
+      // can't live there), so fail closed rather than run an irreversible step unguarded. The same
+      // goes for an outcome-fork option (the fork checks its chosen option BEFORE running it, so
+      // reaching here means a destructive step nested deeper than the fork looked).
       ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
       throw stepFailure(step, i, new Error(
-        "Test stopped before a repeated step that can't be undone: the guard can't pause inside a loop. " +
+        "Test stopped before a repeated or conditional step that can't be undone: the guard can't pause inside a loop or a popup choice. " +
         "Turn the guard off to run it, or test it somewhere safe."
       ), null, state.warnings);
     }
@@ -325,6 +329,18 @@ async function executeOneStep(ctx, state, steps, i) {
     return;
   }
 
+  // Outcome fork — "after the previous action the app is in one of several known states". Like
+  // for_each it runs its chosen option through THIS SAME function, so the option's steps get tab
+  // resolution, GATE/VERIFY, recovery and dry-run's destructive-skip, unlike a best-effort
+  // runBranchBody. See fork.js and runForkStep below.
+  if (step.type === "outcome_fork") {
+    await runForkStep(ctx, state, step, page, i);
+    state.hasExecutedStep = true;
+    state.prevStepType = step.type;
+    state.prevPage = page;
+    return;
+  }
+
   // PROD-3-DRYRUN — the one committing action a dry run withholds. Still RESOLVES the step
   // (proves the target is actually findable, the same signal a real run would need) but never
   // dispatches the handler or verifies a post-condition that couldn't have happened. Kept in
@@ -358,6 +374,17 @@ async function executeOneStep(ctx, state, steps, i) {
   // once — the override only ever lands on the resumed index — BEFORE the step's own action,
   // never in place of it: whether or not the dismissal actually clicked something, the
   // recorded step still runs immediately after.
+  if (step._dismiss_selector || step._dismiss_escape) {
+    // The same rule as the Tier 1 ladder (cascade.js): a popup asking for a decision is never
+    // dismissed on anyone's behalf, not even by an agent's nomination. Only a person answers it.
+    const liveDialog = await evalOn(page, pageScripts.dialogProbe).catch(() => null);
+    if (liveDialog && liveDialog !== EVAL_TIMED_OUT && fork.isDecisionDialog(liveDialog)) {
+      appendRecoveryEvent({ event: "overlay_dismiss_rejected", slug: ctx.slug, step_index: i, reason: "decision_dialog" });
+      step._dismiss_rejected = "decision_dialog";
+      delete step._dismiss_selector;
+      delete step._dismiss_escape;
+    }
+  }
   if (step._dismiss_selector || step._dismiss_escape) {
     if (step._dismiss_escape) {
       await page.keyboard.press("Escape").catch(() => {});
@@ -671,6 +698,221 @@ async function runForEachStep(ctx, state, step, page, i) {
   }
 
   ctx.tracker.emit("for_each_done", { si: i, processed, failed, total: rowIds.length });
+}
+
+// What dialog is showing right now. A native alert/confirm/prompt blocks the page's JS thread
+// (page.evaluate would just time out), so the queued Playwright Dialog is checked first; a DOM
+// dialog comes from page_scripts.dialogProbe. Never throws: an unreadable page reads as "nothing
+// open", and the fork then falls through to its clean path.
+async function observeDialog(page, ctx) {
+  const queued = ctx && Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue[0] : null;
+  if (queued) {
+    const type = typeof queued.type === "function" ? queued.type() : "";
+    const message = typeof queued.message === "function" ? queued.message() : "";
+    const controls = [{ tag: "button", role: "button", name: "OK", text: "OK" }];
+    if (type === "confirm" || type === "prompt") controls.push({ tag: "button", role: "button", name: "Cancel", text: "Cancel" });
+    return { native: true, title: type, text: String(message || ""), controls };
+  }
+  try {
+    const probe = await evalOn(page, pageScripts.dialogProbe);
+    return probe && probe !== EVAL_TIMED_OUT ? probe : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Click a visible dialog button the PERSON chose by its label -- the unknown-popup path, where no
+// compiled option exists to run. Scoped to the topmost open dialog and an exact accessible-name
+// match, so a same-named button elsewhere on the page can never be hit. The label came from the
+// live dialog inventory and was picked by a human, never by a model.
+async function clickDialogButtonByLabel(page, label) {
+  const dialogs = page.locator('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]');
+  const button = dialogs.last().getByRole("button", { name: label, exact: true });
+  await button.first().click({ timeout: 5000 });
+}
+
+// Run one chosen option: the RT-9 guard check at the fork's own index, the option's steps through
+// the real executeOneStep, then confirm the popup is actually gone.
+async function runForkOption(ctx, state, step, page, i, option, title) {
+  const optionSteps = Array.isArray(option.steps) ? option.steps : [];
+
+  // RT-9: a destructive option is checked HERE, at the fork's own index. The guard can't pause
+  // inside the option body (the cursor would be lost), so look before running it.
+  if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && optionSteps.some((s) => s && s.destructive === true)) {
+    if (state.loopDepth > 0) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
+      throw stepFailure(step, i, new Error(
+        "Test stopped before a repeated step that can't be undone: the guard can't pause inside a loop. " +
+        "Turn the guard off to run it, or test it somewhere safe."
+      ), null, state.warnings);
+    }
+    throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 1 });
+  }
+
+  state.forkDepth = (state.forkDepth || 0) + 1;
+  try {
+    for (let j = 0; j < optionSteps.length; j++) {
+      await executeOneStep(ctx, state, optionSteps, j);
+    }
+  } finally {
+    state.forkDepth -= 1;
+  }
+  await confirmForkDialogClosed(ctx, state, step, page, i, title, option.label || option.id);
+}
+
+// The choice must have actually dealt with the popup. A dialog still on screen means the click
+// did nothing (or the app re-asked) -- failing here is cleaner than the next step tripping over it.
+async function confirmForkDialogClosed(ctx, state, step, page, i, title, chosenLabel) {
+  if (ctx.dryRun) return;
+  const closed = await pollNegative(async () => !(await observeDialog(page, ctx)), 3000);
+  if (!closed) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_dialog_still_open" });
+    throw stepFailure(step, i, new Error(`The "${title}" popup is still open after choosing "${chosenLabel}".`), null, state.warnings);
+  }
+}
+
+async function runForkStep(ctx, state, step, page, i) {
+  const states = Array.isArray(step.states) ? step.states : [];
+  if (!states.length) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "bad_input" });
+    throw stepFailure(step, i, Object.assign(new Error("outcome_fork step has no states"), { badInput: true }), null, state.warnings);
+  }
+
+  // Resuming after a person answered: server.js bound their choice under __fork_choice_<i>.
+  const choiceKey = `__fork_choice_${i}`;
+  if (Object.prototype.hasOwnProperty.call(state.inputs, choiceKey)) {
+    const choice = String(state.inputs[choiceKey]);
+    delete state.inputs[choiceKey];
+    return runForkAnswer(ctx, state, step, page, i, states, choice);
+  }
+
+  const timeoutMs = fork.clampTimeout(step.timeout_ms);
+  const deadline = Date.now() + timeoutMs;
+
+  // Watch for up to timeout_ms: a dialog can open a beat after the triggering action returns.
+  // A known state ends the wait at once; an unknown dialog ends it too (it's already blocking).
+  let probe = null;
+  let seen = { kind: "clean" };
+  for (;;) {
+    probe = await observeDialog(page, ctx);
+    seen = fork.matchState(probe, states);
+    if (seen.kind !== "clean" || Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, Math.min(200, Math.max(0, deadline - Date.now()))));
+  }
+
+  if (seen.kind === "clean") {
+    ctx.tracker.emit("fork_observed", { si: i, st: "clean" });
+    ctx.tracker.emit("fork_clean", { si: i });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "clean", mode: "none", source: "observed" });
+    return;
+  }
+
+  let decision;
+  let stateId = "unknown";
+  let title = (probe && probe.title) || "a popup";
+  try {
+    if (seen.kind === "state") {
+      stateId = seen.state.id;
+      title = (seen.state.signature && seen.state.signature.title) || title;
+      decision = fork.decide(seen.state, state.inputs, { loopDepth: state.loopDepth || 0 });
+    } else {
+      ctx.tracker.emit("fork_unknown", { si: i });
+      decision = fork.decideUnknown(step, probe, { loopDepth: state.loopDepth || 0 });
+    }
+  } catch (e) {
+    ctx.tracker.emit("step_fail", { si: i, fc: e && e.badInput ? "bad_input" : "fork_decision" });
+    throw stepFailure(step, i, e, null, state.warnings);
+  }
+  ctx.tracker.emit("fork_observed", { si: i, st: stateId });
+
+  if (decision.do === "pause") {
+    // A decision only a person can make (an unreviewed consequential option, "ask me", an
+    // unrecognised popup). Park the page and hand server.js the question; it resumes through
+    // __fork_choice_<i>. Never answered by a model on the person's behalf.
+    ctx.tracker.emit("fork_paused", { si: i, st: stateId });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "pause", reason: decision.reason, title });
+    throw Object.assign(new Error("fork_pause"), {
+      forkPause: true,
+      stepIndex: i,
+      step,
+      page,
+      info: {
+        title,
+        text: (probe && probe.text) || "",
+        reason: decision.reason,
+        suggested: decision.suggested || null,
+        unknown: seen.kind !== "state",
+        choices: fork.pauseChoices(seen.kind === "state" ? seen.state : null, probe),
+      },
+    });
+  }
+
+  if (decision.do === "stop") {
+    const message = decision.message || `Needs a decision: ${title}`;
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "stop", src: "policy" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "stop", source: "policy", title });
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(new Error(message), { forkDecisionNeeded: true }), null, state.warnings);
+  }
+
+  const option = decision.option;
+  ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: option.id, mode: "run", src: decision.source });
+  appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: option.id, mode: "run", source: decision.source, title });
+  await runForkOption(ctx, state, step, page, i, option, title);
+}
+
+// Re-entry after a person chose. Looks at the page again rather than trusting the park: the
+// person may have clicked in the page themselves, or the app may have shown something else.
+async function runForkAnswer(ctx, state, step, page, i, states, choice) {
+  if (choice === fork.STOP_CHOICE) {
+    ctx.tracker.emit("fork_decided", { si: i, st: "answered", mode: "stop", src: "human" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, mode: "stop", source: "human" });
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_stopped_by_user" });
+    throw stepFailure(step, i, Object.assign(new Error("Stopped at the popup, as you chose."), { forkDecisionNeeded: true }), null, state.warnings);
+  }
+
+  const probe = await observeDialog(page, ctx);
+  const seen = fork.matchState(probe, states);
+
+  if (seen.kind === "clean") {
+    // The person dealt with it in the page themselves.
+    ctx.tracker.emit("fork_decided", { si: i, st: "answered", mode: "handled_in_page", src: "human" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, mode: "handled_in_page", source: "human" });
+    return;
+  }
+
+  const title = (probe && probe.title) || "a popup";
+  if (seen.kind === "state") {
+    const option = fork.findOption(seen.state, choice);
+    if (!option) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "fork_choice_invalid" });
+      throw stepFailure(step, i, Object.assign(new Error(`"${choice}" is not one of the choices for the "${title}" popup.`), { badInput: true }), null, state.warnings);
+    }
+    ctx.tracker.emit("fork_decided", { si: i, st: seen.state.id, opt: option.id, mode: "run", src: "human" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: seen.state.id, option: option.id, mode: "run", source: "human", title });
+    await runForkOption(ctx, state, step, page, i, option, title);
+    return;
+  }
+
+  // An unrecognised popup: the person picked one of its visible buttons by label.
+  const labels = new Set(fork.probeLabelsRaw(probe).map((l) => fork.norm(l)));
+  if (!labels.has(fork.norm(choice))) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_choice_invalid" });
+    throw stepFailure(step, i, Object.assign(new Error(`The popup changed: "${choice}" is no longer one of its buttons.`), { badInput: true }), null, state.warnings);
+  }
+  ctx.tracker.emit("fork_decided", { si: i, st: "unknown", opt: choice, mode: "run", src: "human" });
+  appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", option: choice, mode: "run", source: "human", title });
+  if (ctx.dryRun) {
+    state.warnings.push(`Dry run: did not click "${choice}" in the "${title}" popup.`);
+    return;
+  }
+  try {
+    await clickDialogButtonByLabel(page, choice);
+  } catch (e) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
+    throw stepFailure(step, i, e, null, state.warnings);
+  }
+  await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
 async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard } = {}) {

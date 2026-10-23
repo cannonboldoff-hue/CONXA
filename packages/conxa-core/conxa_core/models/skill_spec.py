@@ -315,6 +315,20 @@ class SkillStep(BaseModel):
     #   no entity_binding, since there is no live row to re-locate).
     for_each: dict[str, Any] = Field(default_factory=dict)
 
+    # [mixed] Outcome fork: "after the previous action the app is in one of several known states"
+    # (no popup; a "file already exists: Replace / Keep both / Cancel" popup; ...), each with a
+    # policy -- auto (run a named option), by_input (the caller picks via a runtime input),
+    # ask_human (a person decides), stop. Empty for ordinary steps. Built by
+    # compiler/outcome_fork.py from a recorded decision dialog; the only writer of a state's
+    # `policy.author_approved` is editor/workflow_mutations.py::set_fork_policy. Unlike `branch`
+    # this is NOT best-effort: the chosen option's steps run with full GATE/VERIFY/recovery
+    # (runtime/app/run.js::runForkStep), and an unrecognised popup is never auto-answered.
+    # Shape: {timeout_ms, unknown_policy, clean: {observed, observed_in}, states: [{id, kind,
+    # signature: {title, button_labels, message_tokens, container_selector}, options: [{id,
+    # label, role, recorded, steps}], policy, observed_in}]}. Option `steps` are nested
+    # saved-step dicts, serialized like `branch`/`for_each` bodies.
+    outcome_fork: dict[str, Any] = Field(default_factory=dict)
+
 
 class WorkflowIntentStep(BaseModel):
     index: int                                                      # [contract]

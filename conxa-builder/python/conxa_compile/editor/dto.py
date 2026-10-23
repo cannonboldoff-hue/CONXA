@@ -140,6 +140,10 @@ class StepEditorDTO(BaseModel):
     # Nested body steps, same path-addressed projection as branch_steps
     # ("{skill_id}:{step_index}.for_each.steps[1]").
     for_each_steps: list["StepEditorDTO"] = Field(default_factory=list)
+    # Outcome fork: {timeout_ms, clean_observed, unknown_policy, states: [{id, title, policy,
+    # options: [{id, label, role, recorded, step_count}]}]} when this step is an outcome_fork; None
+    # for ordinary steps. Read-only: a fork's policy changes only through set_fork_policy.
+    fork_summary: dict[str, Any] | None = None
 
 
 class SuggestionItem(BaseModel):

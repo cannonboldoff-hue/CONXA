@@ -30,7 +30,7 @@ from conxa_compile.compiler.step_key import step_keys
 
 MAX_QUESTIONS = 5
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
-_PRIORITY = {"upload": 0, "confirm": 1, "values": 2, "popup": 3, "done_when": 4}
+_PRIORITY = {"upload": 0, "fork": 1, "confirm": 2, "values": 3, "popup": 4, "done_when": 5}
 
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
@@ -75,11 +75,56 @@ def _question(kind: str, qid: str, title: str, body: str, choices: list[dict[str
     }
 
 
+ForkCopy = Callable[[dict[str, Any]], "str | None"]
+
+
+def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) -> dict[str, Any]:
+    """The question about one popup state of an outcome fork. Every choice is a fixed fact from the
+    compiled fork; ``fork_copy`` (a model, optional) may only reword the title line."""
+    sig = state.get("signature") or {}
+    popup = str(sig.get("title") or "a popup")
+    options = [o for o in state.get("options") or [] if isinstance(o, dict)]
+    choices: list[dict[str, Any]] = []
+    for o in options:
+        detail = []
+        if o.get("recorded"):
+            detail.append("You chose this while recording.")
+        if o.get("role") == "consequential":
+            detail.append("This can change or remove data. Picking it here means it runs without asking.")
+        choices.append({"id": f"option:{o['id']}", "label": str(o.get("label") or o["id"]), "detail": " ".join(detail)})
+    choices += [
+        {"id": "by_input", "label": "Let the person running it choose each time",
+         "detail": "Adds a setting they fill in, so each run can go a different way."},
+        {"id": "ask_human", "label": "Pause and ask me each time", "detail": "The run stops on the popup and waits for a person."},
+        {"id": "stop", "label": "Stop the run", "detail": "Treat this popup as a problem and end the run."},
+    ]
+    title = f"When “{popup}” appears, what should this workflow do?"
+    if fork_copy is not None:
+        try:
+            reworded = fork_copy({
+                "popup_title": popup,
+                "buttons": [str(b) for b in sig.get("button_labels") or []],
+                "message_hint": " ".join(sig.get("message_tokens") or [])[:120],
+                "fallback": title,
+            })
+        except Exception:  # noqa: BLE001 -- wording only, never fail a compile over it
+            reworded = None
+        if reworded and str(reworded).strip():
+            title = str(reworded).strip()
+    return _question(
+        "fork", f"fork:{key}:{state['id']}", title,
+        "This popup can show up on a later run. Pick what happens when it does, and I\u2019ll also handle the case where it doesn\u2019t appear.",
+        choices, step_keys_=[key], fork_state_id=state["id"],
+        input_name="on_" + (re.sub(r"[^a-z0-9]+", "_", popup.lower()).strip("_") or "popup")[:40],
+    )
+
+
 def generate_questions(
     doc: dict[str, Any],
     *,
     source_lookup: SourceLookup | None = None,
     answered_by_recording: dict[str, bool] | None = None,
+    fork_copy: ForkCopy | None = None,
 ) -> list[dict[str, Any]]:
     """Find the places worth asking about in a compiled skill document.
 
@@ -157,6 +202,14 @@ def generate_questions(
             multi=True, step_keys_=[c["step_key"] for c in uniq], recorded={c["binding"]: c["recorded"] for c in uniq},
         ))
 
+    # 1b ─ popups that need a decision (outcome forks): never answered silently.
+    for i, s in enumerate(steps):
+        if _action_name(s) != "outcome_fork":
+            continue
+        for state in ((s.get("outcome_fork") or {}).get("states") or []):
+            if isinstance(state, dict) and state.get("id") and not (state.get("policy") or {}).get("reviewed"):
+                out.append(_fork_question(keys[i], state, fork_copy))
+
     # 4 ─ pop-ups the recorder saw but only a person can classify.
     for i, s in enumerate(steps):
         if isinstance(s.get("optional_hint"), dict) and s["optional_hint"]:
@@ -231,6 +284,24 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                         "prompt": f"About to run “{name}”, which can’t be undone. Should it go ahead?"})
             return ops, "A person confirms"
         return ops, "Runs without confirmation"
+
+    if kind == "fork":
+        choice = str(answer.get("choice") or "")
+        label = next((c["label"] for c in question.get("choices") or [] if c["id"] == choice), "")
+        if choice.startswith("option:"):
+            policy = {"mode": "auto", "option_id": choice[len("option:"):]}
+            receipt = f"Always: {label}"
+        elif choice == "by_input":
+            policy = {"mode": "by_input", "input": question.get("input_name") or "on_popup"}
+            receipt = "The person running it chooses each time"
+        elif choice == "ask_human":
+            policy = {"mode": "ask_human"}
+            receipt = "Pauses and asks a person"
+        else:
+            policy = {"mode": "stop"}
+            receipt = "Stops the run"
+        ops.append({"op": "set_fork_policy", "step_key": keys[0], "state_id": question.get("fork_state_id"), "policy": policy})
+        return ops, receipt
 
     if kind == "popup":
         once = answer.get("choice") == "once"
