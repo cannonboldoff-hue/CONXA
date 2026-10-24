@@ -98,7 +98,7 @@ $versionJson = @{
   app_version = $appVersion
   min_host    = "0.0.0"
   built_at    = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-  capabilities = @("test_guard")  # see build-runtime-app.yml
+  capabilities = @("test_guard", "outputs", "run_if", "stop_before", "date_offset", "ask_missing", "templated_click", "loop_guard", "variant_branch")  # see build-runtime-app.yml
   files       = $hashes
 } | ConvertTo-Json -Depth 5
 # No-BOM write: Windows PowerShell 5.1's `Out-File -Encoding utf8` prepends a BOM, which makes
