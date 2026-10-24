@@ -145,7 +145,9 @@ def _sha256_file(p: Path) -> str:
 # means `visuals/`, the recording-time screenshots the agent recovery tier compares against.
 # Artifacts are bytes, not kilobytes, so they never ride the delta body; they are listed there
 # as metadata and fetched separately (see get_skill_artifacts).
-_CODE_FILES = ("execution.json", "recovery.json", "inputs.json", "manifest.json", "validation.json")
+# app_knowledge.json (advisory popup knowledge from the app map, docs/TRD.md 11.5) rides with the code
+# so it activates atomically with the skill version it was published with; it is optional per skill.
+_CODE_FILES = ("execution.json", "recovery.json", "inputs.json", "manifest.json", "validation.json", "app_knowledge.json")
 
 
 def _resolve_skill_dir(packs_dir: Path, group_id: str, slug: str) -> Path:

@@ -225,6 +225,14 @@ class CompileMixin:
             workflow.compile_min_confidence = compile_report.get("min_confidence")
             workflow.compile_steps_with_warnings = compile_report.get("steps_with_warnings")
             save_workflow(workflow)
+            # The two write_skill calls above ran before the workflow pointed at this skill, so the
+            # app map filed it as unassigned; now that the link exists, refile it under its workspace.
+            try:
+                from conxa_compile.app_graph import refresh_skill  # noqa: PLC0415
+
+                refresh_skill(skill_id)
+            except Exception:  # noqa: BLE001 -- derived data, never worth failing a compile
+                pass
         _log(f"Skill packaged: {skill_id} (version {version}, {step_count} steps)")
         sink({"phase": "compile_done", "skill_id": skill_id, "version": version, "step_count": step_count})
         return {

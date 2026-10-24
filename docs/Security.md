@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
 
 ---
 
@@ -570,6 +571,39 @@ side (try the current key, fall back to a short-lived set of recently-retired ke
 by `key_id`) and a rotation window on the cloud side (sign new artifacts with the new key,
 keep the old key valid for verification only until every deployed runtime has picked up
 the new public key via a runtime update). Tracked in `TODO.md`.
+
+---
+
+## SG-20 — Popup-Shape Telemetry (`app_obs`) Leaves The Customer Machine
+
+**Severity:** Low (mitigated)
+**Component:** Runtime / Cloud API — `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py`
+
+### Description
+
+When a run meets a decision popup it cannot place, the runtime emits an `app_obs` telemetry event
+(`docs/Backend-Schema.md` telemetry table). Until now no event carried page-derived text off the machine
+(the only exception, `drift_detected.url`, is a known wider field). `app_obs` carries the page **host and
+route**, up to eight **title words** and up to six **button labels**.
+
+Mitigations in place: everything goes through `scrub.js` (URLs, emails, quoted spans, file-like words and
+any word with a digit removed; a label that needed any scrubbing is dropped whole; route segments with a
+digit or 16+ characters become `:id`; the popup's message is never sent), which is tested against the same
+cases as the Studio-side scrubber so the two cannot drift; events are only sent when telemetry is already
+enabled for the pack; the cloud re-bounds every field on read; data is workspace-scoped, behind the same
+plan gate and retention as the drift queue; nothing is aggregated across workspaces.
+
+### Residual risk
+
+The scrubber is heuristic: a button label that is itself sensitive text with no digit, quote, dot or `@`
+(for example a person's first name used as a button) would pass. Titles and labels of *decision popups* are
+overwhelmingly application chrome, which is why only decision popups are reported.
+
+### Recommended Fix
+
+If a customer needs it, add a pack-level switch that disables `app_obs` while leaving other telemetry on.
+Cross-workspace sharing of popup shapes (TODO APP-1, phase 8) must not be enabled before this entry is
+re-reviewed.
 
 ---
 

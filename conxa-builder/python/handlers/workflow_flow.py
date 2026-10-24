@@ -247,11 +247,29 @@ class WorkflowFlowMixin:
         workflow_id = workflow.id
         counter = {"n": 0}
 
+        hinter = None
+        if not variant_of:
+            try:
+                from conxa_compile.app_graph.hints import RecordingHinter
+                from conxa_core.workspace import LOCAL_WORKSPACE_ID
+
+                hinter = RecordingHinter(workflow.workspace_id or LOCAL_WORKSPACE_ID)
+            except Exception:  # noqa: BLE001 -- a hint, never worth failing a recording
+                hinter = None
+
         def on_event(event: Any) -> None:
-            row = describe_event(event.model_dump(mode="json"))
+            data = event.model_dump(mode="json")
+            row = describe_event(data)
             counter["n"] = max(counter["n"], int(row.get("sequence") or 0))
             _emit_event(None, phase="recording_event", workflow_id=workflow_id, session_id=session_id,
                         row=row, count=len(sess.snapshot_events()) if sess is not None else counter["n"])
+            if hinter is not None:
+                try:
+                    hint = hinter(data)
+                    if hint:
+                        harness.log_event(_thread(workflow_id), hint, glyph="warn", sink=_event_sink(None))
+                except Exception:  # noqa: BLE001 -- advisory only
+                    pass
 
         if sess is not None:
             sess.event_hook = on_event

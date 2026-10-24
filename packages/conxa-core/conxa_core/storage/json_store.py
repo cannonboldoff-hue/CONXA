@@ -10,6 +10,7 @@ from typing import Any
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_delete, db_list
 from conxa_core.sanitize import scrub_surrogates
+from conxa_core.storage.skill_hooks import notify_skill_deleted, notify_skill_written
 
 
 def skills_dir() -> Path:
@@ -42,6 +43,7 @@ def write_skill(skill_id: str, document: dict[str, Any]) -> Path:
                 f"edit — last_test_* may now be stale: {type(exc).__name__}: {exc}",
                 stacklevel=2,
             )
+    notify_skill_written(skill_id, document)
     return path
 
 
@@ -60,6 +62,7 @@ def delete_skill(skill_id: str) -> bool:
     path = skills_dir() / f"{skill_id}.json"
     if path.is_file():
         path.unlink()
+    notify_skill_deleted(skill_id)
     return True
 
 

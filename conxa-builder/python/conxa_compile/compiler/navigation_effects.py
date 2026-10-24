@@ -125,7 +125,22 @@ def generalize_url_pattern(url: str) -> str:
     return "^" + re.escape(f"{parts.scheme}://{parts.netloc}") + path
 
 
+def route_template(url: str) -> str:
+    """The readable twin of ``generalize_url_pattern``: just the path, with every per-run segment
+    (same rule) shown as ``:id``. "/orders/:id", "/" for the root; "" when `url` is not an absolute
+    http(s) URL. Used to name a screen in the app map, so two visits to /orders/1 and /orders/2 are
+    the same screen."""
+    parts = urlsplit(str(url or "").strip())
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return ""
+    segs = [":id" if _is_dynamic_segment(seg) else seg for seg in parts.path.split("/") if seg]
+    return "/" + "/".join(segs)
+
+
 if __name__ == "__main__":
+    assert route_template("https://app.com/orders/847291?token=abc123") == "/orders/:id"
+    assert route_template("https://app.com") == "/"
+    assert route_template("about:blank") == ""
     assert generalize_url_pattern("https://app.com/orders/847291?token=abc123") == r"^https://app\.com/orders/[^/?#]+"
     assert generalize_url_pattern("https://app.com/success/12345#x") == r"^https://app\.com/success/[^/?#]+"
     assert generalize_url_pattern("https://app.com/") == r"^https://app\.com"

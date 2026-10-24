@@ -71,6 +71,7 @@ Large or time-series data lives in flat files, not the KV store:
 | Reviewer edit log | `data/skills/{id}/edits.jsonl` | JSONL (§3.10) |
 | Human Review Copilot failure evidence (BUILD-26) | `{CONXA_DATA_DIR}/runs/{run_id}/_evidence/{evidence.json, failure.jpg, pre_step.jpg?}` — the Studio test sandbox's own data dir, not `data/` above | JSON + JPEG |
 | Human Review Copilot observed overlays (BUILD-26 stage f) | `{CONXA_DATA_DIR}/runs/{run_id}/_evidence/overlays.jsonl` — written by `runtime/app/overlay_capture.js` on ANY run that intercepted a target, including one that recovered and passed (unlike `evidence.json` above, which is failure-only) | JSONL |
+| App maps (Studio only) | `data/app_graphs/{workspace}/{host}/contrib/{skill_id}.json` (one per workflow per host) and `graph.json` (their fold) — see §3.4l | JSON |
 | Published skill packs | `data/skill-packs/{co}/` | Directory tree |
 | Installer binaries | `data/installers/{co}/installer.exe` | Binary |
 | Installer metadata | `data/installers/{co}/meta.json` | JSON |
@@ -939,6 +940,30 @@ outcome_fork: dict   # {timeout_ms, unknown_policy, clean, states}
 
 Studio RPCs: `set_fork_policy {skill_id, step_index, state_id, policy}`, `apply_variant {workflow_id, session_id, fork_step_key}`, `start_recording {…, variant_of}`, `flow_test_decision {decision: "fork:<choice>"}`.
 
+### 3.4l App map models (`conxa_core/models/app_graph.py`)
+
+Derived, data-free, Studio-local (cloud sync is a later phase). `Contribution` = what one compiled workflow learned on one host; `AppGraph` = `fold_contributions` over every contribution of that host and workspace. Mechanism and privacy rules: `docs/TRD.md` §11.5.
+
+```
+Screen   {id = sha16(host|route), route ("/orders/:id"), title_tokens[<=8], seen (workflows), sources[]}
+Action   {id = sha16(from_screen|kind|stable_hash), from_screen, to_screen|null, kind, role,
+          name|null (scrubbed label), stable_hash, intent, consequence, input_name|null, seen, sources[]}
+Popup    {id, title, button_labels[], message_tokens[], popup_class (decision|dismissable|consent|form),
+          container_selector, after_actions[], appeared, absent, options[{label, role, chosen}],
+          field_seen, sources[]}
+WorkflowPath {skill_id, name, action_ids[]}
+Contribution {id = "skill:<skill_id>", app_key, workspace_id, created_at, screens, actions, popups, path}
+AppGraph {app_key, workspace_id, schema_version = 1, built_at, screens, actions, popups, paths, contribution_ids}
+```
+
+`app_key` is the lowercase hostname without a leading `www.`. A step is filed under the host it **started** on; an action that leaves the host keeps a `to_screen` id that lives in the other host's graph.
+
+`Popup.app_policy` (author's standing answer, only set by `cmd_set_app_popup_policy`): `{"mode": "auto", "option": "<button label>", "author_approved": true}` | `{"mode": "ask_human"}` | `{"mode": "stop", "message"?}` | null. Stored beside the contributions in `policies.json` and applied after every fold.
+
+**`app_knowledge.json`** (per skill, shipped with the code files; optional): `{"schema_version": 1, "apps": {"<host>": {"popups": [{"id", "class", "signature": {"title", "button_labels", "message_tokens", "container_selector"}, "options": [{"label", "role", "chosen"}], "app_policy"}]}}}`, at most 40 popups per host, only for hosts the skill visits. Contains no screens, actions, workflow names or paths. Telemetry: `fork_decided` gains `src: "app_policy"` (state `map:<popup id>`), and `app_obs` reports unplaced popups (see the telemetry table).
+
+**Real-run popup data** (`data/app_graphs/<ws>/<host>/field.json`, Studio only): rows from `GET /api/v1/app-graphs/{app_key}/field` — `{title_tokens[], buttons[], class, count (distinct runs), known, last_seen}`, computed on read from the workspace's own `app_obs` telemetry, ops-tier gated like the drift queue — stored as `[{match_popup_id, popup}]` and applied after every fold: a row matching a covered popup raises its `field_seen`; any other becomes a field-only popup (`sources: ["field"]`, `appeared: 0`).
+
 ### 3.4i Iteration: `for_each` (EXEC-38)
 
 `SkillStep.for_each` (`dict`) is the "for each row matching X, do steps A-C" iteration payload —
@@ -1463,6 +1488,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `fork_unknown` | (Outcome fork) A popup appeared that no state recognises | `si` |
 | `fork_decided` | (Outcome fork) A policy or a person chose what to do | `si`, `st`, `opt` (option id/label, when one ran), `mode` (`run` \| `stop` \| `handled_in_page`), `src` (`policy` \| `input` \| `human`) |
 | `fork_paused` | (Outcome fork) The step stopped to ask a person | `si`, `st` |
+| `app_obs` | (App maps, phase 6) A decision popup this run could not place — an unrecognised fork popup, or one that blocked a click and was left alone. Scrubbed to its shape by `runtime/app/scrub.js` | `si`, `host` (lowercase, no `www.`), `rt` (page route, ids as `:id`), `tt` (<=8 title words), `bt` (<=6 button labels; none that carried a file name, number or quoted text), `cl` (`decision`), `k` (1 if the shipped app map recognised it). Never the popup's message |
 | `fork_answered` | (Outcome fork) A person's answer was accepted on resume | `si` |
 | `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
 | `park_resumed` | A parked run resumed execution on the same live page it paused on | `si` |
@@ -1658,6 +1684,22 @@ mutable mirror or the stable channel moves until Release/Deploy (§5.1d).
 Duplicate-version publish → **409** `skill_pack_version_exists`, unless the
 existing row is still `"ready"` (or legacy `"pending"`) — retrying an
 unreleased version number is safe and expected, not an overwrite.
+
+### 5.0 App-map contributions (`/api/v1/app-graphs`)
+
+Clerk-authenticated, scoped to the caller's workspace (the server stamps `workspace_id` on every contribution, whatever the body says). Build Studio folds the maps; the cloud only stores them so teammates share them (`conxa-builder/python/services/app_graph_sync.py`, run on publish and by `sync_app_graphs`).
+
+```
+PUT    /api/v1/app-graphs/{app_key}/contributions/{contribution_id}   body: Contribution (§3.4l)   → {"ok": true}
+DELETE /api/v1/app-graphs/{app_key}/contributions/{contribution_id}                                → {"ok": true}
+GET    /api/v1/app-graphs/{app_key}/contributions                                                  → {"app_key", "contributions": [...]}
+GET    /api/v1/app-graphs                                                                          → {"apps": [{"app_key", "contributions"}]}
+GET    /api/v1/app-graphs/{app_key}/field                                                          → {"app_key", "popups": [{"title_tokens", "buttons", "class", "count", "known", "last_seen"}]}
+```
+
+`/field` counts the runtime's `app_obs` telemetry (docs section 4.x telemetry table) per popup shape over the caller's own visible runs; the same plan gate and retention as `GET /api/v1/tracking/drift`; the event fields are re-bounded server-side (<=8 title words, <=6 buttons, 40 chars each) because a token holder can send anything.
+
+`app_key` must match `^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$` and `contribution_id` `^skill:[A-Za-z0-9._-]{1,128}$` (422 otherwise); the body's `app_key`/`id` must equal the path (422 `contribution_mismatch`); a contribution over 64 KB is 413 `contribution_too_large`; more than 500 per app is 409 `too_many_contributions` (replacing an existing one is always allowed).
 
 ### 5.1a Versioned Endpoint Scheme (`{installer_version}`)
 
@@ -2934,6 +2976,7 @@ erDiagram
 | `skillpack_release_events__{slug}__{skill_slug}` | `"events"` (single key, JSON array via `db_append`) | `[{id, workspace_id, user_id, action, resource_type, resource_id, skill_slug, metadata, created_at}, ...]` | §5.1d release system — unbounded per-(slug, skill_slug) release audit trail, mirrored into `saas.add_audit_event` |
 | `tracking/{company}` | `{run_id}` | `[event_batch, ...]` | Runtime, Cloud dashboard |
 | `governance_policy` | `{workspace_id}` | Signed policy document, §4.2a | Cloud policy write/read, runtime `policy_gate.js` |
+| `app_graph__{workspace_id}` | `{app_key}/{contribution_id}` | One app-map `Contribution` (§3.4l) — screens/actions/popups only, no values | `app_graph_routes.py` (stores, never folds); Studio `services/app_graph_sync.py` |
 | `runs` | `{workflow_id}` | `[run_record, ...]` | Cloud, Build Studio |
 | `selector_cache` | `{dom_hash}:{bbox}:{model}` | Selector candidates | Compiler |
 | `runtime_registrations` | `{company}:{install_id or platform}` | `{company, install_id, platform, runtime_version, workspace_id, last_seen, first_seen, revoked, skill_versions?, sync_errors?, hostname?, username?, os_release?, os_arch?, capabilities?}` | 2.1 device registration. `skill_versions` (`{skill_slug: installed_version}`) is optional and sticky (an omission never wipes a prior value), added for §5.1d's Deployment view. `sync_errors` (`{skill_slug: {code, at}}`) is optional and **not** sticky — always overwritten in full each phone-home — and is what lets Deployment show a real `failed` status. `hostname`/`username`/`os_release`/`os_arch`/`capabilities` (Machine Registry, added 2026-08-22) are optional and sticky like `skill_versions` — an older runtime that hasn't self-updated just omits them without wiping a newer value. `capabilities` is a small feature-flags object (`max_recovery_tier`, `update_channel`), not a tool list. `revoked` is admin-only (`POST /telemetry/runtimes/revoke`, §5.9a) — the runtime itself never sends it, and it never affects sync/telemetry/execution, only what the Fleet dashboard shows |

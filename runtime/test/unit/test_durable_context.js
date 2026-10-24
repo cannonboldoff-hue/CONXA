@@ -197,3 +197,19 @@ test("updateDurableContext: shared-file target (windsurf) uses the marker-block 
   assert.ok(text.includes(markerStart("acme")));
   assert.ok(text.includes("onboard-user"));
 });
+
+test("buildNote: names the web app each workflow works in, and still lists one with no app", () => {
+  const dc = require("../../app/durable_context");
+  const note = dc.buildNote("wrk_acme", ["upload_file", "legacy"], { upload_file: "drive.example.com" });
+  assert.match(note, /\*\*upload_file\*\* \(works in `drive\.example\.com`\)/);
+  assert.match(note, /- \*\*legacy\*\* — call/);
+  assert.ok(!/legacy\*\* \(works in/.test(note));
+  assert.strictEqual(dc.buildNote("wrk_acme", ["a"]), dc.buildNote("wrk_acme", ["a"], {}), "apps is optional");
+});
+
+test("appOfManifest reads the start URL's host", () => {
+  const { appOfManifest } = require("../../app/app_knowledge");
+  assert.strictEqual(appOfManifest({ target_url: "https://www.Drive.Example.com/drive/my-drive" }), "drive.example.com");
+  assert.strictEqual(appOfManifest({}), "");
+  assert.strictEqual(appOfManifest(null), "");
+});

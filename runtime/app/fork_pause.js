@@ -42,9 +42,14 @@ async function buildForkRequest(page, stepIndex, info, opts = {}) {
   const url = (() => { try { return page.url(); } catch (_) { return ""; } })();
   const choices = Array.isArray(info.choices) ? info.choices : [];
   const validIds = choices.map((c) => c.id);
-  const lines = choices.map((c) => `  - ${c.id}: ${c.label}${describeRole(c.role)}${c.id === info.suggested ? "  [what was chosen when this was recorded]" : ""}`);
+  const suggestedNote = info.knownFromMap ? "  [what other workflows on this app chose]" : "  [what was chosen when this was recorded]";
+  const lines = choices.map((c) => `  - ${c.id}: ${c.label}${describeRole(c.role)}${c.id === info.suggested ? suggestedNote : ""}`);
 
-  const why = info.unknown
+  const why = info.unknown && info.knownFromMap
+    ? info.reason === "consequential_unapproved"
+      ? "this popup is known from other workflows on this app, but its choice that changes or removes data has not been approved to run automatically"
+      : "this popup is known from other workflows on this app, but no one has said what to do about it here"
+    : info.unknown
     ? "an unexpected popup appeared that this workflow was never taught about"
     : info.reason === "consequential_unapproved"
       ? "the popup offers a choice that can change or remove data, and nobody has approved doing that automatically"

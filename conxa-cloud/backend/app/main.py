@@ -23,6 +23,7 @@ from app.api.bug_report_routes import router as bug_report_router
 from app.api.byok_routes import router as byok_router
 from app.api.entitlement_routes import router as entitlement_router
 from app.api.errors import http_error_handler, unhandled_error_handler
+from app.api.app_graph_routes import router as app_graph_router
 from app.api.job_routes import router as job_router
 from app.api.legal_routes import router as legal_router
 from app.api.llm_proxy_routes import router as llm_proxy_router
@@ -175,6 +176,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 # new "/workflows/..." route. See docs/TRD.md's back-compat table for which
 # of these paths are permanent and cannot be renamed to avoid the collision.
 app.include_router(job_router, prefix="/api/v1")
+app.include_router(app_graph_router, prefix="/api/v1")
 app.include_router(byok_router, prefix="/api/v1")
 app.include_router(bug_report_router, prefix="/api/v1")
 app.include_router(entitlement_router, prefix="/api/v1")

@@ -213,7 +213,7 @@ async function _syncCompany(skillPacksDir, workspace_id, log, artifactTasks = nu
   // and skills are already usable even if a host's instructions file couldn't
   // be updated this round.
   try {
-    await require("./durable_context").updateDurableContext(workspace_id, serverSkillNames);
+    await require("./durable_context").updateDurableContext(workspace_id, serverSkillNames, _appsBySkill(skillPacksDir, workspace_id, pack.skill_groups));
   } catch (e) {
     log(`[sync:warn] ${workspace_id} durable-context update failed — ${e.message}`);
   }
@@ -320,6 +320,22 @@ async function _syncArtifacts(skillPacksDir, tasks, log) {
       log(`[sync:artifacts:warn] ${task.workspace_id}/${task.slug} — ${e.message}`);
     }
   }
+}
+
+// {slug: host} for the skills whose active manifest names a start URL -- so an agent's
+// discoverability note can say which web app each workflow works in. Best effort and local only:
+// a skill that is not on disk yet (or has no URL) is simply listed without an app.
+function _appsBySkill(skillPacksDir, workspaceId, skillGroups) {
+  const appOf = require("./app_knowledge").appOfManifest;
+  const out = {};
+  for (const [slug, group] of Object.entries(skillGroups || {})) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(skillPacksDir, workspaceId, group, slug, "current", "manifest.json"), "utf8"));
+      const app = appOf(manifest);
+      if (app) out[slug] = app;
+    } catch (_) { /* not synced yet */ }
+  }
+  return out;
 }
 
 async function _doSync(skillPacksDir, log, artifactTasks = null) {

@@ -20,6 +20,7 @@ import { GroupPage } from '@/pages/GroupPage'
 import { HumanEditPage } from '@/pages/HumanEditPage'
 import { InspectorPage } from '@/pages/InspectorPage'
 import { HumanEditListPage } from '@/pages/HumanEditListPage'
+import { AppMapPage } from '@/pages/AppMapPage'
 import { PublishPage } from '@/pages/PublishPage'
 import { BuildInstallerPage } from '@/pages/BuildInstallerPage'
 import { ChatPage } from '@/pages/ChatPage'
@@ -310,6 +311,7 @@ export function App() {
             <Route path="/edit" element={<HumanEditPage />} />
             <Route path="/edit/:skillId" element={<HumanEditPage />} />
             <Route path="/human-edit" element={<HumanEditListPage />} />
+            <Route path="/app-maps" element={<AppMapPage />} />
             <Route path="/publish" element={<PublishPage />} />
             <Route path="/build-installer" element={<BuildInstallerPage />} />
             <Route path="/settings" element={<OpenSettings />} />

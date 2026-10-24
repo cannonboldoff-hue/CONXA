@@ -166,11 +166,19 @@ class CompileFlowMixin:
             )
             return text if text != payload["fallback"] else None
 
+        try:
+            from conxa_compile.app_graph.hints import known_popups
+            from conxa_core.workspace import LOCAL_WORKSPACE_ID
+
+            known = known_popups(doc, skill_id=result["skill_id"], workspace_id=workflow.workspace_id or LOCAL_WORKSPACE_ID)
+        except Exception:  # noqa: BLE001 -- a hint, never worth failing the compile flow
+            known = []
         questions = clarify.generate_questions(
             doc,
             source_lookup=lambda s: find_source_event(s, doc),
             answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
             fork_copy=fork_copy,
+            known_popups=known,
         )
         clarify_store.save(workflow_id, {
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
@@ -372,6 +380,11 @@ class CompileFlowMixin:
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "state_id": op["state_id"],
                      "policy": op["policy"]}, rid)
                 self._log_edit("set_fork_policy", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "add_known_popup_fork":
+                self.cmd_add_known_popup_fork(
+                    {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "popup": op["popup"]}, rid)
+                self._log_edit("add_known_popup_fork", skill_id, before, source="clarify", proposal_id=None)
+                added += 1
             elif kind == "confirm_optional":
                 self.cmd_confirm_optional_interstitial(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "keep_as_step": bool(op.get("keep_as_step"))}, rid)

@@ -219,3 +219,31 @@ During a test, a pop-up that needs a choice shows up on the test card with a but
 
 **The workflow can no longer close a "choose one" pop-up by accident — 2026-10-24**
 When a click was blocked by an unexpected pop-up, the safety net used to press Escape or a close button, which on a "Replace or Cancel?" box quietly cancels the whole action. Now it leaves pop-ups that ask you to choose alone, and still clears cookie banners and plain "close this" notices as before.
+
+**Build Studio now keeps a private map of every app your workflows touch — 2026-10-24**
+Each time you record and compile a workflow, Studio now remembers which screens of the app it visited, which buttons were pressed, and which pop-ups showed up along the way. Workflows on the same app add to the same map instead of starting from scratch, and re-compiling or deleting a workflow updates it correctly. The map keeps only the shape of the app, never what you typed or what was on the page, so it is safe to build on later.
+— 2026-10-24
+
+**Teammates can now share what Studio has learned about an app — 2026-10-24**
+The private map Studio keeps of each app can now be shared with the rest of your team. After you publish, Studio sends your latest additions to Conxa Cloud and picks up what your teammates have added, so everyone builds on the same picture. Only the outline of the app is shared, never anything you typed or any page content, and each company only ever sees its own.
+— 2026-10-24
+
+**New "App maps" page shows what Studio has learned about each app — 2026-10-24**
+There is now an App maps page in the left menu. Pick an app and you see its screens as boxes, the things that were done as arrows between them, and a yellow badge wherever a pop-up showed up. Click anything to see which workflows use it and, for a pop-up, how often it appeared and which button people chose.
+— 2026-10-24
+
+**Studio now warns you about pop-ups that other workflows ran into — 2026-10-24**
+If another workflow on the same app has met a pop-up such as "this file already exists" after a certain button, Studio now says so while you record that button, and asks after you finish whether to cover it. If you say yes, the workflow stops and asks a person which button to press whenever that pop-up shows up. It never picks a button for them.
+— 2026-10-24
+
+**Studio can now remember your standing answer for a pop-up, and runs follow it safely — 2026-10-24**
+On the App maps page you can tell Studio what to do whenever a particular pop-up shows up in an app, for example always press "Keep both". After you publish, a workflow that meets that pop-up, even one it was never recorded with, follows your answer. Buttons that change or remove things need an extra tick before they can run without asking, and if no answer is set, a person is still asked.
+— 2026-10-24
+
+**Studio now learns about pop-ups your customers actually run into — 2026-10-24**
+When a workflow on a customer's computer hits a "choose one" pop-up it was never taught about, it now reports the outline of that pop-up (a few title words and the button names) back to you. The App maps page then shows pop-ups that real runs met but no workflow covers yet, so you can decide what should happen. It never sends file names, numbers, typed text or the pop-up's message.
+— 2026-10-24
+
+**AI assistants can now tell which website each workflow is for — 2026-10-24**
+When an AI assistant looks at the workflows installed on a computer, each one now says which website it works in, for example "works in drive.example.com". That helps the assistant pick the right workflow without guessing from its name. Nothing about the website's pages or your data is shared to make this work.
+— 2026-10-24

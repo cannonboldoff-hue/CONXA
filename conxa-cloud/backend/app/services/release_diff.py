@@ -19,7 +19,7 @@ import json
 from typing import Any
 
 # Fixed per-skill file set the compiler always writes (see skill_package_builder_output.py).
-_SKILL_FILES = ("execution.json", "recovery.json", "inputs.json", "manifest.json", "validation.json")
+_SKILL_FILES = ("execution.json", "recovery.json", "inputs.json", "manifest.json", "validation.json", "app_knowledge.json")
 
 # Targeting metadata the compiler/recovery may rewrite without the step's actual
 # behavior changing — excluded from the "is this step the same" comparison so a
@@ -146,6 +146,7 @@ def compute_diff(
             _changed(prev.get("manifest.json"), curr.get("manifest.json"))
             or _changed(prev.get("inputs.json"), curr.get("inputs.json"))
             or _changed(prev.get("validation.json"), curr.get("validation.json"))
+            or _changed(prev.get("app_knowledge.json"), curr.get("app_knowledge.json"))
         )
         if skill_recovery_changed:
             recovery_changed_skills.append(slug)

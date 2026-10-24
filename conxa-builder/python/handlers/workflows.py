@@ -556,6 +556,7 @@ class WorkflowsMixin:
                 "cloud_publish_failed",
                 "Skill pack publish did not complete. Check your Conxa Cloud connection and sign-in.",
             )
+        self._sync_app_graphs_quietly(workspace_id)
         return publish_info
 
     def cmd_list_skill_pack_versions(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
@@ -1110,10 +1111,20 @@ class WorkflowsMixin:
     # ─── helpers ────────────────────────────────────────────────────────────
 
     def cmd_delete_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
-        from conxa_core.storage.workflow_store import delete_workflow
+        from conxa_core.storage.workflow_store import delete_workflow, get_workflow
 
         workflow_id = _safe_id(payload.get("workflow_id"), "workflow_id")
-        return {"deleted": bool(delete_workflow(workflow_id))}
+        workflow = get_workflow(workflow_id)
+        deleted = bool(delete_workflow(workflow_id))
+        if deleted and workflow is not None and workflow.skill_id:
+            # The compiled skill file stays behind, but the workflow is gone: take its part out of the app maps.
+            try:
+                from conxa_core.storage.app_graph_store import remove_skill  # noqa: PLC0415
+
+                remove_skill(workflow.skill_id)
+            except Exception:  # noqa: BLE001 -- derived data, never worth failing a delete
+                pass
+        return {"deleted": deleted}
 
     def cmd_update_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         from conxa_core.storage.group_store import get_group

@@ -119,6 +119,18 @@ def build_skill_package(
                 saved_skill=saved_skill,
                 on_warning=lambda msg, wf=wf: _log(msg, warning=True, workflow=wf.name),
             )
+            # What the app map knows about popups on the hosts this skill visits (advisory; see
+            # app_graph/knowledge.py). Never lets the map fail a build.
+            try:
+                from conxa_compile.app_graph.knowledge import write_app_knowledge
+
+                meta_hosts = (saved_skill.get("meta") or {}).get("visited_hosts")
+                write_app_knowledge(
+                    bundle_root / "skills" / wf.slug, workspace_id,
+                    [*(meta_hosts if isinstance(meta_hosts, list) else []), wf.target_url],
+                )
+            except Exception as exc:  # noqa: BLE001
+                _log(f"App knowledge skipped: {exc}", warning=True, workflow=wf.name)
             skill_slugs.append(wf.slug)
             skill_target_urls[wf.slug] = wf.target_url
             skill_group_ids[wf.slug] = wf.group_id

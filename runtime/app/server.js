@@ -610,6 +610,7 @@ function _buildReviewRequest(page, step, stepIndex, resolvedEntry, opts) {
 // module as ai_review above -- a planned pause, never recovery -- and a human (not a model)
 // answers it; see fork_pause.js's header.
 const { validateForkAnswer, buildForkRequest } = require("./fork_pause");
+const appKnowledgeFile = require("./app_knowledge");
 
 // EXEC-21 (hand-over shape): the human sibling of ai_review above, same reasoning for staying
 // its own module — a hand-over is a planned pause, not a failure, and must never touch
@@ -710,6 +711,7 @@ async function _handleTool(name, args, extra) {
         inputs_required: s.manifest.inputs_required || [],
         sync_status:     _syncStatus(s.pack),
         version:         s.manifest.version || "1.0.0",
+        app:             appKnowledgeFile.appOfManifest(s.manifest) || null, // the web app it works in
       }));
     return text(JSON.stringify({ skills, total: skills.length }));
   }
@@ -1890,6 +1892,7 @@ async function _handleTool(name, args, extra) {
             dialogQueue: _dialogQueue,
             structuralFingerprint: entry.manifest && entry.manifest.structural_fingerprint,
             environmentFingerprint: entry.manifest && entry.manifest.environment,
+            appKnowledge: appKnowledgeFile.load(entry.skillDir),
             watch,
             runId: _runId,
             hostOwned: _hostOwned,

@@ -49,39 +49,41 @@ function claudeConfigDirDurable(ctx) {
   return envOverride("CLAUDE_CONFIG_DIR") || path.join(ctx.home, ".claude");
 }
 
-function buildNote(workspace_id, skills) {
+// `apps` maps a skill slug to the web app (host) it works in; a skill with no entry is listed without one.
+function buildNote(workspace_id, skills, apps = {}) {
+  const inApp = (s) => (apps[s] ? ` (works in \`${apps[s]}\`)` : "");
   const list = skills.length
-    ? skills.map((s) => `- **${s}** — call \`execute_skill\` with workspace \`${workspace_id}\`, skill \`${s}\``).join("\n")
+    ? skills.map((s) => `- **${s}**${inApp(s)} — call \`execute_skill\` with workspace \`${workspace_id}\`, skill \`${s}\``).join("\n")
     : "_(no workflows synced yet)_";
   return [
     `Conxa has registered ${skills.length} automated workflow${skills.length === 1 ? "" : "s"} for **${workspace_id}** as MCP tools.`,
-    "Call `list_skills` to see current inputs, or `execute_skill` directly once you know which one applies.",
+    "Call `list_skills` to see current inputs and the web app (`app`) each one works in, or `execute_skill` directly once you know which one applies.",
     "Each workflow handles one record per call: for a spreadsheet or list, read it yourself, map its columns to the workflow's inputs, and call it once per row. Never pass the file to Conxa.",
     "",
     list,
   ].join("\n");
 }
 
-function buildSkillFrontmatterMd(workspace_id, skills) {
+function buildSkillFrontmatterMd(workspace_id, skills, apps = {}) {
   return [
     "---",
     `name: conxa-${workspace_id}`,
     `description: Conxa automated workflows for ${workspace_id} — call execute_skill to run one`,
     "---",
     "",
-    buildNote(workspace_id, skills),
+    buildNote(workspace_id, skills, apps),
     "",
   ].join("\n");
 }
 
-function buildCursorRule(workspace_id, skills) {
+function buildCursorRule(workspace_id, skills, apps = {}) {
   return [
     "---",
     `description: Conxa automated workflows for ${workspace_id}`,
     "alwaysApply: false",
     "---",
     "",
-    buildNote(workspace_id, skills),
+    buildNote(workspace_id, skills, apps),
     "",
   ].join("\n");
 }
@@ -170,9 +172,9 @@ const TARGETS = [
 ];
 
 /** Update every detected target's discoverability content for one workspace. */
-async function updateDurableContext(workspace_id, skills) {
+async function updateDurableContext(workspace_id, skills, apps = {}) {
   const ctx = buildContext();
-  const note = buildNote(workspace_id, skills);
+  const note = buildNote(workspace_id, skills, apps);
   const results = [];
   for (const target of TARGETS) {
     if (!isHostDetected(target.id, ctx)) {
@@ -182,7 +184,7 @@ async function updateDurableContext(workspace_id, skills) {
     const filePath = target.filePath(ctx, workspace_id);
     try {
       const r = target.mode === "dedicated"
-        ? await writeDedicatedFile(filePath, target.id === "cursor" ? buildCursorRule(workspace_id, skills) : buildSkillFrontmatterMd(workspace_id, skills))
+        ? await writeDedicatedFile(filePath, target.id === "cursor" ? buildCursorRule(workspace_id, skills, apps) : buildSkillFrontmatterMd(workspace_id, skills, apps))
         : await upsertSharedBlock(filePath, workspace_id, note);
       results.push({ target: target.id, file: filePath, ...r });
     } catch (e) {

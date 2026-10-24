@@ -29,8 +29,9 @@ from typing import Any, Callable
 from conxa_compile.compiler.step_key import step_keys
 
 MAX_QUESTIONS = 5
+MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
-_PRIORITY = {"upload": 0, "fork": 1, "confirm": 2, "values": 3, "popup": 4, "done_when": 5}
+_PRIORITY = {"upload": 0, "fork": 1, "known_popup": 1.5, "confirm": 2, "values": 3, "popup": 4, "done_when": 5}
 
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
@@ -119,12 +120,30 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) 
     )
 
 
+def _known_popup_question(key: str, name: str, popup: dict[str, Any]) -> dict[str, Any]:
+    """A popup the app map saw after this same step in other workflows. Fixed wording: the map holds
+    no model-written text, and the only things offered are adding it (asks a person by default) or not."""
+    title = str(popup.get("title") or "a popup")
+    labels = [str(l) for l in popup.get("button_labels") or []][:4]
+    return _question(
+        "known_popup", f"known_popup:{key}:{popup.get('id')}",
+        f"Other workflows sometimes get “{title}” after “{name}”. Cover it here too?",
+        f"It offers {', '.join(labels)}. You didn’t see it while recording this one, but it can still appear on a real run.",
+        [
+            {"id": "add", "label": "Yes, handle it", "detail": "A person is asked what to do whenever it appears, and the run carries on if it doesn’t. Adds a short wait at this step."},
+            {"id": "skip", "label": "No, leave it out", "detail": "A run that meets it will stop and ask instead."},
+        ],
+        step_keys_=[key], popup=popup,
+    )
+
+
 def generate_questions(
     doc: dict[str, Any],
     *,
     source_lookup: SourceLookup | None = None,
     answered_by_recording: dict[str, bool] | None = None,
     fork_copy: ForkCopy | None = None,
+    known_popups: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Find the places worth asking about in a compiled skill document.
 
@@ -209,6 +228,12 @@ def generate_questions(
         for state in ((s.get("outcome_fork") or {}).get("states") or []):
             if isinstance(state, dict) and state.get("id") and not (state.get("policy") or {}).get("reviewed"):
                 out.append(_fork_question(keys[i], state, fork_copy))
+
+    # 1c ─ popups other workflows on this app met right after the same step (the app map).
+    for kp in (known_popups or [])[:MAX_KNOWN_POPUP_QUESTIONS]:
+        i = int(kp.get("step_index", -1))
+        if 0 <= i < len(steps) and isinstance(kp.get("popup"), dict):
+            out.append(_known_popup_question(keys[i], step_name(steps[i]), kp["popup"]))
 
     # 4 ─ pop-ups the recorder saw but only a person can classify.
     for i, s in enumerate(steps):
@@ -302,6 +327,13 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             receipt = "Stops the run"
         ops.append({"op": "set_fork_policy", "step_key": keys[0], "state_id": question.get("fork_state_id"), "policy": policy})
         return ops, receipt
+
+    if kind == "known_popup":
+        if answer.get("choice") == "add":
+            title = str((question.get("popup") or {}).get("title") or "the popup")
+            ops.append({"op": "add_known_popup_fork", "step_key": keys[0], "popup": question["popup"]})
+            return ops, f"Added: a person decides when “{title}” appears"
+        return ops, "Left out"
 
     if kind == "popup":
         once = answer.get("choice") == "once"

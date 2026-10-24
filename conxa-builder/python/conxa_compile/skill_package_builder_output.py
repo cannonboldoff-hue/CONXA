@@ -119,10 +119,12 @@ def _write_skill_packs_format(
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy execution.json, recovery.json and visuals unchanged
-        for fname in ("execution.json", "recovery.json"):
+        for fname in ("execution.json", "recovery.json", "app_knowledge.json"):
             src = src_dir / fname
             if src.is_file():
                 shutil.copy2(src, dest_dir / fname)
+            elif fname == "app_knowledge.json":
+                (dest_dir / fname).unlink(missing_ok=True)   # a stale copy from an earlier build
 
         if (src_dir / "visuals").is_dir():
             dest_visuals = dest_dir / "visuals"

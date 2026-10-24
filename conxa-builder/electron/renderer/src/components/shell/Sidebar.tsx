@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
+  Map as MapIcon,
   MessageSquare,
   PackageCheck,
   Plus,
@@ -181,6 +182,7 @@ export function Sidebar({ rail }: { rail: boolean }) {
           }
         />
         <NavItem to="/build-installer" icon={PackageCheck} label="Build Installer" rail={rail} />
+        <NavItem to="/app-maps" icon={MapIcon} label="App maps" rail={rail} />
         <button
           type="button"
           title={rail ? 'Search (Ctrl K)' : undefined}

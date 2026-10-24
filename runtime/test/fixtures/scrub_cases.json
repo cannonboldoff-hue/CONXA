@@ -1,0 +1,200 @@
+[
+ {
+  "fn": "text",
+  "in": "Replace \"q3-report.pdf\" for jane@acme.com at https://x.test/a?b=1 order 12345 now",
+  "out": "Replace for at order now"
+ },
+ {
+  "fn": "label",
+  "in": "Replace \"q3-report.pdf\" for jane@acme.com at https://x.test/a?b=1 order 12345 now",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "Don't save",
+  "out": "Don't save"
+ },
+ {
+  "fn": "label",
+  "in": "Don't save",
+  "out": "Don't save"
+ },
+ {
+  "fn": "text",
+  "in": "Can't upload 'secret plan' today",
+  "out": "Can't upload today"
+ },
+ {
+  "fn": "label",
+  "in": "Can't upload 'secret plan' today",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "Upload options",
+  "out": "Upload options"
+ },
+ {
+  "fn": "label",
+  "in": "Upload options",
+  "out": "Upload options"
+ },
+ {
+  "fn": "text",
+  "in": "Discard changes?",
+  "out": "Discard changes?"
+ },
+ {
+  "fn": "label",
+  "in": "Discard changes?",
+  "out": "Discard changes?"
+ },
+ {
+  "fn": "text",
+  "in": "Quarterly revenue forecast for the northern region team",
+  "out": "Quarterly revenue forecast for the northern region team"
+ },
+ {
+  "fn": "label",
+  "in": "Quarterly revenue forecast for the northern region team",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "report.pdf already exists",
+  "out": "already exists"
+ },
+ {
+  "fn": "label",
+  "in": "report.pdf already exists",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "  lots   of   space  ",
+  "out": "lots of space"
+ },
+ {
+  "fn": "label",
+  "in": "  lots   of   space  ",
+  "out": "lots of space"
+ },
+ {
+  "fn": "text",
+  "in": "Order #4521 shipped to “Jane Doe”",
+  "out": "Order shipped to"
+ },
+ {
+  "fn": "label",
+  "in": "Order #4521 shipped to “Jane Doe”",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "Step 2 of 3",
+  "out": "Step of"
+ },
+ {
+  "fn": "label",
+  "in": "Step 2 of 3",
+  "out": null
+ },
+ {
+  "fn": "text",
+  "in": "",
+  "out": ""
+ },
+ {
+  "fn": "label",
+  "in": "",
+  "out": null
+ },
+ {
+  "fn": "tokens",
+  "in": "Inbox (3) - jane@acme.com - Mail",
+  "out": [
+   "inbox",
+   "mail"
+  ]
+ },
+ {
+  "fn": "tokens",
+  "in": "Save changes to file?",
+  "out": [
+   "save",
+   "changes",
+   "file"
+  ]
+ },
+ {
+  "fn": "tokens",
+  "in": "Upload options",
+  "out": [
+   "upload",
+   "options"
+  ]
+ },
+ {
+  "fn": "tokens",
+  "in": "Report q3.xlsx already exists in this location",
+  "out": [
+   "report",
+   "already",
+   "exists",
+   "this",
+   "location"
+  ]
+ },
+ {
+  "fn": "tokens",
+  "in": "Éclair déjà vu",
+  "out": [
+   "clair"
+  ]
+ },
+ {
+  "fn": "tokens",
+  "in": "",
+  "out": []
+ },
+ {
+  "fn": "route",
+  "in": "https://app.com/orders/847291?token=abc123",
+  "out": "/orders/:id"
+ },
+ {
+  "fn": "route",
+  "in": "https://app.com",
+  "out": "/"
+ },
+ {
+  "fn": "route",
+  "in": "https://app.com/",
+  "out": "/"
+ },
+ {
+  "fn": "route",
+  "in": "https://drive.example.com/drive/my-drive",
+  "out": "/drive/my-drive"
+ },
+ {
+  "fn": "route",
+  "in": "https://app.com/a/0123456789abcdef0123/b",
+  "out": "/a/:id/b"
+ },
+ {
+  "fn": "route",
+  "in": "https://app.com/users/someVeryLongSlugName1/x",
+  "out": "/users/:id/x"
+ },
+ {
+  "fn": "route",
+  "in": "about:blank",
+  "out": ""
+ },
+ {
+  "fn": "route",
+  "in": "not a url",
+  "out": ""
+ }
+]

@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 15 |
 | P1 — Blocking / Foundational | 3 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 43 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 44 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
 | P4 — Low Urgency, Opportunistic | 37 |
-| **Total** | **118** |
+| **Total** | **119** |
 
 ---
 
@@ -700,6 +700,14 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Dependencies:** item 1 depends on EXEC-29's dialog pre-arm; item 4 on the tracking/drift dashboards.
 - **Complexity:** M overall; each item is independent.
 - **Success criteria:** a workflow recorded against a popup that sometimes appears runs unattended on the paths the author approved, and every other path ends with a person's decision — never a silent Replace, Delete or Cancel.
+
+### APP-1 — App maps: finish the learned map of each web app (phase 8)
+- **Category:** Builder / Execution & Recovery / Cloud
+- **Description:** Phases 1-7 shipped (2026-10-24, `docs/TRD.md` §11.5): every compiled workflow adds its screens, actions and decision popups to a data-free, per-host, per-workspace map kept in Build Studio, teammates share contributions through the cloud (`/api/v1/app-graphs`, no folding there), an **App maps** page in Studio draws them, Studio warns about popups other workflows met (a `known_popup` question after compile; a live "Heads up" line while recording), and a popups-only `app_knowledge.json` ships with each skill so a runtime recognises a popup nobody recorded and follows the author's standing policy (or asks a better question; a decision popup is still only ever answered by a person unless the author approved it). Runtimes also report scrubbed `app_obs` telemetry for popups they could not place, which comes back as "seen in real runs" counts and field-only popups. Agents also see which web app each workflow works in (`list_skills.app`, the discoverability note). Still to build (phase 8, gated): an opt-in, k-anonymous shared popup map across customers. Design: a workspace setting `share_app_maps` (default off, with legal copy); a periodic cloud fold of opted-in workspaces' **popup shapes only** (never screens, paths or workflow names) keeping a shape only when >=3 distinct workspaces report it, into KV `app_graph_shared`; Studio shows these as read-only "common in this app" hints that never become a fork or a policy on their own. Blocked on: a `docs/Security.md` re-review of SG-20, customer consent wording, and a decision on whether pooling needs a `docs/PRD.md` change (the PRD already calls the telemetry loop pooled execution metadata). Known limits so far: `app_obs` has no per-pack off switch yet (SG-20); the cascade-path report only fires when a decision popup blocked a click; consent/dismissable popups are not mapped, so `cascade.js` gets no known close button from the map (it still refuses to dismiss decision dialogs); the post-compile `known_popup` question cannot also offer "record the other case" (the variant flow needs an existing fork); the shipped file changes only when a skill is published again; phase 1: single-page apps that keep the URL while the view changes collapse into one screen (the compiled steps carry no page landmarks); `try_dismiss` and consent popups are not mapped yet; branch steps other than forks are skipped; one host = one app (no aliases such as docs.google.com ↔ drive.google.com).
+- **Why required:** the knowledge in every recording is thrown away after the compile. The map is what lets a new workflow, a run, and an agent benefit from what earlier ones saw.
+- **Dependencies:** phase 5 builds on EXEC-44's fork matcher; phase 8 needs a privacy review.
+- **Complexity:** L overall; each phase is S-M.
+- **Success criteria:** a second workflow recorded on the same app is warned about the popups the first one met, and a customer run that meets a known popup asks a better question than "unknown dialog".
 
 ### UPD-1 — True skill-pack cryptographic signing
 - **Category:** Auto Updates

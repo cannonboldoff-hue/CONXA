@@ -1023,6 +1023,12 @@ custom icon.
 
 ---
 
+### App maps (2026-10-24)
+
+Every compile (and every later edit or undo of a compiled skill) updates the maps of the apps the workflow touched: `write_skill` → `conxa_compile.app_graph` → `data/app_graphs/<workspace>/<host>/`. Deleting a workflow takes its part out. Publishing a skill (`cmd_publish_skill_pack`) then shares the maps with teammates through Conxa Cloud (`services/app_graph_sync.py`, best-effort — a failed sync never fails a publish). **App maps** in the sidebar opens the viewer (UI-UX-Brief addendum), which also syncs once when it opens. While recording, a control that other workflows saw a decision popup after posts one “Heads up” line in the conversation; after compiling, the same knowledge becomes a “cover it here too?” question that, if accepted, adds a popup step that asks a person. Agents see the web app each workflow works in (`list_skills`, the note written into each registered agent host). See TRD §11.5.
+
+---
+
 ## Flow Summary
 
 | Flow | Trigger | Systems Involved | Duration |

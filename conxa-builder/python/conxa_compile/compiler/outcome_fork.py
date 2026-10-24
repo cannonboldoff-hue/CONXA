@@ -378,3 +378,77 @@ def state_from_dialog(
         "policy": policy,
         "observed_in": [session_id] if session_id else [],
     }
+
+
+def fork_from_known_popup(trigger: dict[str, Any], popup: dict[str, Any]) -> dict[str, Any] | None:
+    """A fork for a popup other workflows met after this step but this recording never saw.
+
+    ``popup`` is an app-map Popup (``conxa_core.models.app_graph``): scrubbed title, button labels,
+    container and option roles, nothing else. Every option is therefore unrecorded -- a role+name
+    click scoped to the dialog (``bundle_from_descriptor``), never a model-written selector -- the
+    clean (no popup) path is marked observed because this very recording ran without it, and the
+    default policy asks a person. Returns the saved-step dict, or None when fewer than two buttons
+    can be addressed."""
+    container = str(popup.get("container_selector") or "")
+    template = SkillStep.model_validate(trigger)
+    options: list[dict[str, Any]] = []
+    used: set[str] = set()
+    for o in popup.get("options") or []:
+        label = str(o.get("label") or "").strip() if isinstance(o, dict) else ""
+        if not label:
+            continue
+        role = "consequential" if (o.get("role") == "consequential" or option_role(label) == "consequential") else option_role(label)
+        synth = _synthetic_click(template, {"name": label, "text": label, "role": "button", "tag": "button"}, container,
+                                 consequential=(role == "consequential"))
+        if synth is None:
+            continue
+        oid = _slug(label, "option")
+        n = 2
+        while oid in used:
+            oid = f"{_slug(label, 'option')}_{n}"
+            n += 1
+        used.add(oid)
+        options.append({"id": oid, "label": label, "role": role, "recorded": False, "steps": [_dump(synth)],
+                        "_chosen": int(o.get("chosen") or 0)})
+    if len(options) < 2:
+        return None
+
+    top = max(options, key=lambda o: o["_chosen"])
+    suggested = top["id"] if top["_chosen"] > 0 else ""
+    for o in options:
+        o.pop("_chosen")
+
+    title = str(popup.get("title") or "popup")
+    labels = [o["label"] for o in options]
+    sig = {
+        "title": title,
+        "button_labels": labels,
+        "message_tokens": [str(t) for t in popup.get("message_tokens") or []][:12],
+        "container_selector": container,
+    }
+    fork = SkillStep(
+        action="outcome_fork",
+        intent=FORK_INTENT,
+        semantic_description=f'Handle the "{title}" popup',
+        tab=dict(template.tab),
+        frame=dict(template.frame),
+        recovery=no_recovery_block(FORK_INTENT),
+        outcome_fork={
+            "timeout_ms": DEFAULT_TIMEOUT_MS,
+            "unknown_policy": "ask_human",
+            "clean": {"observed": True, "observed_in": []},
+            "states": [{
+                "id": f"dialog_{_slug(title, '1')}",
+                "kind": "dialog",
+                "signature": sig,
+                "options": options,
+                "policy": {"mode": "ask_human", **({"suggested": suggested} if suggested else {})},
+                "observed_in": [],
+                "from_map": True,
+            }],
+        },
+    )
+    fork.identity_bundle.stable_hash = hashlib.sha256(
+        f"fork|{container}|{_norm(title)}|{'|'.join(sorted(_norm(l) for l in labels))}".encode()
+    ).hexdigest()[:16]
+    return _dump(fork)

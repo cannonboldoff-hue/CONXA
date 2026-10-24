@@ -66,6 +66,7 @@ from handlers.conversation import ConversationMixin  # noqa: E402
 from handlers.workflow_flow import WorkflowFlowMixin  # noqa: E402
 from handlers.compile_flow import CompileFlowMixin  # noqa: E402
 from handlers.test_flow import TestFlowMixin  # noqa: E402
+from handlers.app_graph import AppGraphMixin  # noqa: E402
 from conxa_core.progress import set_event_sink  # noqa: E402
 
 # Compile-time sub-step logging (conxa_compile/compiler/build.py's
@@ -104,6 +105,11 @@ def _progress_event_sink(job_id: str, event: str, message: str, data: dict[str, 
 
 
 set_event_sink(_progress_event_sink)
+
+# App maps follow every skill write (compile, editor edit, undo) and delete.
+from conxa_compile.app_graph import install_hooks as _install_app_graph_hooks  # noqa: E402
+
+_install_app_graph_hooks()
 
 # --- background asyncio loop for the recorder --------------------------------
 
@@ -150,6 +156,7 @@ class Backend(
     WorkflowFlowMixin,
     CompileFlowMixin,
     TestFlowMixin,
+    AppGraphMixin,
 ):
     """JSON-RPC dispatcher. Command handlers (cmd_*) live in the handlers/
     package, grouped by domain and mixed in here; this class owns shared

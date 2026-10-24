@@ -541,6 +541,45 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
     return step
 
 
+def add_known_popup_fork(document: dict[str, Any], step_index: int, popup: dict[str, Any]) -> dict[str, Any]:
+    """Put an outcome fork for a popup the app map knows right after step ``step_index``: a popup
+    other workflows met there but this recording did not (``outcome_fork.fork_from_known_popup``).
+    Refuses when a fork already follows that step, or when the popup has fewer than two buttons
+    that can be addressed."""
+    from conxa_compile.compiler.outcome_fork import fork_from_known_popup
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+
+    def is_fork(s: Any) -> bool:
+        a = s.get("action") if isinstance(s, dict) else None
+        return (a.get("action") if isinstance(a, dict) else a) == "outcome_fork"
+
+    if is_fork(steps[step_index]) or (step_index + 1 < len(steps) and is_fork(steps[step_index + 1])):
+        raise ValueError("fork_already_here")
+    fork = fork_from_known_popup(steps[step_index], popup)
+    if fork is None:
+        raise ValueError("popup_not_addable")
+    original_len = len(steps)
+    insert_at = step_index + 1
+    steps.insert(insert_at, fork)
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    doc = _remap_intent_graph_indices(doc, {i: (i if i < insert_at else i + 1) for i in range(original_len)})
+    _invalidate_compile_report(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
 def insert_step_after(document: dict[str, Any], action_kind: str, insert_after: int | None = None) -> dict[str, Any]:
     doc = dict(document)
     skills = list(doc.get("skills") or [])

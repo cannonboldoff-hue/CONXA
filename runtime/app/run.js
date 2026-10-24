@@ -27,6 +27,7 @@ const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs
 const { appendRecoveryEvent } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
 const fork = require("./fork");
+const appKnowledge = require("./app_knowledge");
 const {
   PAGE_LOAD_TIMEOUT_MS,
   RUN_RETENTION_MS,
@@ -576,6 +577,9 @@ async function executeOneStep(ctx, state, steps, i) {
     // on the guard; now that the same-element Layer 2 stages run for destructive steps too, the
     // rule is stated here instead of inferred from where the cascade stopped.
     if (step.destructive === true) primaryErr.destructiveHalt = true;
+    if (primaryErr.decisionDialog) {
+      emitAppObs(ctx.tracker, i, safePageUrl(page), primaryErr.decisionDialog.title, primaryErr.decisionDialog.buttons, false);
+    }
     ctx.tracker.emit("step_fail", { si: i, fc: mapErrorToCode(primaryErr) });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
   }
@@ -700,6 +704,19 @@ async function runForEachStep(ctx, state, step, page, i) {
   ctx.tracker.emit("for_each_done", { si: i, processed, failed, total: rowIds.length });
 }
 
+function safePageUrl(page) {
+  try { return page.url(); } catch (_) { return ""; }
+}
+
+// Tell the fleet's app map about a decision popup this run could not place, scrubbed down to its
+// shape (scrub.js). Telemetry only: never read back by the run, never fails it.
+function emitAppObs(tracker, si, url, title, labels, known) {
+  try {
+    const obs = appKnowledge.observation(url, { title, labels, known });
+    if (obs) tracker.emit("app_obs", { si, ...obs });
+  } catch (_) { /* advisory */ }
+}
+
 // What dialog is showing right now. A native alert/confirm/prompt blocks the page's JS thread
 // (page.evaluate would just time out), so the queued Playwright Dialog is checked first; a DOM
 // dialog comes from page_scripts.dialogProbe. Never throws: an unreadable page reads as "nothing
@@ -731,23 +748,26 @@ async function clickDialogButtonByLabel(page, label) {
   await button.first().click({ timeout: 5000 });
 }
 
+// RT-9: a destructive choice is checked HERE, at the fork's own index. The guard can't pause
+// inside an option body (the cursor would be lost), so look before running it.
+function forkGuard(ctx, state, step, page, i, destructive) {
+  if (!(destructive && ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun)) return;
+  if (state.loopDepth > 0) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
+    throw stepFailure(step, i, new Error(
+      "Test stopped before a repeated step that can't be undone: the guard can't pause inside a loop. " +
+      "Turn the guard off to run it, or test it somewhere safe."
+    ), null, state.warnings);
+  }
+  throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 1 });
+}
+
 // Run one chosen option: the RT-9 guard check at the fork's own index, the option's steps through
 // the real executeOneStep, then confirm the popup is actually gone.
 async function runForkOption(ctx, state, step, page, i, option, title) {
   const optionSteps = Array.isArray(option.steps) ? option.steps : [];
 
-  // RT-9: a destructive option is checked HERE, at the fork's own index. The guard can't pause
-  // inside the option body (the cursor would be lost), so look before running it.
-  if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && optionSteps.some((s) => s && s.destructive === true)) {
-    if (state.loopDepth > 0) {
-      ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
-      throw stepFailure(step, i, new Error(
-        "Test stopped before a repeated step that can't be undone: the guard can't pause inside a loop. " +
-        "Turn the guard off to run it, or test it somewhere safe."
-      ), null, state.warnings);
-    }
-    throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 1 });
-  }
+  forkGuard(ctx, state, step, page, i, optionSteps.some((s) => s && s.destructive === true));
 
   state.forkDepth = (state.forkDepth || 0) + 1;
   try {
@@ -810,6 +830,7 @@ async function runForkStep(ctx, state, step, page, i) {
   let decision;
   let stateId = "unknown";
   let title = (probe && probe.title) || "a popup";
+  let known = null; // a popup the app map knows although this fork does not list it
   try {
     if (seen.kind === "state") {
       stateId = seen.state.id;
@@ -817,7 +838,14 @@ async function runForkStep(ctx, state, step, page, i) {
       decision = fork.decide(seen.state, state.inputs, { loopDepth: state.loopDepth || 0 });
     } else {
       ctx.tracker.emit("fork_unknown", { si: i });
-      decision = fork.decideUnknown(step, probe, { loopDepth: state.loopDepth || 0 });
+      known = appKnowledge.lookupPopup(ctx.appKnowledge, appKnowledge.hostOf(safePageUrl(page)), probe);
+      emitAppObs(ctx.tracker, i, safePageUrl(page), probe && probe.title, fork.probeLabelsRaw(probe), !!known);
+      if (known) {
+        stateId = `map:${known.id}`;
+        decision = appKnowledge.decideKnown(known, probe, { loopDepth: state.loopDepth || 0 });
+      } else {
+        decision = fork.decideUnknown(step, probe, { loopDepth: state.loopDepth || 0 });
+      }
     }
   } catch (e) {
     ctx.tracker.emit("step_fail", { si: i, fc: e && e.badInput ? "bad_input" : "fork_decision" });
@@ -842,9 +870,36 @@ async function runForkStep(ctx, state, step, page, i) {
         reason: decision.reason,
         suggested: decision.suggested || null,
         unknown: seen.kind !== "state",
-        choices: fork.pauseChoices(seen.kind === "state" ? seen.state : null, probe),
+        knownFromMap: !!known,
+        choices: fork.pauseChoices(seen.kind === "state" ? seen.state : null, probe).map((c) => {
+          // A popup the app map knows: say which of its real buttons are risky. The labels are
+          // still only the ones on screen, so the answer can never name an invented action.
+          const role = known && c.role === "unknown" ? appKnowledge.roleOf(known, c.label) : null;
+          return role ? { ...c, role } : c;
+        }),
       },
     });
+  }
+
+  if (decision.do === "click") {
+    // The author's standing policy for a popup the app map knows (set in the App maps page, shipped
+    // with the skill). Same safety as a fork's `auto`: only a visible button, a consequential one
+    // only when the author approved it (decideKnown), and the destructive guard still applies.
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: decision.label, mode: "run", src: decision.source });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: decision.label, mode: "run", source: decision.source, title });
+    forkGuard(ctx, state, step, page, i, appKnowledge.roleOf(known, decision.label) === "consequential");
+    if (ctx.dryRun) {
+      state.warnings.push(`Dry run: did not click "${decision.label}" in the "${title}" popup.`);
+      return;
+    }
+    try {
+      await clickDialogButtonByLabel(page, decision.label);
+    } catch (e) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
+      throw stepFailure(step, i, e, null, state.warnings);
+    }
+    await confirmForkDialogClosed(ctx, state, step, page, i, title, decision.label);
+    return;
   }
 
   if (decision.do === "stop") {
@@ -915,7 +970,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, appKnowledge: knowledge } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1027,6 +1082,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     onStep, onPhase, cancelCheck, tracker: t, downloadQueue, dialogQueue,
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
     guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)
+    appKnowledge: knowledge || null, // advisory popup knowledge for an unrecognised dialog (app_knowledge.js)
   };
 
   for (let i = startFrom; i < steps.length; i++) {
