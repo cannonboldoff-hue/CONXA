@@ -525,11 +525,22 @@ app.whenReady().then(async () => {
   // the renderer counterpart to assets.py's asset_url(). Rejects traversal outside
   // the data dir the same way resolve_skill_asset() does on the Python side.
   const assetsRoot = path.resolve(path.join(conxaEnv.resolve().studioHome, "data"));
+  // A test run's screenshots (failure.jpg, pre_step.jpg) live in the test sandbox, not under data/. They are
+  // served through one narrow, validated shape -- <run id>/_evidence/<name>.jpg|png -- and nothing else in the
+  // sandbox (sessions, auth, downloads) is reachable.
+  const evidenceRoot = path.resolve(path.join(conxaEnv.resolve().studioHome, "sandbox", "data", "runs"));
+  const EVIDENCE_PATH = /^sandbox-evidence\/([A-Za-z0-9_.-]+)\/_evidence\/([A-Za-z0-9_.-]+\.(?:jpe?g|png))$/;
   protocol.handle("conxa-asset", (request) => {
     const url = new URL(request.url);
     const relPath = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
     if (!relPath || relPath.includes("..")) {
       return new Response("Forbidden", { status: 403 });
+    }
+    const evidence = EVIDENCE_PATH.exec(relPath);
+    if (evidence) {
+      const file = path.resolve(evidenceRoot, evidence[1], "_evidence", evidence[2]);
+      if (!file.startsWith(evidenceRoot + path.sep)) return new Response("Forbidden", { status: 403 });
+      return net.fetch(pathToFileURL(file).toString());
     }
     const target = path.resolve(assetsRoot, relPath);
     if (target !== assetsRoot && !target.startsWith(assetsRoot + path.sep)) {

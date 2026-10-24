@@ -1190,3 +1190,26 @@ def test_probe_unmatched_page_with_success_url_is_unverified(monkeypatch) -> Non
     assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "unverified"
     _stub_probe(monkeypatch, _obs(final_url="https://app.test/dashboard"))
     assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "ready"
+
+
+def test_a_download_waits_for_its_click_report_before_it_is_queued(monkeypatch):
+    """BUILD-47: the launched path saved a small file before bridge.js delivered the click that
+    started it, so download_observed landed after the NEXT click. The page is pumped for the grace
+    window first, so the click's report is delivered ahead of the download."""
+    import time
+    from types import SimpleNamespace
+
+    from conxa_compile.recorder import session as session_mod
+
+    monkeypatch.setattr(session_mod, "_DOWNLOAD_CLICK_GRACE_S", 0.2)
+    pumped: list[int] = []
+    page = SimpleNamespace(wait_for_timeout=lambda ms: (pumped.append(ms), time.sleep(ms / 1000))[0])
+    fake = SimpleNamespace(_page=page)
+    started = time.monotonic()
+    session_mod.RecordingSession._pump_until_grace(fake, started, None)
+    assert time.monotonic() - started >= 0.2 and len(pumped) >= 3
+
+    closed = SimpleNamespace(_page=SimpleNamespace(wait_for_timeout=lambda ms: (_ for _ in ()).throw(RuntimeError("closed"))))
+    t0 = time.monotonic()
+    session_mod.RecordingSession._pump_until_grace(closed, t0, None)   # a closed page still just waits
+    assert time.monotonic() - t0 >= 0.2

@@ -171,6 +171,41 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "If the reply is ambiguous, off-topic, or asks a question instead of answering, choose "
         "\"unclear\". Never invent an id that is not in the list."
     ),
+    # JSON: checks a compiled workflow against what the person said it is for, and sorts the
+    # recorded values that are not typed text into "fixed" / "varies each run" / "unsure".
+    "workflow_understanding": (
+        "A person recorded a task in a browser and described what it is for. You get that "
+        "description (task), the compiled steps in order (steps), what the run ends with "
+        "(ends_with_checks), the inputs it already has (existing_inputs) and candidates: values "
+        "taken from the recording that are not typed text (a page address, a record identifier, "
+        "a clicked item's label). Decide for each candidate whether it is specific to this "
+        "recording. \"varies\": the task describes a kind of thing, or does not name this one — "
+        "which repository, which file, which customer — so a future run would use a different "
+        "one. \"fixed\": the task names this exact thing, or it is simply the same page every "
+        "time (a settings page, a sign-in page). \"unsure\": you cannot tell; do not guess. "
+        "Also judge coverage: ok is false only when the task clearly asks for an outcome the "
+        "steps never reach (for example it says send and the steps stop at save draft); note is "
+        "then one plain sentence, at most 25 words. Return ONLY a JSON object: "
+        "{\"goal_summary\": \"one sentence\", \"coverage\": {\"ok\": true|false, \"note\": \"\"}, "
+        "\"values\": [{\"ref\": \"<a candidate ref>\", \"verdict\": \"fixed|varies|unsure\", "
+        "\"name\": \"short_snake_case_input_name (varies/unsure only)\", \"literal\": \"for url "
+        "candidates only: the exact part of the recorded address that changes\"}]}. Never "
+        "invent a ref, never write a selector, and never claim a gap you cannot see in the steps."
+    ),
+    # JSON: is the person's message a command for one of the actions available right now?
+    "chat_route_intent": (
+        "The person is chatting inside a Build Studio workflow conversation. You get the "
+        "actions available right now (actions: \"id: what it does\"), the workflow's input "
+        "names (input_names) and the person's message. Decide whether the message asks to DO "
+        "one of those actions now, or is just a question, a comment or a description of what "
+        "happened (\"why did the test fail?\", \"the button moved\"). Only an instruction to act "
+        "counts. Return ONLY a JSON object: {\"action\": \"<an action id from the list, or "
+        "chat>\", \"slots\": {\"inputs\": {\"<input name>\": \"<value>\"}, \"workflow_id\": "
+        "\"<id from workflows>\"}}. Use \"chat\" whenever you are not sure. slots.inputs is "
+        "only for the test action and only for input names in input_names with a value the "
+        "person actually stated; slots.workflow_id is only for open_workflow. Never invent an "
+        "action id, an input name or a value."
+    ),
     # JSON: folds older conversation turns into a short rolling summary.
     "thread_summarize": (
         "Summarize the older part of a conversation between a person and the Build Studio "
@@ -448,6 +483,11 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             if isinstance(s, dict)
         ]
         text_payload = {"steps": text_steps, "page_urls": page_urls, "sibling_bindings": sibling_bindings}
+        task_description = str((data or {}).get("task_description") or "").strip()
+        if task_description:
+            # What the person said the workflow is for. Context for naming and phases only: it
+            # never licenses a selector, a new step, or a different goal than the recording shows.
+            text_payload["task_description"] = task_description
         content: list[dict[str, Any]] = [
             {"type": "text", "text": json.dumps(text_payload, ensure_ascii=False)},
         ]
@@ -473,6 +513,10 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "followed by a labelled screenshot (\"--- Step: <key> ---\") showing the "
                     "target at the moment it was recorded — use it as extra context, never as "
                     "the only evidence for a finding.\n\n"
+                    "If the input has task_description, it is what the person said this workflow "
+                    "is for. Use it only to pick better names, goals and phases; the recorded "
+                    "steps remain the source of truth and it never justifies a step that was "
+                    "not recorded.\n\n"
                     "Return strict JSON with keys:\n"
                     "goal (one sentence), steps (array of {index, intent_token, intent, "
                     "verification_anchor}), decision_points (array of {step_index, "
@@ -887,8 +931,10 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
     if task == "studio_chat_reply":
         # Streamed prose: same headroom as copilot_reply, for the same hidden-reasoning reason.
         body["max_tokens"] = 16384
-    if task in ("chat_map_answer", "studio_chat_actions"):
+    if task in ("chat_map_answer", "studio_chat_actions", "chat_route_intent"):
         body["max_tokens"] = 1024
+    if task == "workflow_understanding":
+        body["max_tokens"] = 2048
     if task == "thread_summarize":
         body["max_tokens"] = 2048
     if json_mode:

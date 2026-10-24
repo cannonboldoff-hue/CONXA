@@ -40,6 +40,9 @@ from conxa_compile.conversation.context_pack import (
 
 Sink = Callable[[dict[str, Any]], None]
 CardExecutor = Callable[[dict[str, Any], str, dict[str, Any]], dict[str, Any]]
+# (action id, slots) -> {"ok": bool, "message": str}. Runs one of actions.ACTIONS through the same
+# backend commands the card buttons use; never raises.
+FlowExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 class TurnCancelled(Exception):
@@ -112,10 +115,13 @@ def _step_name(row: dict[str, Any]) -> str:
     return _WS.sub(" ", name).strip()[:80]
 
 
-def pinned_facts(digest: dict[str, Any] | None, clarify: dict[str, Any] | None) -> list[str]:
+def pinned_facts(digest: dict[str, Any] | None, clarify: dict[str, Any] | None, task: str = "") -> list[str]:
     """Everything the person decided or the workflow depends on, as short lines. These ride in
-    every context pack and are never summarized away."""
+    every context pack and are never summarized away. ``task`` is what the person said the
+    workflow is for (``Workflow.task_description``): the chat model needs the goal, not just the steps."""
     facts: list[str] = []
+    if task.strip():
+        facts.append(f"What the person said this workflow is for: {task.strip()[:300]}")
     for q in (clarify or {}).get("questions") or []:
         if isinstance(q, dict) and q.get("status") == "answered" and q.get("receipt"):
             facts.append(f"{q.get('title')}: {q.get('receipt')}")
@@ -192,6 +198,9 @@ def run_turn(
     load_digest: Callable[[], dict[str, Any] | None] | None = None,
     load_clarify: Callable[[], dict[str, Any] | None] | None = None,
     last_test_failed: bool = False,
+    flow_executor: FlowExecutor | None = None,
+    workflows: list[dict[str, Any]] | None = None,
+    context_sections: list[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Run one turn. Returns ``{"turn_id", "status": "done"|"cancelled", "reply", "items"}``.
 
@@ -225,6 +234,7 @@ def run_turn(
                 lifecycle=lifecycle, group_names=group_names, card_executor=card_executor,
                 gate_proposals=gate_proposals, load_digest=load_digest, load_clarify=load_clarify,
                 last_test_failed=last_test_failed, push=push, new_items=new_items,
+                flow_executor=flow_executor, workflows=workflows, context_sections=context_sections,
             )
         finally:
             lock.release()
@@ -239,7 +249,9 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
                 lifecycle: dict[str, Any] | None, group_names: list[str] | None,
                 card_executor: CardExecutor | None, gate_proposals: Any, load_digest: Any, load_clarify: Any,
                 last_test_failed: bool, push: Callable[[dict[str, Any]], dict[str, Any]],
-                new_items: list[dict[str, Any]]) -> dict[str, Any]:
+                new_items: list[dict[str, Any]], flow_executor: FlowExecutor | None = None,
+                workflows: list[dict[str, Any]] | None = None,
+                context_sections: list[tuple[str, str]] | None = None) -> dict[str, Any]:
     if sink is not None:
         sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": turn_id, "status": "started"})
 
@@ -277,12 +289,27 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
         if mapped is not None:
             result = card_executor(open_question, "choose", {"choice": mapped, "message": message})
             return {"turn_id": turn_id, "status": "done", "reply": "", "items": new_items, "result": result}
+        # Not an answer. It may still be a command ("what are my options" is not, "test it" is) —
+        # the lifecycle decides what is allowed, so a blocked action simply isn't routed.
+        if flow_executor is not None:
+            routed = _route_command(kind, message, lifecycle, load_digest, workflows)
+            if routed is not None:
+                return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
+                                       new_items=new_items, flow_executor=flow_executor)
         # Unclear: say so, keep the question open, and fall through to nothing else — a guess
         # would apply the wrong answer to the workflow.
         item = push(emit_item(sink, thread_id, ts.append(
             thread_id, "assistant_message",
             text="I wasn’t sure which of the options you meant. Pick one on the card above, or say it another way.")))
         return {"turn_id": turn_id, "status": "done", "reply": item["text"], "items": new_items}
+
+    # 1.5 ─ a command in free text ("test it", "approve", "record that again"): one of the actions the
+    # lifecycle allows right now, never anything else. Side effects wait for a confirm card.
+    if flow_executor is not None and not anchor:
+        routed = _route_command(kind, message, lifecycle, load_digest, workflows)
+        if routed is not None:
+            return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
+                                   new_items=new_items, flow_executor=flow_executor)
 
     # 2 ─ context under a budget.
     digest = load_digest() if load_digest else None
@@ -293,12 +320,13 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     extra: list[tuple[str, str]] = []
     if kind == "chat" and group_names is not None:
         extra.append(("Groups in this workspace (read-only)", ", ".join(group_names) or "(none yet)"))
+        extra.extend(context_sections or [])
     pack = build_context_pack(
         message=message,
         budget_tokens=budget,
         lifecycle=lifecycle,
         open_cards=ts.open_cards(items),
-        pinned_facts=pinned_facts(digest, clarify),
+        pinned_facts=pinned_facts(digest, clarify, str((workflow or {}).get("task_description") or "")),
         digest=digest,
         summary=(summary_item or {}).get("text"),
         turns=turns,
@@ -334,7 +362,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
         message, has_skill=True, anchor=anchor, last_test_failed=last_test_failed
     ):
         proposals = _propose(message=message, base_pack=pack, digest=digest, skill_id=skill_id,
-                             gate_proposals=gate_proposals, cancel=cancel)
+                             gate_proposals=gate_proposals, cancel=cancel, with_failure_image=last_test_failed)
 
     # 3c ─ general Chat: may the conversation become a draft workflow?
     draft = None
@@ -360,6 +388,50 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     if pack.needs_summary:
         _summarize(thread_id, pack.dropped_turns, (summary_item or {}).get("text"), sink)
     return {"turn_id": turn_id, "status": "done", "reply": reply, "items": new_items}
+
+
+def _route_command(kind: str, message: str, lifecycle: dict[str, Any] | None, load_digest: Any,
+                   workflows: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    from conxa_compile.conversation.intent_router import route_intent
+
+    if kind == "chat":
+        return route_intent(message, ["open_workflow"], workflows=workflows) if workflows else None
+    allowed = [str(a) for a in (lifecycle or {}).get("allowed_actions") or []]
+
+    def inputs() -> list[str]:
+        rows = ((load_digest() if load_digest else None) or {}).get("inputs")
+        return [str(i.get("name") or i.get("id")) for i in rows or [] if isinstance(i, dict) and (i.get("name") or i.get("id"))]
+
+    return route_intent(message, allowed, known_inputs=inputs)
+
+
+def _perform_routed(routed: dict[str, Any], *, thread_id: str, sink: Sink | None, turn_id: str,
+                    push: Callable[[dict[str, Any]], dict[str, Any]], new_items: list[dict[str, Any]],
+                    flow_executor: FlowExecutor) -> dict[str, Any]:
+    """Act on a routed command. Opening something and answering a question need no confirmation;
+    anything with a side effect becomes a ``confirm_action`` card and nothing runs until the
+    person presses it."""
+    from conxa_compile.conversation.actions import ACTIONS
+
+    spec = ACTIONS[routed["action"]]
+    slots = routed.get("slots") or {}
+
+    def say(text: str) -> dict[str, Any]:
+        item = push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=text)))
+        return {"turn_id": turn_id, "status": "done", "reply": item["text"], "items": new_items, "routed": spec.id}
+
+    if spec.kind == "nav":
+        name = str(slots.get("name") or "")
+        push(post_card(thread_id, "action_link", "open", sink=sink, action=spec.id, target=spec.target,
+                       title=f"Open “{name}”" if name else spec.label, workflow_id=slots.get("workflow_id") or "",
+                       actions=["open"]))
+        return {"turn_id": turn_id, "status": "done", "reply": "", "items": new_items, "routed": spec.id}
+    if spec.side_effect:
+        push(post_card(thread_id, "confirm_action", "open", sink=sink, action=spec.id, label=spec.label,
+                       describe=spec.describe, slots=slots, actions=["confirm", "cancel"]))
+        return say(f"I can do that: {spec.label.lower()}. Press Confirm on the card to go ahead — nothing has happened yet.")
+    result = flow_executor(spec.id, slots)
+    return say(str(result.get("message") or ("Done." if result.get("ok", True) else "That didn’t work.")))
 
 
 def _no_executor(card: dict[str, Any], action: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -411,7 +483,7 @@ def map_free_text_to_choice(card: dict[str, Any], text: str) -> str | None:
 
 
 def _propose(*, message: str, base_pack: Any, digest: dict[str, Any] | None, skill_id: str,
-             gate_proposals: Any, cancel: threading.Event) -> list[dict[str, Any]]:
+             gate_proposals: Any, cancel: threading.Event, with_failure_image: bool = False) -> list[dict[str, Any]]:
     """One ``copilot_diagnose`` call (with the existing bounded need[] retrieval), then every
     proposal through the gates. The reply it also returns is ignored — the streamed one is shown."""
     from conxa_compile.llm.copilot import _capability_manifest_text, copilot_turn
@@ -422,8 +494,11 @@ def _propose(*, message: str, base_pack: Any, digest: dict[str, Any] | None, ski
         "Capability manifest — what you may propose and what the runtime does with each step kind:\n"
         f"{_capability_manifest_text()}\n\n{base_pack.text}"
     )
+    # After a failed test the diagnosis gets the screenshot of the failure, not only its description.
+    shot = ((digest or {}).get("runtime_evidence") or {}).get("failure_screenshot_path") if with_failure_image else None
     result = copilot_turn(
         skill_id=skill_id, evidence=digest or {}, transcript=[], message=message, on_delta=None, user_text=user_text,
+        screenshot_path=shot,
     )
     raw = [p for p in result.get("proposals") or [] if isinstance(p, dict)]
     return gate_proposals(raw)

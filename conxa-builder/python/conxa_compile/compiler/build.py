@@ -1809,8 +1809,14 @@ def compile_skill_package(
     title: str,
     version: int,
     policy_bundle: PolicyBundle | None = None,
+    task_description: str = "",
+    segment: bool = False,
 ) -> SkillPackage:
-    """Build a package from already pipeline-normalized event dicts."""
+    """Build a package from already pipeline-normalized event dicts.
+
+    ``task_description`` is what the person said the workflow is for. It rides to the second
+    opinion as meaning-only context (never a selector input), so a name or phase can be chosen
+    knowing the goal."""
     from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
 
     bundle = policy_bundle or get_policy_bundle()
@@ -1826,12 +1832,16 @@ def compile_skill_package(
         "Preparing compiler inputs.",
         {"phase": "compiler_prepare", "event_count": len(events), "session_id": sid},
     )
+    drop_ledger: list[dict[str, Any]] = []
     cleaned_events = fix_step_order(clean_steps(events, pol), pol)
+    _record_drops(drop_ledger, events, cleaned_events, "cleanup")
     # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
     # effect, not a step: drop it and keep only a generalized post-condition on the action.
     # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
     # _insert_start_navigate_step's start URL) are never candidates.
+    before_fold = cleaned_events
     cleaned_events = fold_action_caused_navigations(cleaned_events)
+    _record_drops(drop_ledger, before_fold, cleaned_events, "navigation_folded")
     # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
     # fix_step_order so the synthetic marker events never have to satisfy those functions'
     # assumptions about real recorded event shape.
@@ -1856,6 +1866,9 @@ def compile_skill_package(
         _build_step(e, bundle, session_root=session_root, step_index=i)
         for i, e in enumerate(cleaned_events)
     ]
+    # A value the person marked "read this" while recording becomes an extract step (needs the 1:1
+    # alignment with cleaned_events that holds right here).
+    _finish_extract_steps(steps, cleaned_events)
     # Must build this while steps[i] still maps 1:1 onto cleaned_events[i] (the
     # leading-navigate insert below prepends, which shifts positions) — the
     # per-step screenshot the vision-anchor stage chose lives on the event
@@ -1889,7 +1902,9 @@ def compile_skill_package(
     environment = _read_environment_sidecar(session_root)
     convert_typed_date_steps(steps, date_pass_events, pol, str(environment.get("date_format_sample") or ""))
     steps = collapse_date_picker_runs(steps, date_pass_events, pol)
-    steps = _insert_start_navigate_step(steps, cleaned_events)
+    # A segment picks up on a page that is already open, so there is no start page to navigate to.
+    if not segment:
+        steps = _insert_start_navigate_step(steps, cleaned_events)
 
     # The workflow-level intent graph was already built before the step loop —
     # it is the single source of per-step intent tokens and review prose, so no
@@ -1945,7 +1960,15 @@ def compile_skill_package(
         page_urls=page_urls,
         visited_hosts=visited_hosts,
         image_by_step_key=image_by_step_key,
+        task_description=task_description,
+        sidecar=session_root / "second_opinion.json",
     )
+    # Which recorded actions did not become a step of their own, and why: 10 actions in and 9
+    # steps out should never be a mystery. Merges the compiler does on purpose (a date picker's
+    # clicks becoming one step) are not listed; these are the cleanup passes only.
+    compile_report["events_total"] = len(events)
+    if drop_ledger:
+        compile_report["dropped"] = drop_ledger[:200]
     _compile_log(
         "compile_phase",
         "Second opinion finished.",
@@ -2210,6 +2233,56 @@ def _sibling_bindings(visited_hosts: list[str], exclude_skill_id: str) -> dict[s
     return {host: sorted(names) for host, names in out.items()}
 
 
+def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) -> None:
+    """Turn each recorded ``extract`` event's step into a read-a-value step.
+
+    The target (identity bundle, selectors) was built exactly as for a click -- nothing about how
+    the element is found is special. What this adds is meaning, all of it from the recording and
+    never from a model: the output name (the recorder's suggestion, made unique), what to read
+    (``extras.extract``: text, an input's value, or an attribute) and no assertions, since the
+    step has no effect on the page to verify."""
+    taken: set[str] = set()
+    for step, ev in zip(steps, events):
+        act = step.action if isinstance(step.action, str) else str((step.action or {}).get("action") or "")
+        if act != "extract":
+            continue
+        extras = ev.get("extras") if isinstance(ev.get("extras"), dict) else {}
+        raw = extras.get("extract") if isinstance(extras.get("extract"), dict) else {}
+        source = str(raw.get("source") or "text")
+        spec: dict[str, Any] = {"source": source if source in ("text", "value", "attribute") else "text"}
+        if spec["source"] == "attribute" and raw.get("attribute"):
+            spec["attribute"] = str(raw["attribute"])
+        if raw.get("pattern"):
+            spec["pattern"] = str(raw["pattern"])[:200]
+        target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
+        wanted = str((ev.get("action") or {}).get("value") or "") or str(
+            target.get("aria_label") or target.get("name") or target.get("inner_text") or "")
+        base = re.sub(r"[^a-z0-9]+", "_", wanted.lower()).strip("_")[:40].strip("_")
+        base = re.sub(r"^[0-9_]+", "", base) or "extracted_value"
+        name, n = base, 2
+        while name in taken:
+            name = f"{base}_{n}"
+            n += 1
+        taken.add(name)
+        step.value = name
+        step.input_binding = None
+        step.extract = spec
+        step.validation = ValidationBlock()
+
+
+def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], after: list[dict[str, Any]], label: str) -> None:
+    """Append one entry per recorded event (by its recorder sequence number) that is in ``before``
+    and no longer in ``after``. Events without a sequence number can't be tracked and are skipped."""
+    kept = {(e.get("extras") or {}).get("sequence") for e in after if isinstance(e, dict)}
+    for e in before:
+        seq = (e.get("extras") or {}).get("sequence") if isinstance(e, dict) else None
+        if seq is None or seq in kept:
+            continue
+        act = e.get("action")
+        ledger.append({"sequence": seq, "pass": label,
+                       "action": str(act.get("action") if isinstance(act, dict) else act or "")})
+
+
 def _apply_second_opinion(
     compile_report: dict[str, Any],
     steps: list[SkillStep],
@@ -2218,6 +2291,8 @@ def _apply_second_opinion(
     page_urls: list[str],
     visited_hosts: list[str],
     image_by_step_key: dict[str, tuple[str, str]],
+    task_description: str = "",
+    sidecar: Path | None = None,
 ) -> tuple[list[SkillStep], dict[str, Any], WorkflowIntentGraph]:
     """Run the merged workflow-review call (BUILD-25's second opinion merged
     with the workflow-intent graph, BUILD-26 — see llm/workflow_review.py) and
@@ -2256,6 +2331,8 @@ def _apply_second_opinion(
             _review_inputs(steps, compile_report, image_by_step_key),
             page_urls=page_urls,
             sibling_bindings=_sibling_bindings(visited_hosts, skill_id),
+            task_description=task_description,
+            sidecar=sidecar,
             error_detail=error_detail,
         )
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile

@@ -100,6 +100,9 @@ export const flowFinishRecording = (workflowId: string, cardId: string) =>
   cmd<{ ok: boolean; event_count: number }>('flow_finish_recording', { workflow_id: workflowId, card_id: cardId })
 export const flowDiscardRecording = (workflowId: string, cardId: string) =>
   cmd<{ ok: boolean }>('flow_discard_recording', { workflow_id: workflowId, card_id: cardId })
+/** "Read this": the next click in the recording browser reads that element's value into an output, instead of clicking it. */
+export const flowCaptureValue = (workflowId: string, cardId: string, on = true) =>
+  cmd<{ ok: boolean; capturing: boolean }>('flow_capture_value', { workflow_id: workflowId, card_id: cardId, on })
 export const flowSetVaries = (sessionId: string, sequence: number, varies: boolean | null) =>
   cmd<{ varies: Record<string, boolean> }>('flow_set_varies', { session_id: sessionId, sequence, varies })
 export const recordingRows = (sessionId: string) =>
@@ -107,6 +110,8 @@ export const recordingRows = (sessionId: string) =>
 
 // ── compile, Clarify and testing (BUILD-39 / BUILD-32 / BUILD-40) ───────────────────────────
 
+/** A test paused on an expired sign-in: sign in again, then run the same test again by itself. */
+export const flowSignInThenTest = (workflowId: string) => cmd<FlowResult>('flow_sign_in_then_test', { workflow_id: workflowId })
 export const flowCompile = (workflowId: string) => cmd<{ ok: boolean }>('flow_compile', { workflow_id: workflowId })
 export const flowTestPrepare = (workflowId: string) => cmd<{ ok: boolean; card_id?: string }>('flow_test_prepare', { workflow_id: workflowId })
 export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<string, string>, guard: boolean, showBrowser: boolean) =>
@@ -122,3 +127,7 @@ export const flowAutofixResume = (workflowId: string) => cmd<{ ok: boolean }>('f
 export type StudioSettings = { autofix_enabled: boolean }
 export const getStudioSettings = () => cmd<{ settings: StudioSettings }>('get_studio_settings')
 export const setStudioSettings = (s: Partial<StudioSettings>) => cmd<{ settings: StudioSettings }>('set_studio_settings', s)
+
+/** Run one of the lifecycle's actions by id (the action strip). Same table and commands chat uses. */
+export const flowDoAction = (workflowId: string, action: string, slots?: Record<string, unknown>) =>
+  cmd<{ ok: boolean; message?: string }>('flow_do_action', { workflow_id: workflowId, action, slots })

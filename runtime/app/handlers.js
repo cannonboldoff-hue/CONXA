@@ -432,6 +432,20 @@ const HANDLERS = {
     });
   },
 
+  // Read one value off the page into a named output. The target comes from the recording, like any
+  // click: the same identity bundle, the same resolution walk, the same recovery cascade. Nothing
+  // is clicked; the value is written to `inputs[output_name]`, where later steps read it as
+  // {{output_name}} and the run reports it back to the caller.
+  extract: async (page, step, inputs) => {
+    const name = String(step.output_name || "").trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) {
+      throw Object.assign(new Error(`This extract step has no valid output name ("${name}").`), { badInput: true });
+    }
+    await runLocatorStep(page, step, inputs, async locator => {
+      inputs[name] = await readExtractValue(locator.first(), asObject(step.extract), inputs);
+    });
+  },
+
   dblclick: async (page, step, inputs) => {
     await runLocatorStep(page, step, inputs, locator => {
       return locator.dblclick({ timeout: ACTION_TIMEOUT_MS });
@@ -933,6 +947,29 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
 // still "do nothing" rather than the throw below.
 const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each", "outcome_fork"]);
 
+// What an extract step reads. `source`: text (visible text, the default), value (an input's value) or
+// attribute (named by `attribute`). `pattern`, if given, keeps the first capture group (or the whole
+// match) of the first match; no match is a clear, non-retryable failure rather than an empty output,
+// because an agent acting on "" would be acting on nothing.
+async function readExtractValue(loc, spec, inputs = {}) {
+  const source = String(spec.source || "text").toLowerCase();
+  let raw;
+  if (source === "value") raw = await loc.inputValue({ timeout: SECONDARY_ACTION_TIMEOUT_MS });
+  else if (source === "attribute") raw = await loc.getAttribute(String(spec.attribute || ""), { timeout: SECONDARY_ACTION_TIMEOUT_MS });
+  else raw = await loc.innerText({ timeout: SECONDARY_ACTION_TIMEOUT_MS });
+  let value = raw == null ? "" : String(raw).replace(/\s+/g, " ").trim();
+  if (spec.pattern) {
+    let re;
+    try { re = new RegExp(interpolate(String(spec.pattern), inputs)); }
+    catch (_) { throw Object.assign(new Error(`The extract pattern is not a valid expression: ${spec.pattern}`), { badInput: true }); }
+    const m = re.exec(value);
+    if (!m) throw Object.assign(new Error(`The value found ("${value.slice(0, 60)}") does not match the expected pattern ${spec.pattern}.`), { badInput: true });
+    value = m[1] !== undefined ? m[1] : m[0];
+  }
+  if (value === "") throw Object.assign(new Error("The element was found but it holds no value to extract."), { badInput: true });
+  return value;
+}
+
 async function executeStep(page, step, inputs, ctx = {}) {
   const handler = HANDLERS[step.type];
   if (handler) { await handler(page, step, inputs, ctx); return; }
@@ -1072,4 +1109,5 @@ module.exports = {
   answerDialog,
   _dateValueMatches,
   _ensureChoiceMenuOpen,
+  readExtractValue,
 };

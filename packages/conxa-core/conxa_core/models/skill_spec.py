@@ -245,6 +245,12 @@ class SkillStep(BaseModel):
     state: dict[str, Any] = Field(default_factory=dict)                       # [executor] page state at recording
     value: Any = None                                                         # [contract]
     input_binding: str | None = None                                         # [contract]
+    # [contract] `extract` steps only: what to read off the matched element -- {source: text | value |
+    # attribute, attribute?, pattern?}. The step's `value` is the output name the run reports back.
+    extract: dict[str, Any] = Field(default_factory=dict)
+    # [contract] Run this step only when an input says so -- {input, op: not_empty | equals | not_equals,
+    # value?}. Reads the run's inputs only, never the page. Never set on a confirmation or hand-over.
+    run_if: dict[str, Any] = Field(default_factory=dict)
     validation: ValidationBlock = Field(default_factory=ValidationBlock)     # [contract] (see ValidationBlock)
     recovery: RecoveryBlock = Field(default_factory=RecoveryBlock)           # [contract] (see RecoveryBlock)
     confidence_protocol: dict[str, Any] = Field(default_factory=dict)        # [contract]

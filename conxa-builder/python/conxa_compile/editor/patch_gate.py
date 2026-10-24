@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -24,9 +25,14 @@ from conxa_compile.policy.intent_ontology import sanitize_intent_token
 # below and `editor/capability_manifest.py` read, so the copilot's capability manifest can never
 # drift from what the gate actually enforces (they are the same object, not two lists kept in
 # sync by hand).
-NAVIGATE_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "url", "validation", "recovery", "frame"})
-SCROLL_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame"})
-WAIT_SCREENSHOT_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "validation", "recovery", "value", "frame"})
+# run_if lets a step run only when an input says so. Deliberately absent from AI_REVIEW / HANDOVER / FORK:
+# a confirmation or a hand-over to a person must never be switchable by an input, or a destructive step
+# after it could run unguarded.
+_RUN_IF = frozenset({"run_if"})
+_ON_MISSING = frozenset({"on_missing"})
+NAVIGATE_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "url", "validation", "recovery", "frame"}) | _RUN_IF
+SCROLL_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame"}) | _RUN_IF
+WAIT_SCREENSHOT_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "validation", "recovery", "value", "frame"}) | _RUN_IF
 CHECK_ASSERT_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "check_kind", "check_pattern", "check_threshold",
     "check_selector", "check_text", "signals", "recovery", "frame",
@@ -40,14 +46,20 @@ HANDOVER_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
     "handover_on_failure", "handover_resume_when", "handover_resume_when_timeout_ms",
 })
-BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"})
-FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"})
+BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"}) | _RUN_IF
+FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"}) | _RUN_IF
 # An outcome fork's states/options/policy change only through the set_fork_policy mutation (the
 # sole writer of policy.author_approved). A generic patch may rename the step and nothing else.
 FORK_ALLOWED_KEYS = frozenset({"intent", "semantic_description"})
 DEFAULT_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "target", "frame", "validation", "recovery", "value", "input_binding",
-})
+}) | _RUN_IF | _ON_MISSING
+# An extract step: a recorded target, an output name (`value`) and what to read. No input_binding -- its
+# value is a name the run produces, never one the caller supplies.
+EXTRACT_ALLOWED_KEYS = (DEFAULT_ALLOWED_KEYS - {"input_binding"}) | {"extract"}
+EXTRACT_SOURCES = ("text", "value", "attribute")
+RUN_IF_OPS = ("not_empty", "equals", "not_equals")
+
 
 
 def _validate_value_placeholders(value: str) -> None:
@@ -110,6 +122,39 @@ def _merge_step_shell(step: dict[str, Any], patch: dict[str, Any]) -> dict[str, 
     if "url" in patch and isinstance(patch["url"], str):
         out["url"] = str(patch["url"]).strip()
     return out
+
+
+def _validate_run_if(raw: Any) -> None:
+    """A condition over the run's inputs only. {} / None clears it."""
+    if raw in (None, {}):
+        return
+    if not isinstance(raw, dict):
+        raise ValueError("run_if_must_be_object")
+    if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", str(raw.get("input") or "")):
+        raise ValueError("run_if_input_invalid")
+    op = str(raw.get("op") or "not_empty")
+    if op not in RUN_IF_OPS:
+        raise ValueError("run_if_op_invalid")
+    if op in ("equals", "not_equals") and raw.get("value") in (None, ""):
+        raise ValueError("run_if_value_required")
+
+
+def _validate_extract_spec(raw: Any) -> None:
+    if not isinstance(raw, dict):
+        raise ValueError("extract_must_be_object")
+    source = str(raw.get("source") or "text")
+    if source not in EXTRACT_SOURCES:
+        raise ValueError("extract_source_invalid")
+    if source == "attribute" and not str(raw.get("attribute") or "").strip():
+        raise ValueError("extract_attribute_required")
+    pattern = str(raw.get("pattern") or "")
+    if pattern:
+        if len(pattern) > 200:
+            raise ValueError("extract_pattern_too_long")
+        try:
+            re.compile(re.sub(r"\{\{[^{}]*\}\}", "x", pattern))
+        except re.error as exc:
+            raise ValueError("extract_pattern_invalid") from exc
 
 
 def _validate_frame_patch(raw: Any) -> None:
@@ -284,6 +329,16 @@ CONFIRM_ONLY_REVIEW_SCHEMA: dict[str, Any] = {
 }
 
 
+def _is_destructive(step: dict[str, Any], policy: dict[str, Any]) -> bool:
+    """The compiler's label, or the same classifier the gate already uses on a step being patched."""
+    if step.get("consequence") == "irreversible":
+        return True
+    try:
+        return bool(destructive_compiler_step(skill_step_for_destructive_check(step), policy))
+    except Exception:  # noqa: BLE001 -- an unreadable step is not evidence it is safe, but not grounds to block an edit
+        return False
+
+
 def is_confirm_only_review(step: dict[str, Any]) -> bool:
     """A review step whose only acceptable answer is "yes" and whose "no" ends the run.
 
@@ -318,6 +373,7 @@ def validate_editor_patch(
     *,
     in_branch_body: bool = False,
     previous_step: dict[str, Any] | None = None,
+    next_step: dict[str, Any] | None = None,
 ) -> None:
     """Raise ValueError with a human-readable message if the patch is not allowed.
 
@@ -347,6 +403,16 @@ def validate_editor_patch(
 
     if "frame" in patch:
         _validate_frame_patch(patch.get("frame"))
+
+    if "run_if" in patch:
+        _validate_run_if(patch.get("run_if"))
+
+    if "on_missing" in patch:
+        if patch.get("on_missing") not in (None, "", "fail", "skip"):
+            raise ValueError("on_missing_invalid")
+        bound = (_merge_step_shell(step, patch).get("entity_binding") or {})
+        if patch.get("on_missing") == "skip" and not (isinstance(bound, dict) and bound.get("container_selector")):
+            raise ValueError("on_missing_needs_a_bound_record")
 
     merged = _merge_step_shell(step, patch)
 
@@ -409,7 +475,24 @@ def validate_editor_patch(
         invalid_keys = sorted(set(patch) - CHECK_ASSERT_ALLOWED_KEYS)
         if invalid_keys:
             raise ValueError("check_step_allows_only_check_fields")
+    if act == "extract":
+        invalid_keys = sorted(set(patch) - EXTRACT_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError("extract_step_allows_only_target_output_name_and_extract_fields")
+        if "value" in patch:
+            name = str(patch.get("value") or "").strip()
+            if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+                raise ValueError("extract_output_name_invalid")
+        if "extract" in patch:
+            _validate_extract_spec(patch.get("extract"))
     if act == "ai_review":
+        # A confirm-only review is what lets a destructive step sit right behind it (the check further down only
+        # inspects the destructive step when IT is patched). Editing the review into a free-form one afterwards
+        # would quietly turn a person's go/no-go into a model's answer in front of a step that can't be undone.
+        after_edit = {**step, **{k: v for k, v in patch.items() if k.startswith("ai_review_")}}
+        if (next_step is not None and is_confirm_only_review(step) and not is_confirm_only_review(after_edit)
+                and _is_destructive(next_step, policy)):
+            raise ValueError("confirmation_guards_a_destructive_step")
         # EXEC-13: an author-placed reasoning checkpoint, not a selector/identity step. Config
         # fields are top-level, sibling to `action` — the same shape check/assert's check_kind/
         # check_pattern/etc. use above, not the scroll/drag_drop pattern of nesting inside

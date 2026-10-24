@@ -30,6 +30,26 @@ Everything else on the list is a known, filed residual, mostly in `TODO.md`: det
 
 ---
 
+## Implementation status (2026-10-24)
+
+This audit has been worked through on branch `feat/conversation-led-studio`. What is built, tested and documented in `docs/TRD.md` (§ "Understanding check", "Conversation drives the flow", "Compile accounting and determinism", "Reading values back…", "Refining one part…", "Test-loop resilience"), and what is deliberately left:
+
+| Gap | State | Where the rest lives |
+|---|---|---|
+| G1 live golden path | **Runtime half built and in CI** (`runtime/test/e2e/golden_path.js` over `runtime/test/fixture-site`); manual signed-in checklist in `docs/Live-Verification-Checklist.md`. The `app-v` release is yours to cut. | — |
+| G2 free text drives the flow | **Built** (action table, constrained router, confirm cards, action strip) | — |
+| G3 task description | **Built**: pinned fact, second-opinion context, understanding check (coverage + which values change). Not built: pre-record plan card, test → Clarify follow-up | BUILD-49 |
+| G4 returning values | **Built**: capture gesture, `extract` step, `outputs` in the result and on the test card. Not built: values across a pause, `outputSchema`, Human Edit form | BUILD-51 |
+| G5 branching | **Built**: `run_if`, `on_missing: "skip"`. Not built: general variant branch learner, "ask a person" mode | BUILD-51, BUILD-53 |
+| G6 re-record one part | **Built**: `_stop_before_step`, segment compile, `replace_step_range`, `cmd_splice_segment`, stale answers. **Not built**: handing the parked page to the recorder (needs a live Electron pass) | BUILD-52 |
+| G7 Clarify coverage | **Built**: choice/date controls, no dropped questions (queued). Not built: relative dates | BUILD-50 |
+| G8 determinism | **Built**: drop ledger, unused-input pruning, second-opinion pin, download-order fix. Not built: popup-tab race, cache key | BUILD-50 |
+| G9 General Chat context | **Built** (workflows, groups' apps, app maps; open-workflow routing) | — |
+| G10 vision | **Built** for the failure screenshot (diagnosis + card). Point-to-anchor in the panel not built | — |
+| G11 test-loop resilience | **Built**: sign in and carry on, interrupted tests, confirmation can't be loosened. Not built: guard inside a loop, durable pause state | BUILD-53 |
+
+---
+
 ## 1. Method and confidence legend
 
 | Tag | Meaning |

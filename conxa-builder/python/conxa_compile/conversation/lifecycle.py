@@ -98,7 +98,9 @@ def derive_lifecycle(
         elif open_q > 0:
             stage, substate, glyph = "clarify", "open", WARN
             note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
-            actions = ["answer_clarify", "test", "edit"]
+            # A question that decides what the workflow is (is it complete? which values change?)
+            # comes before any test; the rest keep the compiler's default and never block.
+            actions = ["answer_clarify", "edit"] if int(cl.get("blocking_open") or 0) > 0 else ["answer_clarify", "test", "edit"]
         elif last_test == "passed":
             if signed_off:
                 stage, substate, glyph, note, actions = "approve", "approved", OK, "Approved", ["test", "edit", "publish"]
@@ -117,6 +119,9 @@ def derive_lifecycle(
         else:
             stage, substate, glyph, note, actions = "test", "ready", WARN, "Ready to test", ["test", "edit"]
 
+    # Questions held back past the first few are still waiting for the person.
+    if int(cl.get("queued") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not rt.get("testing"):
+        actions = actions + ["answer_clarify"]
     return {
         "stage": stage,
         "substate": substate,

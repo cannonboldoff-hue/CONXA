@@ -302,3 +302,175 @@ def test_finishing_a_recording_starts_the_compile_and_says_so(env, monkeypatch):
     card2 = ts.append_card(f"wf:{wf.id}", "recording", "recording", refs={"session_id": "s"})
     b.cmd_flow_finish_recording({"workflow_id": wf.id, "card_id": card2["card_id"], "auto_compile": False}, "r")
     assert started == []
+
+
+# ── understanding: a recording with nothing typed (GitHub file → Drive) ─────────────────────
+
+
+def _github_doc(skill_id):
+    steps = [
+        _step("navigate", "open_repo", url="https://github.com/github/gitignore"),
+        _step("click", "open_file", identity_bundle={"stable_hash": "open_file", "fingerprint": {"inner_text": "Android.gitignore"}}),
+        _step("click", "download_file", identity_bundle={"stable_hash": "download_file", "fingerprint": {"inner_text": "Download raw file"}}),
+        _step("navigate", "open_drive", url="https://drive.google.com/"),
+    ]
+    return {
+        "meta": {"id": skill_id, "title": "Github to Drive Handoff", "version": 1},
+        "skills": [{"id": skill_id, "steps": steps}], "inputs": [],
+        "compile_report": {"status": "ok", "steps": [{"warnings": []}] * 4},
+    }
+
+
+def test_a_recording_with_nothing_typed_still_asks_what_changes_and_blocks_the_test_until_answered(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow, save_workflow
+    from conxa_compile.conversation import understanding
+
+    w = get_workflow(wf.id)
+    w.task_description = "Download a gitignore file from GitHub and upload it to Google Drive"
+    save_workflow(w)
+    # the model sees only labelled candidates; it says the repository changes, and calls the download button fixed
+    def fake_llm(task, payload, timeout_ms, **_k):
+        assert task == "workflow_understanding" and "gitignore" in payload["user_text"]
+        cands = understanding.extract_candidates(read_skill(get_workflow(wf.id).skill_id))
+        return {"goal_summary": "Copy a file from a GitHub repository to Google Drive.", "coverage": {"ok": True}, "values": [
+            {"ref": c["ref"], "verdict": "varies" if c["kind"] == "url" else "fixed", "name": "repository"} for c in cands]}
+
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm", fake_llm)
+    _fake_compile(b, wf, doc_fn=_github_doc)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+
+    data = clarify_store.load(wf.id)
+    assert [q["kind"] for q in data["questions"]] == ["chosen_values"]          # not "nothing to ask"
+    assert data["understanding"]["goal_summary"].startswith("Copy a file")
+    assert "nothing needs deciding" not in " ".join(_texts(wf.id, "assistant_message"))
+    lc = lifecycle_for_workflow(get_workflow(wf.id))
+    assert lc["stage"] == "clarify" and "test" not in lc["allowed_actions"]     # understood first, tested after
+
+    q = _cards(wf.id, "clarify_question")[0]
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "choose",
+                           "payload": {"selected": [data["questions"][0]["choices"][0]["id"]]}}, "r")
+    assert r["ok"] and r["receipt"] == "Repository"
+    doc = read_skill(get_workflow(wf.id).skill_id)
+    assert doc["skills"][0]["steps"][0]["url"] == "https://github.com/{{repository}}"
+    assert [(i["id"], i["default"]) for i in doc["inputs"]] == [("repository", "github/gitignore")]
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    summary = _cards(wf.id, "workflow_summary")[0]["summary"]
+    assert summary["goal"].startswith("Copy a file") and summary["input_names"] == ["repository"]
+
+    # the test card offers the input, pre-filled with what was recorded
+    prep = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")
+    card = next(c for c in _cards(wf.id, "test_inputs") if c["card_id"] == prep["card_id"])
+    assert [(i["id"], i["value"]) for i in card["inputs"]] == [("repository", "github/gitignore")]
+
+
+def test_a_failed_understanding_call_never_fails_the_compile_flow(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_core.storage.workflow_store import get_workflow, save_workflow
+
+    w = get_workflow(wf.id)
+    w.task_description = "Copy a file"
+    save_workflow(w)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("cloud down")
+
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm", boom)
+    _fake_compile(b, wf, doc_fn=_github_doc)
+    assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
+    q = clarify_store.load(wf.id)["questions"][0]
+    assert q["kind"] == "chosen_values" and [c["selected"] for c in q["choices"]] == [False]  # asked, but nothing pre-ticked
+
+
+# ── driving the flow from conversation (gap analysis G2 / G9) ───────────────────────────────
+
+
+def test_a_confirmed_action_runs_the_same_command_the_button_runs(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_compile.conversation import harness
+
+    started: list[str] = []
+    monkeypatch.setattr(b, "_flow_start_compile", lambda workflow_id: started.append(workflow_id))
+    card = harness.post_card(f"wf:{wf.id}", "confirm_action", "open", action="compile", label="Compile", slots={}, actions=["confirm", "cancel"])
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "confirm"}, "r")
+    assert r["ok"] and started == [wf.id]
+    done = next(c for c in _cards(wf.id, "confirm_action") if c["card_id"] == card["card_id"])
+    assert done["state"] == "done" and done["receipt"] == "Compiling the recording."
+    # a second press does nothing
+    again = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "confirm"}, "r")
+    assert again["ok"] is False and started == [wf.id]
+
+
+def test_cancelling_a_confirmation_runs_nothing(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_compile.conversation import harness
+
+    monkeypatch.setattr(b, "_flow_start_compile", lambda workflow_id: (_ for _ in ()).throw(AssertionError("must not run")))
+    card = harness.post_card(f"wf:{wf.id}", "confirm_action", "open", action="compile", label="Compile", slots={}, actions=["confirm", "cancel"])
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "cancel"}, "r")["ok"]
+    assert _cards(wf.id, "confirm_action")[0]["state"] == "dismissed"
+
+
+def test_an_action_that_cannot_run_becomes_a_sentence_not_an_exception(env):
+    b, wf, _out = env
+    res = b._run_flow_action(wf.id, "approve", {}, "r", lambda e: None)
+    assert res["ok"] is False and "no passing test" in res["message"]
+    assert b._run_flow_action(wf.id, "teleport", {}, "r", lambda e: None)["ok"] is False
+
+
+def test_test_inputs_stated_in_chat_prefill_the_card_but_never_start_a_run(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_core.storage.workflow_store import get_workflow, save_workflow
+
+    w = get_workflow(wf.id)
+    w.task_description = "Copy a file from a repository"
+    save_workflow(w)
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm", lambda t, p, ms, **k: {"goal_summary": "g", "values": [
+        {"ref": c["ref"], "verdict": "varies", "name": "repository"} for c in __import__("conxa_compile.conversation.understanding", fromlist=["x"]).extract_candidates(_github_doc("s")) if c["kind"] == "url"]})
+    _fake_compile(b, wf, doc_fn=_github_doc)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    q = clarify_store.load(wf.id)["questions"][0]
+    b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": _cards(wf.id, "clarify_question")[0]["card_id"], "action": "choose",
+                       "payload": {"selected": [q["choices"][0]["id"]]}}, "r")
+    ran: list = []
+    monkeypatch.setattr(b, "cmd_flow_test_run", lambda *a, **k: ran.append(1))
+    res = b._run_flow_action(wf.id, "test", {"inputs": {"repository": "templates"}}, "r", lambda e: None)
+    assert res["ok"] and "nothing has run yet" in res["message"] and ran == []
+    card = _cards(wf.id, "test_inputs")[0]
+    assert [(i["id"], i["value"]) for i in card["inputs"]] == [("repository", "templates")]
+
+
+def test_general_chat_can_see_the_persons_workflows_and_groups_read_only(env):
+    b, wf, _out = env
+    ctx = b._chat_context()
+    assert ctx["group_names"] == ["Finance Ops"]
+    assert [(w["id"], w["name"], w["group"]) for w in ctx["workflows"]] == [(wf.id, "Create invoice", "Finance Ops")]
+    titles = [t for t, _ in ctx["context_sections"]]
+    assert "The person's workflows (read-only)" in titles
+
+
+def test_questions_past_the_cap_are_queued_not_lost_and_come_back_when_asked(env):
+    b, wf, _out = env
+
+    def many(skill_id):
+        steps = [_step("navigate", "open")] + [_step("click", f"send_{i}", consequence="irreversible") for i in range(1, 9)]
+        return {"meta": {"id": skill_id, "title": "Many", "version": 1}, "skills": [{"id": skill_id, "steps": steps}], "inputs": [],
+                "compile_report": {"status": "ok", "steps": [{"warnings": []}] * 9}}
+
+    _fake_compile(b, wf, doc_fn=many)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    data = clarify_store.load(wf.id)
+    assert [q["status"] for q in data["questions"]] == ["open"] * 5 + ["queued"] * 3
+    assert clarify_store.summary(wf.id)["queued"] == 3
+    first = _cards(wf.id, "clarify_question")[0]
+    assert first["total"] == 5                                      # the queue is not part of "1 of N"
+    for _ in range(5):
+        card = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "skip"}, "r")
+    assert "held back 3 smaller questions" in _texts(wf.id, "assistant_message")[-1]
+    from conxa_core.storage.workflow_store import get_workflow
+
+    assert "answer_clarify" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    assert b._run_flow_action(wf.id, "answer_clarify", {}, "r", lambda e: None)["ok"]
+    assert [q["status"] for q in clarify_store.load(wf.id)["questions"]][5:] == ["open"] * 3

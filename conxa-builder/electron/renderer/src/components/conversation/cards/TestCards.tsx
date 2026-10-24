@@ -6,6 +6,7 @@ import {
   flowAutofixResume,
   flowAutofixStop,
   flowTestDecision,
+  flowSignInThenTest,
   flowTestPrepare,
   flowTestRun,
   flowTestStop,
@@ -261,6 +262,13 @@ export function TestRunCard({ threadId, item }: CardProps) {
         footer={openEdit ? <Button variant="outline" size="sm" onClick={openEdit}>Open Human Edit</Button> : undefined}
       >
         <p className="leading-[1.6] text-[var(--text-primary)]">{String(item.error ?? '')}</p>
+        {typeof item.failure_image === 'string' && item.failure_image && (
+          <img
+            src={item.failure_image}
+            alt="The page at the moment the step failed"
+            className="mt-3 max-h-56 w-full rounded-[8px] border border-[var(--border-subtle)] object-contain object-top"
+          />
+        )}
         <div className="mt-3">{rowList}</div>
         {item.nothing_sent === true && <p className="mt-2 text-xs text-[var(--text-secondary)]">Nothing was saved or sent.</p>}
       </CardShell>
@@ -286,6 +294,16 @@ export function TestRunCard({ threadId, item }: CardProps) {
         {item.irreversible_ran === true && (
           <p className="flex items-start gap-2 text-status-warn"><StatusGlyph kind="warn" /><span className="text-[var(--text-secondary)]">Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.</span></p>
         )}
+        {typeof item.outputs === 'object' && item.outputs !== null && Object.keys(item.outputs as Record<string, string>).length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs text-[var(--text-meta)]">What the run read back</p>
+            <ul className="mt-1 space-y-0.5">
+              {Object.entries(item.outputs as Record<string, string>).map(([k, v]) => (
+                <li key={k} className="text-[var(--text-secondary)]"><span className="text-[var(--text-primary)]">{k}</span>: {v}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {approved && typeof item.build_error === 'string' && item.build_error && <p className="mt-2 text-xs text-status-warn">▲ Approved, but packaging it failed: {item.build_error}</p>}
         {approved && <p className="mt-1 text-xs text-[var(--text-meta)]">Approving doesn’t publish anything on its own.</p>}
       </CardShell>
@@ -301,6 +319,19 @@ export function TestRunCard({ threadId, item }: CardProps) {
         footer={<Button variant="outline" size="sm" onClick={() => run(() => flowTestPrepare(wf))}>Run again</Button>}
       >
         You ended the test before the steps that can’t be undone{item.declined ? ' (you didn’t confirm)' : ''}. Nothing was sent. A workflow isn’t tested until it runs to the end.
+      </CardShell>
+    )
+  }
+
+  if (state === 'interrupted') {
+    return (
+      <CardShell
+        glyph="warn"
+        title="This test was interrupted"
+        meta="Studio was closed or restarted while it ran"
+        footer={<Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowTestPrepare(wf))}>Test again</Button>}
+      >
+        <p>It didn’t finish, and a paused test can’t be picked up again. If a step saved or sent something before this stopped, check the app.</p>
       </CardShell>
     )
   }
@@ -322,11 +353,16 @@ export function TestRunCard({ threadId, item }: CardProps) {
       <CardShell
         glyph="warn"
         title="A sign-in expired during the test"
-        footer={<Button size="sm" onClick={() => run(() => flowTestPrepare(wf))}>Test again</Button>}
+        footer={
+          <>
+            <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowSignInThenTest(wf))}>Sign in and test again</Button>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowTestPrepare(wf))}>Test again</Button>
+          </>
+        }
       >
         <p>
           The test paused because a saved sign-in stopped working — nothing in the workflow failed, and no automatic fix was tried.
-          Sign in again from the workflow’s group page, then test again.
+          “Sign in and test again” signs in, then runs the same test with the same inputs.
         </p>
         {item.detail ? <p className="mt-1 text-xs text-[var(--text-meta)]">{String(item.detail)}</p> : null}
       </CardShell>
@@ -371,6 +407,9 @@ export function AutofixCard({ threadId, item }: CardProps) {
         )}
       </CardShell>
     )
+  }
+  if (state === 'interrupted') {
+    return <CardShell glyph="warn" title="Fixing was interrupted" meta="Studio was closed or restarted">Each change made so far is listed above with Undo.</CardShell>
   }
   if (state === 'passed') {
     return (

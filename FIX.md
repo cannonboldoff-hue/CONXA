@@ -274,3 +274,21 @@ We checked how close Studio is to letting someone build a workflow purely by cha
 
 **Found why the assistant starts testing before it understands the task — 2026-10-24**
 When someone describes a task and records it, the assistant only asks questions about text they typed while recording. It never compares the recording with what they said they wanted, and it can't turn a chosen page or a clicked item into something to ask about. So a workflow like "copy a file from one site to another" is compiled with the exact page and file baked in, and the assistant says it has nothing to ask. This was a read-only investigation; nothing was changed yet.
+
+**The assistant now checks a recording against what you asked for, before it offers a test — 2026-10-24**
+Before this change, a workflow made only of clicks and page visits was saved with nothing to fill in, and the assistant said it had nothing to ask. Now it reads your description, works out which choices (like which repository or which record) look specific to the recording, and asks you whether they should change each run. Say yes and that part becomes something you fill in when you run it. Testing now waits until those questions are answered.
+
+**You can now tell the assistant what to do in plain words — 2026-10-24**
+Before, typing "test it" or "approve" in the chat got you a polite reply and nothing else, because only buttons could move the workflow forward. Now the assistant understands those commands, but only for the steps that make sense at that moment. Anything that records, spends a credit, sends real data or approves asks you to press Confirm first. A row of buttons at the bottom of every workflow shows the same next steps, and the general chat now knows your workflows so it can take you to the right one.
+
+**Fewer questions get lost, and the assistant now explains where recorded steps went — 2026-10-24**
+When a recording had more than five things worth asking about, the extras used to vanish without a word. Now they wait in line, and you can ask for them whenever you like. When a ten-action recording becomes nine steps, the assistant says one was folded away instead of leaving you to wonder. Workflows also stop asking for values that no step actually uses, and re-compiling the same recording gives the same answer as before.
+
+**Workflows can now read a value off the page and hand it back, and skip steps that don't apply — 2026-10-24**
+Until now a workflow could only do things; it couldn't tell you what it found, like a ticket number or an order total. While recording you can now press "Capture a value", click the number you care about, and the finished workflow returns it to whoever ran it. Steps can also be switched off when an optional input is left blank, and a step aimed at one row in a list is quietly skipped (and reported) when that row isn't there, instead of stopping the whole run.
+
+**Groundwork for fixing just one part of a workflow, and a picture of what went wrong — 2026-10-24**
+When a test fails, the assistant now looks at a screenshot of the page at that moment, and the failure card shows you the same picture, so "the button moved" is something it can see rather than guess. We also built the pieces for re-recording only the later part of a workflow without losing your earlier answers: replay to a chosen step, swap in the new steps, and keep what still applies. The last piece — letting the recorder take over the paused browser — still needs a live check in the app, so it isn't switched on yet.
+
+**A test that paused on an expired sign-in now carries on after you sign in again — 2026-10-24**
+Before, a test that stopped because a saved sign-in had run out just showed a "Test again" button that didn't sign you in, so you had to go find the sign-in page yourself. Now there is a "Sign in and test again" button that signs you in and runs the same test with the same inputs. Tests that were cut short by closing the app are now labelled as interrupted instead of showing a spinner forever, and a "go ahead?" check in front of a step that can't be undone can no longer be edited into an open-ended question by accident.

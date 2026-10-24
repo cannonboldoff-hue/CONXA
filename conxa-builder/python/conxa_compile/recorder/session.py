@@ -438,6 +438,9 @@ class RecordingSession:
     on_file_picker_request: Any = None
     _pending_file_chooser: Any = None  # (request_id, chooser) for the one outstanding pick
     _file_pick_results: SimpleQueue = field(default_factory=SimpleQueue)
+    # Set from any thread by request_capture(); applied by the pump loop, the only thread allowed
+    # to touch Playwright pages. None = nothing pending.
+    _capture_pending: bool | None = None
     _zip_downloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     _pending_file_pick: dict[str, Any] | None = None
     # Set by the caller (handlers/session.py) before start(): (request_id, dialog_type, message,
@@ -540,7 +543,7 @@ class RecordingSession:
     _INTERACTION_ACTIONS = frozenset({
         "click", "dblclick", "right_click", "type", "fill", "select", "select_option",
         "set_checkbox", "set_radio", "date_pick", "keyboard_shortcut", "submit", "drag_drop",
-        "upload", "upload_intent",
+        "upload", "upload_intent", "extract",
     })
 
     def _remember_current_url(self, url: str) -> None:
@@ -1881,6 +1884,9 @@ class RecordingSession:
                 )
             timestamp_ms = self._compute_event_timestamp_ms(action, tab_id=(payload.get("tab") or {}).get("id"))
         extras: dict[str, Any] = {"sequence": seq, "session_id": self.session_id}
+        if action_name == "extract" and isinstance(payload.get("extract"), dict):
+            # What to read off the element (text / an input's value); compile turns it into an extract step.
+            extras["extract"] = {k: payload["extract"][k] for k in ("source", "attribute", "pattern") if payload["extract"].get(k)}
         if action_name == "upload_intent" and self._pending_file_pick:
             extras["file_pick"] = self._pending_file_pick
             self._pending_file_pick = None
@@ -2111,8 +2117,24 @@ class RecordingSession:
         except Exception:
             pass
 
+    def _pump_until_grace(self, started: float, src_page: Any | None) -> None:
+        """Keep Playwright's dispatcher turning until ``_DOWNLOAD_CLICK_GRACE_S`` after ``started``.
+
+        The click that started a download is reported by bridge.js only after the DOM settles
+        (up to click_settle_max_ms), but ``download_observed`` is queued the moment the file is
+        saved. For a small file the launched path saved it first, so the download landed after the
+        NEXT click and the compiler attached it to the wrong one (BUILD-47). Pumping delivers the
+        click's report before the download event is queued, which is the order the compiler reads."""
+        pump = src_page or self._page
+        while time.monotonic() - started < _DOWNLOAD_CLICK_GRACE_S:
+            try:
+                pump.wait_for_timeout(50)
+            except Exception:  # noqa: BLE001 — the page closed: just wait
+                time.sleep(0.05)
+
     def _on_download(self, download: Any, src_page: Any | None = None) -> None:
         try:
+            began = time.monotonic()
             zip_members: list[str] | None = None
             if self._downloads_dir is not None:
                 name = self._unique_download_name(
@@ -2145,6 +2167,7 @@ class RecordingSession:
             payload: dict[str, Any] = {"url": download.url, "suggested_filename": download.suggested_filename}
             if zip_members is not None:
                 payload["zip_members"] = zip_members
+            self._pump_until_grace(began, src_page)
             self._enqueue_synthetic("download_observed", json.dumps(payload), src_page=src_page)
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"download_event_error: {exc!s}")
@@ -2199,6 +2222,24 @@ class RecordingSession:
                 )
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"file_chooser_event_error: {exc!s}")
+
+    def request_capture(self, on: bool = True) -> None:
+        """Ask the recorder to switch "capture a value" mode on (the next click reads the element
+        instead of acting on it) or off. Queued, not applied here: evaluating in a page is a
+        Playwright sync call and belongs to the recorder's own thread (see _apply_capture_mode_sync)."""
+        self._capture_pending = bool(on)
+
+    def _apply_capture_mode_sync(self) -> None:
+        pending = self._capture_pending
+        if pending is None or self._context is None:
+            return
+        self._capture_pending = None
+        for page in list(self._context.pages):
+            for frame in list(page.frames):
+                try:
+                    frame.evaluate("(on) => typeof window.__conxaCapture === 'function' && window.__conxaCapture(on)", pending)
+                except Exception:  # noqa: BLE001 -- a frame that navigated away just misses the toggle
+                    pass
 
     def resolve_file_pick(self, request_id: str, paths: list[str] | None) -> None:
         """Called from any thread with the Studio dialog's result. Queued, not applied
@@ -2797,6 +2838,10 @@ class RecordingSession:
                         self._drain_nav_history_checks_sync()
                     except Exception as exc:  # noqa: BLE001
                         self.binding_errors.append(f"nav_history_drain_error: {exc!s}")
+                    try:
+                        self._apply_capture_mode_sync()
+                    except Exception as exc:  # noqa: BLE001
+                        self.binding_errors.append(f"capture_mode_error: {exc!s}")
                     try:
                         request_id, paths = self._file_pick_results.get_nowait()
                         pending = self._pending_file_chooser

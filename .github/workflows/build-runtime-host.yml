@@ -138,6 +138,12 @@ jobs:
         working-directory: runtime
         run: node test/e2e/gate_replay.js dist/conxa-runtime.exe
 
+      - name: Golden path — templated address, banner, iframe download, upload, two inputs
+        # Gap analysis G1. Runs the real app layer (the same code the exe loads) against a
+        # hermetic http fixture (test/fixture-site) with two different inputs and no recompile.
+        working-directory: runtime
+        run: node test/e2e/golden_path.js
+
       - name: Stage keytar.node for release
         working-directory: runtime
         run: |

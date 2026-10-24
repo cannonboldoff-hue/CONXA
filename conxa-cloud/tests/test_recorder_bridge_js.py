@@ -1133,3 +1133,53 @@ def test_sibling_combobox_value_is_not_captured_as_this_fields_label(page: Page)
     events = _type_events(page)
     assert len(events) == 1
     assert events[0]["target"]["label_text"] != "Uttar Pradesh"
+
+
+# ── "capture a value" (gap analysis G4) ─────────────────────────────────────────────────────
+
+
+def test_capture_mode_reads_the_next_click_instead_of_acting_on_it(page: Page) -> None:
+    _install_bridge(
+        page,
+        '<button id="send" onclick="window.__sent = true">Send</button>'
+        '<span id="total" data-testid="order-total">Total: $42.10</span>',
+    )
+
+    assert page.evaluate("() => window.__conxaCapture(true)") is True
+    page.click("#total")
+    page.wait_for_timeout(60)
+
+    events = _action_events(page, "extract")
+    assert len(events) == 1
+    assert events[0]["extract"] == {"source": "text"}
+    assert events[0]["target"]["inner_text"] == "Total: $42.10"
+    assert _action_events(page, "click") == []                 # recorded as a read, never as a click
+    assert page.evaluate("() => document.documentElement.style.cursor") == ""   # one shot: capture turned itself off
+
+    page.click("#send")                                         # back to normal: now it IS a click, and it acts
+    page.wait_for_timeout(60)
+    assert page.evaluate("() => window.__sent === true")
+    assert len(_action_events(page, "click")) == 1
+
+
+def test_a_captured_click_never_reaches_the_page(page: Page) -> None:
+    _install_bridge(page, '<button id="danger" onclick="window.__fired = true">Delete all</button>')
+    page.evaluate("() => window.__conxaCapture(true)")
+    page.click("#danger")
+    page.wait_for_timeout(60)
+    assert page.evaluate("() => window.__fired === true") is False   # reading a Delete button must not press it
+    assert len(_action_events(page, "extract")) == 1
+
+
+def test_capture_mode_can_be_cancelled_and_reads_an_inputs_value(page: Page) -> None:
+    _install_bridge(page, '<input id="ref" value="PO-77"><button id="b">B</button>')
+    page.evaluate("() => window.__conxaCapture(true)")
+    assert page.evaluate("() => window.__conxaCapture(false)") is False
+    page.click("#b")
+    page.wait_for_timeout(60)
+    assert _action_events(page, "extract") == []
+
+    page.evaluate("() => window.__conxaCapture(true)")
+    page.click("#ref")
+    page.wait_for_timeout(60)
+    assert _action_events(page, "extract")[0]["extract"] == {"source": "value"}

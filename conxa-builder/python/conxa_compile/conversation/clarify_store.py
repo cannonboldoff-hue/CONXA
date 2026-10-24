@@ -60,12 +60,18 @@ def clear(workflow_id: str) -> None:
 
 
 def summary(workflow_id: str) -> dict[str, Any] | None:
-    """``{"open": n, "answered": m, "skipped": k, "total": t}``, or None before any questions exist."""
+    """``{"open": n, "answered": m, "skipped": k, "total": t, "blocking_open": b}``, or None before
+    any questions exist. ``blocking_open`` counts open questions that decide what the workflow is
+    (clarify.BLOCKING_KINDS); testing waits for those."""
+    from conxa_compile.conversation.clarify import BLOCKING_KINDS
+
     data = load(workflow_id)
     if data is None:
         return None
     qs = [q for q in data.get("questions") or [] if isinstance(q, dict)]
     return {
+        "blocking_open": sum(1 for q in qs if q.get("status") == "open" and q.get("kind") in BLOCKING_KINDS),
+        "queued": sum(1 for q in qs if q.get("status") == "queued"),
         "open": sum(1 for q in qs if q.get("status") == "open"),
         "answered": sum(1 for q in qs if q.get("status") == "answered"),
         "skipped": sum(1 for q in qs if q.get("status") == "skipped"),
@@ -92,6 +98,25 @@ def update_question(workflow_id: str, question_id: str, **changes: Any) -> dict[
     if hit is not None:
         save(workflow_id, data)
     return hit
+
+
+def mark_stale(workflow_id: str, live_keys: set[str]) -> int:
+    """Flag answered/skipped questions whose steps no longer exist (a segment was re-recorded over
+    them) as ``stale``; answers about steps that survive are kept as they are. Returns how many."""
+    data = load(workflow_id)
+    if data is None:
+        return 0
+    n = 0
+    for q in data.get("questions") or []:
+        if isinstance(q, dict) and q.get("step_keys") and not set(q["step_keys"]) <= live_keys and not q.get("stale"):
+            q["stale"] = True
+            if q.get("status") == "open":
+                q["status"] = "skipped"      # nothing left to ask about
+                q["receipt"] = "The steps this was about were re-recorded"
+            n += 1
+    if n:
+        save(workflow_id, data)
+    return n
 
 
 def next_open(workflow_id: str) -> dict[str, Any] | None:

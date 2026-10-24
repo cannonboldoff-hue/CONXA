@@ -63,8 +63,8 @@ class TestFlowMixin:
         steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
         recorded = {}
         for q in (clarify_store.load(workflow_id) or {}).get("questions") or []:
-            if q.get("kind") == "values":
-                recorded = q.get("recorded") or {}
+            if q.get("kind") in ("values", "chosen_values"):
+                recorded = {**recorded, **(q.get("recorded") or {})}
         last = workflow.last_test_inputs or {}
         inputs = []
         for row in doc.get("inputs") or []:
@@ -252,7 +252,7 @@ class TestFlowMixin:
         if status == "passed":
             ran_destructive = any(r.get("destructive") and r["status"] == "done" for r in rows)
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
-                 actions=["approve", "test_again"])
+                 outputs=result.get("outputs") or {}, actions=["approve", "test_again"])
             harness.log_event(thread, "Test passed", glyph="ok", sink=sink,
                               subject=f"{len(rows)} steps · {elapsed // 60} min {elapsed % 60:02d} s")
             harness.emit_item(sink, thread, ts.append(
@@ -284,6 +284,27 @@ class TestFlowMixin:
         harness.log_event(thread, "Test stopped by you", glyph="none", sink=sink)
         return "stopped"
 
+    def _tf_failure_image(self, workflow_id: str) -> str | None:
+        """``conxa-asset://`` address of the failure screenshot the runtime kept for the latest test, or
+        None. Only the run id and file name leave the sandbox path; the renderer cannot ask for anything else."""
+        try:
+            from pathlib import Path
+
+            from conxa_compile.editor.evidence import build_evidence_bundle
+            from conxa_core.storage.workflow_store import get_workflow
+
+            wf = get_workflow(workflow_id)
+            if wf is None or not wf.skill_id or not wf.last_test_run_id:
+                return None
+            shot = (build_evidence_bundle(wf.skill_id, run_id=wf.last_test_run_id, detail="digest").get("runtime_evidence") or {}).get("failure_screenshot_path")
+            parts = Path(str(shot or "")).parts
+            if "_evidence" not in parts:
+                return None
+            i = parts.index("_evidence")
+            return f"conxa-asset://local/sandbox-evidence/{parts[i - 1]}/_evidence/{parts[-1]}" if i >= 1 else None
+        except Exception:  # noqa: BLE001 -- a picture is a bonus; a failed test must still report
+            return None
+
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float) -> str:
         from conxa_compile.conversation import harness
 
@@ -296,7 +317,7 @@ class TestFlowMixin:
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:600],
             failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent, seconds=int(time.time() - started),
-            actions=[],
+            failure_image=self._tf_failure_image(workflow_id), actions=[],
         )
         harness.log_event(_thread(workflow_id), "Test failed", glyph="fail", sink=sink,
                           subject=(failing["name"] if failing else message[:80]))
@@ -413,8 +434,11 @@ class TestFlowMixin:
                                   failure={"last_test": digest.get("last_test"), "runtime_evidence": digest.get("runtime_evidence")})
         user_text = ("Capability manifest — what you may propose and what the runtime does with each step kind:\n"
                      f"{_capability_manifest_text()}\n\n{pack.text}")
+        # The page as it was when the step failed: a vision model reads "the button moved" off the screenshot
+        # that a text description of the failure can only hint at. None when no failure image was kept.
+        shot = (digest.get("runtime_evidence") or {}).get("failure_screenshot_path")
         result = copilot_turn(skill_id=workflow.skill_id, evidence=digest, transcript=[], message=message,
-                              on_delta=None, user_text=user_text)
+                              on_delta=None, user_text=user_text, screenshot_path=shot)
         ctx = self._thread_context("wf", workflow_id, None)
         return ctx["gate_proposals"]([p for p in result.get("proposals") or [] if isinstance(p, dict)])
 

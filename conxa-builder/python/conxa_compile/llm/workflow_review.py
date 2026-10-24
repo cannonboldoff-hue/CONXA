@@ -38,6 +38,8 @@ rules-only compile — never raises.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from conxa_core.config import settings
@@ -52,6 +54,27 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 1
 
 
+def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:
+    if sidecar is None:
+        return None
+    try:
+        data = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    raw = data.get("raw") if isinstance(data, dict) and data.get("key") == key else None
+    return raw if isinstance(raw, dict) else None
+
+
+def _sidecar_write(sidecar: Path | None, key: str, raw: dict[str, Any]) -> None:
+    if sidecar is None:
+        return
+    try:
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.write_text(json.dumps({"key": key, "raw": raw}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass  # a pin that can't be written is just a cache miss next time
+
+
 def build_workflow_review(
     steps_context: list[dict[str, Any]],
     *,
@@ -59,6 +82,8 @@ def build_workflow_review(
     sibling_bindings: dict[str, list[str]] | None = None,
     model: str | None = None,
     error_detail: list[str] | None = None,
+    task_description: str = "",
+    sidecar: Path | None = None,
 ) -> tuple[WorkflowIntentGraph, list[dict[str, Any]]]:
     """One multimodal LLM call producing (workflow intent graph, BUILD-25
     findings). Returns (WorkflowIntentGraph(), []) on any failure or an empty
@@ -77,13 +102,20 @@ def build_workflow_review(
         {k: v for k, v in s.items() if k not in ("image_base64", "image_mime")}
         for s in steps_context
     ]
+    task = (task_description or "").strip()[:300]
+    # Only when present, so a compile with no description keeps hitting entries written before
+    # this field existed.
+    extra_key = {"task_description": task} if task else {}
     key = cache_key(
         _CACHE_VERSION,
         steps=steps_for_key,
         page_urls=page_urls,
         sibling_bindings=sibling_bindings or {},
+        **extra_key,
     )
     cached = read_cached(_NAMESPACE, key, _CACHE_VERSION)
+    if cached is None:
+        cached = _sidecar_read(sidecar, key)
     raw = cached
     if raw is None:
         raw = infer_workflow_review(
@@ -92,6 +124,7 @@ def build_workflow_review(
             sibling_bindings=sibling_bindings or {},
             model=model,
             error_detail=error_detail,
+            task_description=task,
         )
         if not raw or (
             not str(raw.get("goal") or "").strip()
@@ -101,6 +134,9 @@ def build_workflow_review(
             # Empty/failed response — do NOT cache, so the next compile retries.
             return WorkflowIntentGraph(), []
         write_cached(_NAMESPACE, key, raw, _CACHE_VERSION)
+    # Pinned beside the recording, so a recompile replays this exact answer even if the shared
+    # cache was cleared or the model has since changed its mind.
+    _sidecar_write(sidecar, key, raw)
 
     graph = _graph_from_raw(raw)
     if not settings.llm_semantic_suggestions_enabled:

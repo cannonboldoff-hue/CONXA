@@ -79,17 +79,29 @@ async function entityRoots(roots, step, inputs) {
   const wanted = interpolate(String(eb.identifier), inputs).trim();
   if (!wanted) return [];
   const out = [];
+  // `absent` is true only when the list of records is on the page and NONE of them is this run's
+  // record: a provable "it isn't there", as opposed to an ambiguous match (more than one), a hung
+  // count, or a page that hasn't rendered the list. Only that case may be skipped by on_missing.
+  let listPresent = false;
+  let anyMatch = false;
   for (const root of roots) {
     if (!root || typeof root.locator !== "function") continue;
     let count = 0;
     let rows = null;
     try {
-      rows = root.locator(eb.container_selector).filter({ hasText: wanted });
+      const all = root.locator(eb.container_selector);
+      // (a locator that can't be counted unfiltered simply never proves the list is there)
+      const total = typeof all.count === "function" ? await countOn(all) : EVAL_TIMED_OUT;
+      if (total !== EVAL_TIMED_OUT && total > 0) listPresent = true;
+      rows = all.filter({ hasText: wanted });
       const n = await countOn(rows);
       count = n === EVAL_TIMED_OUT ? 0 : n; // fail closed on a hung count — never guess a match
-    } catch (_) { count = 0; }
+      if (n === EVAL_TIMED_OUT || n > 0) anyMatch = true;
+    } catch (_) { count = 0; anyMatch = true; }
     if (count === 1) out.push(rows.first());
   }
+  // Non-enumerable so the result still compares equal to a plain array of roots.
+  Object.defineProperty(out, "absent", { value: out.length === 0 && listPresent && !anyMatch, enumerable: false });
   return out;
 }
 
@@ -253,7 +265,7 @@ async function resolveStep(page, step, inputs, scrollState) {
     if (isEntityNotFound(step, roots)) {
       throw Object.assign(
         new Error("Bound record could not be uniquely located on the page — refusing to act on a different row"),
-        { entityNotFound: true },
+        { entityNotFound: true, entityAbsent: roots.absent === true },
       );
     }
   }

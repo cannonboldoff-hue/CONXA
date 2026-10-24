@@ -38,6 +38,10 @@ ACTION_KIND_ORDER = (
     "assert",
     "wait",
     "screenshot",
+    # Read one value off the page into a named output the run returns to its caller. Target comes
+    # from the recording (full IdentityBundle) like any click; the step's `value` is the output name
+    # and its `extract` block says what to read. See runtime/app/handlers.js::extract.
+    "extract",
     # EXEC-13: author-placed reasoning checkpoint — pauses execution, asks Claude a stored
     # question about the live page, binds the structured answer into `inputs` under
     # `output_name`. No selector/identity_bundle (SELECTOR_ACTIONS excludes it); value-bearing
@@ -124,6 +128,7 @@ INSERTABLE_ACTIONS = frozenset(
         "assert",
         "wait",
         "screenshot",
+        "extract",
         "ai_review",
         "handover",
         "upload",
@@ -150,6 +155,7 @@ SELECTOR_ACTIONS = frozenset(
         "date_pick",
         "drag_drop",
         "upload",
+        "extract",
         "if_present",
         "try_dismiss",
         "wait_for_one_of",
@@ -169,6 +175,8 @@ VALUE_ACTIONS = frozenset(
         "keyboard_shortcut",
         "wait",
         "upload",
+        # The output name the run reports the read value under (see VALUE_LABELS below).
+        "extract",
         # EXEC-13: not a page-interaction value — this is the output binding name later steps
         # read the reviewed answer back from (see VALUE_LABELS below).
         "ai_review",
@@ -233,6 +241,7 @@ CATEGORIES = {
     "assert": "validation",
     "wait": "validation",
     "screenshot": "validation",
+    "extract": "validation",
     "ai_review": "validation",
     "handover": "validation",
     "click": "pointer",
@@ -271,6 +280,7 @@ VALUE_LABELS = {
     "wait": "Milliseconds",
     "upload": "File path input",
     "ai_review": "Output binding name",
+    "extract": "Output name",
     "handover": "Message shown to the person",
 }
 
@@ -354,6 +364,8 @@ def default_action_value(kind: str) -> Any:
         return "1000"
     if normalized == "upload":
         return "{{file_path}}"
+    if normalized == "extract":
+        return "extracted_value"
     if normalized == "ai_review":
         # EXEC-13: not a page-interaction value — the output binding name later steps read the
         # reviewed answer back from (see VALUE_LABELS above).

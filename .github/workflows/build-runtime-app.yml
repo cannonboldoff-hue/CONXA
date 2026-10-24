@@ -181,7 +181,7 @@ jobs:
             built_at     = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
             # What this app layer can do beyond the base contract; Build Studio reads it before relying on
             # a Studio-only argument (RT-9's test guard) so an older engine can't silently ignore it.
-            capabilities = @("test_guard")
+            capabilities = @("test_guard", "outputs", "run_if", "stop_before")
             files        = $hashes
           } | ConvertTo-Json -Depth 5
           $meta | Out-File -Encoding UTF8 dist-app/version.json

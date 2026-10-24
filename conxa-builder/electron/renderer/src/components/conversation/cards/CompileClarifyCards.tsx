@@ -243,6 +243,9 @@ type Summary = {
   uncertain: number
   step_names: string[]
   done_when: string[]
+  goal?: string
+  input_names?: string[]
+  queued?: number
 }
 
 /** The workflow as it stands. The counts add up across screens: compiled + added = steps now. */
@@ -282,6 +285,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         </>
       }
     >
+      {s.goal && <p className="mb-2 text-[var(--text-primary)]">{s.goal}</p>}
       <ol className="space-y-1">
         {shown.map((n, i) => (
           <li key={i} className="flex gap-2"><span className="w-5 shrink-0 text-right tabular-nums text-[var(--text-meta)]">{i + 1}</span><span className="text-[var(--text-primary)]">{n}</span></li>
@@ -290,7 +294,9 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
       </ol>
       <p className="mt-3 text-xs text-[var(--text-meta)]">
         {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''} · {s.inputs} input{s.inputs === 1 ? '' : 's'}
+        {s.input_names && s.input_names.length ? ` (${s.input_names.join(', ')})` : ''}
         {s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
+        {s.queued ? ` · ${s.queued} more question${s.queued === 1 ? '' : 's'} when you want them` : ''}
       </p>
     </CardShell>
   )

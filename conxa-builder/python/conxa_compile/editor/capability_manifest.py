@@ -28,6 +28,7 @@ from conxa_compile.editor.patch_gate import (
     BRANCH_ALLOWED_KEYS,
     CHECK_ASSERT_ALLOWED_KEYS,
     DEFAULT_ALLOWED_KEYS,
+    EXTRACT_ALLOWED_KEYS,
     FOR_EACH_ALLOWED_KEYS,
     HANDOVER_ALLOWED_KEYS,
     NAVIGATE_ALLOWED_KEYS,
@@ -44,6 +45,7 @@ RUNTIME_NOTES: dict[str, str] = {
     "browser_forward": "page.goForward() only — same non-navigating url caveat as browser_back.",
     "click": "Runs handler_hints.hover_chain first if present; intercepted-pointer retries once.",
     "dblclick": "Same resolution path as click.",
+    "extract": "Reads one value off the matched element into the output named by `value`; nothing is clicked. extract.source is text, value or attribute (extract.attribute); extract.pattern keeps its first capture group. No match is a clear failure, never an empty output.",
     "right_click": "Same resolution path as click.",
     "hover": "Same resolution path as click; no value, no side effect beyond hovering.",
     "focus": "Falls back to click-then-focus; no-op if the step has no target.",
@@ -99,6 +101,7 @@ _PER_KIND_ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "try_dismiss": BRANCH_ALLOWED_KEYS,
     "wait_for_one_of": BRANCH_ALLOWED_KEYS,
     "for_each": FOR_EACH_ALLOWED_KEYS,
+    "extract": EXTRACT_ALLOWED_KEYS,
 }
 
 # The eight assertion `type` values the runtime's verifyStep actually evaluates

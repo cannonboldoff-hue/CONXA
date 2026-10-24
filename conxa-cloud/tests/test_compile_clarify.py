@@ -260,3 +260,38 @@ def test_the_summary_counts_add_up():
     s = build_summary(doc, recorded_actions=14, added_steps=2, name="Create invoice", uncertain=2)
     assert (s["recorded_actions"], s["steps"], s["added_steps"], s["inputs"], s["version"]) == (14, 6, 2, 3, 3)
     assert s["step_names"][0] == "Open new invoice"
+
+
+# ── choice / date controls, and no silently dropped questions (gap analysis G7) ─────────────
+
+
+def test_a_single_choice_and_a_date_can_be_pinned_to_what_was_recorded():
+    doc = _doc([
+        _step("select_option", "pick_plan", value="{{plan}}", input_binding="plan",
+              handler_hints={"control_kind": "choice", "choice": {"multi": False, "recorded_label": "Pro", "options": [{"label": "Pro"}, {"label": "Free"}]}}),
+        _step("date_pick", "pick_date", value="{{start_date}}", input_binding="start_date",
+              handler_hints={"control_kind": "date_picker", "date_picker": {"recorded_value": "2026-09-14"}}),
+    ])
+    q = next(q for q in generate_questions(doc) if q["kind"] == "values")
+    assert [(c["id"], c["detail"]) for c in q["choices"]] == [("plan", "Pro"), ("start_date", "2026-09-14")]
+    ops, receipt = plan_answer(q, {"selected": []}, doc)       # nothing ticked: both stay as recorded
+    patches = {o["patch"]["value"] for o in ops if o["op"] == "patch"}
+    assert patches == {"Pro", "2026-09-14"} and ops[-1] == {"op": "drop_inputs", "ids": ["plan", "start_date"]}
+    ops, _ = plan_answer(q, {"selected": ["plan", "start_date"]}, doc)
+    assert ops == []                                             # both stay inputs
+
+
+def test_a_multi_select_has_no_single_value_to_restore_so_it_is_not_offered():
+    doc = _doc([_step("click", "tick_extras", value="{{extras}}", input_binding="extras",
+                      handler_hints={"control_kind": "choice", "choice": {"multi": True, "recorded_values": ["a"], "options": [{"label": "A", "value": "a"}]}})])
+    assert generate_questions(doc) == []
+
+
+def test_every_question_is_kept_and_only_the_cap_is_asked_first():
+    doc = _doc([_step("click", f"send_{i}", consequence="irreversible") for i in range(1, 9)] )
+    # a first step so each irreversible one has a predecessor
+    doc["skills"][0]["steps"].insert(0, _step("navigate", "open"))
+    capped = generate_questions(doc)
+    everything = generate_questions(doc, limit=None)
+    assert len(capped) == MAX_QUESTIONS and len(everything) == 8
+    assert [q["id"] for q in everything[:MAX_QUESTIONS]] == [q["id"] for q in capped]

@@ -162,6 +162,7 @@ def infer_workflow_review(
     sibling_bindings: dict[str, list[str]],
     model: str | None = None,
     error_detail: list[str] | None = None,
+    task_description: str = "",
 ) -> dict[str, Any] | None:
     """Single multimodal whole-workflow LLM call producing BOTH the workflow
     intent graph (goal + per-step intent) AND BUILD-25's compile-time review
@@ -177,6 +178,7 @@ def infer_workflow_review(
             "steps": steps,
             "page_urls": page_urls,
             "sibling_bindings": sibling_bindings,
+            **({"task_description": task_description} if task_description else {}),
         },
     }
     data = _call_llm_or_none(

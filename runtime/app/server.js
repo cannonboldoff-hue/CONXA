@@ -1081,6 +1081,9 @@ async function _handleTool(name, args, extra) {
     // per-run entry): customer and agent callers never set these, so for them both stay false.
     const _guardPause = args._pause_before_irreversible === true;
     const _guardRelease = args._guard_release === true;
+    // Build Studio only: park BEFORE this step of the primary skill (segment re-recording). Never set by a
+    // customer or an agent, so for them it stays undefined and nothing changes.
+    const _stopBefore = Number.isInteger(args._stop_before_step) && args._stop_before_step >= 0 ? args._stop_before_step : undefined;
 
     // EXEC-21: a handover step needs a person to actually see and click something — there is no
     // window for that in a headless run. Force one open rather than deadlocking on a banner
@@ -1201,6 +1204,9 @@ async function _handleTool(name, args, extra) {
     // paths below — deduped so a warning that would repeat identically per-skill (a shared
     // pack-level environment mismatch) only appears once.
     const _allWarnings = [];
+    // Values this run read off the page (extract steps), and steps its inputs switched off (run_if).
+    const _outputs = {};
+    const _skippedByInput = [];
     // PROD-3-DRYRUN: every destructive step skipped (resolved but never acted on) across every
     // skill in this run, so a dry-run's response can name exactly what it withheld.
     const _dryRunSkipped = [];
@@ -1902,8 +1908,11 @@ async function _handleTool(name, args, extra) {
             isResume: isResuming,
             context: _context, // EXEC-21: handover needs the browser context to arm its banner
             guard: _guardPause ? { pause: true, released: _guardRelease } : undefined, // RT-9
+            stopBefore: si === 0 ? _stopBefore : undefined,
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
+          if (result && result.outputs) Object.assign(_outputs, result.outputs);
+          if (result && Array.isArray(result.skippedByInput)) _skippedByInput.push(...result.skippedByInput);
           if (result && Array.isArray(result.warnings)) {
             for (const w of result.warnings) if (!_allWarnings.includes(w)) _allWarnings.push(w);
           }
@@ -2015,9 +2024,19 @@ async function _handleTool(name, args, extra) {
           _dryRunSkipped.map(s => `  - ${s.intent || `step ${s.index + 1}`}`).join("\n")
         : "";
       const doneVerb = _dryRunSkipped.length ? "Dry run complete" : "Done";
-      const content = [{ type: "text", text: `${doneVerb}. URL: ${url}${downloadNote}${warningNote}${dryRunNote}\n(run_id: ${_runId})` }];
+      // What the run found, in the text (every client sees it) and as structured content (a caller that
+      // wants to act on it). Absent entirely when no step extracted anything, so a run without outputs
+      // returns exactly what it always did.
+      const outputNames = Object.keys(_outputs);
+      const outputNote = outputNames.length
+        ? `\n\nOutputs:\n${outputNames.map(k => `  ${k}: ${_outputs[k]}`).join("\n")}`
+        : "";
+      const skippedNote = _skippedByInput.length
+        ? `\n\nSkipped because an input was empty or different:\n${_skippedByInput.map(x => `  - ${x.intent || `step ${x.index + 1}`} (${x.input})`).join("\n")}`
+        : "";
+      const content = [{ type: "text", text: `${doneVerb}. URL: ${url}${downloadNote}${outputNote}${skippedNote}${warningNote}${dryRunNote}\n(run_id: ${_runId})` }];
       if (shot) content.push({ type: "image", data: shot.toString("base64"), mimeType: "image/png" });
-      return { content };
+      return outputNames.length ? { content, structuredContent: { outputs: { ..._outputs } } } : { content };
 
     } catch (runErr) {
       _phase(`steps_failed:${mapErrorToCode(runErr)}`);
@@ -2208,6 +2227,12 @@ async function _handleTool(name, args, extra) {
         log("info", "guard_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
         _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "guard" });
         const guardIntent = (runErr.step && (runErr.step.intent || runErr.step.type)) || `step ${runErr.stepIndex + 1}`;
+        if (runErr.stopBefore) {
+          return {
+            content: [{ type: "text", text: `Stopped before "${guardIntent}" (step ${runErr.stepIndex + 1}), as asked. (run_id: ${_runId})` }],
+            _meta: { "conxa/stopped_at": { step_index: runErr.stepIndex, step_intent: guardIntent, run_id: _runId } },
+          };
+        }
         return {
           content: [{
             type: "text",

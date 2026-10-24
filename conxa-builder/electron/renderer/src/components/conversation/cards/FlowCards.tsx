@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  flowCaptureValue,
   flowDiscardRecording,
   flowFinishRecording,
   flowPauseRecording,
@@ -170,6 +171,17 @@ export function RecordingCard({ threadId, item }: CardProps) {
             <Button variant="brand" size="sm" disabled={busy || count === 0} onClick={() => run(() => flowFinishRecording(wf, cardId))}>
               Finish and save
             </Button>
+            {state === 'recording' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                title="Click a value in the browser to have the finished workflow report it back, instead of clicking it"
+                onClick={() => run(() => flowCaptureValue(wf, cardId))}
+              >
+                Capture a value
+              </Button>
+            )}
             {state === 'recording' ? (
               <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowPauseRecording(wf, cardId))}>Pause</Button>
             ) : (

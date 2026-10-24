@@ -21,6 +21,7 @@ class WorkflowEditorMixin:
         *,
         in_branch_body: bool = False,
         previous_step: dict[str, Any] | None = None,
+        next_step: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Validate + deep-merge a patch into a single (possibly nested) step dict, rebuilding
         identity_bundle.signals when the target selector list changed. Shared by cmd_patch_step's
@@ -40,7 +41,7 @@ class WorkflowEditorMixin:
 
         try:
             validate_editor_patch(step, patch, get_policy_bundle().data, in_branch_body=in_branch_body,
-                                   previous_step=previous_step)
+                                   previous_step=previous_step, next_step=next_step)
         except ValueError as exc:
             raise _CommandError(str(exc), f"Patch rejected: {exc}") from exc
 
@@ -132,7 +133,9 @@ class WorkflowEditorMixin:
             revalidation_target = merged_nested
         else:
             previous_step = steps[step_index - 1] if step_index > 0 else None
-            step = self._apply_step_patch(parent_step, patch, in_branch_body=False, previous_step=previous_step)
+            following = steps[step_index + 1] if step_index + 1 < len(steps) else None
+            step = self._apply_step_patch(parent_step, patch, in_branch_body=False, previous_step=previous_step,
+                                          next_step=following)
             revalidation_target = step
 
         steps[step_index] = step
@@ -371,6 +374,70 @@ class WorkflowEditorMixin:
         self._push_undo(skill_id, snapshot)
         write_skill(skill_id, doc)
         return {"skill_id": skill_id, "ok": True}
+
+    def cmd_splice_segment(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """Replace everything from a step onward with the steps of a separately compiled segment (a
+        re-recording that picked up at that step). The steps before it keep their keys, so Clarify answers
+        about them stay true; answers about replaced steps are flagged ``stale``. Undoable like any edit."""
+        import copy
+        from conxa_compile.conversation import clarify_store
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
+        from conxa_compile.editor.workflow_mutations import replace_step_range
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_core.storage.workflow_store import get_workflow
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        segment_id = _safe_id(payload.get("segment_skill_id"), "segment_skill_id")
+        doc, segment = read_skill(skill_id), read_skill(segment_id)
+        if doc is None or segment is None:
+            raise _CommandError("skill_not_found", "The workflow or the new recording is missing.")
+        try:
+            start = resolve_step_index(doc, str(payload.get("from_step_key") or ""))
+        except ProposalError as exc:
+            raise _CommandError(exc.code, exc.message) from exc
+        new_steps = [s for s in ((segment.get("skills") or [{}])[0] or {}).get("steps") or [] if isinstance(s, dict)]
+        if not new_steps:
+            raise _CommandError("empty_segment", "The new recording has no steps to add.")
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = replace_step_range(doc, start, new_steps)
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Couldn\u2019t replace those steps: {exc}") from exc
+        self._push_undo(skill_id, snapshot)
+        write_skill(skill_id, doc)
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        workflow = next((w for w in __import__("conxa_core.storage.workflow_store", fromlist=["list_workflows"]).list_workflows() if w.skill_id == skill_id), None)
+        stale = clarify_store.mark_stale(workflow.id, set(step_keys(steps))) if workflow is not None else 0
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        result.update({"replaced_from": start, "added": len(new_steps), "stale_answers": stale})
+        return result
+
+    def cmd_parameterize_literal(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """Make one recorded value (a page address, a row identifier) a run input. See
+        workflow_mutations.parameterize_literal for exactly what it rewrites."""
+        import copy
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_compile.editor.workflow_mutations import parameterize_literal
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        doc = read_skill(skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc, changed = parameterize_literal(
+                doc, str(payload.get("literal") or ""), str(payload.get("name") or ""),
+                default=str(payload.get("default") or ""))
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Could not make that value an input: {exc}") from exc
+        self._push_undo(skill_id, snapshot)
+        write_skill(skill_id, doc)
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        result["changed"] = changed
+        return result
 
     def cmd_replace_literals(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         import copy

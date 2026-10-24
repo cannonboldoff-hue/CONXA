@@ -6,8 +6,7 @@ import { flowBegin, getLifecycle } from '@/api/conversationApi'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Conversation } from '@/components/conversation/Conversation'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
-import { CardShell } from '@/components/conversation/parts'
-import { Button } from '@/components/ui/button'
+import { ActionStrip } from '@/components/conversation/ActionStrip'
 import { useShellData } from '@/hooks/useShellData'
 
 /**
@@ -83,16 +82,7 @@ export function WorkflowConversationPage() {
             placeholder="Ask about this workflow, or describe a change"
             composerNote={workflow.name}
             empty={<p className="text-sm text-[var(--text-meta)]">This is the start of {workflow.name}’s conversation.</p>}
-            tail={
-              lifecycle && ['record', 'configure'].includes(lifecycle.stage) && ['not_recorded', 'discarded', 'sign_in_needed', 'sign_in_expired'].includes(lifecycle.substate) ? (
-                <CardShell
-                  glyph={lifecycle.glyph}
-                  title={lifecycle.substate === 'discarded' ? 'Record it again' : lifecycle.stage === 'configure' ? 'Sign in, then record' : 'Record this workflow'}
-                  meta={lifecycle.substate === 'discarded' ? 'The workflow keeps its name and starting page.' : lifecycle.note}
-                  footer={<Button variant="brand" size="sm" onClick={begin}>{lifecycle.stage === 'configure' ? 'Sign in' : 'Start recording'}</Button>}
-                />
-              ) : null
-            }
+            tail={<ActionStrip workflowId={workflow.id} lifecycle={lifecycle} />}
           />
         </div>
       </div>

@@ -170,6 +170,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     if (cause.destructiveHalt) err.destructiveHalt = true;
     if (cause.frameNotFound) err.frameNotFound = true;
     if (cause.entityNotFound) err.entityNotFound = true;
+    if (cause.entityAbsent) err.entityAbsent = true;
     if (cause.tabNotFound) err.tabNotFound = true;
     if (cause.failedPage) err.failedPage = cause.failedPage;
     // EXEC-30: Tier A's known-pattern ladder saw an INTERCEPTED failure and cleared nothing —
@@ -197,6 +198,15 @@ async function executeOneStep(ctx, state, steps, i) {
   }
 
   const step = steps[i];
+  // run_if: a step that runs only when an input says so ("skip this field when it's empty"). It reads
+  // the run's inputs and nothing else -- never the page -- so whether a step ran is decided by what the
+  // caller supplied, and is reported rather than silent.
+  const gate = runIfDecision(step, state.inputs);
+  if (gate && gate.skip) {
+    state.skippedByInput.push({ index: i, intent: step.intent || "", input: gate.input });
+    if (ctx.onPhase) ctx.onPhase(`step_${i}_skipped_by_input`, { step: i, input: gate.input });
+    return;
+  }
   if (ctx.onStep) ctx.onStep(i);
 
   // Resolve which live page this step runs on. Never falls back to the previous step's page
@@ -246,6 +256,17 @@ async function executeOneStep(ctx, state, steps, i) {
     }
     const remaining = steps.slice(i).filter((s) => s && s.destructive === true).length;
     throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining });
+  }
+
+  // Studio-only: stop, parked on the live page, BEFORE a named step. Used to replay a workflow up to
+  // step N-1 and hand the page to the recorder for re-recording from N (a segment). Same park as the
+  // guard above, same rule about loops and popup choices (no row cursor to resume from).
+  if (ctx.stopBefore !== undefined && ctx.stopBefore === i && !ctx.dryRun) {
+    if (state.loopDepth > 0 || state.forkDepth > 0) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
+      throw stepFailure(step, i, new Error("Can't stop inside a repeated or conditional step: pick the step that starts the loop instead."), null, state.warnings);
+    }
+    throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 0, stopBefore: true });
   }
 
   // EXEC-13: ai_review is a planned pause (author-placed reasoning checkpoint), not a page
@@ -492,6 +513,16 @@ async function executeOneStep(ctx, state, steps, i) {
   // so it would just fail the same way seven more times. Fail straight through rather than
   // burning the cascade (or worse, letting some stage relax scoping and act on the wrong row).
   if (primaryErr && primaryErr.entityNotFound) {
+    // on_missing: "skip" -- the author said that a record which is provably not on the page means there is
+    // nothing to do here (nothing to update, nothing to delete). Only the "list is there, this record is
+    // not in it" case qualifies; an ambiguous or unrendered list still fails closed, and skipping a step
+    // never acts on a different row. Reported, never silent.
+    if (primaryErr.entityAbsent && step.on_missing === "skip") {
+      state.skippedByInput.push({ index: i, intent: step.intent || "", input: "record not on the page" });
+      state.warnings.push(`Step ${i + 1}${step.intent ? ` (${step.intent})` : ""} was skipped: its record isn't on the page.`);
+      if (ctx.onPhase) ctx.onPhase(`step_${i}_skipped_missing`, { step: i });
+      return;
+    }
     ctx.tracker.emit("step_fail", { si: i, fc: "entity_not_found" });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
   }
@@ -970,7 +1001,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, appKnowledge: knowledge } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, appKnowledge: knowledge } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1004,6 +1035,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     // PROD-3-DRYRUN: every destructive step this run resolved-but-skipped, so the caller can
     // name exactly what a dry run withheld.
     dryRunSkipped: [],
+    skippedByInput: [],
   };
 
   // Multi-tab: each step declares which tab it runs on (step.tab — see tabs.js). The registry
@@ -1082,6 +1114,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     onStep, onPhase, cancelCheck, tracker: t, downloadQueue, dialogQueue,
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
     guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)
+    stopBefore, // Studio-only: park just before this step (segment re-recording)
     appKnowledge: knowledge || null, // advisory popup knowledge for an unrecognised dialog (app_knowledge.js)
   };
 
@@ -1089,7 +1122,47 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     await executeOneStep(ctx, state, steps, i);
   }
 
-  return { recoveredSteps: state.recoveredSteps, warnings: state.warnings, dryRunSkipped: state.dryRunSkipped };
+  return {
+    recoveredSteps: state.recoveredSteps, warnings: state.warnings, dryRunSkipped: state.dryRunSkipped,
+    skippedByInput: state.skippedByInput, outputs: collectOutputs(steps, state.inputs),
+  };
+}
+
+// ── run_if and outputs ───────────────────────────────────────────────────────────────────────
+
+// { input, op: "not_empty" | "equals" | "not_equals", value? }. Anything malformed means "run the
+// step": a bad condition must never silently remove a step from a run.
+function runIfDecision(step, inputs) {
+  const cond = step && step.run_if;
+  if (!cond || typeof cond !== "object" || !cond.input) return null;
+  const raw = inputs ? inputs[cond.input] : undefined;
+  const have = raw !== undefined && raw !== null && String(raw).trim() !== "";
+  const op = String(cond.op || "not_empty");
+  let run;
+  if (op === "not_empty") run = have;
+  else if (op === "equals") run = have && String(raw).trim() === String(cond.value ?? "").trim();
+  else if (op === "not_equals") run = !have || String(raw).trim() !== String(cond.value ?? "").trim();
+  else return null;
+  return { skip: !run, input: String(cond.input) };
+}
+
+// The values this run read off the page, by name: every extract step's output_name (nested bodies
+// included) that now holds a value. A name no step produced is simply absent.
+function collectOutputs(steps, inputs) {
+  const names = [];
+  const walk = (list) => {
+    for (const s of Array.isArray(list) ? list : []) {
+      if (!s || typeof s !== "object") continue;
+      if (s.type === "extract" && s.output_name) names.push(String(s.output_name));
+      walk(s.steps);
+      if (s.for_each) walk(s.for_each.steps);
+      if (s.branch) walk(s.branch.steps);
+    }
+  };
+  walk(steps);
+  const out = {};
+  for (const n of names) if (inputs && inputs[n] !== undefined) out[n] = inputs[n];
+  return out;
 }
 
 // Auth-failure detection — login redirect or session-expired page heuristics. Deliberately
@@ -1135,6 +1208,8 @@ module.exports = {
   uniqueDownloadName,
   sweepOldRuns,
   runPlan,
+  runIfDecision,
+  collectOutputs,
   checkRetryBudget,
   clearRetryBudget,
   mapErrorToCode,

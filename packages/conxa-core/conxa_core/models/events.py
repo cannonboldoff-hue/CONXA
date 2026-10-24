@@ -33,6 +33,8 @@ ActionKind = Literal[
     "clipboard_copy", "clipboard_paste",
     # control
     "wait", "assert", "screenshot",
+    # a value the person marked "read this" while recording; compiles to an `extract` step
+    "extract",
     # conditional / branch (EXEC-1): optional interstitials — probe + nested step body, never
     # escalate to recovery. See CLAUDE.md Key Invariants.
     "if_present", "try_dismiss", "wait_for_one_of", "outcome_fork",

@@ -55,6 +55,7 @@ const CORE_TOOL_DEFS = [
         wait_for_auth: { type: "boolean", description: "Default true: when sign-in is missing, return at once and let the run start by itself after the user signs in. false = never wait — fail immediately with the sign-in message instead, so nothing starts later behind the caller's back (used by Build Studio's Run Test)." },
         dry_run:     { type: "boolean", description: "PROD-3-DRYRUN: run every step except the final committing (irreversible) action — that step is resolved (proving its target still exists) but never clicked/submitted. Use to preview a skill with a destructive final step before actually committing it. Read-only/reversible steps still run normally." },
         _trigger:    { type: "string",  description: "Internal: set to \"scheduled\" only by the PROD-5 scheduler daemon. Do not set manually." },
+        _stop_before_step: { type: "integer", minimum: 0, description: "Internal, Build Studio only — do not set. Park on the live page just before this 0-based step instead of running it." },
         _pause_before_irreversible: { type: "boolean", description: "Internal, Build Studio tests only — do not set. Pause (parked on the live page) before the first step that can't be undone instead of running it." },
         _guard_release: { type: "boolean", description: "Internal, Build Studio tests only — do not set. With resume_from set to the paused step, run it and every later step that can't be undone." },
       },

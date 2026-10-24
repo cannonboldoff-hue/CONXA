@@ -1904,12 +1904,38 @@
     return resolveEditableTarget(deepActiveElement(document));
   }
 
+  // "Capture a value": the person pressed the button in Studio, so the NEXT click reads the element
+  // instead of acting on it. It is reported as an `extract` event whose target is serialized exactly like
+  // a click's (so it is found the same way at replay); the page never sees the click. One shot: capture
+  // mode turns itself off, and Studio can switch it off early with window.__conxaCapture(false).
+  let _captureNext = false;
+  window.__conxaCapture = function (on) {
+    _captureNext = !!on;
+    try { document.documentElement.style.cursor = _captureNext ? "crosshair" : ""; } catch (_e) {}
+    return _captureNext;
+  };
+  function _captureSource(el) {
+    const tag = (el.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select" ? "value" : "text";
+  }
+
   onDoc(
     "click",
     (ev) => {
       trace("event", { t: "click" });
       let el = eventTargetFromPath(ev);
       if (!el || el.nodeType !== 1) return;
+      if (_captureNext) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
+        const picked = resolveMeaningfulTarget(el) || el;
+        window.__conxaCapture(false);
+        const p = serializeTarget(picked, "extract", null);
+        p.extract = { source: _captureSource(picked) };
+        finalizeState(p);
+        return;
+      }
       const resolved = resolveMeaningfulTarget(el);
       if (resolved) {
         flushPendingHoverBeforeClick(resolved);

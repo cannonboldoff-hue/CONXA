@@ -14,6 +14,7 @@ function fakeRoot(rowTexts) {
     locator(containerSelector) {
       return {
         _containerSelector: containerSelector,
+        async count() { return rowTexts.length; },
         filter({ hasText }) {
           const matches = rowTexts.filter(t => t.includes(hasText));
           return {
@@ -80,4 +81,27 @@ test("multiple frame-scoped roots: each narrowed independently, non-matching roo
   const out = await entityRoots([rootA, rootB], STEP, {});
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0]._row, "Invoice #12345");
+});
+
+// on_missing: "skip" may only ever act on a PROVABLE absence -- the list is on the page and none of its
+// records is this run's. Everything else (ambiguous, empty/unrendered list) must still fail closed.
+test("absent is true only when the list is there and holds no matching record", async () => {
+  const none = await entityRoots([fakeRoot(["Invoice #1", "Invoice #2"])], STEP, {});
+  assert.deepStrictEqual(none, []);
+  assert.strictEqual(none.absent, true);
+
+  const ambiguous = await entityRoots([fakeRoot(["Invoice #12345 a", "Invoice #12345 b"])], STEP, {});
+  assert.deepStrictEqual(ambiguous, []);
+  assert.strictEqual(ambiguous.absent, false);                         // more than one match is not "absent"
+
+  const emptyList = await entityRoots([fakeRoot([])], STEP, {});
+  assert.strictEqual(emptyList.absent, false);                         // an unrendered list proves nothing
+
+  const found = await entityRoots([fakeRoot(["Invoice #12345"])], STEP, {});
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(found.absent, false);
+
+  const unresolved = await entityRoots([fakeRoot(["Invoice #1"])], { entity_binding: { ...STEP.entity_binding, identifier: "{{inv}}" } }, {});
+  assert.deepStrictEqual(unresolved, []);
+  assert.notStrictEqual(unresolved.absent, true);                      // an input nobody supplied is not a missing record
 });

@@ -80,6 +80,8 @@ def describe_event(event: dict[str, Any]) -> dict[str, Any]:
         can_vary = bool(shown_value)
     elif kind_raw in ("check", "uncheck"):
         kind, text = "click", f"{'Ticked' if kind_raw == 'check' else 'Unticked'} “{name}”"
+    elif kind_raw == "extract":
+        kind, text = "other", f"Will read “{name}” back to whoever runs this"
     elif kind_raw in ("scroll",):
         kind, text = "scroll", "Scrolled"
     elif kind_raw in ("hover", "mouseover"):

@@ -166,7 +166,37 @@ class WorkflowFlowMixin:
             runtime_state.set_flags(workflow.id, signing_in=False)
         harness.log_event(_thread(workflow.id), f"Signed in to {card.get('app_name') or 'the app'}"
                           + (" — detected automatically" if auto else ""), glyph="ok", sink=sink)
-        return self._flow_open_recording(get_workflow(workflow.id) or workflow, rid or "", sink)
+        fresh = get_workflow(workflow.id) or workflow
+        if runtime_state.get_flags(workflow.id).get("retest_after_sign_in"):
+            # The sign-in was asked for by a test that paused on an expired one: carry on testing, not recording.
+            missing = self._flow_missing_apps(fresh)
+            if missing:
+                return self._flow_open_sign_in(fresh, missing[0], rid or "", sink)
+            return self._flow_retest_after_sign_in(fresh, sink)
+        return self._flow_open_recording(fresh, rid or "", sink)
+
+    def cmd_flow_sign_in_then_test(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """A test paused because a saved sign-in expired. Sign in again, then run the same test again with the
+        same inputs (the guard still pauses before anything that can't be undone). Never starts a recording."""
+        from conxa_compile.conversation import runtime_state
+
+        workflow = self._flow_workflow(payload)
+        if not workflow.skill_id:
+            raise _CommandError("workflow_not_compiled", "Compile this workflow before testing it.")
+        runtime_state.set_flags(workflow.id, retest_after_sign_in=True)
+        missing = self._flow_missing_apps(workflow)
+        if missing:
+            return self._flow_open_sign_in(workflow, missing[0], rid, _event_sink(rid))
+        return self._flow_retest_after_sign_in(workflow, _event_sink(rid))
+
+    def _flow_retest_after_sign_in(self, workflow: Any, sink: Any) -> dict[str, Any]:
+        from conxa_compile.conversation import harness, runtime_state
+
+        runtime_state.set_flags(workflow.id, retest_after_sign_in=False, sign_in_expired=False)
+        harness.log_event(_thread(workflow.id), "Testing again with the same inputs", glyph="run", sink=sink)
+        threading.Thread(target=self._tf_background, args=(workflow.id, dict(workflow.last_test_inputs or {}), True, True),
+                         daemon=True).start()
+        return {"next": "test"}
 
     def _flow_watch_sign_in(self, workflow_id: str, card_id: str, session_id: str) -> None:
         """Finish the sign-in by itself once the person has signed in, so nobody has to press
@@ -221,7 +251,7 @@ class WorkflowFlowMixin:
         except _CommandError:
             pass  # the window is already gone
         harness.update_card(_thread(workflow.id), card["card_id"], state="cancelled", actions=[], sink=sink)
-        runtime_state.set_flags(workflow.id, signing_in=False)
+        runtime_state.set_flags(workflow.id, signing_in=False, retest_after_sign_in=False)
         harness.log_event(_thread(workflow.id), "Sign-in cancelled", glyph="none", sink=sink)
         return {"ok": True}
 
@@ -322,6 +352,18 @@ class WorkflowFlowMixin:
     def _flow_session(self, card: dict[str, Any]):
         sid = str((card.get("refs") or {}).get("session_id") or "")
         return sid, _recorder_registry.get(sid)
+
+    def cmd_flow_capture_value(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """"Read this": the next click in the recording browser reads that element's value into an
+        output the finished workflow returns, instead of clicking it. ``on: false`` cancels."""
+        workflow = self._flow_workflow(payload)
+        card = self._flow_card(workflow.id, str(payload.get("card_id") or ""))
+        _sid, sess = self._flow_session(card)
+        if sess is None or card.get("state") != "recording":
+            raise _CommandError("not_recording", "Capture a value while you are recording.")
+        on = payload.get("on", True) is not False
+        sess.request_capture(on)
+        return {"ok": True, "capturing": on}
 
     def cmd_flow_pause_recording(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.conversation import harness, runtime_state

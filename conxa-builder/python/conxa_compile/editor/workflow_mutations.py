@@ -1087,6 +1087,99 @@ def _replace_in_step(step: dict[str, Any], find: str, replace: str) -> tuple[dic
     return step, count
 
 
+def replace_step_range(
+    document: dict[str, Any], start: int, new_steps: list[dict[str, Any]], end: int | None = None
+) -> dict[str, Any]:
+    """Replace ``steps[start..end]`` (inclusive; ``end=None`` means "to the end") with ``new_steps``.
+
+    The splice behind re-recording one part of a workflow: the steps before ``start`` and after ``end``
+    are untouched (same objects, same step keys, so Clarify answers and edit history that refer to
+    them stay true), the intent graph and every index-keyed derived field are remapped, and the compile
+    report is invalidated. Raises ValueError for a range outside the step list.
+
+    Nothing here compiles or validates ``new_steps``; the caller passes steps the compiler produced.
+    """
+    doc = copy.deepcopy(document)
+    block = (doc.get("skills") or [{}])[0] or {}
+    steps = list(block.get("steps") or [])
+    n = len(steps)
+    last = n - 1 if end is None else end
+    if start < 0 or start > n or last < start - 1 or last >= n:
+        raise ValueError("step_range_out_of_bounds")
+    if not isinstance(new_steps, list) or not all(isinstance(s, dict) for s in new_steps):
+        raise ValueError("new_steps_must_be_steps")
+    delta = len(new_steps) - (last - start + 1)
+    block["steps"] = steps[:start] + [copy.deepcopy(s) for s in new_steps] + steps[last + 1:]
+    # Steps inside the replaced range are gone ("gone is honest, misattributed is not"); the ones after
+    # it shift by however much the range grew or shrank.
+    old_to_new: dict[int, int | None] = {}
+    for i in range(n):
+        old_to_new[i] = i if i < start else (None if i <= last else i + delta)
+    doc = _remap_intent_graph_indices(doc, old_to_new)
+    _invalidate_compile_report(doc)
+    report = doc.get("compile_report")
+    if isinstance(report, dict) and report.get("for_each_suggestions"):
+        doc["compile_report"] = {**report, "for_each_suggestions": []}   # step keys may have shifted
+    doc, _ = reconcile_inputs_with_step_values(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
+def parameterize_literal(
+    document: dict[str, Any], literal: str, name: str, *, default: str = ""
+) -> tuple[dict[str, Any], int]:
+    """Turn one recorded value that isn't typed text into a run input: "this changes each run".
+
+    Rewrites the literal to ``{{name}}`` in exactly the two places the runtime re-reads at every
+    run: a navigate step's ``url`` and an entity-bound step's ``entity_binding.identifier`` (the
+    row it must act on). It never touches ``target``, ``identity_bundle`` or any selector, and it
+    is the same rewrite ``apply_for_each_loop_suggestion`` already applies to a loop body. The
+    input is declared by ``reconcile_inputs_with_step_values`` with the recorded value as its
+    default, so a run that omits it still behaves as recorded. Returns (new_document, places
+    changed); raises ValueError("literal_not_found") when nothing matched.
+    """
+    literal = (literal or "").strip()
+    if not literal:
+        raise ValueError("literal_must_be_nonempty")
+    token = "{{%s}}" % name
+    if not PLACEHOLDER_RE.fullmatch(token):
+        raise ValueError("invalid_input_name")
+    doc = copy.deepcopy(document)
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    needle = literal.lower()
+    changed = 0
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        act = step.get("action")
+        act = str(act.get("action") if isinstance(act, dict) else act or "").lower()
+        if act == "navigate" and step.get("url"):
+            templated = replace_url_literal(str(step["url"]), literal, token)
+            if templated is not None:
+                step["url"] = templated
+                changed += 1
+        eb = step.get("entity_binding")
+        if isinstance(eb, dict) and eb.get("identifier") and "{{" not in str(eb["identifier"]):
+            ident = str(eb["identifier"]).lower().strip()
+            if needle in ident or ident in needle:
+                eb["identifier"] = token
+                eb["source"] = "input"
+                changed += 1
+    if not changed:
+        raise ValueError("literal_not_found")
+    doc, _ = reconcile_inputs_with_step_values(doc)
+    if default:
+        for row in doc.get("inputs") or []:
+            if isinstance(row, dict) and str(row.get("id") or "").lower() == name.lower() and not row.get("default"):
+                row["default"] = default
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc, changed
+
+
 def replace_string_literals_in_skill_document(
     document: dict[str, Any], find: str, replace: str
 ) -> tuple[dict[str, Any], int]:

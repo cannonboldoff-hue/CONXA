@@ -84,6 +84,18 @@ _GUARD_META_KEY = "conxa/guard"
 _FORK_META_KEY = "conxa/fork"
 _FORK_STOP = "__stop__"
 _SESSION_EXPIRED_META_KEY = "conxa/session_expired"
+_STOPPED_AT_META_KEY = "conxa/stopped_at"
+
+
+def _extract_stopped_at(result: dict[str, Any]) -> dict[str, Any] | None:
+    """``{step_index, step_intent, run_id}`` when the runtime parked just before the step a caller asked it to
+    stop at (``_stop_before_step``), else None. `_meta` only, like the guard: no prose fallback."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    stopped = meta.get(_STOPPED_AT_META_KEY)
+    if isinstance(stopped, dict) and isinstance(stopped.get("step_index"), int):
+        return {"step_index": stopped["step_index"], "step_intent": str(stopped.get("step_intent") or ""),
+                "run_id": str(stopped.get("run_id") or "")}
+    return None
 
 
 def _extract_fork_pause(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -146,6 +158,45 @@ def _app_layer_supports(conxa_dir: Path, capability: str) -> bool:
         return False
     caps = meta.get("capabilities") if isinstance(meta, dict) else None
     return isinstance(caps, list) and capability in caps
+
+
+def outputs_from_message(message: str) -> dict[str, str]:
+    """The values a run read off the page, from the runtime's success text ("Outputs:" followed by
+    indented ``name: value`` lines). Empty when the run extracted nothing."""
+    out: dict[str, str] = {}
+    lines = str(message or "").splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == "Outputs:":
+            for row in lines[i + 1:]:
+                if not row.startswith("  ") or ":" not in row:
+                    break
+                name, _, value = row.strip().partition(":")
+                out[name.strip()] = value.strip()
+            break
+    return out
+
+
+def capabilities_needed(steps: list[Any]) -> set[str]:
+    """App-layer capabilities a skill's steps rely on (nested bodies included). An engine that predates
+    them would fail loudly on an unknown step type -- or, for ``run_if``, silently ignore the condition and
+    run a step it should have skipped -- so the Studio checks before a test, not after."""
+    need: set[str] = set()
+
+    def walk(items: Any) -> None:
+        for s in items if isinstance(items, list) else []:
+            if not isinstance(s, dict):
+                continue
+            act = s.get("action")
+            act = str(act.get("action") if isinstance(act, dict) else act or "").lower()
+            if act == "extract":
+                need.add("outputs")
+            if isinstance(s.get("run_if"), dict) and s["run_if"].get("input"):
+                need.add("run_if")
+            walk((s.get("branch") or {}).get("steps") if isinstance(s.get("branch"), dict) else None)
+            walk((s.get("for_each") or {}).get("steps") if isinstance(s.get("for_each"), dict) else None)
+
+    walk(steps)
+    return need
 
 
 def _is_confirm_only_review_request(review: dict[str, Any]) -> bool:
@@ -941,6 +992,21 @@ class WorkflowsMixin:
                 )
                 raise _CommandError("runtime_app_not_built", message)
 
+            try:
+                from conxa_core.storage.json_store import read_skill as _read_skill_for_caps
+
+                _doc = _read_skill_for_caps(workflow.skill_id) or {}
+                _needed = capabilities_needed(((_doc.get("skills") or [{}])[0] or {}).get("steps") or [])
+            except Exception:  # noqa: BLE001 -- the check is a courtesy; never fail a test over reading it
+                _needed = set()
+            _missing = sorted(c for c in _needed if not _app_layer_supports(conxa_dir, c))
+            if _missing:
+                raise _CommandError(
+                    "engine_too_old",
+                    "This workflow reads values or skips steps by input, which the installed Conxa engine "
+                    f"doesn\u2019t support yet ({', '.join(_missing)}). Update the app layer, then test again.",
+                )
+
             _mark("Staging skill pack for the runtime…")
             sync_skill_pack(company, source_dir, conxa_dir, data_dir=test_data_dir)
             _stage_runtime_auth(workflow, company, test_data_dir)
@@ -967,6 +1033,13 @@ class WorkflowsMixin:
                 "wait_for_auth": False,
             }
             previewed = False
+            # Replay up to a step and park there (re-recording from it). The engine must know the argument:
+            # an older one would ignore it and run the whole workflow.
+            stop_before = payload.get("stop_before_step")
+            if isinstance(stop_before, int) and not isinstance(stop_before, bool) and stop_before >= 0:
+                if not _app_layer_supports(conxa_dir, "stop_before"):
+                    raise _CommandError("engine_too_old", "The installed Conxa engine can\u2019t stop at a step yet. Update the app layer, then try again.")
+                run_args["_stop_before_step"] = stop_before
             if guard_requested:
                 if _app_layer_supports(conxa_dir, "test_guard"):
                     run_args["_pause_before_irreversible"] = True
@@ -1030,6 +1103,17 @@ class WorkflowsMixin:
                 "declined": bool(stopped_at_guard.get("declined")),
             }
 
+        stopped_step = _extract_stopped_at(result)
+        if stopped_step is not None:
+            # Parked exactly where asked, nothing at or after that step has run. Not a pass and not a failure:
+            # the last real test result is left alone, and the parked page is the caller's to use.
+            sink({"kind": "workflow_test", "message": f"Stopped before {stopped_step['step_intent'] or 'the chosen step'}."})
+            return {
+                "status": "stopped_at_step", "message": "Stopped at the chosen step.", "company": company,
+                "skill": workflow.slug, "run_id": stopped_step["run_id"] or _test_run_id,
+                "stopped_at": stopped_step["step_index"], "stopped_intent": stopped_step["step_intent"],
+            }
+
         message = _runtime_result_text(result)
         expired = _extract_session_expired(result)
         if expired is not None:
@@ -1069,6 +1153,7 @@ class WorkflowsMixin:
         return {
             "status": "passed", "message": message, "company": company,
             "skill": workflow.slug, "run_id": _test_run_id,
+            "outputs": outputs_from_message(message),
         }
 
     def cmd_cancel_test_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:

@@ -169,6 +169,10 @@ class CompileMixin:
                     source_session_id=session_id,
                     title=title,
                     version=version,
+                    # Only when the person gave one, so a compile without a description is called
+                    # exactly as it always was.
+                    **({"task_description": workflow.task_description}
+                       if workflow is not None and workflow.task_description.strip() else {}),
                 )
         except (CloudUnreachable, EntitlementBlocked, QuotaExceeded) as exc:
             _log(str(exc), level="error")

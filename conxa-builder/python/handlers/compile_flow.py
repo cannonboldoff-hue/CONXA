@@ -173,25 +173,45 @@ class CompileFlowMixin:
             known = known_popups(doc, skill_id=result["skill_id"], workspace_id=workflow.workspace_id or LOCAL_WORKSPACE_ID)
         except Exception:  # noqa: BLE001 -- a hint, never worth failing the compile flow
             known = []
+        # Does the compiled workflow match what the person said, and which recorded values that
+        # aren't typed text were only true of this recording? Never raises, never blocks.
+        from conxa_compile.conversation import understanding as understanding_mod
+
+        understood = understanding_mod.understand(doc, workflow.task_description)
         questions = clarify.generate_questions(
             doc,
             source_lookup=lambda s: find_source_event(s, doc),
             answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
             fork_copy=fork_copy,
             known_popups=known,
+            understanding=understood,
+            limit=None,
         )
+        # Ask the most important few now; keep the rest instead of silently dropping them.
+        for n, q in enumerate(questions):
+            if n >= clarify.MAX_QUESTIONS:
+                q["status"] = "queued"
         clarify_store.save(workflow_id, {
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
             "added_steps": 0, "step_count_at_compile": len(steps), "questions": questions,
+            "understanding": {k: understood[k] for k in ("goal_summary", "coverage", "source")},
         })
         lines = [f"Compiled into {len(steps)} steps."]
+        dropped = report.get("dropped") or []
+        if dropped:
+            kinds = sorted({str(d.get("action") or "action").replace("_", " ") for d in dropped})[:3]
+            lines.append(
+                f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
+                f"({', '.join(kinds)}) — repeats, or page loads a click caused. They’re listed in the compile report.")
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
             lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")
-        lines.append(
-            f"A few questions first, so the test reflects how you’ll really use it." if questions
-            else "I had nothing to ask — nothing here looked uncertain."
-        )
+        if questions:
+            lines.append("A few questions first, so the test reflects how you’ll really use it.")
+        elif understood["source"] == "model":
+            lines.append("I checked it against what you described and nothing needs deciding.")
+        else:
+            lines.append("Nothing here looked uncertain" + (" — though I couldn’t check it against your description." if workflow.task_description.strip() else ", and there was no description to check it against."))
         harness_say = ts.append(_thread(workflow_id), "assistant_message", text=" ".join(lines))
         from conxa_compile.conversation import harness
 
@@ -201,20 +221,27 @@ class CompileFlowMixin:
         else:
             self._flow_post_summary(workflow_id, sink)
 
-    def _flow_post_next_question(self, workflow_id: str, sink: Any) -> None:
-        from conxa_compile.conversation import clarify_store, harness
+    def _flow_post_next_question(self, workflow_id: str, sink: Any, *, promote_queued: bool = False) -> None:
+        from conxa_compile.conversation import clarify, clarify_store, harness
 
         data = clarify_store.load(workflow_id) or {}
         questions = [q for q in data.get("questions") or [] if isinstance(q, dict)]
         q = next((x for x in questions if x.get("status") == "open"), None)
+        if q is None and promote_queued:
+            # The person asked for the rest: bring the next few queued questions forward.
+            for x in [x for x in questions if x.get("status") == "queued"][: clarify.MAX_QUESTIONS]:
+                x["status"] = "open"
+            clarify_store.save(workflow_id, {**data, "questions": questions})
+            q = next((x for x in questions if x.get("status") == "open"), None)
         if q is None:
             self._flow_post_summary(workflow_id, sink)
             return
-        number = questions.index(q) + 1
+        asked = [x for x in questions if x.get("status") != "queued"]
+        number = asked.index(q) + 1
         card = harness.post_card(
             _thread(workflow_id), "clarify_question", "open", sink=sink, refs={"question_id": q["id"]},
             question_id=q["id"], question_kind=q["kind"], title=q["title"], body=q["body"], choices=q["choices"],
-            multi=bool(q.get("multi")), index=number, total=len(questions), step_keys=q.get("step_keys") or [],
+            multi=bool(q.get("multi")), index=number, total=len(asked), step_keys=q.get("step_keys") or [],
             actions=["choose", "skip"],
         )
         clarify_store.update_question(workflow_id, q["id"], card_id=card["card_id"])
@@ -234,6 +261,10 @@ class CompileFlowMixin:
             doc, recorded_actions=int(data.get("recorded_actions") or 0), added_steps=added, name=workflow.name,
             uncertain=int(workflow.compile_steps_with_warnings or 0),
         )
+        # What the understanding check took the task to be, and which values a run will be asked for.
+        summary["goal"] = str((data.get("understanding") or {}).get("goal_summary") or "")
+        summary["input_names"] = [str(i.get("id")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")]
+        summary["queued"] = sum(1 for q in data.get("questions") or [] if q.get("status") == "queued")
         questions = data.get("questions") or []
         answered = [q for q in questions if q.get("status") == "answered"]
         if questions:
@@ -241,6 +272,8 @@ class CompileFlowMixin:
             if added:
                 text += f" Your answers added {added} step{'s' if added != 1 else ''}."
             text += f" Here’s the workflow as it stands, saved as version {summary['version']}."
+            if summary["queued"]:
+                text += f" I held back {summary['queued']} smaller question{'s' if summary['queued'] != 1 else ''} — say “ask me” whenever you want them."
         else:
             text = f"Here’s the workflow, saved as version {summary['version']}."
         harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=text))
@@ -389,6 +422,14 @@ class CompileFlowMixin:
                 self.cmd_confirm_optional_interstitial(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "keep_as_step": bool(op.get("keep_as_step"))}, rid)
                 self._log_edit("confirm_optional_interstitial", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "delete_step":
+                self.cmd_delete_step({"skill_id": skill_id, "step_index": index_of(op["step_key"])}, rid)
+                self._log_edit("delete_step", skill_id, before, source="clarify", proposal_id=None)
+                added -= 1
+            elif kind == "parameterize":
+                self.cmd_parameterize_literal(
+                    {"skill_id": skill_id, "literal": op["literal"], "name": op["name"], "default": op.get("default") or ""}, rid)
+                self._log_edit("parameterize_literal", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "drop_inputs":
                 doc = read_skill(skill_id) or {}
                 referenced: set[str] = set()

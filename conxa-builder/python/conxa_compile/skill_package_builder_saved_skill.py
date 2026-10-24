@@ -288,6 +288,13 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
     eb = step.get("entity_binding")
     if isinstance(eb, dict) and eb.get("container_selector") and eb.get("identifier"):
         out["entity_binding"] = eb
+    # run_if: runtime/app/run.js::runIfDecision reads it off the execution step.
+    run_if = step.get("run_if")
+    if isinstance(run_if, dict) and run_if.get("input"):
+        out["run_if"] = {k: run_if[k] for k in ("input", "op", "value") if k in run_if}
+    # on_missing only means something on a step bound to a record (see resolution.js::entityRoots).
+    if step.get("on_missing") == "skip" and "entity_binding" in out:
+        out["on_missing"] = "skip"
     return out
 
 
@@ -548,6 +555,21 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
         if not selector:
             return None
         return _copy_saved_common(step, {"type": action, "selector": selector})
+
+    if action == "extract":
+        # Reads a value off the matched element into the output named by `value` (the editor keeps the
+        # name there, like ai_review). No name or no target means there is nothing to read or report,
+        # so the step is dropped with the same warning the unexportable cases give.
+        selector = _step_selector(step)
+        name = _action_value_text(step).strip()
+        if not selector or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+            return None
+        spec = step.get("extract") if isinstance(step.get("extract"), dict) else {}
+        read = {"source": str(spec.get("source") or "text")}
+        for key in ("attribute", "pattern"):
+            if spec.get(key):
+                read[key] = str(spec[key])
+        return _copy_saved_common(step, {"type": "extract", "selector": selector, "output_name": name, "extract": read})
 
     if action in {"type", "fill", "date_pick"}:
         selector = _step_selector(step)
@@ -869,6 +891,33 @@ def _merge_saved_inputs_with_execution_placeholders(
     return inputs
 
 
+def _drop_unreferenced_inputs(
+    inputs: list[dict[str, Any]],
+    execution_steps: list[dict[str, Any]],
+    on_warning: Any = None,
+) -> list[dict[str, Any]]:
+    """Remove a declared input that nothing in the shipped steps mentions (BUILD-24).
+
+    A step the packager dropped (an unexportable one, a react-select the collapse lost) leaves its
+    input behind, and every caller is then asked for a value nothing uses. "Mentions" is a plain
+    substring test over the serialized steps, deliberately generous: a loop's ``items`` name and a
+    fork policy's ``input`` are bare names, not ``{{placeholders}}``, and must survive. The removal
+    is reported, never silent.
+    """
+    if not inputs:
+        return inputs
+    blob = json.dumps(execution_steps, ensure_ascii=False, default=str)
+    kept: list[dict[str, Any]] = []
+    for item in inputs:
+        name = str(item.get("name") or "")
+        if name and name not in blob:
+            if on_warning:
+                on_warning(f"The input \u201c{name}\u201d isn\u2019t used by any step that was kept, so it was removed from the skill.")
+            continue
+        kept.append(item)
+    return kept
+
+
 def _render_saved_skill_markdown(title: str, inputs: list[dict[str, Any]], execution_steps: list[dict[str, Any]]) -> str:
     lines = [f"# {title}", "", "## Inputs"]
     if inputs:
@@ -1173,6 +1222,10 @@ def _build_workflow_from_saved_skill(
                 if on_warning:
                     on_warning(f"Step {raw_index}: drag-and-drop isn't supported and was removed from the skill.")
                 continue
+            if normalize_action_kind(action) == "extract":
+                if on_warning:
+                    on_warning(f"Step {raw_index}: a value to read needs both a target element and an output name, so it was removed from the skill. Set them in Human Edit, then rebuild.")
+                continue
             if normalize_action_kind(action) == "outcome_fork":
                 # A fork none of whose options can run (every body step was unexportable) has
                 # nothing safe to offer. Same drop-and-warn shape as the cases around it.
@@ -1205,6 +1258,7 @@ def _build_workflow_from_saved_skill(
         execution_steps,
         {**_upload_input_descriptions(source_steps), **_dialog_input_descriptions(source_steps)},
     )
+    inputs = _drop_unreferenced_inputs(inputs, execution_steps, on_warning)
     skill_dir = bundle_root / "skills" / workflow_slug
     if skill_dir.exists():
         shutil.rmtree(skill_dir)

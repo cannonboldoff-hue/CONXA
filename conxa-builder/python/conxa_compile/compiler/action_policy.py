@@ -9,7 +9,7 @@ RECOVERY_ACTION_TYPES = frozenset({
     "click", "dblclick", "right_click", "hover",
     "type", "fill", "set_checkbox", "set_radio", "select", "select_option", "date_pick",
     "drag_drop", "keyboard_shortcut",
-    "upload", "focus",
+    "upload", "focus", "extract",
 })
 NO_RECOVERY_ACTION_TYPES = frozenset({
     "navigate", "goto", "go_to", "open", "check", "scroll",

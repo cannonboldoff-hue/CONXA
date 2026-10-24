@@ -31,7 +31,14 @@ from conxa_compile.compiler.step_key import step_keys
 MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
-_PRIORITY = {"upload": 0, "fork": 1, "known_popup": 1.5, "confirm": 2, "values": 3, "popup": 4, "done_when": 5}
+_PRIORITY = {
+    "coverage": -1, "upload": 0, "fork": 1, "known_popup": 1.5, "confirm": 2, "chosen_values": 2.5,
+    "values": 3, "output": 3.5, "popup": 4, "done_when": 5,
+}
+# Questions whose answer decides what the workflow *is*, so testing waits for them: a test of a
+# workflow that might still be incomplete, or that still carries a value from the recording as if
+# it were fixed, proves little. Everything else keeps the compiler's default and never blocks.
+BLOCKING_KINDS = frozenset({"coverage", "chosen_values", "upload", "fork"})
 
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
@@ -137,6 +144,42 @@ def _known_popup_question(key: str, name: str, popup: dict[str, Any]) -> dict[st
     )
 
 
+def _coverage_question(note: str) -> dict[str, Any]:
+    return _question(
+        "coverage", "coverage", "Does this cover everything you wanted?",
+        f"{note} If something is missing, add it before testing, so the test proves the whole task.",
+        [
+            {"id": "complete", "label": "Yes, that’s everything", "detail": "The recording is what I meant."},
+            {"id": "incomplete", "label": "No, something is missing", "detail": "I’ll record or add the missing part in Human Edit."},
+        ],
+    )
+
+
+def _chosen_values_question(understanding: dict[str, Any]) -> dict[str, Any] | None:
+    """Recorded values that aren't typed text (a page address, a record identifier) and that the
+    person's own description suggests change each run. ``varies`` is pre-ticked, ``unsure`` is listed
+    unticked, and anything judged ``fixed`` is not asked — infer what is clear, ask only what isn't."""
+    cands = [c for c in understanding.get("candidates") or []
+             if isinstance(c, dict) and c.get("supported") and c.get("verdict") in ("varies", "unsure") and c.get("name")]
+    if not cands:
+        return None
+    limits = [str(c.get("recorded") or "") for c in understanding.get("candidates") or []
+              if isinstance(c, dict) and not c.get("supported") and c.get("verdict") in ("varies", "unsure")]
+    body = "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded."
+    if limits:
+        body += " I can’t make a clicked item change each run yet, so these stay as recorded: " + ", ".join(f"“{l}”" for l in limits[:3]) + "."
+    kinds = {"url": "Page address", "row": "Record"}
+    return _question(
+        "chosen_values", "chosen_values", "Which of these change each run?", body,
+        [{"id": c["ref"], "label": _humanize(c["name"]),
+          "detail": f"{kinds.get(c['kind'], 'Value')}: {str(c.get('literal') or c.get('recorded'))[:60]}",
+          "selected": c["verdict"] == "varies"} for c in cands],
+        multi=True, step_keys_=sorted({k for c in cands for k in c.get("step_keys") or []}),
+        items=[{"ref": c["ref"], "name": c["name"], "literal": c["literal"], "recorded": c["recorded"]} for c in cands],
+        recorded={c["name"]: c["literal"] for c in cands},
+    )
+
+
 def generate_questions(
     doc: dict[str, Any],
     *,
@@ -144,6 +187,8 @@ def generate_questions(
     answered_by_recording: dict[str, bool] | None = None,
     fork_copy: ForkCopy | None = None,
     known_popups: list[dict[str, Any]] | None = None,
+    understanding: dict[str, Any] | None = None,
+    limit: int | None = MAX_QUESTIONS,
 ) -> list[dict[str, Any]]:
     """Find the places worth asking about in a compiled skill document.
 
@@ -157,6 +202,16 @@ def generate_questions(
     look = source_lookup or (lambda _s: None)
     hinted = answered_by_recording or {}
     out: list[dict[str, Any]] = []
+
+    # 0 ─ understanding (conversation/understanding.py): the recording against what the person
+    # said, and recorded values that aren't typed text. A fallback answer carries no coverage verdict.
+    if understanding:
+        cov = understanding.get("coverage") or {}
+        if cov.get("ok") is False and cov.get("note"):
+            out.append(_coverage_question(str(cov["note"])))
+        chosen = _chosen_values_question(understanding)
+        if chosen is not None:
+            out.append(chosen)
 
     # 1 ─ file uploads: the recorded path lives on this computer and won't exist on a customer's.
     for i, s in enumerate(steps):
@@ -200,16 +255,31 @@ def generate_questions(
     for i, s in enumerate(steps):
         binding = s.get("input_binding")
         hh = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
-        if (_action_name(s) not in ("type", "fill") or not binding or binding == "file_path" or hh.get("control_kind")
-                or str(s.get("value") or "") != "{{" + str(binding) + "}}"):
+        if not binding or binding == "file_path" or str(s.get("value") or "") != "{{" + str(binding) + "}}":
             continue
+        control = str(hh.get("control_kind") or "")
         ev = look(s) or {}
         seq = (ev.get("extras") or {}).get("sequence")
         if seq is not None and str(seq) in hinted:
             continue  # the person already said, while recording
-        recorded = str((ev.get("action") or {}).get("value") or "")
-        if recorded == "{{REDACTED}}":
+        if control == "choice":
+            # A single choice can be pinned to its recorded option (the runtime matches step.value
+            # against the option labels). A multi-select has no single literal to restore.
+            choice = hh.get("choice") if isinstance(hh.get("choice"), dict) else {}
+            recorded = "" if choice.get("multi") else str(choice.get("recorded_label") or "")
+            if not recorded:
+                continue
+        elif control == "date_picker":
+            picker = hh.get("date_picker") if isinstance(hh.get("date_picker"), dict) else {}
+            recorded = str(picker.get("recorded_value") or "")
+            if not recorded:
+                continue
+        elif control or _action_name(s) not in ("type", "fill"):
             continue
+        else:
+            recorded = str((ev.get("action") or {}).get("value") or "")
+            if recorded == "{{REDACTED}}":
+                continue
         candidates.append({"binding": str(binding), "step_key": keys[i], "recorded": recorded})
     seen: set[str] = set()
     uniq = [c for c in candidates if not (c["binding"] in seen or seen.add(c["binding"]))]
@@ -219,6 +289,26 @@ def generate_questions(
             "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded.",
             [{"id": c["binding"], "label": _humanize(c["binding"]), "detail": c["recorded"][:60] or "Text", "selected": True} for c in uniq],
             multi=True, step_keys_=[c["step_key"] for c in uniq], recorded={c["binding"]: c["recorded"] for c in uniq},
+        ))
+
+    # 3b ─ a value the person marked "read this" while recording: confirm it is meant to be reported back.
+    #      Advisory (a wrong yes is harmless; a wrong no just removes one read step they can re-record).
+    extract_seen = 0
+    for i, s in enumerate(steps):
+        if _action_name(s) != "extract" or not s.get("value"):
+            continue
+        extract_seen += 1
+        if extract_seen > 2:
+            break
+        label = step_name(s)
+        out.append(_question(
+            "output", f"output:{keys[i]}", f"Report \u201c{s['value']}\u201d back when the workflow finishes?",
+            f"You marked \u201c{label}\u201d while recording. Whoever runs the workflow gets this value in its result.",
+            [
+                {"id": "keep", "label": "Yes, report it", "detail": "It comes back as a named result, and later steps can use it."},
+                {"id": "remove", "label": "No, leave it out", "detail": "Removes the read step."},
+            ],
+            step_keys_=[keys[i]], output_name=str(s["value"]),
         ))
 
     # 1b ─ popups that need a decision (outcome forks): never answered silently.
@@ -274,7 +364,9 @@ def generate_questions(
         ))
 
     out.sort(key=lambda q: _PRIORITY[q["kind"]])
-    return out[:MAX_QUESTIONS]
+    # ``limit=None`` returns everything: the compile flow asks the first MAX_QUESTIONS and keeps the
+    # rest as ``queued`` rather than dropping them (see compile_flow._flow_after_compile).
+    return out if limit is None else out[:limit]
 
 
 # ── answering ───────────────────────────────────────────────────────────────────────────────
@@ -290,6 +382,9 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
     ``{"op": "insert_review", "before_step_key", "prompt", "title"}`` — insert + configure a confirm-only review
     ``{"op": "confirm_optional", "step_key", "keep_as_step"}``
     ``{"op": "drop_inputs", "ids"}``                — remove inputs nothing references any more
+    ``{"op": "delete_step", "step_key"}``           — ``cmd_delete_step`` (an extract the person decided not to report)
+    ``{"op": "parameterize", "literal", "name", "default"}`` — ``cmd_parameterize_literal``: a recorded
+        page address / record identifier becomes a run input
     """
     kind = question["kind"]
     ops: list[dict[str, Any]] = []
@@ -301,6 +396,26 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             ops.append({"op": "drop_inputs", "ids": ["file_path"]})
             return ops, "Always uploads the recorded file"
         return ops, "Asks for the file each run"
+
+    if kind == "coverage":
+        if answer.get("choice") == "incomplete":
+            return ops, "Something is missing — add it in Human Edit before relying on this"
+        return ops, "Covers everything"
+
+    if kind == "chosen_values":
+        selected = set(answer.get("selected") or [])
+        names: list[str] = []
+        for item in question.get("items") or []:
+            if item.get("ref") in selected:
+                ops.append({"op": "parameterize", "literal": item["literal"], "name": item["name"], "default": item["literal"]})
+                names.append(_humanize(item["name"]))
+        return ops, (", ".join(names) if names else "Nothing changes — all kept as recorded")
+
+    if kind == "output":
+        if answer.get("choice") == "remove":
+            ops.append({"op": "delete_step", "step_key": keys[0]})
+            return ops, "Not reported"
+        return ops, f"Reported as \u201c{question.get('output_name') or 'the result'}\u201d"
 
     if kind == "confirm":
         if answer.get("choice") == "yes":
