@@ -443,12 +443,12 @@ def test_finalize_video_file_renames_webm_without_touching_events(tmp_path) -> N
     assert sess.binding_errors == []
 
 
-def test_check_app_session_sync_returns_ready_within_deadline_when_probe_wedges(monkeypatch, tmp_path) -> None:
+def test_check_app_session_sync_returns_unverified_within_deadline_when_probe_wedges(monkeypatch, tmp_path) -> None:
     """Regression guard: a wedged Playwright driver inside the probe body must
     not be able to hang the calling thread forever — see FIX.md. Bound the
     probe with a short deadline and confirm it returns (rather than blocking
-    for the monkeypatched 60s sleep) at "ready", the documented inconclusive-
-    outcome policy."""
+    for the monkeypatched 60s sleep) at "unverified" — an inconclusive probe
+    must never read as signed in."""
     state_path = tmp_path / "state.json"
     state_path.write_text("{}", encoding="utf-8")
     app = GroupApp(id="a", name="App", login_url="https://x.test/login", storage_state_path=str(state_path))
@@ -463,7 +463,7 @@ def test_check_app_session_sync_returns_ready_within_deadline_when_probe_wedges(
     result = check_app_session_sync(app, timeout_s=0.2)
     elapsed = time.monotonic() - started
 
-    assert result == "ready"
+    assert result == "unverified"
     assert elapsed < 5, f"probe should return near the 0.2s deadline, took {elapsed:.2f}s"
 
 
@@ -1128,3 +1128,65 @@ def test_drain_dialog_server_events_records_a_dialog_accept_step() -> None:
         "value": "conxa",
     }
     assert src_page is page
+
+
+def _obs(final_url="https://app.test/home", password_box=False, markers=None):
+    return {"final_url": final_url, "password_box": password_box, "markers": markers or [], "responses": [], "cookie_names": []}
+
+
+def _stub_probe(monkeypatch, observation=None, raises=False):
+    class _Pw:
+        def __enter__(self):
+            if raises:
+                raise RuntimeError("driver died")
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        chromium = type("C", (), {"launch": staticmethod(lambda headless=True: type("B", (), {
+            "new_context": lambda self, storage_state=None: type("X", (), {"new_page": lambda self: None})(),
+            "close": lambda self: None,
+        })())})()
+
+    monkeypatch.setattr(recorder_session, "sync_playwright", lambda: _Pw())
+    monkeypatch.setattr(recorder_session, "_navigate_and_observe_sync", lambda *a, **k: observation)
+
+
+def _probe_app(**kw):
+    return GroupApp(id="a", name="App", login_url="https://accounts.test/", storage_state_path="x.json", **kw)
+
+
+def test_probe_driver_failure_is_unverified_not_ready(monkeypatch) -> None:
+    _stub_probe(monkeypatch, raises=True)
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "unverified"
+
+
+def test_probe_navigation_that_never_completed_is_unverified(monkeypatch) -> None:
+    _stub_probe(monkeypatch, _obs(final_url="about:blank"))
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "unverified"
+
+
+def test_probe_signin_page_on_a_different_path_is_expired(monkeypatch) -> None:
+    """The login URL's prefix didn't match where the bounce landed, which used to read as ready."""
+    _stub_probe(monkeypatch, _obs(final_url="https://accounts.test/v3/signin/identifier"))
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
+
+
+def test_probe_signin_button_or_password_box_is_expired(monkeypatch) -> None:
+    _stub_probe(monkeypatch, _obs(markers=[{"role": "a", "name": "Sign in"}]))
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
+    _stub_probe(monkeypatch, _obs(password_box=True))
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
+
+
+def test_probe_leaving_login_with_no_signin_evidence_is_ready(monkeypatch) -> None:
+    _stub_probe(monkeypatch, _obs(final_url="https://myaccount.test/"))
+    assert recorder_session._probe_app_session_sync(_probe_app()) == "ready"
+
+
+def test_probe_unmatched_page_with_success_url_is_unverified(monkeypatch) -> None:
+    _stub_probe(monkeypatch, _obs(final_url="https://app.test/onboarding"))
+    assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "unverified"
+    _stub_probe(monkeypatch, _obs(final_url="https://app.test/dashboard"))
+    assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "ready"

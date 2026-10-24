@@ -99,6 +99,28 @@ def test_set_group_app_checked_records_verdict(tmp_groups_dir):
     assert ready.apps[0].last_error == ""
 
 
+def test_set_group_app_checked_unverified_is_never_verified(tmp_groups_dir):
+    """An inconclusive probe must not stamp checked_at (that is what reads as verified) and
+    must neither clear nor invent an expired verdict."""
+    group = group_store.create_group("Sales")
+    group = group_store.add_app(group.id, "GitHub", "https://github.com/login", "https://github.com")
+    app_id = group.apps[0].id
+    group_store.set_group_app_auth(group.id, app_id, str(tmp_groups_dir / "state.json"))  # stamps checked_at
+
+    after = group_store.set_group_app_checked(group.id, app_id, "unverified")
+    assert after.apps[0].checked_at is None
+    assert after.apps[0].check_note
+    assert after.apps[0].last_error == ""
+
+    group_store.set_group_app_checked(group.id, app_id, "expired")
+    again = group_store.set_group_app_checked(group.id, app_id, "unverified")
+    assert again.apps[0].last_error  # still expired: an inconclusive read is no evidence of recovery
+
+    ready = group_store.set_group_app_checked(group.id, app_id, "ready")
+    assert ready.apps[0].check_note == ""
+    assert ready.apps[0].checked_at is not None
+
+
 def test_clear_group_app_auth_clears_checked_at(tmp_groups_dir):
     group = group_store.create_group("Sales")
     group = group_store.add_app(group.id, "GitHub", "https://github.com/login", "https://github.com")

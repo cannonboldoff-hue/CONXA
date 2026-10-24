@@ -421,8 +421,10 @@ export function GroupAuthWizard({
                         : 'bg-white/8 text-zinc-500',
                 )}
               >
-                {isReady ? (
+                {isReady && app.verified ? (
                   <Check className="size-3.5" />
+                ) : isUnverified ? (
+                  <ShieldAlert className="size-3.5" />
                 ) : isActive && (appState === 'launching' || appState === 'waiting') ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : isExpired || isFailed || isUnconfirmed ? (
@@ -472,7 +474,7 @@ export function GroupAuthWizard({
                   </Button>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => startMut.mutate(app.id)} disabled={!!activeAppId}>
-                    {isExpired ? 'Sign in again' : 'Sign in'}
+                    {isExpired ? 'Reconnect' : 'Sign in'}
                   </Button>
                 )}
                 {editable && !isActive && (
@@ -490,6 +492,12 @@ export function GroupAuthWizard({
                       {isReady && !isUnverified && (
                         <MenuItem icon={<RotateCw />} disabled={isChecking} onSelect={() => { setMenuAppId(null); checkMut.mutate(app.id) }}>
                           Check sign-in
+                        </MenuItem>
+                      )}
+                      {isReady && (
+                        // A session that can't be confirmed may be dead; sign-in must always be reachable.
+                        <MenuItem icon={<ShieldCheck />} disabled={!!activeAppId} onSelect={() => { setMenuAppId(null); startMut.mutate(app.id) }}>
+                          Reconnect
                         </MenuItem>
                       )}
                       <MenuItem icon={<Pencil />} onSelect={() => { setMenuAppId(null); setEditingAppId(app.id) }}>
@@ -525,10 +533,12 @@ export function GroupAuthWizard({
                 <p className="mt-1.5 text-xs text-red-300">{error || app.last_error || 'Login failed.'}</p>
               )}
               {isExpired && (
-                <p className="mt-1.5 text-xs text-red-300">Session expired — sign in again.</p>
+                <p className="mt-1.5 text-xs text-red-300">Not signed in — the session expired. Reconnect to continue.</p>
               )}
               {isUnverified && (
-                <p className="mt-1.5 text-xs text-amber-300">Not verified recently — may have expired.</p>
+                <p className="mt-1.5 text-xs text-amber-300">
+                  {app.check_note || 'Not verified recently — may have expired.'} Not signed in until confirmed.
+                </p>
               )}
               {/* Amber, not red: the sign-in itself worked and is saved — it is the success URL that is suspect. */}
               {isReady && app.detect_warning && (

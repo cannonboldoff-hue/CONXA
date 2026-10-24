@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from queue import Empty, SimpleQueue
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 if os.environ.get("SKILL_ENVIRONMENT") == "production" or os.environ.get("RENDER"):
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
@@ -192,68 +194,103 @@ def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms:
     return _gather_page_observation_sync(page, context, responses)
 
 
-def _probe_app_session_sync(app: GroupApp) -> Literal["ready", "expired"]:
-    """The actual headless probe body — see check_app_session_sync for the
-    policy this implements. Split out so it can be run on a bounded thread."""
-    definition = app.auth_definition
-    if definition:
-        probe_url = definition.get("probe_url") or app.login_url
-        try:
-            with sync_playwright() as pw:
-                browser = pw.chromium.launch(headless=True)
-                try:
-                    context = browser.new_context(storage_state=app.storage_state_path)
-                    page = context.new_page()
-                    observation = _navigate_and_observe_sync(page, context, probe_url)
-                finally:
-                    browser.close()
-        except Exception:  # noqa: BLE001 — a probe failure is inconclusive, not a verdict
-            return "ready"
-        verdict = auth_learning.evaluate(definition, observation)["verdict"]
-        # "unsure" is genuinely ambiguous, same policy as the legacy path below: never lock a
-        # user out on an inconclusive read. Only a confident "no" (a real veto — see evaluate())
-        # counts as expired.
-        return "expired" if verdict == "no" else "ready"
+SessionProbe = Literal["ready", "expired", "unverified"]
 
-    target = (app.success_url.split("{}", 1)[0] if app.success_url else "") or app.login_url
-    login_base = app.login_url.split("?")[0].split("#")[0]
+# A URL path/host that names a sign-in step. Generic on purpose (no per-app list): any app that
+# bounces an unauthenticated visitor lands on something that says so in its address.
+_LOGIN_URL_RE = re.compile(
+    r"sign[-_ ]?in|log[-_ ]?in|signon|(?<![a-z])sso(?![a-z])|oauth|(?<![a-z])(?:identifier|challenge)(?![a-z])|servicelogin|/auth(?:enticate|orize)?(?:/|$)",
+    re.IGNORECASE,
+)
+# Visible control names that only appear when nobody is signed in.
+_SIGNED_OUT_MARKER_RE = re.compile(
+    r"^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$",
+    re.IGNORECASE,
+)
+
+
+def _looks_signed_out(observation: dict, login_url: str) -> bool:
+    """Positive evidence that the page the probe landed on is a sign-in page: a password box, a
+    sign-in-shaped address, or a Sign in / Log in control. Reads only the auth_learning
+    observation shape (final_url, password_box, markers)."""
+    if observation.get("password_box"):
+        return True
+    final_url = str(observation.get("final_url") or "")
+    login_base = login_url.split("?")[0].split("#")[0].rstrip("/")
+    if login_base and final_url.split("?")[0].split("#")[0].rstrip("/").startswith(login_base):
+        return True
+    try:
+        parts = urlsplit(final_url)
+    except ValueError:
+        return False
+    if _LOGIN_URL_RE.search(f"{parts.netloc}{parts.path}"):
+        return True
+    return any(_SIGNED_OUT_MARKER_RE.match(str(m.get("name") or "").strip()) for m in observation.get("markers") or [])
+
+
+def _probe_app_session_sync(app: GroupApp) -> SessionProbe:
+    """The actual headless probe body — see check_app_session_sync for the
+    policy this implements. Split out so it can be run on a bounded thread.
+
+    Only a positive confirmation returns "ready". Anything that could not be read (navigation
+    failed, the driver errored, the page is neither clearly signed in nor clearly signed out)
+    returns "unverified" — never "ready"."""
+    definition = app.auth_definition
+    probe_url = (definition or {}).get("probe_url") or (
+        (app.success_url.split("{}", 1)[0] if app.success_url else "") or app.login_url
+    )
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             try:
                 context = browser.new_context(storage_state=app.storage_state_path)
                 page = context.new_page()
-                page.goto(target, wait_until="load", timeout=10000)
-                landed = page.url
+                observation = _navigate_and_observe_sync(page, context, probe_url, timeout_ms=10000)
             finally:
                 browser.close()
     except Exception:  # noqa: BLE001 — a probe failure is inconclusive, not a verdict
-        return "ready"
+        return "unverified"
 
-    if url_matches_pattern(landed, app.success_url or app.login_url):
-        return "ready"
-    if landed.startswith(login_base):
+    landed = str(observation.get("final_url") or "")
+    if not landed.startswith(("http://", "https://")):
+        return "unverified"  # navigation never completed (about:blank / error page)
+
+    if definition:
+        verdict = auth_learning.evaluate(definition, observation)["verdict"]
+        if verdict == "yes":
+            return "ready"
+        if verdict == "no" or _looks_signed_out(observation, app.login_url):
+            return "expired"
+        return "unverified"
+
+    if _looks_signed_out(observation, app.login_url):
         return "expired"
-    return "ready"
+    if app.success_url and url_matches_pattern(landed, app.success_url):
+        return "ready"
+    if not app.success_url and landed.split("#")[0] != app.login_url.split("#")[0]:
+        # No success page to match against: the best available evidence is that the login URL
+        # let us through to a different page that shows no sign-in form or control.
+        return "ready"
+    return "unverified"
 
 
-def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> Literal["ready", "expired"]:
+def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> SessionProbe:
     """Headless probe: is `app`'s saved session still authenticated?
 
-    Loads the app's saved storage state into a throwaway headless browser,
-    navigates to its success page (or login page if no success_url is set),
-    and checks whether the browser lands on the success pattern or bounces
-    back to the login page. Ambiguous outcomes (timeout, network error) are
-    treated as still-valid rather than flagged expired, so a flaky probe
-    never wrongly locks a user out — only a missing/corrupt saved session or
-    a confident bounce back to the login page counts as expired.
+    Loads the app's saved storage state into a throwaway headless browser, navigates to its
+    success page (or login page if no success_url is set), and reads what it lands on.
 
-    The probe body's only internal timeout covers page.goto(); launching the
-    driver, opening a context, and closing the browser are all unbounded, so
-    a wedged Playwright driver can hang forever and take its caller down with
-    it (this happened — see FIX.md). Run the whole probe on a daemon thread
-    with a hard deadline instead: on timeout, treat it the same as any other
-    inconclusive probe outcome and report "ready".
+    Three outcomes, and the middle one is the point:
+      "ready"      — positively confirmed signed in.
+      "expired"    — a missing/corrupt saved session, or the app showed a sign-in page.
+      "unverified" — could not tell (timeout, network error, a wedged driver, an unrecognised
+                     page). Callers must NOT show this as signed in; they also must not lock the
+                     user out on it, so the recording gate treats it as "not known to be bad".
+
+    The probe body's only internal timeout covers page.goto(); launching the driver, opening a
+    context, and closing the browser are all unbounded, so a wedged Playwright driver can hang
+    forever and take its caller down with it (this happened — see FIX.md). Run the whole probe on
+    a daemon thread with a hard deadline instead: on timeout report "unverified".
     """
     if not app.storage_state_path or not Path(app.storage_state_path).is_file():
         return "expired"
@@ -263,7 +300,7 @@ def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> Literal
     except (OSError, ValueError):
         return "expired"
 
-    result: list[Literal["ready", "expired"]] = []
+    result: list[SessionProbe] = []
     # ponytail: a timed-out probe thread (and its Playwright driver/browser)
     # keeps running in the background until it finishes or the backend exits
     # — daemon=True only stops it from blocking process shutdown. Kill-able
@@ -272,7 +309,7 @@ def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> Literal
     thread = threading.Thread(target=lambda: result.append(_probe_app_session_sync(app)), daemon=True)
     thread.start()
     thread.join(timeout_s)
-    return result[0] if result else "ready"
+    return result[0] if result else "unverified"
 
 
 @dataclass

@@ -55,6 +55,9 @@ export type GroupAppStatus = {
    * session, not just "a session file exists". A `ready` app can still be unverified. */
   verified: boolean
   last_error: string
+  /** Why the last probe couldn't confirm this session either way (timeout, unrecognised page).
+   * "" when the last probe reached a verdict. Never means "expired" — see last_error. */
+  check_note: string
   /** "" when has_auth_definition is true — a learned definition detects sign-in on its own.
    * Otherwise set when the sign-in was saved without ever reaching success_url (closed by
    * hand, or none set): the runtime's generic detection ladder then has less to go on. */
@@ -69,6 +72,8 @@ export type GroupAuthStatus = {
   apps: GroupAppStatus[]
   apps_total: number
   apps_authenticated: number
+  /** Ready AND recently confirmed by a live probe — the only count that may read as "signed in". */
+  apps_verified: number
   ready: boolean
   first_missing_app_id: string | null
 }

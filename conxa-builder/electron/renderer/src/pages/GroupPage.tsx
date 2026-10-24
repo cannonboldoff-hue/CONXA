@@ -474,6 +474,8 @@ export function GroupPage() {
   }
 
   const { group, auth, workflows } = q.data
+  // Green only when every app has been confirmed by a live probe, not merely has a saved session.
+  const allVerified = auth.ready && auth.apps_verified === auth.apps_total
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['group', groupId] })
     qc.invalidateQueries({ queryKey: ['groups'] })
@@ -484,7 +486,7 @@ export function GroupPage() {
       <PageHeader
         title={group.name}
         description={[
-          `${auth.apps_authenticated} of ${auth.apps_total} app${auth.apps_total === 1 ? '' : 's'} connected`,
+          `${auth.apps_verified} of ${auth.apps_total} app${auth.apps_total === 1 ? '' : 's'} signed in`,
           `${workflows.length} workflow${workflows.length === 1 ? '' : 's'}`,
           auth.ready ? null : 'sign in to start recording',
         ]
@@ -506,13 +508,17 @@ export function GroupPage() {
             {group.apps.length > 0 ? (
               // Answers "is this group blocked?" without counting rows.
               <div className="flex min-w-0 items-center gap-1.5 text-xs">
-                <span aria-hidden className={cn('shrink-0 text-[11px] leading-none', auth.ready ? 'text-status-ok' : 'text-status-warn')}>
-                  {auth.ready ? '●' : '▲'}
+                <span aria-hidden className={cn('shrink-0 text-[11px] leading-none', allVerified ? 'text-status-ok' : 'text-status-warn')}>
+                  {allVerified ? '●' : '▲'}
                 </span>
                 <span className="truncate text-[#a3a3a3]">
-                  {auth.ready
-                    ? 'All apps signed in'
-                    : `${auth.apps_total - auth.apps_authenticated} of ${auth.apps_total} still need signing in`}
+                  {checkAllMut.isError
+                    ? "Couldn't check sign-ins — try again"
+                    : allVerified
+                      ? 'All apps signed in'
+                      : auth.ready
+                        ? `${auth.apps_total - auth.apps_verified} of ${auth.apps_total} not verified — Check all`
+                        : `${auth.apps_total - auth.apps_authenticated} of ${auth.apps_total} still need signing in`}
                 </span>
               </div>
             ) : (

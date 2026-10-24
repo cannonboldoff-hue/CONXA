@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { NewGroupDialog } from '@/components/NewGroupDialog'
 import { GroupMenu } from '@/components/GroupMenu'
+import { WorkflowMenu } from '@/components/WorkflowMenu'
 import { chatList } from '@/api/conversationApi'
 import { useAuth } from '@/contexts/AuthContext'
 import { useShellData, type ShellGroup } from '@/hooks/useShellData'
@@ -108,10 +109,10 @@ function GroupBlock({ g, rail }: { g: ShellGroup; rail: boolean }) {
           {g.workflows.map(({ workflow, kind, note }) => {
             const active = pathname === `/w/${workflow.id}`
             return (
-              <li key={workflow.id}>
+              <li key={workflow.id} className="group/wf relative">
                 <NavLink
                   to={`/w/${workflow.id}`}
-                  className={cn(ROW, FOCUS, 'items-start py-1.5', active ? SELECTED : REST)}
+                  className={cn(ROW, FOCUS, 'items-start py-1.5 pr-8', active ? SELECTED : REST)}
                 >
                   <span className="mt-[3px]"><StatusGlyph kind={kind} /></span>
                   <span className="min-w-0">
@@ -119,6 +120,11 @@ function GroupBlock({ g, rail }: { g: ShellGroup; rail: boolean }) {
                     {note && <span className="block truncate text-xs text-[#8e8e8e]">{note}</span>}
                   </span>
                 </NavLink>
+                <WorkflowMenu
+                  workflowId={workflow.id}
+                  workflowName={workflow.name}
+                  className="absolute right-1 top-1.5 opacity-0 focus-visible:opacity-100 group-hover/wf:opacity-100"
+                />
               </li>
             )
           })}

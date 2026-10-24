@@ -2,6 +2,18 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Removed the extra "Human Edit" strip from the top of a workflow — 2026-10-24**
+A workflow's page had a thin bar under its title with a lone "Human Edit" link that looked out of place. It is gone, so the page starts straight with the conversation. Human Edit is still one click away from the side panel.
+— 2026-10-24
+
+**Fixed "Check all" showing apps as signed in when they weren't — 2026-10-24**
+The sign-in check used to count "couldn't tell" as "all good", like a smoke alarm that stays green when its battery is dead. Now an app is shown as signed in only when the check really sees it signed in. If the check can't tell, the app shows an amber warning, and if the app is signed out it shows red with a Reconnect button.
+— 2026-10-24
+
+**Added a three-dots menu to every workflow in the left sidebar — 2026-10-24**
+Workflows in the sidebar had no way to be renamed or removed unless you opened their group page first. Now a small three-dots button appears when you hover over a workflow, with "Rename" and "Delete" right there. Delete asks you to confirm first, like a "are you sure?" prompt on a shredder.
+— 2026-10-24
+
 **Fixed compiling any recording where you scrolled the page — 2026-10-23**
 Compiling a recording stopped with a confusing "Compile didn't finish" message whenever you had scrolled the page while recording. One of the clean-up checks didn't know how to look at a scroll, like a sorting machine jamming on an odd-shaped parcel. It now lets scrolls pass straight through, so those recordings compile normally.
 — 2026-10-23
@@ -255,3 +267,10 @@ When a workflow on a customer's computer hits a "choose one" pop-up it was never
 **AI assistants can now tell which website each workflow is for — 2026-10-24**
 When an AI assistant looks at the workflows installed on a computer, each one now says which website it works in, for example "works in drive.example.com". That helps the assistant pick the right workflow without guessing from its name. Nothing about the website's pages or your data is shared to make this work.
 — 2026-10-24
+
+**Wrote a review of what's still missing for a fully chat-driven Studio — 2026-10-24**
+We checked how close Studio is to letting someone build a workflow purely by chatting: describe it, record it, answer questions, test it. Most of the pieces are already built. The main gaps are that typed requests like "test it again" don't trigger anything yet, the task the person described is never checked against what they recorded, and workflows can't hand information back to whoever ran them. No product behavior changed; this is a written plan, ranked by importance.
+— 2026-10-24
+
+**Found why the assistant starts testing before it understands the task — 2026-10-24**
+When someone describes a task and records it, the assistant only asks questions about text they typed while recording. It never compares the recording with what they said they wanted, and it can't turn a chosen page or a clicked item into something to ask about. So a workflow like "copy a file from one site to another" is compiled with the exact page and file baked in, and the assistant says it has nothing to ask. This was a read-only investigation; nothing was changed yet.

@@ -138,6 +138,7 @@ def group_auth_status(group) -> dict[str, Any]:
             "checked_at": app.checked_at,
             "verified": verified,
             "last_error": app.last_error,
+            "check_note": app.check_note,
             "detect_warning": app.detect_warning,
             # Boolean only — never the definition itself (which is diagnostics-adjacent, not a
             # secret, but has no reason to round-trip through the group-status polling response).
@@ -150,6 +151,9 @@ def group_auth_status(group) -> dict[str, Any]:
         "apps": apps,
         "apps_total": len(group.apps),
         "apps_authenticated": sum(1 for a in apps if a["state"] == "ready"),
+        # Stricter than apps_authenticated: ready AND recently confirmed by a live probe. Only this
+        # may be shown as "signed in" — a session file on disk is not evidence of a session.
+        "apps_verified": sum(1 for a in apps if a["state"] == "ready" and a["verified"]),
         "ready": first_missing is None,
         "first_missing_app_id": first_missing,
     }
@@ -469,6 +473,7 @@ class GroupsMixin:
         from conxa_core.storage.group_store import (
             get_group,
             group_auth_dir,
+            mark_group_app_unverified,
             set_group_app_auth,
             set_group_app_auth_definition,
             set_group_app_error,
@@ -526,6 +531,11 @@ class GroupsMixin:
         group = set_group_app_auth(group_id, app_id, str(auth_path))
         if group is None:
             raise _CommandError("group_or_app_not_found", "No such group or app")
+        if definition is None:
+            # Saved without the self-test proving it (Save anyway, or the window closed by hand):
+            # the session is on disk but nothing has confirmed it works, so it must not read as
+            # verified. The next probe (Check all / the recording gate) decides.
+            group = mark_group_app_unverified(group_id, app_id) or group
 
         app = next((a for a in group.apps if a.id == app_id), None)
         has_definition = definition is not None if decided else app_before is not None and app_before.auth_definition is not None

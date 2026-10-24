@@ -188,6 +188,7 @@ class GroupApp(BaseModel):
     captured_at: float | None  # Unix timestamp, None until authenticated
     storage_state_path: str    # Absolute path to this app's captured session (local only)
     last_error: str            # Most recent capture failure, if any
+    check_note: str            # why the last probe was inconclusive ("" if it reached a verdict); never blocks recording
     checked_at: float | None   # Unix timestamp of the last actual probe verdict (any
                                 # check_app_session_sync call), None if never probed since
                                 # capture. Distinct from captured_at ("a session file

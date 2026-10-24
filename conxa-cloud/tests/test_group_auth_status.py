@@ -137,3 +137,20 @@ def test_detect_warning_is_surfaced_but_never_changes_state() -> None:
 
     assert app["detect_warning"] == "heads up"
     assert app["state"] == "ready"  # advisory only: the saved session is still valid
+
+
+def test_ready_app_without_a_recent_probe_is_not_counted_verified() -> None:
+    """A saved session file is "ready" but only a live probe makes it "verified" — the count the
+    UI uses to decide whether anything may show green."""
+    import time
+
+    from conxa_core.models.workflow import GroupApp, WorkflowGroup
+
+    now = time.time()
+    def _app(i, checked_at):
+        return GroupApp(id=i, name=i, login_url="https://x.test/login", captured_at=now, storage_state_path="s.json", checked_at=checked_at)
+
+    group = WorkflowGroup(id="g", slug="g", name="G", apps=[_app("a", now), _app("b", None)])
+    status = group_auth_status(group)
+    assert status["apps_authenticated"] == 2
+    assert status["apps_verified"] == 1

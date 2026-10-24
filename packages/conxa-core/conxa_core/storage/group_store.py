@@ -295,6 +295,7 @@ def set_group_app_auth(group_id: str, app_id: str, storage_state_path: str) -> W
     app.storage_state_path = storage_state_path
     app.captured_at = time.time()
     app.checked_at = app.captured_at  # a just-completed login is inherently verified
+    app.check_note = ""
     app.last_error = ""
     return save_group(group)
 
@@ -310,6 +311,7 @@ def mark_group_app_unverified(group_id: str, app_id: str) -> WorkflowGroup | Non
     if app is None:
         return None
     app.checked_at = None
+    app.check_note = ""
     return save_group(group)
 
 
@@ -341,17 +343,20 @@ def set_group_app_error(group_id: str, app_id: str, error: str) -> WorkflowGroup
 
 
 def set_group_app_checked(group_id: str, app_id: str, state: str) -> WorkflowGroup | None:
-    """Record that app_id's session was just probed (check_app_session_sync),
-    stamping checked_at regardless of verdict. "expired" also sets last_error
-    so the badge and the recording gate agree; "ready" clears a stale error
-    from a previous failed probe.
+    """Record the outcome of a probe (check_app_session_sync).
 
-    Always overwrites last_error rather than preserving an existing one — this field is
-    also written by set_group_app_error (an unrelated auth-capture failure, e.g. "the
-    login window was closed before it could be saved"). A fresh probe verdict is the most
-    current, most relevant signal about this app's session; deferring to whatever error
-    happened to be sitting there before would let a stale, differently-sourced message
-    survive display as if it explained the CURRENT expiry.
+    "ready"      — confirmed signed in: stamps checked_at (the only thing that makes an app read
+                   as verified) and clears last_error / check_note.
+    "expired"    — confirmed signed out: stamps checked_at and sets last_error so the badge and
+                   the recording gate agree.
+    "unverified" — the probe could not tell. Clears checked_at so the app can never read as
+                   verified off a probe that proved nothing, and leaves last_error alone: an
+                   inconclusive read is not evidence the session recovered, nor that it died.
+
+    "ready"/"expired" always overwrite last_error rather than preserving an existing one — this
+    field is also written by set_group_app_error (an unrelated auth-capture failure). A fresh
+    verdict is the most current signal about the session; deferring to a stale,
+    differently-sourced message would let it survive display as if it explained the CURRENT state.
     """
     group = get_group(group_id)
     if group is None:
@@ -359,7 +364,12 @@ def set_group_app_checked(group_id: str, app_id: str, state: str) -> WorkflowGro
     app = _find_app(group, app_id)
     if app is None:
         return None
+    if state == "unverified":
+        app.checked_at = None
+        app.check_note = "Couldn't confirm this session — the app didn't give a clear answer."
+        return save_group(group)
     app.checked_at = time.time()
+    app.check_note = ""
     app.last_error = "Session expired — sign in again." if state == "expired" else ""
     return save_group(group)
 
@@ -373,6 +383,7 @@ def clear_group_app_auth(group_id: str, app_id: str) -> WorkflowGroup | None:
         return None
     app.captured_at = None
     app.checked_at = None
+    app.check_note = ""
     app.storage_state_path = ""
     app.last_error = ""
     auth_file = group_auth_dir(group_id) / f"{app_id}.json"
