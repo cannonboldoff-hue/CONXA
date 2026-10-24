@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "type": "stdio",
+      "command": "C:\\Users\\kiran\\AppData\\Local\\codebase-memory-mcp\\codebase-memory-mcp.exe",
+      "args": [],
+      "env": {}
+    }
+  }
+}

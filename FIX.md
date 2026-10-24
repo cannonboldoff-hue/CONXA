@@ -2,6 +2,14 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Fixed compiling any recording where you scrolled the page — 2026-10-23**
+Compiling a recording stopped with a confusing "Compile didn't finish" message whenever you had scrolled the page while recording. One of the clean-up checks didn't know how to look at a scroll, like a sorting machine jamming on an odd-shaped parcel. It now lets scrolls pass straight through, so those recordings compile normally.
+— 2026-10-23
+
+**The recording browser now closes the moment you finish — 2026-10-23**
+After you clicked "Finish and save", the browser on the right stayed open for several seconds while the recording was being wrapped up and the next step began. Now it disappears the instant you click, and the behind-the-scenes tidying carries on out of sight. It is like switching off the stage lights as soon as the show ends, instead of after the crew has finished packing up.
+— 2026-10-23
+
 **Removed the "record, compile and test on the group page" pointers — 2026-10-20**
 A workflow's own page used to show a note at the top, and another in the side panel, sending people back to the group page to record, compile and test. Recording already starts right inside the workflow's conversation, so those notes were outdated and confusing. Both are gone; the Human Edit link stays once a workflow has been compiled.
 — 2026-10-20

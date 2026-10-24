@@ -124,3 +124,15 @@ def test_grid_only_no_machine_attr_ships_no_assertion_rather_than_a_frozen_one()
     day_step = _step("click", "day")
     out = collapse_date_picker_runs([day_step], [_day_event(field="", cell_attr="")], {})
     assert out[0].validation.assertions == []
+
+
+def test_typed_date_pass_skips_scroll_steps_with_dict_actions():
+    """Regression: a scroll step's action is a dict payload, and `step.action in frozenset(...)`
+    raised "unhashable type: 'dict'", failing every compile of a recording that scrolled."""
+    from conxa_compile.compiler.date_picker import convert_typed_date_steps
+
+    scroll = _step("click", "scroll")
+    scroll.action = {"action": "scroll", "delta": 651}
+    scroll_event = {"action": {"action": "scroll"}, "target": {}}
+    convert_typed_date_steps([scroll], [scroll_event], {})
+    assert scroll.action == {"action": "scroll", "delta": 651}

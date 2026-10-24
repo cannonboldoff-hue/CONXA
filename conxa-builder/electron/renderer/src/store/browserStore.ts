@@ -50,6 +50,10 @@ type Store = {
    *  rail) for this run. Never touches their own navigation setting, so it returns when the browser goes. */
   navShown: boolean
   flow: FlowControls | null
+  /** Runs the person finished (Finish and save, Discard). The recorder keeps their views alive a few
+   *  seconds to flush the last events, but the pane is gone at once; late updates for them are
+   *  ignored until the panel reports the run closed. */
+  released: string[]
   setAvailable: (a: boolean) => void
   onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind }) => void
   setFolded: (f: boolean) => void
@@ -59,6 +63,8 @@ type Store = {
   setFlow: (f: FlowControls) => void
   /** Drops the card's controls, unless another card has published since. */
   clearFlow: (cardId: string) => void
+  /** Takes a finished recording's browser off screen now; the backend closes the run when it has flushed. */
+  releaseRun: (runId: string) => void
 }
 
 export const useBrowserStore = create<Store>((set) => ({
@@ -69,10 +75,15 @@ export const useBrowserStore = create<Store>((set) => ({
   wide: false,
   navShown: false,
   flow: null,
+  released: [],
   setAvailable: (available) => set({ available }),
   onTabs: ({ runId, tabs, finished, closed, kind }) =>
     set((s) => {
-      if (closed || tabs.length === 0) return s.run?.runId === runId ? { run: null, folded: false, wide: false, navShown: false } : s
+      if (closed || tabs.length === 0) {
+        const released = closed ? s.released.filter((id) => id !== runId) : s.released
+        return s.run?.runId === runId ? { run: null, released, folded: false, wide: false, navShown: false } : { released }
+      }
+      if (s.released.includes(runId)) return s
       // A new run replaces a finished one, and shows itself even if the last one was folded.
       const isNewRun = s.run?.runId !== runId
       return { run: { runId, tabs, finished: Boolean(finished), kind: kind ?? 'test' }, folded: isNewRun ? false : s.folded, wide: isNewRun ? false : s.wide, navShown: isNewRun ? false : s.navShown }
@@ -83,6 +94,11 @@ export const useBrowserStore = create<Store>((set) => ({
   setNavShown: (navShown) => set({ navShown }),
   setFlow: (flow) => set({ flow }),
   clearFlow: (cardId) => set((s) => (s.flow?.cardId === cardId ? { flow: null } : s)),
+  releaseRun: (runId) =>
+    set((s) => ({
+      released: s.released.includes(runId) ? s.released : [...s.released, runId],
+      ...(s.run?.runId === runId ? { run: null, folded: false, wide: false, navShown: false } : {}),
+    })),
 }))
 
 export const activeTab = (run: PanelRun | null): PanelTab | null => run?.tabs.find((t) => t.active) ?? run?.tabs[0] ?? null

@@ -326,7 +326,8 @@ def convert_typed_date_steps(
     if len(steps) != len(events):
         raise ValueError("convert_typed_date_steps: steps and events must be the same length")
     for step, ev in zip(steps, events):
-        if step.action not in _TYPED_ACTIONS:
+        # A scroll step's action is a dict payload ({"action": "scroll", "delta": ...}), not a str.
+        if not isinstance(step.action, str) or step.action not in _TYPED_ACTIONS:
             continue
         target = ev.get("target") or {}
         if str((ev.get("semantic") or {}).get("input_type") or "").lower() in _NATIVE_DATE_INPUT_TYPES:

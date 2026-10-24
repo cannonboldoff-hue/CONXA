@@ -132,6 +132,13 @@ export function RecordingCard({ threadId, item }: CardProps) {
   const glyph: StatusKind = state === 'saved' ? 'ok' : live ? 'run' : state === 'browser_closed' ? 'warn' : 'none'
   const warnings = Array.isArray(item.warnings) ? (item.warnings as string[]) : []
   const inPanel = refs?.embedded === true
+  const releaseRun = useBrowserStore((s) => s.releaseRun)
+  // The person is done with the browser the moment they finish or discard; the recorder needs a few
+  // more seconds to flush the last events, but none of that should be on screen.
+  const finishing = state === 'saving' || state === 'saved' || state === 'discarded'
+  useEffect(() => {
+    if (finishing && inPanel && sessionId) releaseRun(sessionId)
+  }, [finishing, inPanel, sessionId, releaseRun])
   usePanelControls(
     live && inPanel && sessionId
       ? { runId: sessionId, workflowId: wf, cardId, kind: 'record', state, startedAt: typeof item.started_at === 'number' ? item.started_at : undefined, count, last: last?.text }
