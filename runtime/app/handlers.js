@@ -30,6 +30,7 @@ const {
   machineCellSelector,
   dayNumberSelector,
   monthLabel,
+  dateFromOffset,
   MAX_NAV_CLICKS,
 } = require("./date_picker");
 const { matchOption, matchOptions, optionsSummary } = require("./choice");
@@ -572,8 +573,12 @@ const HANDLERS = {
   },
 
   date_pick: async (page, step, inputs) => {
-    const value = interpolate(step.value || "", inputs);
     const hints = asObject(asObject(step.handler_hints).date_picker);
+    // A relative date ("always today", "a week from today"): the author said the recorded date was
+    // only ever an offset from the day it was recorded, so the date is worked out now, not replayed.
+    const value = Number.isInteger(hints.date_offset_days)
+      ? dateFromOffset(hints.date_offset_days)
+      : interpolate(step.value || "", inputs);
     const parsed = parseDateInput(value, hints.display_format);
     const isCustomPicker = asObject(step.handler_hints).control_kind === "date_picker";
     // A plain text field the user typed a date into during recording (compiler/date_picker.py::
@@ -869,10 +874,20 @@ HANDLERS["download_observed"] = async (_page, _step, inputs, ctx) => {
     pending,
     new Promise(resolve => setTimeout(resolve, DOWNLOAD_WAIT_TIMEOUT_MS)),
   ]);
-  // entry is null when server.js's save itself failed, or undefined when the race above timed
-  // out before `pending` resolved either way — both mean no real file exists to bind.
+  // entry is {error} when server.js's save itself failed (cancelled, interrupted, empty file...),
+  // or undefined when the race above timed out before `pending` resolved — either way no real file
+  // exists to bind, and the reason is worth telling the person rather than a generic timeout.
+  if (entry && entry.error) {
+    const kind = /^(cancelled|interrupted|empty|timeout)\b/.exec(entry.error);
+    noDownload(
+      kind && kind[1] === "cancelled" ? "the download was cancelled"
+        : kind && kind[1] === "interrupted" ? "the download was interrupted before it finished"
+          : kind && kind[1] === "empty" ? "the downloaded file was empty or incomplete"
+            : `the download failed (${entry.error})`,
+    );
+  }
   if (!entry || !entry.path) {
-    noDownload("it did not finish saving in time");
+    noDownload(`it did not finish downloading within ${DOWNLOAD_WAIT_TIMEOUT_MS}ms`);
   }
   // Bind the saved path into `inputs` so a later `upload` step in this same run can reference
   // it — `downloaded_file` always holds the latest download, `downloaded_file_N` (1-indexed,

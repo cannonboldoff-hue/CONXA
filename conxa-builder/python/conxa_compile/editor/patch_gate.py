@@ -408,10 +408,10 @@ def validate_editor_patch(
         _validate_run_if(patch.get("run_if"))
 
     if "on_missing" in patch:
-        if patch.get("on_missing") not in (None, "", "fail", "skip"):
+        if patch.get("on_missing") not in (None, "", "fail", "skip", "ask"):
             raise ValueError("on_missing_invalid")
         bound = (_merge_step_shell(step, patch).get("entity_binding") or {})
-        if patch.get("on_missing") == "skip" and not (isinstance(bound, dict) and bound.get("container_selector")):
+        if patch.get("on_missing") in ("skip", "ask") and not (isinstance(bound, dict) and bound.get("container_selector")):
             raise ValueError("on_missing_needs_a_bound_record")
 
     merged = _merge_step_shell(step, patch)

@@ -269,7 +269,7 @@ async function resolveStep(page, step, inputs, scrollState) {
       );
     }
   }
-  const fp = bundleFingerprint(bundle);
+  const fp = bundleFingerprint(bundle, interpolate, inputs);
   let map = await gatherCandidates(roots, signals, interpolate, inputs);
   let result = resolveSignals(signals, fp, { queryAll: sel => map[sel] || [] }, {});
   if (!(result && result.node && result.node._loc) && !(result && result.ambiguous)) {
@@ -385,7 +385,7 @@ async function validateOverrideSelector(page, step, inputs) {
   if (!descriptors.length) return { valid: false, reason: "no-match", candidates: [] };
   if (descriptors.length === 1) return { valid: true, loc: descriptors[0]._loc };
 
-  const fp = bundleFingerprint(asObject(step.identity_bundle));
+  const fp = bundleFingerprint(asObject(step.identity_bundle), interpolate, inputs);
   const scored = descriptors
     .map(d => ({ d, s: scoreCandidate(d, fp) }))
     .sort((a, b) => b.s - a.s);

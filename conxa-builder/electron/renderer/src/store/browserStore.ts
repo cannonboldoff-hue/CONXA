@@ -15,7 +15,17 @@ export type PanelTab = {
 }
 /** test = the runtime's test run; record / signin = the recorder's (fixed 1280x720 page for record). */
 export type PanelRunKind = 'test' | 'record' | 'signin'
-export type PanelRun = { runId: string; tabs: PanelTab[]; finished: boolean; kind: PanelRunKind }
+/** One row of the browser's Downloads list. */
+export type PanelDownload = {
+  id: string
+  filename: string
+  host: string
+  state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'
+  receivedBytes: number
+  /** 0 when the server did not say. */
+  totalBytes: number
+}
+export type PanelRun = { runId: string; tabs: PanelTab[]; finished: boolean; kind: PanelRunKind; downloads: PanelDownload[] }
 
 /** The conversation's live sign-in or recording card, mirrored so the browser pane can carry its
  *  controls. Published by the card while it is live; `runId` is the recorder session the panel
@@ -55,7 +65,7 @@ type Store = {
    *  ignored until the panel reports the run closed. */
   released: string[]
   setAvailable: (a: boolean) => void
-  onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind }) => void
+  onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind; downloads?: PanelDownload[] }) => void
   setFolded: (f: boolean) => void
   setWidth: (w: number | null) => void
   setWide: (w: boolean) => void
@@ -77,7 +87,7 @@ export const useBrowserStore = create<Store>((set) => ({
   flow: null,
   released: [],
   setAvailable: (available) => set({ available }),
-  onTabs: ({ runId, tabs, finished, closed, kind }) =>
+  onTabs: ({ runId, tabs, finished, closed, kind, downloads }) =>
     set((s) => {
       if (closed || tabs.length === 0) {
         const released = closed ? s.released.filter((id) => id !== runId) : s.released
@@ -86,7 +96,7 @@ export const useBrowserStore = create<Store>((set) => ({
       if (s.released.includes(runId)) return s
       // A new run replaces a finished one, and shows itself even if the last one was folded.
       const isNewRun = s.run?.runId !== runId
-      return { run: { runId, tabs, finished: Boolean(finished), kind: kind ?? 'test' }, folded: isNewRun ? false : s.folded, wide: isNewRun ? false : s.wide, navShown: isNewRun ? false : s.navShown }
+      return { run: { runId, tabs, finished: Boolean(finished), kind: kind ?? 'test', downloads: downloads ?? [] }, folded: isNewRun ? false : s.folded, wide: isNewRun ? false : s.wide, navShown: isNewRun ? false : s.navShown }
     }),
   setFolded: (folded) => set(folded ? { folded, wide: false, navShown: false } : { folded }),
   setWidth: (width) => set({ width }),

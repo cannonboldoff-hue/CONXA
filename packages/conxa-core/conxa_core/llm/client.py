@@ -177,8 +177,8 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "A person recorded a task in a browser and described what it is for. You get that "
         "description (task), the compiled steps in order (steps), what the run ends with "
         "(ends_with_checks), the inputs it already has (existing_inputs) and candidates: values "
-        "taken from the recording that are not typed text (a page address, a record identifier, "
-        "a clicked item's label). Decide for each candidate whether it is specific to this "
+        "taken from the recording (a page address, a record identifier, a clicked item's label, "
+        "or text the person typed into a field: kind \"typed\"). Decide for each candidate whether it is specific to this "
         "recording. \"varies\": the task describes a kind of thing, or does not name this one — "
         "which repository, which file, which customer — so a future run would use a different "
         "one. \"fixed\": the task names this exact thing, or it is simply the same page every "
@@ -191,6 +191,15 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "\"name\": \"short_snake_case_input_name (varies/unsure only)\", \"literal\": \"for url "
         "candidates only: the exact part of the recorded address that changes\"}]}. Never "
         "invent a ref, never write a selector, and never claim a gap you cannot see in the steps."
+    ),
+    # JSON: before recording, a short checklist of what the person will need to do, from their own description.
+    "record_plan": (
+        "A person is about to record a task in a browser and described what it is for (task), "
+        "with the address they start from (start_url). Write the short checklist of actions they "
+        "will most likely need to perform, in order, in plain words a non-technical person "
+        "understands. 3 to 8 items, each under 12 words, each starting with a verb. Only what the "
+        "description says or clearly implies: never invent a button name, field name or value. "
+        "Return ONLY a JSON object: {\"steps\": [\"...\"]}."
     ),
     # JSON: is the person's message a command for one of the actions available right now?
     "chat_route_intent": (
@@ -933,7 +942,7 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         body["max_tokens"] = 16384
     if task in ("chat_map_answer", "studio_chat_actions", "chat_route_intent"):
         body["max_tokens"] = 1024
-    if task == "workflow_understanding":
+    if task in ("workflow_understanding", "record_plan"):
         body["max_tokens"] = 2048
     if task == "thread_summarize":
         body["max_tokens"] = 2048

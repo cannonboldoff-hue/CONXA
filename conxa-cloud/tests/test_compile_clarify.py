@@ -295,3 +295,118 @@ def test_every_question_is_kept_and_only_the_cap_is_asked_first():
     everything = generate_questions(doc, limit=None)
     assert len(capped) == MAX_QUESTIONS and len(everything) == 8
     assert [q["id"] for q in everything[:MAX_QUESTIONS]] == [q["id"] for q in capped]
+
+
+# ── test failure -> Clarify ─────────────────────────────────────────────────────────────────
+
+
+def _typed_doc():
+    return {"inputs": [{"id": "company", "default": "Acme Ltd"}],
+            "skills": [{"steps": [{"action": "type", "input_binding": "company", "value": "{{company}}", "intent": "Type company"}]}]}
+
+
+def test_a_failed_test_with_a_different_value_asks_whether_it_varies_and_pins_it_on_no():
+    from conxa_compile.conversation.clarify import plan_answer, test_followup_question
+
+    doc = _typed_doc()
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    q = test_followup_question(doc, key, {"company": "Globex"})
+    assert q and q["kind"] == "test_followup" and "Globex" in q["body"] and "Acme Ltd" in q["body"]
+    ops, receipt = plan_answer(q, {"choice": "fixed"}, doc)
+    assert ops == [{"op": "patch", "step_key": key, "patch": {"value": "Acme Ltd"}}, {"op": "drop_inputs", "ids": ["company"]}]
+    assert plan_answer(q, {"choice": "varies"}, doc)[0] == []
+
+
+def test_no_followup_when_the_test_used_the_recorded_value_or_the_step_is_not_a_typed_input():
+    from conxa_compile.conversation.clarify import test_followup_question
+
+    doc = _typed_doc()
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    assert test_followup_question(doc, key, {"company": "Acme Ltd"}) is None
+    assert test_followup_question(doc, key, {}) is None
+    assert test_followup_question(doc, "nope", {"company": "Globex"}) is None
+
+
+def test_record_plan_keeps_a_short_readable_checklist_and_never_raises():
+    from conxa_compile.conversation import record_plan
+
+    assert record_plan.generate("") == []
+    good = {"steps": ["Open the invoices page", " Open the  invoices page ", "Click New invoice", "x" * 300]}
+    steps = record_plan.generate("Create an invoice", call=lambda *_: good)
+    assert steps[:2] == ["Open the invoices page", "Click New invoice"] and len(steps[2]) == 100
+    assert record_plan.generate("t", call=lambda *_: {"steps": ["only one"]}) == []     # too thin to be a plan
+    assert record_plan.generate("t", call=lambda *_: None) == []
+
+    def boom(*_):
+        raise RuntimeError("no providers")
+
+    assert record_plan.generate("t", call=boom) == []
+
+
+def test_clarify_offers_skip_when_empty_and_missing_item_and_each_answer_is_one_gated_patch():
+    from conxa_compile.conversation.clarify import plan_answer
+
+    doc = {"inputs": [{"id": "note", "default": "", "optional": True}],
+           "skills": [{"steps": [
+               {"action": "type", "input_binding": "note", "value": "{{note}}", "intent": "Type note"},
+               {"action": "click", "intent": "Delete row", "entity_binding": {"container_selector": "tr", "identifier": "{{row}}"}},
+           ]}]}
+    qs = {q["kind"]: q for q in generate_questions(doc, limit=None)}
+    keys = step_keys(doc["skills"][0]["steps"])
+    ops, _ = plan_answer(qs["skip_when_empty"], {"choice": "skip"}, doc)
+    assert ops == [{"op": "patch", "step_key": keys[0], "patch": {"run_if": {"input": "note", "op": "not_empty"}}}]
+    ops, _ = plan_answer(qs["missing_item"], {"choice": "skip"}, doc)
+    assert ops == [{"op": "patch", "step_key": keys[1], "patch": {"on_missing": "skip"}}]
+    assert plan_answer(qs["missing_item"], {"choice": "fail"}, doc)[0] == []
+    # a step that already says what to do is not asked about
+    doc["skills"][0]["steps"][0]["run_if"] = {"input": "note", "op": "not_empty"}
+    doc["skills"][0]["steps"][1]["on_missing"] = "skip"
+    assert not {"skip_when_empty", "missing_item"} & {q["kind"] for q in generate_questions(doc, limit=None)}
+
+
+# ── relative dates ──────────────────────────────────────────────────────────────────────────
+
+
+def _date_doc():
+    step = {"action": "date_pick", "intent": "Pick due date", "input_binding": "due_date", "value": "{{due_date}}",
+            "handler_hints": {"date_picker": {"kind": "text_field", "display_format": "YYYY-MM-DD", "recorded_value": "2026-10-31"}}}
+    return {"inputs": [{"id": "due_date", "type": "date", "default": "2026-10-31"}], "skills": [{"steps": [step]}]}
+
+
+def test_a_picked_date_near_today_is_offered_as_relative_and_the_answer_unbinds_it():
+    import datetime
+
+    from conxa_compile.conversation.clarify import plan_answer
+    from conxa_compile.editor.workflow_mutations import set_date_offset
+
+    doc = _date_doc()
+    today = datetime.date(2026, 10, 24)
+    q = next(q for q in generate_questions(doc, today=today, limit=None) if q["kind"] == "relative_date")
+    assert "7 days after today" in q["title"] and q["days"] == 7
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    ops, _ = plan_answer(q, {"choice": "relative"}, doc)
+    assert ops == [{"op": "set_date_offset", "step_key": key, "days": 7}, {"op": "drop_inputs", "ids": ["due_date"]}]
+    assert plan_answer(q, {"choice": "fixed_input"}, doc)[0] == []
+    out = set_date_offset(doc, 0, 7)
+    step = out["skills"][0]["steps"][0]
+    assert step["handler_hints"]["date_picker"]["date_offset_days"] == 7 and step["value"] == "" and step["input_binding"] is None
+    # no question without a "today", for a far-away date, or once the step is already relative
+    assert not [q for q in generate_questions(doc, limit=None) if q["kind"] == "relative_date"]
+    assert not [q for q in generate_questions(doc, today=datetime.date(2024, 1, 1), limit=None) if q["kind"] == "relative_date"]
+    assert not [q for q in generate_questions(out, today=today, limit=None) if q["kind"] == "relative_date"]
+    with pytest.raises(ValueError, match="not_a_date_step"):
+        set_date_offset({"skills": [{"steps": [{"action": "click"}]}]}, 0, 1)
+    with pytest.raises(ValueError, match="date_offset_invalid"):
+        set_date_offset(doc, 0, 99999)
+
+
+def test_capabilities_needed_names_the_new_engine_features():
+    from handlers.workflows import capabilities_needed
+
+    steps = [
+        {"action": {"action": "date_pick"}, "handler_hints": {"date_picker": {"date_offset_days": 3}}},
+        {"action": {"action": "click"}, "on_missing": "ask"},
+        {"action": {"action": "click"}, "identity_bundle": {"signals": [{"selector": 'role=link[name="{{file}}"]'}], "fingerprint": {}}},
+    ]
+    assert capabilities_needed(steps) == {"date_offset", "ask_missing", "templated_click"}
+    assert capabilities_needed([{"action": {"action": "click"}, "identity_bundle": {"signals": [], "fingerprint": {"inner_text": "Save"}}}]) == set()

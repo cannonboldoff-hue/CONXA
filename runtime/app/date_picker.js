@@ -105,6 +105,14 @@ function parseDateInput(raw, displayFormat) {
   return { year, month, day, hour: null, minute: null };
 }
 
+/** A date `offsetDays` from today, as an ISO date ("2026-10-31"), in the machine's own calendar -- the
+ * same "today" the person running the workflow sees on screen. Relative-date steps (always "today",
+ * "a week from today") compute their date here at run time instead of replaying the recorded one. */
+function dateFromOffset(offsetDays, now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + Number(offsetDays));
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 /** "September 2026" / "Sep 2026" / "2026 Sep" / "09/2026" / "2026-09" -> {year, month}. */
 function parseHeader(text) {
   const t = String(text || "").trim().toLowerCase();
@@ -172,6 +180,7 @@ function monthLabel(month) {
 }
 
 module.exports = {
+  dateFromOffset,
   parseDateValue,
   parseDateInput,
   formatForDisplay,

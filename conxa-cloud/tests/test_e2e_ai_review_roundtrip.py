@@ -23,6 +23,7 @@ def test_scaffold_through_to_compiled_execution_json():
         _build_workflow_from_saved_skill(bundle_root=Path(td), workflow_slug="ai_review_e2e", saved_skill=saved_skill)
         execution = json.loads((Path(td) / "skills" / "ai_review_e2e" / "execution.json").read_text())
 
+    assert execution[0].pop("source_step_key")        # the document step this came from (maps a test result back)
     assert execution == [{
         "type": "ai_review",
         "prompt": "Is there an error banner on this page?",

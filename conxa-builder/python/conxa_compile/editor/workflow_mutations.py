@@ -1127,6 +1127,221 @@ def replace_step_range(
     return doc
 
 
+def _template_assertion_targets(steps: list[Any], literal: str, token: str) -> None:
+    """A page-address or message check recorded with the literal (``/orders/847291``, "Order 847291
+    created") would fail on a run that supplies another value; the runtime interpolates an
+    assertion's ``target`` per run, so the literal becomes the same token. Only these two types: a
+    selector-type assertion's target is a raw selector and is never rewritten."""
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        for a in (step.get("validation") or {}).get("assertions") or []:
+            if not isinstance(a, dict) or a.get("type") not in ("url_pattern", "text_present"):
+                continue
+            target = a.get("target")
+            if not isinstance(target, str) or "{{" in target:
+                continue
+            # a url_pattern is a RegExp, so the recorded literal may appear escaped
+            forms = {literal, re.escape(literal)} if a["type"] == "url_pattern" else {literal}
+            for form in sorted(forms, key=len, reverse=True):
+                target = re.sub(re.escape(form), lambda _m: token, target, flags=re.IGNORECASE)
+            a["target"] = target
+
+
+_CLICK_TEXT_ENGINES = frozenset({"role", "text_based", "text", "aria"})
+_FINGERPRINT_TEXT_FIELDS = ("inner_text", "aria_label", "name", "title", "alt", "label_text", "placeholder")
+_CLICK_LABEL_FIELDS = ("inner_text", "aria_label", "label_text", "title", "alt")
+
+
+def _words(text: Any) -> str:
+    return " ".join(str(text or "").split())
+
+
+def click_text_label(step: dict[str, Any]) -> str:
+    """The visible label a clicked item is known by (same precedence the understanding check uses)."""
+    fp = ((step.get("identity_bundle") or {}).get("fingerprint")) or {}
+    for field in _CLICK_LABEL_FIELDS:
+        text = _words(fp.get(field))
+        if text:
+            return text[:80]
+    return ""
+
+
+def _sub_ci(text: str, literal: str, token: str) -> str:
+    return re.sub(re.escape(literal), lambda _m: token, text, flags=re.IGNORECASE)
+
+
+def _templated_click_step(step: dict[str, Any], literal: str, token: str) -> dict[str, Any] | None:
+    """A copy of one click step whose clicked item is named by ``token`` instead of ``literal``, or
+    None when that is not safe. Substitution only, done in code. Not safe when no text signal names the
+    item (nothing would find the run's item). Every other signal that could still pin the RECORDED
+    item is dropped: one that contains the literal, or a structural one that matched exactly one node
+    at compile time. The ones left match many items and are settled by fingerprint scoring and the
+    resolver's uniqueness margin, which now compare against this run's text."""
+    bundle = step.get("identity_bundle")
+    if not isinstance(bundle, dict) or click_text_label(step).lower() != _words(literal).lower():
+        return None
+    needle = literal.lower()
+    kept: list[dict[str, Any]] = []
+    templated = 0
+    dropped_testid = False
+    for sig in bundle.get("signals") or []:
+        if not isinstance(sig, dict):
+            continue
+        sel = str(sig.get("selector") or "")
+        names_item = needle in sel.lower()
+        if sig.get("engine") in _CLICK_TEXT_ENGINES and names_item:
+            kept.append({**sig, "selector": _sub_ci(sel, literal, token)})
+            templated += 1
+        elif names_item or sig.get("unique_at_compile"):
+            dropped_testid = dropped_testid or sig.get("engine") in ("testid", "css-id")
+        else:
+            kept.append(sig)
+    if not templated:
+        return None
+    out = copy.deepcopy(step)
+    fp = dict(bundle.get("fingerprint") or {})
+    for field in _FINGERPRINT_TEXT_FIELDS:
+        if isinstance(fp.get(field), str) and needle in fp[field].lower():
+            fp[field] = _sub_ci(fp[field], literal, token)
+    if dropped_testid:
+        fp["data_testid"] = ""      # it named the recorded item; it must neither reward nor veto this run's
+    out["identity_bundle"] = {**bundle, "signals": kept, "fingerprint": fp}
+    out["compiled_selectors"] = [_sub_ci(c, literal, token) for c in step.get("compiled_selectors") or []
+                                 if isinstance(c, str) and needle in c.lower()]
+    target = out.get("target")
+    if isinstance(target, dict) and isinstance(target.get("primary_selector"), str):
+        primary = target["primary_selector"]
+        if needle in primary.lower():
+            target["primary_selector"] = _sub_ci(primary, literal, token)
+        else:
+            # a structural display selector would pin the recorded item in string mode
+            target["primary_selector"] = next(
+                (str(sg["selector"]).replace("internal:", "", 1) for sg in kept if token in str(sg.get("selector"))), "")
+    return out
+
+
+def click_text_templatable(step: dict[str, Any]) -> bool:
+    """True when a click's visible text can become a run input (see ``_templated_click_step``)."""
+    label = click_text_label(step)
+    return bool(label) and _templated_click_step(step, label, "{{x}}") is not None
+
+
+def parameterize_click_text(
+    document: dict[str, Any], literal: str, name: str, *, default: str = ""
+) -> tuple[dict[str, Any], int]:
+    """Turn the visible text of a clicked item ("download file X from a list") into a run input.
+
+    The only edit outside the compiler that writes ``identity_bundle`` / ``compiled_selectors``, and
+    only as literal substitution of one label by ``{{name}}`` -- see ``_templated_click_step``. A click
+    inside a row scope (``entity_binding``) is left to ``parameterize_literal``. Returns (new_document,
+    steps changed); raises ValueError("literal_not_found") when no click carried that label safely."""
+    literal = _words(literal)
+    if not literal:
+        raise ValueError("literal_must_be_nonempty")
+    token = "{{%s}}" % name
+    if not PLACEHOLDER_RE.fullmatch(token):
+        raise ValueError("invalid_input_name")
+    doc = copy.deepcopy(document)
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    changed = 0
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict) or step.get("optional_hint") or step.get("entity_binding"):
+            continue
+        act = step.get("action")
+        if str(act.get("action") if isinstance(act, dict) else act or "").lower() not in ("click", "dblclick"):
+            continue
+        new = _templated_click_step(step, literal, token)
+        if new is not None:
+            steps[i] = new
+            changed += 1
+    if not changed:
+        raise ValueError("literal_not_found")
+    _template_assertion_targets(steps, literal, token)
+    doc, _ = reconcile_inputs_with_step_values(doc)
+    if default:
+        for row in doc.get("inputs") or []:
+            if isinstance(row, dict) and str(row.get("id") or "").lower() == name.lower() and not row.get("default"):
+                row["default"] = default
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc, changed
+
+
+def _probe_selector(step: dict[str, Any]) -> str:
+    """The best signal of a step, in its display form (no ``internal:`` prefix): what a person reads."""
+    signals = [s for s in ((step.get("identity_bundle") or {}).get("signals")) or [] if isinstance(s, dict) and s.get("selector")]
+    signals.sort(key=lambda s: -float(s.get("durability") or 0))
+    return str(signals[0]["selector"]).replace("internal:", "", 1) if signals else ""
+
+
+def wrap_variant_branch(document: dict[str, Any], start: int, segment_steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """"Record another way from here": from step ``start`` on, the workflow can go two ways. The steps the
+    workflow already has from ``start`` become one option and ``segment_steps`` (the new recording, which
+    picked up at ``start``) the other. Each option is found on the page by its own first step's identity
+    bundle, so the run takes whichever way the page offers. One ``wait_for_one_of`` step with
+    ``branch.flow`` set replaces everything from ``start`` on (see runtime/app/run.js runVariantBranchStep).
+
+    Refuses when the two ways begin with the same element: the page cannot tell them apart, so a branch
+    would always take the first and the new recording would never run."""
+    steps = ((document.get("skills") or [{}])[0] or {}).get("steps") or []
+    if not 0 <= start < len(steps):
+        raise ValueError("step_range_out_of_bounds")
+    tail = [s for s in steps[start:] if isinstance(s, dict)]
+    segment = [s for s in segment_steps if isinstance(s, dict)]
+    if not segment:
+        raise ValueError("empty_segment")
+    if any(isinstance(s.get("branch"), dict) and s["branch"].get("flow") for s in tail):
+        raise ValueError("branch_inside_branch")      # a branch from a branch is read by nobody; keep it flat
+    first_a, first_b = _probe_selector(tail[0]), _probe_selector(segment[0])
+    if not first_a or not first_b:
+        raise ValueError("no_way_to_tell_them_apart")
+    hash_a = (tail[0].get("identity_bundle") or {}).get("stable_hash")
+    hash_b = (segment[0].get("identity_bundle") or {}).get("stable_hash")
+    if first_a == first_b or (hash_a and hash_a == hash_b):
+        raise ValueError("both_start_the_same_way")
+    branch = {
+        "action": "wait_for_one_of",
+        "intent": "go_one_of_two_ways",
+        "semantic_description": "From here the workflow can go two ways; it takes the one the page offers.",
+        "branch": {
+            "flow": True, "required": True, "timeout_ms": 5000,
+            "options": [
+                {"selector": first_a, "identity_bundle": copy.deepcopy(tail[0].get("identity_bundle") or {}), "steps": copy.deepcopy(tail)},
+                {"selector": first_b, "identity_bundle": copy.deepcopy(segment[0].get("identity_bundle") or {}), "steps": copy.deepcopy(segment)},
+            ],
+        },
+    }
+    return replace_step_range(document, start, [branch])
+
+
+def set_date_offset(document: dict[str, Any], step_index: int, days: int) -> dict[str, Any]:
+    """Make a ``date_pick`` step relative: the date is worked out at run time as today plus ``days``
+    (``handler_hints.date_picker.date_offset_days``, honoured by runtime/app/handlers.js) instead of
+    replaying the recorded one. The step stops taking an input, so it is unbound and its value cleared;
+    the caller drops the now-unused input. Raises ValueError for any other step."""
+    if isinstance(days, bool) or not isinstance(days, int) or abs(days) > 3660:
+        raise ValueError("date_offset_invalid")
+    doc = copy.deepcopy(document)
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    if not 0 <= step_index < len(steps) or not isinstance(steps[step_index], dict):
+        raise ValueError("step_index_out_of_range")
+    step = steps[step_index]
+    act = step.get("action")
+    if str(act.get("action") if isinstance(act, dict) else act or "").lower() != "date_pick":
+        raise ValueError("not_a_date_step")
+    hints = dict(step.get("handler_hints") or {})
+    hints["date_picker"] = {**(hints.get("date_picker") or {}), "date_offset_days": days}
+    step["handler_hints"] = hints
+    step["value"] = ""
+    step["input_binding"] = None
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
 def parameterize_literal(
     document: dict[str, Any], literal: str, name: str, *, default: str = ""
 ) -> tuple[dict[str, Any], int]:
@@ -1169,6 +1384,7 @@ def parameterize_literal(
                 changed += 1
     if not changed:
         raise ValueError("literal_not_found")
+    _template_assertion_targets(steps, literal, token)
     doc, _ = reconcile_inputs_with_step_values(doc)
     if default:
         for row in doc.get("inputs") or []:

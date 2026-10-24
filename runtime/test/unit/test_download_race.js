@@ -78,3 +78,19 @@ test("download_observed throws when downloadQueue itself is missing", async () =
     /Expected a file download/,
   );
 });
+
+// A download that failed must say why, not just "did not finish saving".
+for (const [error, message] of [
+  ["cancelled: download of u did not complete", /was cancelled/],
+  ["interrupted: download of u did not complete", /was interrupted/],
+  ["empty: the downloaded file is 0 bytes", /empty or incomplete/],
+]) {
+  test(`download_observed reports a failed download: ${error.split(":")[0]}`, async () => {
+    const inputs = {};
+    await assert.rejects(
+      () => executeStep(null, { type: "download_observed" }, inputs, { downloadQueue: [Promise.resolve({ error })] }),
+      message,
+    );
+    assert.strictEqual(inputs.downloaded_file, undefined);
+  });
+}

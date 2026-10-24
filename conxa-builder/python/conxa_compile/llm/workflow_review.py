@@ -51,7 +51,10 @@ from conxa_compile.llm.workflow_intent import _graph_from_raw
 from conxa_compile.llm.workflow_semantics import _validate_findings
 
 _NAMESPACE = "workflow_review"
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
+# Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
+# recording after the change is not served an answer the old prompt produced.
+_PROMPT_VERSION = 1
 
 
 def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:
@@ -106,11 +109,14 @@ def build_workflow_review(
     # Only when present, so a compile with no description keeps hitting entries written before
     # this field existed.
     extra_key = {"task_description": task} if task else {}
+    if model:
+        extra_key["model"] = model
     key = cache_key(
         _CACHE_VERSION,
         steps=steps_for_key,
         page_urls=page_urls,
         sibling_bindings=sibling_bindings or {},
+        prompt_version=_PROMPT_VERSION,
         **extra_key,
     )
     cached = read_cached(_NAMESPACE, key, _CACHE_VERSION)

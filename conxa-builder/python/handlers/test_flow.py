@@ -174,7 +174,8 @@ class TestFlowMixin:
             parts = str(entry.get("phase", "")).split("_")  # step_<i>_<type>_start
             kind = parts[2] if len(parts) >= 4 else "step"
             rows.append({"index": int(entry["step"]), "name": _humanize(entry.get("intent") or kind),
-                         "status": "running", "destructive": bool(entry.get("destructive"))})
+                         "status": "running", "destructive": bool(entry.get("destructive")),
+                         "step_key": entry.get("source_step_key") or ""})
             push(step_total=entry.get("step_total"))
 
         def wait_decision(kind: str) -> str:
@@ -238,9 +239,9 @@ class TestFlowMixin:
                  "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook,
                  "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
-            return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started)
+            return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started, inputs)
         except Exception as exc:  # noqa: BLE001
-            return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started)
+            return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs)
         finally:
             runtime_state.set_flags(workflow_id, testing=False, autofix_attempt=0)
 
@@ -305,7 +306,30 @@ class TestFlowMixin:
         except Exception:  # noqa: BLE001 -- a picture is a bonus; a failed test must still report
             return None
 
-    def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float) -> str:
+    def _tf_followup(self, workflow_id: str, step_key: str, inputs: dict[str, Any], sink: Any) -> None:
+        """A failed test where the person's test value differs from the recorded one becomes a
+        Clarify question. Never raises: a missing question must not hide the failure."""
+        try:
+            from conxa_compile.conversation import clarify, clarify_store
+            from conxa_core.storage.json_store import read_skill
+            from conxa_core.storage.workflow_store import get_workflow
+
+            workflow = get_workflow(workflow_id)
+            doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
+            q = clarify.test_followup_question(doc, step_key, inputs) if doc else None
+            if q is None:
+                return
+            data = clarify_store.load(workflow_id) or {"skill_id": workflow.skill_id, "questions": []}
+            if any(x.get("id") == q["id"] for x in data.get("questions") or []):
+                return  # asked (or answered) already
+            data["questions"] = [*(data.get("questions") or []), q]
+            clarify_store.save(workflow_id, data)
+            self._flow_post_next_question(workflow_id, sink)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
+                   inputs: dict[str, Any] | None = None) -> str:
         from conxa_compile.conversation import harness
 
         failing = next((r for r in reversed(rows) if r["status"] == "running"), None)
@@ -321,6 +345,8 @@ class TestFlowMixin:
         )
         harness.log_event(_thread(workflow_id), "Test failed", glyph="fail", sink=sink,
                           subject=(failing["name"] if failing else message[:80]))
+        if failing is not None and failing.get("step_key"):
+            self._tf_followup(workflow_id, failing["step_key"], inputs or {}, sink)
         return "failed"
 
     # ── decisions, stop, approve ────────────────────────────────────────────────────────────

@@ -249,6 +249,7 @@ _BOUND = {"container_selector": "tr.row", "identifier": "{{invoice}}", "source":
 def test_on_missing_skip_ships_only_on_a_step_bound_to_a_record():
     base = {"action": "click", "intent": "open_invoice", "target": {"primary_selector": "#open"}, "on_missing": "skip"}
     assert _saved_step_to_execution_step({**base, "entity_binding": _BOUND})["on_missing"] == "skip"
+    assert _saved_step_to_execution_step({**base, "entity_binding": _BOUND, "on_missing": "ask"})["on_missing"] == "ask"
     assert "on_missing" not in _saved_step_to_execution_step(base)                    # nothing to be missing from
     assert "on_missing" not in _saved_step_to_execution_step({**base, "entity_binding": _BOUND, "on_missing": "teleport"})
 
@@ -257,8 +258,9 @@ def test_the_gate_only_lets_a_bound_step_choose_to_skip_when_its_record_is_missi
     bound = {"action": {"action": "click"}, "intent": "x", "target": {"primary_selector": "#x"}, "entity_binding": _BOUND}
     validate_editor_patch(bound, {"on_missing": "skip"}, POLICY)
     validate_editor_patch(bound, {"on_missing": "fail"}, POLICY)
+    validate_editor_patch(bound, {"on_missing": "ask"}, POLICY)
     with pytest.raises(ValueError, match="on_missing_invalid"):
-        validate_editor_patch(bound, {"on_missing": "ask"}, POLICY)
+        validate_editor_patch(bound, {"on_missing": "teleport"}, POLICY)
     with pytest.raises(ValueError, match="on_missing_needs_a_bound_record"):
         validate_editor_patch({"action": {"action": "click"}, "intent": "x", "target": {"primary_selector": "#x"}}, {"on_missing": "skip"}, POLICY)
 

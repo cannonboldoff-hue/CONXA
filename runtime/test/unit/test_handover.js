@@ -204,3 +204,47 @@ test("runPlan: a resume with __handover_done_<i> bound consumes it and continues
   assert.strictEqual(inputs.__handover_done_0, undefined, "consumed marker is removed");
   await caught.armed.disarm();
 });
+
+// on_missing: "ask" -- a record that is provably not on the page pauses like a hand-over (same park,
+// same resume), and a resume that already bound `__handover_done_<i>` tries the step again.
+function absentRecordPage() {
+  const row = { count: async () => 0, first: () => ({}) };
+  return mockPage({
+    waitForTimeout: async () => {},
+    locator: () => ({ count: async () => 2, filter: () => row, all: async () => [] }),
+  });
+}
+const BOUND_CLICK = {
+  type: "click", intent: "open_invoice", on_missing: "ask",
+  identity_bundle: { signals: [{ engine: "testid", selector: 'internal:testid=[data-testid="open"]', durability: 0.99 }], fingerprint: { data_testid: "open" }, frame_chain: [] },
+  entity_binding: { container_selector: "table tr", identifier: "Invoice #9", source: "literal", confirmed: true },
+};
+
+test("on_missing ask: a provably absent record pauses as a hand-over instead of failing", async () => {
+  const context = mockContext();
+  await assert.rejects(
+    () => runPlan(absentRecordPage(), [BOUND_CLICK], {}, 0, "ask-missing", { context }),
+    (err) => {
+      assert.strictEqual(err.handoverPause, true);
+      assert.strictEqual(err.stepIndex, 0);
+      assert.match(err.step.message, /isn't on the page/);
+      err.armed.disarm();
+      return true;
+    },
+  );
+});
+
+test("on_missing ask: a resume that says the person dealt with it tries the step again (and asks again if still absent)", async () => {
+  const context = mockContext();
+  await assert.rejects(
+    () => runPlan(absentRecordPage(), [BOUND_CLICK], { __handover_done_0: true }, 0, "ask-missing-2", { context, isResume: true }),
+    (err) => { err.armed && err.armed.disarm(); return err.handoverPause === true; },
+  );
+});
+
+test("on_missing ask without a browser context still fails closed", async () => {
+  await assert.rejects(
+    () => runPlan(absentRecordPage(), [BOUND_CLICK], {}, 0, "ask-missing-3", {}),
+    (err) => err.handoverPause !== true && /Bound record could not be uniquely located/.test(String(err.message)),
+  );
+});

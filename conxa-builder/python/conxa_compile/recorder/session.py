@@ -342,6 +342,10 @@ class RecordingSession:
     _seq: int = 0
     _materialized: list[RecordedEvent] = field(default_factory=list)
     _pending_payloads: SimpleQueue = field(default_factory=SimpleQueue)
+    # True: attach to the panel run whose id is session_id and which already holds a replayed page
+    # (re-record from a step), instead of creating a view. See host_view.adopt.
+    adopt: bool = False
+    _held_payload: Any = None  # a popup event waiting for its tab to be registered (see _next_payload_sync)
     # BUILD-38: pause/resume. While paused, payloads are stamped at enqueue time (not at drain
     # time — the queue can lag behind the page by a few ticks, and a resume must not replay what
     # happened during the pause) and dropped by _consume_payload_sync.
@@ -441,6 +445,7 @@ class RecordingSession:
     # Set from any thread by request_capture(); applied by the pump loop, the only thread allowed
     # to touch Playwright pages. None = nothing pending.
     _capture_pending: bool | None = None
+    _capture_on: bool = False
     _zip_downloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     _pending_file_pick: dict[str, Any] | None = None
     # Set by the caller (handlers/session.py) before start(): (request_id, dialog_type, message,
@@ -818,19 +823,25 @@ class RecordingSession:
         launched context. Video starts here, before the first navigation, as record_video_dir's
         does from context creation. A sign-in (auth_mode) gets a panel view at the panel's own
         size and nothing else — no bridge, dialog override or video, as in the launched path."""
-        browser, context, page, _tab = host_view.acquire(
-            self._playwright,
-            self.session_id,
-            kind="signin" if self.auth_mode else "record",
-            label=self.label,
-            viewport=None if self.auth_mode else host_view.RECORD_VIEWPORT,
-        )
+        if self.adopt:
+            # Re-recording from a step: the panel run already holds the replayed page (session_id is
+            # that run's id), so attach to it as it stands instead of opening a fresh view.
+            browser, context, page, _tab = host_view.adopt(
+                self._playwright, self.session_id, viewport=host_view.RECORD_VIEWPORT)
+        else:
+            browser, context, page, _tab = host_view.acquire(
+                self._playwright,
+                self.session_id,
+                kind="signin" if self.auth_mode else "record",
+                label=self.label,
+                viewport=None if self.auth_mode else host_view.RECORD_VIEWPORT,
+            )
         self._browser, self._context, self._page = browser, context, page
         self._browser.on("disconnected", lambda _: self._on_browser_disconnected())
         self.browser_open = True
         try:
             self._page_target_ids[id(page)] = host_view.target_id(context, page)
-            if self.storage_state_path and Path(self.storage_state_path).is_file():
+            if not self.adopt and self.storage_state_path and Path(self.storage_state_path).is_file():
                 state = json.loads(Path(self.storage_state_path).read_text(encoding="utf-8"))
                 host_view.seed_storage_state(context, page, state)
             if self.auth_mode:
@@ -1501,6 +1512,10 @@ class RecordingSession:
 
     def _on_frame_ready(self, frame: Any) -> None:
         self._ensure_bridge_installed_in_frame_sync(frame)
+        # Capture mode was switched on before this frame existed (or before it navigated): re-queue
+        # it so the pump arms this frame too, instead of the person's next click acting normally.
+        if self._capture_on:
+            self._capture_pending = True
 
     def _on_frame_attached(self, frame: Any) -> None:
         self._frame_last_transition_ts[id(frame)] = time.monotonic()
@@ -1515,9 +1530,38 @@ class RecordingSession:
     def _on_frame_detached(self, frame: Any) -> None:
         self._log_frame_lifecycle("detached", frame)
 
+    POPUP_TAB_WAIT_S = 0.5
+
+    def _next_payload_sync(self, *, final: bool = False) -> tuple[dict[str, Any], Any, Any]:
+        """The next queued event, or ``Empty``. A popup event names its page by ``_tab_key`` before the
+        pump has registered that page as a tab; draining it now would stamp it with the OPENER's tab and
+        the new tab would never appear in order. So it is held at the head of the queue (everything behind
+        it waits too, which keeps the order) for up to ``POPUP_TAB_WAIT_S``, then goes with the opener's
+        tab as before. ``final`` (shutdown) never waits."""
+        item = self._held_payload
+        if item is not None:
+            self._held_payload = None
+        else:
+            item = self._pending_payloads.get_nowait()
+        payload = item[0]
+        key = payload.get("_tab_key") if isinstance(payload, dict) else None
+        if not final and key is not None and key not in self._tab_ids:
+            born = payload.setdefault("_held_since", time.monotonic())
+            if time.monotonic() - born < self.POPUP_TAB_WAIT_S:
+                self._held_payload = item
+                raise Empty
+        if isinstance(payload, dict):
+            payload.pop("_held_since", None)
+        return item
+
     def _consume_payload_safe_sync(
         self, payload: dict[str, Any], src_page: Any | None = None, src_frame: Any | None = None
     ) -> None:
+        # The bridge's capture mode is one-shot: it switched itself off with this event, so stop
+        # re-arming frames (see _on_frame_ready).
+        act = payload.get("action") if isinstance(payload, dict) else None
+        if isinstance(act, dict) and act.get("action") == "extract":
+            self._capture_on = False
         try:
             self._consume_payload_sync(payload, src_page, src_frame)
         except Exception as exc:  # noqa: BLE001
@@ -2171,6 +2215,24 @@ class RecordingSession:
             self._enqueue_synthetic("download_observed", json.dumps(payload), src_page=src_page)
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"download_event_error: {exc!s}")
+            # A download that did not land is still a download the author triggered: record it with
+            # its reason so the compiler flags the step instead of reading a plain click, and the
+            # replay fails with the same reason instead of carrying on without a file.
+            try:
+                code = str(exc).split(":", 1)[0].strip()
+                status = code if code in ("cancelled", "interrupted", "timeout", "empty") else "failed"
+                self._enqueue_synthetic(
+                    "download_observed",
+                    json.dumps({
+                        "url": download.url,
+                        "suggested_filename": download.suggested_filename,
+                        "status": status,
+                        "reason": str(exc)[:300],
+                    }),
+                    src_page=src_page,
+                )
+            except Exception as exc2:  # noqa: BLE001
+                self.binding_errors.append(f"download_failure_event_error: {exc2!s}")
 
     def _save_panel_download_sync(self, url: str, dest: Path, src_page: Any | None) -> None:
         """A panel run's download is saved by Electron, never by Playwright: the panel hands over
@@ -2227,7 +2289,7 @@ class RecordingSession:
         """Ask the recorder to switch "capture a value" mode on (the next click reads the element
         instead of acting on it) or off. Queued, not applied here: evaluating in a page is a
         Playwright sync call and belongs to the recorder's own thread (see _apply_capture_mode_sync)."""
-        self._capture_pending = bool(on)
+        self._capture_pending = self._capture_on = bool(on)
 
     def _apply_capture_mode_sync(self) -> None:
         pending = self._capture_pending
@@ -2646,7 +2708,8 @@ class RecordingSession:
                 else:
                     self._page = self._context.new_page()
             try:
-                self._page.goto(self.start_url, wait_until="load", timeout=30000)
+                if not self.adopt:  # an adopted page is already where the recording picks up
+                    self._page.goto(self.start_url, wait_until="load", timeout=30000)
                 self._remember_page_url_sync(self._page)
             except Exception as goto_err:
                 self.binding_errors.append(f"navigation_error: {goto_err!s}")
@@ -2828,7 +2891,7 @@ class RecordingSession:
                         self._learn_auth_done.set()
                 if not self.auth_mode:
                     try:
-                        payload, src_page, src_frame = self._pending_payloads.get_nowait()
+                        payload, src_page, src_frame = self._next_payload_sync()
                         self._consume_payload_safe_sync(payload, src_page, src_frame)
                     except Empty:
                         pass
@@ -2950,7 +3013,7 @@ class RecordingSession:
                     drained = 0
                     try:
                         while True:
-                            payload, src_page, src_frame = self._pending_payloads.get_nowait()
+                            payload, src_page, src_frame = self._next_payload_sync(final=True)
                             drained += 1
                             self._consume_payload_safe_sync(payload, src_page, src_frame)
                     except Empty:
@@ -3026,8 +3089,11 @@ class SessionRegistry:
         window_rect: dict | None = None,
         label: str = "",
         in_panel: bool = True,
+        adopt_run_id: str = "",
     ) -> RecordingSession:
-        sid = str(uuid.uuid4())
+        # Adopting reuses the panel run's id as the session id: the panel, the recording card and the
+        # renderer all key a run by it, so no id has to be translated between them.
+        sid = adopt_run_id or str(uuid.uuid4())
         sess = RecordingSession(
             session_id=sid,
             start_url=start_url,
@@ -3039,6 +3105,7 @@ class SessionRegistry:
             window_rect=window_rect,
             label=label,
             embedded=bool(in_panel and settings.record_in_panel and host_view.available()),
+            adopt=bool(adopt_run_id),
         )
         self._sessions[sid] = sess
         return sess

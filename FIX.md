@@ -2,6 +2,18 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The built-in browser now shows downloads like a regular browser — 2026-10-24**
+Before, clicking a download button gave no sign that anything was happening, so you could not tell when the file was ready. Now a Downloads button appears in the browser, with a progress bar for each file and a clear "Done", "Cancelled" or "Failed" with a retry button. A download that fails or is cancelled is no longer assumed to have worked, and a replay now stops with a plain reason instead of carrying on without the file.
+— 2026-10-24
+
+**Clicked items, retries after a failed test, and "record from here" — 2026-10-24**
+Until now, if a recording clicked a particular file in a list, the workflow could only ever click that same file. Now Studio can ask whether the item changes each time, and if so it looks for whatever name you give it on that run. After a failed test it also asks whether a value you changed should really vary, and before you record it shows a short checklist of what you will probably do. In Human Edit you can now start recording from any step (the old steps from there on are replaced) or record "another way" (the workflow keeps both and takes whichever the page offers).
+— 2026-10-24
+
+**Fixed small gaps that made workflows lose data or stop at the wrong moment — 2026-10-24**
+A value the workflow had read could vanish if the run paused to ask a person. Reading a value inside a repeated list only kept the last row. A pause for a risky step could not happen inside a repeated list at all. All three now work, and a missing item can also make the run ask a person instead of just stopping. Dates can be "always 7 days from today" instead of the day you recorded.
+— 2026-10-24
+
 **Removed the extra "Human Edit" strip from the top of a workflow — 2026-10-24**
 A workflow's page had a thin bar under its title with a lone "Human Edit" link that looked out of place. It is gone, so the page starts straight with the conversation. Human Edit is still one click away from the side panel.
 — 2026-10-24

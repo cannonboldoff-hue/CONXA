@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 29 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46 |
+| BUILD — Build Studio | 34 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53 |
 | EXEC — Execution & Recovery | 27 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 18 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **92** | |
+| **Total** | **97** | |
 
 ---
 
-## BUILD — Build Studio (29 done)
+## BUILD — Build Studio (34 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -705,6 +705,27 @@ inferred from `outer_html`, not read directly.
 - **Category:** Builder
 - **What fixed it:** "Create and start recording" and every sign-in now use a browser drawn inside Studio instead of a separate Chromium window, reversing BUILD-42's "stays in its own window" decision after a proof-first spike (`docs/archive/spikes/in-app-recording-2026-10.md`, Gates A and B). Panel run kinds and a fixed 1280×720 record page (`browser_panel.js`, `browser_control.js`); video rebuilt from CDP screencast frames into the same `recording*.webm` + `videos.json` contract (`recorder/screencast_video.py`); the recorder's embedded mode with per-page bridge/scripts, panel-owned page membership, CDP-session cookies and storage capture, a background-tab LIVE check for learn_auth (`recorder/host_view.py`, `RecordingSession.embedded`); the design's panel states — getting ready, sign-in, recording, paused, tab strip with New badge, widen to a conversation rail, title-bar chip, What-happens-next card (`BrowserPane.tsx`, `useNativeViewRegion.ts`, `browserStore.flow`, `FlowCards.tsx`, `NewWorkflowPage.tsx`, `SignInPane.tsx`). On by default (`SKILL_RECORD_IN_PANEL`); dialogs pass `in_panel: false` and keep the window. Docs: TRD §4.7/§4.7a/§6.1/§6.4, App-Flow, UI-UX-Brief §12.2, Build-Studio-Conversation-Plan, CLAUDE.md.
 - **Verified:** Gate B (same scripted session, launched vs embedded: events, frames, compiled steps equivalent); a real-Electron sign-in run (live check in a background tab, saved state holds the run's cookie + localStorage and nothing from the Studio window, run closed on stop); Gate B re-run three times after the sign-in changes (12/12 events twice; once a slow download hand-off cost a popup click, BUILD-48 item 6); `pytest -q tests` (all pass except the known timing-sensitive `test_llm_router_backoff`, which also flakes when run alone); Electron `npm test` (27), renderer typecheck, lint and production build. **Not exercised:** the whole flow in a running, signed-in Studio — tracked with the known limits as BUILD-48.
+
+### BUILD-49 — Understanding check: follow-ups (clicked items, test → Clarify, pre-record plan)
+**Resolved:** 2026-10-24
+- **Resolution:** a clicked item's visible text can now become a run input (`parameterize_click_text`: text signals and fingerprint text only, signals that would still pin the recorded item are dropped, the runtime fills the fingerprint from the run's inputs); typed values are labelled by the understanding check and pre-decide the `values` question; templated page-address/message checks are rewritten with the literal; a failed test whose input differed from the recording asks a `test_followup` question (steps carry `source_step_key`); a `record_plan` checklist card is posted when recording starts.
+
+### BUILD-50 — Remaining pieces of the compile-determinism and Clarify-coverage work
+**Resolved:** 2026-10-24
+- **Resolution:** popup events wait (≤0.5 s) for their tab to be registered; relative dates (`handler_hints.date_picker.date_offset_days`, a `relative_date` question, runtime `dateFromOffset`); choice/date collapses are in `compile_report["dropped"]` with the dropped value and a `dropped_value` question; the second-opinion cache key includes the model and a prompt version.
+
+### BUILD-51 — Extract / run_if / on_missing: what the first cut leaves out
+**Resolved:** 2026-10-24
+- **Resolution:** values made before a pause survive the resume (`producedInputs` on the park); Human Edit has fields for extract, run condition and "item missing"; Clarify asks `skip_when_empty` and `missing_item`; per-skill tools declare `outputSchema` (structuredContent added to every non-error result); `on_missing: "ask"` pauses like a hand-over; an extract in a loop reports every row's value as a list; a late-created frame is armed for capture.
+
+### BUILD-52 — Re-record from a step: hand the parked page to the recorder
+**Resolved:** 2026-10-24 (live Electron run still to do — see BUILD-54)
+- **Resolution:** panel `adopt_view`, runtime `_handoff_park`, `host_view.adopt`, `RecordingSession.adopt`, `flow_rerecord_from` (replay → hand over → record → compile as a segment → splice), a "Record from here" button in Human Edit.
+
+### BUILD-53 — Branching and loop-safe testing: the parts of the conversation roadmap not built
+**Resolved:** 2026-10-24 (guard-in-loop and rest-of-workflow branches; remainder in BUILD-54)
+- **Resolution:** the test guard pauses inside a `for_each` body with a row cursor and resumes at that row; "Record another way" adds a `wait_for_one_of` with `flow: true` whose bodies run as full steps (recovery, gates) and whose failure fails the run.
+
 
 ## EXEC — Execution & Recovery (27 done)
 

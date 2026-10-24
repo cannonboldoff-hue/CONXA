@@ -1891,7 +1891,9 @@ def compile_skill_package(
     # it a synced events view rather than cleaned_events directly — collapse_date_picker_runs
     # also assumes 1:1 alignment with whatever `steps` it's given, which this pass may have
     # already shrunk.
-    steps, date_pass_events = collapse_choice_group_runs(steps, cleaned_events, pol)
+    absorbed: dict[str, list[dict[str, Any]]] = {"choice_collapsed": [], "date_collapsed": []}
+    steps, date_pass_events = collapse_choice_group_runs(
+        steps, cleaned_events, pol, absorbed=absorbed["choice_collapsed"])
     # Custom date-picker collapse: same alignment requirement, against date_pass_events (see
     # above) rather than cleaned_events. Collapses (never regresses) an open->nav->day-cell click
     # run into one parameterized date_pick step per bridge.js's date_context tagging; see
@@ -1901,7 +1903,9 @@ def compile_skill_package(
     # an ambiguous day/month order falls back to the recording browser's own locale sample.
     environment = _read_environment_sidecar(session_root)
     convert_typed_date_steps(steps, date_pass_events, pol, str(environment.get("date_format_sample") or ""))
-    steps = collapse_date_picker_runs(steps, date_pass_events, pol)
+    steps = collapse_date_picker_runs(steps, date_pass_events, pol, absorbed=absorbed["date_collapsed"])
+    for label, evs in absorbed.items():
+        _record_drops(drop_ledger, evs, [], label)
     # A segment picks up on a page that is already open, so there is no start page to navigate to.
     if not segment:
         steps = _insert_start_navigate_step(steps, cleaned_events)
@@ -2279,8 +2283,14 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
         if seq is None or seq in kept:
             continue
         act = e.get("action")
-        ledger.append({"sequence": seq, "pass": label,
-                       "action": str(act.get("action") if isinstance(act, dict) else act or "")})
+        entry = {"sequence": seq, "pass": label,
+                 "action": str(act.get("action") if isinstance(act, dict) else act or "")}
+        # A dropped step that carried a typed/selected value is something the person may have
+        # meant; Clarify asks about it (clarify.py, "dropped_value").
+        val = act.get("value") if isinstance(act, dict) else None
+        if val not in (None, ""):
+            entry["value"] = str(val)[:200]
+        ledger.append(entry)
 
 
 def _apply_second_opinion(

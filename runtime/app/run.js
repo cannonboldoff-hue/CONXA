@@ -243,11 +243,20 @@ async function executeOneStep(ctx, state, steps, i) {
   // no `guard` on ctx (every customer run, every MCP caller) this block is inert. A dry run already
   // withholds destructive steps, so the guard has nothing to do there.
   if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && step.destructive === true) {
+    if (state.loopDepth === 1 && !state.forkDepth && state.loopCursor) {
+      // Inside a for_each body the pause carries the loop's row cursor, so the resume continues AT
+      // this row and step instead of restarting the loop. `stepIndex` is the loop's own index: that is
+      // what the caller resumes from.
+      const remaining = steps.slice(i).filter((s) => s && s.destructive === true).length;
+      throw Object.assign(new Error("guard_pause"), {
+        guardPause: true, stepIndex: state.loopCursor.stepIndex, step, page, remaining,
+        loop: { ...state.loopCursor, bodyIndex: i },
+      });
+    }
     if (state.loopDepth > 0 || state.forkDepth > 0) {
-      // A pause inside a for_each body would lose the loop's row cursor (the same reason a handover
-      // can't live there), so fail closed rather than run an irreversible step unguarded. The same
-      // goes for an outcome-fork option (the fork checks its chosen option BEFORE running it, so
-      // reaching here means a destructive step nested deeper than the fork looked).
+      // A nested loop or an outcome-fork option has no single row cursor to resume from, so fail
+      // closed rather than run an irreversible step unguarded (the fork checks its chosen option
+      // BEFORE running it, so reaching here means a destructive step nested deeper than it looked).
       ctx.tracker.emit("step_fail", { si: i, fc: "guard_inside_loop" });
       throw stepFailure(step, i, new Error(
         "Test stopped before a repeated or conditional step that can't be undone: the guard can't pause inside a loop or a popup choice. " +
@@ -355,6 +364,18 @@ async function executeOneStep(ctx, state, steps, i) {
   // for_each it runs its chosen option through THIS SAME function, so the option's steps get tab
   // resolution, GATE/VERIFY, recovery and dry-run's destructive-skip, unlike a best-effort
   // runBranchBody. See fork.js and runForkStep below.
+  // A variant branch ("record another way from here"): a wait_for_one_of marked `flow` whose options
+  // are whole ways the rest of the workflow can go. Unlike a cookie-banner branch, the chosen body is
+  // real workflow, so it runs through THIS function too (recovery, GATE/VERIFY, tabs) and a failure
+  // inside it fails the run instead of being swallowed. See runVariantBranchStep.
+  if (step.type === "wait_for_one_of" && step.flow === true) {
+    await runVariantBranchStep(ctx, state, step, page, i);
+    state.hasExecutedStep = true;
+    state.prevStepType = step.type;
+    state.prevPage = page;
+    return;
+  }
+
   if (step.type === "outcome_fork") {
     await runForkStep(ctx, state, step, page, i);
     state.hasExecutedStep = true;
@@ -523,6 +544,29 @@ async function executeOneStep(ctx, state, steps, i) {
       if (ctx.onPhase) ctx.onPhase(`step_${i}_skipped_missing`, { step: i });
       return;
     }
+    // on_missing: "ask" -- the same provable absence, but the author wants a person to look: the run
+    // pauses like a hand-over (banner, file or http signal, then resume at this step) and, once the
+    // person says they've dealt with it, tries the step again from the top. Still never acts on
+    // another row, and an ambiguous or unrendered list still fails closed.
+    if (primaryErr.entityAbsent && step.on_missing === "ask" && ctx.context) {
+      const doneKey = `__handover_done_${i}`;
+      if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
+        delete state.inputs[doneKey];
+        return executeOneStep(ctx, state, steps, i);
+      }
+      const asked = { ...step, type: "handover", message: step.message || `“${step.intent || "This step"}”: its record isn't on the page. Fix that, then click Done.` };
+      const armed = await handover.arm(ctx.context, page, asked, ctx.runCtx && ctx.runCtx.runId);
+      const winner = await Promise.race([
+        armed.signal,
+        new Promise((resolve) => setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS)),
+      ]);
+      if (winner) {
+        await armed.disarm();
+        ctx.tracker.emit("handover_resumed", { si: i, via: winner, inCall: true, reason: "on_missing" });
+        return executeOneStep(ctx, state, steps, i);
+      }
+      throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step: asked, page, armed, dryRun: ctx.dryRun });
+    }
     ctx.tracker.emit("step_fail", { si: i, fc: "entity_not_found" });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
   }
@@ -690,15 +734,42 @@ async function runForEachStep(ctx, state, step, page, i) {
 
   let processed = 0;
   let failed = 0;
-  state.loopDepth = (state.loopDepth || 0) + 1; // RT-9: the guard can't pause inside a loop body
+  // An extract in the body overwrites one input per row; keep every row's value, in row order, and
+  // hand the caller the list once the loop is done (a failed/skipped row contributes nothing).
+  const bodyOutputs = declaredOutputNames(bodySteps);
+  const perRow = Object.fromEntries(bodyOutputs.map((n) => [n, []]));
+
+  // Resuming a guard pause that happened inside this loop: continue AT the paused row and body step.
+  // The row is found by its id, not its position, because rows the run already deleted are gone.
+  let startIdx = 0;
+  let startBody = 0;
+  const resume = ctx.resumeLoop && ctx.resumeLoop.stepIndex === i ? ctx.resumeLoop : null;
+  if (resume) {
+    ctx.resumeLoop = null;
+    startIdx = rowIds.indexOf(resume.rowId);
+    if (startIdx < 0) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "loop_row_missing" });
+      throw stepFailure(step, i, new Error(
+        "The test paused on a row that is no longer on the page, so it can't continue where it stopped. Run the test again."
+      ), null, state.warnings);
+    }
+    startBody = Number(resume.bodyIndex) || 0;
+    for (const n of bodyOutputs) perRow[n] = Array.isArray(resume.perRow && resume.perRow[n]) ? [...resume.perRow[n]] : [];
+  }
+
+  state.loopDepth = (state.loopDepth || 0) + 1; // RT-9: a pause inside the body carries state.loopCursor
   try {
-    for (let idx = 0; idx < rowIds.length; idx++) {
+    for (let idx = startIdx; idx < rowIds.length; idx++) {
+      const resumingRow = idx === startIdx && !!resume;
       state.inputs[idKey] = rowIds[idx];
       state.inputs[idxKey] = idx;
+      if (!resumingRow) for (const n of bodyOutputs) delete state.inputs[n];
       try {
-        for (let j = 0; j < bodySteps.length; j++) {
+        for (let j = resumingRow ? startBody : 0; j < bodySteps.length; j++) {
+          state.loopCursor = { stepIndex: i, rowId: rowIds[idx], bodyIndex: j };
           await executeOneStep(ctx, state, bodySteps, j);
         }
+        for (const n of bodyOutputs) if (state.inputs[n] !== undefined) perRow[n].push(state.inputs[n]);
         processed++;
       } catch (bodyErr) {
         // Cancellation and an ai_review/handover pause inside the body are never row-level
@@ -707,6 +778,10 @@ async function runForEachStep(ctx, state, step, page, i) {
         // place — unwinding this loop on a pause loses the iteration cursor, so resuming would
         // restart the loop from row 0 rather than continuing the interrupted row. This branch
         // only matters if an older/hand-authored pack manages to carry one anyway.)
+        if (bodyErr && bodyErr.guardPause && bodyErr.loop) {
+          bodyErr.loop.perRow = JSON.parse(JSON.stringify(perRow));
+          throw bodyErr;
+        }
         if (bodyErr && (bodyErr.cancelled || bodyErr.reviewPause || bodyErr.handoverPause)) throw bodyErr;
         failed++;
         ctx.tracker.emit("for_each_row_fail", { si: i, row_index: idx, continued: onRowError === "continue" });
@@ -715,8 +790,12 @@ async function runForEachStep(ctx, state, step, page, i) {
     }
   } finally {
     state.loopDepth -= 1;
+    state.loopCursor = null;
     if (hadId) state.inputs[idKey] = prevId; else delete state.inputs[idKey];
     if (hadIdx) state.inputs[idxKey] = prevIdx; else delete state.inputs[idxKey];
+  }
+  for (const n of bodyOutputs) {
+    if (perRow[n].length) state.inputs[n] = perRow[n]; else delete state.inputs[n];
   }
 
   // Reached only when the loop did NOT throw out of the try above — either every row succeeded,
@@ -819,6 +898,40 @@ async function confirmForkDialogClosed(ctx, state, step, page, i, title, chosenL
   if (!closed) {
     ctx.tracker.emit("step_fail", { si: i, fc: "fork_dialog_still_open" });
     throw stepFailure(step, i, new Error(`The "${title}" popup is still open after choosing "${chosenLabel}".`), null, state.warnings);
+  }
+}
+
+// Picks the first option whose probe (an identity bundle or a selector) is on the page, polling up to
+// timeout_ms, and runs that option's steps as full steps. None appearing is a failure: this is the
+// workflow itself, and carrying on without it would report a pass for work that never happened.
+async function runVariantBranchStep(ctx, state, step, page, i) {
+  const options = Array.isArray(step.options) ? step.options.filter((o) => o && typeof o === "object") : [];
+  if (!options.length) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "bad_input" });
+    throw stepFailure(step, i, Object.assign(new Error("branch step has no options"), { badInput: true }), null, state.warnings);
+  }
+  const deadline = Date.now() + (Number(step.timeout_ms) || 5000);
+  let chosen = -1;
+  for (;;) {
+    for (let k = 0; k < options.length && chosen < 0; k++) {
+      if (await probePresent(page, options[k], state.inputs, 0)) chosen = k;
+    }
+    if (chosen >= 0 || Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  if (chosen < 0) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "branch_no_match" });
+    throw stepFailure(step, i, new Error(
+      "None of the known ways this workflow can go from here appeared on the page. The app may have changed, or it is a way nobody recorded yet.",
+    ), null, state.warnings);
+  }
+  ctx.tracker.emit("branch_chosen", { si: i, opt: chosen });
+  const body = Array.isArray(options[chosen].steps) ? options[chosen].steps : [];
+  state.forkDepth = (state.forkDepth || 0) + 1; // a guard pause has no cursor inside a branch body yet
+  try {
+    for (let j = 0; j < body.length; j++) await executeOneStep(ctx, state, body, j);
+  } finally {
+    state.forkDepth -= 1;
   }
 }
 
@@ -1001,7 +1114,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, appKnowledge: knowledge } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1115,6 +1228,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
     guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)
     stopBefore, // Studio-only: park just before this step (segment re-recording)
+    resumeLoop: resumeLoop || null, // a guard pause inside a for_each body: {stepIndex, rowId, bodyIndex, perRow}
     appKnowledge: knowledge || null, // advisory popup knowledge for an unrecognised dialog (app_knowledge.js)
   };
 
@@ -1146,9 +1260,8 @@ function runIfDecision(step, inputs) {
   return { skip: !run, input: String(cond.input) };
 }
 
-// The values this run read off the page, by name: every extract step's output_name (nested bodies
-// included) that now holds a value. A name no step produced is simply absent.
-function collectOutputs(steps, inputs) {
+// Every extract step's output_name, nested bodies included.
+function declaredOutputNames(steps) {
   const names = [];
   const walk = (list) => {
     for (const s of Array.isArray(list) ? list : []) {
@@ -1160,6 +1273,13 @@ function collectOutputs(steps, inputs) {
     }
   };
   walk(steps);
+  return names;
+}
+
+// The values this run read off the page, by name: every extract step's output_name (nested bodies
+// included) that now holds a value. A name no step produced is simply absent.
+function collectOutputs(steps, inputs) {
+  const names = declaredOutputNames(steps);
   const out = {};
   for (const n of names) if (inputs && inputs[n] !== undefined) out[n] = inputs[n];
   return out;
@@ -1210,6 +1330,7 @@ module.exports = {
   runPlan,
   runIfDecision,
   collectOutputs,
+  declaredOutputNames,
   checkRetryBudget,
   clearRetryBudget,
   mapErrorToCode,

@@ -23,7 +23,7 @@ import {
 } from '@/api/workflowApi'
 import { fetchWorkflows, normalizeWorkflowList } from '@/api/workflowsApi'
 import { EditConversationPanel } from '@/components/conversation/EditConversationPanel'
-import { flowTestPrepare } from '@/api/conversationApi'
+import { flowRerecordFrom, flowTestPrepare } from '@/api/conversationApi'
 import { useShellData } from '@/hooks/useShellData'
 import { compactStepLabel } from '@/lib/workflowViewerHelpers'
 import { RecordingScreenshotsPanel } from '@/components/RecordingScreenshotsPanel'
@@ -62,6 +62,8 @@ import {
   Map as MapIcon,
   Redo2,
   RefreshCw,
+  GitBranch,
+  Video,
   SlidersHorizontal,
   Undo2,
   Wrench,
@@ -393,6 +395,24 @@ export function HumanEditPage() {
       await flowTestPrepare(convWorkflow.id)
     } catch (err) {
       toast.error(errorMessage(err, 'Could not start a test — please try again.'))
+      return
+    }
+    navigate(`/w/${convWorkflow.id}`)
+  }
+
+  /** Replay the workflow up to the open step and record the rest by hand; the result replaces this step
+   *  and everything after it. Needs the open step saved first, so the replay runs what is on screen. */
+  const rerecordFromHere = async (mode: 'replace' | 'branch' = 'replace') => {
+    if (!skillId || !convWorkflow || selected === null) return
+    const savedOk = await (stepEditorRef.current?.submitIfDirty() ?? Promise.resolve(true))
+    if (!savedOk || useEditorStore.getState().dirtySteps.size > 0) {
+      toast.error('Save the open step first, then record from it.')
+      return
+    }
+    try {
+      await flowRerecordFrom(skillId, selected, mode)
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not start recording from that step.'))
       return
     }
     navigate(`/w/${convWorkflow.id}`)
@@ -970,6 +990,32 @@ export function HumanEditPage() {
             </PopoverContent>
           </Popover>
           <div className="hidden h-7 w-px bg-white/15 sm:block" aria-hidden />
+          {fromConversation && selected !== null && selected > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 px-3 text-sm" onClick={() => void rerecordFromHere('replace')}>
+                  <Video className="size-4" aria-hidden />
+                  Record from here
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Replay the workflow up to just before this step, then do the rest yourself — what you record replaces this step and the ones after it
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {fromConversation && selected !== null && selected > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 px-3 text-sm" onClick={() => void rerecordFromHere('branch')}>
+                  <GitBranch className="size-4" aria-hidden />
+                  Record another way
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                For when the app sometimes goes a different way from this step (a different page, a different popup). Replay to just before it, record the other way, and the workflow keeps both and takes whichever the page offers
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

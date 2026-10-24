@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Globe, Loader2, Lock, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, FolderOpen, Globe, Loader2, Lock, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
 import { flowDiscardRecording, flowFinishRecording, flowPauseRecording, flowResumeRecording, flowSignInCancel, flowSignInDone } from '@/api/conversationApi'
 import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
 import { PanelDivider } from '@/components/shell/PanelDivider'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { useNativeViewRegion } from '@/components/shell/useNativeViewRegion'
 import { Button } from '@/components/ui/button'
-import { activeTab, useBrowserStore, type FlowControls, type PanelRun, type PanelTab } from '@/store/browserStore'
+import { activeTab, useBrowserStore, type FlowControls, type PanelDownload, type PanelRun, type PanelTab } from '@/store/browserStore'
 import { BROWSER } from '@/lib/panels'
 import { cn } from '@/lib/utils'
 
@@ -172,8 +172,70 @@ function TabStrip({ run, seen }: { run: PanelRun; seen: Set<string> }) {
   )
 }
 
+const fmtBytes = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`)
+
+function downloadStatus(d: PanelDownload): string {
+  const size = d.totalBytes > 0 ? `${fmtBytes(d.receivedBytes)} of ${fmtBytes(d.totalBytes)}` : fmtBytes(d.receivedBytes)
+  switch (d.state) {
+    case 'progressing': return `Downloading… ${size}`
+    case 'completed': return `Done · ${fmtBytes(d.receivedBytes)}`
+    case 'cancelled': return 'Cancelled'
+    default: return 'Failed — the download was interrupted'
+  }
+}
+
+/** Chrome's Downloads list. It sits in the pane (not floating over the page) because the page is a
+ *  native view that always draws on top. */
+function DownloadsPanel({ run, onClose }: { run: PanelRun; onClose: () => void }) {
+  const act = (id: string, action: 'cancel' | 'retry' | 'show' | 'open' | 'clear') => void window.conxa.panel.downloadAction({ runId: run.runId, id, action })
+  const rows = [...run.downloads].reverse()
+  const icon = 'flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--text-meta)] outline-none hover:bg-white/10 hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-brand/55'
+  return (
+    <div className="shrink-0 border-b border-[var(--border-subtle)] bg-[#1f1f1f]" role="region" aria-label="Downloads">
+      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)]">
+        <span className="flex-1 font-medium">Downloads</span>
+        {rows.some((d) => d.state !== 'progressing') && (
+          <button type="button" className="text-[var(--text-meta)] hover:text-[var(--text-primary)]" onClick={() => act('', 'clear')}>Clear list</button>
+        )}
+        <button type="button" aria-label="Close downloads" className={icon} onClick={onClose}><X className="size-3.5" /></button>
+      </div>
+      <ul className="max-h-40 overflow-y-auto px-2 pb-2">
+        {rows.length === 0 && <li className="px-1 py-1 text-xs text-[var(--text-meta)]">No downloads yet.</li>}
+        {rows.map((d) => {
+          const pct = d.totalBytes > 0 ? Math.min(100, Math.round((d.receivedBytes / d.totalBytes) * 100)) : null
+          const bad = d.state === 'cancelled' || d.state === 'interrupted'
+          return (
+            <li key={d.id} className="flex items-center gap-2 rounded-[6px] px-1 py-1 hover:bg-white/[0.04]">
+              <Download className="size-4 shrink-0 text-[var(--text-meta)]" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs text-[var(--text-primary)]" title={d.filename}>{d.filename}</p>
+                {d.state === 'progressing' && (
+                  <div className="my-0.5 h-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
+                    <div className={cn('h-full bg-[#93b4e6]', pct === null && 'w-1/3 animate-pulse motion-reduce:animate-none')} style={pct === null ? undefined : { width: `${pct}%` }} />
+                  </div>
+                )}
+                <p className={cn('truncate text-[0.6875rem]', bad ? 'text-status-warn' : 'text-[var(--text-meta)]')}>{d.host && `${d.host} · `}{downloadStatus(d)}</p>
+              </div>
+              {d.state === 'progressing' && <button type="button" aria-label={`Cancel ${d.filename}`} title="Cancel" className={icon} onClick={() => act(d.id, 'cancel')}><X className="size-3.5" /></button>}
+              {bad && <button type="button" aria-label={`Retry ${d.filename}`} title="Retry" className={icon} onClick={() => act(d.id, 'retry')}><RotateCw className="size-3.5" /></button>}
+              {d.state === 'completed' && (
+                <>
+                  <button type="button" aria-label={`Open ${d.filename}`} title="Open" className={icon} onClick={() => act(d.id, 'open')}><ExternalLink className="size-3.5" /></button>
+                  <button type="button" aria-label={`Show ${d.filename} in folder`} title="Show in folder" className={icon} onClick={() => act(d.id, 'show')}><FolderOpen className="size-3.5" /></button>
+                </>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 /** Back / forward / reload-or-stop and an address bar you can type a site or a search into. */
-function Toolbar({ run, tab }: { run: PanelRun; tab: PanelTab }) {
+function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: PanelTab; dlOpen: boolean; onToggleDownloads: () => void }) {
+  const active = run.downloads.filter((d) => d.state === 'progressing')
+  const failed = run.downloads.some((d) => d.state === 'cancelled' || d.state === 'interrupted')
   const input = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState<string | null>(null) // null = showing the page's own address
   const nav = (action: 'back' | 'forward' | 'reload' | 'stop') => window.conxa.panel.navigate({ runId: run.runId, tabId: tab.id, action })
@@ -253,6 +315,23 @@ function Toolbar({ run, tab }: { run: PanelRun; tab: PanelTab }) {
           className="min-w-0 flex-1 bg-transparent text-[0.8125rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-meta)]"
         />
       </form>
+      {run.downloads.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={cn('relative text-[var(--text-meta)]', dlOpen && 'bg-white/10')}
+          aria-label="Downloads"
+          aria-expanded={dlOpen}
+          title="Downloads"
+          onClick={onToggleDownloads}
+        >
+          {active.length > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Download className="size-4" />}
+          {active.length === 0 && (
+            <span aria-hidden className={cn('absolute right-1 top-1 size-1.5 rounded-full', failed ? 'bg-status-warn' : 'bg-[#93b4e6]')} />
+          )}
+        </Button>
+      )}
     </div>
   )
 }
@@ -280,6 +359,14 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
   useEffect(() => {
     if (tab && !seen.has(tab.id)) setSeen((s) => new Set(s).add(tab.id))
   }, [tab, seen])
+
+  // Chrome opens its Downloads list when a download starts.
+  const [dlOpen, setDlOpen] = useState(false)
+  const dlCount = run?.downloads.length ?? 0
+  useEffect(() => {
+    if (dlCount > 0) setDlOpen(true)
+    else setDlOpen(false)
+  }, [dlCount])
 
   if (!run || !tab) return null
   const flow = storeFlow?.runId === run.runId ? storeFlow : null
@@ -350,7 +437,8 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
         </header>
 
         <TabStrip run={run} seen={seen} />
-        <Toolbar run={run} tab={tab} />
+        <Toolbar run={run} tab={tab} dlOpen={dlOpen} onToggleDownloads={() => setDlOpen((o) => !o)} />
+        {dlOpen && <DownloadsPanel run={run} onClose={() => setDlOpen(false)} />}
         <div aria-hidden className={cn('h-0.5 shrink-0', (phase === 'ready' || tab.loading) && 'animate-pulse bg-[#93b4e6]/60 motion-reduce:animate-none')} />
 
         {/* The native view is drawn into this region. */}

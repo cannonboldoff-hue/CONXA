@@ -28,6 +28,42 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _read_execution_steps(path: Path) -> list[Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def execution_capabilities(steps: list[Any]) -> list[str]:
+    """App-layer features the built steps (runtime shape, nested bodies included) rely on, named as in
+    the app layer's version.json ``capabilities``. An engine without one would misread the step."""
+    need: set[str] = set()
+
+    def walk(items: Any) -> None:
+        for s in items if isinstance(items, list) else []:
+            if not isinstance(s, dict):
+                continue
+            hints = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
+            if isinstance((hints.get("date_picker") or {}).get("date_offset_days"), int):
+                need.add("date_offset")
+            if s.get("on_missing") == "ask":
+                need.add("ask_missing")
+            if s.get("type") == "wait_for_one_of" and s.get("flow"):
+                need.add("variant_branch")
+            bundle = s.get("identity_bundle") if isinstance(s.get("identity_bundle"), dict) else {}
+            if "{{" in json.dumps([bundle.get("signals"), bundle.get("fingerprint")], default=str):
+                need.add("templated_click")
+            walk(s.get("steps"))
+            walk(s.get("body"))
+            for o in s.get("options") if isinstance(s.get("options"), list) else []:
+                walk(o.get("steps") if isinstance(o, dict) else None)
+
+    walk(steps)
+    return sorted(need)
+
+
 def _compute_inputs_required(idata: dict[str, Any]) -> list[str]:
     """Derive the manifest's `inputs_required` from a parsed inputs.json.
 
@@ -197,6 +233,7 @@ def _write_skill_packs_format(
         loaded_comp = _read_json_sidecar(src_dir / "compensation_skill.json", "compensation_skill.json")
         compensation_skill = str(loaded_comp.get("compensation_skill") or "").strip()
 
+        required_capabilities = execution_capabilities(_read_execution_steps(src_dir / "execution.json"))
         manifest = {
             "slug":             slug,
             "name":             skill_name,
@@ -241,6 +278,10 @@ def _write_skill_packs_format(
             "compensation_skill": compensation_skill,
             "checksum":         checksums,
         }
+        # Engine features this pack uses that older app layers don't have: the runtime refuses the pack
+        # instead of running a step it would misread (required_runtime compares the host exe, not this).
+        if required_capabilities:
+            manifest["required_capabilities"] = required_capabilities
         # AUTH-1: hosts the recording visited that no group app covers — the runtime warns (never
         # blocks) about them before step 0. Omitted when empty so the common manifest is unchanged
         # and a runtime that predates the field simply never reads it.

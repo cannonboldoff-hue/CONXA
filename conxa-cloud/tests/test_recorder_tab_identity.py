@@ -4,6 +4,8 @@ conxa_compile/recorder/session.py::_register_new_pages_sync / _tab_context_for_p
 """
 from __future__ import annotations
 
+import pytest
+
 from conxa_compile.recorder.session import RecordingSession
 
 
@@ -233,3 +235,40 @@ def test_popup_that_closes_before_registration_keeps_the_openers_tab() -> None:
     tab_key = payload.pop("_tab_key")
     assert sess._tab_ids.get(tab_key) is None
     assert sess._tab_context_for_page(opener)["id"] == "tab_0"
+
+
+def test_a_popup_event_waits_for_its_tab_to_be_registered_and_keeps_its_place_in_the_queue():
+    from queue import Empty
+
+    from conxa_compile.recorder.session import RecordingSession
+
+    sess = RecordingSession(session_id="popup-race")
+    popup = {"kind": "popup", "_tab_key": 111}
+    later = {"kind": "click"}
+    sess._pending_payloads.put((popup, None, None))
+    sess._pending_payloads.put((later, None, None))
+    with pytest.raises(Empty):
+        sess._next_payload_sync()                    # tab 111 is not registered yet: hold the popup...
+    with pytest.raises(Empty):
+        sess._next_payload_sync()                    # ...and the click behind it waits too (order kept)
+    sess._tab_ids[111] = "tab_1"                     # the pump registers the new page
+    assert sess._next_payload_sync()[0] is popup
+    assert "_held_since" not in popup
+    assert sess._next_payload_sync()[0] is later
+
+
+def test_a_popup_whose_tab_never_registers_goes_with_the_opener_after_the_wait_and_at_shutdown():
+    from queue import Empty
+
+    from conxa_compile.recorder.session import RecordingSession
+
+    sess = RecordingSession(session_id="popup-race-2")
+    sess.POPUP_TAB_WAIT_S = 0.0
+    popup = {"kind": "popup", "_tab_key": 222}
+    sess._pending_payloads.put((popup, None, None))
+    assert sess._next_payload_sync()[0] is popup     # wait elapsed: released as before (opener's tab)
+    sess.POPUP_TAB_WAIT_S = 60
+    sess._pending_payloads.put(({"kind": "popup", "_tab_key": 333}, None, None))
+    assert sess._next_payload_sync(final=True)[0]["_tab_key"] == 333   # shutdown never waits
+    with pytest.raises(Empty):
+        sess._next_payload_sync()

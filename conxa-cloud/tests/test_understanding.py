@@ -8,7 +8,7 @@ import pytest
 from conxa_compile.conversation import understanding
 from conxa_compile.conversation.clarify import BLOCKING_KINDS, generate_questions, plan_answer
 from conxa_compile.conversation.lifecycle import derive_lifecycle
-from conxa_compile.editor.workflow_mutations import parameterize_literal
+from conxa_compile.editor.workflow_mutations import parameterize_click_text, parameterize_literal
 
 
 def _step(action, intent, **kw):
@@ -199,3 +199,94 @@ def test_testing_waits_for_a_question_that_decides_what_the_workflow_is():
     advisory = derive_lifecycle(_WF, clarify={"open": 1, "blocking_open": 0})
     assert "test" in advisory["allowed_actions"]
     assert "test" in derive_lifecycle(_WF, clarify={"open": 1})["allowed_actions"]   # older summaries are unchanged
+
+
+def test_parameterizing_also_templates_address_and_message_checks_but_never_a_selector_check():
+    doc = _github_to_drive()
+    doc["skills"][0]["steps"][0]["validation"] = {"assertions": [
+        {"type": "url_pattern", "target": r"github\.com/github/gitignore$", "required": False},
+        {"type": "text_present", "target": "Showing github/gitignore", "required": False},
+        {"type": "selector_present", "target": "a[href='/github/gitignore']", "required": False},
+    ]}
+    out, _ = parameterize_literal(doc, "github/gitignore", "repository")
+    got = [a["target"] for a in out["skills"][0]["steps"][0]["validation"]["assertions"]]
+    assert got == [r"github\.com/{{repository}}$", "Showing {{repository}}", "a[href='/github/gitignore']"]
+
+
+def test_a_typed_value_the_description_names_is_pre_unticked_in_the_values_question():
+    from conxa_compile.conversation.understanding import extract_candidates, validate
+
+    doc = {"inputs": [{"id": "company", "default": "Acme Ltd"}, {"id": "note", "default": "hello"}],
+           "skills": [{"steps": [
+               {"action": "type", "input_binding": "company", "value": "{{company}}", "intent": "Type company"},
+               {"action": "type", "input_binding": "note", "value": "{{note}}", "intent": "Type note"},
+           ]}]}
+    cands = extract_candidates(doc)
+    assert [c["ref"] for c in cands if c["kind"] == "typed"] == ["typed:company", "typed:note"]
+    checked = validate({"values": [{"ref": "typed:company", "verdict": "fixed", "name": "ignored"}]}, cands, set())
+    assert checked["values"]["typed:company"]["name"] == "company"          # never the model's name
+    for c in cands:
+        c.update(checked["values"].get(c["ref"], {"verdict": "unsure"}))
+    q = next(q for q in generate_questions(doc, understanding={"candidates": cands}, source_lookup=lambda s: {"action": {"value": "x"}}) if q["kind"] == "values")
+    assert {c["id"]: c["selected"] for c in q["choices"]} == {"company": False, "note": True}
+    assert not [q for q in generate_questions(doc, understanding={"candidates": cands}) if q["kind"] == "chosen_values"]
+
+
+# ── clicked items (BUILD-49) ────────────────────────────────────────────────────────────────
+
+
+def _clicked_file_doc():
+    doc = _github_to_drive()
+    doc["skills"][0]["steps"][1]["identity_bundle"] = {
+        "stable_hash": "open_file",
+        "fingerprint": {"role": "link", "tag": "a", "inner_text": "Android.gitignore", "aria_label": "Android.gitignore",
+                        "data_testid": "file-Android"},
+        "signals": [
+            {"engine": "testid", "selector": 'internal:testid=[data-testid="file-Android"]', "durability": 0.99, "unique_at_compile": True},
+            {"engine": "role", "selector": 'internal:role=link[name="Android.gitignore"i]', "durability": 0.9},
+            {"engine": "css-structural", "selector": "tbody tr:nth-child(3) a", "durability": 0.3, "unique_at_compile": True},
+            {"engine": "attr", "selector": "a[title]", "durability": 0.4},
+        ],
+    }
+    doc["skills"][0]["steps"][1]["compiled_selectors"] = ['a:has-text("Android.gitignore")', "#row-3 a"]
+    doc["skills"][0]["steps"][1]["target"] = {"primary_selector": "#row-3 a"}
+    return doc
+
+
+def test_a_clicked_item_with_a_text_signal_is_offered_and_its_text_becomes_an_input():
+    doc = _clicked_file_doc()
+    click = next(c for c in understanding.extract_candidates(doc) if c["kind"] == "click" and c["literal"] == "Android.gitignore")
+    assert click["supported"] is True
+    out, changed = parameterize_click_text(doc, "Android.gitignore", "file_name", default="Android.gitignore")
+    assert changed == 1
+    step = out["skills"][0]["steps"][1]
+    bundle = step["identity_bundle"]
+    # the text signal names the run's item; signals that would still pin the recorded item are gone
+    assert [s["selector"] for s in bundle["signals"]] == ['internal:role=link[name="{{file_name}}"i]', "a[title]"]
+    assert bundle["fingerprint"]["inner_text"] == "{{file_name}}" and bundle["fingerprint"]["aria_label"] == "{{file_name}}"
+    assert bundle["fingerprint"]["data_testid"] == "" and bundle["fingerprint"]["role"] == "link"
+    assert step["compiled_selectors"] == ['a:has-text("{{file_name}}")']
+    assert step["target"]["primary_selector"] == 'role=link[name="{{file_name}}"i]'
+    assert out["inputs"] == [{"id": "file_name", "type": "text", "default": "Android.gitignore", "options": []}]
+    assert out["skills"][0]["steps"][0]["url"] == "https://github.com/github/gitignore"     # nothing else moved
+
+
+def test_a_click_no_text_signal_can_carry_is_reported_but_never_changed():
+    doc = _clicked_file_doc()
+    doc["skills"][0]["steps"][1]["identity_bundle"]["signals"] = [
+        {"engine": "css-structural", "selector": "tbody tr:nth-child(3) a", "durability": 0.3}]
+    click = next(c for c in understanding.extract_candidates(doc) if c["kind"] == "click" and c["literal"] == "Android.gitignore")
+    assert click["supported"] is False
+    with pytest.raises(ValueError, match="literal_not_found"):
+        parameterize_click_text(doc, "Android.gitignore", "file_name")
+
+
+def test_a_ticked_clicked_item_becomes_a_click_parameterize_op():
+    doc = _clicked_file_doc()
+    cands = understanding.extract_candidates(doc)
+    for c in cands:
+        c.update({"verdict": "varies", "name": "file_name"} if c["kind"] == "click" and c["supported"] else {"verdict": "fixed", "name": ""})
+    q = next(q for q in generate_questions(doc, understanding={"candidates": cands}) if q["kind"] == "chosen_values")
+    ops, _ = plan_answer(q, {"selected": [q["choices"][0]["id"]]}, doc)
+    assert ops == [{"op": "parameterize", "literal": "Android.gitignore", "name": "file_name",
+                    "default": "Android.gitignore", "kind": "click"}]

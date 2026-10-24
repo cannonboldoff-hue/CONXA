@@ -360,6 +360,7 @@ def collapse_date_picker_runs(
     steps: list[SkillStep],
     events: list[dict[str, Any]],
     policy: dict[str, Any],
+    absorbed: list[dict[str, Any]] | None = None,
 ) -> list[SkillStep]:
     """Find maximal runs of consecutive click/select steps whose events share a
     `date_context.grid` selector — [field click]? + [nav clicks | year/month <select>]* +
@@ -425,6 +426,10 @@ def collapse_date_picker_runs(
             steps, events, day_idxs, time_idx, year_select_idx, month_select_idx,
             open_step, open_event, policy,
         ))
+        if absorbed is not None:
+            # nav clicks / year-month selects: the day (and time) pick lives on in the new step
+            kept = set(day_idxs) | ({time_idx} if time_idx is not None else set())
+            absorbed.extend(events[k] for k in run_range if k not in kept)
         i = run_end + 1
 
     return out

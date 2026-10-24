@@ -101,6 +101,7 @@ def collapse_choice_group_runs(
     steps: list[Any],
     events: list[dict[str, Any]],
     _policy: dict[str, Any],
+    absorbed: list[dict[str, Any]] | None = None,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     """Collapse consecutive set_checkbox steps sharing a checkbox-group `group_key` into one
     set_checkbox step carrying every group member and which ones ended up checked. Absolute, not
@@ -174,6 +175,8 @@ def collapse_choice_group_runs(
         }
         out.append(base)
         synced_events.append(events[i])
+        if absorbed is not None:
+            absorbed.extend(events[i + 1:run_end + 1])
         i = run_end + 1
 
     return out, synced_events

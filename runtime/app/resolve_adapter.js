@@ -120,10 +120,26 @@ async function gatherCandidates(roots, signals, interpolate, inputs, perSignalCa
   return map;
 }
 
-// Shape the bundle's fingerprint into what resolver.scoreCandidate expects.
-function bundleFingerprint(bundle) {
+// The fields scoreCandidate compares against a candidate's visible text / accessible name.
+const TEXT_FINGERPRINT_FIELDS = ["inner_text", "aria_label", "name", "title", "alt", "label_text", "placeholder"];
+
+// Shape the bundle's fingerprint into what resolver.scoreCandidate expects. A clicked item that
+// changes each run (BUILD-49) carries `{{input}}` in its text signals AND the same token in these
+// fingerprint fields, so the score compares the candidate against THIS run's text; the recorded
+// stable_hash describes the recorded item, so it is dropped (no hash tie-break) for such a bundle.
+function bundleFingerprint(bundle, interpolate, inputs) {
   const fp = (bundle && bundle.fingerprint) || {};
-  return { ...fp, stable_hash: (bundle && bundle.stable_hash) || "" };
+  const out = { ...fp, stable_hash: (bundle && bundle.stable_hash) || "" };
+  if (typeof interpolate !== "function") return out;
+  let templated = false;
+  for (const f of TEXT_FINGERPRINT_FIELDS) {
+    if (typeof out[f] === "string" && out[f].includes("{{")) {
+      out[f] = interpolate(out[f], inputs || {});
+      templated = true;
+    }
+  }
+  if (templated) out.stable_hash = "";
+  return out;
 }
 
 module.exports = {

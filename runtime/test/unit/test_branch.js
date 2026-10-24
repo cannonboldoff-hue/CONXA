@@ -167,3 +167,72 @@ test("wait_for_one_of no-ops when not required and no option appears before time
   const step = { type: "wait_for_one_of", timeout_ms: 50, options: [{ selector: "#never" }] };
   await assert.doesNotReject(executeStep(page, step, {}));
 });
+
+// ─── variant branch (flow: true) ───────────────────────────────────────────────
+// "Record another way from here": each option is a whole way the rest of the workflow can go. The
+// chosen body runs as real steps, so a failure inside it fails the run (a cookie-banner branch
+// would have swallowed it).
+
+const { runPlan } = require("../../app/run");
+const { HANDLERS } = require("../../app/handlers");
+
+function flowPage(present) {
+  return {
+    ...mockPage({ present }),
+    waitForLoadState: async () => {},
+    context: () => ({ on: () => {} }),
+    url: () => "https://x.test",
+  };
+}
+
+function flowBranch(extra = {}) {
+  return {
+    type: "wait_for_one_of", flow: true, timeout_ms: 50,
+    options: [
+      { selector: "#path-a", steps: [{ type: "ran", intent: "a1" }, { type: "ran", intent: "a2" }] },
+      { selector: "#path-b", steps: [{ type: "ran", intent: "b1" }] },
+    ],
+    ...extra,
+  };
+}
+
+test("variant branch: runs the body of the option whose probe is on the page, and only that one", async () => {
+  const ran = [];
+  HANDLERS.ran = async (_p, step) => { ran.push(step.intent); };
+  try {
+    await runPlan(flowPage({ "#path-b": true }), [flowBranch()], {}, 0, "vb-b");
+    assert.deepStrictEqual(ran, ["b1"]);
+    ran.length = 0;
+    await runPlan(flowPage({ "#path-a": true, "#path-b": true }), [flowBranch()], {}, 0, "vb-ab");
+    assert.deepStrictEqual(ran, ["a1", "a2"]);                       // the first matching option wins
+  } finally {
+    delete HANDLERS.ran;
+  }
+});
+
+test("variant branch: nothing on the page matching any way fails the run instead of passing silently", async () => {
+  await assert.rejects(
+    () => runPlan(flowPage({}), [flowBranch()], {}, 0, "vb-none"),
+    (err) => /None of the known ways/.test(err.message),
+  );
+});
+
+test("variant branch: a failing step inside the chosen body fails the run (it is not swallowed)", async () => {
+  HANDLERS.boom = async () => { throw Object.assign(new Error("boom"), { badInput: true }); };
+  try {
+    const branch = flowBranch({ options: [{ selector: "#path-a", steps: [{ type: "boom", intent: "x" }] }] });
+    await assert.rejects(() => runPlan(flowPage({ "#path-a": true }), [branch], {}, 0, "vb-fail"), /boom/);
+  } finally {
+    delete HANDLERS.boom;
+  }
+});
+
+test("a branch without flow: true still swallows body errors (cookie banners must never fail a run)", async () => {
+  HANDLERS.boom = async () => { throw new Error("boom"); };
+  try {
+    const banner = { type: "wait_for_one_of", timeout_ms: 50, options: [{ selector: "#path-a", steps: [{ type: "boom", intent: "x" }] }] };
+    await runPlan(flowPage({ "#path-a": true }), [banner], {}, 0, "vb-banner");
+  } finally {
+    delete HANDLERS.boom;
+  }
+});

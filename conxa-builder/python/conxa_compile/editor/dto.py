@@ -121,6 +121,11 @@ class StepEditorDTO(BaseModel):
     # note on EntityBinding). An irreversible step with a detected but unconfirmed binding
     # cannot be saved (patch_gate) or published (see publish invariant).
     entity_binding: dict[str, Any] = Field(default_factory=dict)
+    # BUILD-51: what the step reads / when it runs / what to do when its record is gone. All three are
+    # patchable (patch_gate already validates them); {} / None when the step carries none.
+    run_if: dict[str, Any] = Field(default_factory=dict)
+    on_missing: str | None = None
+    extract: dict[str, Any] = Field(default_factory=dict)
     # {kind, probe, step_count} when this step is a branch action (if_present/try_dismiss/
     # wait_for_one_of); None for ordinary steps.
     branch_summary: dict[str, Any] | None = None

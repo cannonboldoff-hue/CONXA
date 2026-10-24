@@ -107,6 +107,32 @@ def acquire(playwright: Any, run_id: str, *, kind: str, label: str = "",
     return browser, context, page, str(created["tabId"])
 
 
+def adopt(playwright: Any, run_id: str, *, viewport: dict | None = None) -> tuple[Any, Any, Any, str]:
+    """Take over a panel run that already holds a page (a test replayed up to a step and parked there)
+    instead of asking for a fresh view: the same views, partition and signed-in state. The page has long
+    left its marker URL, so it is found by its devtools target id, which the panel reports on adoption.
+    Returns (browser, context, page, tab_id) like acquire()."""
+    adopted = control("adopt_view", runId=run_id, kind="record", viewport=viewport)
+    wanted = adopted.get("targetId")
+    if not wanted:
+        raise RuntimeError("browser panel: the parked page has no devtools target to attach to")
+    browser = playwright.chromium.connect_over_cdp(cdp_endpoint())
+    try:
+        if not browser.contexts:
+            raise RuntimeError("browser panel: no browser context on connect")
+        context = browser.contexts[0]
+        page = next((p for p in context.pages if target_id(context, p) == wanted), None)
+        if page is None:
+            raise RuntimeError("browser panel: could not find the parked page")
+    except Exception:
+        try:
+            browser.close()
+        except Exception:  # noqa: BLE001
+            pass
+        raise  # the run is the panel's (and the person's); a failed adoption must not destroy it
+    return browser, context, page, str(adopted["tabId"])
+
+
 def run_target_ids(run_id: str) -> set[str]:
     return {t["targetId"] for t in control("targets", runId=run_id).get("targets") or []}
 

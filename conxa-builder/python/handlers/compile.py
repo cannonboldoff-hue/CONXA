@@ -39,7 +39,8 @@ class CompileMixin:
             workflow = get_workflow(workflow_id)
             if workflow is None:
                 raise _CommandError("workflow_not_found", f"No workflow {workflow_id}")
-            if workflow.session_id != session_id:
+            # A segment (re-record from a step) is a separate take beside the workflow's own recording.
+            if workflow.session_id != session_id and not payload.get("segment"):
                 raise _CommandError("workflow_not_found", f"Workflow {workflow_id} has no recording for session {session_id}")
 
         title = str(payload.get("skill_title") or "").strip()
@@ -173,6 +174,8 @@ class CompileMixin:
                     # exactly as it always was.
                     **({"task_description": workflow.task_description}
                        if workflow is not None and workflow.task_description.strip() else {}),
+                    # Picks up on a page that is already open: no start-page navigation is added.
+                    **({"segment": True} if payload.get("segment") else {}),
                 )
         except (CloudUnreachable, EntitlementBlocked, QuotaExceeded) as exc:
             _log(str(exc), level="error")
@@ -222,7 +225,7 @@ class CompileMixin:
             sink({"phase": "compile_step", "step": step, "status": "done"})
             _log(f"Completed: {step}")
         compile_report = package.compile_report or {}
-        if workflow is not None:
+        if workflow is not None and not payload.get("segment"):
             workflow.skill_id = skill_id
             workflow.recording_status = "compiled"
             workflow.compile_status = compile_report.get("status")

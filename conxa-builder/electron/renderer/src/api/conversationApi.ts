@@ -113,6 +113,9 @@ export const recordingRows = (sessionId: string) =>
 /** A test paused on an expired sign-in: sign in again, then run the same test again by itself. */
 export const flowSignInThenTest = (workflowId: string) => cmd<FlowResult>('flow_sign_in_then_test', { workflow_id: workflowId })
 export const flowCompile = (workflowId: string) => cmd<{ ok: boolean }>('flow_compile', { workflow_id: workflowId })
+/** Re-record from a step: replay up to just before it, then record the rest by hand (BUILD-52). */
+export const flowRerecordFrom = (skillId: string, stepIndex: number, mode: 'replace' | 'branch' = 'replace') =>
+  cmd<{ ok: boolean; step_key: string }>('flow_rerecord_from', { skill_id: skillId, step_index: stepIndex, mode })
 export const flowTestPrepare = (workflowId: string) => cmd<{ ok: boolean; card_id?: string }>('flow_test_prepare', { workflow_id: workflowId })
 export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<string, string>, guard: boolean, showBrowser: boolean) =>
   cmd<{ ok: boolean }>('flow_test_run', { workflow_id: workflowId, card_id: cardId, inputs, guard, show_browser: showBrowser })

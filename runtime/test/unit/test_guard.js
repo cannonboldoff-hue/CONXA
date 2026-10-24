@@ -123,3 +123,49 @@ test("guard: resuming from the paused step with a released guard skips the steps
   assert.deepStrictEqual(order, [1]);
   assert.strictEqual(paused, false);
 });
+
+// A guard pause inside a for_each body carries the loop's row cursor, so the resume continues AT the
+// paused row and step instead of restarting the loop (BUILD-53).
+test("guard inside a for_each body: pauses with a row cursor, and the resume continues at that row", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  const real = HANDLERS.extract;
+  const sent = [];
+  HANDLERS.extract = async (_p, step, inputs) => { inputs[step.output_name] = `read_${inputs.row_id}`; };
+  const realClick = HANDLERS.click;
+  HANDLERS.click = async (_p, _s, inputs) => { sent.push(inputs.row_id); };
+  try {
+    const page = { ...mockPage(), screenshot: async () => Buffer.from("") };
+    const loop = {
+      type: "for_each", as: "row", items: "ids", max_iterations: 5,
+      steps: [{ type: "extract", output_name: "seen", intent: "read" }, { type: "click", intent: "send", destructive: true, identity_bundle: bundle }],
+    };
+    const args = (extra) => ({ guard: { pause: true, released: !!extra.released }, resumeLoop: extra.resumeLoop, isResume: !!extra.resumeLoop });
+    let paused;
+    await assert.rejects(
+      () => runPlan(page, [loop], { ids: "a,b" }, 0, "guard-loop", args({})),
+      (err) => { paused = err; return err.guardPause === true; },
+    );
+    assert.strictEqual(paused.stepIndex, 0);                                  // the loop's own index: what the caller resumes from
+    assert.deepStrictEqual({ r: paused.loop.rowId, b: paused.loop.bodyIndex }, { r: "a", b: 1 });
+    assert.deepStrictEqual(sent, []);                                         // nothing sent before the pause
+
+    // resume: the extract of row "a" ran before the pause, so its value comes back as a produced input
+    const result = await runPlan(page, [loop], { ids: "a,b", seen: "read_a" }, 0, "guard-loop",
+      args({ released: true, resumeLoop: paused.loop }));
+    assert.deepStrictEqual(sent, ["a", "b"]);                                 // row a continued (not restarted), then row b
+    assert.deepStrictEqual(result.outputs, { seen: ["read_a", "read_b"] });
+  } finally {
+    HANDLERS.extract = real;
+    HANDLERS.click = realClick;
+  }
+});
+
+test("guard inside a for_each body: a resume whose row is gone fails closed", async () => {
+  const page = mockPage();
+  const loop = { type: "for_each", as: "row", items: "ids", max_iterations: 5, steps: [DESTRUCTIVE] };
+  await assert.rejects(
+    () => runPlan(page, [loop], { ids: "b,c" }, 0, "guard-loop-gone", {
+      guard: { pause: true, released: true }, isResume: true, resumeLoop: { stepIndex: 0, rowId: "a", bodyIndex: 0, perRow: {} } }),
+    (err) => /no longer on the page/.test(err.message),
+  );
+});

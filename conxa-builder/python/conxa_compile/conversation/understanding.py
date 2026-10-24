@@ -30,6 +30,7 @@ from conxa_compile.conversation.clarify import _action_name, _steps, step_name
 
 MAX_CANDIDATES = 12
 MAX_CLICK_CANDIDATES = 6
+MAX_TYPED_CANDIDATES = 6
 _NAME_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _VERDICTS = ("fixed", "varies", "unsure")
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
@@ -68,8 +69,8 @@ def extract_candidates(doc: dict[str, Any]) -> list[dict[str, Any]]:
 
     ``kind`` is ``url`` (a navigate step's address), ``row`` (an entity-bound step's record
     identifier) or ``click`` (a clicked item known only by its visible label). ``supported`` is
-    False for ``click``: nothing can yet change what a click's own text signals look for, so those
-    are reported but never offered as a choice.
+    True for a ``click`` only when ``workflow_mutations.click_text_templatable`` says its text
+    signals can carry the run's own text; otherwise it is reported but never offered as a choice.
     """
     steps = _steps(doc)
     keys = step_keys(steps)
@@ -100,7 +101,11 @@ def extract_candidates(doc: dict[str, Any]) -> list[dict[str, Any]]:
         elif act in ("click", "dblclick") and not s.get("optional_hint"):
             label = _fingerprint_label(s)
             if len(label) >= 2:
-                add("click", keys[i], s, label, label, False)
+                # Only a click whose text signals can carry the run's own text is offered as a choice;
+                # the rest (no text signal names the item) stay as recorded and are only reported.
+                from conxa_compile.editor.workflow_mutations import click_text_templatable  # noqa: PLC0415
+
+                add("click", keys[i], s, label, label, click_text_templatable(s) and not s.get("entity_binding"))
 
     out: list[dict[str, Any]] = []
     clicks = 0
@@ -111,7 +116,24 @@ def extract_candidates(doc: dict[str, Any]) -> list[dict[str, Any]]:
             if clicks > MAX_CLICK_CANDIDATES:
                 continue
         out.append(c)
-    return out[:MAX_CANDIDATES]
+    # Typed values last, so the cap drops them before the kinds only this check can see. They are
+    # already inputs (Clarify's ``values`` question owns them); the verdict only pre-decides its ticks.
+    defaults = {str(i.get("id")): str(i.get("default") or "") for i in doc.get("inputs") or [] if isinstance(i, dict)}
+    typed: dict[str, dict[str, Any]] = {}
+    for i, s in enumerate(steps):
+        binding = str(s.get("input_binding") or "")
+        if not binding or binding == "file_path" or binding in typed or _action_name(s) not in ("type", "fill"):
+            continue
+        if str(s.get("value") or "") != "{{" + binding + "}}" or not defaults.get(binding, "").strip():
+            continue
+        recorded = defaults[binding]
+        if recorded == "{{REDACTED}}" or len(typed) >= MAX_TYPED_CANDIDATES:
+            continue
+        typed[binding] = {
+            "ref": f"typed:{binding}", "kind": "typed", "step_keys": [keys[i]], "step_name": step_name(s),
+            "recorded": recorded[:200], "literal": recorded.strip(), "supported": False, "name": binding,
+        }
+    return (out + list(typed.values()))[:MAX_CANDIDATES + MAX_TYPED_CANDIDATES]
 
 
 def _end_checks(steps: list[dict[str, Any]]) -> list[str]:
@@ -174,7 +196,9 @@ def validate(raw: Any, candidates: list[dict[str, Any]], existing_inputs: set[st
         if cand["kind"] == "url" and proposed and proposed.lower() in cand["recorded"].lower():
             literal = proposed
         name = ""
-        if verdict != "fixed":
+        if cand["kind"] == "typed":
+            name = cand["name"]  # already an input: the name is not the model's to choose
+        elif verdict != "fixed":
             wanted = _snake(str(row.get("name") or ""))
             name = _unique_name(wanted or _FALLBACK_NAME[cand["kind"]], taken)
         values[row["ref"]] = {"verdict": verdict, "name": name, "literal": literal}
@@ -228,9 +252,14 @@ def understand(
         values = {}
         if task:
             for c in candidates:
-                if c["kind"] != "click":
+                if c["kind"] not in ("click", "typed"):
                     values[c["ref"]] = {"verdict": "unsure", "name": _unique_name(_FALLBACK_NAME[c["kind"]], taken), "literal": c["literal"]}
     for c in candidates:
         v = values.get(c["ref"])
-        c.update(v if v else {"verdict": "fixed", "name": "", "literal": c["literal"]})
+        if v:
+            c.update(v)
+        elif c["kind"] == "typed":
+            c["verdict"] = "unsure"  # no answer must not untick a value the compiler made an input
+        else:
+            c.update({"verdict": "fixed", "name": "", "literal": c["literal"]})
     return result

@@ -147,12 +147,19 @@ class _BindingState:
         return f"downloaded_file_{order}_dir"
 
     def add_download(self, raw_value: str) -> None:
-        self.total_downloads += 1
-        order = self.total_downloads
         try:
             payload = json.loads(raw_value) if raw_value else {}
         except (TypeError, ValueError):
             payload = {}
+        # A recorded download that failed/was cancelled left no file, so no later upload may bind to
+        # it. Payloads from before `status` existed have none and count as completed.
+        # shortcut: the runtime still numbers downloaded_file_N by real downloads, so a replay that
+        # succeeds where the recording failed shifts later indices by one; upgrade by recording the
+        # failed step's number in the payload if that ever bites.
+        if isinstance(payload, dict) and payload.get("status", "completed") != "completed":
+            return
+        self.total_downloads += 1
+        order = self.total_downloads
         name = parse_download_suggested_filename(raw_value)
         if name:
             self.pending_by_name.setdefault(name, []).append(order)

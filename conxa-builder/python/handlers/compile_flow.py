@@ -13,6 +13,7 @@ it have returned.
 
 from __future__ import annotations
 
+import datetime
 import threading
 import time
 import uuid
@@ -185,6 +186,8 @@ class CompileFlowMixin:
             fork_copy=fork_copy,
             known_popups=known,
             understanding=understood,
+            dropped=report.get("dropped") or [],
+            today=datetime.date.today(),
             limit=None,
         )
         # Ask the most important few now; keep the rest instead of silently dropping them.
@@ -428,8 +431,12 @@ class CompileFlowMixin:
                 added -= 1
             elif kind == "parameterize":
                 self.cmd_parameterize_literal(
-                    {"skill_id": skill_id, "literal": op["literal"], "name": op["name"], "default": op.get("default") or ""}, rid)
+                    {"skill_id": skill_id, "literal": op["literal"], "name": op["name"], "default": op.get("default") or "",
+                     "kind": op.get("kind") or ""}, rid)
                 self._log_edit("parameterize_literal", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "set_date_offset":
+                self.cmd_set_date_offset({"skill_id": skill_id, "step_index": index_of(op["step_key"]), "days": op["days"]}, rid)
+                self._log_edit("set_date_offset", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "drop_inputs":
                 doc = read_skill(skill_id) or {}
                 referenced: set[str] = set()

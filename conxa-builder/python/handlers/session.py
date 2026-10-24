@@ -302,7 +302,12 @@ class SessionMixin:
                 capture_hover=bool(payload.get("capture_hover")),
                 # False from a caller with nowhere to draw the panel's view (the older record dialog).
                 in_panel=payload.get("in_panel") is not False,
+                # Re-record from a step: record on the panel run that already holds the replayed page.
+                adopt_run_id=_safe_id(payload.get("adopt_run_id"), "adopt_run_id") if payload.get("adopt_run_id") else "",
             )
+            if payload.get("adopt_run_id") and not sess.embedded:
+                _recorder_registry.pop(sess.session_id)
+                raise _CommandError("panel_required", "Re-recording from a step needs Build Studio's browser panel.")
             # Fires from the recorder's Playwright driver thread whenever a "Choose File"
             # click would otherwise open the native OS picker — see
             # RecordingSession._on_file_chooser. No req_id: this isn't a reply to any

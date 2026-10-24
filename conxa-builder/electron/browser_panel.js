@@ -76,7 +76,9 @@ function _describeTab(run, t) {
 function _emit(runId, meta) {
   const run = _runs.get(runId);
   if (!run || !_onTabsChanged) return;
-  _onTabsChanged(runId, run.tabs.map((t) => _describeTab(run, t)), { finished: run.finished, kind: run.kind, ...(meta || {}) });
+  _onTabsChanged(runId, run.tabs.map((t) => _describeTab(run, t)), {
+    finished: run.finished, kind: run.kind, downloads: run.downloads.map(_describeDownload), ...(meta || {}),
+  });
 }
 
 // Fixed-viewport runs: the page always sees viewport.width x height at DPR 1, drawn at `scale`.
@@ -297,14 +299,50 @@ function _hookDownloads(runId, partition) {
     if (!run) { item.cancel(); return; }
     const dir = _downloadDir(runId);
     fs.mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, String(run.downloads.length + 1));
+    // A counter, not downloads.length: "Clear list" shrinks the array and ids/files must stay unique.
+    const seq = (run.downloadSeq = (run.downloadSeq || 0) + 1);
+    const file = path.join(dir, String(seq));
     item.setSavePath(file);
-    run.downloads.push({
+    const entry = {
+      id: String(seq),
       url: item.getURL(),
-      done: new Promise((resolve) => item.once("done", (_ev, state) => resolve(state === "completed" ? file : null))),
+      filename: item.getFilename(),
+      host: _hostOf(item.getURL()),
+      totalBytes: item.getTotalBytes(),
+      receivedBytes: 0,
+      // progressing | completed | cancelled | interrupted
+      state: "progressing",
+      path: file,
+      item,
+    };
+    let lastEmit = 0;
+    item.on("updated", (_ev, state) => {
+      entry.receivedBytes = item.getReceivedBytes();
+      entry.totalBytes = item.getTotalBytes();
+      if (state === "interrupted") entry.state = "interrupted";
+      const now = Date.now();
+      if (now - lastEmit >= 250) { lastEmit = now; _emit(runId); }
     });
+    entry.done = new Promise((resolve) => item.once("done", (_ev, state) => {
+      entry.receivedBytes = item.getReceivedBytes();
+      entry.totalBytes = item.getTotalBytes() || entry.totalBytes;
+      entry.state = state === "completed" ? "completed" : state === "cancelled" ? "cancelled" : "interrupted";
+      _emit(runId);
+      resolve(state === "completed" ? file : null);
+    }));
+    run.downloads.push(entry);
+    _emit(runId);
   });
 }
+
+const _describeDownload = (d) => ({
+  id: d.id, filename: d.filename, host: d.host, state: d.state,
+  receivedBytes: d.receivedBytes, totalBytes: d.totalBytes,
+});
+
+// A download failure carries its kind in the message ("cancelled: ...") because browser_control only
+// relays e.message to the recorder/runtime, which turn it back into a reason.
+const _fail = (code, msg) => Object.assign(new Error(`${code}: ${msg}`), { code });
 
 async function saveDownload(runId, url, dest, timeoutMs = 120000) {
   const deadline = Date.now() + timeoutMs;
@@ -315,14 +353,47 @@ async function saveDownload(runId, url, dest, timeoutMs = 120000) {
     if (entry || Date.now() > deadline) break;
     await new Promise((r) => setTimeout(r, 100));
   }
-  if (!entry) throw new Error(`no download of ${url} in run ${runId}`);
+  if (!entry) throw _fail("timeout", `no download of ${url} in run ${runId}`);
   entry.claimed = true;
-  const file = await entry.done;
-  if (!file) throw new Error(`download of ${url} did not complete`);
+  // The slow-download budget covers the transfer too, not only the wait for it to start.
+  const file = await Promise.race([
+    entry.done,
+    new Promise((r) => setTimeout(() => r("timeout"), Math.max(1000, timeoutMs))),
+  ]);
+  if (file === "timeout") {
+    try { entry.item.cancel(); } catch (_) { /* already gone */ }
+    throw _fail("timeout", `download of ${url} did not finish in ${timeoutMs}ms`);
+  }
+  if (!file) throw _fail(entry.state === "cancelled" ? "cancelled" : "interrupted", `download of ${url} did not complete`);
+  const size = fs.statSync(file).size;
+  if (size === 0 || (entry.totalBytes > 0 && size !== entry.totalBytes)) {
+    throw _fail("empty", `download of ${url} is ${size} bytes${entry.totalBytes > 0 ? ` (expected ${entry.totalBytes})` : ""}`);
+  }
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(file, dest);
   fs.rmSync(file, { force: true });
-  return { ok: true };
+  entry.path = dest;
+  return { ok: true, size };
+}
+
+// Chrome's download row actions. cancel/retry act on the live item; show/open on the saved file.
+function downloadAction(runId, id, action) {
+  const run = _runs.get(runId);
+  if (run && action === "clear") { run.downloads = run.downloads.filter((x) => x.state === "progressing"); _emit(runId); return true; }
+  const d = run && run.downloads.find((x) => x.id === id);
+  if (!d) return false;
+  const { shell } = require("electron");
+  switch (action) {
+    case "cancel": if (d.state === "progressing") d.item.cancel(); return true;
+    case "retry": {
+      const tab = run.tabs.find((t) => t.id === run.activeTabId) || run.tabs[0];
+      if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.downloadURL(d.url);
+      return true;
+    }
+    case "show": if (d.state === "completed" && fs.existsSync(d.path)) shell.showItemInFolder(d.path); return true;
+    case "open": if (d.state === "completed" && fs.existsSync(d.path)) void shell.openPath(d.path); return true;
+    default: return false;
+  }
 }
 
 // A new run starting replaces a finished test still sitting on screen. Record and sign-in runs are
@@ -421,6 +492,33 @@ async function runEnd(runId) {
   _emit(runId);
 }
 
+// Control-channel op "adopt_view": hand a test run that is parked mid-workflow to a recorder. Same views
+// and same partition, so the signed-in session and the page state the replay built up carry over; the run
+// becomes a record run (never dropped as a "finished test") at the recorder's fixed viewport. Awaits each
+// tab's devtools target id, which test tabs never looked up: the recorder finds its pages by them.
+async function adoptRun(runId, { kind = "record", viewport } = {}) {
+  const run = _runs.get(runId);
+  if (!run) throw new Error(`browser_panel: no run ${runId} to adopt`);
+  if (!KINDS.has(kind) || kind === "test") throw new Error(`browser_panel: cannot adopt a run as ${kind}`);
+  run.kind = kind;
+  run.finished = false;
+  if (viewport) {
+    run.viewport = _viewport(viewport);
+    for (const t of run.tabs) _emulate(run, t);
+  }
+  await Promise.all(run.tabs.map((t) => {
+    const dbg = _debugger(t);
+    t.targetReady = dbg
+      ? dbg.sendCommand("Target.getTargetInfo").then((r) => { t.targetId = r.targetInfo.targetId; }, () => {})
+      : Promise.resolve();
+    return t.targetReady;
+  }));
+  _emit(runId);
+  const active = run.tabs.find((t) => t.id === run.activeTabId) || run.tabs[0];
+  if (!active) throw new Error(`browser_panel: run ${runId} has no open tab to adopt`);
+  return { tabId: active.id, targetId: active.targetId || null };
+}
+
 // The person closed the browser (or a newer run replaced it): destroy the views, wipe the partition.
 async function closeRun(runId) {
   const run = _runs.get(runId);
@@ -491,4 +589,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { init, newView, newTab, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, scaleOf, targetsOf };
+module.exports = { init, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, scaleOf, targetsOf };

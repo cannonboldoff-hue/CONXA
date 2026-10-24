@@ -1,1 +1,1 @@
-{ "min_host": "0.0.0", "app_version": "v0.0.0-dev", "capabilities": ["test_guard"] }
+{ "min_host": "0.0.0", "app_version": "v0.0.0-dev", "capabilities": ["test_guard", "outputs", "run_if", "stop_before", "date_offset", "ask_missing", "templated_click", "loop_guard", "variant_branch"] }

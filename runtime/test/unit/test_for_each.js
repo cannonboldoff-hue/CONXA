@@ -272,3 +272,20 @@ test("for_each items source restores inputs after the loop — no {{file_id}}/{{
   assert.strictEqual(Object.prototype.hasOwnProperty.call(inputs, "file_id"), false);
   assert.strictEqual(Object.prototype.hasOwnProperty.call(inputs, "file_index"), false);
 });
+
+test("an extract in the loop body reports every row's value, in row order", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  const real = HANDLERS.extract;
+  HANDLERS.extract = async (_page, _step, inputs) => { inputs.total = `v_${inputs.row_id}`; };
+  try {
+    const page = mockRowsPage([]);
+    const step = {
+      type: "for_each", as: "row", max_iterations: 5, items: "ids",
+      steps: [{ type: "extract", output_name: "total", intent: "read_total" }],
+    };
+    const result = await runPlan(page, [step], { ids: "a,b,c" }, 0, "for-each-extract", {});
+    assert.deepStrictEqual(result.outputs, { total: ["v_a", "v_b", "v_c"] });
+  } finally {
+    HANDLERS.extract = real;
+  }
+});

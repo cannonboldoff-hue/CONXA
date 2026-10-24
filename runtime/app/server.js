@@ -35,6 +35,13 @@ const RUNTIME_VERSION = hostBridge.runtimeVersion(process.env.CONXA_DEV_RUNTIME_
 // not block local testing.
 const IS_LOCAL_DEV_RUNTIME = RUNTIME_VERSION.startsWith("0.0.0-");
 const INSTALL_ID      = loadInstallId(CONXA_DATA_DIR);
+// What this app layer can do beyond the base contract (its own version.json, written by CI). null when
+// the file is absent (an unpackaged checkout): then nothing is gated.
+const APP_CAPABILITIES = (() => {
+  try {
+    return new Set(JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8")).capabilities || []);
+  } catch (_) { return null; }
+})();
 
 // ─── Recovery tier ceiling ────────────────────────────────────────────────────
 // The zero-token cascade (Tier 1 deterministic ladder + Tier 2 a11y/fallback) always
@@ -237,6 +244,7 @@ let frameScopedInventory;
 let uniqueDownloadName;
 let sweepOldRuns;
 let extractZipOnce;
+let declaredOutputNames;
 let getCachedBrowser;
 let getAuthContext;
 let awaitAuthPending;
@@ -262,7 +270,7 @@ try {
   skillLoader  = require("./skill_loader");
   sync         = require("./sync");
   authManager  = require("./auth_manager");
-  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce } = require("./run"));
+  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce, declaredOutputNames } = require("./run"));
   ({ getCachedBrowser, releaseCachedBrowser, teardownExecBrowser, captureReAuth, gracefulShutdown,
      getAuthContext, awaitAuthPending, describeAuthWait, authAppStatus,
      _resolveGroup: resolveGroup } = require("./browser"));
@@ -307,7 +315,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
   const { name, arguments: args } = req.params;
   log("info", "tool_call", { tool: name });
   try {
-    return await _handleTool(name, args || {}, extra);
+    const result = await _handleTool(name, args || {}, extra);
+    // A tool with an outputSchema must return structuredContent on every non-error result, including
+    // pauses and "nothing extracted yet" runs.
+    if (result && !result.isError && !result.structuredContent && name.startsWith("skill_")
+        && _skillToolDefinitions().some((t) => t.name === name && t.outputSchema)) {
+      result.structuredContent = { outputs: {} };
+    }
+    return result;
   } catch (e) {
     log("error", "tool_error", { tool: name, error: e.message, stack: e.stack });
     const { summary, detail } = plainCause(e);
@@ -448,6 +463,22 @@ function _readDeclaredInputs(entry) {
   return [];
 }
 
+// What a paused run has produced so far: every extract output that holds a value.
+function _producedInputs(primary) {
+  const out = {};
+  for (const n of declaredOutputNames(primary.steps || [])) {
+    if (primary.inputs && primary.inputs[n] !== undefined) out[n] = primary.inputs[n];
+  }
+  return out;
+}
+
+function _skillOutputNames(entry) {
+  try {
+    const steps = JSON.parse(fs.readFileSync(path.join(entry.skillDir, "execution.json"), "utf8"));
+    return Array.isArray(steps) ? declaredOutputNames(steps) : [];
+  } catch (_) { return []; }
+}
+
 // ─── Skill-specific tool definitions (generated from loaded skill index) ─────
 // One tool per installed skill so Claude can match intent directly without
 // a discovery round-trip. Tool names: skill_{company}_{slug_underscored}.
@@ -483,11 +514,21 @@ function _skillToolDefinitions() {
     }
 
     const needsStr = required.length ? ` Needs: ${required.join(", ")}.` : "";
-    tools.push({
+    const tool = {
       name: `skill_${entry.workspace_id}_${entry.slug.replace(/-/g, "_")}`,
       description: `Conxa: ${entry.manifest.name || entry.slug} on ${entry.workspace_id}. ${entry.manifest.description || ""}${needsStr} Runs one record per call; for a list/spreadsheet, call once per row.`,
       inputSchema: { type: "object", properties, required },
-    });
+    };
+    // Only a skill that reads values declares an output shape: the SDK demands structuredContent on
+    // every successful result of a tool that has one (see the CallTool handler), so the rest keep none.
+    const outNames = _skillOutputNames(entry);
+    if (outNames.length) {
+      tool.outputSchema = {
+        type: "object",
+        properties: { outputs: { type: "object", properties: Object.fromEntries(outNames.map((n) => [n, {}])) } },
+      };
+    }
+    tools.push(tool);
   }
   return tools;
 }
@@ -991,6 +1032,15 @@ async function _handleTool(name, args, extra) {
       if (!IS_LOCAL_DEV_RUNTIME && !semver.satisfies(RUNTIME_VERSION, required))
         return err(`Skill ${run.skill} requires runtime ${required}, installed: ${RUNTIME_VERSION}. Please update the Conxa runtime.`);
 
+      // required_runtime above compares the HOST exe's version, which says nothing about this app layer.
+      // A pack that uses an engine feature added later lists it in required_capabilities (see this
+      // layer's version.json); an engine without it refuses here instead of running the step wrong.
+      const missingCaps = (Array.isArray(entry.manifest.required_capabilities) ? entry.manifest.required_capabilities : [])
+        .filter((c) => APP_CAPABILITIES && !APP_CAPABILITIES.has(c));
+      if (missingCaps.length) {
+        return err(`Skill ${run.skill} needs a newer Conxa engine (${missingCaps.join(", ")}). Conxa updates itself — try again after the next start.`);
+      }
+
       // Required-input gate (audit finding C2): interpolate() silently substitutes "" for a
       // missing/mis-typed input, so a required field the caller forgot would fail silently
       // deep inside a step instead of here, with a clear message. Declared defaults (H2) fill
@@ -1088,7 +1138,7 @@ async function _handleTool(name, args, extra) {
     // EXEC-21: a handover step needs a person to actually see and click something — there is no
     // window for that in a headless run. Force one open rather than deadlocking on a banner
     // nobody can see; watch was already resolved above, before we could know what's in the pack.
-    if (!watch && resolved.some((r) => Array.isArray(r.steps) && r.steps.some((s) => s && s.type === "handover"))) {
+    if (!watch && resolved.some((r) => Array.isArray(r.steps) && r.steps.some((s) => s && (s.type === "handover" || s.on_missing === "ask")))) {
       watch = true;
       log("info", "handover_forced_watch", { skills: resolved.map((r) => r.entry.slug) });
     }
@@ -1254,6 +1304,40 @@ async function _handleTool(name, args, extra) {
         }
       } catch (_) { _park = null; }
       if (_park) { clearTimeout(_park.timer); _setParkedRecovery(_parkKey, null); }
+    }
+
+    // Build Studio's re-record from a step: the test parked just before step N (`_stop_before_step`). Hand
+    // that page to the recorder by letting go of it WITHOUT closing it: the park's timer, listeners, lease
+    // and host lock are released and the CDP connection is dropped (a disconnect only), so the panel's
+    // views and their sign-in stay open. The panel run id comes back for Studio to give to the recording.
+    if (args._handoff_park === true) {
+      const handoffPark = resolved.length === 1 ? _getParkedRecovery(_parkKey) : null;
+      const endHandoffCall = async () => {
+        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+        runRegistry.end(_runId);
+        await _receiptFlush;
+        await _tracker.flush();
+        _tracker.destroy();
+      };
+      if (!handoffPark || !handoffPark.hostOwned || !Number.isInteger(handoffPark.guardStepIndex)) {
+        await endHandoffCall();
+        return err(`Nothing is parked in Build Studio's browser for "${primary.entry.slug}" (the pause may have expired). Run the replay again.`);
+      }
+      clearTimeout(handoffPark.timer);
+      _setParkedRecovery(_parkKey, null);
+      try {
+        handoffPark.context.off("page", handoffPark.attachPageListeners);
+        handoffPark.context.off("page", handoffPark.trackOpenedTab);
+      } catch (_) { /* best effort */ }
+      if (handoffPark.leaseKey) releaseCachedBrowser(handoffPark.leaseKey);
+      if (handoffPark.hostRelease) { try { handoffPark.hostRelease(); } catch (_) {} }
+      await handoffPark.browser.close().catch(() => {}); // CDP: disconnect only, the views stay
+      appendRecoveryEvent({ event: "park_handed_off", slug: primary.entry.slug, step_index: handoffPark.guardStepIndex });
+      await endHandoffCall();
+      return {
+        content: [{ type: "text", text: `Handed the page before step ${handoffPark.guardStepIndex + 1} over to the recorder. (run_id: ${_runId})` }],
+        _meta: { "conxa/handed_off": { run_id: handoffPark.runId, step_index: handoffPark.guardStepIndex } },
+      };
     }
 
     // EXEC-32: a resume_from that names a step with a pending recovery park, but supplies no
@@ -1488,7 +1572,8 @@ async function _handleTool(name, args, extra) {
     // which the pause-creation branch below released for the whole wait — handled further down,
     // gated on `_park.hostRelease == null`, right where the fresh-run branch first acquires it.
     const _resumeHandoverStep = resolved.length === 1 && primary.isResume
-      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "handover";
+      && primary.steps[primary.resumeFrom]
+      && (primary.steps[primary.resumeFrom].type === "handover" || primary.steps[primary.resumeFrom].on_missing === "ask");
     if (_resumeHandoverStep) {
       const handoverPark = _getParkedRecovery(_parkKey);
       if (!handoverPark) {
@@ -1547,6 +1632,13 @@ async function _handleTool(name, args, extra) {
     // PROD-18: every surviving path (fresh run or an adopted park) crosses here exactly
     // once, and none of the early returns above reach this line — so this is the one place
     // to settle the start receipt before any browser work begins.
+    // Values this run made before it paused (an extract's output) are not in the caller's arguments,
+    // so a resume would lose them for later steps and for the final outputs.
+    if (_park && _park.producedInputs) {
+      for (const [k, v] of Object.entries(_park.producedInputs)) {
+        if (primary.inputs[k] === undefined) primary.inputs[k] = v;
+      }
+    }
     await _receiptFlush;
 
     let page = null;
@@ -1829,6 +1921,8 @@ async function _handleTool(name, args, extra) {
             // (host_browser.js::saveDownload, EXEC-46).
             if (_hostOwned) await hostBrowser.saveDownload({ runId: _hostRunId, download, dest, timeoutMs: DOWNLOAD_WAIT_TIMEOUT_MS });
             else await download.saveAs(dest);
+            // A file that landed empty is a failed download, not a finished one.
+            if (fs.statSync(dest).size === 0) throw new Error("empty: the downloaded file is 0 bytes");
             _downloads.push(dest);
             // Extraction happens here — at download time, unconditionally — not lazily when
             // some later upload step happens to resolve to a .zip path. Keeps replay symmetric
@@ -1837,7 +1931,10 @@ async function _handleTool(name, args, extra) {
             // time any step needs it. See run.js::resolveUploadPaths for the upload-side half.
             const extractedDir = fname.toLowerCase().endsWith(".zip") ? extractZipOnce(dest) : null;
             resolveEntry({ filename: fname, path: dest, extractedDir });
-          })().catch(() => { resolveEntry(null); });
+          })().catch((e) => {
+            // Keep the reason ("cancelled: ...", "interrupted: ...") — download_observed reports it.
+            resolveEntry({ error: String((e && e.message) || e).slice(0, 300) });
+          });
           _downloadSaves.push(savePromise);
         });
         // dialog_accept/dialog_dismiss steps (handlers.js) drain this — without a listener here
@@ -1890,7 +1987,7 @@ async function _handleTool(name, args, extra) {
           const result = await runPlan(page, steps, inputs, startAt, entry.slug, {
             // `step`/`intent`/`destructive` ride along so Build Studio's test card can name each step as it
             // starts (RT-9) — extra fields on a diagnostic log line, ignored by every other reader.
-            onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`, { step: i, step_total: steps.length, intent: steps[i]?.intent || null, destructive: steps[i]?.destructive === true }); },
+            onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`, { step: i, step_total: steps.length, intent: steps[i]?.intent || null, destructive: steps[i]?.destructive === true, source_step_key: steps[i]?.source_step_key || null }); },
             onPhase:       _phase,
             cancelCheck:   _execCancelled,
             tracker:       _runTracker,
@@ -1909,6 +2006,7 @@ async function _handleTool(name, args, extra) {
             context: _context, // EXEC-21: handover needs the browser context to arm its banner
             guard: _guardPause ? { pause: true, released: _guardRelease } : undefined, // RT-9
             stopBefore: si === 0 ? _stopBefore : undefined,
+            resumeLoop: isResuming && _park ? _park.loopCursor : undefined, // a guard pause inside a loop body
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
           if (result && result.outputs) Object.assign(_outputs, result.outputs);
@@ -2171,7 +2269,7 @@ async function _handleTool(name, args, extra) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _reviewPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, reviewStepIndex: runErr.stepIndex, timer,
+          page: _reviewPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, reviewStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
           pageFingerprint: await capturePageFingerprint(_reviewPage),
           leaseKey: _leaseKey, hostRelease: _hostRelease,
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
@@ -2195,7 +2293,7 @@ async function _handleTool(name, args, extra) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _forkPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, forkStepIndex: runErr.stepIndex, timer,
+          page: _forkPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, forkStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
           forkChoices: (runErr.info.choices || []).map((c) => c.id), forkInfo: runErr.info,
           pageFingerprint: await capturePageFingerprint(_forkPage),
           leaseKey: _leaseKey, hostRelease: _hostRelease,
@@ -2219,7 +2317,7 @@ async function _handleTool(name, args, extra) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _guardPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, guardStepIndex: runErr.stepIndex, timer,
+          page: _guardPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, guardStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary), loopCursor: runErr.loop || null,
           pageFingerprint: await capturePageFingerprint(_guardPage),
           leaseKey: _leaseKey, hostRelease: _hostRelease,
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
@@ -2264,7 +2362,7 @@ async function _handleTool(name, args, extra) {
         }, HANDOVER_PARK_TTL_MS);
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _handoverPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, handoverStepIndex: runErr.stepIndex, timer,
+          page: _handoverPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, handoverStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
           pageFingerprint: await capturePageFingerprint(_handoverPage),
           leaseKey: _leaseKey, hostRelease: null,
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab,
@@ -2373,7 +2471,7 @@ async function _handleTool(name, args, extra) {
         // must stay blocked from touching the same platform while this fix is pending) until
         // whichever call resumes or discards this park releases them.
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _failedPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, failedAt: runErr.failedAt, timer,
+          page: _failedPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, failedAt: runErr.failedAt, timer, producedInputs: _producedInputs(primary),
           pageFingerprint: await capturePageFingerprint(_failedPage),
           leaseKey: _leaseKey, hostRelease: _hostRelease,
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });

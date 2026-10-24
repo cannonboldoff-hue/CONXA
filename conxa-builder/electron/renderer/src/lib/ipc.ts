@@ -1,6 +1,6 @@
 /** Typed wrapper over the preload `window.conxa` bridge. */
 
-import type { PanelRunKind, PanelTab } from '@/store/browserStore';
+import type { PanelDownload, PanelRunKind, PanelTab } from '@/store/browserStore';
 
 export interface CmdSuccess<T> {
   ok: true;
@@ -73,7 +73,8 @@ declare global {
         closeTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
         closeRun: (p: { runId: string }) => Promise<boolean>;
         navigate: (p: { runId: string; tabId: string; action: 'back' | 'forward' | 'reload' | 'hard-reload' | 'stop' | 'load'; url?: string }) => Promise<boolean>;
-        onTabs: (handler: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind }) => void) => () => void;
+        downloadAction: (p: { runId: string; id: string; action: 'cancel' | 'retry' | 'show' | 'open' | 'clear' }) => Promise<boolean>;
+        onTabs: (handler: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind; downloads?: PanelDownload[] }) => void) => () => void;
         onShortcut: (handler: (msg: { runId: string; action: 'focus-address' }) => void) => () => void;
       };
       update: {

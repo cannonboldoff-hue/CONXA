@@ -52,6 +52,14 @@ type FormValues = {
   ai_review_on_failure: 'abort' | 'use_default' | 'continue'
   ai_review_default_value: string
   assertions: AssertionDraft[]
+  // BUILD-51: when a step runs, what to do when its record is gone, and what an extract step reads
+  run_if_input: string
+  run_if_op: 'not_empty' | 'equals' | 'not_equals'
+  run_if_value: string
+  on_missing: '' | 'skip' | 'ask' | 'fail'
+  extract_source: 'text' | 'value' | 'attribute'
+  extract_attribute: string
+  extract_pattern: string
 }
 
 // EXEC-13: canonical shapes the preset picker offers — 'custom' isn't a real option, it's what
@@ -104,6 +112,13 @@ const emptyForm: FormValues = {
   ai_review_on_failure: 'abort',
   ai_review_default_value: '',
   assertions: [],
+  run_if_input: '',
+  run_if_op: 'not_empty',
+  run_if_value: '',
+  on_missing: '',
+  extract_source: 'text',
+  extract_attribute: '',
+  extract_pattern: '',
 }
 
 const URL_CHECK_KINDS = new Set(['url', 'url_exact', 'url_must_be'])
@@ -169,7 +184,33 @@ function defaultsFromStep(step: StepEditorDTO): FormValues {
           ? step.ai_review_default_value
           : JSON.stringify(step.ai_review_default_value),
     assertions: (step.validation.assertions || []) as AssertionDraft[],
+    run_if_input: String(step.run_if?.input || ''),
+    run_if_op: (step.run_if?.op as FormValues['run_if_op']) || 'not_empty',
+    run_if_value: String(step.run_if?.value || ''),
+    on_missing: (step.on_missing as FormValues['on_missing']) || '',
+    extract_source: (step.extract?.source as FormValues['extract_source']) || 'text',
+    extract_attribute: String(step.extract?.attribute || ''),
+    extract_pattern: String(step.extract?.pattern || ''),
   }
+}
+
+/** The part of a patch every element step shares: its run condition and its "record is gone" choice.
+ *  Sent only when there is something to set or something to clear, so a step that never had one is not
+ *  touched. The patch gate refuses a condition on a confirmation or hand-over, so those never get here. */
+function conditionPatch(step: StepEditorDTO, values: FormValues): Record<string, unknown> {
+  const patch: Record<string, unknown> = {}
+  const input = values.run_if_input.trim()
+  if (input || step.run_if?.input) {
+    patch.run_if = input
+      ? {
+          input,
+          op: values.run_if_op,
+          ...(values.run_if_op === 'equals' || values.run_if_op === 'not_equals' ? { value: values.run_if_value } : {}),
+        }
+      : {}
+  }
+  if (Object.keys(step.entity_binding || {}).length) patch.on_missing = values.on_missing
+  return patch
 }
 
 type Props = {
@@ -492,6 +533,40 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
           throw e
         }
       }
+      if (actionKind === 'extract') {
+        const name = values.value.trim()
+        if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) {
+          const err = new Error('The result name must start with a letter and use only letters, numbers and underscores')
+          methods.setError('value', { message: err.message })
+          if (!silent) toast.error(err.message)
+          throw err
+        }
+        const patch: Record<string, unknown> = {
+          semantic_description: values.intent,
+          value: name,
+          extract: {
+            source: values.extract_source,
+            ...(values.extract_source === 'attribute' ? { attribute: values.extract_attribute.trim() } : {}),
+            ...(values.extract_pattern.trim() ? { pattern: values.extract_pattern.trim() } : {}),
+          },
+          ...conditionPatch(step, values),
+        }
+        if (canEditField('validation')) patch.validation = { assertions: values.assertions }
+        try {
+          const res = await patchStep(skillId, patchIndex, patch, false, path)
+          onWorkflowUpdated(res.workflow)
+          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
+          const next = findUpdatedStep(res.workflow, step.id)
+          if (next) methods.reset(defaultsFromStep(next))
+          if (!silent) toast.success('Step saved')
+          return
+        } catch (e) {
+          const msg = errorMessage(e, 'Save failed')
+          methods.setError('root', { message: msg })
+          if (!silent) toast.error(msg)
+          throw e
+        }
+      }
       if (step.flags.is_scroll) {
         const patch: Record<string, unknown> = {
           semantic_description: values.intent,
@@ -567,6 +642,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
         }
       }
       if (canEditField('validation')) patch.validation = { assertions: values.assertions }
+      Object.assign(patch, conditionPatch(step, values))
       try {
         const res = await patchStep(skillId, patchIndex, patch, false, path)
         onWorkflowUpdated(res.workflow)
@@ -615,6 +691,8 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const assertions = useWatch({ control: methods.control, name: 'assertions' }) || []
   const aiReviewSchemaPreset = useWatch({ control: methods.control, name: 'ai_review_output_schema_preset' }) || 'yes_no'
   const aiReviewOnFailure = useWatch({ control: methods.control, name: 'ai_review_on_failure' }) || 'abort'
+  const extractSource = useWatch({ control: methods.control, name: 'extract_source' }) || 'text'
+  const runIfOp = useWatch({ control: methods.control, name: 'run_if_op' }) || 'not_empty'
 
   if (!step) {
     return (
@@ -636,6 +714,11 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const isWaitStep = actionKind === 'wait'
   const isScreenshotStep = actionKind === 'screenshot'
   const isAiReviewStep = actionKind === 'ai_review'
+  const isExtractStep = actionKind === 'extract'
+  const isBoundStep = Object.keys(step.entity_binding || {}).length > 0
+  // The patch gate refuses a run condition on a confirmation, hand-over or marker, and a popup decision.
+  const canHaveCondition = !isMarkerStep && !isAiReviewStep && actionKind !== 'handover' && actionKind !== 'outcome_fork'
+    && actionKind !== 'for_each' && !isCheckStep
   const showSelectorAndAnchorTools =
     !hideSelectorTools &&
     actionHasSelectors && !isScrollStep && !isNavigateStep && !isMarkerStep && !(isCheckStep && URL_CHECK_KINDS.has(checkKind))
@@ -899,6 +982,64 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
               {methods.formState.errors.value ? (
                 <p className="text-destructive text-xs">{methods.formState.errors.value.message}</p>
               ) : null}
+            </div>
+          ) : null}
+
+          {isExtractStep ? (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="extract_source">What to read</Label>
+                <select id="extract_source" className={fieldSelectClass} {...methods.register('extract_source')}>
+                  <option value="text">The text shown on the page</option>
+                  <option value="value">The value in a field</option>
+                  <option value="attribute">An attribute of the element (for example a link address)</option>
+                </select>
+              </div>
+              {extractSource === 'attribute' ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="extract_attribute">Attribute name</Label>
+                  <Input id="extract_attribute" type="text" placeholder="e.g., href" {...methods.register('extract_attribute')} />
+                </div>
+              ) : null}
+              <div className="grid gap-2">
+                <Label htmlFor="extract_pattern">Keep only this part (optional)</Label>
+                <Input id="extract_pattern" type="text" placeholder="e.g., #([A-Z]-\d+)" {...methods.register('extract_pattern')} />
+                <p className="text-muted-foreground text-xs">
+                  A pattern. The first bracketed part is kept, or the whole match when there are no brackets. The run fails clearly if nothing matches.
+                </p>
+              </div>
+            </>
+          ) : null}
+          {canHaveCondition ? (
+            <div className="grid gap-2">
+              <Label htmlFor="run_if_input" className="text-sm font-medium">Run this step only when (optional)</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input id="run_if_input" type="text" placeholder="input name" className="w-40" {...methods.register('run_if_input')} />
+                <select aria-label="Condition" className={fieldSelectClass} {...methods.register('run_if_op')}>
+                  <option value="not_empty">has a value</option>
+                  <option value="equals">equals</option>
+                  <option value="not_equals">does not equal</option>
+                </select>
+                {runIfOp === 'equals' || runIfOp === 'not_equals' ? (
+                  <Input aria-label="Compared value" type="text" placeholder="value" className="w-40" {...methods.register('run_if_value')} />
+                ) : null}
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Looks only at what the person running it supplied, never at the page. Leave the input name empty to always run.
+              </p>
+            </div>
+          ) : null}
+          {isBoundStep && canHaveCondition ? (
+            <div className="grid gap-2">
+              <Label htmlFor="on_missing">If the item isn’t on the page</Label>
+              <select id="on_missing" className={fieldSelectClass} {...methods.register('on_missing')}>
+                <option value="">Stop with an error</option>
+                <option value="skip">Skip this step and carry on</option>
+                <option value="ask">Ask a person (needs a visible browser)</option>
+              </select>
+              <p className="text-muted-foreground text-xs">
+                Only used when the list is on the page and the item clearly isn’t in it. It never acts on a different row.
+              </p>
             </div>
           ) : null}
 

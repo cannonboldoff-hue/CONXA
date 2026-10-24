@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+import uuid
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -257,7 +258,28 @@ class WorkflowFlowMixin:
 
     # ── recording ───────────────────────────────────────────────────────────────────────────
 
-    def _flow_open_recording(self, workflow: Any, rid: str, sink: Any, variant_of: str = "") -> dict[str, Any]:
+    def _flow_post_record_plan(self, workflow: Any, sink: Any) -> None:
+        """A checklist from the person's own description, posted a moment after recording opens (a
+        model call must not delay the browser). Nothing is posted without a description or a plan."""
+        task = (workflow.task_description or "").strip()
+        if not task:
+            return
+        workflow_id, target = workflow.id, workflow.target_url or ""
+
+        def work() -> None:
+            try:
+                from conxa_compile.conversation import harness, record_plan
+
+                steps = record_plan.generate(task, target)
+                if steps:
+                    harness.post_card(_thread(workflow_id), "record_plan", "open", sink=sink, steps=steps, actions=[])
+            except Exception:  # noqa: BLE001 -- advisory only
+                pass
+
+        threading.Thread(target=work, daemon=True, name="record-plan").start()
+
+    def _flow_open_recording(self, workflow: Any, rid: str, sink: Any, variant_of: str = "",
+                             segment_from: str = "", adopt_run_id: str = "", segment_mode: str = "replace") -> dict[str, Any]:
         """Open the recording browser. ``variant_of`` (an outcome fork's step key) makes it a
         VARIANT take: a second recording of the same task showing a different outcome, which never
         replaces the workflow's own recording (see cmd_start_recording / cmd_apply_variant)."""
@@ -265,7 +287,14 @@ class WorkflowFlowMixin:
         from conxa_compile.recorder.plain import describe_event
 
         try:
-            started = self.cmd_start_recording({"workflow_id": workflow.id, **({"variant_of": variant_of} if variant_of else {})}, rid)
+            # A segment (re-record from a step) is stored beside the workflow's own recording exactly like a
+            # variant take: it never replaces it. The "segment:" prefix keeps its key apart from a fork's.
+            kind_key = f"segment:{segment_from}" if segment_from else variant_of
+            started = self.cmd_start_recording({
+                "workflow_id": workflow.id,
+                **({"variant_of": kind_key} if kind_key else {}),
+                **({"adopt_run_id": adopt_run_id} if adopt_run_id else {}),
+            }, rid)
         except _CommandError as exc:
             if exc.code == "auth_required":
                 missing = self._flow_missing_apps(workflow)
@@ -278,7 +307,7 @@ class WorkflowFlowMixin:
         counter = {"n": 0}
 
         hinter = None
-        if not variant_of:
+        if not variant_of and not segment_from:
             try:
                 from conxa_compile.app_graph.hints import RecordingHinter
                 from conxa_core.workspace import LOCAL_WORKSPACE_ID
@@ -309,16 +338,24 @@ class WorkflowFlowMixin:
         harness.log_event(_thread(workflow_id), "Recording started", glyph="run", sink=sink, subject=host or None)
         embedded = bool(started.get("embedded"))
         where = "the browser on the right" if embedded else "the browser window"
-        if variant_of:
+        if segment_from:
+            what = ("is kept as a second way the workflow can go from that step on" if segment_mode == "branch"
+                    else "replaces that step and the ones after it")
+            self._flow_say(workflow_id, f"The browser on the right is at the point just before the step you chose — everything "
+                           f"before it is done. Carry on from there; when you press Finish, what you do {what}. "
+                           "The steps before it stay exactly as they are.", sink)
+        elif variant_of:
             self._flow_say(workflow_id, f"Record it once more in {where}, this time so the popup does NOT appear "
                            "(for example, upload a file that isn’t there yet). Then press Finish — I’ll compare it with your "
                            "first recording; your first recording isn’t touched.", sink)
         else:
             self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
                            "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
+            self._flow_post_record_plan(workflow, sink)
         card = harness.post_card(
             _thread(workflow_id), "recording", "recording", sink=sink,
-            refs={"session_id": session_id, "embedded": embedded, **({"variant_of": variant_of} if variant_of else {})},
+            refs={"session_id": session_id, "embedded": embedded, **({"variant_of": variant_of} if variant_of else {}),
+                  **({"segment_from": segment_from, "segment_mode": segment_mode} if segment_from else {})},
             started_at=time.time(), host=host, count=0,
             actions=["pause", "finish", "discard"], warnings=started.get("warnings") or [],
         )
@@ -407,6 +444,10 @@ class WorkflowFlowMixin:
         variant_of = str((card.get("refs") or {}).get("variant_of") or "")
         if variant_of:
             return self._flow_finish_variant(workflow, card, sid, variant_of, rid, sink)
+        segment_from = str((card.get("refs") or {}).get("segment_from") or "")
+        if segment_from:
+            return self._flow_finish_segment(workflow, card, sid, segment_from, rid, sink,
+                                             str((card.get("refs") or {}).get("segment_mode") or "replace"))
         harness.update_card(_thread(workflow.id), card["card_id"], state="saving", actions=[], sink=sink)
         try:
             result = self.cmd_stop_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
@@ -427,6 +468,156 @@ class WorkflowFlowMixin:
         if payload.get("auto_compile", True):
             self._flow_start_compile(workflow.id)
         return {"ok": True, "event_count": count, "session_id": sid}
+
+    # ── re-record from a step ───────────────────────────────────────────────────────────────
+
+    def cmd_flow_rerecord_from(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """"Step 7 is wrong, let me show you": replay the workflow up to the step before it, hand that live page
+        to the recorder, and (when the person finishes) compile what they did and put it in place of that step
+        and everything after. Returns at once; the replay and the recording run on the conversation."""
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.conversation import runtime_state
+        from conxa_compile.skill_package_builder_saved_skill import runtime_step_index
+        from conxa_core.storage.json_store import read_skill
+        from conxa_core.storage.workflow_store import get_workflow, list_workflows
+
+        if payload.get("workflow_id"):
+            workflow = self._flow_workflow(payload)
+        else:
+            skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+            workflow = next((w for w in list_workflows() if w.skill_id == skill_id), None)
+            if workflow is None:
+                raise _CommandError("workflow_not_found", "That skill doesn\u2019t belong to a workflow.")
+        workflow = get_workflow(workflow.id)
+        doc = read_skill(workflow.skill_id) if workflow.skill_id else None
+        if doc is None:
+            raise _CommandError("not_compiled", "Compile this workflow before re-recording part of it.")
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        keys = step_keys(steps)
+        step_key = str(payload.get("step_key") or "")
+        if not step_key and payload.get("step_index") is not None:
+            index = int(payload["step_index"])
+            step_key = keys[index] if 0 <= index < len(keys) else ""
+        if step_key not in keys:
+            raise _CommandError("step_not_found", "That step isn\u2019t in the workflow any more.")
+        if keys.index(step_key) == 0:
+            raise _CommandError("first_step", "That is the first step \u2014 record the whole workflow again instead.")
+        runtime_index = runtime_step_index(doc, step_key)
+        if runtime_index is None:
+            raise _CommandError("step_not_runnable", "That step isn\u2019t part of what runs, so there is nothing to replay up to.")
+        flags = runtime_state.get_flags(workflow.id)
+        if flags.get("recording") or flags.get("testing"):
+            raise _CommandError("busy", "Finish the recording or test that is in progress first.")
+        inputs = {str(i.get("id")): i.get("default") for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")}
+        missing = [str(i.get("id")) for i in doc.get("inputs") or []
+                   if isinstance(i, dict) and i.get("id") and not i.get("optional") and str(i.get("default") or "").strip() == ""]
+        if missing:
+            raise _CommandError("inputs_required", "Fill in " + ", ".join(missing) + " first \u2014 the replay needs a value for each.")
+        mode = "branch" if payload.get("mode") == "branch" else "replace"
+        runtime_state.set_flags(workflow.id, testing=True)
+        threading.Thread(target=self._rerecord_safe, args=(workflow.id, step_key, runtime_index, inputs, mode), daemon=True).start()
+        return {"ok": True, "step_key": step_key, "runtime_index": runtime_index, "mode": mode}
+
+    def _rerecord_safe(self, workflow_id: str, step_key: str, runtime_index: int, inputs: dict[str, Any], mode: str = "replace") -> None:
+        from conxa_compile.conversation import harness, runtime_state
+
+        sink = _event_sink(f"rerecord_{workflow_id}")
+        try:
+            self._rerecord(workflow_id, step_key, runtime_index, inputs, sink, mode)
+        except _CommandError as exc:
+            runtime_state.set_flags(workflow_id, testing=False)
+            harness.log_event(_thread(workflow_id), "Couldn\u2019t continue from that step", glyph="fail", sink=sink, subject=exc.message[:160])
+            self._flow_say(workflow_id, f"I couldn\u2019t get the browser to that point: {exc.message}", sink)
+        except Exception as exc:  # noqa: BLE001 -- a background replay must never take the engine down
+            import traceback
+
+            traceback.print_exc()
+            runtime_state.set_flags(workflow_id, testing=False)
+            self._flow_say(workflow_id, f"I couldn\u2019t get the browser to that point: {exc}", sink)
+
+    def _rerecord(self, workflow_id: str, step_key: str, runtime_index: int, inputs: dict[str, Any], sink: Any, mode: str = "replace") -> None:
+        from conxa_compile.conversation import harness, runtime_state
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow = get_workflow(workflow_id)
+        harness.log_event(_thread(workflow_id), "Replaying up to the step you chose", glyph="run", sink=sink)
+        self._flow_say(workflow_id, "Replaying the workflow up to just before that step \u2014 the browser on the right will do it by "
+                       "itself. When it stops, it\u2019s your turn.", sink)
+        self._tf_ensure_built(workflow, f"rerecord_{workflow_id}")
+        result = self.cmd_test_workflow({
+            "workflow_id": workflow_id, "inputs": inputs, "headless": False, "guard": False,
+            "stop_before_step": runtime_index, "handoff_park": True,
+        }, f"rerecord_{workflow_id}")
+        runtime_state.set_flags(workflow_id, testing=False)
+        run_id = result.get("handed_off_run_id")
+        if result.get("status") != "stopped_at_step" or not run_id:
+            raise _CommandError("replay_failed", "The replay didn\u2019t reach that step \u2014 test the workflow to see where it stops.")
+        self._flow_open_recording(get_workflow(workflow_id), f"rerecord_{workflow_id}", sink, segment_from=step_key, adopt_run_id=run_id,
+                                  segment_mode=mode)
+
+    def _flow_finish_segment(self, workflow: Any, card: dict[str, Any], sid: str, step_key: str, rid: str, sink: Any,
+                             mode: str = "replace") -> dict[str, Any]:
+        """Finish a re-recorded part: stop, then compile it and splice it in over the chosen step and
+        everything after, in the background. The workflow's own recording is never touched."""
+        from conxa_compile.conversation import harness, runtime_state
+
+        thread = _thread(workflow.id)
+        harness.update_card(thread, card["card_id"], state="saving", actions=[], sink=sink)
+        try:
+            stopped = self.cmd_stop_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
+        except _CommandError as exc:
+            runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
+            harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
+            harness.log_event(thread, "Nothing was saved", glyph="none", sink=sink, subject=exc.message)
+            raise
+        runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
+        count = int(stopped.get("event_count") or 0)
+        harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
+        harness.log_event(thread, "Recording saved", glyph="ok", sink=sink, subject=f"{plural(count, 'action')}")
+        where = "adding them as a second way from that step on" if mode == "branch" else "putting them in place of that step and the ones after it"
+        self._flow_say(workflow.id, f"Got it \u2014 {plural(count, 'action')}. I\u2019m compiling them and {where}.", sink)
+        threading.Thread(target=self._splice_segment_safe, args=(workflow.id, sid, step_key, mode), daemon=True).start()
+        return {"ok": True, "event_count": count, "session_id": sid}
+
+    def _splice_segment_safe(self, workflow_id: str, sid: str, step_key: str, mode: str = "replace") -> None:
+        from conxa_compile.conversation import harness
+        from conxa_core.storage.json_store import delete_skill
+        from conxa_core.storage.workflow_store import get_workflow, remove_variant
+
+        rid = f"segment_{uuid.uuid4().hex[:10]}"
+        sink = _event_sink(rid)
+        workflow = get_workflow(workflow_id)
+        try:
+            compiled = self.cmd_compile({"session_id": sid, "workflow_id": workflow_id, "skill_title": f"{workflow.name} (part)", "segment": True}, rid)
+            put_in = self.cmd_branch_segment if mode == "branch" else self.cmd_splice_segment
+            spliced = put_in({"skill_id": workflow.skill_id, "segment_skill_id": compiled["skill_id"], "from_step_key": step_key}, rid)
+        except _CommandError as exc:
+            harness.log_event(_thread(workflow_id), "Couldn\u2019t put the new part in", glyph="fail", sink=sink, subject=exc.message[:160])
+            self._flow_say(workflow_id, f"I couldn\u2019t put the new part in: {exc.message} Your workflow is unchanged.", sink)
+            return
+        except Exception as exc:  # noqa: BLE001
+            self._flow_say(workflow_id, f"I couldn\u2019t put the new part in: {exc} Your workflow is unchanged.", sink)
+            return
+        finally:
+            try:
+                remove_variant(workflow_id, sid)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            delete_skill(compiled["skill_id"])  # the part only existed to be spliced in
+        except Exception:  # noqa: BLE001
+            pass
+        added = int(spliced.get("added") or 0)
+        stale = int(spliced.get("stale_answers") or 0)
+        from_step = int(spliced.get("branched_from", spliced.get("replaced_from")) or 0) + 1
+        harness.log_event(_thread(workflow_id), "New part added", glyph="ok", sink=sink, subject=f"{plural(added, 'step')} from step {from_step}")
+        self._flow_say(workflow_id, (f"Done \u2014 from step {from_step} on, the workflow now takes whichever way the page offers: the one it "
+                                     f"had, or your new {plural(added, 'step')}. You can see both in Human Edit."
+                                     if mode == "branch" else
+                                     f"Done \u2014 the workflow now has your new {plural(added, 'step')} from step {from_step} on.")
+                       + (f" {plural(stale, 'earlier answer')} about the old steps no longer apply." if stale else "")
+                       + " Test it to check the whole thing still works.", sink)
+        self._flow_post_summary(workflow_id, sink)
 
     def cmd_apply_variant(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """Learn from a variant recording ("the case where the popup does NOT appear") and fold it
@@ -516,7 +707,7 @@ class WorkflowFlowMixin:
         sink = _event_sink(rid)
         card = self._flow_card(workflow.id, str(payload.get("card_id") or ""))
         sid, _sess = self._flow_session(card)
-        is_variant = bool((card.get("refs") or {}).get("variant_of"))
+        is_variant = bool((card.get("refs") or {}).get("variant_of") or (card.get("refs") or {}).get("segment_from"))
         self.cmd_cancel_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=not is_variant)
         harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", actions=[], sink=sink)

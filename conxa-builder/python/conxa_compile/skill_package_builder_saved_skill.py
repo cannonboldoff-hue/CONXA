@@ -293,8 +293,8 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
     if isinstance(run_if, dict) and run_if.get("input"):
         out["run_if"] = {k: run_if[k] for k in ("input", "op", "value") if k in run_if}
     # on_missing only means something on a step bound to a record (see resolution.js::entityRoots).
-    if step.get("on_missing") == "skip" and "entity_binding" in out:
-        out["on_missing"] = "skip"
+    if step.get("on_missing") in ("skip", "ask") and "entity_binding" in out:
+        out["on_missing"] = step["on_missing"]
     return out
 
 
@@ -385,9 +385,14 @@ def _saved_branch_step(step: dict[str, Any], action: str) -> dict[str, Any] | No
             if not isinstance(raw_option, dict):
                 continue
             option_selector = str(raw_option.get("selector") or "").strip()
-            if not option_selector:
+            bundle = raw_option.get("identity_bundle") if isinstance(raw_option.get("identity_bundle"), dict) else {}
+            has_signals = any(isinstance(s, dict) and s.get("selector") for s in bundle.get("signals") or [])
+            if not option_selector and not has_signals:
                 continue
             option_out: dict[str, Any] = {"selector": option_selector}
+            # A way the workflow can go is found like a click target is: by its identity bundle.
+            if has_signals:
+                option_out["identity_bundle"] = bundle
             nested = _saved_branch_steps_list(raw_option.get("steps"))
             if nested:
                 option_out["steps"] = nested
@@ -399,6 +404,8 @@ def _saved_branch_step(step: dict[str, Any], action: str) -> dict[str, Any] | No
             out["timeout_ms"] = timeout_ms
         if branch.get("required"):
             out["required"] = True
+        if branch.get("flow"):
+            out["flow"] = True  # the options are whole ways the workflow can go: run.js runs them as real steps
         return _copy_saved_common(step, out)
 
     return None
@@ -1189,6 +1196,29 @@ def _build_saved_skill_recovery(
     return {"steps": entries}
 
 
+def runtime_step_index(saved_skill: dict[str, Any], step_key: str) -> int | None:
+    """Where the document step ``step_key`` sits in execution.json -- the runtime's step numbering. The
+    packager drops steps it cannot run, so this is NOT the document index; None when that step is dropped
+    (or unknown). Walks exactly the conversion ``_build_workflow_from_saved_skill`` does."""
+    import copy
+
+    from conxa_compile.compiler.step_key import step_keys
+
+    skills = saved_skill.get("skills") if isinstance(saved_skill.get("skills"), list) else []
+    block = skills[0] if skills and isinstance(skills[0], dict) else {}
+    steps = copy.deepcopy(block.get("steps") if isinstance(block.get("steps"), list) else [])
+    _bind_downloads_to_uploads(steps)
+    keys = step_keys([s if isinstance(s, dict) else {} for s in steps])
+    kept = 0
+    for key, raw in zip(keys, steps):
+        if not isinstance(raw, dict) or _saved_step_to_execution_step(raw) is None:
+            continue
+        if key == step_key:
+            return kept
+        kept += 1
+    return None
+
+
 def _build_workflow_from_saved_skill(
     *,
     bundle_root: Path,
@@ -1210,10 +1240,17 @@ def _build_workflow_from_saved_skill(
     # upload step's value becomes {{downloaded_file...}} instead of the generic {{file_path}}
     # _saved_step_to_execution_step would otherwise fall back to.
     _bind_downloads_to_uploads(export_steps)
+    # The runtime numbers the steps it runs, and this pass can drop some, so a test result cannot be
+    # mapped back to the document by position: each step carries the document's own key for it.
+    from conxa_compile.compiler.step_key import step_keys
+
+    doc_keys = step_keys([s if isinstance(s, dict) else {} for s in export_steps])
     for raw_index, raw in enumerate(export_steps, start=1):
         if not isinstance(raw, dict):
             continue
         converted = _saved_step_to_execution_step(raw)
+        if converted is not None:
+            converted["source_step_key"] = doc_keys[raw_index - 1]
         if converted is None:
             action = _step_action_name(raw) or "unknown"
             if normalize_action_kind(action) == "drag_drop":

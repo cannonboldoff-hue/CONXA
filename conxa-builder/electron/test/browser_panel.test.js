@@ -222,3 +222,23 @@ test("the address bar takes a site, a host, localhost or a search, as Chrome doe
   assert.strictEqual(go("invoices"), "https://www.google.com/search?q=invoices");
   assert.ok(wc.focused, "typing an address hands the keyboard to the page");
 });
+
+test("adopting a parked test run makes it a record run: kept views, target ids, fixed viewport, never dropped", async () => {
+  const { tabId } = panel.newView("adopt1");
+  panel.runEnd && await panel.runEnd("adopt1");                        // the runtime let go of it: finished
+  const wc = added[added.length - 1].webContents;
+  assert.strictEqual(last.meta.finished, true);
+  await assert.rejects(() => panel.targetsOf("adopt1").then((t) => { if (!t.targets.length) throw new Error("no targets"); }));  // a test tab has none
+  const got = await panel.adoptRun("adopt1", { kind: "record", viewport: { width: 1280, height: 720 } });
+  assert.strictEqual(got.tabId, tabId);
+  assert.strictEqual(got.targetId, wc.targetId);
+  assert.strictEqual(last.meta.kind, "record");
+  assert.strictEqual(last.meta.finished, false);
+  assert.deepStrictEqual(lastMetrics(wc).params.width, 1280);
+  assert.deepStrictEqual((await panel.targetsOf("adopt1")).targets.map((t) => t.targetId), [wc.targetId]);
+  panel.newView("adopt2");                                             // a newer run must not drop the adopted one
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok((await panel.targetsOf("adopt1")).targets.length === 1);
+  await assert.rejects(() => panel.adoptRun("nope"), /no run nope/);
+  await assert.rejects(() => panel.adoptRun("adopt1", { kind: "test" }), /cannot adopt/);
+});

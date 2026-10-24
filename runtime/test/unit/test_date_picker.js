@@ -202,3 +202,46 @@ test("date_pick: an unreadable date on a format-aware step is a badInput error, 
   };
   await assert.rejects(() => HANDLERS.date_pick(null, step, { date: "next tuesday" }), (err) => err.badInput === true);
 });
+
+// Relative dates: the recorded date was only ever an offset from the day it was recorded.
+test("dateFromOffset: today, later and earlier, across month and year ends", () => {
+  const { dateFromOffset } = require("../../app/date_picker");
+  const now = new Date(2026, 11, 28, 15, 30); // 28 Dec 2026, mid-afternoon: the time of day never matters
+  assert.strictEqual(dateFromOffset(0, now), "2026-12-28");
+  assert.strictEqual(dateFromOffset(7, now), "2027-01-04");
+  assert.strictEqual(dateFromOffset(-28, now), "2026-11-30");
+  assert.strictEqual(dateFromOffset(1, new Date(2028, 1, 28)), "2028-02-29"); // leap day
+});
+
+test("date_pick: date_offset_days ignores the recorded value and works the date out now", async () => {
+  const { dateFromOffset } = require("../../app/date_picker");
+  const pageScripts = require("../../app/page_scripts");
+  const filled = [];
+  const item = {
+    // the descriptor extractor gets an object; the gate's "stable" / "disabled" probes get plain answers
+    evaluate: async (fn) => (fn === pageScripts.isDisabled ? false : fn === pageScripts.rafStable ? true
+      : { testid: "due", role: "textbox", name: "Due", text: "" }),
+    fill: async (v) => { filled.push(v); },
+    press: async () => {},
+    inputValue: async () => filled[filled.length - 1] || "",
+    waitFor: async () => {},
+    first() { return this; },
+  };
+  const page = {
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    context: () => ({ on: () => {} }),
+    url: () => "https://x.test",
+    locator: () => ({ all: async () => [item], first: () => item }),
+  };
+  const step = {
+    type: "date_pick", value: "", intent: "due",
+    identity_bundle: {
+      signals: [{ engine: "testid", selector: 'internal:testid=[data-testid="due"]', durability: 0.99 }],
+      fingerprint: { data_testid: "due", role: "textbox" }, frame_chain: [],
+    },
+    handler_hints: { date_picker: { kind: "text_field", display_format: "YYYY-MM-DD", date_offset_days: 7, recorded_value: "2020-01-01" } },
+  };
+  await HANDLERS.date_pick(page, step, {}).catch((e) => console.log("ERR", e.message));
+  assert.ok(filled.length && filled[0] === dateFromOffset(7), `filled ${JSON.stringify(filled)}`);
+});

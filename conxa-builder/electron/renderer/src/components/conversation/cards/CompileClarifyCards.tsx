@@ -341,3 +341,17 @@ export function ForkVariantCard({ threadId, item }: CardProps) {
     </CardShell>
   )
 }
+
+/** What the recording will probably need, from the person's own description. Advisory: nothing here
+ *  is checked or enforced, and there is nothing to press. */
+export function RecordPlanCard({ item }: CardProps) {
+  const steps = (Array.isArray(item.steps) ? item.steps : []) as string[]
+  if (!steps.length) return null
+  return (
+    <CardShell glyph="none" title="What you’ll probably do" meta="A rough plan from your description — record it your own way">
+      <ol className="list-decimal space-y-1 pl-5 leading-[1.6]">
+        {steps.map((s, i) => <li key={i}>{s}</li>)}
+      </ol>
+    </CardShell>
+  )
+}

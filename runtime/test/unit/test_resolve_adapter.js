@@ -233,3 +233,37 @@ test("toLocator routes role/text strings through the tolerant matcher, everythin
   toLocator(cssRoot, '[data-key="19"]');
   assert.deepStrictEqual(cssRoot.calls[0], { kind: "locator", arg: '[data-key="19"]', opts: undefined });
 });
+
+// BUILD-49: a clicked item that changes each run keeps `{{input}}` in its text signals and in the
+// fingerprint's text fields, so scoring compares each candidate with THIS run's text.
+const { interpolate: realInterp } = require("../../app/interpolate");
+
+function textNode(text) {
+  return { role: "link", name: text, text, testid: "", stableHash: "recorded-hash", anchorNeighbors: [] };
+}
+
+const templatedBundle = {
+  stable_hash: "recorded-hash",
+  fingerprint: { role: "link", tag: "a", inner_text: "{{file}}", aria_label: "{{file}}" },
+  signals: [{ engine: "role", selector: 'internal:role=link[name="{{file}}"]', durability: 0.9 }],
+};
+
+test("bundleFingerprint fills a templated text field from the run and drops the recorded hash", () => {
+  const fp = bundleFingerprint(templatedBundle, realInterp, { file: "LICENSE" });
+  assert.strictEqual(fp.inner_text, "LICENSE");
+  assert.strictEqual(fp.aria_label, "LICENSE");
+  assert.strictEqual(fp.stable_hash, "");
+  // an untemplated bundle is untouched, even when an interpolator is supplied
+  assert.strictEqual(bundleFingerprint({ stable_hash: "h", fingerprint: { inner_text: "Save" } }, realInterp, {}).stable_hash, "h");
+});
+
+test("a templated item resolves to this run's label, and the uniqueness margin still decides among near matches", () => {
+  const fp = bundleFingerprint(templatedBundle, realInterp, { file: "LICENSE" });
+  const unique = { queryAll: () => [textNode("LICENSE")] };
+  assert.ok(resolve(templatedBundle.signals, fp, unique, {}).node);
+  // the RECORDED label would have scored 0 against this run's fingerprint
+  assert.strictEqual(resolve(templatedBundle.signals, fp, { queryAll: () => [textNode("Android.gitignore")] }, {}).node, undefined);
+  // two near-identical candidates (LICENSE vs LICENSE-2) are not blindly picked: margin gate applies
+  const both = { queryAll: () => [textNode("LICENSE"), textNode("LICENSE")] };
+  assert.strictEqual(resolve(templatedBundle.signals, fp, both, {}).ambiguous, true);
+});

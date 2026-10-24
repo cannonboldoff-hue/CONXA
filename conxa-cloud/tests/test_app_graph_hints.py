@@ -262,3 +262,19 @@ def test_recording_hint_is_silent_without_a_map_or_a_label(hooked):
     h = RecordingHinter(LOCAL_WORKSPACE_ID, graph_for=lambda _h: graph)
     assert h({"page": {"url": "about:blank"}, "target": {}}) is None
     assert h({"page": {"url": f"{DRIVE}/drive/my-drive"}, "target": {}}) is None
+
+
+def test_every_exported_step_names_the_document_step_it_came_from(hooked, tmp_path):
+    import json
+
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.skill_package_builder_saved_skill import _build_workflow_from_saved_skill
+    from conxa_core.models.skill_spec import SkillStep
+
+    steps = [SkillStep(action="click", intent=f"click_{n}", target={"primary_selector": f"#b{n}"}).model_dump(mode="json")
+             for n in range(2)]
+    saved = doc(*steps)
+    _build_workflow_from_saved_skill(bundle_root=tmp_path, workflow_slug="wf", saved_skill=saved)
+    execution = json.loads((tmp_path / "skills" / "wf" / "execution.json").read_text())
+    expected = step_keys(saved["skills"][0]["steps"])
+    assert [s["source_step_key"] for s in execution] == expected[: len(execution)] and len(set(expected)) == len(expected)

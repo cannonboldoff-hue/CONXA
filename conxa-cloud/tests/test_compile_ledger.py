@@ -72,3 +72,54 @@ def test_a_second_opinion_is_pinned_beside_the_recording_and_replayed_without_th
 
     workflow_review.build_workflow_review([{"key": "k1", "action": "type"}], page_urls=[], sidecar=pin)  # a different recording
     assert calls == [1, 1]
+
+
+def test_a_dropped_value_is_kept_on_the_ledger_and_merged_passes_are_named():
+    ev = {"extras": {"sequence": 4}, "action": {"action": "type", "value": "hello"}}
+    ledger: list = []
+    _record_drops(ledger, [ev], [], "choice_collapsed")
+    assert ledger == [{"sequence": 4, "pass": "choice_collapsed", "action": "type", "value": "hello"}]
+
+
+def test_clarify_asks_about_a_lost_value_but_not_one_a_merged_step_kept():
+    from conxa_compile.conversation.clarify import generate_questions, plan_answer
+
+    doc = {"skills": [{"steps": [{"action": "click", "intent": "go"}]}]}
+    merged = [{"sequence": 1, "pass": "date_collapsed", "action": "select", "value": "2026"}]
+    assert not [q for q in generate_questions(doc, dropped=merged, limit=None) if q["kind"] == "dropped_value"]
+    lost = [{"sequence": 2, "pass": "cleanup", "action": "type", "value": "Acme Ltd"}]
+    qs = [q for q in generate_questions(doc, dropped=lost, limit=None) if q["kind"] == "dropped_value"]
+    assert len(qs) == 1 and "Acme Ltd" in qs[0]["body"]
+    ops, receipt = plan_answer(qs[0], {"choice": "ok"}, doc)
+    assert ops == [] and receipt == "Left out"
+
+
+def test_the_second_opinion_cache_key_changes_with_the_model(tmp_path, monkeypatch):
+    from conxa_compile.llm import workflow_review
+
+    keys: list[str] = []
+    monkeypatch.setattr(workflow_review, "read_cached", lambda ns, key, v: keys.append(key) or None)
+    monkeypatch.setattr(workflow_review, "write_cached", lambda *a, **k: None)
+    monkeypatch.setattr(workflow_review, "infer_workflow_review", lambda **k: None)
+    steps = [{"key": "k1", "action": "click"}]
+    workflow_review.build_workflow_review(steps, page_urls=[], model="a")
+    workflow_review.build_workflow_review(steps, page_urls=[], model="b")
+    workflow_review.build_workflow_review(steps, page_urls=[], model="a")
+    assert keys[0] != keys[1] and keys[0] == keys[2]
+
+
+def test_capture_mode_rearms_a_frame_that_appears_after_it_was_switched_on(monkeypatch):
+    from conxa_compile.recorder.session import RecordingSession
+
+    sess = RecordingSession(session_id="late-frame")
+    monkeypatch.setattr(sess, "_ensure_bridge_installed_in_frame_sync", lambda f: None)
+    sess._on_frame_ready(object())
+    assert sess._capture_pending is None                       # capture was never switched on
+    sess.request_capture(True)
+    sess._capture_pending = None                               # the pump already applied it
+    sess._on_frame_ready(object())                             # ...then a new frame appears
+    assert sess._capture_pending is True
+    sess._consume_payload_safe_sync({"action": {"action": "extract"}})   # one-shot: the bridge turned itself off
+    sess._capture_pending = None
+    sess._on_frame_ready(object())
+    assert sess._capture_pending is None

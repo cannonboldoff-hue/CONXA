@@ -414,12 +414,48 @@ class WorkflowEditorMixin:
         result.update({"replaced_from": start, "added": len(new_steps), "stale_answers": stale})
         return result
 
+    def cmd_branch_segment(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """Add a separately compiled segment (a recording that picked up at a step) as a second way the
+        workflow can go from that step on, instead of replacing what is there. Undoable like any edit."""
+        import copy
+        from conxa_compile.conversation import clarify_store
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
+        from conxa_compile.editor.workflow_mutations import wrap_variant_branch
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_core.storage.workflow_store import list_workflows
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        segment_id = _safe_id(payload.get("segment_skill_id"), "segment_skill_id")
+        doc, segment = read_skill(skill_id), read_skill(segment_id)
+        if doc is None or segment is None:
+            raise _CommandError("skill_not_found", "The workflow or the new recording is missing.")
+        try:
+            start = resolve_step_index(doc, str(payload.get("from_step_key") or ""))
+        except ProposalError as exc:
+            raise _CommandError(exc.code, exc.message) from exc
+        new_steps = [s for s in ((segment.get("skills") or [{}])[0] or {}).get("steps") or [] if isinstance(s, dict)]
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = wrap_variant_branch(doc, start, new_steps)
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Couldn\u2019t add that as another way: {exc}") from exc
+        self._push_undo(skill_id, snapshot)
+        write_skill(skill_id, doc)
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        workflow = next((w for w in list_workflows() if w.skill_id == skill_id), None)
+        stale = clarify_store.mark_stale(workflow.id, set(step_keys(steps))) if workflow is not None else 0
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        result.update({"branched_from": start, "added": len(new_steps), "stale_answers": stale})
+        return result
+
     def cmd_parameterize_literal(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """Make one recorded value (a page address, a row identifier) a run input. See
         workflow_mutations.parameterize_literal for exactly what it rewrites."""
         import copy
         from conxa_core.storage.json_store import read_skill, write_skill
-        from conxa_compile.editor.workflow_mutations import parameterize_literal
+        from conxa_compile.editor.workflow_mutations import parameterize_click_text, parameterize_literal
 
         skill_id = _safe_id(payload.get("skill_id"), "skill_id")
         doc = read_skill(skill_id)
@@ -427,7 +463,9 @@ class WorkflowEditorMixin:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         snapshot = copy.deepcopy(doc)
         try:
-            doc, changed = parameterize_literal(
+            # "click": the visible text of a clicked item (identity signals); else a page address / record id
+            mutate = parameterize_click_text if payload.get("kind") == "click" else parameterize_literal
+            doc, changed = mutate(
                 doc, str(payload.get("literal") or ""), str(payload.get("name") or ""),
                 default=str(payload.get("default") or ""))
         except ValueError as exc:
@@ -437,6 +475,27 @@ class WorkflowEditorMixin:
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))
         result["changed"] = changed
+        return result
+
+    def cmd_set_date_offset(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """Make a date step "today plus N days". See workflow_mutations.set_date_offset."""
+        import copy
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_compile.editor.workflow_mutations import set_date_offset
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        doc = read_skill(skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = set_date_offset(doc, int(payload.get("step_index")), payload.get("days"))
+        except (TypeError, ValueError) as exc:
+            raise _CommandError("date_offset_invalid", f"Could not make that date relative: {exc}") from exc
+        self._push_undo(skill_id, snapshot)
+        write_skill(skill_id, doc)
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
         return result
 
     def cmd_replace_literals(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:

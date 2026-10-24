@@ -8,6 +8,8 @@
  *   new_view      { runId, label?, kind?, viewport? } -> { markerUrl, tabId }   first tab of a run;
  *                 kind "test" (default) | "record" | "signin", viewport { width, height } fixes the page size
  *   new_tab       { runId, label?, focus? }  -> { markerUrl, tabId }   a tab_open step's later tab
+ *   adopt_view    { runId, kind?, viewport? } -> { tabId, targetId }   hand a parked test run to a recorder
+ *                 (re-record from a step): same views and partition, now a record run
  *   close_view    { runId, tabId }           -> { ok: true }           destroy ONE view
  *   run_end       { runId }                  -> { ok: true }           the run finished — the view stays
  *   close_run     { runId }                  -> { ok: true }           destroy every view, wipe the partition
@@ -67,6 +69,7 @@ async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, d
   switch (op) {
     case "new_view": return panel.newView(runId, { label, kind, viewport });
     case "new_tab": return panel.newTab(runId, { label, focus });
+    case "adopt_view": return panel.adoptRun(runId, { kind, viewport });
     case "close_view":
       if (!tabId) throw new Error("missing tabId");
       await panel.closeTab(runId, tabId);

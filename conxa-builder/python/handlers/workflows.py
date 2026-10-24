@@ -85,6 +85,15 @@ _FORK_META_KEY = "conxa/fork"
 _FORK_STOP = "__stop__"
 _SESSION_EXPIRED_META_KEY = "conxa/session_expired"
 _STOPPED_AT_META_KEY = "conxa/stopped_at"
+_HANDED_OFF_META_KEY = "conxa/handed_off"
+
+
+def _extract_handed_off(result: dict[str, Any]) -> str | None:
+    """The browser-panel run id the runtime released to the recorder (``_handoff_park``), else None."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    handed = meta.get(_HANDED_OFF_META_KEY)
+    run_id = str(handed.get("run_id") or "") if isinstance(handed, dict) else ""
+    return run_id or None
 
 
 def _extract_stopped_at(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -192,6 +201,16 @@ def capabilities_needed(steps: list[Any]) -> set[str]:
                 need.add("outputs")
             if isinstance(s.get("run_if"), dict) and s["run_if"].get("input"):
                 need.add("run_if")
+            hints = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
+            if isinstance((hints.get("date_picker") or {}).get("date_offset_days"), int):
+                need.add("date_offset")
+            if s.get("on_missing") == "ask":
+                need.add("ask_missing")
+            if act == "wait_for_one_of" and isinstance(s.get("branch"), dict) and s["branch"].get("flow"):
+                need.add("variant_branch")
+            bundle = s.get("identity_bundle") if isinstance(s.get("identity_bundle"), dict) else {}
+            if "{{" in json.dumps([bundle.get("signals"), bundle.get("fingerprint")], default=str):
+                need.add("templated_click")
             walk((s.get("branch") or {}).get("steps") if isinstance(s.get("branch"), dict) else None)
             walk((s.get("for_each") or {}).get("steps") if isinstance(s.get("for_each"), dict) else None)
 
@@ -1108,10 +1127,25 @@ class WorkflowsMixin:
             # Parked exactly where asked, nothing at or after that step has run. Not a pass and not a failure:
             # the last real test result is left alone, and the parked page is the caller's to use.
             sink({"kind": "workflow_test", "message": f"Stopped before {stopped_step['step_intent'] or 'the chosen step'}."})
+            handed_off = None
+            if payload.get("handoff_park"):
+                # Re-record from this step: let the runtime go of the parked page without closing it, so
+                # the recorder can take it over (runtime/app/server.js, _handoff_park).
+                try:
+                    released = call_runtime_tool(
+                        runtime_dir, "execute_skill",
+                        {k: run_args[k] for k in ("skill", "company", "inputs", "watch", "wait_for_auth")} | {"_handoff_park": True},
+                        conxa_dir=conxa_dir, env={"CONXA_DATA_DIR": str(test_data_dir)}, phase_sink=_phase_sink)
+                except (RuntimeToolError, RuntimeError) as exc:
+                    raise _CommandError("handoff_failed", f"Could not hand the page over: {exc}") from exc
+                handed_off = _extract_handed_off(released)
+                if handed_off is None:
+                    raise _CommandError("handoff_failed", _runtime_result_text(released) or "The page could not be handed over.")
             return {
                 "status": "stopped_at_step", "message": "Stopped at the chosen step.", "company": company,
                 "skill": workflow.slug, "run_id": stopped_step["run_id"] or _test_run_id,
                 "stopped_at": stopped_step["step_index"], "stopped_intent": stopped_step["step_intent"],
+                **({"handed_off_run_id": handed_off} if handed_off else {}),
             }
 
         message = _runtime_result_text(result)

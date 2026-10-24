@@ -22,6 +22,7 @@ Everything here is pure (the recorded-event lookup is injected), so it is unit-t
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 from typing import Any, Callable
@@ -33,8 +34,11 @@ MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
     "coverage": -1, "upload": 0, "fork": 1, "known_popup": 1.5, "confirm": 2, "chosen_values": 2.5,
-    "values": 3, "output": 3.5, "popup": 4, "done_when": 5,
+    "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
+# Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
+# value on one of them is not "lost" and is never asked about.
+_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed"})
 # Questions whose answer decides what the workflow *is*, so testing waits for them: a test of a
 # workflow that might still be incomplete, or that still carries a value from the recording as if
 # it were fixed, proves little. Everything else keeps the compiler's default and never blocks.
@@ -164,19 +168,49 @@ def _chosen_values_question(understanding: dict[str, Any]) -> dict[str, Any] | N
     if not cands:
         return None
     limits = [str(c.get("recorded") or "") for c in understanding.get("candidates") or []
-              if isinstance(c, dict) and not c.get("supported") and c.get("verdict") in ("varies", "unsure")]
+              if isinstance(c, dict) and c.get("kind") == "click" and not c.get("supported")
+              and c.get("verdict") in ("varies", "unsure")]
     body = "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded."
     if limits:
         body += " I can’t make a clicked item change each run yet, so these stay as recorded: " + ", ".join(f"“{l}”" for l in limits[:3]) + "."
-    kinds = {"url": "Page address", "row": "Record"}
+    kinds = {"url": "Page address", "row": "Record", "click": "Clicked item"}
     return _question(
         "chosen_values", "chosen_values", "Which of these change each run?", body,
         [{"id": c["ref"], "label": _humanize(c["name"]),
           "detail": f"{kinds.get(c['kind'], 'Value')}: {str(c.get('literal') or c.get('recorded'))[:60]}",
           "selected": c["verdict"] == "varies"} for c in cands],
         multi=True, step_keys_=sorted({k for c in cands for k in c.get("step_keys") or []}),
-        items=[{"ref": c["ref"], "name": c["name"], "literal": c["literal"], "recorded": c["recorded"]} for c in cands],
+        items=[{"ref": c["ref"], "name": c["name"], "literal": c["literal"], "recorded": c["recorded"],
+                **({"kind": "click"} if c["kind"] == "click" else {})} for c in cands],
         recorded={c["name"]: c["literal"] for c in cands},
+    )
+
+
+def test_followup_question(doc: dict[str, Any], step_key: str, tested_inputs: dict[str, Any]) -> dict[str, Any] | None:
+    """After a failed test: the failing step typed an input whose test value differs from the
+    recorded one. Asks whether it really changes each run (keep it an input) or was only ever the
+    recorded value (pin it back). None when the step is not that shape. Pure."""
+    steps = _steps(doc)
+    keyed = dict(zip(step_keys(steps), steps))
+    step = keyed.get(step_key)
+    binding = str((step or {}).get("input_binding") or "")
+    if not step or not binding or binding == "file_path" or str(step.get("value") or "") != "{{" + binding + "}}":
+        return None
+    recorded = next((str(i.get("default") or "") for i in doc.get("inputs") or []
+                     if isinstance(i, dict) and i.get("id") == binding), "")
+    tested = str((tested_inputs or {}).get(binding) or "")
+    if not recorded.strip() or recorded == "{{REDACTED}}" or not tested.strip() or tested == recorded:
+        return None
+    name = step_name(step)
+    return _question(
+        "test_followup", f"test_followup:{step_key}:{binding}",
+        f"The test failed at “{name}”. Does {_humanize(binding).lower()} really change each run?",
+        f"The test used “{tested[:60]}” but you recorded “{recorded[:60]}”. If it is always the recorded one, I’ll stop asking for it.",
+        [
+            {"id": "varies", "label": "Yes, it changes each run", "detail": "Stays an input. The failure may be something else."},
+            {"id": "fixed", "label": f"No, always “{recorded[:40]}”", "detail": "Pins it to the recorded value."},
+        ],
+        step_keys_=[step_key], binding=binding, recorded_value=recorded,
     )
 
 
@@ -188,6 +222,8 @@ def generate_questions(
     fork_copy: ForkCopy | None = None,
     known_popups: list[dict[str, Any]] | None = None,
     understanding: dict[str, Any] | None = None,
+    dropped: list[dict[str, Any]] | None = None,
+    today: datetime.date | None = None,
     limit: int | None = MAX_QUESTIONS,
 ) -> list[dict[str, Any]]:
     """Find the places worth asking about in a compiled skill document.
@@ -212,6 +248,22 @@ def generate_questions(
         chosen = _chosen_values_question(understanding)
         if chosen is not None:
             out.append(chosen)
+
+    # 0b ─ steps the compile left out that carried a value the person entered: say so, so a
+    # real omission is not silent. Advisory: the answer applies nothing (re-record to add it back).
+    lost = [d for d in dropped or []
+            if isinstance(d, dict) and d.get("value") and d.get("pass") not in _MERGE_PASSES]
+    if lost:
+        shown = ", ".join(f"“{str(d['value'])[:40]}”" for d in lost[:3])
+        out.append(_question(
+            "dropped_value", "dropped_value", "Some of what you entered was left out. Is that right?",
+            f"These values were in the recording but are not in the workflow: {shown}. "
+            "That is normal for a value typed over or corrected while recording.",
+            [
+                {"id": "ok", "label": "Yes, leave them out", "detail": "They were mistakes or repeats."},
+                {"id": "missing", "label": "No, something is missing", "detail": "I’ll add it in Human Edit or record it again."},
+            ],
+        ))
 
     # 1 ─ file uploads: the recorded path lives on this computer and won't exist on a customer's.
     for i, s in enumerate(steps):
@@ -281,13 +333,17 @@ def generate_questions(
             if recorded == "{{REDACTED}}":
                 continue
         candidates.append({"binding": str(binding), "step_key": keys[i], "recorded": recorded})
+    # The person's own description said this exact value is the point of the task: leave it unticked.
+    fixed_typed = {str(c.get("name")) for c in (understanding or {}).get("candidates") or []
+                   if isinstance(c, dict) and c.get("kind") == "typed" and c.get("verdict") == "fixed"}
     seen: set[str] = set()
     uniq = [c for c in candidates if not (c["binding"] in seen or seen.add(c["binding"]))]
     if uniq:
         out.append(_question(
             "values", "values", "Which values change each run?",
             "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded.",
-            [{"id": c["binding"], "label": _humanize(c["binding"]), "detail": c["recorded"][:60] or "Text", "selected": True} for c in uniq],
+            [{"id": c["binding"], "label": _humanize(c["binding"]), "detail": c["recorded"][:60] or "Text",
+              "selected": c["binding"] not in fixed_typed} for c in uniq],
             multi=True, step_keys_=[c["step_key"] for c in uniq], recorded={c["binding"]: c["recorded"] for c in uniq},
         ))
 
@@ -310,6 +366,85 @@ def generate_questions(
             ],
             step_keys_=[keys[i]], output_name=str(s["value"]),
         ))
+
+    # 3b2 ─ a picked date that may only ever have meant "N days from today". Needs today's date (passed in,
+    #       so this stays pure); the label states the offset it infers so a wrong guess is easy to refuse.
+    if today is not None:
+        rel_seen = 0
+        for i, s in enumerate(steps):
+            hh = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
+            picker = hh.get("date_picker") if isinstance(hh.get("date_picker"), dict) else {}
+            try:
+                picked = datetime.date.fromisoformat(str(picker.get("recorded_value") or "")[:10])
+            except ValueError:
+                continue
+            days = (picked - today).days
+            if _action_name(s) != "date_pick" or picker.get("date_offset_days") is not None or not -31 <= days <= 366:
+                continue
+            rel_seen += 1
+            if rel_seen > 2:
+                break
+            when = ("today" if days == 0 else f"{abs(days)} day{'s' if abs(days) != 1 else ''} "
+                    f"{'after' if days > 0 else 'before'} today")
+            name = step_name(s)
+            out.append(_question(
+                "relative_date", f"relative_date:{keys[i]}", f"Is “{name}” always {when}?",
+                f"You picked {picked.strftime('%d %b %Y')}, and today is {today.strftime('%d %b %Y')}. "
+                "If the date is always counted from the day it runs, it won’t need to be filled in.",
+                [
+                    {"id": "relative", "label": f"Yes, always {when}", "detail": "Worked out on the day it runs. No input to fill in."},
+                    {"id": "fixed_input", "label": "No, it changes each run", "detail": "Stays an input the person running it fills in."},
+                ],
+                step_keys_=[keys[i]], days=days, binding=str(s.get("input_binding") or ""),
+            ))
+
+    # 3c ─ a typed field the person may leave empty: skip the step then, instead of typing nothing.
+    #      Advisory; the answer is one gated patch (run_if reads the run's inputs, never the page).
+    declared = {str(i.get("id")): i for i in doc.get("inputs") or [] if isinstance(i, dict)}
+    skip_seen = 0
+    for i, s in enumerate(steps):
+        binding = str(s.get("input_binding") or "")
+        row = declared.get(binding) or {}
+        # "optional-looking": marked optional, or recorded empty (an empty default alone is not proof)
+        ev = look(s)
+        recorded_empty = bool(ev) and not str((ev.get("action") or {}).get("value") or "").strip()
+        if (row and (row.get("optional") or (recorded_empty and not str(row.get("default") or "").strip()))
+                and binding != "file_path" and _action_name(s) in ("type", "fill")
+                and str(s.get("value") or "") == "{{" + binding + "}}" and not s.get("run_if")):
+            skip_seen += 1
+            if skip_seen > 2:
+                break
+            name = step_name(s)
+            out.append(_question(
+                "skip_when_empty", f"skip_when_empty:{keys[i]}", f"If {_humanize(binding).lower()} is left empty, skip “{name}”?",
+                "Some runs may not have a value for this. Skipping avoids typing nothing into the field.",
+                [
+                    {"id": "skip", "label": "Yes, skip it when empty", "detail": f"“{name}” only runs when a value is given."},
+                    {"id": "run", "label": "No, always run it", "detail": "Runs even with no value."},
+                ],
+                step_keys_=[keys[i]], binding=binding,
+            ))
+
+    # 3d ─ a step acting on a record the run names: what if that record is not on the page?
+    missing_seen = 0
+    for i, s in enumerate(steps):
+        eb = s.get("entity_binding")
+        if (isinstance(eb, dict) and eb.get("container_selector") and str(eb.get("identifier") or "").startswith("{{")
+                and not s.get("on_missing")):
+            missing_seen += 1
+            if missing_seen > 2:
+                break
+            name = step_name(s)
+            out.append(_question(
+                "missing_item", f"missing_item:{keys[i]}", f"If the item isn’t on the page, what should “{name}” do?",
+                "The run is told which item to act on. It can be gone because someone already dealt with it.",
+                [
+                    {"id": "skip", "label": "Skip it and carry on", "detail": "Only when the list is on the page and the item clearly isn’t in it."},
+                    {"id": "ask", "label": "Ask a person", "detail": "The run pauses with a visible browser until someone has dealt with it."},
+                    {"id": "fail", "label": "Stop with an error", "detail": "Treat a missing item as a problem."},
+                ],
+                step_keys_=[keys[i]],
+            ))
 
     # 1b ─ popups that need a decision (outcome forks): never answered silently.
     for i, s in enumerate(steps):
@@ -402,12 +537,46 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             return ops, "Something is missing — add it in Human Edit before relying on this"
         return ops, "Covers everything"
 
+    if kind == "relative_date":
+        if answer.get("choice") == "relative":
+            ops.append({"op": "set_date_offset", "step_key": keys[0], "days": int(question["days"])})
+            if question.get("binding"):
+                ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
+            return ops, "Counted from the day it runs"
+        return ops, "Stays an input"
+
+    if kind == "skip_when_empty":
+        if answer.get("choice") == "skip":
+            ops.append({"op": "patch", "step_key": keys[0], "patch": {"run_if": {"input": question["binding"], "op": "not_empty"}}})
+            return ops, "Skipped when empty"
+        return ops, "Always runs"
+
+    if kind == "missing_item":
+        if answer.get("choice") in ("skip", "ask"):
+            ops.append({"op": "patch", "step_key": keys[0], "patch": {"on_missing": answer["choice"]}})
+            return ops, ("Skipped when the item isn’t there" if answer["choice"] == "skip"
+                         else "Asks a person when the item isn’t there")
+        return ops, "Stops with an error"
+
+    if kind == "test_followup":
+        if answer.get("choice") == "fixed":
+            ops.append({"op": "patch", "step_key": keys[0], "patch": {"value": question["recorded_value"]}})
+            ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
+            return ops, "Always the recorded value"
+        return ops, "Stays an input"
+
+    if kind == "dropped_value":
+        if answer.get("choice") == "missing":
+            return ops, "Something is missing — add it in Human Edit before relying on this"
+        return ops, "Left out"
+
     if kind == "chosen_values":
         selected = set(answer.get("selected") or [])
         names: list[str] = []
         for item in question.get("items") or []:
             if item.get("ref") in selected:
-                ops.append({"op": "parameterize", "literal": item["literal"], "name": item["name"], "default": item["literal"]})
+                ops.append({"op": "parameterize", "literal": item["literal"], "name": item["name"], "default": item["literal"],
+                            **({"kind": "click"} if item.get("kind") == "click" else {})})
                 names.append(_humanize(item["name"]))
         return ops, (", ".join(names) if names else "Nothing changes — all kept as recorded")
 
