@@ -66,7 +66,7 @@ export function HumanEditListPage() {
                 Record a workflow, then compile it — it'll show up here for review.
               </p>
             </div>
-            <Button size="sm" variant="outline" className="mt-1" onClick={() => navigate('/workflows')}>
+            <Button size="sm" variant="outline" className="mt-1" onClick={() => navigate('/chat')}>
               Go to Workflows
             </Button>
           </div>

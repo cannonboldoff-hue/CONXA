@@ -259,6 +259,17 @@ class CompileFlowMixin:
         if q is None:
             self._flow_post_summary(workflow_id, sink)
             return
+        if q.get("kind") == "done_when":
+            # Its labels were written at compile time; earlier answers may have turned a value into an input since.
+            from conxa_core.storage.json_store import read_skill
+            from conxa_core.storage.workflow_store import get_workflow
+
+            wf = get_workflow(workflow_id)
+            doc = read_skill(wf.skill_id) if wf and wf.skill_id else None
+            if doc is not None:
+                fresh = clarify.refresh_question(q, doc)
+                q.update(choices=fresh["choices"], step_keys=fresh["step_keys"])
+                clarify_store.update_question(workflow_id, q["id"], choices=q["choices"], step_keys=q["step_keys"])
         asked = [x for x in questions if x.get("status") != "queued"]
         number = asked.index(q) + 1
         card = harness.post_card(
@@ -376,6 +387,8 @@ class CompileFlowMixin:
             raise _CommandError("card_action_unsupported", f"A question can’t “{action}”.")
 
         answer = {"choice": body.get("choice")} if body.get("choice") else {"selected": list(body.get("selected") or [])}
+        if body.get("custom_text"):
+            answer["custom_text"] = str(body["custom_text"])
         workflow = get_workflow(workflow_id)
         doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
         if doc is None:

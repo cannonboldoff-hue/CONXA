@@ -254,7 +254,7 @@ Some parts were **not** audited line by line: the recorder's `bridge.js`, `resol
 | Popups | EXEC-44 #1 native `alert/confirm` forks, #2 late popups after the watch window, #3 insertable forks; EXEC-25 `beforeunload`; EXEC-26 native dialogs in the auth-capture browser | The safe default is already there (fail closed to a person); these reduce interruptions |
 | Auth | BUILD-48 (live in-panel sign-in pass, localStorage of a closed tab), AUTH-10, AUTH-17, RT-10 (handover banner leaks to the whole host browser), PROD-4 vendor-session half | Group sign-in, live checks, mid-test expiry and handover exist |
 | Dynamic pages | EXEC-28 (renamed accessible name can't heal), EXEC-29a (hover-reveal), EXEC-27 (unbounded branch polling), PROD-2 (recordability score) | [V] `wait` is clamped to 1000 ms (`capability_manifest.py:62`) and assertion types outside the eight listed silently pass (`:104-105`). Both are worth surfacing in the editor so authors aren't misled |
-| Loops | EXEC-38-UI (no for_each authoring UI), BUILD-6 (try_dismiss / wait_for_one_of authoring) | "Do this for each row in my CSV" has no conversational route at all; fits naturally after G2 |
+| Loops | No for_each / try_dismiss / wait_for_one_of authoring UI (those backlog items were dropped when Studio went conversation-first) | "Do this for each row in my CSV" has no conversational route at all; fits naturally after G2 |
 | Skill contract | BUILD-27 (name/description/input prose never reviewed), BUILD-28 (drift signal has no response path) | Directly affects whether an agent picks and fills the reusable workflow correctly |
 
 ### P3: polish

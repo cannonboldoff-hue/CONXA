@@ -15,7 +15,6 @@ import { fetchWorkflow } from '@/api/workflowsApi'
 import { useShellStore } from '@/store/shellStore'
 
 // Pages
-import { WorkflowListPage } from '@/pages/WorkflowListPage'
 import { GroupPage } from '@/pages/GroupPage'
 import { HumanEditPage } from '@/pages/HumanEditPage'
 import { InspectorPage } from '@/pages/InspectorPage'
@@ -127,7 +126,7 @@ function DeepLinkHandler() {
     return window.conxa.onDeepLink((url) => {
       const workflowMatch = url.match(/[?&]workflow=([^&]+)/)
       const workflowId = workflowMatch ? decodeURIComponent(workflowMatch[1]) : null
-      navigate(workflowId ? `/workflows/${workflowId}` : '/workflows')
+      navigate(workflowId ? `/workflows/${workflowId}` : '/chat')
     })
   }, [navigate])
   return null
@@ -141,7 +140,7 @@ function OpenSettings() {
 }
 
 /** `/` has no id to route on — new chat is the home, unless there is nothing in the workspace yet:
- * then the first-launch screen explains how to start. The group list is still one click away at `/workflows`. */
+ * then the first-launch screen explains how to start. */
 function DefaultRedirect() {
   const { groups, loading, failed } = useShellData()
   if (loading) return null
@@ -162,7 +161,7 @@ function WorkflowRedirect() {
   })
 
   if (q.isLoading) return null
-  if (q.isError || !q.data) return <Navigate to="/workflows" replace />
+  if (q.isError || !q.data) return <Navigate to="/chat" replace />
   return <Navigate to={`/groups/${encodeURIComponent(q.data.workflow.group_id)}`} replace />
 }
 
@@ -299,7 +298,6 @@ export function App() {
           <DeepLinkHandler />
           <Routes>
             <Route path="/" element={<DefaultRedirect />} />
-            <Route path="/workflows" element={<WorkflowListPage />} />
             <Route path="/welcome" element={<FirstLaunchPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/new" element={<NewWorkflowPage />} />
@@ -315,7 +313,7 @@ export function App() {
             <Route path="/publish" element={<PublishPage />} />
             <Route path="/build-installer" element={<BuildInstallerPage />} />
             <Route path="/settings" element={<OpenSettings />} />
-            <Route path="*" element={<Navigate to="/workflows" replace />} />
+            <Route path="*" element={<Navigate to="/chat" replace />} />
           </Routes>
           </LegalGate>
         </AppChrome>

@@ -9,6 +9,7 @@ from typing import Any
 
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_delete, db_list
+from conxa_core.models.prose_binding import bind_prose
 from conxa_core.sanitize import scrub_surrogates
 from conxa_core.storage.skill_hooks import notify_skill_deleted, notify_skill_written
 
@@ -20,7 +21,7 @@ def skills_dir() -> Path:
 
 
 def write_skill(skill_id: str, document: dict[str, Any]) -> Path:
-    document = scrub_surrogates(document)
+    document = bind_prose(scrub_surrogates(document))
     is_update = read_skill(skill_id) is not None
     db_set("skills", skill_id, document)  # the durable copy — Postgres, or db.py's own KV fallback
     path = skills_dir() / f"{skill_id}.json"

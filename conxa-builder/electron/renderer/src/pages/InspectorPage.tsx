@@ -41,7 +41,7 @@ export function InspectorPage() {
   const [rebuilding, setRebuilding] = useState(false)
   const qc = useQueryClient()
 
-  const goBack = useCallback(() => navigate(from ?? '/workflows'), [navigate, from])
+  const goBack = useCallback(() => navigate(from ?? '/chat'), [navigate, from])
 
   const workflowQ = useQuery({
     queryKey: ['workflow', workflowId],

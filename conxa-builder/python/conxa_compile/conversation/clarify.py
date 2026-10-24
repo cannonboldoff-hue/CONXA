@@ -28,6 +28,7 @@ import re
 from typing import Any, Callable
 
 from conxa_compile.compiler.step_key import step_keys
+from conxa_core.models.prose_binding import readable as _readable
 
 MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
@@ -60,7 +61,7 @@ def step_name(step: dict[str, Any]) -> str:
     for key in ("semantic_description", "intent"):
         text = str(step.get(key) or "").strip()
         if text:
-            text = re.sub(r"^Step \d+:\s*", "", text)
+            text = _readable(re.sub(r"^Step \d+:\s*", "", text))
             if "_" in text and " " not in text:
                 text = text.replace("_", " ")
             return text[:1].upper() + text[1:80]
@@ -212,6 +213,52 @@ def test_followup_question(doc: dict[str, Any], step_key: str, tested_inputs: di
         ],
         step_keys_=[step_key], binding=binding, recorded_value=recorded,
     )
+
+
+def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
+    wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
+    ``target`` first -- the field the runtime checks and a "changes each run" answer rewrites."""
+    steps = _steps(doc)
+    keys = step_keys(steps)
+    checks: list[dict[str, Any]] = []
+    for i in range(max(0, len(steps) - 3), len(steps)):
+        for j, a in enumerate((steps[i].get("validation") or {}).get("assertions") or []):
+            if isinstance(a, dict) and a.get("type") in _ASSERTION_TYPES and not a.get("required"):
+                checks.append({"id": f"{keys[i]}#{j}", "step_key": keys[i], "assertion": a})
+
+    def describe(a: dict[str, Any]) -> str:
+        t = a.get("type")
+        if t == "text_present":
+            return f"The message “{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears"
+        if t == "url_changed":
+            return "The page address changes"
+        if t == "url_pattern":
+            return f"The page address matches {_readable(str(a.get('pattern') or a.get('value') or ''))[:60]}"
+        return "The page changes"
+
+    choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
+                "selected": c["assertion"].get("type") == "text_present"} for c in checks]
+    if choices:  # offered only beside a real check, so an input-only workflow isn't pestered
+        referenced = " ".join(str(a.get("target") or "") for s in steps
+                              for a in (s.get("validation") or {}).get("assertions") or [] if isinstance(a, dict))
+        for inp in doc.get("inputs") or []:
+            iid = str(inp.get("id") or "") if isinstance(inp, dict) else ""
+            if iid and iid != "file_path" and "{{" + iid + "}}" not in referenced and not any(
+                    c["assertion"].get("type") == "text_present" and "{{" + iid + "}}" in str(c["assertion"].get("target") or "")
+                    for c in checks):
+                choices.append({"id": f"input:{iid}", "label": f"The {_humanize(iid).lower()} shows up on the page",
+                                "detail": "Checks the page after the run shows what was entered.", "selected": False})
+    return choices, sorted({c["step_key"] for c in checks})
+
+
+def refresh_question(question: dict[str, Any], doc: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild a ``done_when`` question from the doc as it is now, so its labels reflect answers given
+    after the compile (a value that became an input). Other kinds are returned as they were."""
+    if question.get("kind") != "done_when":
+        return question
+    choices, keys = _done_when_choices(doc)
+    return {**question, "choices": choices, "step_keys": keys} if choices else question
 
 
 def generate_questions(
@@ -475,27 +522,13 @@ def generate_questions(
             ))
 
     # 5 ─ how do we know it worked? Only checks the compiler already wrote, never new selectors.
-    checks: list[dict[str, Any]] = []
-    for i in range(max(0, len(steps) - 3), len(steps)):
-        for j, a in enumerate((steps[i].get("validation") or {}).get("assertions") or []):
-            if isinstance(a, dict) and a.get("type") in _ASSERTION_TYPES and not a.get("required"):
-                checks.append({"id": f"{keys[i]}#{j}", "step_key": keys[i], "index": j, "assertion": a})
-    if checks:
-        def describe(a: dict[str, Any]) -> str:
-            t = a.get("type")
-            if t == "text_present":
-                return f"The message “{str(a.get('text') or a.get('value') or a.get('target') or '')[:60]}” appears"
-            if t == "url_changed":
-                return "The page address changes"
-            if t == "url_pattern":
-                return f"The page address matches {str(a.get('pattern') or a.get('value') or '')[:60]}"
-            return "The page changes"
-
+    done_choices, done_keys = _done_when_choices(doc)
+    if done_choices:
         out.append(_question(
             "done_when", "done_when", "How do we know it worked?",
-            "I saw these at the end of your recording. Ticked checks must pass for a run to count as done.",
-            [{"id": c["id"], "label": describe(c["assertion"]), "detail": "", "selected": c["assertion"].get("type") == "text_present"} for c in checks],
-            multi=True, step_keys_=sorted({c["step_key"] for c in checks}),
+            "I saw these at the end of your recording. Ticked checks must pass for a run to count as done. "
+            "You can also type your own check below.",
+            done_choices, multi=True, step_keys_=done_keys,
         ))
 
     out.sort(key=lambda q: _PRIORITY[q["kind"]])
@@ -648,12 +681,21 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
 
     if kind == "done_when":
         selected = set(answer.get("selected") or [])
+        custom = str(answer.get("custom_text") or "").strip()[:120]
         by_step: dict[str, dict[int, bool]] = {}
+        extra: list[dict[str, Any]] = []  # new text checks, added to the last step
         for cid in selected:
+            if cid.startswith("input:"):
+                extra.append({"type": "text_present", "target": "{{" + cid[len("input:"):] + "}}", "required": True})
+                continue
             key, _, idx = cid.rpartition("#")  # step keys may contain "#" themselves
             by_step.setdefault(key, {})[int(idx)] = True
+        if custom:
+            extra.append({"type": "text_present", "target": custom, "required": True})
         steps = _steps(doc)
         keyed = dict(zip(step_keys(steps), steps))
+        if extra and keyed:
+            by_step.setdefault(list(keyed)[-1], {})
         for key, idxs in by_step.items():
             step = keyed.get(key)
             if step is None:
@@ -662,8 +704,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             for j in idxs:
                 if j < len(assertions):
                     assertions[j]["required"] = True
+            if key == list(keyed)[-1]:
+                assertions += extra
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
         labels = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
+        if custom:
+            labels.append(f"The page shows “{custom}”")
         return ops, "; ".join(labels) if labels else "No required checks"
 
     return ops, ""
@@ -682,7 +728,7 @@ def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: in
         for a in (s.get("validation") or {}).get("assertions") or []:
             if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
                 if a.get("type") == "text_present":
-                    required_checks.append(f"“{str(a.get('text') or a.get('value') or a.get('target') or '')[:60]}” appears")
+                    required_checks.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
                 elif a.get("type") == "url_changed":
                     required_checks.append("the page address changes")
     inputs = [i for i in doc.get("inputs") or [] if isinstance(i, dict)]

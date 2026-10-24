@@ -161,7 +161,8 @@ def test_questions_cover_the_places_only_the_recorder_knows_and_are_capped_and_o
     assert values["multi"] and [c["id"] for c in values["choices"]] == ["po_number", "description"]
     assert values["choices"][0]["detail"] == "PO-44821"
     done = qs[4]
-    assert [c["selected"] for c in done["choices"]] == [True, False]  # the message is pre-ticked, the address is not
+    # the message is pre-ticked; the address and the two "input shows up" offers are not
+    assert [c["selected"] for c in done["choices"]] == [True, False, False, False]
 
 
 def test_a_workflow_with_nothing_uncertain_asks_nothing():
@@ -246,6 +247,27 @@ def test_done_when_only_ever_makes_an_existing_text_url_or_state_check_required(
     assert asserts[0]["required"] is True and asserts[1]["required"] is False
     assert {a["type"] for a in asserts} <= {"text_present", "url_changed", "url_pattern", "state_changed"}
     assert receipt == "The message “Invoice sent” appears"
+
+
+def test_done_when_offers_inputs_and_takes_a_typed_check_and_reads_the_current_doc():
+    from conxa_compile.conversation.clarify import refresh_question
+
+    doc = _invoice_doc()
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = _q(doc, "done_when")
+    assert {"input:po_number", "input:description"} <= {c["id"] for c in q["choices"]}
+    assert "input:file_path" not in {c["id"] for c in q["choices"]}
+    ops, receipt = plan_answer(q, {"selected": ["input:po_number"], "custom_text": "Saved"}, doc)
+    (op,) = ops
+    assert op["step_key"] == keys[5]
+    added = op["patch"]["validation"]["assertions"][-2:]
+    assert added == [{"type": "text_present", "target": "{{po_number}}", "required": True},
+                     {"type": "text_present", "target": "Saved", "required": True}]
+    # a value turned into an input after the compile: the label shows the input, not the recorded text
+    doc["skills"][0]["steps"][5]["validation"]["assertions"][0]["target"] = "Invoice {{po_number}} sent"
+    fresh = refresh_question(q, doc)
+    assert fresh["choices"][0]["label"] == "The message “Invoice “po number” sent” appears"
+    assert "input:po_number" not in {c["id"] for c in fresh["choices"]}
 
 
 def test_planning_never_mutates_the_document():

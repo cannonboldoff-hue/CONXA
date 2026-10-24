@@ -51,7 +51,7 @@ export function WorkflowMenu({ workflowId, workflowName, className }: { workflow
     onSuccess: () => {
       setDeleting(false)
       refresh()
-      if (pathname === `/w/${workflowId}`) navigate('/workflows')
+      if (pathname === `/w/${workflowId}`) navigate('/chat')
     },
     onError: (e) => toast.error((e as Error).message || 'Failed to delete workflow.'),
   })

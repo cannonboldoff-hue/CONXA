@@ -170,7 +170,6 @@ export function NewWorkflowPage() {
           <div className="flex items-center gap-2">
             <Button type="submit" variant="brand" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create and start recording'}</Button>
             <Button type="button" variant="ghost" disabled={create.isPending} onClick={() => { setDraft(null); navigate(-1) }}>Cancel</Button>
-            <span className="ml-auto text-xs text-[var(--text-meta)]">{inPanel ? 'Records inside Conxa — no separate window' : 'Opens the recording browser in its own window'}</span>
           </div>
         </form>
       </div>

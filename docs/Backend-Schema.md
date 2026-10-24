@@ -727,7 +727,7 @@ cannot patch `recovery`/`validation` (branch bodies never enter Tier A/B recover
 blocks are meaningless there — enforced by `patch_gate.py::validate_editor_patch`'s
 `in_branch_body` flag). `try_dismiss`/`wait_for_one_of` accept a normal `branch` key patch
 (candidates/options, quality-gated the same way as any selector) but have no dedicated authoring
-UI yet — see `TODO.md` BUILD-6.
+UI yet.
 
 ### 3.4d Optional-interstitial observation (recording-next-steps.md Priority 2, 2026-07-10)
 

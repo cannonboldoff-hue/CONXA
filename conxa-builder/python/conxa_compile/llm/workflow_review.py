@@ -54,7 +54,7 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 1
+_PROMPT_VERSION = 3
 
 
 def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:

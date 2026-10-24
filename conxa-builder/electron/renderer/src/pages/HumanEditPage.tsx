@@ -169,9 +169,9 @@ export function HumanEditPage() {
     try {
       const list = normalizeWorkflowList(await fetchWorkflows())
       const owner = list.find((wf) => wf.skill_id === skillId)
-      navigate(owner ? `/groups/${encodeURIComponent(owner.group_id)}` : '/workflows')
+      navigate(owner ? `/groups/${encodeURIComponent(owner.group_id)}` : '/chat')
     } catch {
-      navigate(fromPath ?? '/workflows')
+      navigate(fromPath ?? '/chat')
     }
   }, [skillId, fromPath, navigate])
 
@@ -568,7 +568,7 @@ export function HumanEditPage() {
           actions={
             <>
               <Button variant="outline" size="sm" asChild className="border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08]">
-                <Link to="/workflows">
+                <Link to="/chat">
                   <Home className="size-3.5" />
                   Home
                 </Link>
@@ -790,7 +790,7 @@ export function HumanEditPage() {
             </CardHeader>
             <CardContent>
               <Button variant="default" asChild className="bg-white text-black hover:bg-zinc-200">
-                <Link to={fromPath ?? '/workflows'}>{fromPath ? 'Back to Workflow' : 'Back to Workflows'}</Link>
+                <Link to={fromPath ?? '/chat'}>{fromPath ? 'Back to Workflow' : 'Back to chat'}</Link>
               </Button>
             </CardContent>
           </Card>

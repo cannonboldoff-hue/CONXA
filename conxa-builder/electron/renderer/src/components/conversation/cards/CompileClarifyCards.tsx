@@ -131,6 +131,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
   const [single, setSingle] = useState(choices[0]?.id ?? '')
   const [picked, setPicked] = useState<Set<string>>(() => new Set(choices.filter((c) => c.selected).map((c) => c.id)))
   const [busy, setBusy] = useState(false)
+  const [custom, setCustom] = useState('')
   const qKind = String(item.question_kind ?? '')
   const title = String(item.title ?? '')
   const receipt = typeof item.receipt === 'string' ? item.receipt : ''
@@ -168,10 +169,12 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
     )
   }
 
+  const customText = qKind === 'done_when' ? custom.trim() : ''
   const count = picked.size
+  const checks = count + (customText ? 1 : 0)
   const primary =
     qKind === 'values' ? (count ? `Make ${count} input${count === 1 ? '' : 's'}` : 'Keep all as recorded')
-    : qKind === 'done_when' ? (count ? `Use ${count} check${count === 1 ? '' : 's'}` : 'No required checks')
+    : qKind === 'done_when' ? (checks ? `Use ${checks} check${checks === 1 ? '' : 's'}` : 'No required checks')
     : 'Use this'
 
   return (
@@ -185,7 +188,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
             variant="brand"
             size="sm"
             disabled={busy || (!multi && !single)}
-            onClick={() => send('choose', multi ? { selected: [...picked] } : { choice: single })}
+            onClick={() => send('choose', multi ? { selected: [...picked], ...(customText ? { custom_text: customText } : {}) } : { choice: single })}
           >
             {primary}
           </Button>
@@ -228,6 +231,20 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
           )
         })}
       </ul>
+      {qKind === 'done_when' && (
+        <label className="mt-3 block text-xs text-[var(--text-meta)]">
+          Or type text that should appear on the page when it worked
+          <input
+            type="text"
+            maxLength={120}
+            value={custom}
+            disabled={busy}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder="e.g. File uploaded"
+            className="mt-1 w-full rounded-[8px] border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+          />
+        </label>
+      )}
       <p className="mt-2 text-xs text-[var(--text-meta)]">Or answer in your own words in the box below.</p>
     </CardShell>
   )
@@ -255,7 +272,8 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
   const [busy, setBusy] = useState(false)
   const s = item.summary as Summary
   const compiled = s.steps - s.added_steps
-  const shown = s.step_names.slice(0, 6)
+  const [expanded, setExpanded] = useState(false)
+  const shown = expanded ? s.step_names : s.step_names.slice(0, 6)
   const wf = workflowIdOf(threadId)
 
   const test = async () => {
@@ -290,7 +308,14 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         {shown.map((n, i) => (
           <li key={i} className="flex gap-2"><span className="w-5 shrink-0 text-right tabular-nums text-[var(--text-meta)]">{i + 1}</span><span className="text-[var(--text-primary)]">{n}</span></li>
         ))}
-        {s.step_names.length > shown.length && <li className="pl-7 text-xs text-[var(--text-meta)]">and {s.step_names.length - shown.length} more</li>}
+        {s.step_names.length > 6 && (
+          <li className="pl-7 text-xs">
+            <button type="button" className="text-[var(--text-meta)] underline-offset-2 hover:text-[var(--text-primary)] hover:underline"
+              aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+              {expanded ? 'Show fewer' : `and ${s.step_names.length - 6} more`}
+            </button>
+          </li>
+        )}
       </ol>
       <p className="mt-3 text-xs text-[var(--text-meta)]">
         {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''} · {s.inputs} input{s.inputs === 1 ? '' : 's'}

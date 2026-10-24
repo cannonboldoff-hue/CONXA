@@ -41,16 +41,16 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 
 | Priority | Remaining |
 |---|---|
-| P0 — Critical / Time-Sensitive | 15 |
-| P1 — Blocking / Foundational | 3 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 44 |
+| P0 — Critical / Time-Sensitive | 14 |
+| P1 — Blocking / Foundational | 1 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 42 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
-| P4 — Low Urgency, Opportunistic | 37 |
-| **Total** | **119** |
+| P4 — Low Urgency, Opportunistic | 33 |
+| **Total** | **110** |
 
 ---
 
-## P0 — Critical / Time-Sensitive (15 remaining)
+## P0 — Critical / Time-Sensitive (14 remaining)
 
 **Added 2026-08-09, direct from the founders — supersedes every previously-tracked priority in this file.** The four items below are the reason the rest of this backlog shifted down one tier (old P0 → P1, old P1 → P2, old P2 → P3, old P3 → P4); no other item content changed, only the section labels. See the "Fourth pass" note at the bottom of this file.
 
@@ -148,19 +148,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** S.
 - **Found via:** direct founder question (2026-08-22) — "can we cap concurrency to whatever the
   laptop supports instead of a fixed number?"
-
-### BUILD-14 — Record/Compile page: workflow-centric counting + folder grouping
-- **Category:** Builder / Cloud
-- **Description:** Build Studio's record/compile screens (`PluginListSidebar.tsx`, `PluginSwitcher.tsx`) and the surrounding UI are built around counting and switching between "plugins" — but a single published plugin/skill pack can bundle many individually recorded workflows, and the cloud's entitlement layer already models that distinction internally (`entitlements.py::ensure_workflow_publishable(principal, plugin_id, workflow_ids)` treats workflows as the countable sub-unit of a plugin). Redesign the Record + Compile page to show and count **workflows**, not plugins, and add folder-style grouping (e.g., "Marketing", "Sales") so a vendor with a growing catalog can organize workflows into named groups. Add the backend support needed for a workflow→folder association as **pure organizational metadata** — a label attached to a workflow record, not a structural change to the compiled `SkillPackage`, its `IdentityBundle`, or anything the runtime reads. Grouping must never touch the skill contract (see `CLAUDE.md`'s Key Invariants and ARCH-3's contract/executor boundary) — moving a workflow between folders must be indistinguishable, from the runtime's perspective, from not moving it at all.
-- **Why required:** the current plugin-centric counting doesn't match how vendors actually think about or are billed on their catalog (by workflow, per the entitlement model's own `workflow_ids` field), and there is no way today to organize a growing list of recorded workflows.
-- **Business value:** keeps Build Studio usable at the scale a vendor with dozens of workflows will actually reach, and surfaces the same unit (workflows) that entitlements already count and gate on, instead of a different unit (plugins) that can undercount or overcount what a customer is actually paying for.
-- **Technical value:** reuses the entitlement model's existing plugin_id/workflow_ids distinction rather than inventing a new counting unit; folder metadata is additive and stored out-of-band from the compiled skill package, which keeps the change low-risk to execution as long as that boundary is respected.
-- **Dependencies:** should land together with an explicit check (a test, per this repo's non-negotiable-invariant convention) proving folder assignment is never read by `runtime/run.js` or by any step of the compiler's build path — this is the same class of contract-boundary discipline ARCH-3 is asking for more broadly.
-- **Suggested order:** immediate, alongside the other three P0 items.
-- **Complexity:** M–L — UI rework of the Record/Compile screens plus a new backend field/endpoint for folder assignment; no change to the skill contract itself.
-- **Success criteria:** the Record/Compile page shows and counts workflows, not plugins, matching what's actually entitled/billed; a workflow can be assigned to a named folder and the list can be filtered by folder; compiling and executing the same workflow before and after a folder move produces byte-identical compiled output and identical runtime behavior.
-
-</details>
 
 ### Workflow Groups CI gate coverage
 - **Category:** Runtime / CI
@@ -309,7 +296,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 ---
 
-## P1 — Blocking / Foundational (4 remaining)
+## P1 — Blocking / Foundational (2 remaining)
 
 ### SHIP-1 — Build Studio's dependency manifest is hand-maintained and can silently disagree with what CI actually published
 
@@ -319,34 +306,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Also:** `SHIP-GUIDE.md:356` reads "Nothing promotes automatically the way conxa-app/conxa-runtime do" — true for the runtime self-updater, false for Build Studio. Correct it in the same pass.
 - **Partially mitigated 2026-09-20:** the Studio no longer hides the failure (`App.tsx` renders the dep error instead of dismissing the banner), so a future mismatch is at least visible. The drift itself is untouched.
 
-
-### BUILD-15 — Recording-window flicker: move the mid-recording session-refresh save off the visible hot path
-- **Category:** Builder
-- **Description:** Recording any workflow that belongs to a Group makes the Chromium recording window visibly flicker while the user interacts with the page. Root cause confirmed by direct comparison against the last known-good commit (`b445dab`, where `handlers/session.py`'s group-recording branch set `storage_state_autosave = ""`) plus a controlled test (disabling the wiring eliminates the flicker): an in-progress, not-yet-committed feature — `_refresh_group_app_sessions` in `handlers/session.py`, which carries a rotated cookie or a mid-recording re-login back to each app's saved session after a group workflow recording ends — needs a live, up-to-date copy of the session while recording is happening, so it wired `storage_state_autosave_path` on for ordinary (non-auth) workflow recording. That turns on `_autosave_storage_state_sync`'s periodic `context.storage_state()` call (`conxa_compile/recorder/session.py`) every 6 seconds during recording — the same call whose own code comment already blames it for "visible window flicker during active login" in auth-mode recording, where it was always meant to be confined. Two earlier, wrong hypotheses (generic per-tick timer checks; Playwright's built-in video screencast) were investigated and ruled out first — both are documented, along with the full trace, in the plan file this investigation produced.
-- **Currently patched, not fixed:** `storage_state_autosave` is force-disabled again in `handlers/session.py` (marked `PONYTAIL TEMP DEBUG (2026-08-17)`) so recording is flicker-free, but this also disables the rotated-cookie-refresh feature it was wired up for. Playwright's `record_video_dir`/`record_video_size` in `session.py` is also still temporarily disabled from the earlier (ruled-out) video hypothesis and needs re-enabling once the real fix lands. Both temp-debug blocks are clearly marked in the diff and must not ship as-is.
-- **Why required:** blocks clean recording for any workflow that belongs to a Group — the primary/expected shape of most real customer workflows — and the temporary fix trades away a legitimate feature (session refresh) to get there.
-- **Business value:** recording a clean browser session is the single core action of the entire product; a visibly broken/flickering recorder is a first-five-minutes trust problem, and it's currently live in the working tree, not yet shipped.
-- **Technical value:** the same investigation also confirmed (but did not yet fix) two amplifying issues worth fixing alongside this: `_rewrite_events_jsonl` writes a full diagnostics dump (`_write_diagnostics_sync`, a `frame.evaluate()` per frame) on every single recorded event instead of once at session end, and `_capture_a11y_async` spawns a thread per event to call `page.accessibility.snapshot()`, an API removed in the installed Playwright version (1.58.0) — every call silently fails, wasting a thread per event for nothing. Neither is the flicker's root cause, but both are real, independently-confirmed cleanups on the same hot path.
-- **What's left:** design and implement a version of the session-refresh save that doesn't block/interrupt the browser's compositor while recording — options include (a) saving only once, right before recording ends, instead of on a 6s timer (loses the "browser crashed mid-recording" safety net that timer also serves — see the other autosave comment in `session.py`); (b) moving the `storage_state()` read off the synchronous per-tick pump loop onto a separate thread/process (needs confirming Playwright's sync API tolerates a concurrent call from another thread — the existing "reentrancy deadlock" comment on `_binding_sink_sync` suggests it may not, without care); (c) triggering the save on a real signal (e.g. a cookie-set event) instead of a blind timer, so it only fires when something actually changed. A plan file with the full investigation, Phase 0 confirmation steps, and a first-draft implementation plan already exists at `.claude/plans/created-workflow-testing-download-staged-cray.md` (session-local, not yet committed anywhere durable) — read it before restarting this investigation from scratch.
-- **Dependencies:** none blocking, but must land before (or alongside) the uncommitted `_refresh_group_app_sessions` feature is committed — do not ship that feature with the flicker-causing wiring left live.
-- **Suggested order:** immediate — it's an active regression sitting in the working tree, not yet shipped to any customer.
-- **Complexity:** M.
-- **Success criteria:** recording a group workflow with 2+ tabs shows zero visible browser flicker while interacting, **and** a rotated cookie / mid-recording re-login is still correctly carried back to each app's saved session after recording ends — the fix must not just re-disable the feature to make the symptom go away.
-
-</details>
-
-### BUILD-21 — Human Edit step form should show/edit the workflow-plan prose intent, not the machine token
-- **Category:** Builder
-- **Description:** Since 2026-08-25 the single workflow-intent compile call produces both a snake_case `intent_token` (machine logic) and readable prose per step (`semantic_description` — same source as the Workflow plan panel). But `StepConfigForm.tsx` still shows/edits the machine token (`step.intent || step.final_intent`) and sends it back through a patch gate that enforces `sanitize_intent_token`, so the human-friendly sentence never appears where users edit steps.
-- **Why required:** the plan panel and the step editor tell two different stories about the same step; users editing the token field must guess slug conventions instead of plain English.
-- **Business value:** consistency between review and editing surfaces; editing text a human can actually read.
-- **Technical value:** form defaults prefer `semantic_description`; patches send a new patchable `semantic_description` key (plain string, no token validation) instead of `intent`; patch-gate allowlists gain that key; editor DTO prefers the stored description over `describe_step`'s recomputed generic label; machine token shown as read-only mono hint under the field.
-- **Dependencies:** none (compile-side single-source intent already shipped).
-- **Suggested order:** immediate follow-up to the 2026-08-25 compiler change.
-- **Complexity:** S.
-- **Success criteria:** opening any compiled step in Human Edit shows the plan's sentence for it; saving edits persists that sentence and it survives reload + appears on re-fetch; the machine token stays untouched by prose edits.
-
-</details>
 
 ### BUILD-19 (original) — `build-app-local.ps1` still reads app-layer files from the pre-split flat `runtime/` layout, so it fails on every file
 - **Category:** Builder / Runtime (dev tooling)
@@ -416,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (37 remaining)
+## P2 — High Value, Do Soon (35 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -445,7 +404,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Description:** A live per-skill health score with drift alerts and a fast diff-based re-record/republish flow (target: under 15 vendor-minutes per republish), plus "skill CI" — since the vendor owns the target app, let them add a `conxa test` step to their own release pipeline that dry-runs all published skills against their staging environment on every deploy, so a redesign that would break a skill fails the *vendor's* build before it ever reaches customers.
 - **Why required:** answers "teach once, run forever quietly becomes re-record after every redesign" — the maintenance cost that "less hassle than a connector" depends on actually being small. Skill CI specifically is described as something no traditional automation vendor can offer, since their customers don't own the target app and Conxa's do — it's called out as possibly Conxa's single most differentiated feature, "falling out of the vendor-automates-their-own-product model almost for free."
 - **Business value:** makes the "maintenance is genuinely small" claim provably true rather than asserted, which is central to the whole "cheaper than building/maintaining a connector" pitch; skill CI in particular could make most redesign-breaks invisible to customers entirely.
-- **Technical value:** the health-dashboard half overlaps with the already-shipped drift-detection queue (`GET /api/v1/tracking/{company}/drift`, Implementation-Plan §2.2) and with EXEC-2's fleet-flywheel work — this item is the vendor-facing UX and CI-integration layer on top of that existing detection mechanism, not a duplicate of it. Also overlaps `docs/UI-UX-Brief.md`'s existing "fast re-record" UI backlog item (see BUILD-2).
+- **Technical value:** the health-dashboard half overlaps with the already-shipped drift-detection queue (`GET /api/v1/tracking/{company}/drift`, Implementation-Plan §2.2) and with EXEC-2's fleet-flywheel work — this item is the vendor-facing UX and CI-integration layer on top of that existing detection mechanism, not a duplicate of it. Also overlaps `docs/UI-UX-Brief.md`'s existing "fast re-record" UI backlog item.
 - **Dependencies:** builds on the existing drift-detection queue; benefits from EXEC-2's automation work for the "fast re-record" half to eventually become semi-automatic.
 - **Suggested order:** high value — sequence alongside EXEC-2, since both work from the same underlying drift-detection signal.
 - **Complexity:** L — the dashboard/re-record UX is moderate; the "skill CI" integration (a CLI tool the vendor's own CI calls) is a new, self-contained deliverable.
@@ -546,18 +505,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** M for the labeling hook; L+ for the eventual model/prompt work once data exists.
 - **Success criteria:** every editor correction to a dedupe/variable/hover decision is captured as a labeled example with its source event sequence; before any model is trained, someone can query "how often does the current heuristic get corrected, and on what event shapes."
 - **Found via:** user discussion (2026-08-30) on whether the compiler should move toward ML/LLM-driven output.
-
-### BUILD-20 — Workflows page: parallel workflow checks instead of cancel-on-new-check
-- **Category:** Builder / Build Studio
-- **Description:** On the Build Studio Workflows page, starting a check (test run) on one workflow and then starting a check on another cancels the first one — checks currently run sequentially through a single slot, so the newest click always kills the in-flight check. Make checks parallel: clicking check on a second workflow should start it alongside the first, not replace it.
-- **Why required:** a vendor verifying several workflows after recording has to babysit the page — wait for each check to finish before daring to click the next one, or silently lose the running check. This is exactly the sequential-execution pain point already solved at the runtime level by RT-3's per-run registry (`runtime/app/run_registry.js`, `CONXA_MAX_CONCURRENT_RUNS` default 5) and host-level serialization via `host_lock.js`; the Studio's test path should behave the same way.
-- **Business value:** vendors verify whole batches of workflows after recording/publishing; serial checking multiplies that wall-clock time and surprises users when their running check vanishes.
-- **Technical value:** likely a Studio-side single-active-test slot (renderer state and/or backend handler) needs to become a per-run keyed map mirroring RT-3's shape; note two runs touching the SAME external app still serialize via `host_lock.js` semantics, which is correct and should be surfaced as "queued behind" rather than "cancelled".
-- **Dependencies:** none blocking — runtime-side parallel execution already ships (RT-3).
-- **Suggested order:** soon — direct user-reported friction on the primary authoring surface.
-- **Complexity:** M — depends on how much of the serialization lives in the renderer vs. the Python backend's test/sandbox runner (`conxa_runtime.py` stages a sandbox; its staging may itself assume a single active test).
-- **Success criteria:** with two workflows checked back-to-back, both checks run to completion concurrently (or the second visibly queues with status, never cancelling the first); results for each check stay correctly attributed to their own workflow.
-- **Found via:** direct user report (2026-08-23).
 
 ### BUILD-31 — Durability scores are hand-set priors, never measured against real page mutations
 - **Category:** Builder / Build Studio
@@ -662,16 +609,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Suggested order:** early — ideally before meaningful customer run volume accumulates; sequence alongside or immediately after EXEC-1, since the new branch primitives will also need outcome events.
 - **Complexity:** M — event schema design, `tracker.js` emission points at the resolver/recovery seams, ingest-side validation, and doc updates; no new learning code.
 - **Success criteria:** every resolution outcome event carries winning signal engine, orthogonality class, fallback depth, stable-hash match, and compat fingerprint; a sample export can answer "which signal classes survived last month's drift events, per app" with a query rather than a code change; `docs/Backend-Schema.md` documents the new event codes.
-
-### EXEC-38-UI — Studio UI for authoring a for_each loop body
-- **Category:** Execution & Recovery / Builder
-- **Description:** EXEC-38 shipped the `for_each` iteration primitive fully in the compiler and runtime, with read-only visibility in Human Edit (`StepEditorDTO.for_each_summary`/`.for_each_steps`), but no dedicated authoring control — a vendor can insert a `for_each` step and see its body, but can only edit `rows.container_selector`/`items`/`as`/`max_iterations`/`on_row_error` and the nested body through the generic patch mechanism, not a purpose-built UI. This is the same "backend done, editor control pending" gap `PROD-3-UI` already tracks for Strict Mode, entity-binding confirmation, and `compensation_skill`.
-- **Why required:** without an editor surface, a vendor cannot practically build or adjust a loop body (wrap N steps, set the row selector, confirm the destructive body step's entity binding) without hand-crafting patches — the primitive is correct but not usable at scale.
-- **Business value:** makes the shipped loop mechanism actually usable day-to-day for the bulk-processing workflows EXEC-38's business case targets.
-- **Technical value:** `BranchBodyEditor.tsx` already solves most of this shape for `if_present` — a `for_each` variant needs a row-selector field, `max_iterations`/`on_row_error` controls, and the same nested-step insert/delete/reorder UX, reusing `insert_branch_step`/`delete_branch_step`/`reorder_branch_steps`'s pattern (parallel `for_each` RPCs, not yet built) rather than inventing new interaction design.
-- **Dependencies:** EXEC-38 (done).
-- **Complexity:** M — a for_each variant of `BranchBodyEditor.tsx`, matching structural-mutation RPCs (`insert_for_each_step`/`delete_for_each_step`/`reorder_for_each_step` in `workflow_mutations.py` + `handlers/workflow_editor.py`), and a row-selector/cap/on-row-error control panel.
-- **Success criteria:** a vendor can build and edit a `for_each` loop — row selector, cap, on-row-error, and its nested body — from the Human Edit page without hand-crafting a patch.
 
 ### EXEC-43 — Finish the Conxa Execute → conxa-cloud merge: new Clerk client + decommission old infra
 - **Category:** Execution & Recovery / Conxa Execute / Auth
@@ -1482,7 +1419,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 ### TEST-10 — Move per-event diagnostics off the recorder's hot path; remove dead a11y-capture thread
 - **Category:** Testing & Cleanup
-- **Description:** Found during BUILD-15's flicker investigation (see its resolution note), neither is the flicker's cause, both still open. (1) `_rewrite_events_jsonl` (`conxa_compile/recorder/session.py`) calls `_write_diagnostics_sync` on **every recorded event** — a `frame.evaluate()` per frame on the page plus `frame_element()` + 2 more evaluates per subframe, and a full `events.jsonl` rewrite from scratch — when it's a diagnostics dump that only needs writing once, at session end (which already happens separately in the shutdown path). (2) `_capture_a11y_async` (same file) spawns a daemon thread per recorded event to call `page.accessibility.snapshot()` — an API Playwright removed; installed version is 1.58.0, confirmed via `hasattr(Page, 'accessibility')` returning `False`. Every call raises `AttributeError` instantly, swallowed by a bare `except`, so `settings.snapshot_capture_a11y` does nothing and every event pays for a wasted thread.
+- **Description:** Found during an earlier recording-flicker investigation, neither is the flicker's cause, both still open. (1) `_rewrite_events_jsonl` (`conxa_compile/recorder/session.py`) calls `_write_diagnostics_sync` on **every recorded event** — a `frame.evaluate()` per frame on the page plus `frame_element()` + 2 more evaluates per subframe, and a full `events.jsonl` rewrite from scratch — when it's a diagnostics dump that only needs writing once, at session end (which already happens separately in the shutdown path). (2) `_capture_a11y_async` (same file) spawns a daemon thread per recorded event to call `page.accessibility.snapshot()` — an API Playwright removed; installed version is 1.58.0, confirmed via `hasattr(Page, 'accessibility')` returning `False`. Every call raises `AttributeError` instantly, swallowed by a bare `except`, so `settings.snapshot_capture_a11y` does nothing and every event pays for a wasted thread.
 - **Why required:** both scale with recording length and page complexity for zero benefit — (1) is O(n²) CDP traffic over a session, (2) is pure waste.
 - **Business value:** none directly; performance/hygiene.
 - **Technical value:** removing (1) also reduces per-event latency (fewer synchronous CDP round-trips on the path that decides how quickly a click gets recorded); removing (2) deletes a permanently-broken code path (and its `_last_a11y_capture_time`/`_a11y_skip_count` state) before some future compatibility issue makes its failure mode less obviously silent.
@@ -1494,7 +1431,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 ---
 
-## P4 — Low Urgency, Opportunistic (37 remaining)
+## P4 — Low Urgency, Opportunistic (33 remaining)
 
 ### AUTH-10 — A same-host app whose success page is public could pass the signed-out-baseline check while actually signed out
 - **Category:** Execution & Recovery / Authentication
@@ -1616,17 +1553,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Suggested order:** opportunistic — whenever someone has the PDFs handy (see the `pdftotext` snippet already in the file).
 - **Complexity:** S.
 - **Success criteria:** each of the 3 papers gets either a full dossier (if relevant) or a one-line "confirmed off-topic, removed from corpus" resolution in the same file.
-
-### BUILD-2 — Build Studio UX backlog (from `docs/UI-UX-Brief.md` §9)
-- **Category:** Builder
-- **Description:** A set of smaller Build Studio UI improvements identified in the UI/UX audit that were never carried into an engineering backlog: a guided HumanEdit review checklist before sign-off; parameterization auto-suggest (detect email/name/date-shaped values during HumanEdit and suggest `{{variable}}` templating); ~~a workflow pipeline visualization (`Recorded → Compiled → Reviewed → Signed Off → Built → Deployed`) replacing plain status text~~ **Resolved 2026-07-07** — `handlers/status.py::derive_workflow_stage` + `StagePath`/`WorkflowStageBadge` (see `docs/Implementation-Plan.md` §1.9, the Build Studio workflow redesign); persisted, prominently-shown test results with a "test required before publish" gate; bulk compile (select multiple recordings, compile in sequence with per-item progress); installer version history (version/date/sha256 list on the Build Installer page); publish-without-installer-rebuild for content-only updates (the delta sync already supports this — this is a UI path to trigger it directly — tracked as Phase 4 of the workflow redesign); and an execution-dashboard widget embedded in Build Studio showing the last 10 runs across deployed plugins.
-- **Why required:** these are all still-open items from the UX audit's own "Priority 2/3" improvement lists that were never converted into tracked engineering work.
-- **Business value:** each is a small usability improvement rather than a blocker; collectively they reduce friction for the people actually using Build Studio day-to-day (the "guided checklist" and "test-required gate" items also reduce the risk of a badly-reviewed skill reaching customers).
-- **Technical value:** low-to-moderate individually; "publish without installer rebuild" in particular is mostly UI work since the underlying delta-sync capability already exists.
-- **Dependencies:** none blocking; overlaps PROD-11's "fast re-record" dashboard item — sequence together if convenient.
-- **Suggested order:** opportunistic, low urgency — pick off individually as Build Studio UI work comes up.
-- **Complexity:** S–M per item; M overall if batched.
-- **Success criteria:** each listed item ships as a discrete, independently-shippable UI change; track completion per sub-item rather than requiring the whole list to land at once.
 
 ### CLOUD-21 — Blob/CDN storage + durable job queue
 - **Category:** Cloud
@@ -1774,40 +1700,6 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Suggested order:** last — explicitly speculative and not gating anything else in this file.
 - **Complexity:** L per integration point; the source doc scopes each of the four independently, so they don't need to land together.
 - **Success criteria:** at least one integration point (most likely compile-time intent enrichment, the simplest of the four) is validated against a sample of real recordings and shown to measurably improve compiled-skill quality before investing in the remaining three.
-
-### BUILD-3 — Stale-validation badge for manual selector edits
-- **Category:** Builder
-- **Description:** The new 3-phase re-target wizard (`RetargetWizardDialog.tsx`) shows a plain-language current-vs-proposed validation diff whenever the user re-targets a step's element through it. But a user can still hand-edit `target.primary_selector`/`fallback_selectors` directly in `StepEditorPanel`'s selector fields via `cmd_patch_step`, which does not surface any "the wait-for/assertions may now be stale" signal — the editor has no dependency awareness outside the wizard.
-- **Why required:** identified during the re-target wizard design as explicitly out of scope for that task (kept surgical); the gap is real but narrower than the wizard itself, since manual selector edits are the less common path (the wizard is now the primary re-target entry point).
-- **Business value:** small — reduces the chance a manually-edited step silently ships with assertions that no longer match its new target.
-- **Technical value:** the plumbing already exists (`infer_wait_for_shape` + `_build_assertions`, already reused by `conxa_compile/editor/retarget.py::preview_retarget`); this is mostly a `cmd_patch_step` response addition plus a UI badge, not new compiler logic.
-- **Dependencies:** none blocking; natural follow-up to the re-target wizard.
-- **Suggested order:** opportunistic — pick up next time `StepEditorPanel.tsx` or `cmd_patch_step` is touched.
-- **Complexity:** S — a "re-check validation" badge with a one-click regenerate action reusing `preview_retarget`'s validation-diff computation.
-- **Success criteria:** hand-editing a step's target selector in `StepEditorPanel` (outside the wizard) shows a visible warning when the current `validation` block no longer matches what `infer_wait_for_shape`/`_build_assertions` would produce for the new target, with a one-click way to regenerate it.
-- ~~**Discovered 2026-07-09 (post-condition validation work):** `conxa_compile/editor/patch_gate.py::validate_editor_patch` — including its destructive-wait_for invariant and the new "consequential action must retain a required assertion" invariant added alongside `docs/Implementation-Plan.md` 1.10 — is not actually called from `cmd_patch_step` (or anywhere else); it's covered by unit tests (`conxa-cloud/tests/test_patch_gate.py`) but not wired into the live patch path, so a manual `StepEditorPanel` edit today can silently violate either invariant. Wiring `validate_editor_patch` into `cmd_patch_step` would close this gap and is a natural companion to the stale-validation badge above.~~ **Resolved 2026-07-09:** `cmd_patch_step` (`conxa-builder/python/handlers/workflow_editor.py`) now calls `validate_editor_patch` before merging/persisting any patch, raising a rejecting `_CommandError` on violation. This closes the invariant-violation gap specifically; the broader "stale but not invariant-violating" badge-and-regenerate UX described above is still open.
-
-### BUILD-6 — Authoring UI for try_dismiss candidates and wait_for_one_of options
-- **Category:** Builder
-- **Description:** BUILD-5 shipped full authoring for `if_present`'s nested body (`BranchBodyEditor.tsx`) but deliberately left `try_dismiss`'s `branch.candidates` (an ordered list of selector strings) and `wait_for_one_of`'s `branch.options` (a list of `{selector, steps}` alternatives) with read-only summary badges only. The backend patch-gate validation for both already exists (`conxa_compile/editor/patch_gate.py::_validate_branch_patch`) — a normal `patch_step` call with a `branch: {candidates: [...]}` or `branch: {options: [{selector: ...}]}` payload is already accepted and quality-gated; there is just no UI to compose that payload. Per-option nested `steps` bodies for `wait_for_one_of` are explicitly out of scope even for this follow-up (see `_validate_branch_patch`'s rejection of a `steps` key inside any option) — that would need its own path-addressing scheme (`branch.options[i].steps[j]`) beyond what `cmd_patch_step`'s current `path` parameter supports.
-- **Why required:** identified while scoping BUILD-5 — `if_present` covers the most common case (optional interstitials with a body to run), but `try_dismiss` and `wait_for_one_of` are equally real primitives with no authoring path today.
-- **Business value:** small — completes branch-step authoring parity; most real-world interstitial handling likely uses `if_present`.
-- **Technical value:** low-risk, additive; the write path is already validated and tested (`tests/test_patch_gate.py::TestBranchStepPatches`), this is UI-only.
-- **Dependencies:** builds on BUILD-5's branch-authoring foundation.
-- **Suggested order:** opportunistic — next time branch-step authoring is touched.
-- **Complexity:** S for candidates (a simple ordered string-list editor); M for options (needs the new path-addressing scheme if per-option bodies are also wanted).
-- **Success criteria:** a user can add/remove/reorder `try_dismiss` candidate selectors and `wait_for_one_of` options from Human Edit without hand-crafting a patch payload.
-
-### BUILD-7 — Decide the fate of `validation.success_conditions`
-- **Category:** Builder
-- **Description:** Flagged by the Human Edit vs. Skill Package audit (§4 item 7) as "half-exposed" — the field is typed in `types/workflow.ts` and read by one path in `StepConfigForm.tsx` (setting a URL into it for navigate steps) but has no dedicated editor next to `validation.assertions`. Explicitly deferred out of BUILD-5's scope per user direction (2026-07-10) rather than addressed inline. Needs a decision: give it a real editor, or migrate its one remaining use into `assertions` and delete the field (the more invasive option — touches the compiler + runtime contract).
-- **Why required:** a half-exposed field is worse than either a fully-exposed or fully-hidden one — it reads as "nothing to see here" when there's actually a gap.
-- **Business value:** small — mostly a consistency/debt item.
-- **Technical value:** low if the "editor" path is chosen (mirrors the existing assertion editor); moderate if the "delete and migrate" path is chosen.
-- **Dependencies:** none blocking.
-- **Suggested order:** opportunistic.
-- **Complexity:** S (add an editor) or M (migrate and delete, since it touches `compiler/patch.py` and the runtime's `verifyAssertions()` contract).
-- **Success criteria:** `success_conditions` is either editable through a real UI or removed from the schema — no third state.
 
 ### BUILD-9 — Dev deps manifest can pin an app layer older than the runtime code requires
 - **Category:** Builder

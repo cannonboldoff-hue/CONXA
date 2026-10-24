@@ -364,16 +364,17 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
     setStill(null)
   }
   const dlCount = run?.downloads.length ?? 0
-  const runKind = run?.kind
-  // Chrome shows the list as a download starts. Only when a person is driving: a running test is
-  // not frozen behind a still on its own account.
-  const prevDl = useRef(0)
+  // No auto-open: the still would freeze the page the person is working in. The icon says a download
+  // exists; they open it. It also closes whenever the page underneath changes (the main process
+  // re-shows the native view on a tab switch, which would land on top of the still).
   useEffect(() => {
-    if (dlCount > prevDl.current && runKind !== 'test') void openDownloads()
     if (dlCount === 0) closeDownloads()
-    prevDl.current = dlCount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dlCount])
+  useEffect(() => {
+    closeDownloads()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab?.id, tab?.url])
   useEffect(() => {
     if (!dlOpen) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeDownloads()

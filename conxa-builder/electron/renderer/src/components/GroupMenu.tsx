@@ -44,7 +44,7 @@ export function GroupMenu({ groupId, groupName, className }: { groupId: string; 
     onSuccess: () => {
       setDeleting(false)
       qc.invalidateQueries({ queryKey: ['groups'] })
-      if (pathname === `/groups/${groupId}`) navigate('/workflows')
+      if (pathname === `/groups/${groupId}`) navigate('/chat')
     },
   })
 

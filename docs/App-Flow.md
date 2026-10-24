@@ -337,7 +337,7 @@ are now insertable from the Add-action menu. `if_present`'s nested body gets a d
 (add/remove/reorder + per-step field edits via the new `path`-addressed `cmd_patch_step`); nested
 steps cannot patch `recovery`/`validation` since branch bodies are best-effort and never enter
 recovery. `try_dismiss`/`wait_for_one_of` show read-only summary badges only — no authoring UI
-for their candidate/option lists yet (`TODO.md` BUILD-6).
+for their candidate/option lists yet.
 
 **AI Review step authoring (EXEC-13, 2026-09-14):** `ai_review` (§10.9 of `docs/TRD.md`) is now
 insertable from the Add-action menu alongside the branch primitives above. It has no selector to

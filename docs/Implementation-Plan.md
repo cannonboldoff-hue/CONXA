@@ -157,7 +157,7 @@ was already deleted or never committed). No action needed. The authoritative UIs
 ### 🚧 1.9 Build Studio Workflow Redesign — Phase 0/1 DONE 2026-07-07, Phases 2-6 open
 
 Full gap analysis and phased plan: `conxa-builder-workflow-redesign.md` (repo root). Overlaps
-and supersedes the UI-layer half of `TODO.md` BUILD-2. Reorganizes the Build Studio around a
+and supersedes the UI-layer half of the old UX backlog. Reorganizes the Build Studio around a
 stage-shaped sidebar (Record → Compile → Human Edit → Test Skill → Publish Skill Package →
 Build Installer) instead of the compiler-pipeline-shaped one it replaced, with one shared
 plugin selection instead of four independent per-page rails.
@@ -280,8 +280,8 @@ no Build Studio authoring path — they could only be produced by hand-editing a
   LLM router stats, compiler policy version, required runtime, and the selected step's integrity
   hashes.
 - **Scope trims (tracked as follow-ups):** `try_dismiss`/`wait_for_one_of` got read-only summary
-  badges only, no authoring UI for their candidate/option lists (`TODO.md` BUILD-6);
-  `validation.success_conditions` was left as-is per explicit user direction (`TODO.md` BUILD-7).
+  badges only, no authoring UI for their candidate/option lists;
+  `validation.success_conditions` was left as-is per explicit user direction.
   `plugin_builder_output.py`'s `CONXA_REQUIRED_RUNTIME` floor was **not** bumped — confirmed the
   branch-executor commit isn't in any tagged `app-vX.Y.Z` release yet; the code comment now names
   the exact commit for a future release to act on.
