@@ -129,6 +129,51 @@ def test_pending_change_apply_then_undo_goes_through_the_existing_commands(b, mo
     assert undone == [1] and ts.get_card(tid, card["card_id"])["state"] == "undone"
 
 
+def _change_set_env(b):
+    from conxa_core.storage.json_store import write_skill
+
+    _g, gid = _group_and_workflow()
+    wf = b.cmd_create_workflow({"name": "W", "group_id": gid, "target_url": "https://a.example.test"}, "r")["workflow"]
+    write_skill("skill_cs", {
+        "meta": {"version": 1}, "inputs": [],
+        "skills": [{"id": "skill_cs", "steps": [{
+            "action": {"action": "navigate"}, "url": "https://github.com/o/r/blob/main/Agda.gitignore",
+            "intent": "navigate", "value": "", "validation": {"assertions": []},
+        }]}],
+    })
+    parameterize = {"id": "p1", "command": "structural_op", "op": "parameterize", "literal": "Agda.gitignore",
+                    "name": "file_name", "kinds": ["value"], "changed": 1}
+    return f"wf:{wf['id']}", parameterize
+
+
+def test_one_replys_changes_apply_together_with_one_undo_entry(b):
+    from conxa_core.storage.json_store import read_skill
+
+    tid, parameterize = _change_set_env(b)
+    card = ts.append_card(tid, "pending_change", "open", refs={"skill_id": "skill_cs"}, title="t", proposals=[parameterize])
+    r = b.cmd_card_action({"thread_id": tid, "card_id": card["card_id"], "action": "apply"}, "r")
+    assert r["ok"], r
+    doc = read_skill("skill_cs")
+    assert doc["skills"][0]["steps"][0]["url"].endswith("{{file_name}}")
+    assert [i["id"] for i in doc["inputs"]] == ["file_name"] and doc["inputs"][0]["default"] == "Agda.gitignore"
+    assert ts.get_card(tid, card["card_id"])["undo_steps"] == 1
+
+
+def test_a_change_set_with_one_failing_part_changes_nothing(b):
+    from conxa_core.storage.json_store import read_skill
+
+    tid, parameterize = _change_set_env(b)
+    stale = {"id": "p2", "command": "patch_step", "step_key": "no-such-step", "patch": {"value": "x"}}
+    before = read_skill("skill_cs")
+    depth = len(b._undo_stacks.get("skill_cs", []))
+    card = ts.append_card(tid, "pending_change", "open", refs={"skill_id": "skill_cs"}, title="t", proposals=[parameterize, stale])
+    r = b.cmd_card_action({"thread_id": tid, "card_id": card["card_id"], "action": "apply"}, "r")
+    assert r["ok"] is False
+    assert read_skill("skill_cs") == before  # the first part was rolled back with the second
+    assert len(b._undo_stacks.get("skill_cs", [])) == depth
+    assert ts.get_card(tid, card["card_id"])["state"] == "failed"
+
+
 def test_undo_is_refused_when_the_workflow_changed_since(b, monkeypatch):
     from conxa_core.storage import json_store
 

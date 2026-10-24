@@ -359,8 +359,14 @@ def test_autofix_makes_one_gated_change_at_a_time_retests_with_the_guard_and_sto
     b.cmd_test_workflow = fake_test
     applied: list[str] = []
     monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: [_proposal(len(applied) + 1)])
-    monkeypatch.setattr(b, "_card_pending_change", lambda thread, card, action, body, rid, sink:
-                        applied.append(body.get("source")) or {"ok": True})
+    def fake_apply(thread, card, action, body, rid, sink):
+        from conxa_compile.conversation import harness
+
+        applied.append(body.get("source"))
+        harness.update_card(thread, card["card_id"], state="applied")  # an applied change no longer holds back a test
+        return {"ok": True}
+
+    monkeypatch.setattr(b, "_card_pending_change", fake_apply)
     b._tf_autofix(wf.id, {"po_number": "PO-1"}, False)
     assert applied == ["auto_fix", "auto_fix", "auto_fix"]  # one change per attempt, every one attributed to auto-fix
     assert all(r["guard"] is True for r in runs) and len(runs) == 3  # re-tests always run with the guard on

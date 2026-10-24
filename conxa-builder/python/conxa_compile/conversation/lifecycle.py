@@ -35,12 +35,14 @@ def derive_lifecycle(
     clarify: dict[str, Any] | None = None,
     runtime: dict[str, Any] | None = None,
     autofix: dict[str, Any] | None = None,
+    pending_changes: int = 0,
 ) -> dict[str, Any]:
     """Return ``{stage, substate, glyph, note, allowed_actions, rows}``.
 
     ``clarify`` is ``{"open": n, "answered": m}`` (None = no questions generated yet).
     ``runtime`` is ``runtime_state.get_flags(...)``. ``autofix`` is the latest auto-fix summary
-    ``{"state": "running"|"stopped"|"passed", "attempt": n}`` or None.
+    ``{"state": "running"|"stopped"|"passed", "attempt": n}`` or None. ``pending_changes`` is how
+    many proposed chat changes are still waiting for Apply / Dismiss.
     """
     rt = runtime or {}
     cl = clarify or {}
@@ -85,7 +87,13 @@ def derive_lifecycle(
         else:
             substate, glyph, note, actions = "ready", WARN, "Recorded · ready to compile", ["compile", "re_record"]
     else:
-        if rt.get("testing"):
+        # A compile (including a recompile: skill_id stays set) or the understanding check is still
+        # running, so the questions don't exist yet: nothing may offer a test in that gap.
+        if rt.get("compiling") or rt.get("queued"):
+            stage, substate, glyph, note, actions = "compile", "compiling", RUN, "Compiling", []
+        elif rt.get("understanding"):
+            stage, substate, glyph, note, actions = "clarify", "checking", RUN, "Checking it against your description", []
+        elif rt.get("testing"):
             stage = "test"
             attempt = int(rt.get("autofix_attempt") or 0)
             if attempt:
@@ -98,9 +106,10 @@ def derive_lifecycle(
         elif open_q > 0:
             stage, substate, glyph = "clarify", "open", WARN
             note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
-            # A question that decides what the workflow is (is it complete? which values change?)
-            # comes before any test; the rest keep the compiler's default and never block.
-            actions = ["answer_clarify", "edit"] if int(cl.get("blocking_open") or 0) > 0 else ["answer_clarify", "test", "edit"]
+            # Every question that was asked is answered (or skipped) before any test.
+            actions = ["answer_clarify", "edit"]
+        elif pending_changes > 0:
+            stage, substate, glyph, note, actions = "edit", "change_pending", WARN, "A proposed change is waiting — apply or dismiss it", ["edit"]
         elif last_test == "passed":
             if signed_off:
                 stage, substate, glyph, note, actions = "approve", "approved", OK, "Approved", ["test", "edit", "publish"]
@@ -120,7 +129,9 @@ def derive_lifecycle(
             stage, substate, glyph, note, actions = "test", "ready", WARN, "Ready to test", ["test", "edit"]
 
     # Questions held back past the first few are still waiting for the person.
-    if int(cl.get("queued") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not rt.get("testing"):
+    if int(cl.get("queued") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not (
+        rt.get("testing") or rt.get("compiling") or rt.get("queued") or rt.get("understanding")
+    ):
         actions = actions + ["answer_clarify"]
     return {
         "stage": stage,
@@ -207,7 +218,19 @@ def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
         clarify=clarify,
         runtime=runtime_state.get_flags(workflow.id),
         autofix=_latest_autofix(workflow.id),
+        pending_changes=_pending_changes(workflow.id),
     )
+
+
+def _pending_changes(workflow_id: str) -> int:
+    """Proposed chat changes still waiting for Apply / Dismiss (thread data, like auto-fix state)."""
+    from conxa_compile.conversation import thread_store as ts
+
+    try:
+        return sum(1 for i in ts.fold(ts.read_raw(f"wf:{workflow_id}"))
+                   if i.get("card_type") == "pending_change" and i.get("state") == "open")
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _latest_autofix(workflow_id: str) -> dict[str, Any] | None:

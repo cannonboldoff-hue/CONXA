@@ -110,6 +110,7 @@ def test_cancelling_the_sign_in_forgets_that_a_retest_was_wanted(env, monkeypatc
 
 def test_a_sign_in_said_in_chat_on_a_compiled_workflow_continues_the_test_not_a_recording(env, monkeypatch):  # noqa: F811
     b, wf = _compiled(env)
+    runtime_state.set_flags(wf.id, sign_in_expired=True)  # the lifecycle only offers sign-in once a saved one has stopped working
     monkeypatch.setattr(b, "cmd_flow_sign_in_then_test", lambda payload, rid: {"next": "sign_in"})
     monkeypatch.setattr(b, "cmd_flow_begin", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not begin a recording")))
     res = b._run_flow_action(wf.id, "sign_in", {}, "r", lambda e: None)

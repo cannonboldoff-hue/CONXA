@@ -376,6 +376,15 @@ async function saveDownload(runId, url, dest, timeoutMs = 120000) {
   return { ok: true, size };
 }
 
+// A still of the active tab. The page is a native view that always draws above the renderer, so the
+// Downloads popover can only float over it if the view steps aside and this stands in for it.
+async function snapshot(runId, tabId) {
+  const run = _runs.get(runId);
+  const tab = run && run.tabs.find((t) => t.id === tabId);
+  if (!tab || tab.view.webContents.isDestroyed()) return null;
+  try { return (await tab.view.webContents.capturePage()).toDataURL(); } catch (_) { return null; }
+}
+
 // Chrome's download row actions. cancel/retry act on the live item; show/open on the saved file.
 function downloadAction(runId, id, action) {
   const run = _runs.get(runId);
@@ -589,4 +598,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { init, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, scaleOf, targetsOf };
+module.exports = { init, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };

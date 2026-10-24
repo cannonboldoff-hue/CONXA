@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld("conxa", {
     closeTab: (payload) => ipcRenderer.invoke("panel:close-tab", payload),
     closeRun: (payload) => ipcRenderer.invoke("panel:close-run", payload),
     navigate: (payload) => ipcRenderer.invoke("panel:navigate", payload),
+    snapshot: (payload) => ipcRenderer.invoke("panel:snapshot", payload),
     downloadAction: (payload) => ipcRenderer.invoke("panel:download-action", payload),
     onTabs: (handler) => {
       const listener = (_e, msg) => handler(msg);

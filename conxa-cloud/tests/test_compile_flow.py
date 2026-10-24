@@ -147,6 +147,57 @@ def test_questions_are_asked_one_at_a_time_and_never_blocking(env):
     assert qs[0]["total"] == 2
 
 
+def test_no_test_is_offered_between_the_compile_ending_and_the_questions_existing(env, monkeypatch):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    seen: list[list[str]] = []
+    from conxa_compile.conversation import understanding as understanding_mod
+
+    real = understanding_mod.understand
+
+    def spy(doc, task):  # the slow model call: the compile card already says "done" by now
+        from conxa_core.storage.workflow_store import get_workflow
+
+        seen.append(lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"])
+        return real(doc, task)
+
+    monkeypatch.setattr(understanding_mod, "understand", spy)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    assert seen and "test" not in seen[0]
+    assert runtime_state.get_flags(wf.id) == {}
+
+
+def test_a_failing_question_generator_ends_checking_and_tells_the_thread(env, monkeypatch):
+    b, wf, out = env
+    _fake_compile(b, wf)
+    from conxa_compile.conversation import clarify
+
+    def boom(*a, **k):
+        raise RuntimeError("model down")
+
+    monkeypatch.setattr(clarify, "generate_questions", boom)
+    res = b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    assert res["ok"]
+    assert runtime_state.get_flags(wf.id) == {}
+    assert "Couldn’t prepare the questions" in _texts(wf.id, "event")
+    # the event is the last thing posted, so the renderer's refetch sees the settled lifecycle
+    from conxa_core.storage.workflow_store import get_workflow
+
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+
+
+def test_a_test_cannot_be_started_while_questions_are_open_whatever_the_entry_point(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    assert clarify_store.summary(wf.id)["open"] > 0
+    with pytest.raises(_CommandError) as exc:
+        b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")
+    assert exc.value.code == "not_allowed_now"
+    res = b._run_flow_action(wf.id, "test", {}, "r", lambda e: None)
+    assert res["ok"] is False and res["message"].startswith("Not yet")
+
+
 def test_answering_applies_existing_mutations_and_the_counts_add_up(env):
     b, wf, _out = env
     _fake_compile(b, wf)
@@ -415,7 +466,8 @@ def test_cancelling_a_confirmation_runs_nothing(env, monkeypatch):
 def test_an_action_that_cannot_run_becomes_a_sentence_not_an_exception(env):
     b, wf, _out = env
     res = b._run_flow_action(wf.id, "approve", {}, "r", lambda e: None)
-    assert res["ok"] is False and "no passing test" in res["message"]
+    # not offered by the lifecycle right now, so refused with the lifecycle's own reason
+    assert res["ok"] is False and res["message"].startswith("Not yet")
     assert b._run_flow_action(wf.id, "teleport", {}, "r", lambda e: None)["ok"] is False
 
 

@@ -155,6 +155,10 @@ _BASE = dict(target_url="https://a.example.com", session_id=None, recording_stat
         (dict(session_id="s", recording_status="recorded"), dict(runtime={"out_of_credits": True}), "compile", "out_of_credits", "warn"),
         (dict(session_id="s", recording_status="error"), {}, "compile", "failed", "fail"),
         (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(clarify={"open": 2}), "clarify", "open", "warn"),
+        # questions don't exist yet while the post-compile check runs, and a recompile keeps skill_id set
+        (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(runtime={"understanding": True}), "clarify", "checking", "run"),
+        (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(runtime={"compiling": True}), "compile", "compiling", "run"),
+        (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(pending_changes=1), "edit", "change_pending", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k", compile_steps_with_warnings=2), {}, "edit", "recommended", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k"), {}, "test", "ready", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(runtime={"testing": True, "autofix_attempt": 2}), "test", "autofix", "run"),
@@ -169,6 +173,18 @@ def test_lifecycle_is_derived_from_existing_data(wf, kw, stage, substate, glyph)
     assert isinstance(lc["allowed_actions"], list)
     if glyph != "run":
         assert lc["allowed_actions"]  # anything waiting on a person offers a way forward
+
+
+@pytest.mark.parametrize("kw", [
+    dict(runtime={"understanding": True}),
+    dict(runtime={"compiling": True}),
+    dict(clarify={"open": 1, "blocking_open": 0}),  # a small question is still a question: answer it first
+    dict(clarify={"open": 2, "blocking_open": 1}),
+    dict(pending_changes=1),
+])
+def test_nothing_offers_a_test_while_something_is_still_to_settle(kw):
+    wf = {**_BASE, "session_id": "s", "recording_status": "compiled", "skill_id": "k"}
+    assert "test" not in derive_lifecycle(wf, **kw)["allowed_actions"]
 
 
 def test_edits_clear_approval_so_the_lifecycle_falls_back_to_testing():
@@ -310,6 +326,33 @@ def test_proposals_only_become_cards_after_the_gates(monkeypatch):
     cards = [i for i in ts.load("wf:w9")["items"] if i["kind"] == "card"]
     assert len(gated[0]) == 2 and len(cards) == 1          # the ungated one never reaches the page
     assert cards[0]["card_type"] == "pending_change" and cards[0]["state"] == "open" and cards[0]["actions"] == ["apply", "dismiss"]
+
+
+def test_one_reply_offers_one_card_and_the_reply_is_told_exactly_what_is_offered(monkeypatch):
+    calls: list = []
+    _fake_stream(monkeypatch, calls=calls)
+    monkeypatch.setattr("conxa_compile.llm.copilot.copilot_turn", lambda **k: {"reply": "", "proposals": [{"id": "a"}, {"id": "b"}]})
+    gated = [
+        {"id": "a", "command": "structural_op", "op": "parameterize", "literal": "Agda.gitignore", "name": "file_name", "changed": 2,
+         "kinds": ["click"], "preview": {"before": "Agda.gitignore", "after": "{{file_name}}"}},
+        {"id": "b", "command": "patch_step", "step_key": "s1", "field": "intent", "patch": {"intent": "x"}},
+    ]
+    harness.run_turn(thread_id="wf:w11", message="make the file name a run input", sink=None, skill_id="skill_1",
+                     gate_proposals=lambda raw: gated, load_digest=lambda: {"steps": []}, lifecycle={"stage": "test"})
+    cards = [i for i in ts.load("wf:w11")["items"] if i["kind"] == "card"]
+    assert len(cards) == 1 and [p["id"] for p in cards[0]["proposals"]] == ["a", "b"] and len(cards[0]["summaries"]) == 2
+    reply_text = next(p for task, p in calls if task == "studio_chat_reply")["user_text"]
+    assert "Changes you are offering" in reply_text and "Make “Agda.gitignore” a run input called file_name" in reply_text
+
+
+def test_when_no_change_could_be_prepared_the_reply_is_told_so(monkeypatch):
+    calls: list = []
+    _fake_stream(monkeypatch, calls=calls)
+    monkeypatch.setattr("conxa_compile.llm.copilot.copilot_turn", lambda **k: {"reply": "", "proposals": [{"id": "bad"}]})
+    harness.run_turn(thread_id="wf:w12", message="change the wait", sink=None, skill_id="skill_1",
+                     gate_proposals=lambda raw: [], load_digest=lambda: {"steps": []}, lifecycle={"stage": "test"})
+    assert not [i for i in ts.load("wf:w12")["items"] if i["kind"] == "card"]
+    assert "none could be prepared" in next(p for task, p in calls if task == "studio_chat_reply")["user_text"]
 
 
 def test_a_plain_question_does_not_pay_for_the_proposal_call(monkeypatch):

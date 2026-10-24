@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, FolderOpen, Globe, Loader2, Lock, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, FileText, FolderOpen, Globe, Loader2, Lock, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
 import { flowDiscardRecording, flowFinishRecording, flowPauseRecording, flowResumeRecording, flowSignInCancel, flowSignInDone } from '@/api/conversationApi'
 import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
 import { PanelDivider } from '@/components/shell/PanelDivider'
@@ -178,56 +178,53 @@ function downloadStatus(d: PanelDownload): string {
   const size = d.totalBytes > 0 ? `${fmtBytes(d.receivedBytes)} of ${fmtBytes(d.totalBytes)}` : fmtBytes(d.receivedBytes)
   switch (d.state) {
     case 'progressing': return `Downloading… ${size}`
-    case 'completed': return `Done · ${fmtBytes(d.receivedBytes)}`
+    case 'completed': return `${fmtBytes(d.receivedBytes)} • Done`
     case 'cancelled': return 'Cancelled'
-    default: return 'Failed — the download was interrupted'
+    default: return 'Failed - interrupted'
   }
 }
 
-/** Chrome's Downloads list. It sits in the pane (not floating over the page) because the page is a
- *  native view that always draws on top. */
-function DownloadsPanel({ run, onClose }: { run: PanelRun; onClose: () => void }) {
+/** Chrome's Downloads popover: drops from the toolbar icon over the page. */
+function DownloadsPopover({ run, onClose }: { run: PanelRun; onClose: () => void }) {
   const act = (id: string, action: 'cancel' | 'retry' | 'show' | 'open' | 'clear') => void window.conxa.panel.downloadAction({ runId: run.runId, id, action })
   const rows = [...run.downloads].reverse()
-  const icon = 'flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--text-meta)] outline-none hover:bg-white/10 hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-brand/55'
+  const icon = 'flex size-7 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand/55'
   return (
-    <div className="shrink-0 border-b border-[var(--border-subtle)] bg-[#1f1f1f]" role="region" aria-label="Downloads">
-      <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)]">
-        <span className="flex-1 font-medium">Downloads</span>
-        {rows.some((d) => d.state !== 'progressing') && (
-          <button type="button" className="text-[var(--text-meta)] hover:text-[var(--text-primary)]" onClick={() => act('', 'clear')}>Clear list</button>
-        )}
-        <button type="button" aria-label="Close downloads" className={icon} onClick={onClose}><X className="size-3.5" /></button>
-      </div>
-      <ul className="max-h-40 overflow-y-auto px-2 pb-2">
-        {rows.length === 0 && <li className="px-1 py-1 text-xs text-[var(--text-meta)]">No downloads yet.</li>}
+    <div className="absolute right-2 top-1 z-10 w-80 max-w-[calc(100%-1rem)] rounded-[12px] bg-[#2b2b2b] p-2 shadow-xl ring-1 ring-white/10" role="dialog" aria-label="Downloads" onClick={(e) => e.stopPropagation()}>
+      <ul className="max-h-72 overflow-y-auto">
+        {rows.length === 0 && <li className="px-2 py-2 text-sm text-[var(--text-meta)]">No downloads yet.</li>}
         {rows.map((d) => {
           const pct = d.totalBytes > 0 ? Math.min(100, Math.round((d.receivedBytes / d.totalBytes) * 100)) : null
           const bad = d.state === 'cancelled' || d.state === 'interrupted'
           return (
-            <li key={d.id} className="flex items-center gap-2 rounded-[6px] px-1 py-1 hover:bg-white/[0.04]">
-              <Download className="size-4 shrink-0 text-[var(--text-meta)]" aria-hidden />
+            <li key={d.id} className="flex items-center gap-3 rounded-[8px] px-2 py-2 hover:bg-white/[0.05]">
+              <FileText className="size-5 shrink-0 text-[var(--text-secondary)]" aria-hidden />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-[var(--text-primary)]" title={d.filename}>{d.filename}</p>
+                <p className="truncate text-sm font-medium text-[var(--text-primary)]" title={d.filename}>{d.filename}</p>
+                <p className={cn('truncate text-xs', bad ? 'text-status-warn' : 'text-[var(--text-meta)]')}>{downloadStatus(d)}</p>
                 {d.state === 'progressing' && (
-                  <div className="my-0.5 h-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
-                    <div className={cn('h-full bg-[#93b4e6]', pct === null && 'w-1/3 animate-pulse motion-reduce:animate-none')} style={pct === null ? undefined : { width: `${pct}%` }} />
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
+                    <div className={cn('h-full bg-[#8ab4f8]', pct === null && 'w-1/3 animate-pulse motion-reduce:animate-none')} style={pct === null ? undefined : { width: `${pct}%` }} />
                   </div>
                 )}
-                <p className={cn('truncate text-[0.6875rem]', bad ? 'text-status-warn' : 'text-[var(--text-meta)]')}>{d.host && `${d.host} · `}{downloadStatus(d)}</p>
               </div>
-              {d.state === 'progressing' && <button type="button" aria-label={`Cancel ${d.filename}`} title="Cancel" className={icon} onClick={() => act(d.id, 'cancel')}><X className="size-3.5" /></button>}
-              {bad && <button type="button" aria-label={`Retry ${d.filename}`} title="Retry" className={icon} onClick={() => act(d.id, 'retry')}><RotateCw className="size-3.5" /></button>}
+              {d.state === 'progressing' && <button type="button" aria-label={`Cancel ${d.filename}`} title="Cancel" className={icon} onClick={() => act(d.id, 'cancel')}><X className="size-4" /></button>}
+              {bad && <button type="button" aria-label={`Retry ${d.filename}`} title="Retry" className={icon} onClick={() => act(d.id, 'retry')}><RotateCw className="size-4" /></button>}
               {d.state === 'completed' && (
                 <>
-                  <button type="button" aria-label={`Open ${d.filename}`} title="Open" className={icon} onClick={() => act(d.id, 'open')}><ExternalLink className="size-3.5" /></button>
-                  <button type="button" aria-label={`Show ${d.filename} in folder`} title="Show in folder" className={icon} onClick={() => act(d.id, 'show')}><FolderOpen className="size-3.5" /></button>
+                  <button type="button" aria-label={`Open ${d.filename}`} title="Open" className={icon} onClick={() => act(d.id, 'open')}><ExternalLink className="size-4" /></button>
+                  <button type="button" aria-label={`Show ${d.filename} in folder`} title="Show in folder" className={icon} onClick={() => act(d.id, 'show')}><FolderOpen className="size-4" /></button>
                 </>
               )}
             </li>
           )
         })}
       </ul>
+      {rows.some((d) => d.state !== 'progressing') && (
+        <div className="mt-1 flex justify-end border-t border-white/10 px-2 pt-1.5">
+          <button type="button" className="text-xs text-[#8ab4f8] hover:underline" onClick={() => { act('', 'clear'); onClose() }}>Clear list</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -320,7 +317,7 @@ function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: 
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={cn('relative text-[var(--text-meta)]', dlOpen && 'bg-white/10')}
+          className={cn('relative ml-1 rounded-full text-[var(--text-secondary)]', dlOpen && 'bg-[#3c4b66] text-[#8ab4f8]')}
           aria-label="Downloads"
           aria-expanded={dlOpen}
           title="Downloads"
@@ -353,20 +350,41 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
   const setWide = useBrowserStore((s) => s.setWide)
   const region = useRef<HTMLDivElement>(null)
   const tab = activeTab(run)
-  const dialogOpen = useNativeViewRegion(region, run, tab)
+  // The Downloads popover floats over the page, so the native page steps aside for a still of itself.
+  const [dlOpen, setDlOpen] = useState(false)
+  const [still, setStill] = useState<string | null>(null)
+  const dialogOpen = useNativeViewRegion(region, run, tab, dlOpen)
+  const openDownloads = async () => {
+    if (dlOpen || !run || !tab) return
+    setStill(await window.conxa.panel.snapshot({ runId: run.runId, tabId: tab.id }))
+    setDlOpen(true)
+  }
+  const closeDownloads = () => {
+    setDlOpen(false)
+    setStill(null)
+  }
+  const dlCount = run?.downloads.length ?? 0
+  const runKind = run?.kind
+  // Chrome shows the list as a download starts. Only when a person is driving: a running test is
+  // not frozen behind a still on its own account.
+  const prevDl = useRef(0)
+  useEffect(() => {
+    if (dlCount > prevDl.current && runKind !== 'test') void openDownloads()
+    if (dlCount === 0) closeDownloads()
+    prevDl.current = dlCount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dlCount])
+  useEffect(() => {
+    if (!dlOpen) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeDownloads()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dlOpen])
   // Site-opened tabs the person hasn't looked at yet.
   const [seen, setSeen] = useState<Set<string>>(new Set())
   useEffect(() => {
     if (tab && !seen.has(tab.id)) setSeen((s) => new Set(s).add(tab.id))
   }, [tab, seen])
-
-  // Chrome opens its Downloads list when a download starts.
-  const [dlOpen, setDlOpen] = useState(false)
-  const dlCount = run?.downloads.length ?? 0
-  useEffect(() => {
-    if (dlCount > 0) setDlOpen(true)
-    else setDlOpen(false)
-  }, [dlCount])
 
   if (!run || !tab) return null
   const flow = storeFlow?.runId === run.runId ? storeFlow : null
@@ -437,13 +455,14 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
         </header>
 
         <TabStrip run={run} seen={seen} />
-        <Toolbar run={run} tab={tab} dlOpen={dlOpen} onToggleDownloads={() => setDlOpen((o) => !o)} />
-        {dlOpen && <DownloadsPanel run={run} onClose={() => setDlOpen(false)} />}
+        <Toolbar run={run} tab={tab} dlOpen={dlOpen} onToggleDownloads={() => (dlOpen ? closeDownloads() : void openDownloads())} />
         <div aria-hidden className={cn('h-0.5 shrink-0', (phase === 'ready' || tab.loading) && 'animate-pulse bg-[#93b4e6]/60 motion-reduce:animate-none')} />
 
         {/* The native view is drawn into this region. */}
-        <div ref={region} className="relative min-h-0 flex-1 bg-[#1a1a1a]">
-          {dialogOpen ? (
+        <div ref={region} className="relative min-h-0 flex-1 bg-[#1a1a1a]" onClick={dlOpen ? closeDownloads : undefined}>
+          {dlOpen && still && <img src={still} alt="" draggable={false} className="absolute inset-0 size-full object-cover object-top" />}
+          {dlOpen && <DownloadsPopover run={run} onClose={closeDownloads} />}
+          {dialogOpen && !dlOpen ? (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[var(--text-meta)]">Browser hidden while this dialog is open</p>
           ) : phase === 'ready' ? (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[var(--text-meta)]">Opening {run.kind === 'signin' ? 'the sign-in page' : 'the site'}…</p>

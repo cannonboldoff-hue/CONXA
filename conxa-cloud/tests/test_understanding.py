@@ -193,12 +193,11 @@ def test_parameterizing_something_that_is_not_there_or_a_bad_name_is_refused():
 _WF = {"session_id": "s", "recording_status": "compiled", "skill_id": "k", "target_url": "https://x", "last_test_status": "never"}
 
 
-def test_testing_waits_for_a_question_that_decides_what_the_workflow_is():
-    blocked = derive_lifecycle(_WF, clarify={"open": 1, "blocking_open": 1})
-    assert blocked["stage"] == "clarify" and "test" not in blocked["allowed_actions"]
-    advisory = derive_lifecycle(_WF, clarify={"open": 1, "blocking_open": 0})
-    assert "test" in advisory["allowed_actions"]
-    assert "test" in derive_lifecycle(_WF, clarify={"open": 1})["allowed_actions"]   # older summaries are unchanged
+def test_testing_waits_for_every_question_that_was_asked():
+    # Questions come first, then their answers, then the test — a small question is still a question.
+    for summary in ({"open": 1, "blocking_open": 1}, {"open": 1, "blocking_open": 0}, {"open": 1}):
+        lc = derive_lifecycle(_WF, clarify=summary)
+        assert lc["stage"] == "clarify" and "test" not in lc["allowed_actions"]
 
 
 def test_parameterizing_also_templates_address_and_message_checks_but_never_a_selector_check():

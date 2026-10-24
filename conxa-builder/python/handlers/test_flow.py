@@ -53,6 +53,7 @@ class TestFlowMixin:
         workflow = get_workflow(workflow_id)
         if workflow is None or not workflow.skill_id:
             raise _CommandError("workflow_not_compiled", "Compile this workflow before testing it.")
+        self._require_allowed(workflow_id, "test")
         doc = read_skill(workflow.skill_id) or {}
         sink = _event_sink(rid)
         existing = next((c for c in reversed(ts.fold(ts.read_raw(_thread(workflow_id))))

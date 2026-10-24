@@ -338,6 +338,20 @@ class ConversationMixin:
                 return c
         return None
 
+    def _require_allowed(self, workflow_id: str, action: str) -> None:
+        """The lifecycle's ``allowed_actions`` is the one rule for what may start now. The strip and
+        chat routing read it, but a stale confirm card, a summary-card button or a direct command
+        would not, so every entry point re-checks it here."""
+        from conxa_compile.conversation.lifecycle import lifecycle_for_workflow
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow = get_workflow(workflow_id)
+        if workflow is None:
+            return  # the action's own command reports a missing workflow
+        lc = lifecycle_for_workflow(workflow)
+        if action not in lc["allowed_actions"]:
+            raise _CommandError("not_allowed_now", f"Not yet — {lc['note'][:1].lower()}{lc['note'][1:]}.")
+
     def _run_flow_action(self, workflow_id: str, action: str, slots: dict[str, Any], rid: str, sink: Any) -> dict[str, Any]:
         """Run one of conversation/actions.ACTIONS through the same ``cmd_flow_*`` commands the card
         buttons use. Returns ``{"ok", "message"}`` and never raises, so a failed action becomes a
@@ -353,6 +367,7 @@ class ConversationMixin:
         from conxa_compile.conversation import harness
 
         base = {"workflow_id": workflow_id}
+        self._require_allowed(workflow_id, action)
 
         def need(card_type: str, states: tuple[str, ...], what: str) -> dict[str, Any]:
             card = self._latest_card(workflow_id, card_type, states)
@@ -472,16 +487,21 @@ class ConversationMixin:
 
         card_id = card["card_id"]
         skill_id = str((card.get("refs") or {}).get("skill_id") or "")
-        proposal = card.get("proposal") if isinstance(card.get("proposal"), dict) else {}
+        # One card = one reply's change set; a card from before change sets carries one `proposal`.
+        proposals = [p for p in card.get("proposals") or [] if isinstance(p, dict)]
+        if not proposals and isinstance(card.get("proposal"), dict):
+            proposals = [card["proposal"]]
+        proposal = proposals[0] if proposals else {}
         title = card.get("title") or "the change"
 
         if action == "dismiss":
             if card.get("state") != "open":
                 return {"ok": False, "code": "not_open"}
-            try:
-                self.cmd_reject_copilot_proposal({**proposal, "skill_id": skill_id, "proposal_id": proposal.get("id")}, rid)
-            except _CommandError:
-                pass  # a dismissal that can't be logged is still a dismissal
+            for p in proposals:
+                try:
+                    self.cmd_reject_copilot_proposal({**p, "skill_id": skill_id, "proposal_id": p.get("id")}, rid)
+                except _CommandError:
+                    pass  # a dismissal that can't be logged is still a dismissal
             harness.update_card(thread_id, card_id, state="dismissed", sink=sink)
             return {"ok": True}
 
@@ -493,7 +513,7 @@ class ConversationMixin:
             before_stack = len(self._undo_stacks.get(skill_id, []))
             before_doc = read_skill(skill_id)
             try:
-                self.cmd_accept_copilot_proposal({**proposal, "skill_id": skill_id, "proposal_id": proposal.get("id")}, rid)
+                self._apply_change_set(skill_id, proposals, rid)
             except _CommandError as exc:
                 harness.update_card(thread_id, card_id, state="failed", error=exc.message, sink=sink)
                 return {"ok": False, "code": exc.code, "message": exc.message}

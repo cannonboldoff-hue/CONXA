@@ -289,6 +289,7 @@ ipcMain.handle("panel:bounds", (_e, { runId, tabId, rect }) => {
 });
 ipcMain.handle("panel:hide", () => { browserPanel.hideAll(); return true; });
 ipcMain.handle("panel:select-tab", (_e, { runId, tabId }) => browserPanel.selectTab(runId, tabId));
+ipcMain.handle("panel:snapshot", (_e, { runId, tabId }) => browserPanel.snapshot(runId, tabId));
 ipcMain.handle("panel:download-action", (_e, { runId, id, action }) => browserPanel.downloadAction(runId, id, action));
 ipcMain.handle("panel:new-tab", (_e, { runId, url }) => browserPanel.personTab(runId, { url }));
 ipcMain.handle("panel:close-tab", async (_e, { runId, tabId }) => { await browserPanel.closeTab(runId, tabId); return true; });

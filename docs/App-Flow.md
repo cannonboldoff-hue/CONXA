@@ -128,7 +128,7 @@ flowchart LR
     R -- Finish --> C[Compile card<br/>real stages · queued · out of credits]
     R -- Discard / browser closed --> R2[Record again · Save N actions]
     C --> U[Understanding check<br/>task vs. recording · values that change each run]
-    U --> Q[Clarify questions<br/>one at a time, up to 5 · Test waits for the ones that decide what the workflow is]
+    U --> Q[Clarify questions<br/>one at a time, up to 5 · Test waits until every asked question is answered or skipped, and until any proposed chat change is applied or dismissed]
     Q --> SUM[Summary card]
     SUM --> T[Test inputs]
     SUM --> E[Human Edit<br/>Test changes]

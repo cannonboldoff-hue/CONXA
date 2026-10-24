@@ -138,6 +138,32 @@ class CopilotMixin:
             {"skill_id": skill_id, "step_index": step_index, "patch": patch}, rid
         )
 
+    def _apply_change_set(self, skill_id: str, proposals: list[dict[str, Any]], rid: str) -> None:
+        """Apply every proposal from one chat reply as one all-or-nothing change with ONE undo entry
+        (the pattern `_accept_structural_proposal` uses within structural ops, extended to any mix
+        of kinds). One failing proposal restores the document, so the person never ends up with half
+        of what the reply described."""
+        import copy
+
+        from conxa_core.storage.json_store import read_skill, write_skill
+
+        pre = read_skill(skill_id)
+        if pre is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        snapshot = copy.deepcopy(pre)
+        undo_stack = self._undo_stacks.setdefault(skill_id, [])
+        depth = len(undo_stack)
+        try:
+            for proposal in proposals:
+                self.cmd_accept_copilot_proposal({**proposal, "skill_id": skill_id, "proposal_id": proposal.get("id")}, rid)
+        except _CommandError:
+            del undo_stack[depth:]
+            write_skill(skill_id, snapshot)
+            raise
+        del undo_stack[depth:]
+        undo_stack.append(snapshot)
+        self._redo_stacks[skill_id] = []
+
     def _accept_overlay_branch_proposal(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """Composes three existing, gate-validated RPCs — cmd_insert_step, cmd_patch_step, and
         (if_present only) cmd_insert_branch_step — rather than writing new mutation logic. All
@@ -303,6 +329,19 @@ class CopilotMixin:
         if kind == "update_inputs":
             inputs = op.get("inputs") if isinstance(op.get("inputs"), list) else []
             return self.cmd_update_workflow_inputs({"skill_id": skill_id, "inputs": inputs}, rid)
+
+        if kind == "parameterize":
+            # Same command the understanding check's "varies" answer uses; one call per rewrite the
+            # gate's dry run found (click label, page address / row id). Each declares the input.
+            if not op.get("kinds"):
+                raise _CommandError("invalid_input", "Nothing to make an input from.")
+            result = {}
+            for rewrite in op["kinds"]:
+                result = self.cmd_parameterize_literal({
+                    "skill_id": skill_id, "literal": op.get("literal"), "name": op.get("name"),
+                    "default": op.get("literal"), "kind": "click" if rewrite == "click" else "value",
+                }, rid)
+            return result
 
         if kind == "replace_literals":
             find = str(op.get("find") or "")

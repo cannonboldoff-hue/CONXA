@@ -8,10 +8,12 @@ A turn:
    through to it.
 2. **Build the context** (``context_pack.py``) under an explicit token budget — the proxy is
    stateless, so every turn rebuilds it.
-3. **Stream the reply** (``studio_chat_reply``). When the turn may produce edits, a separate
-   proposal call runs (the Human Review copilot's ``copilot_diagnose``) and **every proposal
-   goes through the existing gates** before it can become a pending-change card. The model
-   never writes a selector, and a proposal that fails a gate is silently dropped.
+3. **Propose, then stream the reply** (``studio_chat_reply``). When the turn may produce edits,
+   a separate proposal call runs first (the Human Review copilot's ``copilot_diagnose``) and
+   **every proposal goes through the existing gates** before it can be offered. The model
+   never writes a selector, and a proposal that fails a gate is silently dropped. The reply is
+   then written knowing exactly which gated changes are on offer, and they become ONE
+   pending-change card (one reply, one change set, one Apply).
 4. Append everything to the thread. When the verbatim window overflows, fold the oldest turns
    into a stored rolling summary.
 
@@ -321,18 +323,37 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     if kind == "chat" and group_names is not None:
         extra.append(("Groups in this workspace (read-only)", ", ".join(group_names) or "(none yet)"))
         extra.extend(context_sections or [])
-    pack = build_context_pack(
-        message=message,
-        budget_tokens=budget,
-        lifecycle=lifecycle,
-        open_cards=ts.open_cards(items),
-        pinned_facts=pinned_facts(digest, clarify, str((workflow or {}).get("task_description") or "")),
-        digest=digest,
-        summary=(summary_item or {}).get("text"),
-        turns=turns,
-        extra_sections=extra,
-        anchor=anchor,
-    )
+    def make_pack() -> Any:
+        return build_context_pack(
+            message=message,
+            budget_tokens=budget,
+            lifecycle=lifecycle,
+            open_cards=ts.open_cards(items),
+            pinned_facts=pinned_facts(digest, clarify, str((workflow or {}).get("task_description") or "")),
+            digest=digest,
+            summary=(summary_item or {}).get("text"),
+            turns=turns,
+            extra_sections=extra,
+            anchor=anchor,
+        )
+
+    pack = make_pack()
+
+    # 2b ─ proposals, gated, never applied here — and made BEFORE the reply, so the reply describes
+    # exactly the changes that are on offer instead of promising ones no card carries.
+    proposals: list[dict[str, Any]] = []
+    if kind == "wf" and skill_id and gate_proposals is not None and wants_proposals(
+        message, has_skill=True, anchor=anchor, last_test_failed=last_test_failed
+    ):
+        from conxa_compile.editor.copilot_proposals import proposal_summary
+
+        proposals = _propose(message=message, base_pack=pack, digest=digest, skill_id=skill_id,
+                             gate_proposals=gate_proposals, cancel=cancel, with_failure_image=last_test_failed)
+        if cancel.is_set():
+            return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
+        offered = "\n".join(f"- {proposal_summary(p)}" for p in proposals) or "(none could be prepared)"
+        extra.append(("Changes you are offering — each takes effect only when the person presses Apply", offered))
+        pack = make_pack()
 
     # 3 ─ stream the reply.
     from conxa_compile.llm.client import stream_llm
@@ -356,14 +377,6 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     if cancel.is_set():
         return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
 
-    # 3b ─ proposals, gated. Never applied here.
-    proposals: list[dict[str, Any]] = []
-    if kind == "wf" and skill_id and gate_proposals is not None and wants_proposals(
-        message, has_skill=True, anchor=anchor, last_test_failed=last_test_failed
-    ):
-        proposals = _propose(message=message, base_pack=pack, digest=digest, skill_id=skill_id,
-                             gate_proposals=gate_proposals, cancel=cancel, with_failure_image=last_test_failed)
-
     # 3c ─ general Chat: may the conversation become a draft workflow?
     draft = None
     if kind == "chat" and not cancel.is_set():
@@ -375,12 +388,18 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     # 4 ─ append. Only now: nothing half-finished is ever written.
     if reply:
         push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=reply)))
-    for p in proposals:
+    if proposals:
+        # One reply, one change set, one Apply: the changes are applied all together or not at all.
+        from conxa_compile.editor.copilot_proposals import proposal_summary
+
+        single = proposals[0] if len(proposals) == 1 else None
         push(post_card(
             thread_id, "pending_change", "open", sink=sink,
-            refs={"skill_id": skill_id, "proposal_id": p.get("id"), "step_key": p.get("step_key")},
-            title=_proposal_title(p), why=p.get("why") or "", proposal=p, preview=p.get("preview"),
-            actions=["apply", "dismiss"],
+            refs={"skill_id": skill_id, "proposal_ids": [p.get("id") for p in proposals]},
+            title=_proposal_title(single) if single else "Proposed changes",
+            why=(single or {}).get("why") or "", proposals=proposals,
+            summaries=[proposal_summary(p) for p in proposals],
+            preview=(single or {}).get("preview"), actions=["apply", "dismiss"],
         ))
     if draft:
         push(post_card(thread_id, "draft_workflow", "open", sink=sink, draft=draft, actions=["create_and_record", "edit_details", "dismiss"]))
@@ -453,7 +472,7 @@ def _proposal_title(p: dict[str, Any]) -> str:
     if cmd == "insert_overlay_branch":
         return "Add a step to dismiss a popup"
     if cmd == "structural_op":
-        return "Change the steps"
+        return "Make it a run input" if p.get("op") == "parameterize" else "Change the steps"
     return f"Change “{p.get('field') or 'a step'}”"
 
 

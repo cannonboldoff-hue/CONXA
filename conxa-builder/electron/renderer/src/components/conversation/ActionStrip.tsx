@@ -13,7 +13,8 @@ export function ActionStrip({ workflowId, lifecycle }: { workflowId: string; lif
   const navigate = useNavigate()
   const openEdit = useOpenEdit(`wf:${workflowId}`)
   const actions = (lifecycle?.allowed_actions ?? []).filter((a) => ACTION_INFO[a]?.strip)
-  if (!lifecycle || actions.length === 0) return null
+  // No button to show, but "checking" is a wait the person should see: nothing else on screen says why Test isn't there yet.
+  if (!lifecycle || (actions.length === 0 && lifecycle.substate !== 'checking')) return null
 
   const press = (id: string) => {
     const info = ACTION_INFO[id]

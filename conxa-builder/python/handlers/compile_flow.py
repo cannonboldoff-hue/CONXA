@@ -97,6 +97,9 @@ class CompileFlowMixin:
         JOB_OBSERVERS[rid] = observe
         try:
             result = self.cmd_compile({"session_id": workflow.session_id, "workflow_id": workflow_id}, rid)
+            # Raised before `compiling` clears below, so there is no moment where the workflow is
+            # compiled but its questions don't exist yet and the lifecycle would offer a test.
+            runtime_state.set_flags(workflow_id, understanding=True)
         except _CommandError as exc:
             return self._flow_compile_failed(workflow_id, card_id, progress, exc, sink)
         except Exception as exc:  # noqa: BLE001
@@ -106,13 +109,25 @@ class CompileFlowMixin:
             compile_queue.release(workflow_id)
             runtime_state.set_flags(workflow_id, compiling=False, queued=0)
 
-        progress.observe({"phase": "compile_done", "step_count": result.get("step_count")})
-        harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
-                            credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
-        warnings = int(result.get("compile_steps_with_warnings") or 0)
-        harness.log_event(thread, "Compiled", glyph="warn" if warnings else "ok", sink=sink,
-                          subject=f"{result.get('step_count')} steps" + (f" · {warnings} less certain" if warnings else ""))
-        self._flow_after_compile(workflow_id, result, sink)
+        try:
+            progress.observe({"phase": "compile_done", "step_count": result.get("step_count")})
+            harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
+                                credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
+            warnings = int(result.get("compile_steps_with_warnings") or 0)
+            harness.log_event(thread, "Compiled", glyph="warn" if warnings else "ok", sink=sink,
+                              subject=f"{result.get('step_count')} steps" + (f" · {warnings} less certain" if warnings else ""))
+            self._flow_after_compile(workflow_id, result, sink)
+        except Exception:  # noqa: BLE001 — the compile itself succeeded; only the questions failed
+            import traceback
+
+            traceback.print_exc()
+            # Clear first, then post: the renderer re-reads the lifecycle on every thread item, and
+            # this item is the only thing that tells it "Checking…" is over.
+            runtime_state.set_flags(workflow_id, understanding=False)
+            harness.log_event(thread, "Couldn’t prepare the questions", glyph="warn", sink=sink,
+                              subject="The workflow compiled; you can still test it")
+        finally:
+            runtime_state.set_flags(workflow_id, understanding=False)
         return {"ok": True, **result}
 
     def _flow_compile_failed(self, workflow_id: str, card_id: str, progress: Any, exc: _CommandError, sink: Any) -> dict[str, Any]:
@@ -199,7 +214,12 @@ class CompileFlowMixin:
             "added_steps": 0, "step_count_at_compile": len(steps), "questions": questions,
             "understanding": {k: understood[k] for k in ("goal_summary", "coverage", "source")},
         })
-        lines = [f"Compiled into {len(steps)} steps."]
+        # Questions now exist, so the lifecycle can see them; clear before the posts below, because
+        # the renderer re-reads the lifecycle on each one (the caller's `finally` is only the net).
+        from conxa_compile.conversation import runtime_state
+
+        runtime_state.set_flags(workflow_id, understanding=False)
+        lines =[f"Compiled into {len(steps)} steps."]
         dropped = report.get("dropped") or []
         if dropped:
             kinds = sorted({str(d.get("action") or "action").replace("_", " ") for d in dropped})[:3]

@@ -71,7 +71,7 @@ export function CardShell({
   className?: string
 }) {
   return (
-    <section className={cn('rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4', className)}>
+    <section className={cn('min-w-0 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4', className)}>
       <header className="flex items-start gap-2.5">
         {glyph && <span className="mt-[3px]"><StatusGlyph kind={glyph} /></span>}
         <div className="min-w-0 flex-1">
@@ -79,7 +79,7 @@ export function CardShell({
           {meta && <p className="mt-0.5 text-xs text-[var(--text-meta)]">{meta}</p>}
         </div>
       </header>
-      {children && <div className="mt-3 text-sm text-[var(--text-secondary)]">{children}</div>}
+      {children && <div className="mt-3 min-w-0 text-sm text-[var(--text-secondary)]">{children}</div>}
       {footer && <footer className="mt-4 flex flex-wrap items-center gap-2">{footer}</footer>}
     </section>
   )

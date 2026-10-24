@@ -26,7 +26,13 @@ from conxa_compile.editor.action_registry import SELECTOR_ACTIONS, action_spec, 
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.overlay_identity import bundle_from_descriptor
 from conxa_compile.editor.patch_gate import validate_editor_patch
-from conxa_compile.editor.workflow_mutations import _new_manual_step
+from conxa_compile.editor.workflow_mutations import (
+    _new_manual_step,
+    merge_skill_inputs,
+    parameterize_click_text,
+    parameterize_literal,
+    replace_string_literals_in_skill_document,
+)
 from conxa_compile.policy.bundle import get_policy_bundle
 
 # BUILD-26 stage g: widened from the original five to every field that actually changes
@@ -247,7 +253,29 @@ def resolve_step_index(doc: dict[str, Any], step_key: str) -> int:
     return resolved[0]
 
 
-_STRUCTURAL_OPS = frozenset({"insert_step", "delete_step", "move_step", "update_inputs", "replace_literals"})
+_STRUCTURAL_OPS = frozenset({"insert_step", "delete_step", "move_step", "update_inputs", "replace_literals", "parameterize"})
+
+# The two code-owned rewrites behind `parameterize`, in the order they are applied. The model only
+# names the recorded value and the input; these decide which places change.
+_PARAMETERIZERS = (("click", parameterize_click_text), ("value", parameterize_literal))
+
+
+def proposal_summary(p: dict[str, Any]) -> str:
+    """One plain sentence for a gated proposal, written by code from its validated fields — shown on
+    the card and given to the reply, so what is said and what is offered cannot drift apart."""
+    cmd, op = p.get("command"), p.get("op")
+    if cmd == "insert_overlay_branch":
+        return str((p.get("preview") or {}).get("after") or "Add a step to dismiss a popup")
+    if cmd == "patch_step":
+        return f"Change “{p.get('field')}” on step {p.get('step_key')}"
+    if op == "parameterize":
+        return (f"Make “{p.get('literal')}” a run input called {p.get('name')} "
+                f"({p.get('changed')} place{'s' if p.get('changed') != 1 else ''}); the recorded value stays its default")
+    if op == "update_inputs":
+        return f"Set the run inputs to: {', '.join(str(i.get('id')) for i in p.get('inputs') or []) or 'none'}"
+    if op == "replace_literals":
+        return f"Replace “{p.get('find')}” with “{p.get('replace')}” in typed values"
+    return str((p.get("preview") or {}).get("after") or p.get("why") or "Change the steps")
 
 
 def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[str, Any]]:
@@ -339,6 +367,10 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             inputs = raw.get("inputs")
             if not isinstance(inputs, list):
                 continue
+            try:
+                merge_skill_inputs(doc, inputs, None)  # the same trust boundary the accept runs
+            except ValueError:
+                continue
             out.append({**base, "inputs": inputs, "preview": {"before": doc.get("inputs"), "after": inputs}})
 
         elif op == "replace_literals":
@@ -346,6 +378,34 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             replace = str(raw.get("replace") or "")
             if not find:
                 continue
+            try:
+                _, matches = replace_string_literals_in_skill_document(doc, find, replace)
+            except ValueError:
+                continue
+            if not matches:
+                continue
             out.append({**base, "find": find, "replace": replace, "preview": {"before": find, "after": replace}})
+
+        elif op == "parameterize":
+            literal = str(raw.get("literal") or "").strip()
+            name = str(raw.get("name") or "").strip()
+            if not literal or not name:
+                continue
+            # Dry-run each code-owned rewrite on a copy (both are pure and never raise on a
+            # no-match other than ValueError); keep only those that would really change the workflow.
+            kinds: list[str] = []
+            changed = 0
+            for kind, mutate in _PARAMETERIZERS:
+                try:
+                    _, n = mutate(doc, literal, name, default=literal)
+                except ValueError:
+                    continue
+                if n:
+                    kinds.append(kind)
+                    changed += n
+            if not kinds:
+                continue
+            out.append({**base, "literal": literal, "name": name, "kinds": kinds, "changed": changed,
+                        "preview": {"before": literal, "after": "{{%s}}" % name}})
 
     return out

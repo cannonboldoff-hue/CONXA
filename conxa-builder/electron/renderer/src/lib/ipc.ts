@@ -73,6 +73,7 @@ declare global {
         closeTab: (p: { runId: string; tabId: string }) => Promise<boolean>;
         closeRun: (p: { runId: string }) => Promise<boolean>;
         navigate: (p: { runId: string; tabId: string; action: 'back' | 'forward' | 'reload' | 'hard-reload' | 'stop' | 'load'; url?: string }) => Promise<boolean>;
+        snapshot: (p: { runId: string; tabId: string }) => Promise<string | null>;
         downloadAction: (p: { runId: string; id: string; action: 'cancel' | 'retry' | 'show' | 'open' | 'clear' }) => Promise<boolean>;
         onTabs: (handler: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind; downloads?: PanelDownload[] }) => void) => () => void;
         onShortcut: (handler: (msg: { runId: string; action: 'focus-address' }) => void) => () => void;

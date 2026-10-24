@@ -11,6 +11,7 @@ import type { ThreadItem } from '@/lib/thread'
 export type CardProps = { threadId: string; item: ThreadItem }
 
 const asText = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v))
+const asPretty = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v, null, 2))
 
 /** A proposed change to the workflow: the exact change, Apply / Undo. Nothing is applied until Apply. */
 export function PendingChangeCard({ threadId, item }: CardProps) {
@@ -18,6 +19,7 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
   const [note, setNote] = useState('')
   const state = String(item.state)
   const preview = (item.preview ?? null) as { before?: unknown; after?: unknown } | null
+  const summaries = (Array.isArray(item.summaries) ? item.summaries : []).map(String)
   const glyph: StatusKind =
     state === 'applied' ? 'ok' : state === 'applying' ? 'run' : state === 'failed' ? 'fail' : state === 'open' ? 'warn' : 'none'
   const run = async (action: string) => {
@@ -41,16 +43,23 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
           {state === 'applying' && <span className="text-xs text-[var(--text-meta)]">Applying…</span>}
           {state === 'applied' && <Button variant="outline" size="sm" onClick={() => run('undo')}>Undo</Button>}
           {state === 'failed' && <span className="text-xs text-status-error">✕ {asText(item.error) || 'Couldn’t apply'}</span>}
-          {note && <span className="text-xs text-status-warn">▲ {note}</span>}
+          {note && state !== 'failed' && <span className="text-xs text-status-warn">▲ {note}</span>}
         </>
       }
     >
-      {item.why ? <p className="leading-[1.6]">{asText(item.why)}</p> : null}
+      {summaries.length > 0 ? (
+        <ul className="list-disc space-y-1 pl-4 leading-[1.6]">
+          {summaries.map((s, i) => <li key={i}>{s}</li>)}
+        </ul>
+      ) : item.why ? <p className="leading-[1.6]">{asText(item.why)}</p> : null}
       {preview && (preview.before !== undefined || preview.after !== undefined) && (
-        <div className="mt-2 space-y-1 rounded-[8px] bg-[var(--bg-raised)] p-2.5 font-mono text-xs">
-          {preview.before !== undefined && <p className="text-[var(--text-meta)] line-through">{asText(preview.before)}</p>}
-          {preview.after !== undefined && <p className="text-[var(--text-primary)]">{asText(preview.after)}</p>}
-        </div>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-[var(--text-meta)]">Show exact change</summary>
+          <div className="mt-1 max-h-60 space-y-1 overflow-auto rounded-[8px] bg-[var(--bg-raised)] p-2.5 font-mono text-xs">
+            {preview.before !== undefined && <pre className="whitespace-pre-wrap break-all text-[var(--text-meta)] line-through">{asPretty(preview.before)}</pre>}
+            {preview.after !== undefined && <pre className="whitespace-pre-wrap break-all text-[var(--text-primary)]">{asPretty(preview.after)}</pre>}
+          </div>
+        </details>
       )}
     </CardShell>
   )

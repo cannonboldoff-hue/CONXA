@@ -21,14 +21,16 @@ function useDialogOpen(): boolean {
  * change, hides it while a dialog is open, and hides it when the host unmounts. Shared by the
  * right-hand browser pane and the Group page's sign-in pane. Returns whether a dialog hid it.
  */
-export function useNativeViewRegion(region: RefObject<HTMLElement>, run: PanelRun | null, tab: PanelTab | null): boolean {
+export function useNativeViewRegion(region: RefObject<HTMLElement>, run: PanelRun | null, tab: PanelTab | null, suspend = false): boolean {
   const lastSent = useRef('')
   const dialogOpen = useDialogOpen()
+  // `suspend`: the host floats its own popover over the page and stands a still in for it.
+  const hidden = dialogOpen || suspend
 
   const report = () => {
     const el = region.current
     if (!el || !run || !tab) return
-    if (dialogOpen) {
+    if (hidden) {
       if (lastSent.current !== 'hidden') {
         lastSent.current = 'hidden'
         void window.conxa.panel.hide()
@@ -55,7 +57,7 @@ export function useNativeViewRegion(region: RefObject<HTMLElement>, run: PanelRu
       window.removeEventListener('resize', report)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.runId, tab?.id, dialogOpen])
+  }, [run?.runId, tab?.id, hidden])
   // The native view must never outlive its host on screen. A layout cleanup, not a passive one: in
   // one commit React runs a removed host's layout cleanups before the next host's layout effects,
   // but its passive cleanups after them — a passive hide here landed after the new host's report and
