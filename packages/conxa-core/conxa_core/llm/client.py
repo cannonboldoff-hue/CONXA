@@ -318,64 +318,36 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
         ]
-    if task == "loop_suggestion_copy":
-        # Compile-time: rewrite a deterministically-built "generalize this to a loop"
-        # suggestion (compiler/loop_suggestion.py) into one or two short, plain-English
-        # sentences for the mandatory Human Edit review popup — never the deciding logic,
-        # purely the copy a reviewer reads before answering Yes/No. See
-        # conxa_compile/llm/loop_suggestion_copy.py for the deterministic fallback used
-        # when this call fails, and for how `input.steps` is built (role-tagged, no
-        # selectors) — an earlier version of this prompt got only a bare filename and a
-        # boolean, with no picture of what the workflow does, and produced confidently
-        # wrong descriptions (e.g. a delete) for what is always a download-then-upload
-        # pattern. `input.steps[].role` is one of "acquire" (a step that gets hold of the
-        # file — typically a navigate to the file's page, then the download itself) or
-        # "upload" (the step that re-uploads that same file). A separate, deterministic
-        # (no LLM) question asks about removing a leftover click, if one exists — this
-        # prompt's own text never mentions it.
+    if task == "clarify_question_copy":
+        # Compile-time: rewrite the follow-up questions asked after a compile into warm, plain
+        # language. Copy only: ids, how many choices there are, and what each choice does are all
+        # decided by code (conversation/clarify.py), which also validates this answer and keeps
+        # its own text for anything that does not check out -- see llm/clarify_question_copy.py.
         return [
             {
                 "role": "system",
                 "content": (
-                    "You write one short, friendly explanation for a non-technical reviewer "
-                    "approving a recorded browser automation. The pattern is ALWAYS: the "
-                    "recording downloads one specific file, then later uploads that same file "
-                    "somewhere else. `input.steps` lists the real steps involved, each tagged "
-                    "with a `role` (\"acquire\" = getting hold of the file, \"upload\" = "
-                    "sending that file elsewhere) plus that step's own `action` and "
-                    "`description`. Describe ONLY the download-then-upload mechanism these "
-                    "steps show — never invent a different action (never a delete/remove, "
-                    "never anything the steps don't support) even if a step's own wording is "
-                    "ambiguous, and never mention anything not in `input.steps`. They will see "
-                    "your text next to Yes/No buttons for turning this single fixed file into "
-                    "a loop over any number of caller-named files. Plain words, no jargon, 1-2 "
-                    "short sentences, end with a question the Yes/No buttons answer. Return "
-                    "strict JSON with key: text (string)."
-                ),
-            },
-            {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
-        ]
-    if task == "fork_question_copy":
-        # Compile-time: rewrite the question a workflow author is asked about a popup that
-        # needs a decision ("file already exists: Replace / Keep both / Cancel") into plain,
-        # friendly words. Copy only: the choices, what each does, and what the workflow will
-        # actually do are all decided by code (compiler/outcome_fork.py, conversation/
-        # clarify.py) -- see llm/fork_question_copy.py for the deterministic fallback. The model
-        # may only rephrase; it never adds, removes or renames a choice.
-        return [
-            {
-                "role": "system",
-                "content": (
-                    "You write ONE short, friendly question for a non-technical person who "
-                    "just recorded a browser automation. While recording, a popup appeared "
-                    "(`input.popup_title`, with `input.message_hint` describing it and "
-                    "`input.buttons` listing its buttons). They are being asked what the "
-                    "automation should do the next time that popup shows up. Mention what the "
-                    "popup is about, using only `input.popup_title`, `input.message_hint` and "
-                    "`input.buttons`. Never invent a button, never name an action that is not "
-                    "in `input.buttons`, never include file names or personal data. Plain "
-                    "words, one or two short sentences, end with a question mark. Return "
-                    "strict JSON with key: text (string)."
+                    "You rewrite short questions for someone who is NOT technical (think: an "
+                    "office manager, not an engineer) who just recorded a task in a browser. "
+                    "`input.questions` is a list; each has an `id`, a `title`, a `body` and "
+                    "optionally `choices` (each with an `id`, `label` and `detail`) -- these are "
+                    "plain drafts. Rewrite each in friendly, easy words, like explaining to a "
+                    "colleague. Use short sentences. You may use more words than the draft if it "
+                    "makes things clearer, e.g. one sentence on why we are asking. Never use "
+                    "words like input, run, step, selector, assertion, workflow, binding, "
+                    "parameter, token, field value. Say 'each time someone uses it' instead of "
+                    "'each run', 'the screen' instead of 'the page'. KEEP THE MEANING EXACTLY: "
+                    "a choice must still do the same thing as its draft, never swap or merge "
+                    "choices, never add or drop one. Copy any text inside curly quotes (“like "
+                    "this”) exactly, character for character, and keep every quoted item the "
+                    "draft mentions. Never invent facts, file names, buttons or values not in "
+                    "the draft. A question about a popup may also carry `popup_buttons`, the "
+                    "popup's own buttons: use them only to say what the popup is about, never "
+                    "name an action that is not one of them, and never add them to the answer. "
+                    "Return strict JSON:{\"questions\": [{\"id\": same id, "
+                    "\"title\": string, \"body\": string, \"choices\": [{\"id\": same id, "
+                    "\"label\": string, \"detail\": string}]}]}. Omit `choices` when the "
+                    "question had none."
                 ),
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
@@ -501,6 +473,16 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             # What the person said the workflow is for. Context for naming and phases only: it
             # never licenses a selector, a new step, or a different goal than the recording shows.
             text_payload["task_description"] = task_description
+            # BUILD-55: the "does it match what I said, and which recorded values only belong to this
+            # recording?" check rides on this call instead of being a second one. Only asked when
+            # there is a description to compare against.
+            review_candidates = (data or {}).get("candidates")
+            if review_candidates:
+                text_payload["candidates"] = review_candidates
+                text_payload["ends_with_checks"] = (data or {}).get("ends_with_checks") or []
+        loop_candidates = (data or {}).get("loop_candidates")
+        if loop_candidates:
+            text_payload["loop_candidates"] = loop_candidates
         content: list[dict[str, Any]] = [
             {"type": "text", "text": json.dumps(text_payload, ensure_ascii=False)},
         ]
@@ -588,9 +570,35 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "Prefer steps marked low_confidence — the compiler was least sure about those. "
                     "Use sibling_bindings (names other workflows for the same site already use) to "
                     "pick names, not guesses. Return an EMPTY suggestions array when nothing is "
-                    "clearly wrong — most workflows should get few or zero suggestions. Never write "
-                    "or invent a page selector anywhere in this response. No markdown, no extra "
-                    "keys, no suggestion whose step_key you are not certain about."
+                    "clearly wrong — most workflows should get few or zero suggestions.\n\n"
+                    "ONLY IF the input has candidates, also return a key understanding: "
+                    "{\"goal_summary\": \"one sentence\", \"coverage\": {\"ok\": true|false, "
+                    "\"note\": \"\"}, \"values\": [{\"ref\": \"<a candidate ref>\", \"verdict\": "
+                    "\"fixed|varies|unsure\", \"name\": \"short_snake_case_input_name (varies/unsure "
+                    "only)\", \"literal\": \"for url candidates only: the exact part of the recorded "
+                    "address that changes\"}]}. candidates are values taken from the recording "
+                    "(kind \"url\": a page address, \"row\": a record identifier, \"click\": a "
+                    "clicked item's label); ends_with_checks is what the run ends by checking. "
+                    "Decide for each candidate whether it is specific to this recording. \"varies\": "
+                    "task_description describes a kind of thing, or does not name this one — which "
+                    "repository, which file, which customer — so a future run would use a different "
+                    "one. \"fixed\": task_description names this exact thing, or it is simply the "
+                    "same page every time (a settings page, a sign-in page). \"unsure\": you cannot "
+                    "tell; do not guess. Also judge coverage: ok is false only when task_description "
+                    "clearly asks for an outcome the steps never reach (for example it says send and "
+                    "the steps stop at save draft); note is then one plain sentence, at most 25 "
+                    "words. Never invent a ref and never claim a gap you cannot see in the steps.\n\n"
+                    "ONLY IF the input has loop_candidates, also return a key loop_copy: an array of "
+                    "{\"id\": the loop candidate's id, \"text\": string}. Each loop candidate is a "
+                    "recording that downloads one specific file and later uploads that same file "
+                    "somewhere else; its steps are tagged role \"acquire\" or \"upload\". Write 1-2 "
+                    "short, friendly sentences for a non-technical reviewer, describing ONLY that "
+                    "download-then-upload mechanism (never a delete, never anything the steps do not "
+                    "show), ending with a question that Yes/No buttons for turning this single fixed "
+                    "file into a loop over any number of caller-named files answer.\n\n"
+                    "Never write or invent a page selector anywhere in this response. No markdown, "
+                    "no keys other than the ones described here, no suggestion whose step_key you "
+                    "are not certain about."
                 ),
             },
             {"role": "user", "content": content},
@@ -935,7 +943,7 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         # A whole-workflow intent graph AND a suggestions array in one response — the largest
         # structured JSON any task here returns, well above region_selector's handful of
         # candidates.
-        body["max_tokens"] = 4096
+        body["max_tokens"] = 6144  # was 4096; the description check and loop wording ride on this call now
     if task == "copilot_diagnose":
         # BUILD-33: the cloud router (conxa-cloud/backend/app/llm/router.py) sends
         # reasoning={"enabled": False} to OpenRouter for every task, so a reasoning-capable

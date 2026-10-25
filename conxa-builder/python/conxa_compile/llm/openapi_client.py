@@ -163,6 +163,8 @@ def infer_workflow_review(
     model: str | None = None,
     error_detail: list[str] | None = None,
     task_description: str = "",
+    review_inputs: dict[str, Any] | None = None,
+    loop_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Single multimodal whole-workflow LLM call producing BOTH the workflow
     intent graph (goal + per-step intent) AND BUILD-25's compile-time review
@@ -170,7 +172,12 @@ def infer_workflow_review(
     (workflow_intent, workflow_semantics) into one. Each step in `steps` may
     carry `image_base64`/`image_mime` (the frame the vision-anchor stage
     already chose for that step) alongside its text context. Never selectors,
-    never a change to compiled behavior."""
+    never a change to compiled behavior.
+
+    BUILD-55: the same call also answers the description check (`review_inputs`:
+    candidate values + how the run ends, asked only when there is a description)
+    and writes the wording for download-then-upload loop suggestions
+    (`loop_candidates`), so neither is a call of its own."""
     payload = {
         "task": "workflow_review",
         "model": model,
@@ -179,6 +186,9 @@ def infer_workflow_review(
             "page_urls": page_urls,
             "sibling_bindings": sibling_bindings,
             **({"task_description": task_description} if task_description else {}),
+            **({"candidates": review_inputs["candidates"], "ends_with_checks": review_inputs.get("ends_with_checks") or []}
+               if task_description and review_inputs and review_inputs.get("candidates") else {}),
+            **({"loop_candidates": loop_candidates} if loop_candidates else {}),
         },
     }
     data = _call_llm_or_none(
@@ -195,4 +205,6 @@ def infer_workflow_review(
         "decision_points": list(data.get("decision_points") or []),
         "expected_end_state": dict(data.get("expected_end_state") or {}),
         "suggestions": list(data.get("suggestions") or []),
+        "understanding": dict(data["understanding"]) if isinstance(data.get("understanding"), dict) else None,
+        "loop_copy": [r for r in data.get("loop_copy") or [] if isinstance(r, dict)],
     }

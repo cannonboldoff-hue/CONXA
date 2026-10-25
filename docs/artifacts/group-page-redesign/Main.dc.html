@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales group</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#161615;font-family:'Inter',system-ui,sans-serif}
+button{font-family:inherit;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+button:disabled{cursor:default}
+button:focus-visible,a:focus-visible{outline:2px solid #F0A07F;outline-offset:2px}
+.nav{display:flex;align-items:center;gap:12px;padding:0 12px;min-height:40px;border-radius:8px;color:#CFCCC4;font-size:14px;text-decoration:none}
+.nav:hover{background:#1E1E1D;color:#ECEAE4}
+.nav svg{flex:none;color:#8E8B84}
+.ghost:hover:not(:disabled){background:#2A2A28;border-color:#4A4A46}
+.icon:hover{background:#2A2A28;color:#ECEAE4}
+.row:hover{background:#202020}
+.cta:hover{background:#E48B6C}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</helmet>
+<div style="min-height: 900px; display: flex; flex-wrap: wrap; background: #161615; color: #ECEAE4; font-family: 'Inter', system-ui, sans-serif">
+
+<!-- sidebar -->
+<nav aria-label="Main" style="flex: 0 0 280px; box-sizing: border-box; display: flex; flex-direction: column; background: #121211; border-right: 1px solid #262624; padding: 20px 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg><span style="flex: 1">Chat</span></a>
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span style="flex: 1">New workflow</span><span style="color: #8E8B84; font-size: 12px">Ctrl N</span></a>
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg><span style="flex: 1">Publish</span></a>
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5ZM3 8l9 5 9-5M12 13v8"/></svg><span style="flex: 1">Build Installer</span></a>
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2ZM9 4v14M15 6v14"/></svg><span style="flex: 1">App maps</span></a>
+<a class="nav" href="#"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span style="flex: 1">Search</span><span style="color: #8E8B84; font-size: 12px">Ctrl K</span></a>
+</div>
+
+<div style="margin: 24px 12px 6px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8E8B84"><span>Groups</span></div>
+<a class="nav" href="#" aria-current="page" style="background: #242422; color: #ECEAE4; font-weight: 500"><span style="flex: 1">Sales</span><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{dotColor}}"></span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">{{summaryText}}</span></a>
+<a class="nav" href="#" style="margin-left: 16px; padding-left: 12px; min-height: 48px; border-left: 1px solid #262624; border-radius: 0 8px 8px 0; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0"><span style="font-size: 13px">Github to Drive Handoff</span><span style="font-size: 12px; color: #8E8B84">Recording discarded</span></a>
+
+<div style="flex: 1"></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid #262624">
+<div aria-hidden="true" style="width: 36px; height: 36px; border-radius: 50%; background: #2A2A28; display: flex; align-items: center; justify-content: center; font-size: 12px">DU</div>
+<div style="font-size: 13px; font-weight: 500">Dev User<div style="font-size: 12px; color: #8E8B84; font-weight: 400">Local workspace</div></div>
+</div>
+</nav>
+
+<!-- main -->
+<main style="flex: 1 1 640px; min-width: 0; padding: 20px 32px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600">Sales</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: #A8A59D">
+<span style="padding: 7px 12px; border: 1px solid #2E2E2B; border-radius: 8px">Compile credits <b style="color: #ECEAE4; font-weight: 600">Unlimited</b></span>
+<span style="padding: 7px 12px; border: 1px solid #2E2E2B; border-radius: 8px">AI credits <b style="color: #ECEAE4; font-weight: 600">Unlimited</b></span>
+</div>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 24px; align-items: stretch">
+
+<!-- applications -->
+<section aria-labelledby="apps-h" style="flex: 1 1 340px; max-width: 460px; min-width: 0; display: flex; flex-direction: column">
+<h2 id="apps-h" style="margin: 0; font-size: 18px; font-weight: 600">Applications</h2>
+<p style="margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: #A8A59D">Sign in once so workflows in this group can run on your behalf.</p>
+
+<div style="margin-top: 16px; border-bottom: 1px solid #262624; display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: center; gap: 4px; min-height: 44px; font-size: 13px; color: {{summaryColor}}" aria-live="polite">
+<span>{{summaryText}}</span>
+<button class="ghost" onClick="{{checkAll}}" disabled="{{checkAllDisabled}}" style="min-height: 44px; padding: 0 8px; background: transparent; border: 0; color: #ECEAE4; font-size: 13px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; display: {{checkAllDisplay}}">Check all</button>
+</div>
+<button class="ghost" style="min-height: 44px; padding: 0 10px; background: transparent; border: 0; color: #ECEAE4; font-size: 13px; font-weight: 500">+ Add app</button>
+</div>
+
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{apps}}" as="app" hint-placeholder-count="2">
+<li style="display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #262624">
+<div aria-hidden="true" style="width: 40px; height: 40px; border-radius: 10px; background: #242422; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex: none; color: #CFCCC4">{{app.initial}}</div>
+<div style="flex: 1; min-width: 0">
+<div style="font-size: 15px; font-weight: 600">{{app.name}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A8A59D; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{app.url}}</div>
+<div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: 3px; color: {{app.color}}"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{app.color}}; animation: {{app.anim}}"></span>{{app.status}}</div>
+</div>
+<button class="ghost" onClick="{{app.check}}" disabled="{{app.busy}}" style="min-height: 44px; min-width: 96px; padding: 0 16px; background: #2A2A28; color: #ECEAE4; border: 1px solid #3A3A37; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: {{app.btnOpacity}}">{{app.btn}}</button>
+</li>
+</sc-for>
+</ul>
+
+<div style="flex: 1; min-height: 24px"></div>
+
+<div style="padding: 16px 20px; border: 1px solid #262624; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+<div>
+<div style="font-size: 15px; font-weight: 600">Record a workflow</div>
+<div style="font-size: 13px; color: #A8A59D; margin-top: 2px">Uses the sessions signed in above.</div>
+</div>
+<button class="cta" style="min-height: 44px; padding: 0 20px; background: #D97757; color: #1A0E09; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600">+ New workflow</button>
+</div>
+</section>
+
+<!-- workflows -->
+<section aria-labelledby="wf-h" style="flex: 999 1 420px; min-width: 0; background: #1C1C1B; border: 1px solid #262624; border-radius: 12px; align-self: stretch">
+<div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #262624">
+<h2 id="wf-h" style="margin: 0; font-size: 13px; font-weight: 500; color: #A8A59D">Workflows <span style="color: #8E8B84">· 1</span></h2>
+<span style="font-size: 12.5px; color: #8E8B84">Updated Oct 25, 2026</span>
+</div>
+<div class="row" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px">
+<div style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">Github to Drive Handoff</h3>
+<span style="font-size: 12px; font-weight: 500; color: #F2B84B; background: #2A2113; border: 1px solid #5A4417; padding: 3px 10px; border-radius: 999px">Ready to compile</span>
+</div>
+<span style="display: inline-block; margin-top: 8px; font-size: 12px; color: #A8A59D; background: #2A2A28; padding: 3px 10px; border-radius: 999px">Github</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="cta" style="min-height: 44px; padding: 0 18px; background: #D97757; color: #1A0E09; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600">Compile</button>
+<button class="icon" aria-label="Open chat" title="Chat" style="width: 44px; height: 44px; background: transparent; color: #CFCCC4; border: 1px solid #3A3A37; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg></button>
+<button class="icon" aria-label="Edit workflow" title="Edit" style="width: 44px; height: 44px; background: transparent; color: #CFCCC4; border: 1px solid #3A3A37; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+<button class="icon" aria-label="Delete workflow" title="Delete" style="width: 44px; height: 44px; background: transparent; color: #E58A8A; border: 1px solid #3A3A37; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+</div>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { s: { github: 'stale', google: 'stale' } };
+}
+setApp(id, v) {
+this.setState((st) => ({ s: { ...st.s, [id]: v } }));
+}
+check(id) {
+if (this.state.s[id] === 'checking') return;
+this.setApp(id, 'checking');
+setTimeout(() => this.setApp(id, 'ok'), 1100);
+}
+renderVals() {
+const s = this.state.s;
+const defs = [
+{ id: 'github', name: 'Github', url: 'github.com/login' },
+{ id: 'google', name: 'Google', url: 'accounts.google.com' },
+];
+const apps = defs.map((d) => {
+const v = s[d.id];
+const m = {
+stale: { color: '#F2B84B', status: 'Not verified recently', btn: 'Check now', anim: 'none' },
+checking: { color: '#F2B84B', status: 'Checking…', btn: 'Checking', anim: 'pulse 1s infinite' },
+ok: { color: '#8FD3A4', status: 'Signed in · verified just now', btn: 'Recheck', anim: 'none' },
+}[v];
+return {
+...d, ...m,
+initial: d.name[0],
+busy: v === 'checking',
+btnOpacity: v === 'checking' ? 0.6 : 1,
+check: () => this.check(d.id),
+};
+});
+const stale = defs.filter((d) => s[d.id] !== 'ok').length;
+const busy = defs.some((d) => s[d.id] === 'checking');
+return {
+apps,
+summaryText: stale ? stale + ' of 2 not verified' : 'All apps verified',
+summaryColor: stale ? '#F2B84B' : '#8FD3A4',
+dotColor: stale ? '#F2B84B' : '#8FD3A4',
+checkAllDisplay: stale ? 'inline-block' : 'none',
+checkAllDisabled: busy,
+checkAll: () => defs.forEach((d) => { if (s[d.id] === 'stale') this.check(d.id); }),
+};
+}
+}
+</script>
+</body>
+</html>

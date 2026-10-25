@@ -1,0 +1,605 @@
+<title>How Conxa Asks Questions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one calm reading column; diagrams sit full width in scrollable frames. Three roles carry all the colour: code (blue square), model (orange rounded), you (green circle). */
+:root {
+  --bg: #f5f7fa; --surface: #ffffff; --ink: #15202b; --muted: #55626f; --line: #d8dee6; --soft: #eef2f6;
+  --code: #2f5d9a; --model: #c4540a; --you: #1b7f5c;
+  --code-t: #e6eef8; --model-t: #fbebdf; --you-t: #def3ea;
+  --display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161b; --surface: #1a1f26; --ink: #e8ecf0; --muted: #9aa6b2; --line: #2c333c; --soft: #20262e;
+    --code: #5c8fd9; --model: #d9763a; --you: #2fa97c;
+    --code-t: #1c2a3e; --model-t: #3a2417; --you-t: #14332a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b; --surface: #1a1f26; --ink: #e8ecf0; --muted: #9aa6b2; --line: #2c333c; --soft: #20262e;
+  --code: #5c8fd9; --model: #d9763a; --you: #2fa97c;
+  --code-t: #1c2a3e; --model-t: #3a2417; --you-t: #14332a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.65 var(--body); padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 900px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.7rem; font-weight: 600; margin-top: 64px; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; font-weight: 600; margin-top: 28px; }
+p { margin: 12px 0 0; max-width: 68ch; }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 62ch; margin-top: 16px; }
+.eyebrow { font: 500 0.75rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+code, .m { font-family: var(--mono); font-size: 0.86em; background: var(--soft); padding: 1px 6px; border-radius: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 28px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.legend div { display: flex; gap: 10px; align-items: flex-start; flex: 1 1 240px; min-width: 0; font-size: 0.92rem; }
+.legend svg { flex: none; margin-top: 3px; }
+.legend b { display: block; font-family: var(--display); font-size: 1rem; }
+.fences { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 20px; }
+.fence { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.fence b { font-family: var(--display); display: block; }
+.fence span { font-size: 0.92rem; color: var(--muted); }
+.frame { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.frame svg { display: block; width: 100%; min-width: 720px; height: auto; }
+figcaption { font-size: 0.88rem; color: var(--muted); padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+figure { margin: 0; }
+/* svg text + shapes use tokens so both themes work */
+svg text { font-family: var(--body); fill: var(--ink); }
+svg .mono { font-family: var(--mono); }
+svg .mut { fill: var(--muted); }
+svg .ttl { font-family: var(--display); font-weight: 600; }
+svg .code { fill: var(--code-t); stroke: var(--code); stroke-width: 1.6; }
+svg .model { fill: var(--model-t); stroke: var(--model); stroke-width: 1.6; }
+svg .you { fill: var(--you-t); stroke: var(--you); stroke-width: 1.6; }
+svg .plain { fill: var(--soft); stroke: var(--line); stroke-width: 1; }
+svg .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+svg .dot-model { fill: var(--model); }
+svg .dot-code { fill: var(--code); }
+svg .dot-you { fill: var(--you); }
+svg .hollow { fill: none; stroke: var(--code); stroke-width: 1.8; }
+svg .stripe { fill: var(--soft); }
+svg .bar { fill: var(--code); }
+svg .grid { stroke: var(--line); stroke-width: 1; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h4 { margin: 0 0 4px; font-family: var(--display); font-size: 1.02rem; }
+.card p { margin: 0; font-size: 0.94rem; color: var(--muted); }
+ul.plain { margin: 12px 0 0; padding-left: 1.2em; max-width: 68ch; }
+ul.plain li { margin-top: 6px; }
+.tablewrap { margin-top: 18px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 0.88rem; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 0.72rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--soft); position: sticky; top: 0; }
+tr.grp td { background: var(--soft); font: 600 0.78rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+td:first-child { white-space: nowrap; }
+.tag { display: inline-block; font: 500 0.7rem var(--mono); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+.tag.new { border-color: var(--model); color: var(--ink); }
+.note { margin-top: 18px; padding: 14px 16px; border-left: 3px solid var(--model); background: var(--surface); border-radius: 0 10px 10px 0; font-size: 0.94rem; max-width: 74ch; }
+footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.88rem; }
+footer li { margin-top: 4px; }
+</style>
+
+<main>
+  <p class="eyebrow">Conxa Build Studio · after you press Compile</p>
+  <h1>How Conxa asks its questions</h1>
+  <p class="lede">When a recording finishes compiling, Conxa checks the result against what you said the task was for, then asks only about the things it cannot know. This page shows every point where an AI model is used, what it is allowed to do there, and how the chat that carries it all works.</p>
+
+  <div class="legend" role="group" aria-label="How to read the diagrams">
+    <div>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="3" width="16" height="16" class="dot-code"/></svg>
+      <span><b>Code</b>Ordinary program rules. Same input, same result, every time. Code makes every decision that changes your workflow.</span>
+    </div>
+    <div>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="4" width="18" height="14" rx="7" class="dot-model"/></svg>
+      <span><b>Model</b>An AI language model, reached through the Conxa cloud. It reads meaning and writes words. It is never trusted to change anything by itself.</span>
+    </div>
+    <div>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" class="dot-you"/></svg>
+      <span><b>You</b>The person building the workflow. Your clicks and answers are the only things that approve a change.</span>
+    </div>
+  </div>
+
+  <h2>The short version</h2>
+  <div class="cols">
+    <div class="card"><h4>1. Check</h4><p>One model reads your description next to the compiled steps. It says what looks the same on every run and what looks different, and whether the steps reach the goal you described.</p></div>
+    <div class="card"><h4>2. Find</h4><p>Code scans the workflow for 16 kinds of spot that deserve a question, such as a file path, a popup, or a step that cannot be undone. No model chooses what to ask.</p></div>
+    <div class="card"><h4>3. Word</h4><p>A second model call rewrites the draft questions in plain language. Code checks the result and keeps the original wording wherever the rewrite looks wrong.</p></div>
+    <div class="card"><h4>4. Apply</h4><p>When you answer, code turns your choice into an edit using the same gated commands you would use by hand. The model never touches it.</p></div>
+  </div>
+
+  <h2>1. The whole journey</h2>
+  <p>A workflow goes through eight stages. Most of them need no model at all. The orange pills show every model call that can happen at each stage.</p>
+
+  <figure class="frame">
+    <svg viewBox="0 0 860 730" role="img" aria-labelledby="ta">
+      <title id="ta">Eight stages from describing a task to publishing, with the model calls used at each stage</title>
+      <line x1="36" y1="44" x2="36" y2="660" class="edge"/>
+      <!-- stage rows: y0 = 18 + i*88 -->
+      <g>
+        <circle cx="36" cy="42" r="15" class="plain"/><text x="36" y="47" text-anchor="middle" font-size="14" font-weight="600">1</text>
+        <text x="66" y="40" font-size="16" class="ttl">You describe the task</text>
+        <text x="66" y="60" font-size="12.5" class="mut">You say what the task is for and where it starts.</text>
+        <text x="66" y="76" font-size="12.5" class="mut">Nothing is recorded yet.</text>
+        <rect x="470" y="22" width="190" height="24" rx="12" class="model"/><text x="482" y="38" font-size="12" class="mono">record_plan</text>
+        <text x="670" y="38" font-size="11.5" class="mut">short to-do list from your text</text>
+      </g>
+      <g>
+        <circle cx="36" cy="130" r="15" class="plain"/><text x="36" y="135" text-anchor="middle" font-size="14" font-weight="600">2</text>
+        <text x="66" y="128" font-size="16" class="ttl">You record it once</text>
+        <text x="66" y="148" font-size="12.5" class="mut">You do the task in a real browser.</text>
+        <text x="66" y="164" font-size="12.5" class="mut">Code logs every click, keystroke and page change.</text>
+        <rect x="470" y="112" width="190" height="24" class="code"/><text x="482" y="128" font-size="12" class="mono">no model</text>
+        <text x="670" y="128" font-size="11.5" class="mut">recording is pure code</text>
+      </g>
+      <g>
+        <circle cx="36" cy="218" r="15" class="plain"/><text x="36" y="223" text-anchor="middle" font-size="14" font-weight="600">3</text>
+        <text x="66" y="216" font-size="16" class="ttl">Compile</text>
+        <text x="66" y="236" font-size="12.5" class="mut">Code turns the log into steps and works out how to</text>
+        <text x="66" y="252" font-size="12.5" class="mut">find each button. Models only describe what is on screen.</text>
+        <rect x="470" y="190" width="190" height="24" rx="12" class="model"/><text x="482" y="206" font-size="12" class="mono">workflow_review</text>
+        <text x="670" y="206" font-size="11.5" class="mut">goal and meaning of each step</text>
+        <rect x="470" y="218" width="190" height="24" rx="12" class="model"/><text x="482" y="234" font-size="12" class="mono">anchor_vision</text>
+        <text x="670" y="234" font-size="11.5" class="mut">looks at screenshots of clicks</text>
+        <rect x="470" y="246" width="190" height="24" rx="12" class="model"/><text x="482" y="262" font-size="12" class="mono">loop_suggestion_copy</text>
+        <text x="670" y="262" font-size="11.5" class="mut">words for a repeat suggestion</text>
+      </g>
+      <g>
+        <circle cx="36" cy="306" r="15" class="plain"/><text x="36" y="311" text-anchor="middle" font-size="14" font-weight="600">4</text>
+        <text x="66" y="304" font-size="16" class="ttl">Check against your description</text>
+        <text x="66" y="324" font-size="12.5" class="mut">One model reads your description and the steps, and</text>
+        <text x="66" y="340" font-size="12.5" class="mut">says what looks fixed and what changes each time.</text>
+        <rect x="470" y="298" width="190" height="24" rx="12" class="model"/><text x="482" y="314" font-size="12" class="mono">workflow_understanding</text>
+        <text x="670" y="314" font-size="11.5" class="mut">compares steps to your text</text>
+      </g>
+      <g>
+        <circle cx="36" cy="394" r="15" class="plain"/><text x="36" y="399" text-anchor="middle" font-size="14" font-weight="600">5</text>
+        <text x="66" y="392" font-size="16" class="ttl">Write the questions</text>
+        <text x="66" y="412" font-size="12.5" class="mut">Code finds what is worth asking about (16 kinds).</text>
+        <text x="66" y="428" font-size="12.5" class="mut">Models then reword the questions in plain language.</text>
+        <rect x="470" y="374" width="190" height="24" rx="12" class="model"/><text x="482" y="390" font-size="12" class="mono">clarify_question_copy</text>
+        <text x="670" y="390" font-size="11.5" class="mut">rewords the questions</text>
+        <rect x="470" y="402" width="190" height="24" rx="12" class="model"/><text x="482" y="418" font-size="12" class="mono">fork_question_copy</text>
+        <text x="670" y="418" font-size="11.5" class="mut">rewords popup questions</text>
+      </g>
+      <g>
+        <circle cx="36" cy="482" r="15" class="you"/><text x="36" y="487" text-anchor="middle" font-size="14" font-weight="600">6</text>
+        <text x="66" y="480" font-size="16" class="ttl">You answer</text>
+        <text x="66" y="500" font-size="12.5" class="mut">A click on an option is applied by code alone.</text>
+        <text x="66" y="516" font-size="12.5" class="mut">A typed answer gets one small call to match an option.</text>
+        <rect x="470" y="462" width="190" height="24" rx="12" class="model"/><text x="482" y="478" font-size="12" class="mono">chat_map_answer</text>
+        <text x="670" y="478" font-size="11.5" class="mut">reads a typed answer</text>
+        <rect x="470" y="490" width="190" height="24" class="code"/><text x="482" y="506" font-size="12" class="mono">click = no model</text>
+      </g>
+      <g>
+        <circle cx="36" cy="570" r="15" class="plain"/><text x="36" y="575" text-anchor="middle" font-size="14" font-weight="600">7</text>
+        <text x="66" y="568" font-size="16" class="ttl">Test run</text>
+        <text x="66" y="588" font-size="12.5" class="mut">Code replays the steps. A model is used only at a review</text>
+        <text x="66" y="604" font-size="12.5" class="mut">step you placed, or when you ask for help after a failure.</text>
+        <rect x="470" y="550" width="190" height="24" rx="12" class="model"/><text x="482" y="566" font-size="12" class="mono">ai_review</text>
+        <text x="670" y="566" font-size="11.5" class="mut">judges a screen you asked about</text>
+        <rect x="470" y="578" width="190" height="24" rx="12" class="model"/><text x="482" y="594" font-size="12" class="mono">copilot_diagnose</text>
+        <text x="670" y="594" font-size="11.5" class="mut">suggests fixes after a failure</text>
+      </g>
+      <g>
+        <circle cx="36" cy="658" r="15" class="plain"/><text x="36" y="663" text-anchor="middle" font-size="14" font-weight="600">8</text>
+        <text x="66" y="656" font-size="16" class="ttl">Publish</text>
+        <text x="66" y="676" font-size="12.5" class="mut">Code packs the steps and sends them to the cloud.</text>
+        <text x="66" y="692" font-size="12.5" class="mut">No model is involved.</text>
+        <rect x="470" y="638" width="190" height="24" class="code"/><text x="482" y="654" font-size="12" class="mono">no model</text>
+      </g>
+    </svg>
+    <figcaption>Stage 3 runs during the compile and uses your compile credit. Stages 4 and 5 run right after it, in the background of the chat. Stage 6 to 8 happen as you work.</figcaption>
+  </figure>
+
+  <h2>2. After the compile, step by step</h2>
+  <p>This is the part you asked about: how the result is checked against your description, and how the questions get written. Read it top to bottom.</p>
+
+  <figure class="frame">
+    <svg viewBox="0 0 860 880" role="img" aria-labelledby="tb">
+      <title id="tb">Flow from the finished compile through the understanding check, question finding, rewording and checking, to the question cards</title>
+      <defs><marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker></defs>
+
+      <rect x="30" y="10" width="420" height="50" rx="8" class="code"/>
+      <text x="46" y="32" font-size="14" class="ttl">Compile finishes</text><text x="46" y="50" font-size="12.5" class="mut">The workflow is saved as a list of steps.</text>
+      <line x1="240" y1="60" x2="240" y2="90" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="92" width="420" height="64" rx="8" class="code"/>
+      <text x="46" y="114" font-size="14" class="ttl">Code lists the suspicious values</text>
+      <text x="46" y="133" font-size="12.5" class="mut">Web addresses, list rows, clicked items, typed text.</text>
+      <text x="46" y="148" font-size="12.5" class="mut">At most 12 candidates are kept.</text>
+      <line x1="240" y1="156" x2="240" y2="186" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="188" width="420" height="92" rx="16" class="model"/>
+      <text x="46" y="210" font-size="14" class="ttl">Model call 1 · <tspan class="mono" font-size="12.5">workflow_understanding</tspan></text>
+      <text x="46" y="231" font-size="12.5" class="mut">Sees: your description, the steps in order, how the run</text>
+      <text x="46" y="247" font-size="12.5" class="mut">ends, the inputs it already has, and the candidate list.</text>
+      <text x="46" y="266" font-size="12.5" class="mut">Never sees or writes a selector.</text>
+
+      <path d="M450 234 H470" class="edge"/>
+      <rect x="470" y="188" width="370" height="40" rx="8" class="plain"/>
+      <text x="484" y="205" font-size="12.5" font-weight="600">Usable answer</text><text x="484" y="221" font-size="12" class="mut">source = model. Verdicts are used.</text>
+      <rect x="470" y="234" width="370" height="40" rx="8" class="plain"/>
+      <text x="484" y="251" font-size="12.5" font-weight="600">Failed, empty, or no model reachable</text><text x="484" y="267" font-size="12" class="mut">source = fallback. Likely values are asked, unticked.</text>
+      <rect x="470" y="280" width="370" height="40" rx="8" class="plain"/>
+      <text x="484" y="297" font-size="12.5" font-weight="600">No description and nothing to look at</text><text x="484" y="313" font-size="12" class="mut">source = none. Nothing is asked about meaning.</text>
+      <path d="M460 234 V300 M460 208 H470 M460 254 H470 M460 300 H470" class="edge"/>
+      <line x1="240" y1="280" x2="240" y2="330" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="332" width="420" height="72" rx="8" class="code"/>
+      <text x="46" y="354" font-size="14" class="ttl">Code checks the answer</text>
+      <text x="46" y="373" font-size="12.5" class="mut">Unknown references are dropped. Bad input names are dropped.</text>
+      <text x="46" y="389" font-size="12.5" class="mut">A "changing part" must really appear in the recorded value.</text>
+      <rect x="470" y="340" width="370" height="64" rx="8" class="plain"/>
+      <text x="484" y="360" font-size="12.5" font-weight="600">What the model may return</text>
+      <text x="484" y="378" font-size="12" class="mut">A one-line goal, "covers it: yes or no" with one</text>
+      <text x="484" y="393" font-size="12" class="mut">sentence, and fixed / varies / unsure per value.</text>
+      <line x1="240" y1="404" x2="240" y2="434" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="436" width="420" height="72" rx="8" class="code"/>
+      <text x="46" y="458" font-size="14" class="ttl">Code scans for 16 kinds of question</text>
+      <text x="46" y="477" font-size="12.5" class="mut">File uploads, popups, steps that cannot be undone, typed</text>
+      <text x="46" y="493" font-size="12.5" class="mut">values, dates, blank fields, missing items, "did it work".</text>
+      <rect x="470" y="444" width="370" height="56" rx="8" class="plain"/>
+      <text x="484" y="464" font-size="12.5" font-weight="600">Only two kinds lean on the model's check</text>
+      <text x="484" y="482" font-size="12" class="mut">"Does this cover everything?" and "Which values change?"</text>
+      <line x1="240" y1="508" x2="240" y2="538" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="540" width="420" height="64" rx="8" class="code"/>
+      <text x="46" y="562" font-size="14" class="ttl">Code ranks them</text>
+      <text x="46" y="581" font-size="12.5" class="mut">The first 5 are open now. The rest wait as "queued"</text>
+      <text x="46" y="596" font-size="12.5" class="mut">and come forward if you ask for more.</text>
+      <line x1="240" y1="604" x2="240" y2="634" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="636" width="420" height="92" rx="16" class="model"/>
+      <text x="46" y="658" font-size="14" class="ttl">Model call 2 · <tspan class="mono" font-size="12.5">clarify_question_copy</tspan></text>
+      <text x="46" y="679" font-size="12.5" class="mut">One call for every open and queued question.</text>
+      <text x="46" y="695" font-size="12.5" class="mut">Sees each draft title, text and fixed options.</text>
+      <text x="46" y="714" font-size="12.5" class="mut">Never sees raw typed values.</text>
+      <rect x="470" y="644" width="370" height="76" rx="8" class="plain"/>
+      <text x="484" y="664" font-size="12.5" font-weight="600">Popup questions get an earlier pass</text>
+      <text x="484" y="682" font-size="12" class="mut"><tspan class="mono">fork_question_copy</tspan> rewrites just the question line,</text>
+      <text x="484" y="697" font-size="12" class="mut">using the popup title and its button names. Its choices</text>
+      <text x="484" y="712" font-size="12" class="mut">are the page's own buttons and never change.</text>
+      <line x1="240" y1="728" x2="240" y2="758" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="760" width="420" height="72" rx="8" class="code"/>
+      <text x="46" y="782" font-size="14" class="ttl">Code checks every reworded field</text>
+      <text x="46" y="801" font-size="12.5" class="mut">Empty, too long, a leftover placeholder, or a missing</text>
+      <text x="46" y="817" font-size="12.5" class="mut">"quoted name" means the plain template text stays.</text>
+      <rect x="470" y="768" width="370" height="56" rx="8" class="plain"/>
+      <text x="484" y="788" font-size="12.5" font-weight="600">Checked one field at a time</text>
+      <text x="484" y="806" font-size="12" class="mut">A good title and a bad body: the title is used.</text>
+      <line x1="240" y1="832" x2="240" y2="858" class="edge" marker-end="url(#ar1)"/>
+
+      <rect x="30" y="852" width="420" height="24" rx="12" class="you"/>
+      <text x="46" y="869" font-size="13" class="ttl">You see the question cards, one at a time</text>
+    </svg>
+    <figcaption>The last bar is the cards you see in the chat, one at a time. Questions are saved in a separate file, not inside the workflow, so a compile you never answer is identical to one that never asked.</figcaption>
+  </figure>
+
+  <h3>What "check against the description" really means</h3>
+  <p>Your description is the sentence you typed when you created the workflow, such as "download the .gitignore file for a repository". Conxa gives that sentence to the model next to the compiled steps and asks two things.</p>
+  <ul class="plain">
+    <li><b>Does it cover the goal?</b> The model says "no" only when your sentence clearly asks for an outcome the steps never reach. For example, you said "send" but the steps stop at "save draft". It then writes one short sentence, and Conxa asks you "Does this cover everything you wanted?"</li>
+    <li><b>Which recorded values were only true of that one recording?</b> You clicked a repository called <span class="m">asia</span>. Did you mean that one forever, or any repository? The model labels each value <b>fixed</b>, <b>varies</b> or <b>unsure</b>. "Varies" boxes arrive already ticked. "Unsure" ones arrive unticked. "Fixed" ones are not asked about at all.</li>
+  </ul>
+  <p>If the model fails, Conxa does not stop. It asks about the likely values with every box unticked, so you stay in control. If you wrote no description, it asks nothing about meaning, because there is nothing to compare against.</p>
+
+  <h2>3. Who decides what</h2>
+  <p>Each row is one kind of question. Each column is one job. A square means plain code does that job. A circle means a model is involved. The two right-hand columns are all squares, which is the point: a model can help find a problem and phrase it, but it can never offer a choice or change your workflow.</p>
+
+  <figure class="frame">
+    <svg viewBox="0 0 860 620" role="img" aria-labelledby="tc">
+      <title id="tc">Matrix of sixteen question kinds against four jobs, showing which jobs involve a model</title>
+      <text x="10" y="50" font-size="12" class="mut mono">QUESTION KIND</text>
+      <g font-size="12.5" text-anchor="middle" class="ttl">
+        <text x="460" y="30">Spots the</text><text x="460" y="46">need</text>
+        <text x="580" y="30">Writes the</text><text x="580" y="46">words</text>
+        <text x="700" y="30">Offers the</text><text x="700" y="46">choices</text>
+        <text x="810" y="30">Applies your</text><text x="810" y="46">answer</text>
+      </g>
+      <line x1="0" y1="58" x2="860" y2="58" class="grid"/>
+      <!-- rows y = 76 + i*28 ; stripes on odd rows -->
+      <g>
+        <rect x="0" y="100" width="860" height="28" class="stripe"/><rect x="0" y="156" width="860" height="28" class="stripe"/><rect x="0" y="212" width="860" height="28" class="stripe"/><rect x="0" y="268" width="860" height="28" class="stripe"/><rect x="0" y="324" width="860" height="28" class="stripe"/><rect x="0" y="380" width="860" height="28" class="stripe"/><rect x="0" y="436" width="860" height="28" class="stripe"/><rect x="0" y="492" width="860" height="28" class="stripe"/>
+      </g>
+      <g font-size="13">
+        <text x="10" y="90">Does this cover everything you wanted?</text>
+        <text x="10" y="118">Upload the same file, or ask each time?</text>
+        <text x="10" y="146">A popup that needs a decision</text>
+        <text x="10" y="174">A popup other workflows saw here</text>
+        <text x="10" y="202">A step that cannot be undone: confirm first?</text>
+        <text x="10" y="230">Which values change (judged from your text)</text>
+        <text x="10" y="258">Typed things left out of the workflow</text>
+        <text x="10" y="286">Which typed values change each time?</text>
+        <text x="10" y="314">Is a picked date always N days from today?</text>
+        <text x="10" y="342">Skip the step when a field is left blank?</text>
+        <text x="10" y="370">Item not on the page: skip, ask or stop?</text>
+        <text x="10" y="398">Show a value you read back to the user?</text>
+        <text x="10" y="426">A small popup: always close it?</text>
+        <text x="10" y="454">How can we tell it worked?</text>
+        <text x="10" y="482">After a failed test: does this value change?</text>
+        <text x="10" y="510">After a failed test: was the value right?</text>
+      </g>
+      <!-- column 1: spots the need (model for rows 0 and 5) -->
+      <g>
+        <rect x="438" y="72" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="453" y="107" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="135" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="163" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="191" width="14" height="14" class="dot-code"/>
+        <rect x="438" y="212" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="453" y="247" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="275" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="303" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="331" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="359" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="387" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="415" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="443" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="471" width="14" height="14" class="dot-code"/>
+        <rect x="453" y="499" width="14" height="14" class="dot-code"/>
+      </g>
+      <!-- column 2: writes the words (model polish everywhere except rows 6, 14, 15 which stay template) -->
+      <g>
+        <rect x="558" y="72" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="100" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="128" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="156" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="184" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="212" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="573" y="247" width="14" height="14" class="hollow"/>
+        <rect x="558" y="268" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="296" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="324" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="352" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="380" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="408" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="558" y="436" width="44" height="22" rx="11" class="dot-model"/>
+        <rect x="573" y="471" width="14" height="14" class="hollow"/>
+        <rect x="573" y="499" width="14" height="14" class="hollow"/>
+      </g>
+      <!-- columns 3 and 4: always code -->
+      <g>
+        <rect x="693" y="79" width="14" height="14" class="dot-code"/><rect x="803" y="79" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="107" width="14" height="14" class="dot-code"/><rect x="803" y="107" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="135" width="14" height="14" class="dot-code"/><rect x="803" y="135" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="163" width="14" height="14" class="dot-code"/><rect x="803" y="163" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="191" width="14" height="14" class="dot-code"/><rect x="803" y="191" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="219" width="14" height="14" class="dot-code"/><rect x="803" y="219" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="247" width="14" height="14" class="dot-code"/><rect x="803" y="247" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="275" width="14" height="14" class="dot-code"/><rect x="803" y="275" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="303" width="14" height="14" class="dot-code"/><rect x="803" y="303" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="331" width="14" height="14" class="dot-code"/><rect x="803" y="331" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="359" width="14" height="14" class="dot-code"/><rect x="803" y="359" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="387" width="14" height="14" class="dot-code"/><rect x="803" y="387" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="415" width="14" height="14" class="dot-code"/><rect x="803" y="415" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="443" width="14" height="14" class="dot-code"/><rect x="803" y="443" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="471" width="14" height="14" class="dot-code"/><rect x="803" y="471" width="14" height="14" class="dot-code"/>
+        <rect x="693" y="499" width="14" height="14" class="dot-code"/><rect x="803" y="499" width="14" height="14" class="dot-code"/>
+      </g>
+      <line x1="0" y1="528" x2="860" y2="528" class="grid"/>
+      <g font-size="12.5">
+        <rect x="10" y="545" width="26" height="14" rx="7" class="dot-model"/><text x="44" y="557">a model helps (finds the need, or rewords)</text>
+        <rect x="333" y="545" width="14" height="14" class="dot-code"/><text x="355" y="557">plain code</text>
+        <rect x="445" y="545" width="14" height="14" class="hollow"/><text x="467" y="557">code, fixed template wording only</text>
+      </g>
+      <text x="10" y="590" font-size="12" class="mut">Which typed values change each time? is judged by code, but a "fixed" verdict from the model leaves a value unticked.</text>
+      <text x="10" y="608" font-size="12" class="mut">The two "after a failed test" questions are built later, outside the reword step, so they keep the template wording.</text>
+    </svg>
+    <figcaption>A model touches the "spots the need" job in only 2 of 16 kinds. It touches "words" in 13. It touches the choices and the edit in none.</figcaption>
+  </figure>
+
+  <h3>The four fences around every model</h3>
+  <div class="fences">
+    <div class="fence"><b>It cannot pick an element.</b><span>No model writes a selector, the address that finds a button on a page. A separate rules engine does that on the main compile path.</span></div>
+    <div class="fence"><b>It cannot invent a choice.</b><span>Choices and the edit behind each are fixed in code. A reworded choice is checked and falls back to the original if anything looks off.</span></div>
+    <div class="fence"><b>It cannot skip your approval.</b><span>Risky edits, such as always clicking "Replace", wait for you. Popups that ask for a decision are never answered on your behalf.</span></div>
+    <div class="fence"><b>It cannot block you.</b><span>Every call is advisory. A failed call means a plain template question, never a failed compile.</span></div>
+  </div>
+
+  <h2>4. How much a model may write</h2>
+  <p>Each task has a ceiling on how long its reply can be. A short ceiling is a safety feature: a model asked for a yes/no label has no room to wander. These are limits, not typical sizes.</p>
+
+  <figure class="frame">
+    <svg viewBox="0 0 860 470" role="img" aria-labelledby="td">
+      <title id="td">Horizontal bars showing the reply size ceiling in tokens for each model task</title>
+      <line x1="225" y1="8" x2="225" y2="440" class="grid"/>
+      <g font-size="12.5" text-anchor="end" class="mono">
+        <text x="215" y="30">studio_chat_reply</text>
+        <text x="215" y="60">copilot_diagnose</text>
+        <text x="215" y="90">copilot_reply</text>
+        <text x="215" y="120">workflow_review</text>
+        <text x="215" y="150">workflow_understanding</text>
+        <text x="215" y="180">record_plan</text>
+        <text x="215" y="210">thread_summarize</text>
+        <text x="215" y="240">region_selector</text>
+        <text x="215" y="270">anchor_vision</text>
+        <text x="215" y="300">ai_review</text>
+        <text x="215" y="330">chat_map_answer</text>
+        <text x="215" y="360">chat_route_intent</text>
+        <text x="215" y="390">studio_chat_actions</text>
+        <text x="215" y="420">anchor_vision_frameset</text>
+      </g>
+      <g class="bar">
+        <rect x="225" y="16" width="440" height="20" rx="3"/>
+        <rect x="225" y="46" width="440" height="20" rx="3"/>
+        <rect x="225" y="76" width="440" height="20" rx="3"/>
+        <rect x="225" y="106" width="110" height="20" rx="3"/>
+        <rect x="225" y="136" width="55" height="20" rx="3"/>
+        <rect x="225" y="166" width="55" height="20" rx="3"/>
+        <rect x="225" y="196" width="55" height="20" rx="3"/>
+        <rect x="225" y="226" width="41" height="20" rx="3"/>
+        <rect x="225" y="256" width="27.5" height="20" rx="3"/>
+        <rect x="225" y="286" width="27.5" height="20" rx="3"/>
+        <rect x="225" y="316" width="27.5" height="20" rx="3"/>
+        <rect x="225" y="346" width="27.5" height="20" rx="3"/>
+        <rect x="225" y="376" width="27.5" height="20" rx="3"/>
+        <rect x="225" y="406" width="8" height="20" rx="3"/>
+      </g>
+      <g font-size="12.5">
+        <text x="673" y="31">16,384</text>
+        <text x="673" y="61">16,384 · reads screenshots</text>
+        <text x="673" y="91">16,384 · reads screenshots</text>
+        <text x="343" y="121">4,096 · reads screenshots</text>
+        <text x="288" y="151">2,048</text>
+        <text x="288" y="181">2,048</text>
+        <text x="288" y="211">2,048</text>
+        <text x="274" y="241">1,536 · reads screenshots</text>
+        <text x="260" y="271">1,024 · reads screenshots</text>
+        <text x="260" y="301">1,024</text>
+        <text x="260" y="331">1,024</text>
+        <text x="260" y="361">1,024</text>
+        <text x="260" y="391">1,024</text>
+        <text x="241" y="421">300 · reads screenshots</text>
+      </g>
+      <text x="225" y="458" font-size="12" class="mut">tokens (a token is roughly three quarters of a word)</text>
+    </svg>
+    <figcaption>The three giant bars are the chat and Human Edit assistants. Their ceiling is large on purpose: some models spend tokens thinking before they answer. The new question-rewording task has no ceiling set, so it uses the provider default.</figcaption>
+  </figure>
+
+  <h2>5. How the harness works</h2>
+  <p>The harness is the engine behind every chat, both the general Chat and each workflow's own conversation. It is one loop that handles one message at a time. Its guiding idea: <b>try code first, and only reach for a model when code cannot tell what you meant.</b></p>
+
+  <figure class="frame">
+    <svg viewBox="0 0 860 1010" role="img" aria-labelledby="te">
+      <title id="te">The chat harness turn loop: routing a message, building context, proposing gated changes, streaming a reply, saving the turn</title>
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker></defs>
+
+      <rect x="30" y="10" width="400" height="46" rx="23" class="you"/>
+      <text x="48" y="30" font-size="14" class="ttl">Your message, or a click on a card</text>
+      <text x="48" y="46" font-size="12" class="mut">Shown on screen immediately, even if everything after fails.</text>
+      <line x1="230" y1="56" x2="230" y2="86" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="88" width="400" height="52" rx="8" class="code"/>
+      <text x="48" y="110" font-size="14" class="ttl">1. A card button was pressed?</text><text x="48" y="128" font-size="12" class="mut">An "Apply", "Test it", or an option on a question.</text>
+      <path d="M430 114 H470" class="edge" marker-end="url(#ar2)"/>
+      <rect x="470" y="88" width="370" height="52" rx="8" class="code"/>
+      <text x="486" y="110" font-size="13" class="ttl">Run that card's action</text><text x="486" y="128" font-size="12" class="mut">No model. The turn ends here.</text>
+      <line x1="230" y1="140" x2="230" y2="170" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="172" width="400" height="64" rx="8" class="code"/>
+      <text x="48" y="194" font-size="14" class="ttl">2. A single-choice question is open?</text>
+      <text x="48" y="212" font-size="12" class="mut">You typed words instead of clicking.</text><text x="48" y="227" font-size="12" class="mut">A tick-list gets a nudge back to the card instead.</text>
+      <path d="M430 204 H470" class="edge" marker-end="url(#ar2)"/>
+      <rect x="470" y="172" width="370" height="64" rx="16" class="model"/>
+      <text x="486" y="194" font-size="13" class="ttl mono">chat_map_answer</text>
+      <text x="486" y="212" font-size="12" class="mut">Picks one allowed option id, or "unclear".</text><text x="486" y="227" font-size="12" class="mut">Unclear means ask you again, never guess.</text>
+      <line x1="230" y1="236" x2="230" y2="266" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="268" width="400" height="64" rx="8" class="code"/>
+      <text x="48" y="290" font-size="14" class="ttl">3. Does it read like a command?</text>
+      <text x="48" y="308" font-size="12" class="mut">A word list: record, test, approve, stop, open…</text><text x="48" y="323" font-size="12" class="mut">Plain questions skip this and cost nothing.</text>
+      <path d="M430 300 H470" class="edge" marker-end="url(#ar2)"/>
+      <rect x="470" y="268" width="370" height="64" rx="16" class="model"/>
+      <text x="486" y="290" font-size="13" class="ttl mono">chat_route_intent</text>
+      <text x="486" y="308" font-size="12" class="mut">Can only choose an action the current stage allows.</text><text x="486" y="323" font-size="12" class="mut">Actions with side effects wait for a Confirm card.</text>
+      <line x1="230" y1="332" x2="230" y2="362" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="364" width="400" height="76" rx="8" class="code"/>
+      <text x="48" y="386" font-size="14" class="ttl">4. Build the context</text>
+      <text x="48" y="404" font-size="12" class="mut">Stage, pinned facts, step digest, rolling summary, recent</text><text x="48" y="419" font-size="12" class="mut">turns, all inside a token budget. The cloud keeps no memory,</text><text x="48" y="434" font-size="12" class="mut">so this is rebuilt on every turn.</text>
+      <line x1="230" y1="440" x2="230" y2="470" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="472" width="400" height="64" rx="8" class="code"/>
+      <text x="48" y="494" font-size="14" class="ttl">5. Could it change the workflow?</text>
+      <text x="48" y="512" font-size="12" class="mut">Change-words, a step you pointed at, or a failed test.</text><text x="48" y="527" font-size="12" class="mut">Otherwise this extra paid call is skipped.</text>
+      <path d="M430 504 H470" class="edge" marker-end="url(#ar2)"/>
+      <rect x="470" y="472" width="370" height="64" rx="16" class="model"/>
+      <text x="486" y="494" font-size="13" class="ttl mono">copilot_diagnose</text>
+      <text x="486" y="512" font-size="12" class="mut">Proposes edits. May look at the failure screenshot.</text><text x="486" y="527" font-size="12" class="mut">It never writes a selector.</text>
+      <line x1="655" y1="536" x2="655" y2="556" class="edge" marker-end="url(#ar2)"/>
+      <rect x="470" y="558" width="370" height="56" rx="8" class="code"/>
+      <text x="486" y="580" font-size="13" class="ttl">Every proposal goes through the gates</text><text x="486" y="598" font-size="12" class="mut">One that fails a gate is quietly dropped.</text>
+      <path d="M470 586 H240 V636" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="638" width="400" height="76" rx="16" class="model"/>
+      <text x="48" y="660" font-size="14" class="ttl">6. Stream the reply · <tspan class="mono" font-size="12.5">studio_chat_reply</tspan></text>
+      <text x="48" y="678" font-size="12" class="mut">The words appear as they are written. The model is told</text><text x="48" y="693" font-size="12" class="mut">exactly which gated changes are on offer, so it never</text><text x="48" y="708" font-size="12" class="mut">promises one that no card carries.</text>
+      <line x1="230" y1="714" x2="230" y2="744" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="746" width="400" height="52" rx="16" class="model"/>
+      <text x="48" y="768" font-size="14" class="ttl">General Chat only · <tspan class="mono" font-size="12.5">studio_chat_actions</tspan></text>
+      <text x="48" y="786" font-size="12" class="mut">Is there a task worth drafting as a workflow? Usually null.</text>
+      <line x1="230" y1="798" x2="230" y2="828" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="830" width="400" height="72" rx="8" class="code"/>
+      <text x="48" y="852" font-size="14" class="ttl">7. Save the turn</text>
+      <text x="48" y="870" font-size="12" class="mut">The reply, and ONE change card with Apply / Dismiss.</text><text x="48" y="885" font-size="12" class="mut">Nothing half-finished is ever saved.</text>
+      <line x1="230" y1="902" x2="230" y2="932" class="edge" marker-end="url(#ar2)"/>
+
+      <rect x="30" y="934" width="400" height="52" rx="16" class="model"/>
+      <text x="48" y="956" font-size="14" class="ttl">8. Too long? · <tspan class="mono" font-size="12.5">thread_summarize</tspan></text>
+      <text x="48" y="974" font-size="12" class="mut">The oldest turns fold into a short summary.</text>
+
+      <rect x="470" y="660" width="370" height="132" rx="10" class="plain"/>
+      <text x="486" y="684" font-size="13" class="ttl">One turn at a time, per chat</text>
+      <text x="486" y="704" font-size="12" class="mut">A second message while one is being answered</text><text x="486" y="719" font-size="12" class="mut">waits in line. It is never mixed in.</text>
+      <text x="486" y="742" font-size="13" class="ttl">Cancel is safe</text>
+      <text x="486" y="762" font-size="12" class="mut">Stopping mid-reply saves nothing half-written,</text><text x="486" y="777" font-size="12" class="mut">and "Try again" is always safe.</text>
+    </svg>
+    <figcaption>Steps 1 to 3 are the router. Steps 4 to 8 are the conversation. The orange boxes cost AI credits, so the router tries to avoid them.</figcaption>
+  </figure>
+
+  <h3>The stage decides what chat can do</h3>
+  <p>Next to the loop sits a small state tracker called the lifecycle. At any moment it holds a list of actions that are allowed: record, compile, test, publish, and so on. While a question is open, a compile is running, or a change card is waiting for you, "test" simply is not on the list. Chat can only choose from that list, and a message like "run it now" while a question is open is turned away by the server, not just hidden by the screen.</p>
+  <p>Anything with a side effect, such as starting a test run, posts a confirm card first and does nothing until you press the button. Inputs you state in chat ("test it with the repo asia") only pre-fill that card.</p>
+
+  <h2>6. Every model call, in one table</h2>
+  <p>Every call goes through one shared client. The Studio sends it to the Conxa cloud, which picks a provider from a pool and counts usage against your plan. Tasks that look at pictures are sent to a vision model.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Task name</th><th>When it runs</th><th>What it sees</th><th>What it gives back</th><th>What code does with it</th><th>If it fails</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="6">Before recording</td></tr>
+        <tr><td class="m">record_plan</td><td>You describe a task, before recording</td><td>Your task text and starting page</td><td>3 to 8 short to-do items</td><td>Shows a plan card. Nothing is enforced.</td><td>No plan card</td></tr>
+        <tr class="grp"><td colspan="6">During compile</td></tr>
+        <tr><td class="m">workflow_review</td><td>Once, after every step is compiled</td><td>All compiled steps and the screenshot of each click</td><td>A goal, a meaning per step, and suggestions (input names, optional popups, phases)</td><td>Six validation gates. Writes meaning only, never an address.</td><td>Compile continues with rules only</td></tr>
+        <tr><td class="m">anchor_vision<br>anchor_vision_frameset</td><td>For steps that need a visual landmark</td><td>The screenshot of the click</td><td>A short description of what sits near the element</td><td>Stored as a hint for recovery</td><td>The compile reports an anchor error</td></tr>
+        <tr><td class="m">loop_suggestion_copy</td><td>The recording looks like download-then-upload</td><td>The real steps involved</td><td>1 to 2 friendly sentences</td><td>Shown beside Yes / No</td><td>Plain built-in wording</td></tr>
+        <tr class="grp"><td colspan="6">After compile</td></tr>
+        <tr><td class="m">workflow_understanding</td><td>Right after compile</td><td>Description, steps, how it ends, inputs, candidates</td><td>Goal line, coverage yes/no, fixed / varies / unsure per value</td><td>Drops unknown refs and bad names. Turns "varies" into an input via a fixed edit routine.</td><td>Asks the likely values, unticked</td></tr>
+        <tr><td class="m">fork_question_copy</td><td>For each popup that needs a decision</td><td>Popup title, button names, a message hint</td><td>One question line</td><td>Replaces only the title line</td><td>Template title</td></tr>
+        <tr><td class="m">clarify_question_copy <span class="tag new">new</span></td><td>Once, after questions are built</td><td>Draft titles, texts and fixed options. Never raw typed values.</td><td>Friendlier title, text, and option wording</td><td>Checked field by field. Choices and edits stay as built.</td><td>Template wording stays</td></tr>
+        <tr class="grp"><td colspan="6">In the chat harness</td></tr>
+        <tr><td class="m">chat_map_answer</td><td>You type an answer to an open single-choice question</td><td>The question, its allowed options, your words</td><td>One option id or "unclear"</td><td>Applies it the same way a click does</td><td>Asks you to pick on the card</td></tr>
+        <tr><td class="m">chat_route_intent</td><td>A message reads like a command</td><td>Allowed actions, input names, your message</td><td>An action id or "chat", plus slots</td><td>Rejects any id not in the allowed list</td><td>Treated as normal chat</td></tr>
+        <tr><td class="m">studio_chat_reply</td><td>Every normal chat turn</td><td>The whole context pack</td><td>A streamed text reply</td><td>Saved as the reply</td><td>An error card. Try again is safe.</td></tr>
+        <tr><td class="m">copilot_diagnose</td><td>The message could change the workflow, or a test failed</td><td>Context pack and optionally the failure screenshot</td><td>Proposed edits</td><td>Every proposal goes through the gates first</td><td>No change card</td></tr>
+        <tr><td class="m">studio_chat_actions</td><td>General Chat, after the reply</td><td>The conversation and your group names</td><td>A workflow draft, or nothing</td><td>Posts a draft card you can edit or dismiss</td><td>No draft</td></tr>
+        <tr><td class="m">thread_summarize</td><td>The chat grows past its budget</td><td>The oldest turns</td><td>A summary of 180 words or fewer</td><td>Stored; old turns leave the context</td><td>Older turns are dropped without a summary</td></tr>
+        <tr class="grp"><td colspan="6">Testing and editing</td></tr>
+        <tr><td class="m">ai_review</td><td>A test reaches a review step you placed</td><td>The screen and your question</td><td>A yes/no or short structured answer</td><td>Step passes or stops, per its own setting</td><td>Per that step's failure rule</td></tr>
+        <tr><td class="m">copilot_reply</td><td>Questions asked in the Human Edit assistant</td><td>The workflow and your question</td><td>A streamed explanation</td><td>Shown as text</td><td>An error message</td></tr>
+        <tr><td class="m">region_selector</td><td>You draw a new region in the re-target wizard</td><td>A screenshot with your box, plus the recorded page</td><td>Candidate selectors</td><td>Each is tested against the page. Only valid ones are kept.</td><td>No candidate accepted</td></tr>
+        <tr><td class="m">semantic_enrichment<br>vision_reasoning<br>recovery_assist</td><td>When you re-target a step and Conxa re-scores it</td><td>Step description and candidate elements</td><td>Meaning, or a ranking among candidates</td><td>Combined with the code score</td><td>The code score alone is used</td></tr>
+        <tr class="grp"><td colspan="6">Other products and unused prompts</td></tr>
+        <tr><td class="m">execute_chat</td><td>Conxa Execute's own chat window</td><td>Full chat with tool definitions</td><td>Replies and tool calls</td><td>Handled in the Execute app</td><td>Error shown there</td></tr>
+        <tr><td class="m">intent_generation<br>selector_generation<br>recovery_resolve</td><td>Never today</td><td colspan="4">Prompts exist in the shared client, but no code calls them. They are leftovers, safe to remove later.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>One honest limit.</b> Code can check that a reworded option still has the same id and keeps every quoted name. It cannot check that the new sentence means the same thing. The prompt forbids swapping choices, and the original wording is the fallback, but watch the first few real compiles. The <span class="m">clarify_question_copy</span> call was added today and is covered by tests, not yet by a real model run.
+  </div>
+
+  <footer>
+    <p><b>Where to look in the code</b></p>
+    <ul class="plain">
+      <li><span class="m">conxa-builder/python/handlers/compile_flow.py</span>: runs everything in section 2, in order.</li>
+      <li><span class="m">conxa_compile/conversation/understanding.py</span>: the description check and its fallbacks.</li>
+      <li><span class="m">conxa_compile/conversation/clarify.py</span>: finds the questions, validates rewording, turns answers into edits.</li>
+      <li><span class="m">conxa_compile/llm/clarify_question_copy.py</span> and <span class="m">fork_question_copy.py</span>: the two rewording calls.</li>
+      <li><span class="m">conxa_compile/conversation/harness.py</span> and <span class="m">intent_router.py</span>: the chat loop and command router.</li>
+      <li><span class="m">packages/conxa-core/conxa_core/llm/client.py</span>: every prompt, and every reply-size ceiling.</li>
+    </ul>
+  </footer>
+</main>

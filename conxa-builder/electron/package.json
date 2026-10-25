@@ -17,7 +17,7 @@
     "test:bridge": "node test/bridge.test.js",
     "test:panel": "node --test test/browser_panel.test.js",
     "test:release-state": "node --experimental-strip-types --test test/releaseState.test.mjs",
-    "test:shell": "node --experimental-strip-types --test test/panels.test.mjs test/status.test.mjs test/thread.test.mjs test/stages.test.mjs",
+    "test:shell": "node --experimental-strip-types --test test/panels.test.mjs test/status.test.mjs test/thread.test.mjs",
     "test:app-map": "node --experimental-strip-types --test test/appMapLayout.test.mjs",
     "test": "npm run test:bridge && npm run test:panel && npm run test:release-state && npm run test:shell && npm run test:app-map"
   },

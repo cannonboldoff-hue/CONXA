@@ -54,7 +54,7 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 3
+_PROMPT_VERSION = 4  # 4: the call also answers the description check and loop wording (BUILD-55)
 
 
 def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:
@@ -87,11 +87,21 @@ def build_workflow_review(
     error_detail: list[str] | None = None,
     task_description: str = "",
     sidecar: Path | None = None,
+    review_inputs: dict[str, Any] | None = None,
+    loop_candidates: list[dict[str, Any]] | None = None,
+    extras_out: dict[str, Any] | None = None,
 ) -> tuple[WorkflowIntentGraph, list[dict[str, Any]]]:
     """One multimodal LLM call producing (workflow intent graph, BUILD-25
     findings). Returns (WorkflowIntentGraph(), []) on any failure or an empty
     response — never raises. `suggestions` is additionally forced to [] when
-    llm_semantic_suggestions_enabled is False, even on a successful call."""
+    llm_semantic_suggestions_enabled is False, even on a successful call.
+
+    BUILD-55: the same answer may also carry `understanding` (the description check) and
+    `loop_copy` (wording for loop suggestions). Neither is part of the return value; they are
+    written into ``extras_out`` when given -- ``understanding`` stamped with the description it
+    was written for (``for_task``), so a later edit to the description makes it stale."""
+    if extras_out is not None:
+        extras_out.update(understanding=None, loop_copy=[])
     if not steps_context:
         return WorkflowIntentGraph(), []
 
@@ -111,6 +121,11 @@ def build_workflow_review(
     extra_key = {"task_description": task} if task else {}
     if model:
         extra_key["model"] = model
+    # Same rule: only when present, so a compile that asks for neither keeps its old cache entries.
+    if task and review_inputs and review_inputs.get("candidates"):
+        extra_key["review_candidates"] = review_inputs["candidates"]
+    if loop_candidates:
+        extra_key["loop_candidates"] = loop_candidates
     key = cache_key(
         _CACHE_VERSION,
         steps=steps_for_key,
@@ -131,6 +146,8 @@ def build_workflow_review(
             model=model,
             error_detail=error_detail,
             task_description=task,
+            review_inputs=review_inputs,
+            loop_candidates=loop_candidates,
         )
         if not raw or (
             not str(raw.get("goal") or "").strip()
@@ -140,6 +157,12 @@ def build_workflow_review(
             # Empty/failed response — do NOT cache, so the next compile retries.
             return WorkflowIntentGraph(), []
         write_cached(_NAMESPACE, key, raw, _CACHE_VERSION)
+    understanding = raw.get("understanding") if isinstance(raw.get("understanding"), dict) else None
+    if understanding is not None:
+        understanding = {**understanding, "for_task": task}
+        raw = {**raw, "understanding": understanding}
+    if extras_out is not None:
+        extras_out.update(understanding=understanding, loop_copy=[r for r in raw.get("loop_copy") or [] if isinstance(r, dict)])
     # Pinned beside the recording, so a recompile replays this exact answer even if the shared
     # cache was cleared or the model has since changed its mind.
     _sidecar_write(sidecar, key, raw)

@@ -40,11 +40,6 @@ _PRIORITY = {
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
 # value on one of them is not "lost" and is never asked about.
 _MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed"})
-# Questions whose answer decides what the workflow *is*, so testing waits for them: a test of a
-# workflow that might still be incomplete, or that still carries a value from the recording as if
-# it were fixed, proves little. Everything else keeps the compiler's default and never blocks.
-BLOCKING_KINDS = frozenset({"coverage", "chosen_values", "upload", "fork"})
-
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
 
@@ -70,6 +65,13 @@ def step_name(step: dict[str, Any]) -> str:
 
 def _humanize(binding: str) -> str:
     return binding.replace("_", " ").strip().capitalize()
+
+
+def _quoted(text: str) -> str:
+    """``“text”`` for a person, without doubling the quotes when ``readable`` already added them
+    (a target that is only a ``{{token}}`` comes back already quoted)."""
+    shown = _readable(text)[:60].strip()
+    return shown if shown.startswith("“") and shown.endswith("”") and shown.count("“") == 1 else f"“{shown}”"
 
 
 def _steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
@@ -101,17 +103,17 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) 
     for o in options:
         detail = []
         if o.get("recorded"):
-            detail.append("You chose this while recording.")
+            detail.append("This is what you clicked while recording.")
         if o.get("role") == "consequential":
-            detail.append("This can change or remove data. Picking it here means it runs without asking.")
+            detail.append("Careful: this can change or delete things. If you pick it, it will happen on its own, without asking anyone.")
         choices.append({"id": f"option:{o['id']}", "label": str(o.get("label") or o["id"]), "detail": " ".join(detail)})
     choices += [
-        {"id": "by_input", "label": "Let the person running it choose each time",
-         "detail": "Adds a setting they fill in, so each run can go a different way."},
-        {"id": "ask_human", "label": "Pause and ask me each time", "detail": "The run stops on the popup and waits for a person."},
-        {"id": "stop", "label": "Stop the run", "detail": "Treat this popup as a problem and end the run."},
+        {"id": "by_input", "label": "Let whoever uses it decide each time",
+         "detail": "They get a question to answer before it starts, so it can go a different way each time."},
+        {"id": "ask_human", "label": "Stop and ask a person each time", "detail": "It waits on the popup until someone tells it what to do."},
+        {"id": "stop", "label": "Stop completely", "detail": "Treat this popup as a problem and end here."},
     ]
-    title = f"When “{popup}” appears, what should this workflow do?"
+    title = f"A message box called “{popup}” can pop up here. What should happen when it does?"
     if fork_copy is not None:
         try:
             reworded = fork_copy({
@@ -126,9 +128,11 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) 
             title = str(reworded).strip()
     return _question(
         "fork", f"fork:{key}:{state['id']}", title,
-        "This popup can show up on a later run. Pick what happens when it does, and I\u2019ll also handle the case where it doesn\u2019t appear.",
+        "You saw this message box while recording, but it might not always show up. Tell me what to do when it does. If it doesn\u2019t show up, I\u2019ll just carry on.",
         choices, step_keys_=[key], fork_state_id=state["id"],
         input_name="on_" + (re.sub(r"[^a-z0-9]+", "_", popup.lower()).strip("_") or "popup")[:40],
+        # Context for the wording call only (the popup's own buttons); nothing reads it back as a choice.
+        popup_buttons=[str(b) for b in sig.get("button_labels") or []][:6],
     )
 
 
@@ -139,11 +143,11 @@ def _known_popup_question(key: str, name: str, popup: dict[str, Any]) -> dict[st
     labels = [str(l) for l in popup.get("button_labels") or []][:4]
     return _question(
         "known_popup", f"known_popup:{key}:{popup.get('id')}",
-        f"Other workflows sometimes get “{title}” after “{name}”. Cover it here too?",
-        f"It offers {', '.join(labels)}. You didn’t see it while recording this one, but it can still appear on a real run.",
+        f"Your other workflows sometimes see a message box called “{title}” after “{name}”. Should this one be ready for it too?",
+        f"It has these buttons: {', '.join(labels)}. It didn’t appear while you recorded this one, but it could show up when someone really uses it.",
         [
-            {"id": "add", "label": "Yes, handle it", "detail": "A person is asked what to do whenever it appears, and the run carries on if it doesn’t. Adds a short wait at this step."},
-            {"id": "skip", "label": "No, leave it out", "detail": "A run that meets it will stop and ask instead."},
+            {"id": "add", "label": "Yes, be ready for it", "detail": "If it shows up, a person gets asked what to do. If not, it carries on. This adds a short pause at this step."},
+            {"id": "skip", "label": "No, skip it", "detail": "If it ever shows up, it will stop and ask a person for help."},
         ],
         step_keys_=[key], popup=popup,
     )
@@ -152,10 +156,10 @@ def _known_popup_question(key: str, name: str, popup: dict[str, Any]) -> dict[st
 def _coverage_question(note: str) -> dict[str, Any]:
     return _question(
         "coverage", "coverage", "Does this cover everything you wanted?",
-        f"{note} If something is missing, add it before testing, so the test proves the whole task.",
+        f"{note} If a part is missing, add it now, before you try it out. That way the try-out checks the whole job.",
         [
-            {"id": "complete", "label": "Yes, that’s everything", "detail": "The recording is what I meant."},
-            {"id": "incomplete", "label": "No, something is missing", "detail": "I’ll record or add the missing part in Human Edit."},
+            {"id": "complete", "label": "Yes, that’s everything", "detail": "The recording shows what I wanted."},
+            {"id": "incomplete", "label": "No, a part is missing", "detail": "I\u2019ll add or record the missing part in the editor."},
         ],
     )
 
@@ -171,12 +175,12 @@ def _chosen_values_question(understanding: dict[str, Any]) -> dict[str, Any] | N
     limits = [str(c.get("recorded") or "") for c in understanding.get("candidates") or []
               if isinstance(c, dict) and c.get("kind") == "click" and not c.get("supported")
               and c.get("verdict") in ("varies", "unsure")]
-    body = "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded."
+    body = "Tick the ones that are different every time. Whoever uses this will type them in. Anything you leave unticked stays exactly as you recorded it."
     if limits:
-        body += " I can’t make a clicked item change each run yet, so these stay as recorded: " + ", ".join(f"“{l}”" for l in limits[:3]) + "."
-    kinds = {"url": "Page address", "row": "Record", "click": "Clicked item"}
+        body += " I can\u2019t make a clicked item change yet, so these stay the same as you recorded: " + ", ".join(f"“{l}”" for l in limits[:3]) + "."
+    kinds = {"url": "Web address", "row": "Item in a list", "click": "Something you clicked"}
     return _question(
-        "chosen_values", "chosen_values", "Which of these change each run?", body,
+        "chosen_values", "chosen_values", "Which of these are different every time?", body,
         [{"id": c["ref"], "label": _humanize(c["name"]),
           "detail": f"{kinds.get(c['kind'], 'Value')}: {str(c.get('literal') or c.get('recorded'))[:60]}",
           "selected": c["verdict"] == "varies"} for c in cands],
@@ -205,21 +209,21 @@ def test_followup_question(doc: dict[str, Any], step_key: str, tested_inputs: di
     name = step_name(step)
     return _question(
         "test_followup", f"test_followup:{step_key}:{binding}",
-        f"The test failed at “{name}”. Does {_humanize(binding).lower()} really change each run?",
-        f"The test used “{tested[:60]}” but you recorded “{recorded[:60]}”. If it is always the recorded one, I’ll stop asking for it.",
+        f"The try-out got stuck at “{name}”. Is the “{_humanize(binding).lower()}” really different every time?",
+        f"In the try-out you typed “{tested[:60]}”, but while recording you typed “{recorded[:60]}”. If it is always “{recorded[:60]}”, I\u2019ll stop asking for it.",
         [
-            {"id": "varies", "label": "Yes, it changes each run", "detail": "Stays an input. The failure may be something else."},
-            {"id": "fixed", "label": f"No, always “{recorded[:40]}”", "detail": "Pins it to the recorded value."},
+            {"id": "varies", "label": "Yes, it is different every time", "detail": "Whoever uses it will still type it in. The problem may be something else."},
+            {"id": "fixed", "label": f"No, always “{recorded[:40]}”", "detail": "I\u2019ll always use what you recorded and stop asking."},
         ],
         step_keys_=[step_key], binding=binding, recorded_value=recorded,
     )
 
 
 _INPUT_CHECK_WHY = {
-    "differs_from_recorded": "The test used “{tested}” but you recorded “{recorded}”.",
-    "not_an_option": "“{tested}” isn’t one of the choices this input allows.",
-    "pattern_mismatch": "“{tested}” doesn’t match the format this input expects.",
-    "empty": "It was left empty.",
+    "differs_from_recorded": "In the try-out you typed “{tested}”, but while recording you typed “{recorded}”.",
+    "not_an_option": "“{tested}” is not one of the choices allowed here.",
+    "pattern_mismatch": "“{tested}” is not written the way it needs to be.",
+    "empty": "It was left blank.",
 }
 
 
@@ -243,11 +247,11 @@ def input_check_question(suspects: list[dict[str, Any]], input_defs: list[dict[s
     names = ", ".join(_humanize(i).lower() for i in ids)
     return _question(
         "input_check", f"input_check:{run_id}",
-        f"The test couldn’t find what {names} points to. Is the value right?",
+        f"The try-out couldn\u2019t find the {names} on the page. Did you type the right thing?",
         " ".join(sentences) + " The workflow itself may be fine.",
         [
-            {"id": "wrong", "label": "That value was wrong — test again", "detail": "Opens the test with it highlighted so you can correct it."},
-            {"id": "right", "label": "The value is right — fix the workflow", "detail": "Auto-fix looks at the steps instead."},
+            {"id": "wrong", "label": "No, I typed it wrong. Let me try again", "detail": "I\u2019ll reopen the try-out and point to the box to fix."},
+            {"id": "right", "label": "Yes, it was right. Fix the workflow instead", "detail": "I\u2019ll look for the problem in the steps."},
         ],
         input_ids=ids,
     )
@@ -268,12 +272,12 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
     def describe(a: dict[str, Any]) -> str:
         t = a.get("type")
         if t == "text_present":
-            return f"The message “{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears"
+            return f"You see the words {_quoted(str(a.get('target') or a.get('text') or a.get('value') or ''))} on the screen"
         if t == "url_changed":
-            return "The page address changes"
+            return "The web address at the top of the browser changes"
         if t == "url_pattern":
-            return f"The page address matches {_readable(str(a.get('pattern') or a.get('value') or ''))[:60]}"
-        return "The page changes"
+            return f"The web address looks like {_readable(str(a.get('pattern') or a.get('value') or ''))[:60]}"
+        return "The screen changes"
 
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
                 "selected": c["assertion"].get("type") == "text_present"} for c in checks]
@@ -285,9 +289,71 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
             if iid and iid != "file_path" and "{{" + iid + "}}" not in referenced and not any(
                     c["assertion"].get("type") == "text_present" and "{{" + iid + "}}" in str(c["assertion"].get("target") or "")
                     for c in checks):
-                choices.append({"id": f"input:{iid}", "label": f"The {_humanize(iid).lower()} shows up on the page",
-                                "detail": "Checks the page after the run shows what was entered.", "selected": False})
+                choices.append({"id": f"input:{iid}", "label": f"You see the {_humanize(iid).lower()} on the screen",
+                                "detail": "Makes sure what was typed in appears on the screen at the end.", "selected": False})
     return choices, sorted({c["step_key"] for c in checks})
+
+
+# Kinds whose body quotes raw typed values, and choice labels that are page text or value names:
+# those are never sent to a model, never reworded. Everything else may have its wording rewritten.
+_NO_REWORD_KINDS = {"dropped_value", "test_followup", "input_check"}
+_QUOTED = re.compile(r"“[^”]+”")
+
+
+def reword_payload(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What a model may see to reword: title, body, and (single-choice only) each fixed choice.
+    Multi-choice labels are value names and fork ``option:`` labels are the popup's own buttons, so
+    they are left out and stay exactly as built."""
+    out = []
+    for q in questions:
+        if q.get("kind") in _NO_REWORD_KINDS or q.get("status") not in ("open", "queued"):
+            continue
+        item: dict[str, Any] = {"id": q["id"], "title": q["title"], "body": q["body"]}
+        if q.get("popup_buttons"):
+            item["popup_buttons"] = list(q["popup_buttons"])
+        if not q.get("multi"):
+            item["choices"] = [{"id": c["id"], "label": c["label"], "detail": c.get("detail", "")}
+                               for c in q["choices"] if not str(c["id"]).startswith("option:")]
+        out.append(item)
+    return out
+
+
+def apply_reworded(questions: list[dict[str, Any]], reworded: Any) -> None:
+    """Fold a model's friendlier wording into ``questions`` (in place), field by field.
+
+    Only title, body and the label/detail of existing single-choice options can change; ids, order,
+    what each choice does and every key besides those are code's. A field is taken only when it is a
+    non-empty string of sane length, has no ``{{`` placeholder and keeps every “quoted” item of the
+    original (so a recorded name or value can't be dropped or invented); anything else keeps the
+    template text. Never raises."""
+    if not isinstance(reworded, dict) or not isinstance(reworded.get("questions"), list):
+        return
+    by_id = {str(r.get("id")): r for r in reworded["questions"] if isinstance(r, dict)}
+    allowed = {item["id"] for item in reword_payload(questions)}
+
+    def ok(new: Any, old: str, limit: int) -> bool:
+        return (isinstance(new, str) and 0 < len(new.strip()) <= limit and "{{" not in new
+                and all(m in new for m in _QUOTED.findall(old)))
+
+    for q in questions:
+        r = by_id.get(q["id"])
+        if r is None or q["id"] not in allowed:
+            continue
+        if ok(r.get("title"), q["title"], 200):
+            q["title"] = r["title"].strip()
+        if ok(r.get("body"), q["body"], 500):
+            q["body"] = r["body"].strip()
+        if q.get("multi"):
+            continue
+        new_choices = {str(c.get("id")): c for c in r.get("choices") or [] if isinstance(c, dict)}
+        for c in q["choices"]:
+            n = new_choices.get(str(c["id"]))
+            if n is None or str(c["id"]).startswith("option:"):
+                continue
+            if ok(n.get("label"), c["label"], 90):
+                c["label"] = n["label"].strip()
+            if ok(n.get("detail"), c.get("detail", ""), 220) or (n.get("detail") == "" and not c.get("detail")):
+                c["detail"] = str(n.get("detail") or "").strip()
 
 
 def refresh_question(question: dict[str, Any], doc: dict[str, Any]) -> dict[str, Any]:
@@ -341,12 +407,12 @@ def generate_questions(
     if lost:
         shown = ", ".join(f"“{str(d['value'])[:40]}”" for d in lost[:3])
         out.append(_question(
-            "dropped_value", "dropped_value", "Some of what you entered was left out. Is that right?",
-            f"These values were in the recording but are not in the workflow: {shown}. "
-            "That is normal for a value typed over or corrected while recording.",
+            "dropped_value", "dropped_value", "A few things you typed are not in the workflow. Is that okay?",
+            f"You typed these while recording, but they are not in the workflow: {shown}. "
+            "That is normal if you fixed a typo or typed over something while recording.",
             [
-                {"id": "ok", "label": "Yes, leave them out", "detail": "They were mistakes or repeats."},
-                {"id": "missing", "label": "No, something is missing", "detail": "I’ll add it in Human Edit or record it again."},
+                {"id": "ok", "label": "Yes, leave them out", "detail": "They were mistakes or typed twice."},
+                {"id": "missing", "label": "No, they should be there", "detail": "I\u2019ll add them in the editor, or you can record again."},
             ],
         ))
 
@@ -358,11 +424,11 @@ def generate_questions(
             fname = os.path.basename(recorded.replace("\\", "/")) if recorded else ""
             label = f"“{fname}”" if fname else "the file"
             out.append(_question(
-                "upload", f"upload:{keys[i]}", f"Upload {label} every time, or ask for the file each run?",
-                f"You picked {label} while recording. A path on this computer won’t exist on your customers’ computers.",
+                "upload", f"upload:{keys[i]}", f"Always send {label}, or let whoever uses this pick the file?",
+                f"You chose {label} from your computer while recording. Your customers won\u2019t have that file on their computers.",
                 [
-                    {"id": "input", "label": "Ask for the file each run", "detail": "Recommended — whoever runs it chooses the file."},
-                    {"id": "fixed", "label": f"Always upload {label}", "detail": "Only works where that exact path exists."},
+                    {"id": "input", "label": "Let them pick the file each time", "detail": "Best choice. Whoever uses this picks their own file."},
+                    {"id": "fixed", "label": f"Always send {label}", "detail": "Only works on a computer that has this exact file in the same place."},
                 ],
                 step_keys_=[keys[i]], recorded_value=recorded,
             ))
@@ -378,11 +444,11 @@ def generate_questions(
             continue  # already guarded
         name = step_name(s)
         out.append(_question(
-            "confirm", f"confirm:{keys[i]}", f"“{name}” can’t be undone. Should a person confirm first?",
-            f"The run pauses before “{name}” and shows what’s about to happen. Whoever runs it — the agent’s user — answers.",
+            "confirm", f"confirm:{keys[i]}", f"“{name}” can\u2019t be undone. Should someone approve it before it happens?",
+            f"It will stop just before “{name}”, show what is about to happen, and wait for a yes or no from whoever is using it.",
             [
-                {"id": "yes", "label": "Yes, confirm first", "detail": f"Adds a confirmation step before “{name}”."},
-                {"id": "no", "label": "No, go straight ahead", "detail": "Runs without asking."},
+                {"id": "yes", "label": "Yes, ask for approval first", "detail": f"A yes or no question appears before “{name}”."},
+                {"id": "no", "label": "No, just do it", "detail": "It goes ahead without asking."},
             ],
             step_keys_=[keys[i]], step_name=name,
         ))
@@ -425,8 +491,8 @@ def generate_questions(
     uniq = [c for c in candidates if not (c["binding"] in seen or seen.add(c["binding"]))]
     if uniq:
         out.append(_question(
-            "values", "values", "Which values change each run?",
-            "Ticked values become inputs the person running it fills in. Unticked ones stay exactly as recorded.",
+            "values", "values", "Which of these are different every time?",
+            "Tick the ones that are different every time. Whoever uses this will type them in. Anything you leave unticked stays exactly as you recorded it.",
             [{"id": c["binding"], "label": _humanize(c["binding"]), "detail": c["recorded"][:60] or "Text",
               "selected": c["binding"] not in fixed_typed} for c in uniq],
             multi=True, step_keys_=[c["step_key"] for c in uniq], recorded={c["binding"]: c["recorded"] for c in uniq},
@@ -443,11 +509,11 @@ def generate_questions(
             break
         label = step_name(s)
         out.append(_question(
-            "output", f"output:{keys[i]}", f"Report \u201c{s['value']}\u201d back when the workflow finishes?",
-            f"You marked \u201c{label}\u201d while recording. Whoever runs the workflow gets this value in its result.",
+            "output", f"output:{keys[i]}", f"Show \u201c{s['value']}\u201d to the user when it finishes?",
+            f"While recording you chose to read \u201c{label}\u201d from the screen. Whoever uses this workflow can get that text back when it is done.",
             [
-                {"id": "keep", "label": "Yes, report it", "detail": "It comes back as a named result, and later steps can use it."},
-                {"id": "remove", "label": "No, leave it out", "detail": "Removes the read step."},
+                {"id": "keep", "label": "Yes, show it", "detail": "It is handed back with a name, and later steps can use it too."},
+                {"id": "remove", "label": "No, don\u2019t show it", "detail": "I\u2019ll remove the step that reads it."},
             ],
             step_keys_=[keys[i]], output_name=str(s["value"]),
         ))
@@ -475,10 +541,10 @@ def generate_questions(
             out.append(_question(
                 "relative_date", f"relative_date:{keys[i]}", f"Is “{name}” always {when}?",
                 f"You picked {picked.strftime('%d %b %Y')}, and today is {today.strftime('%d %b %Y')}. "
-                "If the date is always counted from the day it runs, it won’t need to be filled in.",
+                "If it is always counted from the day someone uses it, nobody has to type a date.",
                 [
-                    {"id": "relative", "label": f"Yes, always {when}", "detail": "Worked out on the day it runs. No input to fill in."},
-                    {"id": "fixed_input", "label": "No, it changes each run", "detail": "Stays an input the person running it fills in."},
+                    {"id": "relative", "label": f"Yes, always {when}", "detail": "I\u2019ll work out the date on the day. Nothing to type."},
+                    {"id": "fixed_input", "label": "No, it is different every time", "detail": "Whoever uses it will pick the date."},
                 ],
                 step_keys_=[keys[i]], days=days, binding=str(s.get("input_binding") or ""),
             ))
@@ -501,11 +567,11 @@ def generate_questions(
                 break
             name = step_name(s)
             out.append(_question(
-                "skip_when_empty", f"skip_when_empty:{keys[i]}", f"If {_humanize(binding).lower()} is left empty, skip “{name}”?",
-                "Some runs may not have a value for this. Skipping avoids typing nothing into the field.",
+                "skip_when_empty", f"skip_when_empty:{keys[i]}", f"If the “{_humanize(binding).lower()}” is left blank, should we skip “{name}”?",
+                "Sometimes whoever uses this may have nothing to put here. Skipping stops it from typing nothing into the box.",
                 [
-                    {"id": "skip", "label": "Yes, skip it when empty", "detail": f"“{name}” only runs when a value is given."},
-                    {"id": "run", "label": "No, always run it", "detail": "Runs even with no value."},
+                    {"id": "skip", "label": "Yes, skip it if blank", "detail": f"“{name}” only happens when something is typed in."},
+                    {"id": "run", "label": "No, always do it", "detail": "It happens even if the box is blank."},
                 ],
                 step_keys_=[keys[i]], binding=binding,
             ))
@@ -521,12 +587,12 @@ def generate_questions(
                 break
             name = step_name(s)
             out.append(_question(
-                "missing_item", f"missing_item:{keys[i]}", f"If the item isn’t on the page, what should “{name}” do?",
-                "The run is told which item to act on. It can be gone because someone already dealt with it.",
+                "missing_item", f"missing_item:{keys[i]}", f"What should “{name}” do if the item can\u2019t be found on the page?",
+                "This step works on one particular item. It might be gone, for example if someone already dealt with it.",
                 [
-                    {"id": "skip", "label": "Skip it and carry on", "detail": "Only when the list is on the page and the item clearly isn’t in it."},
-                    {"id": "ask", "label": "Ask a person", "detail": "The run pauses with a visible browser until someone has dealt with it."},
-                    {"id": "fail", "label": "Stop with an error", "detail": "Treat a missing item as a problem."},
+                    {"id": "skip", "label": "Skip it and keep going", "detail": "Only when the list is showing and the item is clearly not in it."},
+                    {"id": "ask", "label": "Stop and ask a person", "detail": "It waits with the browser open until someone sorts it out."},
+                    {"id": "fail", "label": "Stop and show an error", "detail": "Treat a missing item as a problem."},
                 ],
                 step_keys_=[keys[i]],
             ))
@@ -550,11 +616,11 @@ def generate_questions(
         if isinstance(s.get("optional_hint"), dict) and s["optional_hint"]:
             name = step_name(s)
             out.append(_question(
-                "popup", f"popup:{keys[i]}", f"A pop-up appeared at “{name}”. Always close it if it appears?",
-                "You saw it while recording. Only you know whether it shows up every time.",
+                "popup", f"popup:{keys[i]}", f"A small window popped up at “{name}”. Should it be closed whenever it shows up?",
+                "You saw it while recording. Only you know if it appears every time or only sometimes.",
                 [
-                    {"id": "dismiss", "label": "Close it whenever it appears", "detail": "The run dismisses it if it’s there, and carries on if not."},
-                    {"id": "once", "label": "It was a one-off", "detail": "Keep it as an ordinary step."},
+                    {"id": "dismiss", "label": "Yes, close it if it shows up", "detail": "If it’s there it gets closed. If not, it carries on."},
+                    {"id": "once", "label": "No, that only happened once", "detail": "Keep it as a normal step."},
                 ],
                 step_keys_=[keys[i]],
             ))
@@ -563,9 +629,9 @@ def generate_questions(
     done_choices, done_keys = _done_when_choices(doc)
     if done_choices:
         out.append(_question(
-            "done_when", "done_when", "How do we know it worked?",
-            "I saw these at the end of your recording. Ticked checks must pass for a run to count as done. "
-            "You can also type your own check below.",
+            "done_when", "done_when", "How can we tell it worked?",
+            "At the end of your recording I noticed these. Tick the ones that should be true when it works. If a ticked one is not true, it counts as failed. "
+            "You can also type your own below.",
             done_choices, multi=True, step_keys_=done_keys,
         ))
 
@@ -600,49 +666,49 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         if answer.get("choice") == "fixed" and question.get("recorded_value"):
             ops.append({"op": "patch", "step_key": keys[0], "patch": {"value": question["recorded_value"]}})
             ops.append({"op": "drop_inputs", "ids": ["file_path"]})
-            return ops, "Always uploads the recorded file"
-        return ops, "Asks for the file each run"
+            return ops, "Always sends the file you recorded"
+        return ops, "Whoever uses it picks the file"
 
     if kind == "coverage":
         if answer.get("choice") == "incomplete":
-            return ops, "Something is missing — add it in Human Edit before relying on this"
-        return ops, "Covers everything"
+            return ops, "A part is missing — add it in the editor before you rely on this"
+        return ops, "Covers everything you wanted"
 
     if kind == "relative_date":
         if answer.get("choice") == "relative":
             ops.append({"op": "set_date_offset", "step_key": keys[0], "days": int(question["days"])})
             if question.get("binding"):
                 ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
-            return ops, "Counted from the day it runs"
-        return ops, "Stays an input"
+            return ops, "Worked out from the day it is used"
+        return ops, "Whoever uses it still fills it in"
 
     if kind == "skip_when_empty":
         if answer.get("choice") == "skip":
             ops.append({"op": "patch", "step_key": keys[0], "patch": {"run_if": {"input": question["binding"], "op": "not_empty"}}})
-            return ops, "Skipped when empty"
-        return ops, "Always runs"
+            return ops, "Skipped if left blank"
+        return ops, "Always happens"
 
     if kind == "missing_item":
         if answer.get("choice") in ("skip", "ask"):
             ops.append({"op": "patch", "step_key": keys[0], "patch": {"on_missing": answer["choice"]}})
-            return ops, ("Skipped when the item isn’t there" if answer["choice"] == "skip"
-                         else "Asks a person when the item isn’t there")
-        return ops, "Stops with an error"
+            return ops, ("Skipped if the item isn’t there" if answer["choice"] == "skip"
+                         else "Asks a person if the item isn’t there")
+        return ops, "Stops and shows an error"
 
     if kind == "test_followup":
         if answer.get("choice") == "fixed":
             ops.append({"op": "patch", "step_key": keys[0], "patch": {"value": question["recorded_value"]}})
             ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
-            return ops, "Always the recorded value"
-        return ops, "Stays an input"
+            return ops, "Always what you recorded"
+        return ops, "Whoever uses it still fills it in"
 
     if kind == "input_check":
         # No edit to the workflow either way; the handler acts on the choice (re-test or Auto-fix).
-        return ops, ("Test again with a corrected value" if answer.get("choice") == "wrong" else "The value stays — checking the steps")
+        return ops, ("Trying again with a corrected value" if answer.get("choice") == "wrong" else "Keeping the value — looking at the steps")
 
     if kind == "dropped_value":
         if answer.get("choice") == "missing":
-            return ops, "Something is missing — add it in Human Edit before relying on this"
+            return ops, "A part is missing — add it in the editor before you rely on this"
         return ops, "Left out"
 
     if kind == "chosen_values":
@@ -653,21 +719,21 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 ops.append({"op": "parameterize", "literal": item["literal"], "name": item["name"], "default": item["literal"],
                             **({"kind": "click"} if item.get("kind") == "click" else {})})
                 names.append(_humanize(item["name"]))
-        return ops, (", ".join(names) if names else "Nothing changes — all kept as recorded")
+        return ops, (", ".join(names) if names else "Nothing changes — everything stays as you recorded")
 
     if kind == "output":
         if answer.get("choice") == "remove":
             ops.append({"op": "delete_step", "step_key": keys[0]})
-            return ops, "Not reported"
-        return ops, f"Reported as \u201c{question.get('output_name') or 'the result'}\u201d"
+            return ops, "Not shown to the user"
+        return ops, f"Shown to the user as \u201c{question.get('output_name') or 'the result'}\u201d"
 
     if kind == "confirm":
         if answer.get("choice") == "yes":
             name = question.get("step_name") or "this step"
             ops.append({"op": "insert_review", "before_step_key": keys[0], "title": f"Confirm before “{name}”",
                         "prompt": f"About to run “{name}”, which can’t be undone. Should it go ahead?"})
-            return ops, "A person confirms"
-        return ops, "Runs without confirmation"
+            return ops, "Someone approves it first"
+        return ops, "Goes ahead without asking"
 
     if kind == "fork":
         choice = str(answer.get("choice") or "")
@@ -677,13 +743,13 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             receipt = f"Always: {label}"
         elif choice == "by_input":
             policy = {"mode": "by_input", "input": question.get("input_name") or "on_popup"}
-            receipt = "The person running it chooses each time"
+            receipt = "Whoever uses it decides each time"
         elif choice == "ask_human":
             policy = {"mode": "ask_human"}
-            receipt = "Pauses and asks a person"
+            receipt = "Stops and asks a person"
         else:
             policy = {"mode": "stop"}
-            receipt = "Stops the run"
+            receipt = "Stops completely"
         ops.append({"op": "set_fork_policy", "step_key": keys[0], "state_id": question.get("fork_state_id"), "policy": policy})
         return ops, receipt
 
@@ -691,13 +757,13 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         if answer.get("choice") == "add":
             title = str((question.get("popup") or {}).get("title") or "the popup")
             ops.append({"op": "add_known_popup_fork", "step_key": keys[0], "popup": question["popup"]})
-            return ops, f"Added: a person decides when “{title}” appears"
+            return ops, f"Added: a person decides what to do when “{title}” appears"
         return ops, "Left out"
 
     if kind == "popup":
         once = answer.get("choice") == "once"
         ops.append({"op": "confirm_optional", "step_key": keys[0], "keep_as_step": once})
-        return ops, "Kept as an ordinary step" if once else "Close it whenever it appears"
+        return ops, "Kept as a normal step" if once else "Closed whenever it shows up"
 
     if kind == "values":
         selected = set(answer.get("selected") or [])
@@ -719,7 +785,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         if fixed:
             ops.append({"op": "drop_inputs", "ids": fixed})
         kept = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
-        return ops, (", ".join(kept) if kept else "Nothing changes — all kept as recorded")
+        return ops, (", ".join(kept) if kept else "Nothing changes — everything stays as you recorded")
 
     if kind == "done_when":
         selected = set(answer.get("selected") or [])
@@ -751,8 +817,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
         labels = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
         if custom:
-            labels.append(f"The page shows “{custom}”")
-        return ops, "; ".join(labels) if labels else "No required checks"
+            labels.append(f"You see “{custom}” on the screen")
+        return ops, "; ".join(labels) if labels else "No checks needed"
 
     return ops, ""
 

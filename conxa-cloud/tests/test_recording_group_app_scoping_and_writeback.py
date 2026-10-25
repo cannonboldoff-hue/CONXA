@@ -223,6 +223,27 @@ def test_expired_required_app_blocks_recording(isolated_data_dir, monkeypatch):
     assert "expired" in exc_info.value.message
 
 
+def test_unconfirmed_session_blocks_recording(isolated_data_dir, monkeypatch):
+    """A saved session whose probe could not tell is not proof of sign-in: the browser must not open."""
+    group = create_group("Sales", workspace_id="wrk_local")
+    group, render_id = _captured_app(
+        isolated_data_dir, group.id, "Render", "https://render.test/login", "https://render.test/", '{"cookies": [], "origins": []}'
+    )
+    _age_checked_at(group.id, render_id, 700)
+    workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
+    created = []
+    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "unverified")
+    monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: created.append(1) or _FakeSess())
+
+    h = _Harness()
+    with pytest.raises(_CommandError) as exc_info:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert exc_info.value.code == "auth_required"
+    assert "Render" in exc_info.value.message
+    assert "confirmed" in exc_info.value.message
+    assert created == []
+
+
 def test_expired_sibling_app_blocks_recording(isolated_data_dir, monkeypatch):
     """An expired app the start URL doesn't match is just as fatal mid-recording as one it
     does — it used to only warn, and the recording opened signed out of it."""

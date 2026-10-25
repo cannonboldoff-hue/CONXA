@@ -156,7 +156,7 @@ def test_questions_cover_the_places_only_the_recorder_knows_and_are_capped_and_o
     assert len(qs) <= MAX_QUESTIONS
     upload = qs[0]
     assert "invoice.pdf" in upload["title"] and upload["choices"][0]["id"] == "input"  # the safe default first
-    assert qs[1]["title"] == "“Send invoice” can’t be undone. Should a person confirm first?"
+    assert qs[1]["title"] == "“Send invoice” can’t be undone. Should someone approve it before it happens?"
     values = qs[2]
     assert values["multi"] and [c["id"] for c in values["choices"]] == ["po_number", "description"]
     assert values["choices"][0]["detail"] == "PO-44821"
@@ -222,7 +222,7 @@ def test_answers_become_only_existing_mutations():
     assert plan_answer(_q(doc, "values"), {"selected": ["po_number", "description"]}, doc)[0] == []
 
     # upload: the default asks each run (no op at all); fixed restores the recorded path
-    assert plan_answer(_q(doc, "upload"), {"choice": "input"}, doc) == ([], "Asks for the file each run")
+    assert plan_answer(_q(doc, "upload"), {"choice": "input"}, doc) == ([], "Whoever uses it picks the file")
     ops, _ = plan_answer(_q(doc, "upload"), {"choice": "fixed"}, doc)
     assert ops[0] == {"op": "patch", "step_key": keys[3], "patch": {"value": "C:\\Users\\me\\Desktop\\invoice.pdf"}}
 
@@ -232,7 +232,7 @@ def test_answers_become_only_existing_mutations():
 
     # confirm: yes inserts a review before the step; no does nothing
     ops, receipt = plan_answer(_q(doc, "confirm"), {"choice": "yes"}, doc)
-    assert ops[0]["op"] == "insert_review" and ops[0]["before_step_key"] == keys[5] and receipt == "A person confirms"
+    assert ops[0]["op"] == "insert_review" and ops[0]["before_step_key"] == keys[5] and receipt == "Someone approves it first"
     assert plan_answer(_q(doc, "confirm"), {"choice": "no"}, doc)[0] == []
 
 
@@ -246,7 +246,7 @@ def test_done_when_only_ever_makes_an_existing_text_url_or_state_check_required(
     asserts = op["patch"]["validation"]["assertions"]
     assert asserts[0]["required"] is True and asserts[1]["required"] is False
     assert {a["type"] for a in asserts} <= {"text_present", "url_changed", "url_pattern", "state_changed"}
-    assert receipt == "The message “Invoice sent” appears"
+    assert receipt == "You see the words “Invoice sent” on the screen"
 
 
 def test_done_when_offers_inputs_and_takes_a_typed_check_and_reads_the_current_doc():
@@ -266,7 +266,7 @@ def test_done_when_offers_inputs_and_takes_a_typed_check_and_reads_the_current_d
     # a value turned into an input after the compile: the label shows the input, not the recorded text
     doc["skills"][0]["steps"][5]["validation"]["assertions"][0]["target"] = "Invoice {{po_number}} sent"
     fresh = refresh_question(q, doc)
-    assert fresh["choices"][0]["label"] == "The message “Invoice “po number” sent” appears"
+    assert fresh["choices"][0]["label"] == "You see the words “Invoice “po number” sent” on the screen"
     assert "input:po_number" not in {c["id"] for c in fresh["choices"]}
 
 
@@ -445,3 +445,31 @@ def test_capabilities_needed_names_the_new_engine_features():
     ]
     assert capabilities_needed(steps) == {"date_offset", "ask_missing", "templated_click"}
     assert capabilities_needed([{"action": {"action": "click"}, "identity_bundle": {"signals": [], "fingerprint": {"inner_text": "Save"}}}]) == set()
+
+
+def test_reworded_questions_are_validated_field_by_field():
+    from conxa_compile.conversation.clarify import apply_reworded, reword_payload
+
+    qs = [
+        {"id": "c", "kind": "confirm", "status": "open", "multi": False, "title": "“Send invoice” can’t be undone.", "body": "Draft body.",
+         "choices": [{"id": "yes", "label": "Yes", "detail": "Asks first."}, {"id": "no", "label": "No", "detail": ""}]},
+        {"id": "v", "kind": "values", "status": "open", "multi": True, "title": "Which change?", "body": "Tick them.",
+         "choices": [{"id": "po", "label": "Po number", "detail": "PO-1"}]},
+        {"id": "d", "kind": "dropped_value", "status": "open", "multi": False, "title": "T", "body": "typed “secret”", "choices": []},
+    ]
+    assert [i["id"] for i in reword_payload(qs)] == ["c", "v"]          # typed values never leave the machine
+    assert "choices" not in reword_payload(qs)[1]                         # multi-choice labels are value names
+    apply_reworded(qs, {"questions": [
+        {"id": "c", "title": "Heads up: “Send invoice” can’t be taken back.", "body": "{{x}}",         # placeholder: rejected
+         "choices": [{"id": "yes", "label": "Yes, ask someone first", "detail": "A yes/no box appears."},
+                     {"id": "no", "label": "", "detail": ""}, {"id": "ghost", "label": "Invented", "detail": "x"}]},
+        {"id": "v", "title": "Which of these change?", "body": "Tick them.", "choices": [{"id": "po", "label": "HACK", "detail": "HACK"}]},
+        {"id": "d", "title": "HACK", "body": "HACK"},
+    ]})
+    assert qs[0]["title"].startswith("Heads up") and qs[0]["body"] == "Draft body."
+    assert [c["label"] for c in qs[0]["choices"]] == ["Yes, ask someone first", "No"] and len(qs[0]["choices"]) == 2
+    assert qs[1]["title"] == "Which of these change?" and qs[1]["choices"][0]["label"] == "Po number"
+    assert qs[2]["title"] == "T"
+    apply_reworded(qs, {"questions": [{"id": "c", "title": "Dropped the quoted name"}]})  # a quoted item missing: rejected
+    assert qs[0]["title"].startswith("Heads up")
+    apply_reworded(qs, None)  # a failed call changes nothing

@@ -135,3 +135,59 @@ def test_ai_credits_falls_back_to_legacy_class_on_an_older_cloud(monkeypatch):
     client.route_text("copilot_reply", {"user_text": "x"}, 30_000, error_detail=[])
 
     assert sent == ["ai_credits", "human_edit", "human_edit"]
+
+
+def test_a_short_interactive_text_task_gets_its_own_deadline_not_the_90s_floor(monkeypatch):
+    """BUILD-55 F04: workflow_understanding asks for 30 s; it must not run for the 90 s floor."""
+    seen: list[float] = []
+
+    def fake_urlopen(req, timeout=None):
+        seen.append(timeout)
+        raise _http_error(502, {"detail": "x"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    slept: list[float] = []
+    monkeypatch.setattr("services.llm_proxy_client.time.sleep", lambda s: slept.append(s))
+
+    client = LLMProxyClient("http://cloud.local", token_provider=lambda: "tok")
+    with pytest.raises(ProxyUnavailable):
+        client.route_text("workflow_understanding", {}, 30_000)
+
+    assert seen[0] <= 35.0 + 0.5            # 30 s + 5 s slack, not 95 s
+    assert len(seen) == 3 and len(slept) == 2  # backoffs (1 s, 4 s) still fit inside the deadline
+
+
+def test_retries_stop_when_the_deadline_would_pass(monkeypatch):
+    calls: list[str] = []
+    clock = {"t": 1000.0}
+
+    def fake_urlopen(req, timeout=None):
+        calls.append("call")
+        clock["t"] += 14.0                   # each attempt "takes" 14 s
+        raise _http_error(502, {"detail": "x"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("services.llm_proxy_client.time.sleep", lambda s: None)
+    monkeypatch.setattr("services.llm_proxy_client.time.monotonic", lambda: clock["t"])
+
+    client = LLMProxyClient("http://cloud.local", token_provider=lambda: "tok")
+    with pytest.raises(ProxyUnavailable):
+        client.route_text("chat_map_answer", {}, 10_000)   # deadline = 15 s after the first call starts
+
+    assert len(calls) == 1                   # a backoff would pass the deadline, so no retry is made
+
+
+def test_other_text_tasks_keep_the_long_budget(monkeypatch):
+    seen: list[float] = []
+
+    def fake_urlopen(req, timeout=None):
+        seen.append(timeout)
+        raise _http_error(402, {"detail": "trial_expired"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    from services.llm_proxy_client import EntitlementBlocked
+
+    client = LLMProxyClient("http://cloud.local", token_provider=lambda: "tok")
+    with pytest.raises(EntitlementBlocked):
+        client.route_text("semantic_enrichment", {}, 20_000)
+    assert seen[0] == 95.0

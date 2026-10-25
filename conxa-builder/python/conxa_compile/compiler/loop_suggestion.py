@@ -14,8 +14,8 @@ mutates a step. Applying one is `editor/workflow_mutations.py::apply_for_each_lo
 gated behind an explicit Human Edit "Accept" click (`handlers/copilot.py`), same governance model
 as BUILD-25's second-opinion findings and BUILD-26's Copilot proposals.
 
-The `why` string built below is later, optionally, rewritten into friendlier prose by
-`build.py::_rewrite_loop_suggestions_for_review` (LLM task `llm/loop_suggestion_copy.py`) before
+The `why` string built below is later, optionally, replaced by a friendlier sentence from
+the compile's review call (`build.py::_rewrite_loop_suggestions_for_review`, BUILD-55) before
 it reaches the Human Edit review popup — copy-only, runs after this module returns, and never
 changes anything this module decided. This module's own "no LLM" claim above still holds.
 """

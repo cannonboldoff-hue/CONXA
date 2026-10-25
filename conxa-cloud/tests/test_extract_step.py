@@ -225,10 +225,10 @@ def test_a_captured_value_is_confirmed_once_and_removal_deletes_just_that_step()
          "semantic_description": "Order total", "validation": {"assertions": []}, "identity_bundle": {"stable_hash": "b"}},
     ]}]}
     qs = [q for q in generate_questions(doc) if q["kind"] == "output"]
-    assert len(qs) == 1 and qs[0]["title"] == "Report \u201corder_total\u201d back when the workflow finishes?"
-    assert plan_answer(qs[0], {"choice": "keep"}, doc) == ([], "Reported as \u201corder_total\u201d")
+    assert len(qs) == 1 and qs[0]["title"] == "Show \u201corder_total\u201d to the user when it finishes?"
+    assert plan_answer(qs[0], {"choice": "keep"}, doc) == ([], "Shown to the user as \u201corder_total\u201d")
     ops, receipt = plan_answer(qs[0], {"choice": "remove"}, doc)
-    assert ops == [{"op": "delete_step", "step_key": qs[0]["step_keys"][0]}] and receipt == "Not reported"
+    assert ops == [{"op": "delete_step", "step_key": qs[0]["step_keys"][0]}] and receipt == "Not shown to the user"
     row = describe_event({"action": {"action": "extract"}, "target": {"inner_text": "Order total"}, "extras": {"sequence": 3}, "page": {}})
     assert row["text"] == "Will read \u201cOrder total\u201d back to whoever runs this"
 

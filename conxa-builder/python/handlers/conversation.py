@@ -104,6 +104,7 @@ class ConversationMixin:
         if workflow is None:
             raise _CommandError("workflow_not_found", "No such workflow.")
         self._reconcile_interrupted(ident)
+        self._resume_question_building(ident, rid)
         page = ts.load(thread_id, before=int(before) if before is not None else None, limit=int(payload.get("limit") or _THREAD_PAGE))
         if before is None:
             # Read-only, once per skill: the reviewer's old copilot history joins the thread.
@@ -329,6 +330,29 @@ class ConversationMixin:
             if age < 30:
                 continue
             harness.update_card(thread, card["card_id"], state="interrupted", actions=["test_again"])
+
+    def _resume_question_building(self, workflow_id: str, rid: str) -> None:
+        """A compile finished but the app closed before its questions were written: ``clarify.json``
+        holds only the "building" marker. Write them now, in the background (no model call), so the
+        workflow isn't left looking ready to test with its questions silently lost. Workflows compiled
+        before questions existed have no marker and are left alone."""
+        import threading
+
+        from conxa_compile.conversation import clarify_store, runtime_state
+        from conxa_core.storage.workflow_store import get_workflow
+
+        data = clarify_store.load(workflow_id)
+        if not data or not data.get("building"):
+            return
+        flags = runtime_state.get_flags(workflow_id)
+        if flags.get("understanding") or flags.get("compiling") or flags.get("queued"):
+            return  # genuinely in progress in this process
+        workflow = get_workflow(workflow_id)
+        if workflow is None or not workflow.skill_id or workflow.skill_id != data.get("skill_id"):
+            return
+        runtime_state.set_flags(workflow_id, understanding=True)  # the lifecycle we return says "checking", not "ready"
+        result = {"skill_id": workflow.skill_id, "version": data.get("version")}
+        threading.Thread(target=self._flow_rebuild_questions, args=(workflow_id, result, _event_sink(rid)), daemon=True).start()
 
     def _latest_card(self, workflow_id: str, card_type: str, states: tuple[str, ...]) -> dict[str, Any] | None:
         from conxa_compile.conversation import thread_store as ts

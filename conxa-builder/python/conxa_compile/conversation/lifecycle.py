@@ -212,34 +212,35 @@ def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
         clarify = clarify_store.summary(workflow.id)
     except Exception:  # noqa: BLE001
         clarify = None
+    # The thread file is read and folded once: the screen asks for the lifecycle after every new
+    # chat item, so reading it per helper made the cost grow with the length of the chat.
+    items = _thread_items(workflow.id)
     return derive_lifecycle(
         workflow,
         auth_missing=auth_missing,
         clarify=clarify,
         runtime=runtime_state.get_flags(workflow.id),
-        autofix=_latest_autofix(workflow.id),
-        pending_changes=_pending_changes(workflow.id),
+        autofix=_latest_autofix(items),
+        pending_changes=_pending_changes(items),
     )
 
 
-def _pending_changes(workflow_id: str) -> int:
-    """Proposed chat changes still waiting for Apply / Dismiss (thread data, like auto-fix state)."""
+def _thread_items(workflow_id: str) -> list[dict[str, Any]]:
     from conxa_compile.conversation import thread_store as ts
 
     try:
-        return sum(1 for i in ts.fold(ts.read_raw(f"wf:{workflow_id}"))
-                   if i.get("card_type") == "pending_change" and i.get("state") == "open")
+        return ts.fold(ts.read_raw(f"wf:{workflow_id}"))
     except Exception:  # noqa: BLE001
-        return 0
+        return []
 
 
-def _latest_autofix(workflow_id: str) -> dict[str, Any] | None:
+def _pending_changes(items: list[dict[str, Any]]) -> int:
+    """Proposed chat changes still waiting for Apply / Dismiss (thread data, like auto-fix state)."""
+    return sum(1 for i in items if i.get("card_type") == "pending_change" and i.get("state") == "open")
+
+
+def _latest_autofix(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The newest auto-fix card's state, read from the thread (auto-fix state is thread data, not a
     second source of truth: the lifecycle only uses it to tell "failed" from "auto-fix stopped")."""
-    from conxa_compile.conversation import thread_store as ts
-
-    try:
-        cards = [i for i in ts.fold(ts.read_raw(f"wf:{workflow_id}")) if i.get("card_type") == "autofix"]
-    except Exception:  # noqa: BLE001
-        return None
+    cards = [i for i in items if i.get("card_type") == "autofix"]
     return {"state": cards[-1].get("state")} if cards else None

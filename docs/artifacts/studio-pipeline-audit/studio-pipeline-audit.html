@@ -1,0 +1,496 @@
+<title>Studio Pipeline Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: companion to "How Conxa Asks Questions". One reading column, summary first, then charts, the register, and the plan. Code = blue square, model = orange pill, you = green circle, as on that page. */
+:root {
+  --bg: #f5f7fa; --surface: #ffffff; --ink: #15202b; --muted: #55626f; --line: #d8dee6; --soft: #eef2f6;
+  --code: #2f5d9a; --model: #c4540a; --you: #1b7f5c;
+  --code-t: #e6eef8; --model-t: #fbebdf; --you-t: #def3ea;
+  --s1: #2a78d6; --s2: #eb6834; --grid: #e1e0d9; --axis: #c3c2b7;
+  --crit: #d03b3b; --serious: #ec835a; --warn: #fab219; --good: #0ca30c;
+  --display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161b; --surface: #1a1f26; --ink: #e8ecf0; --muted: #9aa6b2; --line: #2c333c; --soft: #20262e;
+    --code: #5c8fd9; --model: #d9763a; --you: #2fa97c;
+    --code-t: #1c2a3e; --model-t: #3a2417; --you-t: #14332a;
+    --s1: #3987e5; --s2: #d95926; --grid: #2c2c2a; --axis: #383835; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b; --surface: #1a1f26; --ink: #e8ecf0; --muted: #9aa6b2; --line: #2c333c; --soft: #20262e;
+  --code: #5c8fd9; --model: #d9763a; --you: #2fa97c;
+  --code-t: #1c2a3e; --model-t: #3a2417; --you-t: #14332a;
+  --s1: #3987e5; --s2: #d95926; --grid: #2c2c2a; --axis: #383835; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.65 var(--body); padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 940px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; margin-top: 8px; }
+h2 { font-size: 1.65rem; font-weight: 600; margin-top: 64px; letter-spacing: -0.01em; }
+h3 { font-size: 1.12rem; font-weight: 600; margin-top: 28px; }
+p { margin: 12px 0 0; max-width: 70ch; }
+.lede { font-size: 1.12rem; color: var(--muted); max-width: 64ch; margin-top: 16px; }
+.eyebrow { font: 500 0.75rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+code, .m { font-family: var(--mono); font-size: 0.84em; background: var(--soft); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--code); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 28px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.tile .v { font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.02em; }
+.tile .k { font-size: 0.9rem; color: var(--muted); margin-top: 6px; }
+
+.scope { margin-top: 18px; font-size: 0.92rem; color: var(--muted); max-width: 76ch; }
+
+.frame { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.frame .head { padding: 14px 18px 0; }
+.frame .head b { font-family: var(--display); font-size: 1.05rem; }
+.frame .head span { display: block; color: var(--muted); font-size: 0.88rem; }
+.chartwrap { overflow-x: auto; padding: 6px 8px 4px; position: relative; }
+.chartwrap svg { display: block; width: 100%; min-width: 640px; height: auto; }
+figcaption { font-size: 0.88rem; color: var(--muted); padding: 10px 18px 14px; border-top: 1px solid var(--line); }
+figure { margin: 0; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; padding: 10px 18px 0; font-size: 0.86rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+svg text { font-family: var(--body); fill: var(--ink); }
+svg .mut { fill: var(--muted); }
+svg .mono { font-family: var(--mono); }
+svg .gridl { stroke: var(--grid); stroke-width: 1; }
+svg .base { stroke: var(--axis); stroke-width: 1; }
+svg .hit { fill: transparent; cursor: default; }
+svg .hit:hover + .bar, svg .bar:hover { opacity: 0.85; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 0.82rem; line-height: 1.4;
+  padding: 8px 10px; border-radius: 6px; max-width: 280px; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.tip b { display: block; font-family: var(--display); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
+.filters .lbl { font: 500 0.72rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.chip { font: 500 0.84rem var(--body); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 99px; padding: 4px 12px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip:focus-visible { outline: 2px solid var(--code); outline-offset: 2px; }
+.chip .n { font-family: var(--mono); font-size: 0.78rem; opacity: 0.75; margin-left: 4px; }
+
+.reg { display: grid; gap: 10px; margin-top: 16px; }
+.f { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0;
+  display: grid; grid-template-columns: 110px 1fr; gap: 6px 16px; }
+.f .meta { display: flex; flex-direction: column; gap: 6px; font: 500 0.74rem var(--mono); color: var(--muted); }
+.f h4 { margin: 0; font: 600 1.02rem/1.3 var(--display); }
+.f p { margin: 6px 0 0; font-size: 0.93rem; max-width: none; }
+.f .ev { font-size: 0.82rem; color: var(--muted); }
+.f .fix { font-size: 0.93rem; }
+.f .fix b { font-family: var(--display); }
+.sev { display: inline-flex; align-items: center; gap: 6px; font: 600 0.74rem var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+.sev svg { flex: none; }
+.area, .eff { display: inline-block; border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; width: fit-content; }
+@media (max-width: 560px) { .f { grid-template-columns: 1fr; } .f .meta { flex-direction: row; flex-wrap: wrap; } }
+
+.dup { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h4 { margin: 0; font: 600 1.02rem var(--display); }
+.card ul { margin: 8px 0 0; padding-left: 1.1em; font-size: 0.92rem; }
+.card li { margin-top: 4px; }
+.card .to { margin-top: 10px; font-size: 0.92rem; padding-top: 8px; border-top: 1px dashed var(--line); }
+
+.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 18px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 16px; min-width: 0; }
+.flow h4 { margin: 0 0 10px; font: 600 1rem var(--display); }
+.flow ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.flow li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; font-size: 0.9rem; padding: 7px 10px; border-radius: 8px; }
+.flow li.c { background: var(--code-t); } .flow li.md { background: var(--model-t); } .flow li.y { background: var(--you-t); }
+.flow li.gone { background: transparent; border: 1px dashed var(--line); color: var(--muted); text-decoration: line-through; }
+.flow li .g { margin-top: 4px; }
+.flow .note { margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+
+.phases { display: grid; gap: 12px; margin-top: 18px; }
+.phase { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: 150px 1fr; gap: 6px 18px; min-width: 0; }
+.phase .when { font: 600 1rem var(--display); }
+.phase .when span { display: block; font: 400 0.84rem var(--body); color: var(--muted); }
+.phase p { margin: 0; font-size: 0.93rem; max-width: none; }
+.phase .ids { font: 500 0.8rem var(--mono); color: var(--muted); margin-top: 6px; }
+@media (max-width: 560px) { .phase { grid-template-columns: 1fr; } }
+
+.note { margin-top: 18px; padding: 14px 16px; border-left: 3px solid var(--model); background: var(--surface); border-radius: 0 10px 10px 0; font-size: 0.94rem; max-width: 78ch; }
+footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.88rem; }
+footer ul { padding-left: 1.1em; }
+footer li { margin-top: 4px; }
+.tablewrap { margin-top: 12px; overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 0.86rem; }
+table.data th, table.data td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+table.data td.n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+details { margin-top: 8px; }
+summary { cursor: pointer; font-size: 0.86rem; color: var(--muted); padding: 0 18px 10px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+  <p class="eyebrow">Conxa Build Studio · after the compile and in the chat · 26 Oct 2026</p>
+  <h1>Where the Studio loses answers and pays twice</h1>
+  <p class="lede">A code audit of the path from "compile finished" to "ready to test", and of the chat engine that carries it. It lists what can break in production, what is done twice, and a plan to cut model calls and wait time without loosening any safety rule.</p>
+
+  <div class="tiles">
+    <div class="tile"><div class="v">23</div><div class="k">findings, each tied to a file and line</div></div>
+    <div class="tile"><div class="v">4</div><div class="k">high severity: a lost reply, a crashed turn, a double-applied answer, a stuck screen</div></div>
+    <div class="tile"><div class="v">6</div><div class="k">model calls one chat message can cost today, worst case</div></div>
+    <div class="tile"><div class="v">~4 min</div><div class="k">longest the "Checking it against your description" step can block Test, for a call that asks for 30 s</div></div>
+  </div>
+
+  <p class="scope"><b>What was read:</b> the compile flow handler, the question builder and its store, the description check, the chat engine and command router, the lifecycle, the Studio's model client, the cloud proxy client, and the reply-size and retry settings. <b>Not covered:</b> the runtime's step executor and recovery, the recorder, the compiler internals, and the renderer. Call counts and wait times are worked out from the code, not measured on a live account.</p>
+
+  <h2>Model calls per action</h2>
+  <p>Clicking a choice costs nothing, which is the design working. Typing, chatting and finishing a compile fan out into several calls, mostly one after another.</p>
+  <figure class="frame">
+    <div class="head"><b>Model calls for one action, worst case today</b><span>Counted from the code paths. Hover a bar for the calls behind it.</span></div>
+    <div class="chartwrap" id="callsChart"></div>
+    <details><summary>Show as a table</summary><div class="tablewrap" style="padding:0 18px 12px"><table class="data" id="callsTable"></table></div></details>
+    <figcaption>"Finish a compile" counts only the question step after the compile, for a recording with two popups that need a decision. The compile's own calls (step meanings, screenshot landmarks) are not included.</figcaption>
+  </figure>
+
+  <h2>Timeouts that do not hold</h2>
+  <p>Each call asks for a short timeout. The Studio's cloud client never waits less than 90 seconds per request, the cloud may spend up to 75 seconds per request trying providers, and the Studio retries a 502, 503 or 504 twice. So every short call shares the same real ceiling.</p>
+  <figure class="frame">
+    <div class="legend"><span><i style="background:var(--s1)"></i>Timeout the call asks for</span><span><i style="background:var(--s2)"></i>Longest it can actually run</span></div>
+    <div class="chartwrap" id="timeChart"></div>
+    <details><summary>Show as a table</summary><div class="tablewrap" style="padding:0 18px 12px"><table class="data" id="timeTable"></table></div></details>
+    <figcaption>Ceiling = 3 requests × 75 s cloud budget + 5 s of backoff ≈ 230 s. The chat reply itself streams and is left out. Source: <span class="m">llm_proxy_client.py:23,30,158</span>, <span class="m">config.py:357</span>.</figcaption>
+  </figure>
+
+  <h2>Findings register</h2>
+  <p>Sorted by severity. Filter by area or severity. Effort is a rough size: XS is under an hour, S a few hours, M one to three days.</p>
+  <div class="filters" id="areaFilters" role="group" aria-label="Filter by area"><span class="lbl">Area</span></div>
+  <div class="filters" id="sevFilters" role="group" aria-label="Filter by severity"><span class="lbl">Severity</span></div>
+  <div class="reg" id="register"></div>
+
+  <h2>Redundancy to fold away</h2>
+  <p>The same question, the same wording job, or the same plumbing exists in more than one place. Each copy is a place for behavior to drift.</p>
+  <div class="dup">
+    <div class="card"><h4>"Which values change?" is asked four ways</h4>
+      <ul>
+        <li>The recorder's "Changes each run?" toggle</li>
+        <li>Chosen values (addresses, rows, clicked items)</li>
+        <li>Typed values, with the same title and body</li>
+        <li>After a failed test, per value</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> one card grouped by kind. The recorder toggle pre-ticks rows instead of hiding them; the after-test version re-opens that card.</div></div>
+    <div class="card"><h4>Popups have three question kinds</h4>
+      <ul>
+        <li>Decision popup (outcome fork)</li>
+        <li>Popup seen in other workflows (app map)</li>
+        <li>Small popup the recorder flagged</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> one builder with a "source" field. Keep the three answer paths, since they map to different gated commands.</div></div>
+    <div class="card"><h4>Popup titles are worded twice</h4>
+      <ul>
+        <li>One wording call per popup during question building</li>
+        <li>The batch wording call rewrites the same title again</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> the batch call only, with the popup's button names as context.</div></div>
+    <div class="card"><h4>Two keyword lists gate paid calls</h4>
+      <ul>
+        <li>"Looks like a command" list in the router</li>
+        <li>"Might want a change" list in the chat engine</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> one list with a test table of real messages and the call each should trigger.</div></div>
+    <div class="card"><h4>Four ways to call a model</h4>
+      <ul>
+        <li>Direct calls with ad hoc error handling</li>
+        <li>The older OpenAPI-style wrapper</li>
+        <li>The wording helper with cache and fallback</li>
+        <li>Recovery's own cache file</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> one advisory call: task, payload, validator, fallback, optional cache. Every non-primary call uses it.</div></div>
+    <div class="card"><h4>Two model replies per change request</h4>
+      <ul>
+        <li>The proposal call writes a reply that is thrown away</li>
+        <li>The streamed reply is then written from scratch</li>
+      </ul>
+      <div class="to"><b>Fold into:</b> ask the proposal call for proposals only, with a smaller output ceiling.</div></div>
+  </div>
+
+  <h2>Target shape</h2>
+  <p>Same rules as today: code builds every question, choice and edit; a model only labels meaning and writes words; nothing changes the workflow without a click. The change is order and count.</p>
+  <div class="flows">
+    <div class="flow"><h4>After a compile, today</h4>
+      <ol>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Description check (waits)</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Popup wording, one call per popup (waits)</span></li>
+        <li class="c"><svg class="g" width="12" height="12" aria-hidden="true"><rect width="12" height="12" fill="var(--code)"/></svg><span>Find and rank questions</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Batch wording (waits)</span></li>
+        <li class="y"><svg class="g" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="6" fill="var(--you)"/></svg><span>First question appears</span></li>
+      </ol>
+      <p class="note">Three or more calls in a row before anything shows. Test stays blocked the whole time.</p></div>
+    <div class="flow"><h4>After a compile, proposed</h4>
+      <ol>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Description check, 20 s overall deadline, then fallback</span></li>
+        <li class="gone"><span></span><span>Popup wording per popup</span></li>
+        <li class="c"><svg class="g" width="12" height="12" aria-hidden="true"><rect width="12" height="12" fill="var(--code)"/></svg><span>Find and rank questions</span></li>
+        <li class="y"><svg class="g" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="6" fill="var(--you)"/></svg><span>First question appears in template wording</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Batch wording in the background, cached, revises cards not yet answered</span></li>
+      </ol>
+      <p class="note">One call blocks, with a hard limit. Wording never delays a question.</p></div>
+    <div class="flow"><h4>A chat message, today</h4>
+      <ol>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Map to a card choice, then route as a command</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Proposal call, up to 3 rounds, reply discarded (waits)</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Streamed reply</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Draft check on every general Chat turn, unguarded</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Summary, while the chat stays locked</span></li>
+      </ol></div>
+    <div class="flow"><h4>A chat message, proposed</h4>
+      <ol>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>One classify call: choice, action, change request, or chat</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Streamed reply starts at once</span></li>
+        <li class="md"><svg class="g" width="16" height="10" aria-hidden="true"><rect width="16" height="10" rx="5" fill="var(--model)"/></svg><span>Proposals in parallel, proposals only; change card posts when ready</span></li>
+        <li class="gone"><span></span><span>Draft check every turn</span></li>
+        <li class="c"><svg class="g" width="12" height="12" aria-hidden="true"><rect width="12" height="12" fill="var(--code)"/></svg><span>Save the reply first; summary runs after the lock is released</span></li>
+      </ol>
+      <p class="note">The reply is saved before anything optional runs, so no later failure can take it away.</p></div>
+  </div>
+
+  <h2>Plan</h2>
+  <div class="phases">
+    <div class="phase"><div class="when">Phase 1<span>about a day</span></div>
+      <div><p>Stop losing work. Guard the two unguarded calls, save the reply before the draft check, pick one rule for which questions block Test, fix the reply timeout, run summaries outside the lock, cache the wording call, delete dead code.</p>
+      <p class="ids">F01 F02 F05 F09 F16 F17 F20 F23 · tests: a failing draft check keeps the reply; a failing answer-mapping call returns "unclear"</p></div></div>
+    <div class="phase"><div class="when">Phase 2<span>two to three days</span></div>
+      <div><p>Make answers safe to apply. Snapshot the workflow before an answer's edits and restore it on any failure; record applied answers so a retry or restart never applies one twice; lock the question file around each update; give post-compile calls a real deadline; rebuild missing questions after a restart; read the chat file once per lifecycle update.</p>
+      <p class="ids">F03 F04 F06 F14 F15 · tests: second edit fails, workflow equals the snapshot; retry after a crash applies once; dead cloud returns fallback questions within the deadline</p></div></div>
+    <div class="phase"><div class="when">Phase 3<span>about a week</span></div>
+      <div><p>Fewer calls, faster first card. Drop per-popup wording, post the first question before rewording, stream the reply before proposals, merge the two routing calls and the two keyword lists, run the draft check only on request, merge the "which values change" cards and the popup builders.</p>
+      <p class="ids">F07 F08 F10 F11 F12 F13 F21 F22 · tests: a message table that pins which calls each sample triggers</p></div></div>
+    <div class="phase"><div class="when">Phase 4<span>two to three days</span></div>
+      <div><p>One way to call a model. A single advisory call with validator, fallback and cache; one shared list of picture tasks for the Studio, the core package and the cloud router.</p>
+      <p class="ids">F18 F19</p></div></div>
+  </div>
+
+  <div class="note"><b>Correction to "How Conxa Asks Questions".</b> That page lists <span class="m">selector_generation</span> and <span class="m">recovery_resolve</span> as unused prompts. Both are called through <span class="m">llm/openapi_client.py:87</span> and <span class="m">:130</span> on the 1-click fix path. Only <span class="m">intent_generation</span> has no caller.</div>
+
+  <footer>
+    <p><b>Files behind the findings</b></p>
+    <ul>
+      <li><span class="m">conxa-builder/python/handlers/compile_flow.py</span>: post-compile flow and answer application</li>
+      <li><span class="m">conxa_compile/conversation/clarify.py</span>, <span class="m">clarify_store.py</span>, <span class="m">understanding.py</span>, <span class="m">lifecycle.py</span>, <span class="m">runtime_state.py</span></li>
+      <li><span class="m">conxa_compile/conversation/harness.py</span>, <span class="m">intent_router.py</span></li>
+      <li><span class="m">conxa_compile/llm/client.py</span>, <span class="m">copy_rewrite.py</span>, <span class="m">clarify_question_copy.py</span>, <span class="m">copilot.py</span>, <span class="m">openapi_client.py</span></li>
+      <li><span class="m">conxa-builder/python/services/llm_proxy_client.py</span>, <span class="m">packages/conxa-core/conxa_core/llm/client.py</span>, <span class="m">conxa_core/config.py</span></li>
+    </ul>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var SEV = { high: { label: "High", color: "var(--crit)" }, medium: { label: "Medium", color: "var(--serious)" }, low: { label: "Low", color: "var(--warn)" } };
+  function sevIcon(s) {
+    if (s === "high") return '<svg width="12" height="12" aria-hidden="true"><path d="M6 0 L12 12 L0 12 Z" fill="' + SEV[s].color + '"/></svg>';
+    if (s === "medium") return '<svg width="12" height="12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" transform="rotate(45 6 6)" fill="' + SEV[s].color + '"/></svg>';
+    return '<svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="' + SEV[s].color + '"/></svg>';
+  }
+
+  var F = [
+    ["F01","high","Chat","A failed draft check erases a reply the person already read",
+     "In general Chat, after the reply has streamed, a second call checks whether the talk could become a workflow draft. That call has no error guard and runs before the reply is saved. If it fails, the turn errors, the reply disappears, and Try again pays for the reply twice.",
+     "harness.py:383 calls _maybe_draft; harness.py:532 call_llm is unguarded; the reply is appended only at harness.py:389",
+     "Save the reply first, then run the draft check inside try/except that returns nothing.","XS"],
+    ["F02","high","Chat","A typed answer to a question card can crash the turn",
+     "When the person types instead of clicking, one call maps their words to a choice. A provider error there is not caught, so they get an error card instead of \"pick one on the card\".",
+     "harness.py:499 call_llm(\"chat_map_answer\") has no try/except",
+     "Catch the error and treat it as unclear, which already has a safe path.","XS"],
+    ["F03","high","State","An answer is applied edit by edit, with no undo if one fails",
+     "One answer can become several edits (insert a review step, then fill it in). Each runs as its own command. If a later one fails, the earlier ones stay, and the card offers Try again, which inserts a second review step. A crash between saving the workflow and saving the question file reopens an answered question, and answering it again applies it twice.",
+     "compile_flow.py:445-498 runs ops one at a time; workflow saved at :399, question marked answered at :406",
+     "Snapshot the workflow before the edits and restore it on any failure. Store the applied answer per question id and skip re-applying it.","M"],
+    ["F04","high","Calls","A 30-second check can hold the screen for about four minutes",
+     "The description check asks for 30 s. The cloud client never waits less than 90 s per request, the cloud can spend 75 s per request, and the Studio retries 502/503/504 twice. Test is blocked the whole time behind \"Checking it against your description\".",
+     "llm_proxy_client.py:23 (_PROXY_MIN_TIMEOUT_S = 90), :30 (two retries), :158; config.py:357 (75 s budget); compile_flow.py:102 sets the blocking flag",
+     "Pass each task's own deadline through; keep the 90 s floor only for picture and streamed tasks. Give the post-compile check one overall deadline, then use the fallback questions.","S"],
+    ["F05","medium","State","Every open question blocks Test, though only four kinds are meant to",
+     "The code defines which question kinds decide what the workflow is, and counts them, but the lifecycle checks the plain open count. So \"How can we tell it worked?\" or \"Show this value?\" also stops Test, against the comment that says they never block.",
+     "clarify.py:46 BLOCKING_KINDS; clarify_store.py:73 blocking_open is never read; lifecycle.py:106 uses open",
+     "Pick one rule. Either gate Test on blocking_open, or delete the unused set and fix the comment.","XS"],
+    ["F06","medium","State","Question file updates can overwrite each other",
+     "The question store locks only the final write, not the read-edit-write around it. Saving a card id while an answer lands, or marking questions stale while one is answered, can drop one change. A failed disk write is swallowed, so an applied answer can stay \"open\".",
+     "clarify_store.py:46 lock covers the write only; :89-100 update_question; :51 except OSError: pass; compile_flow.py:405-409 loads twice and saves the whole file",
+     "Hold one lock around load, edit and save. Surface a failed write instead of ignoring it.","S"],
+    ["F07","medium","Questions","Popup questions are worded twice",
+     "During question building, each decision popup gets its own wording call. Then the batch wording call rewrites the same title and body again, because popup questions are not excluded from it.",
+     "compile_flow.py:171-179 and clarify.py:122-133 (per-popup call); clarify.py:302 excludes only dropped_value, test_followup, input_check",
+     "Drop the per-popup call. Give the batch call the popup's button names. Saves one call, in series, per popup.","S"],
+    ["F08","medium","Questions","The first question waits on every wording call",
+     "The description check, each popup wording call and the batch wording call run one after another before the first card appears. Wording is cosmetic, but it sits on the slowest path in the product.",
+     "compile_flow.py:192-211",
+     "Post the first card in template wording right away. Reword in the background and revise only cards not yet answered.","M"],
+    ["F09","low","Questions","The batch wording call skips the shared cache",
+     "A helper with cache and fallback already exists for wording calls. The batch call bypasses it, so recompiling an unchanged workflow pays again.",
+     "clarify_question_copy.py:24 calls call_llm directly; copy_rewrite.py:42-66 has the cache",
+     "Key a cache on the reword payload and reuse the helper's read and write.","S"],
+    ["F10","medium","Chat","The reply waits for change proposals, whose own reply is thrown away",
+     "When a message might ask for a change, the proposal call runs first: up to three rounds, with a 16,384-token ceiling. Only then does the reply start streaming. The proposal call also writes a reply that is discarded.",
+     "harness.py:345-356; harness.py:507 docstring says its reply is ignored; copilot_retrieval.py:20 MAX_RETRIEVAL_ROUNDS = 2",
+     "Start the reply at once and run proposals in parallel, posting the change card when ready. Ask the proposal call for proposals only, with a smaller ceiling.","M"],
+    ["F11","medium","Chat","One chat message can cost six model calls",
+     "A change request in a workflow chat can run routing, three proposal rounds, the reply and a summary. In general Chat the draft check runs on every turn, although it usually returns nothing.",
+     "intent_router.py:78; harness.py:350, :373, :383, :408",
+     "Run the draft check only when the person asks to make a workflow. Merge the routing calls (F13). Count calls per message in a test.","M"],
+    ["F12","low","Chat","Two keyword lists decide what costs a call",
+     "The router's list includes common words like show, go, ask, try and run. The change list includes should, input and wrong. \"Why should it show that?\" pays for both routing and proposals.",
+     "intent_router.py:20 _COMMANDISH; harness.py:147 _CHANGE_WORDS",
+     "One shared list, held to a table of sample messages and the calls each should trigger.","S"],
+    ["F13","low","Chat","An unclear typed answer makes two calls",
+     "A typed answer is first mapped to a choice. If that is unclear, the same message is sent again to the command router.",
+     "harness.py:290-300",
+     "One call that sees the card's choices and the allowed actions and returns a choice, an action, or unclear.","S"],
+    ["F14","medium","State","The lifecycle re-reads the whole chat file twice per update",
+     "Working out what the person may do next reads and folds the full chat file twice, plus the question file. The screen asks for this after every new chat item, so the cost grows with chat length.",
+     "lifecycle.py:230 and :242 each call ts.fold(ts.read_raw(...)); compile_flow.py:122 notes the re-read",
+     "Fold once per call and pass the items to both helpers, or keep pending-change and auto-fix state in the in-memory flags.","S"],
+    ["F15","medium","State","A restart during the check loses the questions",
+     "\"A check is running\" lives only in memory. If the engine stops after the compile but before the question file is written, the workflow shows \"Ready to test\" and never asks about coverage or changing values.",
+     "runtime_state.py:1-15 (in-memory by design); clarify_store.save happens at compile_flow.py:212",
+     "When a compiled version has no question file, rebuild the questions the next time the workflow opens.","S"],
+    ["F16","low","Chat","Summaries run while the chat is locked",
+     "Folding old turns into a summary is housekeeping, but it runs inside the per-chat lock. The next message waits up to 60 s behind it.",
+     "harness.py:407-408 inside _run_locked; harness.py:563 60 s",
+     "Run it after the lock is released, on a background thread.","S"],
+    ["F17","low","Calls","Chat calls use the picture timeout",
+     "Every chat call derives its timeout from the vision setting (120 s), even text-only ones.",
+     "harness.py:177-178",
+     "Use the text timeout for text tasks.","XS"],
+    ["F18","low","Calls","Four ways to call a model, three ways to cache",
+     "Direct calls, an older wrapper, a wording helper and recovery's own cache file each handle errors and caching differently. F01 and F02 are what happens when a call site forgets.",
+     "openapi_client.py:16; copy_rewrite.py:26; recovery_llm.py:38-65; ten direct call_llm sites",
+     "One advisory call with task, payload, validator, fallback and optional cache. Every non-primary call goes through it and can never raise.","M"],
+    ["F19","low","Calls","The list of picture tasks lives in three places",
+     "The Studio, the core package and the cloud router each decide which tasks are sent to a vision model. The code comments admit the copies must be kept in sync by hand.",
+     "conxa_compile/llm/client.py:60-61",
+     "One table in the core package that both the Studio and the cloud import.","S"],
+    ["F20","low","Calls","One leftover prompt",
+     "The intent_generation prompt has no caller. The earlier page also listed two others as unused; those are in use (see the correction below).",
+     "conxa_core/llm/client.py:279",
+     "Delete the prompt branch.","XS"],
+    ["F21","medium","Questions","Two cards in a row ask \"Which of these are different every time?\"",
+     "Chosen values (addresses, rows, clicked items) and typed values are separate questions with the same title and body. The recorder toggle and the after-test question ask the same thing again.",
+     "clarify.py:186 and :495 (same title); clarify.py:197 (after a test); clarify.py:467 (recorder hints)",
+     "One values card grouped by kind. Recorder answers pre-tick rows instead of hiding them.","M"],
+    ["F22","low","Questions","Three question kinds for popups",
+     "Decision popups, popups seen in other workflows and small flagged popups each have their own builder and wording.",
+     "clarify.py:101, :142, :616",
+     "One builder with a source field. Keep the three answer paths, which map to different gated commands.","M"],
+    ["F23","low","State","Small dead code in the compile flow",
+     "An unused warnings count, a card handler that always refuses, and the \"checking\" flag cleared three times.",
+     "compile_flow.py:116, :514, :124/:128/:221",
+     "Remove them.","XS"]
+  ];
+  var order = { high: 0, medium: 1, low: 2 };
+  F.sort(function (a, b) { return order[a[1]] - order[b[1]] || a[0].localeCompare(b[0]); });
+
+  var state = { area: "All", sev: "All" };
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function renderReg() {
+    var html = F.filter(function (f) { return (state.area === "All" || f[2] === state.area) && (state.sev === "All" || f[1] === state.sev); })
+      .map(function (f) {
+        return '<article class="f"><div class="meta"><span>' + f[0] + '</span><span class="sev">' + sevIcon(f[1]) + SEV[f[1]].label + '</span><span class="area">' + f[2] + '</span><span class="eff">effort ' + f[7] + '</span></div>' +
+          '<div><h4>' + esc(f[3]) + '</h4><p>' + esc(f[4]) + '</p><p class="ev"><span class="m">' + esc(f[5]) + '</span></p><p class="fix"><b>Fix.</b> ' + esc(f[6]) + '</p></div></article>';
+      }).join("");
+    document.getElementById("register").innerHTML = html || '<p>No findings match.</p>';
+  }
+  function chips(id, key, values, labelFn, countFn) {
+    var box = document.getElementById(id);
+    values.forEach(function (v) {
+      var b = document.createElement("button");
+      b.className = "chip"; b.type = "button"; b.id = id + "-" + v;
+      b.setAttribute("aria-pressed", v === "All" ? "true" : "false");
+      b.innerHTML = labelFn(v) + '<span class="n">' + countFn(v) + '</span>';
+      b.addEventListener("click", function () {
+        state[key] = v;
+        box.querySelectorAll(".chip").forEach(function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+        renderReg();
+      });
+      box.appendChild(b);
+    });
+  }
+  chips("areaFilters", "area", ["All", "State", "Chat", "Questions", "Calls"], function (v) { return v; },
+    function (v) { return F.filter(function (f) { return v === "All" || f[2] === v; }).length; });
+  chips("sevFilters", "sev", ["All", "high", "medium", "low"], function (v) { return v === "All" ? "All" : SEV[v].label; },
+    function (v) { return F.filter(function (f) { return v === "All" || f[1] === v; }).length; });
+  renderReg();
+
+  // ── charts ──
+  function tipFor(wrap) {
+    var t = document.createElement("div"); t.className = "tip"; t.hidden = true; wrap.appendChild(t);
+    return {
+      show: function (e, html) { t.innerHTML = html; t.hidden = false; var r = wrap.getBoundingClientRect();
+        var x = e.clientX - r.left + wrap.scrollLeft + 14, y = e.clientY - r.top + 10;
+        t.style.left = Math.min(x, wrap.scrollWidth - 290) + "px"; t.style.top = y + "px"; },
+      hide: function () { t.hidden = true; }
+    };
+  }
+
+  var calls = [
+    ["Click a choice on a question card", 0, "No model. Code applies the edit."],
+    ["Ask a plain question in a workflow chat", 2, "studio_chat_reply · thread_summarize (when the chat is long)"],
+    ["Type an answer to a question card", 2, "chat_map_answer · chat_route_intent (when the first is unclear)"],
+    ["Finish a compile with two decision popups", 4, "workflow_understanding · fork_question_copy × 2 · clarify_question_copy"],
+    ["Send a message in general Chat", 4, "chat_route_intent · studio_chat_reply · studio_chat_actions · thread_summarize"],
+    ["Ask for a change in a workflow chat", 6, "chat_route_intent · copilot_diagnose × 3 · studio_chat_reply · thread_summarize"]
+  ];
+  (function () {
+    var wrap = document.getElementById("callsChart"), tip;
+    var W = 860, L = 300, R = 40, rowH = 40, top = 14, H = top + calls.length * rowH + 30, max = 6, sx = (W - L - R) / max;
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart of model calls per user action">';
+    for (var g = 0; g <= max; g += 2) s += '<line class="gridl" x1="' + (L + g * sx) + '" y1="' + top + '" x2="' + (L + g * sx) + '" y2="' + (H - 26) + '"/><text class="mut" font-size="12" text-anchor="middle" x="' + (L + g * sx) + '" y="' + (H - 8) + '">' + g + '</text>';
+    calls.forEach(function (c, i) {
+      var y = top + i * rowH, w = c[1] * sx;
+      s += '<text font-size="13" text-anchor="end" x="' + (L - 12) + '" y="' + (y + 24) + '">' + esc(c[0]) + '</text>';
+      if (w > 0) s += '<path class="bar" fill="var(--s1)" d="M' + L + ' ' + (y + 8) + ' h' + (w - 4) + ' a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-' + (w - 4) + ' z"/>';
+      s += '<text font-size="13" font-weight="600" x="' + (L + w + 8) + '" y="' + (y + 24) + '">' + c[1] + '</text>';
+      s += '<rect class="hit" data-i="' + i + '" x="0" y="' + y + '" width="' + W + '" height="' + rowH + '"/>';
+    });
+    s += '<line class="base" x1="' + L + '" y1="' + top + '" x2="' + L + '" y2="' + (H - 26) + '"/></svg>';
+    wrap.innerHTML = s; tip = tipFor(wrap);
+    wrap.querySelectorAll(".hit").forEach(function (h) {
+      h.addEventListener("mousemove", function (e) { var c = calls[+h.dataset.i]; tip.show(e, "<b>" + esc(c[0]) + ": " + c[1] + "</b>" + esc(c[2])); });
+      h.addEventListener("mouseleave", tip.hide);
+    });
+    document.getElementById("callsTable").innerHTML = "<tr><th>Action</th><th>Calls</th><th>Which</th></tr>" +
+      calls.map(function (c) { return "<tr><td>" + esc(c[0]) + '</td><td class="n">' + c[1] + "</td><td>" + esc(c[2]) + "</td></tr>"; }).join("");
+  })();
+
+  var times = [
+    ["chat_route_intent", 15], ["clarify_question_copy", 20], ["workflow_understanding", 30],
+    ["chat_map_answer", 30], ["studio_chat_actions", 30], ["thread_summarize", 60]
+  ];
+  var CEIL = 230;
+  (function () {
+    var wrap = document.getElementById("timeChart"), tip;
+    var W = 860, L = 200, R = 70, rowH = 44, top = 12, H = top + times.length * rowH + 30, max = 240, sx = (W - L - R) / max;
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Paired bars: requested timeout versus worst-case run time per task">';
+    for (var g = 0; g <= max; g += 60) s += '<line class="gridl" x1="' + (L + g * sx) + '" y1="' + top + '" x2="' + (L + g * sx) + '" y2="' + (H - 26) + '"/><text class="mut" font-size="12" text-anchor="middle" x="' + (L + g * sx) + '" y="' + (H - 8) + '">' + g + ' s</text>';
+    function bar(x, y, w, h, fill) { return '<path class="bar" fill="' + fill + '" d="M' + x + ' ' + y + ' h' + (w - 4) + ' a4 4 0 0 1 4 4 v' + (h - 8) + ' a4 4 0 0 1 -4 4 h-' + (w - 4) + ' z"/>'; }
+    times.forEach(function (t, i) {
+      var y = top + i * rowH;
+      s += '<text class="mono" font-size="12.5" text-anchor="end" x="' + (L - 12) + '" y="' + (y + 24) + '">' + t[0] + '</text>';
+      s += bar(L, y + 6, t[1] * sx, 14, "var(--s1)");
+      s += '<text class="mut" font-size="12" x="' + (L + t[1] * sx + 6) + '" y="' + (y + 17) + '">' + t[1] + ' s</text>';
+      s += bar(L, y + 22, CEIL * sx, 14, "var(--s2)");
+      if (i === 0) s += '<text class="mut" font-size="12" x="' + (L + CEIL * sx + 6) + '" y="' + (y + 33) + '">≈' + CEIL + ' s</text>';
+      s += '<rect class="hit" data-i="' + i + '" x="0" y="' + y + '" width="' + W + '" height="' + rowH + '"/>';
+    });
+    s += '<line class="base" x1="' + L + '" y1="' + top + '" x2="' + L + '" y2="' + (H - 26) + '"/></svg>';
+    wrap.innerHTML = s; tip = tipFor(wrap);
+    wrap.querySelectorAll(".hit").forEach(function (h) {
+      h.addEventListener("mousemove", function (e) { var t = times[+h.dataset.i]; tip.show(e, "<b>" + t[0] + "</b>Asks for " + t[1] + " s · can run ≈" + CEIL + " s (" + Math.round(CEIL / t[1]) + "×)"); });
+      h.addEventListener("mouseleave", tip.hide);
+    });
+    document.getElementById("timeTable").innerHTML = "<tr><th>Task</th><th>Asks for</th><th>Can run</th></tr>" +
+      times.map(function (t) { return '<tr><td class="m">' + t[0] + '</td><td class="n">' + t[1] + ' s</td><td class="n">≈' + CEIL + " s</td></tr>"; }).join("");
+  })();
+})();
+</script>

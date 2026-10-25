@@ -7,7 +7,7 @@ import {
   fetchGroup,
   type GroupApp,
 } from '@/api/groupsApi'
-import { fetchSkillPack, fetchSkillPackVersions, updateWorkflow, type SkillPackBuild, type Workflow } from '@/api/workflowsApi'
+import { fetchSkillPack, updateWorkflow, type SkillPackBuild, type Workflow } from '@/api/workflowsApi'
 import { GroupAuthWizard, type SignInSession } from '@/components/GroupAuthWizard'
 import { SignInPane } from '@/components/SignInPane'
 import { RecordWorkflowDialog } from '@/components/RecordWorkflowDialog'
@@ -16,7 +16,7 @@ import { UsageCards } from '@/components/EntitlementMeters'
 import { WorkflowTestRow } from '@/components/WorkflowTests'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CompilePanel } from '@/components/CompilePanel'
-import { WorkflowStageBadge, WorkflowStageRail } from '@/components/StagePath'
+import { WorkflowStageBadge } from '@/components/StagePath'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -32,11 +32,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { formatCompileEta, useCompileEtaSeconds, useCompileStore } from '@/store/compileStore'
+import { useCompileStore } from '@/store/compileStore'
 import { useShellStore } from '@/store/shellStore'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { FolderKanban, Layers, Loader2, Pencil, Plus } from 'lucide-react'
+import { Layers, Loader2, MessageSquare, Pencil, Plus } from 'lucide-react'
 
 function AddAppDialog({ groupId }: { groupId: string }) {
   const qc = useQueryClient()
@@ -175,22 +175,18 @@ function RenameWorkflowButton({ workflow, onRenamed }: { workflow: Workflow; onR
 function WorkflowRow({
   wf,
   groupId,
-  groupReady,
   apps,
   skillPackBuild,
   onChanged,
 }: {
   wf: Workflow
   groupId: string
-  groupReady: boolean
   apps: GroupApp[]
   skillPackBuild: SkillPackBuild | null
   onChanged: () => void
 }) {
   const navigate = useNavigate()
   const compileRun = useCompileStore((s) => s.run)
-  const ownCompiling = compileRun?.status === 'running' && compileRun.workflowId === wf.id
-  const compileEtaSeconds = useCompileEtaSeconds(ownCompiling ? compileRun : null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [rerecordConfirmOpen, setRerecordConfirmOpen] = useState(false)
   const [recompileConfirmOpen, setRecompileConfirmOpen] = useState(false)
@@ -201,50 +197,10 @@ function WorkflowRow({
   const [collapsed, setCollapsed] = useState(false)
   const [compileMode, setCompileMode] = useState<'compile' | 'recompile'>('compile')
 
-  const hasRecording = !!wf.session_id
   const hasSkill = !!wf.skill_id
   const packBuilt = !!skillPackBuild
-  const stale = wf.edited_at != null && skillPackBuild != null && wf.edited_at > skillPackBuild.last_built_at
   const usedApps = appsUsedBy(wf, apps)
   const unclaimed = wf.unclaimed_hosts ?? []
-  const stage = wf.stage ?? 'ready_to_compile'
-
-  // The last rail node only turns green once this workflow's skill actually has
-  // a published release on Conxa Cloud — a passed test merely makes it amber.
-  // Scoped to wf.slug (1 Workflow = 1 Skill); only fetched once a test passed,
-  // which is the earliest point the node could leave amber anyway.
-  const versionsQ = useQuery({
-    queryKey: ['skill-pack-versions', wf.slug],
-    queryFn: () => fetchSkillPackVersions(wf.slug),
-    enabled: stage === 'ready',
-    staleTime: 10_000,
-  })
-  // Upload writes status "ready" (publish_routes.py); a Cloud admin's Release
-  // later flips it to "published". Green means "uploaded to Conxa Cloud", so
-  // either status counts — checking only "published" left the node amber
-  // forever after a normal publish.
-  const published = (versionsQ.data?.versions ?? []).some(
-    (v) => v.status === 'ready' || v.status === 'published',
-  )
-
-  function handleCompileClick() {
-    if (!hasRecording) return
-    // Compiles run one at a time (see compileStore) — say so here rather than
-    // letting the user land on the compile page just to be told no. But if the
-    // running compile IS this workflow's own (started, then navigated away
-    // from), let it through — CompilePanel re-attaches to it by key instead
-    // of refusing to open.
-    const key = `${wf.id}:${wf.session_id}:${hasSkill ? 'recompile' : 'compile'}`
-    if (compileRun?.status === 'running' && !ownCompiling && compileRun.key !== key) {
-      toast.info('Another workflow is compiling. Try again once it finishes.')
-      return
-    }
-    if (hasSkill) {
-      setRecompileConfirmOpen(true)
-      return
-    }
-    openCompile('compile')
-  }
 
   function openCompile(mode: 'compile' | 'recompile') {
     setCompileMode(mode)
@@ -305,38 +261,19 @@ function WorkflowRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <Button
-              size="icon-sm"
-              variant="outline"
-              title="Inspector"
-              className="border-white/10 bg-white/[0.04] text-zinc-400 hover:text-white"
-              onClick={() => navigate(`/workflows/${encodeURIComponent(wf.id)}/inspector?from=${encodeURIComponent(`/groups/${groupId}`)}`)}
-            >
-              <FolderKanban className="size-3.5" />
-            </Button>
             <RenameWorkflowButton workflow={wf} onRenamed={onChanged} />
             <DeleteWorkflowButton workflow={wf} onDeleted={onChanged} iconOnly />
+            <Button
+              size="sm"
+              variant="brand"
+              onClick={() => navigate(`/w/${encodeURIComponent(wf.id)}`)}
+            >
+              <MessageSquare className="size-3.5" />
+              Open workflow chat
+            </Button>
           </div>
         </div>
 
-        <div className="mt-3.5">
-          <WorkflowStageRail
-            stage={stage}
-            hasRecording={hasRecording}
-            hasSkill={hasSkill}
-            groupReady={groupReady}
-            packBuilt={packBuilt}
-            stale={stale}
-            published={published}
-            compileBusy={ownCompiling}
-            compileEtaLabel={ownCompiling ? formatCompileEta(compileEtaSeconds) : undefined}
-            onRecord={() => (hasRecording ? setRerecordConfirmOpen(true) : setRecordOpen(true))}
-            onCompile={handleCompileClick}
-            onReview={() => navigate(`/edit/${encodeURIComponent(wf.skill_id!)}?from=${encodeURIComponent(`/groups/${groupId}`)}`)}
-            onToggleTest={toggleTest}
-            onPackage={() => navigate('/publish')}
-          />
-        </div>
       </div>
 
       {panel === 'compile' && (
@@ -559,16 +496,6 @@ export function GroupPage() {
               />
             )}
           </div>
-          {/* The page's one next action, placed where sign-in leads to it. */}
-          <div className="mt-4 flex shrink-0 items-center gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-[#1e1e1e] p-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-[#e8e6e3]">Record a workflow</p>
-              <p className="mt-0.5 text-xs text-[#a3a3a3]">
-                {group.apps.length > 0 && !auth.ready ? 'Finish signing in above first.' : 'Uses the sessions signed in above.'}
-              </p>
-            </div>
-            <NewWorkflowButton groupName={group.name} />
-          </div>
         </section>
 
         {paneOpen && <SignInPane session={signIn} connectedApp={connectedApp} regionRef={dockRef} />}
@@ -603,7 +530,6 @@ export function GroupPage() {
                     key={wf.id}
                     wf={wf}
                     groupId={group.id}
-                    groupReady={auth.ready}
                     apps={group.apps}
                     skillPackBuild={packQ.data?.skill_pack?.build ?? null}
                     onChanged={refresh}
@@ -612,6 +538,16 @@ export function GroupPage() {
               </ScrollArea>
             </div>
           )}
+          {/* The page's one next action, beside the workflows it creates. */}
+          <div className="mt-4 flex shrink-0 items-center gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-[#1e1e1e] p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[#e8e6e3]">Record a workflow</p>
+              <p className="mt-0.5 text-xs text-[#a3a3a3]">
+                {group.apps.length > 0 && !auth.ready ? 'Finish signing in above first.' : 'Uses the sessions signed in above.'}
+              </p>
+            </div>
+            <NewWorkflowButton groupName={group.name} />
+          </div>
         </div>
       </div>
     </div>

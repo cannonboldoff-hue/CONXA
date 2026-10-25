@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from conxa_compile.conversation import understanding
-from conxa_compile.conversation.clarify import BLOCKING_KINDS, generate_questions, plan_answer
+from conxa_compile.conversation.clarify import generate_questions, plan_answer
 from conxa_compile.conversation.lifecycle import derive_lifecycle
 from conxa_compile.editor.workflow_mutations import parameterize_click_text, parameterize_literal
 
@@ -129,9 +129,8 @@ def test_the_github_to_drive_recording_now_asks_which_repository_and_says_what_i
     qs = generate_questions(_github_to_drive(), understanding=_understood())
     q = next(q for q in qs if q["kind"] == "chosen_values")
     assert q["multi"] and [c["selected"] for c in q["choices"]] == [True]
-    assert q["choices"][0]["detail"] == "Page address: github/gitignore"
-    assert "these stay as recorded: “Android.gitignore”" in q["body"]   # honest about what can't change yet
-    assert q["kind"] in BLOCKING_KINDS
+    assert q["choices"][0]["detail"] == "Web address: github/gitignore"
+    assert "these stay the same as you recorded: “Android.gitignore”" in q["body"]   # honest about what can't change yet
 
 
 def test_unsure_is_listed_unticked_and_fixed_is_not_asked():
@@ -155,7 +154,7 @@ def test_answers_become_a_parameterize_op_only_for_the_ticked_values():
     assert receipt == "Repository"
     ops, receipt = plan_answer(q, {"selected": []}, doc)
     assert ops == [] and receipt.startswith("Nothing changes")
-    assert plan_answer({"kind": "coverage"}, {"choice": "incomplete"}, doc)[1].startswith("Something is missing")
+    assert plan_answer({"kind": "coverage"}, {"choice": "incomplete"}, doc)[1].startswith("A part is missing")
 
 
 # ── the mutation ────────────────────────────────────────────────────────────────────────────
@@ -195,9 +194,8 @@ _WF = {"session_id": "s", "recording_status": "compiled", "skill_id": "k", "targ
 
 def test_testing_waits_for_every_question_that_was_asked():
     # Questions come first, then their answers, then the test — a small question is still a question.
-    for summary in ({"open": 1, "blocking_open": 1}, {"open": 1, "blocking_open": 0}, {"open": 1}):
-        lc = derive_lifecycle(_WF, clarify=summary)
-        assert lc["stage"] == "clarify" and "test" not in lc["allowed_actions"]
+    lc = derive_lifecycle(_WF, clarify={"open": 1})
+    assert lc["stage"] == "clarify" and "test" not in lc["allowed_actions"]
 
 
 def test_parameterizing_also_templates_address_and_message_checks_but_never_a_selector_check():

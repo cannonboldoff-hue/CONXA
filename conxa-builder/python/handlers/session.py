@@ -107,9 +107,28 @@ def group_apps_needing_sign_in(group: Any) -> list[Any]:
         for a, state in zip(to_probe, verdicts):
             set_group_app_checked(group.id, a.id, state)
         group = get_group(group.id) or group  # set_group_app_checked persisted the verdicts
-    # last_error is the single source of truth for "expired now": set_group_app_checked sets it
-    # on "expired" and clears it on "ready"; a failed capture sets it too.
-    return [a for a in group.apps if not a.captured_at or not a.storage_state_path or a.last_error]
+    # A saved session file proves nothing. Only a stamped checked_at (written on a positive probe,
+    # or a just-completed login) counts as signed in; an inconclusive probe clears it, so that app
+    # is held back too. last_error marks "expired now" (set_group_app_checked / a failed capture).
+    return [
+        a for a in group.apps
+        if not a.captured_at or not a.storage_state_path or a.last_error or not a.checked_at
+    ]
+
+
+def describe_sign_in_gap(apps: list[Any]) -> str:
+    """Plain-English reason `apps` block a recording: never connected, expired, or unconfirmed."""
+    never = [a.name for a in apps if not a.captured_at or not a.storage_state_path]
+    expired = [a.name for a in apps if a.captured_at and a.storage_state_path and a.last_error]
+    unconfirmed = [a.name for a in apps if a.captured_at and a.storage_state_path and not a.last_error]
+    parts = []
+    if never:
+        parts.append(f"sign in to {', '.join(never)}")
+    if expired:
+        parts.append(f"sign in again to {', '.join(expired)} (the saved sign-in has expired)")
+    if unconfirmed:
+        parts.append(f"sign in again to {', '.join(unconfirmed)} (the saved sign-in couldn't be confirmed)")
+    return f"Before recording, {' and '.join(parts)}."
 
 
 def _backup_previous_recording(workflow_id: str, session_id: str) -> str | None:
@@ -238,14 +257,7 @@ class SessionMixin:
                 # missing or expired sign-in is never discovered halfway through a recording.
                 needs = group_apps_needing_sign_in(group)
                 if needs:
-                    never = [a.name for a in needs if not a.captured_at]
-                    expired = [a.name for a in needs if a.captured_at]
-                    parts = []
-                    if never:
-                        parts.append(f"sign in to {', '.join(never)}")
-                    if expired:
-                        parts.append(f"sign in again to {', '.join(expired)} (the saved sign-in has expired)")
-                    raise _CommandError("auth_required", f"Before recording, {' and '.join(parts)}.")
+                    raise _CommandError("auth_required", describe_sign_in_gap(needs))
 
                 # Seed the recording from every app in the group — all of them were just
                 # confirmed signed in above.

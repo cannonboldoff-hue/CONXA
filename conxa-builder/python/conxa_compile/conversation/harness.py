@@ -377,17 +377,19 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     if cancel.is_set():
         return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
 
-    # 3c ─ general Chat: may the conversation become a draft workflow?
+    if cancel.is_set():
+        return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
+
+    # 4 ─ append. Only now: nothing half-finished is ever written. The reply goes first, so no
+    # optional call after it can take away a reply the person has already read.
+    if reply:
+        push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=reply)))
+
+    # 4b ─ general Chat: may the conversation become a draft workflow?
     draft = None
     if kind == "chat" and not cancel.is_set():
         draft = _maybe_draft(pack.text, reply, group_names or [])
 
-    if cancel.is_set():
-        return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
-
-    # 4 ─ append. Only now: nothing half-finished is ever written.
-    if reply:
-        push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=reply)))
     if proposals:
         # One reply, one change set, one Apply: the changes are applied all together or not at all.
         from conxa_compile.editor.copilot_proposals import proposal_summary
@@ -496,7 +498,14 @@ def map_free_text_to_choice(card: dict[str, Any], text: str) -> str | None:
         f"Allowed choices: {[{'id': c['id'], 'label': c.get('label'), 'detail': c.get('detail')} for c in choices]}\n"
         f"The person replied: {text}"
     )}
-    data = call_llm("chat_map_answer", payload, min(30_000, _timeout()))
+    try:
+        data = call_llm("chat_map_answer", payload, min(30_000, _timeout()))
+    except Exception as exc:  # noqa: BLE001 -- unclear is the safe answer: the card stays open
+        # Out of credits / not entitled still become their own error cards in the command handler.
+        # Matched by name: conxa_compile cannot import the Studio's services package.
+        if type(exc).__name__ in ("QuotaExceeded", "EntitlementBlocked"):
+            raise
+        return None
     pick = str((data or {}).get("choice") or "").strip() if isinstance(data, dict) else ""
     return pick if pick in allowed else None
 
@@ -529,11 +538,14 @@ _URL = re.compile(r"^https?://[^\s/]+\.[^\s/]+", re.I)
 def _maybe_draft(context_text: str, reply: str, group_names: list[str]) -> dict[str, Any] | None:
     from conxa_compile.llm.client import call_llm
 
-    data = call_llm(
-        "studio_chat_actions",
-        {"user_text": f"{context_text}\n\nAssistant just replied: {reply}\nExisting groups: {group_names}"},
-        min(30_000, _timeout()),
-    )
+    try:
+        data = call_llm(
+            "studio_chat_actions",
+            {"user_text": f"{context_text}\n\nAssistant just replied: {reply}\nExisting groups: {group_names}"},
+            min(30_000, _timeout()),
+        )
+    except Exception:  # noqa: BLE001 -- optional extra: a failure here must never cost the reply
+        return None
     draft = (data or {}).get("draft_workflow") if isinstance(data, dict) else None
     if not isinstance(draft, dict):
         return None

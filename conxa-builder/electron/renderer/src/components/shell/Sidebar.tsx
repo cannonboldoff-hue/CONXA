@@ -203,8 +203,8 @@ export function Sidebar({ rail }: { rail: boolean }) {
       <div className="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-3">
         {!rail && (
           <section aria-label="Chats">
-            <h2 className="px-2.5 pb-1 text-[0.6875rem] font-medium text-[#8e8e8e]">Chats</h2>
-            {chats.length === 0 && <p className="px-2.5 text-xs text-[#8e8e8e]">General conversations appear here.</p>}
+            <h2 className="px-2.5 pb-1 text-sm font-medium text-[#8e8e8e]">Chats</h2>
+            {chats.length === 0 && <p className="px-2.5 text-sm text-[#8e8e8e]">General conversations appear here.</p>}
             <ul className="space-y-0.5">
               {chats.map((c) => (
                 <li key={c.id}>
@@ -221,7 +221,7 @@ export function Sidebar({ rail }: { rail: boolean }) {
         <section aria-label="Groups">
           {!rail && (
             <div className="flex items-center px-2.5 pb-1">
-              <h2 className="text-[0.6875rem] font-medium text-[#8e8e8e]">Groups</h2>
+              <h2 className="text-sm font-medium text-[#8e8e8e]">Groups</h2>
               <button
                 type="button"
                 aria-label="Create a group"
@@ -232,11 +232,6 @@ export function Sidebar({ rail }: { rail: boolean }) {
                 <Plus className="size-3.5" />
               </button>
             </div>
-          )}
-          {!rail && (
-            <p className="px-2.5 pb-1.5 text-xs text-[#8e8e8e]">
-              Groups hold workflows that share sign-ins — like everything you do in one billing app.
-            </p>
           )}
           <NewGroupDialog open={creating} onOpenChange={setCreating} />
           <div className="space-y-0.5">

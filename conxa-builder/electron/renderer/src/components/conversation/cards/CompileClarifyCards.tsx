@@ -153,7 +153,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
         <span className="mt-[3px]"><StatusGlyph kind={state === 'answered' ? 'ok' : 'none'} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[var(--text-primary)]">{title}</p>
-          <p className="text-xs text-[var(--text-meta)]">{receipt || (state === 'skipped' ? 'Kept as compiled' : '')}</p>
+          <p className="text-xs text-[var(--text-meta)]">{receipt || (state === 'skipped' ? 'Left as it was' : '')}</p>
         </div>
         {state === 'answered' && keys.length > 0 && openEdit && (
           <button
@@ -173,8 +173,8 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
   const count = picked.size
   const checks = count + (customText ? 1 : 0)
   const primary =
-    qKind === 'values' ? (count ? `Make ${count} input${count === 1 ? '' : 's'}` : 'Keep all as recorded')
-    : qKind === 'done_when' ? (checks ? `Use ${checks} check${checks === 1 ? '' : 's'}` : 'No required checks')
+    qKind === 'values' ? (count ? `Yes, ${count} change${count === 1 ? 's' : ''} each time` : 'None change, keep all as recorded')
+    : qKind === 'done_when' ? (checks ? `Use ${checks} check${checks === 1 ? '' : 's'}` : 'No checks needed')
     : 'Use this'
 
   return (
@@ -193,7 +193,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
             {primary}
           </Button>
           {multi && qKind === 'values' && count > 0 && (
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => send('choose', { selected: [] })}>Keep all as recorded</Button>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => send('choose', { selected: [] })}>None change, keep all as recorded</Button>
           )}
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => send('skip')}>Not now</Button>
           {state === 'failed' && typeof item.error === 'string' && <span className="basis-full text-xs text-status-error">✕ {item.error}</span>}
@@ -233,7 +233,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
       </ul>
       {qKind === 'done_when' && (
         <label className="mt-3 block text-xs text-[var(--text-meta)]">
-          Or type text that should appear on the page when it worked
+          Or type words you should see on the screen when it works
           <input
             type="text"
             maxLength={120}
@@ -245,7 +245,7 @@ export function ClarifyQuestionCard({ threadId, item }: CardProps) {
           />
         </label>
       )}
-      <p className="mt-2 text-xs text-[var(--text-meta)]">Or answer in your own words in the box below.</p>
+      <p className="mt-2 text-xs text-[var(--text-meta)]">Prefer to explain it yourself? Type your answer in the message box below.</p>
     </CardShell>
   )
 }

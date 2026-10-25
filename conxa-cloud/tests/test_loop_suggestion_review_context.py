@@ -60,7 +60,34 @@ def test_rewrite_never_touches_structural_fields():
     assert before == after  # only `why` may ever change
 
 
-def test_rewrite_excludes_the_redundant_click_from_the_loop_questions_own_context(monkeypatch):
+def test_the_review_is_asked_about_the_loop_with_a_deterministic_id_and_role_tagged_steps():
+    from conxa_compile.compiler import build as build_module
+
+    steps = _matching_steps()
+    first = build_module._review_loop_candidates(steps)
+    second = build_module._review_loop_candidates(steps)
+    assert len(first) == 1 and first[0]["id"] == second[0]["id"]      # not the suggestion's random uuid: it keys a cache
+    assert {s["role"] for s in first[0]["steps"]} == {"acquire", "upload"}
+
+
+def test_the_reviews_sentence_replaces_why_only_when_usable():
+    steps = _matching_steps()
+    for copy, expect_changed in (
+        ({"__PAIR__": "Do you want this to run for any file you name?"}, True),
+        ({"__PAIR__": ""}, False),
+        ({"__PAIR__": "x" * 401}, False),
+        ({"__PAIR__": "Use {{file}} here"}, False),
+        ({"some|other": "Not this loop"}, False),
+        (None, False),
+    ):
+        suggestions = detect_download_upload_loop_candidates(steps)
+        original = suggestions[0]["why"]
+        pair = "|".join((suggestions[0]["wrap_start_key"], suggestions[0]["upload_step_key"]))
+        _rewrite_loop_suggestions_for_review(suggestions, steps, {(pair if k == "__PAIR__" else k): v for k, v in (copy or {}).items()} or copy)
+        assert (suggestions[0]["why"] != original) is expect_changed
+
+
+def test_the_loop_questions_own_context_never_sees_the_redundant_click():
     # The click removal is a SEPARATE Yes/No question (ReviewQuestionsDialog.tsx), asked only
     # after the loop question is answered Yes, with its own deterministic (no LLM) copy
     # (loop_suggestion.py's `redundant_click_why`) — the loop question's own LLM context must
@@ -84,19 +111,9 @@ def test_rewrite_excludes_the_redundant_click_from_the_loop_questions_own_contex
     assert "redundant_click_key" in suggestions[0]
     assert "leftover click" in suggestions[0]["redundant_click_why"]
 
-    captured: list[list[dict]] = []
+    candidates = build_module._review_loop_candidates(steps)
 
-    def _fake_friendly(_filename, *, steps_context, fallback, error_detail=None):
-        del error_detail
-        captured.append(steps_context)
-        return fallback
-
-    monkeypatch.setattr(
-        "conxa_compile.llm.loop_suggestion_copy.friendly_loop_suggestion_text", _fake_friendly
-    )
-    build_module._rewrite_loop_suggestions_for_review(suggestions, steps)
-
-    roles = [s["role"] for s in captured[0]]
+    roles = [s["role"] for s in candidates[0]["steps"]]
     assert "redundant_click" not in roles
     assert set(roles) == {"acquire", "upload"}
-    assert not any(s.get("description") == "click_the_file_link" for s in captured[0])
+    assert not any(s.get("description") == "click_the_file_link" for s in candidates[0]["steps"])

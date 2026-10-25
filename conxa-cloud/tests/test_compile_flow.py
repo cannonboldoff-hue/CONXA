@@ -155,11 +155,11 @@ def test_no_test_is_offered_between_the_compile_ending_and_the_questions_existin
 
     real = understanding_mod.understand
 
-    def spy(doc, task):  # the slow model call: the compile card already says "done" by now
+    def spy(doc, task, **kw):  # the check after the compile: the compile card already says "done" by now
         from conxa_core.storage.workflow_store import get_workflow
 
         seen.append(lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"])
-        return real(doc, task)
+        return real(doc, task, **kw)
 
     monkeypatch.setattr(understanding_mod, "understand", spy)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
@@ -208,7 +208,7 @@ def test_answering_applies_existing_mutations_and_the_counts_add_up(env):
     skill_id = get_workflow(wf.id).skill_id
     q1 = _cards(wf.id, "clarify_question")[0]
     r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
-    assert r["ok"] and r["receipt"] == "A person confirms"
+    assert r["ok"] and r["receipt"] == "Someone approves it first"
     steps = read_skill(skill_id)["skills"][0]["steps"]
     assert [s["action"] if isinstance(s["action"], str) else s["action"]["action"] for s in steps][-2:] == ["ai_review", "click"]
     review = steps[-2]
@@ -377,18 +377,24 @@ def test_a_recording_with_nothing_typed_still_asks_what_changes_and_blocks_the_t
     from conxa_core.storage.workflow_store import get_workflow, save_workflow
     from conxa_compile.conversation import understanding
 
+    task = "Download a gitignore file from GitHub and upload it to Google Drive"
     w = get_workflow(wf.id)
-    w.task_description = "Download a gitignore file from GitHub and upload it to Google Drive"
+    w.task_description = task
     save_workflow(w)
-    # the model sees only labelled candidates; it says the repository changes, and calls the download button fixed
-    def fake_llm(task, payload, timeout_ms, **_k):
-        assert task == "workflow_understanding" and "gitignore" in payload["user_text"]
-        cands = understanding.extract_candidates(read_skill(get_workflow(wf.id).skill_id))
-        return {"goal_summary": "Copy a file from a GitHub repository to Google Drive.", "coverage": {"ok": True}, "values": [
-            {"ref": c["ref"], "verdict": "varies" if c["kind"] == "url" else "fixed", "name": "repository"} for c in cands]}
 
-    monkeypatch.setattr("conxa_compile.llm.client.call_llm", fake_llm)
-    _fake_compile(b, wf, doc_fn=_github_doc)
+    # The compile's own review call judged the candidates (BUILD-55): the repository changes, the download button doesn't.
+    # No separate model call is made after the compile.
+    def doc_with_review(skill_id):
+        doc = _github_doc(skill_id)
+        cands = understanding.extract_candidates(doc)
+        doc["compile_report"]["understanding"] = {
+            "goal_summary": "Copy a file from a GitHub repository to Google Drive.", "coverage": {"ok": True}, "for_task": task,
+            "values": [{"ref": c["ref"], "verdict": "varies" if c["kind"] == "url" else "fixed", "name": "repository"} for c in cands]}
+        return doc
+
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm",
+                        lambda *a, **k: pytest.fail("the question flow must not make a model call to check the description"))
+    _fake_compile(b, wf, doc_fn=doc_with_review)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
 
     data = clarify_store.load(wf.id)
@@ -415,7 +421,7 @@ def test_a_recording_with_nothing_typed_still_asks_what_changes_and_blocks_the_t
     assert [(i["id"], i["value"]) for i in card["inputs"]] == [("repository", "github/gitignore")]
 
 
-def test_a_failed_understanding_call_never_fails_the_compile_flow(env, monkeypatch):
+def test_a_compile_with_no_review_answer_still_asks_the_likely_values_unticked(env, monkeypatch):
     b, wf, _out = env
     from conxa_core.storage.workflow_store import get_workflow, save_workflow
 
@@ -423,10 +429,9 @@ def test_a_failed_understanding_call_never_fails_the_compile_flow(env, monkeypat
     w.task_description = "Copy a file"
     save_workflow(w)
 
-    def boom(*_a, **_k):
-        raise RuntimeError("cloud down")
-
-    monkeypatch.setattr("conxa_compile.llm.client.call_llm", boom)
+    # The review call failed or was disabled: the compile carries no understanding, and none is invented.
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm",
+                        lambda *a, **k: pytest.fail("the question flow must not make a model call to check the description"))
     _fake_compile(b, wf, doc_fn=_github_doc)
     assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
     q = clarify_store.load(wf.id)["questions"][0]
@@ -475,11 +480,19 @@ def test_test_inputs_stated_in_chat_prefill_the_card_but_never_start_a_run(env, 
     from conxa_core.storage.workflow_store import get_workflow, save_workflow
 
     w = get_workflow(wf.id)
-    w.task_description = "Copy a file from a repository"
+    task = "Copy a file from a repository"
+    w.task_description = task
     save_workflow(w)
-    monkeypatch.setattr("conxa_compile.llm.client.call_llm", lambda t, p, ms, **k: {"goal_summary": "g", "values": [
-        {"ref": c["ref"], "verdict": "varies", "name": "repository"} for c in __import__("conxa_compile.conversation.understanding", fromlist=["x"]).extract_candidates(_github_doc("s")) if c["kind"] == "url"]})
-    _fake_compile(b, wf, doc_fn=_github_doc)
+
+    def doc_with_review(skill_id):  # the compile's review call said the repository changes each run
+        from conxa_compile.conversation import understanding
+
+        doc = _github_doc(skill_id)
+        doc["compile_report"]["understanding"] = {"goal_summary": "g", "for_task": task, "values": [
+            {"ref": c["ref"], "verdict": "varies", "name": "repository"} for c in understanding.extract_candidates(doc) if c["kind"] == "url"]}
+        return doc
+
+    _fake_compile(b, wf, doc_fn=doc_with_review)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
     q = clarify_store.load(wf.id)["questions"][0]
     b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": _cards(wf.id, "clarify_question")[0]["card_id"], "action": "choose",
@@ -525,3 +538,210 @@ def test_questions_past_the_cap_are_queued_not_lost_and_come_back_when_asked(env
     assert "answer_clarify" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
     assert b._run_flow_action(wf.id, "answer_clarify", {}, "r", lambda e: None)["ok"]
     assert [q["status"] for q in clarify_store.load(wf.id)["questions"]][5:] == ["open"] * 3
+
+
+# ── BUILD-55 B2: an answer is all-or-nothing and never applied twice ───────────────────────
+
+
+def _step_actions(doc):
+    return [s["action"] if isinstance(s["action"], str) else s["action"]["action"] for s in doc["skills"][0]["steps"]]
+
+
+def test_an_answer_whose_second_edit_fails_restores_the_workflow_and_a_retry_applies_it_once(env, monkeypatch):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    before = read_skill(skill_id)
+    q1 = _cards(wf.id, "clarify_question")[0]
+    real_patch = b.cmd_patch_step
+
+    def boom(payload, rid):
+        raise _CommandError("patch_failed", "The second edit failed.")
+
+    monkeypatch.setattr(b, "cmd_patch_step", boom)   # the review step is inserted, then its fill-in fails
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
+    assert r["ok"] is False and r["code"] == "patch_failed"
+    assert read_skill(skill_id) == before                       # the half-applied insert was rolled back
+    card = _cards(wf.id, "clarify_question")[0]
+    assert card["state"] == "failed" and card["actions"] == ["choose", "skip"]
+    assert clarify_store.get_question(wf.id, q1["question_id"])["status"] == "open"
+
+    monkeypatch.setattr(b, "cmd_patch_step", real_patch)
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
+    assert r["ok"]
+    assert _step_actions(read_skill(skill_id)).count("ai_review") == 1   # not two
+
+
+def _mark_applying(wf, q, *, since, base_version):
+    from conxa_compile.conversation import harness
+
+    clarify_store.update_question(wf.id, q["question_id"], status="applying", base_version=base_version, applying_since=since)
+    harness.update_card(f"wf:{wf.id}", q["card_id"], state="applying", actions=[])
+
+
+def test_an_attempt_that_died_after_changing_the_workflow_is_not_run_again(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    before = read_skill(skill_id)
+    q1 = _cards(wf.id, "clarify_question")[0]
+    _mark_applying(wf, q1, since=1.0, base_version=0)           # old, and the workflow has moved on from version 0
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
+    assert r["ok"] is False and r["code"] == "interrupted"
+    assert read_skill(skill_id) == before
+    card = _cards(wf.id, "clarify_question")[0]
+    assert card["state"] == "failed" and card["actions"] == ["skip"]
+
+
+def test_a_dead_attempt_that_changed_nothing_can_be_tried_again(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    version = (read_skill(skill_id).get("meta") or {}).get("version")
+    q1 = _cards(wf.id, "clarify_question")[0]
+    _mark_applying(wf, q1, since=1.0, base_version=version)
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")["ok"]
+    assert _step_actions(read_skill(skill_id)).count("ai_review") == 1
+
+
+def test_a_live_attempt_is_refused_so_a_double_click_cannot_apply_twice(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    q1 = _cards(wf.id, "clarify_question")[0]
+    _mark_applying(wf, q1, since=time.time(), base_version=1)
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
+    assert r["ok"] is False and r["code"] == "not_open"
+
+
+def test_two_writers_to_the_question_file_do_not_lose_each_others_change(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    qs = clarify_store.load(wf.id)["questions"]
+    a, c = qs[0]["id"], qs[1]["id"]
+
+    def hammer(qid, tag):
+        for n in range(40):
+            clarify_store.update_question(wf.id, qid, receipt=f"{tag}{n}")
+
+    threads = [threading.Thread(target=hammer, args=(a, "a")), threading.Thread(target=hammer, args=(c, "c"))]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    got = {q["id"]: q["receipt"] for q in clarify_store.load(wf.id)["questions"]}
+    assert got[a] == "a39" and got[c] == "c39"
+
+
+# ── BUILD-55 A4: no question waits on wording ───────────────────────────────────────────────
+
+
+def test_the_first_question_appears_in_template_wording_and_is_reworded_in_the_background(env, monkeypatch):
+    b, wf, _out = env
+    gate = threading.Event()
+
+    def fake(task, payload, timeout_ms, **k):
+        assert gate.wait(5)                      # the card must already be on screen while this waits
+        return {"questions": [{"id": q["id"], "title": "Friendly: " + q["title"]} for q in payload["input"]["questions"]]}
+
+    monkeypatch.setattr("conxa_compile.llm.clarify_question_copy.call_llm", fake)
+    _fake_compile(b, wf)
+    assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
+    first = _cards(wf.id, "clarify_question")[0]
+    assert first["state"] == "open" and not first["title"].startswith("Friendly")
+
+    gate.set()
+    deadline = time.time() + 5
+    while time.time() < deadline and not _cards(wf.id, "clarify_question")[0]["title"].startswith("Friendly"):
+        time.sleep(0.05)
+    card = _cards(wf.id, "clarify_question")[0]
+    assert card["title"].startswith("Friendly:") and card["state"] == "open"
+    assert clarify_store.load(wf.id)["questions"][0]["title"].startswith("Friendly:")      # later questions are posted reworded
+    assert [c["id"] for c in card["choices"]] == [c["id"] for c in first["choices"]]       # wording never changes the choices
+
+
+def test_a_question_answered_while_the_wording_call_runs_is_left_alone(env, monkeypatch):
+    b, wf, _out = env
+    gate = threading.Event()
+
+    def fake(task, payload, timeout_ms, **k):
+        gate.wait(5)
+        return {"questions": [{"id": q["id"], "title": "Friendly: " + q["title"]} for q in payload["input"]["questions"]]}
+
+    monkeypatch.setattr("conxa_compile.llm.clarify_question_copy.call_llm", fake)
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    q1 = _cards(wf.id, "clarify_question")[0]
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "skip"}, "r")["ok"]
+    gate.set()
+    time.sleep(0.5)
+    done = _cards(wf.id, "clarify_question")[0]
+    assert done["state"] == "skipped" and not done["title"].startswith("Friendly")
+
+
+# ── BUILD-55 B5: a check cut short by a restart is rebuilt when the workflow is opened ─────
+
+
+def _wait_for(cond, seconds=5.0):
+    deadline = time.time() + seconds
+    while time.time() < deadline and not cond():
+        time.sleep(0.05)
+    return cond()
+
+
+def test_questions_lost_to_a_restart_are_rebuilt_when_the_workflow_opens_and_without_a_model_call(env, monkeypatch):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    # what a restart mid-check leaves behind: the durable marker only; every in-memory flag is gone
+    clarify_store.save(wf.id, {"skill_id": skill_id, "version": 1, "building": True, "questions": []})
+    runtime_state.clear_all()
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm", lambda *a, **k: pytest.fail("a rebuild must not call a model"))
+
+    page = b.cmd_thread_load({"thread_id": f"wf:{wf.id}"}, "r")
+    assert page["lifecycle"]["stage"] == "clarify"              # checking, or already asking: never "ready to test"
+    assert _wait_for(lambda: (clarify_store.load(wf.id) or {}).get("questions"))
+    data = clarify_store.load(wf.id)
+    assert not data.get("building") and data["skill_id"] == skill_id
+    assert _wait_for(lambda: runtime_state.get_flags(wf.id) == {})
+    assert lifecycle_for_workflow(get_workflow(wf.id))["stage"] == "clarify"
+
+
+def test_a_workflow_compiled_before_questions_existed_is_left_alone(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    clarify_store.clear(wf.id)                                  # no file at all: not an interrupted check
+    b.cmd_thread_load({"thread_id": f"wf:{wf.id}"}, "r")
+    time.sleep(0.3)
+    assert clarify_store.load(wf.id) is None and runtime_state.get_flags(wf.id) == {}
+
+
+def test_a_rebuild_that_fails_clears_the_marker_so_opening_it_again_does_not_repeat_the_failure(env, monkeypatch):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    clarify_store.save(wf.id, {"skill_id": skill_id, "version": 1, "building": True, "questions": []})
+    runtime_state.clear_all()
+    monkeypatch.setattr(b, "_flow_after_compile", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk full")))
+    b.cmd_thread_load({"thread_id": f"wf:{wf.id}"}, "r")
+    assert _wait_for(lambda: clarify_store.load(wf.id) is None and runtime_state.get_flags(wf.id) == {})
+    assert "Couldn’t prepare the questions" in _texts(wf.id, "event")
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]

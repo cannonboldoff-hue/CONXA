@@ -178,8 +178,8 @@ def test_lifecycle_is_derived_from_existing_data(wf, kw, stage, substate, glyph)
 @pytest.mark.parametrize("kw", [
     dict(runtime={"understanding": True}),
     dict(runtime={"compiling": True}),
-    dict(clarify={"open": 1, "blocking_open": 0}),  # a small question is still a question: answer it first
-    dict(clarify={"open": 2, "blocking_open": 1}),
+    dict(clarify={"open": 1}),  # a small question is still a question: answer it first
+    dict(clarify={"open": 2}),
     dict(pending_changes=1),
 ])
 def test_nothing_offers_a_test_while_something_is_still_to_settle(kw):
@@ -397,9 +397,7 @@ def test_old_turns_are_folded_into_a_stored_summary(monkeypatch):
 def test_clarify_summary_counts_by_status():
     assert clarify_store.summary("w1") is None
     clarify_store.save("w1", {"questions": [{"id": "a", "status": "open"}, {"id": "b", "status": "answered"}, {"id": "c", "status": "skipped"}]})
-    assert clarify_store.summary("w1") == {"open": 1, "answered": 1, "skipped": 1, "total": 3, "blocking_open": 0, "queued": 0}
-    clarify_store.save("w1", {"questions": [{"id": "a", "kind": "coverage", "status": "open"}, {"id": "b", "kind": "popup", "status": "open"}]})
-    assert clarify_store.summary("w1")["blocking_open"] == 1  # only the question that decides what the workflow is
+    assert clarify_store.summary("w1") == {"open": 1, "answered": 1, "skipped": 1, "total": 3, "queued": 0}
     clarify_store.save("w1", {"questions": [{"id": "a", "status": "open"}, {"id": "b", "status": "answered"}, {"id": "c", "status": "skipped"}]})
     clarify_store.update_question("w1", "a", status="answered")
     assert clarify_store.next_open("w1") is None

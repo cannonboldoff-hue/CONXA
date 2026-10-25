@@ -4,7 +4,7 @@ Every advisory, non-primary LLM call whose only job is turning something the com
 already decided deterministically into better prose for a human reviewer — never a
 decision-maker, never allowed to change what actually got compiled — should call this
 instead of hand-rolling its own cache + fallback + failure-logging dance.
-`llm/loop_suggestion_copy.py` is the first caller, not a special case: it existed as a
+`llm/loop_suggestion_copy.py` was the first caller (since folded into the compile's review call, BUILD-55): it existed as a
 bespoke module before this was pulled out, mirroring the same duplication llm_cache.py's
 own docstring describes ("every task client under conxa_compile/llm/ has hand-rolled the
 identical dual-write cache... this extracts that one pattern").

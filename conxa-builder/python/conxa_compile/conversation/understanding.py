@@ -15,7 +15,8 @@ Two rules, the same ones every other Clarify step keeps:
 - **Never blocks.** Any failure, an empty answer or no model at all degrades to "ask about the
   likely candidates, unticked" (or ask nothing without a description). The compile is untouched.
 
-Everything but ``understand``'s model call is pure and unit-testable (``call`` is injected).
+No model call is made here: the compile's review call answers the question (BUILD-55), and ``understand``
+reads that answer. Everything is pure and unit-testable (``call`` is a test seam).
 """
 
 from __future__ import annotations
@@ -162,6 +163,23 @@ def build_input(doc: dict[str, Any], task: str, candidates: list[dict[str, Any]]
     return json.dumps(payload, ensure_ascii=False)
 
 
+def review_inputs(doc: dict[str, Any]) -> dict[str, Any]:
+    """What the compile's whole-workflow review call is asked on top of its own job (BUILD-55): the
+    candidate values to judge and how the run ends. ``doc`` only needs ``skills[0].steps``; typed
+    values are not included, because at review time the workflow has no inputs (or their recorded
+    defaults) yet. ``{}`` when there is nothing to judge."""
+    candidates = [c for c in extract_candidates(doc) if c["kind"] != "typed"]
+    if not candidates:
+        return {}
+    return {
+        "candidates": [
+            {"ref": c["ref"], "kind": c["kind"], "step": c["step_name"], "recorded": c["recorded"]}
+            for c in candidates
+        ],
+        "ends_with_checks": _end_checks(_steps(doc)),
+    }
+
+
 def _unique_name(base: str, taken: set[str]) -> str:
     name = base if _NAME_OK.match(base) else (_snake(base).lstrip("0123456789_") or "value")
     if not _NAME_OK.match(name):
@@ -216,10 +234,17 @@ def understand(
     doc: dict[str, Any],
     task: str,
     *,
+    review: dict[str, Any] | None = None,
     call: Caller | None = None,
     timeout_ms: int = 30_000,
 ) -> dict[str, Any]:
     """``{"candidates": [...with verdict/name], "goal_summary", "coverage", "source"}``.
+
+    The model's answer is not asked for here any more: the compile's whole-workflow review call
+    already judged the candidates and the goal (BUILD-55), and its answer is stored with the
+    compile as ``compile_report["understanding"]`` (``review``). It is used only when it was written
+    for this same description (``for_task``), because a description edited since would make its
+    verdicts stale. ``call`` is a test seam that still asks a model directly.
 
     Never raises. ``source`` is ``model`` when the answer was usable, ``fallback`` otherwise, and
     ``none`` when there was nothing to look at (no candidates and no description)."""
@@ -231,12 +256,13 @@ def understand(
         return result
 
     parsed: dict[str, Any] | None = None
-    try:
-        if call is None:
-            from conxa_compile.llm.client import call_llm as call  # noqa: PLC0415
-        parsed = call("workflow_understanding", {"user_text": build_input(doc, task, candidates)}, timeout_ms)
-    except Exception:  # noqa: BLE001 -- advisory pass: a failed model call must never fail the compile flow
-        parsed = None
+    if call is not None:
+        try:
+            parsed = call("workflow_understanding", {"user_text": build_input(doc, task, candidates)}, timeout_ms)
+        except Exception:  # noqa: BLE001 -- advisory pass: a failed model call must never fail the compile flow
+            parsed = None
+    elif isinstance(review, dict) and str(review.get("for_task") or "").strip() == task:
+        parsed = review
     checked = validate(parsed, candidates, existing) if isinstance(parsed, dict) else None
 
     if checked is not None and (checked["values"] or checked["goal_summary"]):

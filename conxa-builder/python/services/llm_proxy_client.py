@@ -29,6 +29,21 @@ _PROXY_MIN_TIMEOUT_S = 90.0
 _RETRYABLE_HTTP_CODES = {502, 503, 504}
 _RETRY_BACKOFFS_S = (1.0, 4.0)
 
+# Short text tasks a person is waiting on, or that sit in front of a screen: they get the caller's
+# own timeout (plus a little slack) as a hard deadline across every attempt and backoff, instead of
+# the 90 s floor above (BUILD-55 F04). Everything else keeps the long budget, because a compile's
+# own text calls are calibrated for it.
+_DEADLINE_SLACK_S = 5.0
+_INTERACTIVE_TEXT_TASKS = frozenset({
+    "workflow_understanding", "clarify_question_copy", "fork_question_copy", "chat_map_answer",
+    "chat_route_intent", "studio_chat_actions", "thread_summarize", "record_plan",
+})
+
+
+def _has_time(deadline: float | None, wait_s: float) -> bool:
+    """True when a wait of ``wait_s`` still leaves room before ``deadline`` (None = no deadline)."""
+    return deadline is None or time.monotonic() + wait_s < deadline
+
 
 def _parse_retry_after_secs(headers: Any) -> float | None:
     """Parse a numeric Retry-After header into seconds, or None if absent/invalid.
@@ -134,8 +149,11 @@ class LLMProxyClient:
         _retried: bool = False,
         _retry_count: int = 0,
         on_delta: Callable[[str], None] | None = None,
+        _deadline: float | None = None,
     ) -> dict[str, Any] | None:
         streaming = on_delta is not None
+        if _deadline is None and kind == "text" and not streaming and task in _INTERACTIVE_TEXT_TASKS:
+            _deadline = time.monotonic() + timeout_ms / 1000 + _DEADLINE_SLACK_S
         url = f"{self._cloud_api}/api/v1/llm/proxy/{kind}{'/stream' if streaming else ''}"
         body = json.dumps(
             {
@@ -155,7 +173,10 @@ class LLMProxyClient:
 
         # Use a minimum 90s budget for proxied calls; the caller's timeout_ms is
         # calibrated for direct LLM endpoints, not a double-hop proxy.
-        http_timeout_s = max(timeout_ms / 1000, _PROXY_MIN_TIMEOUT_S) + 5.0
+        if _deadline is None:
+            http_timeout_s = max(timeout_ms / 1000, _PROXY_MIN_TIMEOUT_S) + 5.0
+        else:
+            http_timeout_s = max(1.0, _deadline - time.monotonic())
         t0 = time.monotonic()
         try:
             with urllib.request.urlopen(req, timeout=http_timeout_s) as resp:
@@ -215,7 +236,7 @@ class LLMProxyClient:
                 # Token likely expired — let the auth layer refresh, then retry once.
                 return self._post(
                     kind, task, payload, timeout_ms,
-                    error_detail=error_detail, _retried=True, on_delta=on_delta,
+                    error_detail=error_detail, _retried=True, on_delta=on_delta, _deadline=_deadline,
                 )
             detail: Any = ""
             try:
@@ -233,12 +254,14 @@ class LLMProxyClient:
                 if _retry_count < len(_RETRY_BACKOFFS_S):
                     retry_after = _parse_retry_after_secs(exc.headers)
                     base = retry_after if retry_after is not None else _RETRY_BACKOFFS_S[_retry_count]
-                    time.sleep(base + random.uniform(0, 0.5))
-                    return self._post(
-                        kind, task, payload, timeout_ms,
-                        error_detail=error_detail, _retried=_retried, _retry_count=_retry_count + 1,
-                        on_delta=on_delta,
-                    )
+                    wait_s = base + random.uniform(0, 0.5)
+                    if _has_time(_deadline, wait_s):
+                        time.sleep(wait_s)
+                        return self._post(
+                            kind, task, payload, timeout_ms,
+                            error_detail=error_detail, _retried=_retried, _retry_count=_retry_count + 1,
+                            on_delta=on_delta, _deadline=_deadline,
+                        )
                 raise ProxyUnavailable(
                     "Cloud LLM proxy workspace concurrency limit exceeded after retries",
                     error_detail=[f"proxy HTTP 429: {detail_str}"],
@@ -252,6 +275,7 @@ class LLMProxyClient:
                 return self._post(
                     kind, task, payload, timeout_ms,
                     error_detail=error_detail, _retried=_retried, _retry_count=_retry_count, on_delta=on_delta,
+                    _deadline=_deadline,
                 )
             if detail_str in {
                 "compile_credit_limit_exceeded",
@@ -277,7 +301,11 @@ class LLMProxyClient:
             else:
                 collected.append(f"proxy HTTP {exc.code}")
 
-            if exc.code in _RETRYABLE_HTTP_CODES and _retry_count < len(_RETRY_BACKOFFS_S):
+            retry_wait = (
+                (_parse_retry_after_secs(exc.headers) or _RETRY_BACKOFFS_S[_retry_count])
+                if _retry_count < len(_RETRY_BACKOFFS_S) else None
+            )
+            if exc.code in _RETRYABLE_HTTP_CODES and retry_wait is not None and _has_time(_deadline, retry_wait + 0.5):
                 # A 502/503/504 here means the cloud's own router exhausted its
                 # pool for this one attempt — possibly a moment-in-time thing, a
                 # cooldown that clears seconds later. Retry with backoff instead
@@ -291,7 +319,7 @@ class LLMProxyClient:
                 return self._post(
                     kind, task, payload, timeout_ms,
                     error_detail=error_detail, _retried=_retried, _retry_count=_retry_count + 1,
-                    on_delta=on_delta,
+                    on_delta=on_delta, _deadline=_deadline,
                 )
 
             if exc.code in _RETRYABLE_HTTP_CODES:

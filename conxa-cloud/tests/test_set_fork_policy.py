@@ -101,7 +101,7 @@ def test_a_fork_is_asked_about_with_every_option_plus_the_three_policies():
     ids = [c["id"] for c in q["choices"]]
     assert ids == ["option:replace", "option:keep_both", "option:cancel", "by_input", "ask_human", "stop"]
     assert "recording" in q["choices"][0]["detail"]
-    assert "remove data" in q["choices"][0]["detail"]
+    assert "change or delete things" in q["choices"][0]["detail"]
     assert q["fork_state_id"] == "dialog_upload_options"
 
 
@@ -135,7 +135,7 @@ def test_the_model_may_only_reword_the_title_never_the_choices():
 def test_a_failing_or_empty_rewrite_falls_back_to_the_fixed_title():
     for bad in (lambda p: None, lambda p: "  ", lambda p: (_ for _ in ()).throw(RuntimeError("provider down"))):
         q = next(q for q in clarify.generate_questions(_doc(), fork_copy=bad) if q["kind"] == "fork")
-        assert q["title"] == "When “Upload options” appears, what should this workflow do?"
+        assert q["title"] == "A message box called “Upload options” can pop up here. What should happen when it does?"
 
 
 @pytest.mark.parametrize("choice, mode", [

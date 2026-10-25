@@ -284,8 +284,8 @@ def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> Session
       "ready"      — positively confirmed signed in.
       "expired"    — a missing/corrupt saved session, or the app showed a sign-in page.
       "unverified" — could not tell (timeout, network error, a wedged driver, an unrecognised
-                     page). Callers must NOT show this as signed in; they also must not lock the
-                     user out on it, so the recording gate treats it as "not known to be bad".
+                     page). Callers must NOT show this as signed in; the recording gate also holds
+                     the app back and asks for a fresh sign-in, never trusting a saved file alone.
 
     The probe body's only internal timeout covers page.goto(); launching the driver, opening a
     context, and closing the browser are all unbounded, so a wedged Playwright driver can hang

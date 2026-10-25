@@ -1957,6 +1957,24 @@ def compile_skill_package(
         "Asking for a second opinion on the whole workflow.",
         {"phase": "second_opinion_start", "step_count": len(steps)},
     )
+    # BUILD-55: the same call also judges the values this recording may have pinned to one thing
+    # (the "does it match what I said?" check) and words the download→upload loop suggestion, so
+    # neither costs a call of its own. Both are asked of the steps as they are right now; the
+    # answers are matched back by step key.
+    review_inputs: dict[str, Any] = {}
+    if task_description.strip():
+        try:
+            from conxa_compile.conversation.understanding import review_inputs as _review_inputs_for  # noqa: PLC0415
+
+            review_inputs = _review_inputs_for(
+                {"skills": [{"steps": [s.model_dump(mode="json") for s in steps]}], "inputs": []})
+        except Exception:  # noqa: BLE001 -- advisory: a failure here is "no description check", not a failed compile
+            review_inputs = {}
+    try:
+        loop_candidates = _review_loop_candidates(steps)
+    except Exception:  # noqa: BLE001
+        loop_candidates = []
+    review_extras: dict[str, Any] = {}
     steps, compile_report, intent_graph = _apply_second_opinion(
         compile_report,
         steps,
@@ -1966,7 +1984,14 @@ def compile_skill_package(
         image_by_step_key=image_by_step_key,
         task_description=task_description,
         sidecar=session_root / "second_opinion.json",
+        review_inputs=review_inputs,
+        loop_candidates=loop_candidates,
+        extras_out=review_extras,
     )
+    if review_extras.get("understanding"):
+        # Read back by the question flow (conversation/understanding.py::understand), tied to this
+        # compile so a stale file beside the recording can never be mistaken for it.
+        compile_report["understanding"] = review_extras["understanding"]
     # Which recorded actions did not become a step of their own, and why: 10 actions in and 9
     # steps out should never be a mystery. Merges the compiler does on purpose (a date picker's
     # clicks becoming one step) are not listed; these are the cleanup passes only.
@@ -1994,7 +2019,10 @@ def compile_skill_package(
     # filtered out later by skill_id-aware code in handlers/compile.py, same layering
     # filter_runtime_only_inputs already uses there.
     loop_suggestions = detect_download_upload_loop_candidates(steps)
-    _rewrite_loop_suggestions_for_review(loop_suggestions, steps)
+    _rewrite_loop_suggestions_for_review(
+        loop_suggestions, steps,
+        {str(r.get("id") or ""): str(r.get("text") or "") for r in review_extras.get("loop_copy") or []},
+    )
     compile_report["for_each_suggestions"] = loop_suggestions
 
     now = datetime.now(timezone.utc).isoformat()
@@ -2303,6 +2331,9 @@ def _apply_second_opinion(
     image_by_step_key: dict[str, tuple[str, str]],
     task_description: str = "",
     sidecar: Path | None = None,
+    review_inputs: dict[str, Any] | None = None,
+    loop_candidates: list[dict[str, Any]] | None = None,
+    extras_out: dict[str, Any] | None = None,
 ) -> tuple[list[SkillStep], dict[str, Any], WorkflowIntentGraph]:
     """Run the merged workflow-review call (BUILD-25's second opinion merged
     with the workflow-intent graph, BUILD-26 — see llm/workflow_review.py) and
@@ -2344,6 +2375,9 @@ def _apply_second_opinion(
             task_description=task_description,
             sidecar=sidecar,
             error_detail=error_detail,
+            review_inputs=review_inputs,
+            loop_candidates=loop_candidates,
+            extras_out=extras_out,
         )
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile
         graph, findings = WorkflowIntentGraph(), []
@@ -2392,64 +2426,72 @@ def _apply_second_opinion(
     return steps, fresh, graph
 
 
-def _rewrite_loop_suggestions_for_review(suggestions: list[dict[str, Any]], steps: list[Any]) -> None:
-    """Best-effort in-place rewrite of each suggestion's `why` into plain, friendly language
-    for the mandatory Human Edit review popup (ReviewQuestionsDialog.tsx) — see
-    llm/loop_suggestion_copy.py. Copy-only: never touches `wrap_start_key`/`wrap_end_key`/
-    `upload_step_key`/`template_literal`/`redundant_click_key`, so a failed or skipped call
-    changes nothing but the sentence a reviewer reads; the deterministic `why` already there
-    is the fallback, not a placeholder that needs a working provider to be usable. Doesn't
-    touch compile_report["degraded"]/status — unlike second_opinion, a failure here is a
-    worse sentence, never a worse compile.
+def _loop_pair(suggestion: dict[str, Any]) -> tuple[str, str]:
+    """The pair of step keys that identifies a download→upload loop suggestion. Deterministic
+    (unlike the suggestion's own random ``id``), so it can sit in the review call's cache key and
+    match a candidate seen before the review to the same loop detected again after it."""
+    return str(suggestion.get("wrap_start_key") or ""), str(suggestion.get("upload_step_key") or "")
 
-    Passes the LLM the actual steps involved (role-tagged: acquiring the file vs. uploading
-    it, each with its own compile-time intent/semantic_description, never a selector, via
-    `compiler/step_description.py::describe_step`) rather than a bare filename + boolean —
-    the earlier bare-facts version of this prompt had the model guessing at what the workflow
-    even does and inventing a wrong mechanism (e.g. describing a delete when the pattern is
-    download-then-upload). The key→step lookup (`step_key_index_map`) and the description
-    shape (`describe_step`) are both generic, reusable by any future step that needs to hand
-    an LLM copy-rewrite real grounding — this function is just the loop-suggestion-specific
-    glue: which steps play which role.
 
-    Deliberately excludes the redundant click (when present) from this context: whether to
-    remove it is a SEPARATE Yes/No question (`redundant_click_why`, built deterministically in
-    `compiler/loop_suggestion.py` — no LLM rewrite, it's one factual sentence) that
-    ReviewQuestionsDialog.tsx asks as its own popup, only after this loop question is answered
-    Yes. Rewriting the loop's own `why` has no reason to mention it at all."""
+def _loop_steps_context(suggestion: dict[str, Any], steps: list[Any], key_to_index: dict[str, int]) -> list[dict[str, Any]]:
+    """The actual steps behind a loop suggestion, role-tagged (acquiring the file vs. uploading
+    it), each with its own compile-time intent/semantic_description and never a selector
+    (``compiler/step_description.py::describe_step``). Grounding the wording in the real steps
+    matters: an earlier bare-facts version had the model guessing at what the workflow even does and
+    inventing a wrong mechanism (e.g. describing a delete when the pattern is download-then-upload).
+
+    Deliberately excludes the redundant click (when present): whether to remove it is a SEPARATE
+    Yes/No question (``redundant_click_why``, built deterministically in
+    ``compiler/loop_suggestion.py``) asked only after this loop question is answered Yes."""
     from conxa_compile.compiler.step_description import describe_step  # noqa: PLC0415
-    from conxa_compile.llm.loop_suggestion_copy import friendly_loop_suggestion_text  # noqa: PLC0415
 
+    context: list[dict[str, Any]] = []
+    redundant_key = str(suggestion.get("redundant_click_key") or "")
+    wrap_start_idx = key_to_index.get(str(suggestion.get("wrap_start_key") or ""))
+    wrap_end_idx = key_to_index.get(str(suggestion.get("wrap_end_key") or ""))
+    if wrap_start_idx is not None and wrap_end_idx is not None:
+        for idx in range(wrap_start_idx, wrap_end_idx + 1):
+            if key_to_index.get(redundant_key) == idx:
+                continue
+            context.append(describe_step(steps[idx], role="acquire"))
+    upload_idx = key_to_index.get(str(suggestion.get("upload_step_key") or ""))
+    if upload_idx is not None:
+        context.append(describe_step(steps[upload_idx], role="upload"))
+    return context
+
+
+def _review_loop_candidates(steps: list[Any]) -> list[dict[str, Any]]:
+    """Download→upload loops in ``steps`` as the review call is asked about them (BUILD-55): an id
+    (the key pair) and the role-tagged steps. The model writes the sentence a reviewer reads next to
+    Yes/No; every structural field of the suggestion stays code's."""
     key_to_index = step_key_index_map(steps)
-
-    for suggestion in suggestions:
-        error_detail: list[str] = []
+    out: list[dict[str, Any]] = []
+    for suggestion in detect_download_upload_loop_candidates(steps):
         try:
-            steps_context: list[dict[str, Any]] = []
-            redundant_key = str(suggestion.get("redundant_click_key") or "")
-            wrap_start_idx = key_to_index.get(str(suggestion.get("wrap_start_key") or ""))
-            wrap_end_idx = key_to_index.get(str(suggestion.get("wrap_end_key") or ""))
-            if wrap_start_idx is not None and wrap_end_idx is not None:
-                for idx in range(wrap_start_idx, wrap_end_idx + 1):
-                    if key_to_index.get(redundant_key) == idx:
-                        continue  # the redundant click, if absorbed into the wrap range — its
-                        # own separate question, not part of this one's context (see above)
-                    steps_context.append(describe_step(steps[idx], role="acquire"))
-            upload_idx = key_to_index.get(str(suggestion.get("upload_step_key") or ""))
-            if upload_idx is not None:
-                steps_context.append(describe_step(steps[upload_idx], role="upload"))
+            context = _loop_steps_context(suggestion, steps, key_to_index)
+        except Exception:  # noqa: BLE001 -- advisory only
+            continue
+        if context:
+            out.append({"id": "|".join(_loop_pair(suggestion)), "steps": context})
+    return out
 
-            suggestion["why"] = friendly_loop_suggestion_text(
-                str(suggestion.get("template_literal") or ""),
-                steps_context=steps_context,
-                fallback=str(suggestion.get("why") or ""),
-                error_detail=error_detail,
-            )
-        except Exception as exc:  # noqa: BLE001 — advisory copy only, never fail compile over this
-            error_detail.append(f"{type(exc).__name__}: {exc}")
-        if error_detail:
-            _compile_log(
-                "compile_phase",
-                "Loop suggestion copy rewrite failed — kept the deterministic wording.",
-                {"phase": "loop_suggestion_copy_failed", "detail": "; ".join(error_detail)},
-            )
+
+_LOOP_COPY_MAX_CHARS = 400
+
+
+def _rewrite_loop_suggestions_for_review(
+    suggestions: list[dict[str, Any]], steps: list[Any], copy_by_pair: dict[str, str] | None = None
+) -> None:
+    """In-place: replace each suggestion's ``why`` with the review call's friendlier sentence for the
+    mandatory Human Edit review popup (ReviewQuestionsDialog.tsx). Copy-only: never touches
+    ``wrap_start_key``/``wrap_end_key``/``upload_step_key``/``template_literal``/
+    ``redundant_click_key``, so a missing or unusable sentence changes nothing but the wording a
+    reviewer reads; the deterministic ``why`` already there is the fallback, not a placeholder that
+    needs a working provider. ``copy_by_pair`` maps a loop's id (``wrap_start_key|upload_step_key``)
+    to the sentence; one that is empty, over 400 characters or holds a ``{{`` placeholder is
+    ignored. Doesn't touch compile_report["degraded"]/status: a missing sentence is a plainer
+    sentence, never a worse compile."""
+    for suggestion in suggestions:
+        text = " ".join(str((copy_by_pair or {}).get("|".join(_loop_pair(suggestion))) or "").split())
+        if text and len(text) <= _LOOP_COPY_MAX_CHARS and "{{" not in text:
+            suggestion["why"] = text

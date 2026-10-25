@@ -68,7 +68,7 @@ def test_workflow_review_attaches_images_as_image_url_blocks_not_inlined_text():
 
 def test_workflow_review_body_gets_its_own_token_budget():
     body = _openai_body_dict("workflow_review", _payload([]), json_mode=True)
-    assert body["max_tokens"] == 4096
+    assert body["max_tokens"] == 6144
     assert body["response_format"] == {"type": "json_object"}
 
 

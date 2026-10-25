@@ -113,7 +113,12 @@ class WorkflowFlowMixin:
                           glyph="warn", sink=sink)
         embedded = bool(started.get("embedded"))
         where = "in the browser on the right" if embedded else "in a browser window"
-        why = "your saved sign-in has expired, so sign in again" if expired else "you need to sign in first"
+        if not expired:
+            why = "you need to sign in first"
+        elif app.last_error:
+            why = "your saved sign-in has expired, so sign in again"
+        else:
+            why = "I couldn’t confirm your saved sign-in is still active, so sign in again"
         self._flow_say(
             workflow.id,
             f"Before recording: {app.name} — {why}. I’ve opened its sign-in page {where} — sign in as you "
