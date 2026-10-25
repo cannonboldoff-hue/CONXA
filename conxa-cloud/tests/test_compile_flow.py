@@ -124,7 +124,7 @@ def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(
     assert card["state"] == "done" and card["credits_left"] == 37 and card["step_count"] == 4
     assert [(r["key"], r["status"]) for r in card["rows"]] == [("clean", "done"), ("find", "done"), ("meaning", "done"), ("save", "done")]
     assert card["rows"][0]["detail"] == "14 actions kept" and card["rows"][1]["detail"] == "4 of 4"
-    assert _texts(wf.id, "event")[-1] == "Compiled"
+    assert "Compiled" not in _texts(wf.id, "event")  # the card carries it
     assert "Compiled into 4 steps." in _texts(wf.id, "assistant_message")[0]
     assert "send invoice" in _texts(wf.id, "assistant_message")[0].lower()  # the uncertain step is named, not numbered
     # lifecycle follows: clarify questions are open
@@ -288,7 +288,6 @@ def test_out_of_credits_and_failures_are_their_own_states(env):
 
     lc = lifecycle_for_workflow(get_workflow(wf.id))
     assert (lc["stage"], lc["substate"]) == ("compile", "out_of_credits")
-    assert "Your recording is saved" in " ".join(str(i.get("subject")) for i in ts.load(f"wf:{wf.id}")["items"])
 
     _fake_compile(b, wf, fail=_CommandError("cloud_unreachable", "Conxa Cloud is unreachable."))
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid2")

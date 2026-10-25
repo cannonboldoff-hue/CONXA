@@ -13,7 +13,7 @@ import {
 } from '@/api/conversationApi'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CardShell } from '@/components/conversation/parts'
+import { CardShell, Disclosure } from '@/components/conversation/parts'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { useBrowserStore } from '@/store/browserStore'
 import { useOpenEdit } from '@/components/conversation/cards/CompileClarifyCards'
@@ -46,7 +46,7 @@ function useAction(threadId: string) {
   return { busy, run }
 }
 
-type InputSpec = { id: string; label: string; type: string; options: string[]; required: boolean; value: string | number | boolean }
+type InputSpec = { id: string; label: string; type: string; options: string[]; required: boolean; value: string | number | boolean; suspect?: boolean }
 
 /** Test inputs: fill them in the way a real request would, then run. Nothing is published by a test. */
 export function TestInputsCard({ threadId, item }: CardProps) {
@@ -119,6 +119,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
                 />
               )}
               {bad && <p className="mt-1 text-xs text-status-error">✕ Required — the workflow types this in.</p>}
+              {s.suspect && <p className="mt-1 text-xs text-[var(--text-meta)]">The last test couldn’t find what this points to — check the value.</p>}
             </div>
           )
         })}
@@ -160,7 +161,6 @@ const ROW_GLYPH: Record<Row['status'], StatusKind> = { running: 'run', done: 'ok
 export function TestRunCard({ threadId, item }: CardProps) {
   const wf = workflowIdOf(threadId)
   const { busy, run } = useAction(threadId)
-  const openEdit = useOpenEdit(threadId)
   const state = String(item.state)
   const rows = (Array.isArray(item.rows) ? item.rows : []) as Row[]
   const attempt = Number(item.attempt ?? 1)
@@ -259,9 +259,8 @@ export function TestRunCard({ threadId, item }: CardProps) {
         glyph="fail"
         title={`${auto ? `Attempt ${attempt}` : 'Test'} failed${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`}
         meta={clock || undefined}
-        footer={openEdit ? <Button variant="outline" size="sm" onClick={openEdit}>Open Human Edit</Button> : undefined}
       >
-        <p className="leading-[1.6] text-[var(--text-primary)]">{String(item.error ?? '')}</p>
+        <p className="leading-[1.6] text-[var(--text-primary)]">{String(item.summary || 'Something went wrong at this step.')}</p>
         {typeof item.failure_image === 'string' && item.failure_image && (
           <img
             src={item.failure_image}
@@ -271,6 +270,7 @@ export function TestRunCard({ threadId, item }: CardProps) {
         )}
         <div className="mt-3">{rowList}</div>
         {item.nothing_sent === true && <p className="mt-2 text-xs text-[var(--text-secondary)]">Nothing was saved or sent.</p>}
+        {item.error ? <Disclosure label="Technical details">{String(item.error)}</Disclosure> : null}
       </CardShell>
     )
   }

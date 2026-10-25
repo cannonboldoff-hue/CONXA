@@ -12,6 +12,7 @@ const { collectSyncErrors } = require("./sync_errors");
 const pageScripts = require("./page_scripts");
 const { plainCause } = require("./errors");
 const hostBrowser = require("./host_browser");
+const { inputsFailingPattern } = require("./interpolate");
 const { DOWNLOAD_WAIT_TIMEOUT_MS } = require("./run_config");
 
 // ─── 1. Resolve CONXA_DIR (install, read-only) and CONXA_DATA_DIR (user-writable) ─
@@ -499,6 +500,7 @@ function _skillToolDefinitions() {
       // _normalize_saved_skill_inputs. Forward it the same way so the agent knows the value must
       // be a list of these exact strings, not a single one.
       if (f.items) prop.items = f.items;
+      if (f.pattern) prop.pattern = f.pattern;
       // A date input is sent in a normal date form and converted at run time into the format the
       // target application itself accepted (handlers.js date_pick) — tell the agent which form.
       if (f.format === "date") {
@@ -607,7 +609,7 @@ function _tooManyRunsMessage() {
 // at call time. `exec` is the calling run's own registry entry (RT-3) — never
 // a shared/global execution slot — so its sentVisualRefs set is scoped to
 // this run alone.
-async function _buildFailureResponse(page, errObj, resolvedEntry, runTracker, steps = null, exec = null) {
+async function _buildFailureResponse(page, errObj, resolvedEntry, runTracker, steps = null, exec = null, inputs = null) {
   const { maxRecoveryTier, agentRecoveryEnabled } = _effectiveRecoveryTier(resolvedEntry && resolvedEntry.manifest);
   return require("./failure_response").buildFailureResponse(
     page, errObj, resolvedEntry, runTracker, steps,
@@ -627,6 +629,8 @@ async function _buildFailureResponse(page, errObj, resolvedEntry, runTracker, st
       dataDir: CONXA_DATA_DIR,
       runId: exec && exec.runId,
       runStartTs: exec && exec.startedAt,
+      // The run's inputs, so the failure evidence can say which ones the failing step read.
+      inputs,
     }
   );
 }
@@ -1060,6 +1064,10 @@ async function _handleTool(name, args, extra) {
       });
       if (missingInputs.length) {
         return err(`Skill ${run.skill} is missing required input(s): ${missingInputs.join(", ")}. Call get_skill_inputs first.`);
+      }
+      const badPattern = inputsFailingPattern(declaredInputs, effectiveInputs);
+      if (badPattern.length) {
+        return err(`Skill ${run.skill}: the value given for ${badPattern.join(", ")} is not in the expected format. Call get_skill_inputs to see the format.`);
       }
       run.inputs = effectiveInputs;
 
@@ -2410,7 +2418,7 @@ async function _handleTool(name, args, extra) {
       const failResp = _failedPage
         ? await (async () => {
             try {
-              return await _buildFailureResponse(_failedPage, runErr, runErr.fromEntry || primary.entry, _runTracker, resolved.length === 1 ? primary.steps : null, exec);
+              return await _buildFailureResponse(_failedPage, runErr, runErr.fromEntry || primary.entry, _runTracker, resolved.length === 1 ? primary.steps : null, exec, primary.inputs);
             } catch (buildErr) {
               log("error", "failure_response_build_failed", { run_id: _runId, error: buildErr && buildErr.message });
               const { summary, detail } = plainCause(runErr);

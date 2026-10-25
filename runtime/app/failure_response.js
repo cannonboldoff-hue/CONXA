@@ -34,6 +34,18 @@ const recoveryStage = require("./recovery_stage");
 const { buildIndexedDigest } = require("./candidate_digest");
 const artifactStore = require("./artifact_store");
 const recoveryLog = require("./recovery_log");
+const { inputsReferenced } = require("./interpolate");
+
+// One normalized class for the failure, read from flags the throw sites already set. The Studio
+// uses it to tell "could not find the element" apart from every other failure.
+function failureKind(err) {
+  if (err.ambiguous) return "ambiguous";
+  if (err.entityNotFound) return "entity_not_found";
+  if (err.frameNotFound) return "frame_not_found";
+  if (err.resolveMiss) return "not_found";
+  if (err.verifyFail) return "verify_fail";
+  return "other";
+}
 
 // Compact, recovery-relevant description of the step the cascade could not resolve.
 // Drives semantic matching: the agent matches THIS intent against the live DOM.
@@ -437,6 +449,12 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       recovery_halt_reason: err.recoveryHaltReason || null,
       destructive_halt: !!err.destructiveHalt,
       verify_fail: !!err.verifyFail,
+      // Lets the Studio blame a changed input before it edits the workflow: what kind of failure,
+      // which run inputs the failing step reads (and what they held), how many elements each
+      // signal found.
+      failure_kind: failureKind(err),
+      input_refs: inputsReferenced(err.failedStep, deps.inputs),
+      signal_counts: Array.isArray(err.signalCounts) ? err.signalCounts : null,
     };
     fs.writeFileSync(path.join(dir, "evidence.json"), JSON.stringify(evidence));
   } catch (_) {
@@ -647,4 +665,5 @@ module.exports = {
   overlayNoteText,
   dismissRejectedNoteText,
   _writeStudioEvidence,
+  failureKind,
 };

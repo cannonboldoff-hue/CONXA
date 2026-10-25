@@ -281,10 +281,18 @@ async function resolveStep(page, step, inputs, scrollState) {
   if (result && result.node && result.node._loc) {
     return result.node._loc;
   }
+  // How many elements each signal found: tells "matched nothing" from "matched several" on a miss too.
+  const signalCounts = signals.map(s => ({ selector: s.selector, matches: (map[s.selector] || []).length }));
   if (result && result.ambiguous) {
-    throw Object.assign(new Error("Ambiguous element resolution (no signal cleared uniqueness gate)"), { ambiguous: true });
+    const why = (result.tied || []).map(t =>
+      `${t.selector} → ${t.matches} matches, margin ${t.margin} (need ${DEFAULT_UNIQUE_MARGIN}): ` +
+      t.top.map(c => `${c.role || "?"} "${String(c.name || "").slice(0, 40)}" ${c.score}`).join(" | ")).join("; ");
+    throw Object.assign(
+      new Error(`Ambiguous element resolution (no signal cleared uniqueness gate)${why ? ` [${why}]` : ""}`),
+      { ambiguous: true, signalCounts },
+    );
   }
-  throw Object.assign(new Error("Element not found (resolve miss)"), { resolveMiss: true });
+  throw Object.assign(new Error("Element not found (resolve miss)"), { resolveMiss: true, signalCounts });
 }
 
 const GATE_ENABLED = process.env.CONXA_GATE !== "0";

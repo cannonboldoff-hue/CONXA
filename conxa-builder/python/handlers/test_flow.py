@@ -67,6 +67,7 @@ class TestFlowMixin:
             if q.get("kind") in ("values", "chosen_values"):
                 recorded = {**recorded, **(q.get("recorded") or {})}
         last = workflow.last_test_inputs or {}
+        suspects = {str(s) for s in payload.get("suspect_inputs") or []}
         inputs = []
         for row in doc.get("inputs") or []:
             if not isinstance(row, dict) or not row.get("id"):
@@ -75,8 +76,9 @@ class TestFlowMixin:
             value = last.get(rid_, recorded.get(rid_, row.get("default") or ""))
             inputs.append({
                 "id": rid_, "label": _humanize(rid_), "type": row.get("type") or "text",
-                "options": row.get("options") or [], "required": bool(row.get("required", True)),
+                "options": row.get("options") or [], "required": not row.get("optional", False),
                 "value": value if isinstance(value, (str, int, float, bool)) else "",
+                **({"suspect": True} if rid_ in suspects else {}),
             })
         irreversible = [clarify.step_name(s) for s in steps if isinstance(s, dict) and s.get("consequence") == "irreversible"]
         if not irreversible:
@@ -124,6 +126,10 @@ class TestFlowMixin:
             if outcome == "failed":
                 from conxa_compile.conversation import studio_settings
 
+                # A value the person typed is the first suspect for a step that couldn't find its
+                # element: ask before Auto-fix starts rewriting steps that may be fine.
+                if self._tf_input_check(workflow_id, inputs):
+                    return
                 if studio_settings.load().get("autofix_enabled"):
                     self._tf_autofix(workflow_id, inputs, show_browser)
         except Exception:  # noqa: BLE001 — never take the engine down from a background test
@@ -329,9 +335,46 @@ class TestFlowMixin:
         except Exception:  # noqa: BLE001
             pass
 
+    def _tf_input_check(self, workflow_id: str, inputs: dict[str, Any]) -> bool:
+        """True when the failed test is put to the person as "is this value right?" instead of going
+        to Auto-fix. Never raises: a failed check must not hide the failure or stop Auto-fix."""
+        try:
+            from conxa_compile.conversation import clarify, clarify_store
+            from conxa_compile.editor.evidence import build_evidence_bundle
+            from conxa_compile.editor.input_suspects import find_input_suspects
+            from conxa_core.storage.json_store import read_skill
+            from conxa_core.storage.workflow_store import get_workflow
+
+            workflow = get_workflow(workflow_id)
+            if workflow is None or not workflow.skill_id or not workflow.last_test_run_id:
+                return False
+            data = clarify_store.load(workflow_id) or {"skill_id": workflow.skill_id, "questions": []}
+            if any(q.get("status") == "open" for q in data.get("questions") or []):
+                return False  # a question already asked about this failure (the typed-step follow-up)
+            doc = read_skill(workflow.skill_id) or {}
+            # The recorded value of each input: the same source (and precedence) the test card prefills from.
+            recorded: dict[str, Any] = {}
+            for x in data.get("questions") or []:
+                if x.get("kind") in ("values", "chosen_values"):
+                    recorded = {**recorded, **(x.get("recorded") or {})}
+            defs = [{**d, "default": recorded.get(str(d.get("id"))) or d.get("default")}
+                    for d in doc.get("inputs") or [] if isinstance(d, dict)]
+            evidence = build_evidence_bundle(workflow.skill_id, run_id=workflow.last_test_run_id, detail="digest")
+            suspects = find_input_suspects(evidence.get("runtime_evidence"), inputs, defs)
+            q = clarify.input_check_question(suspects, defs, inputs, workflow.last_test_run_id)
+            if q is None or any(x.get("id") == q["id"] for x in data.get("questions") or []):
+                return False
+            data["questions"] = [*(data.get("questions") or []), q]
+            clarify_store.save(workflow_id, data)
+            self._flow_post_next_question(workflow_id, _event_sink(f"inputcheck_{uuid.uuid4().hex[:10]}"))
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
                    inputs: dict[str, Any] | None = None) -> str:
         from conxa_compile.conversation import harness
+        from conxa_compile.conversation.failure_summary import summarize
 
         failing = next((r for r in reversed(rows) if r["status"] == "running"), None)
         if failing is not None:
@@ -341,11 +384,9 @@ class TestFlowMixin:
         nothing_sent = not any(r.get("destructive") for r in rows)
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:600],
-            failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent, seconds=int(time.time() - started),
+            summary=summarize(message), failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent, seconds=int(time.time() - started),
             failure_image=self._tf_failure_image(workflow_id), actions=[],
         )
-        harness.log_event(_thread(workflow_id), "Test failed", glyph="fail", sink=sink,
-                          subject=(failing["name"] if failing else message[:80]))
         if failing is not None and failing.get("step_key"):
             self._tf_followup(workflow_id, failing["step_key"], inputs or {}, sink)
         return "failed"
@@ -405,8 +446,6 @@ class TestFlowMixin:
             pass
         harness.update_card(_thread(workflow.id), card_id, sink=sink, approved=True, approved_version=version,
                             actions=["test_again"], build_error=result.get("build_error"))
-        harness.log_event(_thread(workflow.id), "Approved for packaging", glyph="ok", sink=sink,
-                          subject=f"version {version}" if version else None)
         from conxa_compile.conversation import thread_store as ts
 
         from conxa_core.storage.workflow_store import list_workflows
@@ -492,7 +531,6 @@ class TestFlowMixin:
             runtime_state.set_flags(workflow_id, autofix_attempt=0)
             harness.update_card(thread, card_id, sink=sink, state="stopped", reason=reason, changes=changes,
                                 actions=["resume", "human_edit"])
-            harness.log_event(thread, "Auto-fix stopped", glyph="warn", sink=sink, subject=reason)
 
         try:
             for attempt in range(1, MAX_AUTOFIX_ATTEMPTS + 1):

@@ -349,6 +349,19 @@ def test_no_followup_when_the_test_used_the_recorded_value_or_the_step_is_not_a_
     assert test_followup_question(doc, "nope", {"company": "Globex"}) is None
 
 
+def test_input_check_names_the_doubtful_values_in_plain_words_and_edits_nothing():
+    from conxa_compile.conversation.clarify import input_check_question, plan_answer
+
+    defs = [{"id": "gitignore_file", "default": "Ada.gitignore"}, {"id": "region", "type": "select", "options": ["eu"]}]
+    suspects = [{"id": "gitignore_file", "reason": "differs_from_recorded"}, {"id": "region", "reason": "not_an_option"}]
+    q = input_check_question(suspects, defs, {"gitignore_file": "gitignore", "region": "asia"}, "r_1")
+    assert q["kind"] == "input_check" and q["id"] == "input_check:r_1" and q["input_ids"] == ["gitignore_file", "region"]
+    assert "“gitignore”" in q["body"] and "“Ada.gitignore”" in q["body"] and "“asia”" in q["body"]
+    assert [c["id"] for c in q["choices"]] == ["wrong", "right"]
+    assert plan_answer(q, {"choice": "wrong"}, {})[0] == [] and plan_answer(q, {"choice": "right"}, {})[0] == []
+    assert input_check_question([], defs, {}, "r_1") is None
+
+
 def test_record_plan_keeps_a_short_readable_checklist_and_never_raises():
     from conxa_compile.conversation import record_plan
 

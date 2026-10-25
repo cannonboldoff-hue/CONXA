@@ -253,7 +253,6 @@ class WorkflowFlowMixin:
             pass  # the window is already gone
         harness.update_card(_thread(workflow.id), card["card_id"], state="cancelled", actions=[], sink=sink)
         runtime_state.set_flags(workflow.id, signing_in=False, retest_after_sign_in=False)
-        harness.log_event(_thread(workflow.id), "Sign-in cancelled", glyph="none", sink=sink)
         return {"ok": True}
 
     # ── recording ───────────────────────────────────────────────────────────────────────────
@@ -382,8 +381,6 @@ class WorkflowFlowMixin:
             runtime_state.set_flags(workflow_id, recording=False, recording_paused=False)
             harness.update_card(_thread(workflow_id), card_id, state="browser_closed", count=count,
                                 actions=["finish", "discard"] if count else ["discard"], sink=sink)
-            harness.log_event(_thread(workflow_id), "The browser closed before you finished", glyph="warn", sink=sink,
-                              subject=f"{count} action{'s' if count != 1 else ''} captured")
             return
 
     def _flow_session(self, card: dict[str, Any]):
@@ -454,15 +451,12 @@ class WorkflowFlowMixin:
         except _CommandError as exc:
             runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=exc.code == "empty_recording")
             harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
-            harness.log_event(_thread(workflow.id), "Nothing was saved", glyph="none", sink=sink, subject=exc.message)
             raise
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
         saved = get_workflow(workflow.id)
         seconds = int(getattr(saved, "recording_duration_seconds", 0) or 0)
         count = int(result.get("event_count") or 0)
         harness.update_card(_thread(workflow.id), card["card_id"], state="saved", count=count, duration_seconds=seconds, actions=[], sink=sink)
-        pretty = f"{count} action{'s' if count != 1 else ''}" + (f" · {seconds // 60} min {seconds % 60:02d} s" if seconds else "")
-        harness.log_event(_thread(workflow.id), "Recording saved", glyph="ok", sink=sink, subject=pretty)
         self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}. I’m compiling them into steps that can find the right "
                        "buttons and fields again, even when the page shifts a little. I’ll ask you a few things once that’s done.", sink)
         if payload.get("auto_compile", True):
@@ -568,12 +562,10 @@ class WorkflowFlowMixin:
         except _CommandError as exc:
             runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
             harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
-            harness.log_event(thread, "Nothing was saved", glyph="none", sink=sink, subject=exc.message)
             raise
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
         count = int(stopped.get("event_count") or 0)
         harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
-        harness.log_event(thread, "Recording saved", glyph="ok", sink=sink, subject=f"{plural(count, 'action')}")
         where = "adding them as a second way from that step on" if mode == "branch" else "putting them in place of that step and the ones after it"
         self._flow_say(workflow.id, f"Got it \u2014 {plural(count, 'action')}. I\u2019m compiling them and {where}.", sink)
         threading.Thread(target=self._splice_segment_safe, args=(workflow.id, sid, step_key, mode), daemon=True).start()
@@ -681,7 +673,6 @@ class WorkflowFlowMixin:
         except _CommandError as exc:
             runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
             harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
-            harness.log_event(thread, "Nothing was learned from that recording", glyph="none", sink=sink, subject=exc.message)
             raise
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
         count = int(stopped.get("event_count") or 0)
@@ -711,8 +702,6 @@ class WorkflowFlowMixin:
         self.cmd_cancel_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=not is_variant)
         harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", actions=[], sink=sink)
-        harness.log_event(_thread(workflow.id), "Recording discarded", glyph="none", sink=sink,
-                          subject="Nothing was saved")
         return {"ok": True}
 
     def cmd_flow_set_varies(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:

@@ -5,6 +5,8 @@ import { AssistantMessage, EventRow, ThreadSkeleton, UserMessage } from '@/compo
 import { cardComponent } from '@/components/conversation/cards'
 import { selectThread, useThreadStore } from '@/store/threadStore'
 import { visibleItems, type ThreadItem } from '@/lib/thread'
+import { groupByStage, STAGES } from '@/lib/stages'
+import { StageDivider } from '@/components/conversation/StageBar'
 import { useConnectionStore } from '@/store/connectionStore'
 import { cn } from '@/lib/utils'
 
@@ -145,6 +147,7 @@ export function Conversation({
   anchor,
   virtual,
   tail,
+  stageDividers,
   centerWhenEmpty,
   emptyBelow,
   onSend,
@@ -163,6 +166,8 @@ export function Conversation({
   virtual?: boolean
   /** Rendered after the last item — e.g. the next step the lifecycle is waiting on. */
   tail?: ReactNode
+  /** Break the thread into Record / Compile / Test sections with a heading each (a workflow's thread). */
+  stageDividers?: boolean
   /** Replace the default send (e.g. a chat that must create its thread first). */
   onSend?: (text: string) => void | Promise<void>
 }) {
@@ -173,12 +178,16 @@ export function Conversation({
   const send = useThreadStore((s) => s.send)
   const scroller = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
+  const pinnedRef = useRef(true)
+  pinnedRef.current = pinned
 
   useEffect(() => {
     if (!virtual) void load(threadId)
   }, [threadId, load, virtual])
 
   const items = useMemo(() => visibleItems(t.items), [t.items])
+  const groups = useMemo(() => groupByStage(items), [items])
+  const hasItems = items.length > 0
 
   const toBottom = useCallback(() => {
     const el = scroller.current
@@ -189,6 +198,17 @@ export function Conversation({
   useLayoutEffect(() => {
     if (pinned) toBottom()
   }, [items.length, t.streaming?.text, pinned, toBottom])
+
+  // A card that grows in place (a failure's details, a revised card) adds height without adding an item.
+  useEffect(() => {
+    const el = scroller.current?.firstElementChild
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) toBottom()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [toBottom, hasItems])
 
   const onScroll = () => {
     const el = scroller.current
@@ -235,9 +255,16 @@ export function Conversation({
           )}
           {!ready && <ThreadSkeleton />}
           {showEmpty && (empty ?? <p className="text-sm text-[var(--text-meta)]">Nothing here yet.</p>)}
-          {items.map((item) => (
-            <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />
-          ))}
+          {stageDividers
+            ? groups.map((g, gi) => (
+                <section key={`${g.stage}-${gi}`} className="space-y-5">
+                  <StageDivider stage={g.stage} number={STAGES.indexOf(g.stage) + 1} />
+                  {g.items.map((item) => (
+                    <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />
+                  ))}
+                </section>
+              ))
+            : items.map((item) => <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />)}
           {tail}
           {t.streaming && <AssistantMessage text={t.streaming.text} streaming />}
           {t.turnId && !t.streaming && <AssistantMessage text="" streaming />}

@@ -507,3 +507,28 @@ def test_semantic_description_patch_rejects_empty():
     }
     with pytest.raises(ValueError, match="semantic_description_empty"):
         validate_editor_patch(step, {"semantic_description": "   "}, {})
+
+
+# BUILD-55: a "wait for this element" insert of a branch kind must not be refused for carrying a root
+# identity_bundle; the element rides in the branch body instead.
+@pytest.mark.parametrize("kind", ["if_present", "try_dismiss", "wait_for_one_of"])
+def test_an_inserted_branch_step_is_pointed_at_its_source_element_without_being_refused(kind):
+    from conxa_compile.editor.copilot_proposals import identity_patch_from_source
+    from conxa_compile.editor.workflow_mutations import _new_manual_step
+    from conxa_compile.policy.bundle import get_policy_bundle
+
+    source = {"target": {"primary_selector": "internal:role=link[name=\"report.pdf\"i]", "fallback_selectors": []},
+              "identity_bundle": {"signals": [{"selector": "internal:role=link[name=\"report.pdf\"i]"}]}}
+    patch = identity_patch_from_source(kind, source)
+    assert "identity_bundle" not in patch
+    step = _new_manual_step(kind, "")
+    validate_editor_patch(step, patch, get_policy_bundle().data)
+    if kind == "wait_for_one_of":
+        assert patch["branch"]["options"][0]["identity_bundle"] == source["identity_bundle"]
+
+
+def test_a_click_insert_still_copies_the_full_identity():
+    from conxa_compile.editor.copilot_proposals import identity_patch_from_source
+
+    src = {"target": {"primary_selector": "x"}, "identity_bundle": {"signals": []}}
+    assert identity_patch_from_source("click", src) == {"identity_bundle": src["identity_bundle"], "target": src["target"]}

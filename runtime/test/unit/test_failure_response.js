@@ -159,6 +159,35 @@ test("ceiling 2 with a run workspace configured: writes evidence.json + failure.
   assert.ok(!fs.existsSync(path.join(evidenceDir, "pre_step.jpg")), "no err.preShot on this failure → not written");
 });
 
+test("evidence.json names the failure kind, the inputs the step read, and per-signal match counts", async () => {
+  const dataDir = tmpSkillDir();
+  const step = { type: "click", target: { name: "{{gitignore_file}}, (File)" }, identity_bundle: { signals: [{ selector: "role=link[name=\"{{gitignore_file}}\"]" }] } };
+  await buildFailureResponse(
+    mockPage(),
+    {
+      message: "Ambiguous element resolution", failedAt: 1, failedStep: step, ambiguous: true,
+      signalCounts: [{ selector: "role=link[name=\"{{gitignore_file}}\"]", matches: 3 }],
+    },
+    entry("studio-evidence-inputs"), null, null,
+    { ...BASE_DEPS, maxRecoveryTier: 2, dataDir, runId: "run_inputs1", runStartTs: new Date(0).toISOString(),
+      inputs: { gitignore_file: "gitignore", unused: "x" } },
+  );
+  const evidence = JSON.parse(fs.readFileSync(path.join(dataDir, "runs", "run_inputs1", "_evidence", "evidence.json"), "utf8"));
+  assert.strictEqual(evidence.failure_kind, "ambiguous");
+  assert.deepStrictEqual(evidence.input_refs, [{ id: "gitignore_file", empty: false }]);
+  assert.ok(!JSON.stringify(evidence).includes("\"gitignore\""), "input values never reach the evidence file");
+  assert.strictEqual(evidence.signal_counts[0].matches, 3);
+});
+
+test("failureKind: one class per find-failure flag, 'other' otherwise", () => {
+  const { failureKind } = require("../../app/failure_response");
+  assert.strictEqual(failureKind({ resolveMiss: true }), "not_found");
+  assert.strictEqual(failureKind({ entityNotFound: true }), "entity_not_found");
+  assert.strictEqual(failureKind({ frameNotFound: true }), "frame_not_found");
+  assert.strictEqual(failureKind({ verifyFail: true }), "verify_fail");
+  assert.strictEqual(failureKind({}), "other");
+});
+
 test("evidence write never breaks the failure response when the page.screenshot() call throws", async () => {
   const dataDir = tmpSkillDir();
   const page = {

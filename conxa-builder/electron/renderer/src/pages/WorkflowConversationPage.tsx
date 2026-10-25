@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Conversation } from '@/components/conversation/Conversation'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { ActionStrip } from '@/components/conversation/ActionStrip'
+import { StageBar } from '@/components/conversation/StageBar'
 import { useShellData } from '@/hooks/useShellData'
 
 /**
@@ -23,6 +24,7 @@ export function WorkflowConversationPage() {
   const qc = useQueryClient()
   const lifecycleQ = useQuery({ queryKey: ['lifecycle', workflowId], queryFn: () => getLifecycle(workflowId!), enabled: Boolean(workflowId), retry: false })
   const lifecycle = lifecycleQ.data?.lifecycle
+  const stageBar = useMemo(() => <StageBar lifecycle={lifecycle} />, [lifecycle])
 
   const begin = async () => {
     if (!workflowId) return
@@ -73,6 +75,7 @@ export function WorkflowConversationPage() {
             {group.name} · <StatusGlyph kind={kind} /> {note || 'Ready'}
           </span>
         }
+        extra={stageBar}
       />
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1">
@@ -82,6 +85,7 @@ export function WorkflowConversationPage() {
             placeholder="Ask about this workflow, or describe a change"
             composerNote={workflow.name}
             empty={<p className="text-sm text-[var(--text-meta)]">This is the start of {workflow.name}’s conversation.</p>}
+            stageDividers
             tail={<ActionStrip workflowId={workflow.id} lifecycle={lifecycle} />}
           />
         </div>

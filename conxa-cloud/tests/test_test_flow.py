@@ -182,7 +182,7 @@ def env(monkeypatch, tmp_path):
         {"action": {"action": "type"}, "intent": "enter_po_number", "value": "{{po_number}}", "input_binding": "po_number", "validation": {"assertions": []}},
         {"action": {"action": "click"}, "intent": "send_invoice", "consequence": "irreversible", "validation": {"assertions": []}},
     ]
-    write_skill(skill_id, {"meta": {"version": 3}, "skills": [{"steps": steps}], "inputs": [{"id": "po_number", "type": "text"}, {"id": "date", "type": "text", "default": "2026-11-15", "required": False}]})
+    write_skill(skill_id, {"meta": {"version": 3}, "skills": [{"steps": steps}], "inputs": [{"id": "po_number", "type": "text"}, {"id": "date", "type": "text", "default": "2026-11-15", "optional": True}]})
     w = get_workflow(wf.id)
     w.session_id, w.recording_status, w.skill_id = "s", "compiled", skill_id
     save_workflow(w)
@@ -425,6 +425,74 @@ def test_the_stop_button_ends_autofix_between_steps(env, monkeypatch):
     b.cmd_test_workflow = lambda p, r: pytest.fail("must not re-test after Stop")
     b._tf_autofix(wf.id, {}, False)
     assert _cards(wf.id, "autofix")[0]["reason"] == "You pressed Stop."
+
+
+# ── a value the person typed is blamed before the workflow is edited ─────────────────────────────
+
+def _failed_find(env, monkeypatch, tested):
+    """A test that failed to FIND its element, with the typed value `tested` for po_number."""
+    b, wf, _out = env
+    w = get_workflow(wf.id)
+    w.last_test_run_id, w.last_test_status = "r_1", "failed"
+    save_workflow(w)
+    evidence = {"runtime_evidence": {"failure_kind": "ambiguous", "input_refs": [{"id": "po_number", "empty": False}]}}
+    monkeypatch.setattr("conxa_compile.editor.evidence.build_evidence_bundle", lambda *a, **k: evidence)
+    monkeypatch.setattr(studio_settings, "load", lambda: {"autofix_enabled": True})
+    monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: "failed")
+    return b, wf
+
+
+def test_a_changed_input_is_asked_about_before_autofix_edits_any_step(env, monkeypatch):
+    b, wf = _failed_find(env, monkeypatch, "PO-1")
+    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
+    q = next(x for x in clarify_store.load(wf.id)["questions"] if x["kind"] == "input_check")
+    assert q["status"] == "open" and q["input_ids"] == ["po_number"] and "PO-1" in q["body"] and "PO-44821" in q["body"]
+    assert len(_cards(wf.id, "clarify_question")) == 1
+    assert lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"] == ["answer_clarify", "edit"]
+
+
+def test_the_recorded_value_is_not_blamed_so_autofix_runs_as_before(env, monkeypatch):
+    b, wf = _failed_find(env, monkeypatch, "PO-44821")
+    ran = []
+    monkeypatch.setattr(b, "_tf_autofix", lambda *a: ran.append(a))
+    b._tf_background(wf.id, {"po_number": "PO-44821"}, True, False)
+    assert ran and not any(x["kind"] == "input_check" for x in clarify_store.load(wf.id)["questions"])
+
+
+def test_answering_wrong_reopens_the_test_card_with_the_input_flagged(env, monkeypatch):
+    b, wf = _failed_find(env, monkeypatch, "PO-1")
+    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
+    card = _cards(wf.id, "clarify_question")[0]
+    res = b._card_clarify_question(f"wf:{wf.id}", card, "choose", {"choice": "wrong"}, "r", lambda e: None)
+    assert res["ok"]
+    tc = _cards(wf.id, "test_inputs")[0]
+    assert {i["id"]: i.get("suspect") for i in tc["inputs"]}["po_number"] is True
+
+
+def test_answering_right_hands_the_failure_to_autofix(env, monkeypatch):
+    b, wf = _failed_find(env, monkeypatch, "PO-1")
+    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
+    resumed = []
+    monkeypatch.setattr(b, "cmd_flow_autofix_resume", lambda payload, rid: resumed.append(payload))
+    b._card_clarify_question(f"wf:{wf.id}", _cards(wf.id, "clarify_question")[0], "choose", {"choice": "right"}, "r", lambda e: None)
+    assert resumed == [{"workflow_id": wf.id}]
+
+
+def test_evidence_without_the_new_keys_leaves_autofix_untouched(env, monkeypatch):
+    b, wf, _out = env
+    w = get_workflow(wf.id)
+    w.last_test_run_id = "r_1"
+    save_workflow(w)
+    monkeypatch.setattr("conxa_compile.editor.evidence.build_evidence_bundle", lambda *a, **k: {"runtime_evidence": {"message": "old runtime"}})
+    monkeypatch.setattr(studio_settings, "load", lambda: {"autofix_enabled": True})
+    monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: "failed")
+    ran = []
+    monkeypatch.setattr(b, "_tf_autofix", lambda *a: ran.append(a))
+    b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
+    assert ran
 
 
 # ── BUILD-43: a sign-in that expired during a test pauses it instead of failing it ───────────────

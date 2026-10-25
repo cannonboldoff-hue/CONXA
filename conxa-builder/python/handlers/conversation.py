@@ -525,7 +525,6 @@ class ConversationMixin:
                 applied_version=(after.get("meta") or {}).get("version"),
                 actions=["undo"],
             )
-            harness.log_event(thread_id, f"Applied: {title}", glyph="ok", sink=sink)
             return {"ok": True}
 
         if action == "undo":
@@ -542,7 +541,6 @@ class ConversationMixin:
                 self.cmd_undo_workflow({"skill_id": skill_id}, rid)
             self._log_edit("undo_workflow", skill_id, before_doc, source="human", proposal_id=proposal.get("id"))
             harness.update_card(thread_id, card_id, state="undone", actions=[], sink=sink)
-            harness.log_event(thread_id, f"Undid: {title}", glyph="none", sink=sink)
             return {"ok": True}
 
         raise _CommandError("card_action_unsupported", f"A change card can’t “{action}”.")

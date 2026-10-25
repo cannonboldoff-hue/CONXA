@@ -752,6 +752,8 @@ def _normalize_saved_skill_inputs(inputs: list[Any]) -> list[dict[str, Any]]:
             row["sensitive"] = True
         if raw.get("optional"):
             row["optional"] = True
+        if raw.get("pattern"):
+            row["pattern"] = str(raw["pattern"])
         options = raw.get("options")
         if isinstance(options, list) and options:
             option_strs = [str(item) for item in options if str(item)]

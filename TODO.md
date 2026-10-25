@@ -1780,7 +1780,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 ---
 
-## P3 Discovered Items (4 remaining) (2026-08-12 Plugin→Workflow/SkillPack refactor)
+## P3 Discovered Items (7 remaining) (2026-08-12 Plugin→Workflow/SkillPack refactor)
 
 ### TEST-7 — Dev-script renaming cleanup: test_plugin.py, rebuild_plugin.py, plugin_test/ directory
 - **Category:** Testing & Cleanup

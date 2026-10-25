@@ -148,7 +148,7 @@ function stableHashMatch(node, fingerprint) {
 }
 
 // resolve(signals, fingerprint, root, opts)
-//   → { node, score, margin, signalUsed } | { miss: true } | { ambiguous: true }
+//   → { node, score, margin, signalUsed } | { miss: true } | { ambiguous: true, tied: [...] }
 function resolve(signals, fingerprint, root, opts) {
   const options = opts || {};
   const confidenceThreshold = typeof options.confidenceThreshold === "number"
@@ -163,6 +163,7 @@ function resolve(signals, fingerprint, root, opts) {
     : [];
 
   let sawAmbiguous = false;
+  const tied = [];
 
   for (const signal of ordered) {
     let candidates;
@@ -204,10 +205,19 @@ function resolve(signals, fingerprint, root, opts) {
       return { node: hashMatches[0].c, score: hashMatches[0].s, margin, signalUsed: signal, stableHashTieBreak: true };
     }
     sawAmbiguous = true;
+    // Kept so the failure can say WHICH elements tied, not just that something did.
+    tied.push({
+      selector: signal.selector,
+      matches: candidates.length,
+      margin: Number(margin.toFixed(2)),
+      top: scored.slice(0, 3).map(x => ({
+        role: x.c.role, name: x.c.name || x.c.text, score: Number(x.s.toFixed(2)),
+      })),
+    });
     // still ambiguous → try next signal
   }
 
-  return sawAmbiguous ? { ambiguous: true } : { miss: true };
+  return sawAmbiguous ? { ambiguous: true, tied } : { miss: true };
 }
 
 // Exported (read-only) so tests can pin the exact gate values — a silent drift

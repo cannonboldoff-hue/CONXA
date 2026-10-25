@@ -12,7 +12,7 @@ export const ACTION_INFO: Record<string, ActionInfo> = {
   autofix: { label: 'Fix it', kind: 'flow', strip: true },
   resume_autofix: { label: 'Keep fixing', kind: 'flow', strip: true },
   approve: { label: 'Approve', kind: 'flow', strip: true, primary: true },
-  edit: { label: 'Open Human Edit', kind: 'nav', target: 'edit', strip: true },
+  edit: { label: 'Open Human Edit', kind: 'nav', target: 'edit' }, // the Human Edit panel is always on screen
   publish: { label: 'Publish', kind: 'nav', target: 'publish', strip: true },
   // Not on the strip: the active card carries these buttons itself.
   finish_sign_in: { label: 'I’m signed in', kind: 'flow' },

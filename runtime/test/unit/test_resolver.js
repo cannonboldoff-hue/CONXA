@@ -43,6 +43,12 @@ test("multi-match below margin returns ambiguous", () => {
   const fp = { role: "button", aria_label: "Save" };
   const r = resolve([ROLE_SIG], fp, root, { uniqueMargin: 0.15 });
   assert.strictEqual(r.ambiguous, true);
+  // The tie is reported, so a failure can name the elements that tied.
+  assert.strictEqual(r.tied.length, 1);
+  assert.strictEqual(r.tied[0].selector, ROLE_SIG.selector);
+  assert.strictEqual(r.tied[0].matches, 2);
+  assert.strictEqual(r.tied[0].margin, 0);
+  assert.deepStrictEqual(r.tied[0].top.map(c => c.name), ["Save", "Save"]);
 });
 
 test("multi-match with clear winner returns best node and margin", () => {

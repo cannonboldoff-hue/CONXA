@@ -114,8 +114,6 @@ class CompileFlowMixin:
             harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
                                 credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
             warnings = int(result.get("compile_steps_with_warnings") or 0)
-            harness.log_event(thread, "Compiled", glyph="warn" if warnings else "ok", sink=sink,
-                              subject=f"{result.get('step_count')} steps" + (f" · {warnings} less certain" if warnings else ""))
             self._flow_after_compile(workflow_id, result, sink)
         except Exception:  # noqa: BLE001 — the compile itself succeeded; only the questions failed
             import traceback
@@ -138,14 +136,12 @@ class CompileFlowMixin:
             runtime_state.set_flags(workflow_id, out_of_credits=True)
             harness.update_card(thread, card_id, sink=sink, state="out_of_credits", rows=progress.rows(),
                                 actions=["add_credits", "compile_later"], error=exc.message)
-            harness.log_event(thread, "No compile credits left", glyph="warn", sink=sink, subject="Your recording is saved")
             return {"ok": False, "code": exc.code}
         runtime_state.set_flags(workflow_id, compile_error=exc.message or exc.code)
         # Only an infrastructure failure is refunded (handlers/compile.py); say "no credit was used" only then.
         refunded = exc.code in ("cloud_unreachable", "llm_no_output", "vision_llm_request_failed")
         harness.update_card(thread, card_id, sink=sink, state="failed", rows=progress.rows(), error=exc.message,
                             failed_stage=progress.failed_stage, refunded=refunded, actions=["retry", "details"])
-        harness.log_event(thread, "Compile didn’t finish", glyph="fail", sink=sink, subject=exc.message[:120])
         return {"ok": False, "code": exc.code, "message": exc.message}
 
     # ── after a compile: questions, then the summary ────────────────────────────────────────
@@ -410,7 +406,21 @@ class CompileFlowMixin:
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, actions=[],
                             step_keys=question.get("step_keys") or [])
         self._flow_post_next_question(workflow_id, sink)
+        if question["kind"] == "input_check":
+            self._after_input_check(workflow_id, question, answer.get("choice"), rid)
         return {"ok": True, "receipt": receipt}
+
+    def _after_input_check(self, workflow_id: str, question: dict[str, Any], choice: Any, rid: str) -> None:
+        """What the person's answer to "is this value right?" sets going: a corrected re-test, or the
+        Auto-fix that was held back. Runs after the question is answered, since an open question
+        keeps both out of the lifecycle's allowed actions."""
+        try:
+            if choice == "wrong":
+                self.cmd_flow_test_prepare({"workflow_id": workflow_id, "suspect_inputs": question.get("input_ids") or []}, rid)
+            else:
+                self.cmd_flow_autofix_resume({"workflow_id": workflow_id}, rid)
+        except _CommandError:
+            pass  # the card is answered; the person can still press Test or Fix from the lifecycle actions
 
     def _run_clarify_ops(self, skill_id: str, ops: list[dict[str, Any]], rid: str) -> int:
         """Run an answer's ops through the commands a reviewer would use. Returns steps added."""

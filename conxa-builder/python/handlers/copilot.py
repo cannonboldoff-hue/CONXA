@@ -270,7 +270,7 @@ class CopilotMixin:
         return result
 
     def _apply_one_structural_op(self, skill_id: str, op: dict[str, Any], rid: str) -> dict[str, Any]:
-        from conxa_compile.editor.copilot_proposals import resolve_step_index
+        from conxa_compile.editor.copilot_proposals import identity_patch_from_source, resolve_step_index
         from conxa_core.storage.json_store import read_skill
 
         kind = str(op.get("op") or "").strip()
@@ -296,8 +296,7 @@ class CopilotMixin:
             if identity_from_step_key:
                 source_index = resolve_step_index(doc, identity_from_step_key)
                 source_step = (block0.get("steps") or [])[source_index]
-                patch["identity_bundle"] = source_step.get("identity_bundle")
-                patch["target"] = source_step.get("target")
+                patch.update(identity_patch_from_source(action_kind, source_step))
             for field, value in fields.items():
                 nested = patch
                 parts = field.split(".")

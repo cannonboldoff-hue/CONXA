@@ -219,7 +219,7 @@ def test_pause_resume_finish_and_the_lifecycle_follows(env):
     assert res["event_count"] == 14
     done = _cards(wf.id, "recording")[0]
     assert done["state"] == "saved" and done["count"] == 14 and done["duration_seconds"] == 151
-    assert _events(wf.id)[-1] == "Recording saved"
+    assert "Recording saved" not in _events(wf.id)  # the card carries it
     lc = lifecycle_for_workflow(get_workflow(wf.id))
     assert (lc["stage"], lc["substate"]) == ("compile", "ready")
     # finishing twice is refused rather than saving twice
@@ -238,7 +238,7 @@ def test_discard_saves_nothing_and_the_lifecycle_says_so(env):
 
     lc = lifecycle_for_workflow(get_workflow(wf.id))
     assert (lc["stage"], lc["substate"]) == ("record", "discarded") and lc["allowed_actions"] == ["record"]
-    assert "Recording discarded" in _events(wf.id)
+    assert "Recording discarded" not in _events(wf.id)
 
 
 def test_a_browser_closed_by_hand_offers_to_save_what_was_captured(env):
@@ -252,7 +252,7 @@ def test_a_browser_closed_by_hand_offers_to_save_what_was_captured(env):
         time.sleep(0.02)
     card = _cards(wf.id, "recording")[0]
     assert card["state"] == "browser_closed" and card["count"] == 9 and card["actions"] == ["finish", "discard"]
-    assert "The browser closed before you finished" in _events(wf.id)
+    assert "The browser closed before you finished" not in _events(wf.id)
     # "Save 9 actions" is the same finish command
     assert b.cmd_flow_finish_recording({"workflow_id": wf.id, "card_id": card["card_id"]}, "r")["ok"]
 

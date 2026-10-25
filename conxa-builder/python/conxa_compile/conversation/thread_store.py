@@ -204,6 +204,49 @@ def revise_card(
 # ── reading a page ──────────────────────────────────────────────────────────────────────────
 
 
+# ── one-time cleanup of threads written before "one item per moment" ───────────────────────────
+
+# Events that only restated a card's final state; the card carries it now.
+_DUPLICATE_EVENTS = frozenset({
+    "Recording saved", "Recording discarded", "The browser closed before you finished", "Nothing was saved",
+    "Nothing was learned from that recording", "Sign-in cancelled", "Compiled", "No compile credits left",
+    "Compile didn’t finish", "Test failed", "Auto-fix stopped", "Approved for packaging",
+})
+_DUPLICATE_PREFIXES = ("Applied: ", "Undid: ")
+
+
+def compact(thread_id: str) -> list[dict[str, Any]]:
+    """Drop events that duplicate a card and give failed test cards a plain ``summary``. Only
+    touches a thread that has something to fix, so it is idempotent without a marker; keeps the
+    original beside it as ``thread.jsonl.bak``. Never raises: on any trouble the thread is left
+    exactly as it was. Returns the lines now on disk."""
+    from conxa_compile.conversation.failure_summary import summarize
+
+    path = thread_path(thread_id)
+    try:
+        with _write_lock:
+            raw = read_raw(thread_id)
+            kept: list[dict[str, Any]] = []
+            for item in raw:
+                if item.get("kind") == "event":
+                    text = str(item.get("text") or "")
+                    if text in _DUPLICATE_EVENTS or text.startswith(_DUPLICATE_PREFIXES):
+                        continue
+                if item.get("kind") == "card" and item.get("card_type") == "test_run" and item.get("state") == "failed"                         and not item.get("summary") and item.get("error"):
+                    item = {**item, "summary": summarize(str(item["error"]))}
+                kept.append(item)
+            if kept == raw:
+                return raw
+            tmp = path.with_suffix(".jsonl.tmp")
+            tmp.write_text("".join(json.dumps(i, ensure_ascii=False, default=str) + "\n" for i in kept), encoding="utf-8")
+            if path.is_file():
+                os.replace(path, path.with_suffix(".jsonl.bak"))
+            os.replace(tmp, path)
+            return kept
+    except OSError:
+        return read_raw(thread_id)
+
+
 def load(thread_id: str, *, before: int | None = None, limit: int = 40) -> dict[str, Any]:
     """Newest-first paging over the folded thread. ``before`` is an index into the folded list
     (exclusive); the page itself comes back oldest-first so it renders top to bottom.
@@ -211,7 +254,8 @@ def load(thread_id: str, *, before: int | None = None, limit: int = 40) -> dict[
     The whole file is parsed — card revisions can land far from the card's first line, and a
     workflow thread is hundreds of lines, not millions — but only a page is sent to the renderer.
     """
-    items = fold(read_raw(thread_id))
+    raw = compact(thread_id)
+    items = fold(raw)
     total = len(items)
     end = total if before is None else max(0, min(int(before), total))
     start = max(0, end - max(1, int(limit)))

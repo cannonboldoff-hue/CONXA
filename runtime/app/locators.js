@@ -154,7 +154,7 @@ async function withLocator(page, step, inputs, selector, timeout, fn) {
   if (sawAmbiguous && !lastErr) {
     throw Object.assign(new Error(`Selector matched more than one element: ${String(selector)}`), { ambiguous: true });
   }
-  throw lastErr || new Error(`Locator not found: ${String(selector)}`);
+  throw lastErr || Object.assign(new Error(`Locator not found: ${String(selector)}`), { resolveMiss: true });
 }
 
 async function withLocatorPair(page, step, inputs, srcSelector, dstSelector, timeout, fn) {

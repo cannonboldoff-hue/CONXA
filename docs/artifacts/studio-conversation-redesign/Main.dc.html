@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workflow conversation</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#1a1a1a}
+a{color:#e8e6e3}a:hover{color:#ffffff}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+details[open] .chev{transform:rotate(90deg)}
+button{font-family:inherit;cursor:pointer}
+.stage{display:flex;align-items:center;gap:12px;padding-top:20px}
+.stage b{font-size:12px;font-weight:600;color:#8e8e8e;text-transform:uppercase;letter-spacing:.08em}
+.stage i{flex:1;height:1px;background:rgba(255,255,255,.08)}
+.ev{display:flex;align-items:center;gap:10px;font-size:14px;min-height:28px}
+.ev svg{flex:none}
+.ev .m{color:#8e8e8e}
+.ev .ln{flex:1;height:1px;background:rgba(255,255,255,.07);min-width:16px}
+.ev .t{font-size:12px;color:#8e8e8e;white-space:nowrap}
+.msg{display:flex;gap:12px}
+.av{flex:none;width:28px;height:28px;border-radius:8px;background:#2c2c2c;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#e8e6e3}
+.msg .who{font-size:12px;color:#8e8e8e}
+.msg p{margin:2px 0 0;color:#d4d2cf;font-size:15px;line-height:1.6}
+.me{display:flex;justify-content:flex-end}
+.me div{max-width:80%;background:#2c2c2c;border-radius:12px 12px 4px 12px;padding:10px 14px}
+.card{background:#252525;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.card.warn{border-color:rgba(251,191,36,.4)}
+.ch{display:flex;gap:10px;align-items:flex-start}
+.ch svg{flex:none;margin-top:3px}
+.ch h3{margin:0;font-size:15px;font-weight:600;line-height:1.4}
+.ch .s{font-size:12px;color:#8e8e8e}
+.ch .tm{margin-left:auto;font-size:12px;color:#8e8e8e;white-space:nowrap;padding-top:2px}
+.card p{margin:0;color:#a3a3a3}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:transparent;color:#e8e6e3;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;min-height:38px}
+.btn.p{background:#d97757;border-color:#d97757;color:#1a1a1a;font-weight:600}
+.sum{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#a3a3a3;min-height:28px}
+.raw{margin:8px 0 0;background:#2c2c2c;border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:#a3a3a3;white-space:pre-wrap;word-break:break-word}
+.shot{height:170px;background:#2c2c2c;border:1px dashed rgba(255,255,255,.14);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#8e8e8e;font-size:12px;text-align:center;padding:12px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.steps li{display:flex;gap:8px;align-items:center}
+.safe{display:flex;gap:8px;align-items:center;font-size:13px;color:#a3a3a3}
+.chk{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.chk li{display:flex;gap:10px;align-items:flex-start}
+.chk svg{flex:none;margin-top:4px}
+.chk small{display:block;font-size:12px;color:#8e8e8e}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #1a1a1a; color: #e8e6e3; font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.55; display: flex; flex-direction: column">
+
+<header style="position: sticky; top: 0; z-index: 2; background: #1a1a1a; border-bottom: 1px solid rgba(255,255,255,0.08)">
+<div style="max-width: 760px; margin: 0 auto; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h1 style="margin: 0; font-size: 16px; font-weight: 600">Github to Drive Handoff</h1>
+<button type="button" aria-label="About this workflow" style="background: transparent; border: 0; color: #8e8e8e; padding: 4px; display: flex"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v4M8 5h.01"/></svg></button>
+</div>
+<nav aria-label="Progress" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px">
+<a href="#record" style="display: inline-flex; align-items: center; gap: 6px; color: #a3a3a3; text-decoration: none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>Record</a>
+<span style="width: 18px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+<a href="#check" style="display: inline-flex; align-items: center; gap: 6px; color: #a3a3a3; text-decoration: none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>Compile</a>
+<span style="width: 18px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+<a href="#test" style="display: inline-flex; align-items: center; gap: 6px; color: #a3a3a3; text-decoration: none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>Test</a>
+<span style="width: 18px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+<a href="#approve" style="display: inline-flex; align-items: center; gap: 6px; color: #a3a3a3; text-decoration: none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>Approve</a>
+<span style="width: 18px; height: 1px; background: rgba(255,255,255,0.14)"></span>
+<span aria-current="step" style="display: inline-flex; align-items: center; gap: 6px; color: #e8e6e3; font-weight: 600; background: rgba(217,119,87,0.14); border-radius: 999px; padding: 3px 10px"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="#d97757"/></svg>Publish</span>
+</nav>
+</div>
+</header>
+
+<main style="flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 8px 16px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+
+<div class="stage" id="record"><b>1 · Record</b><i></i></div>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg><span>Workflow created <span class="m">· Github to Drive Handoff</span></span><span class="ln"></span><span class="t">2:16 AM</span></div>
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" role="img" aria-label="Started"><circle cx="8" cy="8" r="6" fill="none" stroke="#93b4e6" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="#93b4e6"/></svg><span>Recording started <span class="m">· github.com</span></span><span class="ln"></span><span class="t">2:17 AM</span></div>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:17 AM</div><p>Do the task in the browser on the right; each action shows up here as it’s captured. Mark a typed value “Changes each run” and I won’t need to ask about it later.</p></div></div>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg><span>Recording saved <span class="m">· 9 actions · 22 s</span></span><span class="ln"></span><span class="t">2:17 AM</span></div>
+
+<div class="stage" id="check"><b>2 · Compile</b><i></i></div>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:17 AM</div><p>Got it — 9 actions. I’m turning them into steps that can find the right buttons and fields again, even when the page shifts a little. I’ll ask you a few things once that’s done.</p></div></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Compiled · 9 steps</h3></div><span class="tm">2:18 AM</span></div>
+<ul class="chk">
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg><div>Cleaned up the recording<small>9 actions kept</small></div></li>
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg><div>Learned how to find each element<small>9 of 9</small></div></li>
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg><div>Worked out what each step is for and which values change</div></li>
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg><div>Saved the workflow</div></li>
+</ul>
+</section>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:18 AM</div><p>Compiled into 9 steps. I folded away 2 recorded actions while tidying up (a click and a manual page load) — repeats, or page loads a click already caused. They’re listed in the <a href="#check">compile report</a>. A few questions first, so the test reflects how you’ll really use it.</p></div></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Answered"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Which of these change each run?</h3><div class="s">You picked: Gitignore file</div></div><button type="button" class="btn" style="margin-left: auto">Change</button></div>
+</section>
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Answered"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Some of what you entered was left out. Is that right?</h3><div class="s">You said: Yes, leave it out</div></div><button type="button" class="btn" style="margin-left: auto">Change</button></div>
+</section>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:19 AM</div><p>That’s everything. Here’s the workflow as it stands, saved as version 2.</p></div></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#a3a3a3" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg><div><h3>Github to Drive Handoff</h3><div class="s">version 2</div></div></div>
+<p style="color: #e8e6e3">Download a gitignore file from the github/gitignore GitHub repository and upload it to Google Drive.</p>
+<ol style="margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 2px">
+<li>Go to the GitHub gitignore repository page.</li>
+<li>Click the “Gitignore file” link to view or download it.</li>
+<li>Download the “Gitignore file”.</li>
+<li>Check that the download started.</li>
+<li>Open a new browser tab.</li>
+<li>Go to Google Drive in the new tab.</li>
+</ol>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Show 3 more steps</summary>
+<ol start="7" style="margin: 6px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 2px">
+<li>[STEP 7 — from the workflow]</li>
+<li>[STEP 8 — from the workflow]</li>
+<li>[STEP 9 — from the workflow]</li>
+</ol>
+</details>
+<div style="font-size: 12px; color: #8e8e8e">9 steps · 1 input (Gitignore file) · Done when the page address changes</div>
+<div class="acts"><button type="button" class="btn">Test it</button></div>
+</section>
+
+<div class="stage" id="test"><b>3 · Test</b><i></i></div>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:20 AM</div><p>Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.</p></div></div>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg><span>Test inputs <span class="m">· Gitignore file: Ada.gitignore</span></span><span class="ln"></span><span class="t">2:20 AM</span></div>
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" role="img" aria-label="Started"><circle cx="8" cy="8" r="6" fill="none" stroke="#93b4e6" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="#93b4e6"/></svg><span>Test started</span><span class="ln"></span><span class="t">2:20 AM</span></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg><div><h3>Try 1 failed at step 2 · Click</h3><div class="s">0 min 47 s</div></div><span class="tm">2:21 AM</span></div>
+<p>Two links on the page looked like “Ada.gitignore” and I couldn’t tell which one to click. GitHub may have changed its page since you recorded it.</p>
+<div style="display: flex; gap: 16px; flex-wrap: wrap">
+<div class="shot" role="img" aria-label="Screenshot placeholder" style="flex: 1 1 260px">[Screenshot · github.com/github/gitignore]</div>
+<ol class="steps" style="flex: 1 1 180px">
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg>1 · Navigate</li>
+<li style="color: #f87171; font-weight: 500"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg>2 · Click</li>
+<li style="color: #8e8e8e"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="#6b6b6b" stroke-width="1.5"/></svg>3–9 · Not run</li>
+</ol>
+</div>
+<div class="safe"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M8 1.5l5.5 2v4c0 3.5-2.5 6-5.5 7-3-1-5.5-3.5-5.5-7v-4z"/></svg>Nothing was saved or sent.</div>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Technical details</summary>
+<pre class="raw">Execution failed at step 2: Step 2 (click) failed: Something unexpected went wrong. (Ambiguous element resolution (no signal cleared uniqueness gate)) Page URL: https://github.com/github/gitignore Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery). Step intent: {"action":"click","intent":"interact_ada_gitignore","target":{"role":"link","name":"{{gitignore_file}}, (File)","text":"ada.gitignore"},"anchors":["ada.gitignore","ada.gitignore, (file)"]} Warning: This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.</pre>
+</details>
+</section>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:21 AM</div><p>I’ll fix this and test again on my own, up to 3 attempts — then I stop and ask you. Re-tests always pause before the steps that can’t be undone, so nothing real is sent without your OK. Every change shows up here, and you can undo it.</p></div></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Applied"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Fix 1 · Changed the steps</h3><div class="s">Applied automatically — you can undo it</div></div><span class="tm">2:22 AM</span></div>
+<p>Step 2 now opens the file’s page directly instead of clicking its link. It ends up in the same place, with nothing to mix up.</p>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Show exact change</summary>
+<pre class="raw">The failing click's only recorded effect was landing on the blob page for {{gitignore_file}} (post_condition url_delta to …/blob/main/Ada.gitignore), and its own assertions expect that exact URL pattern. Navigating there directly reproduces the same post-state with no element resolution, sidestepping the uniqueness-gate failure caused by GitHub's live-page markup/name drift.</pre>
+</details>
+<div class="acts"><button type="button" class="btn">Undo</button></div>
+</section>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" role="img" aria-label="Started"><circle cx="8" cy="8" r="6" fill="none" stroke="#93b4e6" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="#93b4e6"/></svg><span>Test started <span class="m">· try 2</span></span><span class="ln"></span><span class="t">2:22 AM</span></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg><div><h3>Try 2 failed at step 2 · Navigate</h3><div class="s">2 min 09 s</div></div><span class="tm">2:24 AM</span></div>
+<p>The page opened, but it wasn’t the one this step expects. Also, this browser window is smaller than when you recorded (922×624 vs 1280×720), so some buttons or menus may be hidden.</p>
+<div style="display: flex; gap: 16px; flex-wrap: wrap">
+<div class="shot" role="img" aria-label="Screenshot placeholder" style="flex: 1 1 260px">[Screenshot · github.com/github/gitignore]</div>
+<ol class="steps" style="flex: 1 1 180px">
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg>1 · Navigate</li>
+<li style="color: #f87171; font-weight: 500"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg>2 · Navigate</li>
+<li style="color: #8e8e8e"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="#6b6b6b" stroke-width="1.5"/></svg>3–9 · Not run</li>
+</ol>
+</div>
+<div class="safe"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M8 1.5l5.5 2v4c0 3.5-2.5 6-5.5 7-3-1-5.5-3.5-5.5-7v-4z"/></svg>Nothing was saved or sent.</div>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Technical details</summary>
+<pre class="raw">Execution failed at step 2: Step 2 (navigate) failed: Something unexpected went wrong. (Verification failed: url_pattern) Page URL: https://github.com/github/gitignore Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery). Step intent: {"action":"navigate","intent":""} Warning: This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page. This workflow was recorded at 1280×720; this browser is 922×624 — buttons or menus may be hidden behind a collapsed nav or moved off-screen. (run_id: r_mvmvktxq_og9jg)</pre>
+</details>
+</section>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Applied"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Fix 2 · Changed the steps</h3><div class="s">Applied automatically — you can undo it</div></div><span class="tm">2:25 AM</span></div>
+<p>Removed step 2. It was an extra page-open that could never pass, and step 3 already opens the file.</p>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Show exact change</summary>
+<pre class="raw">Step 2 is a duplicate navigation to the repo root that was auto-added, but its required url_pattern assertion expects the blob page (blob/main/{{gitignore_file}}), which can never hold on https://github.com/github/gitignore — exactly where the failed run's page_url sat. Step 3 already navigates to the blob page by clicking the {{gitignore_file}} link with its own url_changed assertion, so deleting this redundant step fixes the failure without losing any behavior.</pre>
+</details>
+<div class="acts"><button type="button" class="btn">Undo</button></div>
+</section>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" role="img" aria-label="Started"><circle cx="8" cy="8" r="6" fill="none" stroke="#93b4e6" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="#93b4e6"/></svg><span>Test started <span class="m">· try 3</span></span><span class="ln"></span><span class="t">2:25 AM</span></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg><div><h3>Try 3 failed at step 2 · Click</h3><div class="s">0 min 14 s</div></div><span class="tm">2:25 AM</span></div>
+<p>I clicked before GitHub’s file list had finished loading, so the “Ada.gitignore” link wasn’t there yet.</p>
+<div style="display: flex; gap: 16px; flex-wrap: wrap">
+<div class="shot" role="img" aria-label="Screenshot placeholder" style="flex: 1 1 260px">[Screenshot · github.com/github/gitignore]</div>
+<ol class="steps" style="flex: 1 1 180px">
+<li><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg>1 · Navigate</li>
+<li style="color: #f87171; font-weight: 500"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Failed"><path d="M4 4l8 8M12 4l-8 8"/></svg>2 · Click</li>
+<li style="color: #8e8e8e"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="#6b6b6b" stroke-width="1.5"/></svg>3–9 · Not run</li>
+</ol>
+</div>
+<div class="safe"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><path d="M8 1.5l5.5 2v4c0 3.5-2.5 6-5.5 7-3-1-5.5-3.5-5.5-7v-4z"/></svg>Nothing was saved or sent.</div>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Technical details</summary>
+<pre class="raw">Execution failed at step 2: Step 2 (click) failed: Something unexpected went wrong. (Ambiguous element resolution (no signal cleared uniqueness gate)) Page URL: https://github.com/github/gitignore Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery). Step intent: {"action":"click","intent":"interact_ada_gitignore","target":{"role":"link","name":"{{gitignore_file}}, (File)","text":"ada.gitignore"},"anchors":["ada.gitignore","ada.gitignore, (file)"]} Warning: This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.</pre>
+</details>
+</section>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" role="img" aria-label="Not applied"><path d="M4 4l8 8M12 4l-8 8"/></svg><div><h3>Fix 3 · Not applied</h3><div class="s">This kind of step doesn’t allow that change</div></div><span class="tm">2:26 AM</span></div>
+<p>I wanted step 2 to wait up to 15 seconds for the file link to appear before clicking.</p>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Show exact change</summary>
+<pre class="raw">The failing click resolved before GitHub's client-rendered file table appeared (failure inventory has no file-row links; both expected landmarks missing), so no signal cleared the uniqueness gate. Waiting on the same file link (up to 15s) after navigation ensures the element exists before the click runs.
+
+Patch rejected: branch_step_allows_only_target_branch_intent_validation_recovery_frame</pre>
+</details>
+</section>
+
+<section class="card warn">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fbbf24" stroke-width="2" role="img" aria-label="Needs you"><path d="M8 2.5l6 11H2z"/><path d="M8 7v3"/></svg><div><h3>Auto-fix stopped · needs you</h3><div class="s">3 tries, stuck at step 2</div></div><span class="tm">2:26 AM</span></div>
+<p>Fixes 1 and 2 are kept — undo them above if you like. The workflow stays marked “needs a fix” until a test passes.</p>
+<details>
+<summary class="sum"><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="transition: transform 0.15s"><path d="M6 3l5 5-5 5"/></svg>Technical details</summary>
+<pre class="raw">Patch rejected: branch_step_allows_only_target_branch_intent_validation_recovery_frame</pre>
+</details>
+<div class="acts"><button type="button" class="btn">Fix it myself in Human Edit</button><button type="button" class="btn">Resume auto-fix</button></div>
+</section>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:24 PM</div><p>Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.</p></div></div>
+
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Done"><path d="M3 8.5l3 3 7-7"/></svg><span>Test inputs <span class="m">· Gitignore file: Erlang.gitignore</span></span><span class="ln"></span><span class="t">2:24 PM</span></div>
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" role="img" aria-label="Started"><circle cx="8" cy="8" r="6" fill="none" stroke="#93b4e6" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="#93b4e6"/></svg><span>Test started</span><span class="ln"></span><span class="t">2:25 PM</span></div>
+<div class="ev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Passed"><path d="M3 8.5l3 3 7-7"/></svg><span>Test passed <span class="m">· 9 steps · 1 min 35 s</span></span><span class="ln"></span><span class="t">2:27 PM</span></div>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:27 PM</div><p>It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.</p></div></div>
+
+<div class="stage" id="approve"><b>4 · Approve</b><i></i></div>
+
+<section class="card">
+<div class="ch"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="2" role="img" aria-label="Approved"><path d="M3 8.5l3 3 7-7"/></svg><div><h3>Approved for packaging</h3><div class="s">by you · version 7</div></div><span class="tm">2:27 PM</span></div>
+<p>Approving doesn’t publish anything on its own.</p>
+<div class="acts"><button type="button" class="btn">Test with other inputs</button></div>
+</section>
+
+<div class="msg"><span class="av" aria-hidden="true">C</span><div><div class="who">Conxa · 2:27 PM</div><p>Approved. You now have 1 approved workflow waiting in the next release. Publish when the whole group is ready.</p>
+<div class="acts" style="margin-top: 12px"><button type="button" class="btn p">Publish</button><button type="button" class="btn">Test it</button></div>
+</div></div>
+
+</main>
+
+<div style="position: sticky; bottom: 0; background: #1a1a1a; border-top: 1px solid rgba(255,255,255,0.06)">
+<div style="max-width: 760px; margin: 0 auto; padding: 12px 16px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+<form>
+<label for="ask" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Ask about this workflow</label>
+<div style="background: #252525; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 10px 10px 10px 16px; display: flex; flex-direction: column; gap: 8px">
+<input id="ask" type="text" placeholder="Ask about this workflow, or describe a change" style="background: transparent; border: 0; outline: none; color: #e8e6e3; font: inherit; font-size: 14px; padding: 4px 0">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-size: 12px; color: #8e8e8e">Github to Drive Handoff</span>
+<button type="submit" aria-label="Send" style="width: 36px; height: 36px; border-radius: 10px; border: 0; background: #2c2c2c; color: #a3a3a3; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5"/></svg></button>
+</div>
+</div>
+</form>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":5600}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

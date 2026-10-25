@@ -215,6 +215,44 @@ def test_followup_question(doc: dict[str, Any], step_key: str, tested_inputs: di
     )
 
 
+_INPUT_CHECK_WHY = {
+    "differs_from_recorded": "The test used “{tested}” but you recorded “{recorded}”.",
+    "not_an_option": "“{tested}” isn’t one of the choices this input allows.",
+    "pattern_mismatch": "“{tested}” doesn’t match the format this input expects.",
+    "empty": "It was left empty.",
+}
+
+
+def input_check_question(suspects: list[dict[str, Any]], input_defs: list[dict[str, Any]],
+                         tested_inputs: dict[str, Any], run_id: str) -> dict[str, Any] | None:
+    """After a test that could not find an element: the value typed for an input the failing step
+    reads looks wrong (``editor/input_suspects.py``). Asks before Auto-fix rewrites the steps. None
+    when nothing is suspect. Pure; the values shown are never a sensitive input's (those are only
+    ever suspect when empty)."""
+    defs = {str(d["id"]): d for d in input_defs or [] if isinstance(d, dict) and d.get("id")}
+    sentences, ids = [], []
+    for s in suspects:
+        defn = defs.get(s["id"]) or {}
+        label = _humanize(s["id"])
+        why = _INPUT_CHECK_WHY.get(s["reason"], "").format(
+            tested=str((tested_inputs or {}).get(s["id"]) or "")[:40], recorded=str(defn.get("default") or "")[:40])
+        sentences.append(f"{label}: {why}" if len(suspects) > 1 else why)
+        ids.append(s["id"])
+    if not ids:
+        return None
+    names = ", ".join(_humanize(i).lower() for i in ids)
+    return _question(
+        "input_check", f"input_check:{run_id}",
+        f"The test couldn’t find what {names} points to. Is the value right?",
+        " ".join(sentences) + " The workflow itself may be fine.",
+        [
+            {"id": "wrong", "label": "That value was wrong — test again", "detail": "Opens the test with it highlighted so you can correct it."},
+            {"id": "right", "label": "The value is right — fix the workflow", "detail": "Auto-fix looks at the steps instead."},
+        ],
+        input_ids=ids,
+    )
+
+
 def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
     wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
@@ -597,6 +635,10 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
             return ops, "Always the recorded value"
         return ops, "Stays an input"
+
+    if kind == "input_check":
+        # No edit to the workflow either way; the handler acts on the choice (re-test or Auto-fix).
+        return ops, ("Test again with a corrected value" if answer.get("choice") == "wrong" else "The value stays — checking the steps")
 
     if kind == "dropped_value":
         if answer.get("choice") == "missing":

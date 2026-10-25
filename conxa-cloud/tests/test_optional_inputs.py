@@ -53,3 +53,8 @@ def test_normalize_saved_skill_inputs_omits_optional_when_unset():
 
 def test_validate_skill_inputs_accepts_optional_flag():
     _validate_skill_inputs([{"id": "region", "type": "text", "optional": True}])
+
+
+def test_normalize_saved_skill_inputs_carries_the_pattern():
+    out = _normalize_saved_skill_inputs([{"id": "code", "type": "text", "pattern": "^[A-Z]{3}$"}])
+    assert out[0]["pattern"] == "^[A-Z]{3}$"

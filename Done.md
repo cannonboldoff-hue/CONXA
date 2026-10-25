@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 34 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53 |
+| BUILD — Build Studio | 37 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57 |
 | EXEC — Execution & Recovery | 27 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -725,6 +725,18 @@ inferred from `outer_html`, not read directly.
 ### BUILD-53 — Branching and loop-safe testing: the parts of the conversation roadmap not built
 **Resolved:** 2026-10-24 (guard-in-loop and rest-of-workflow branches; remainder in BUILD-54)
 - **Resolution:** the test guard pauses inside a `for_each` body with a row cursor and resumes at that row; "Record another way" adds a `wait_for_one_of` with `flow: true` whose bodies run as full steps (recovery, gates) and whose failure fails the run.
+
+### BUILD-55 — Patch gate refuses to insert a step after a branch step (Auto-fix's best fix is rejected)
+**Resolved:** 2026-10-25
+- **Resolution:** a branch-kind insert copied a root `identity_bundle` the gate refuses; `copilot_proposals.identity_patch_from_source` now re-anchors the element into the branch body (`wait_for_one_of` option / `target`).
+
+### BUILD-56 — Test card reads `required` but the input model field is `optional`
+**Resolved:** 2026-10-25
+- **Resolution:** `cmd_flow_test_prepare` derives `required` from `optional`.
+
+### BUILD-57 — Input `pattern` is declared but never enforced at run time
+**Resolved:** 2026-10-25
+- **Resolution:** the packager now ships `pattern` in `inputs.json`; `server.js` refuses a non-matching value by input name before any step (`interpolate.js::inputsFailingPattern`) and forwards `pattern` in the tool schema.
 
 
 ## EXEC — Execution & Recovery (27 done)

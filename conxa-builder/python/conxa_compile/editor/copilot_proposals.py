@@ -240,6 +240,19 @@ def gate_overlay_proposals(
     return out
 
 
+def identity_patch_from_source(action_kind: str, source_step: dict[str, Any]) -> dict[str, Any]:
+    """The patch that points a newly inserted step at `source_step`'s element. A branch step
+    (if_present / try_dismiss / wait_for_one_of) is refused a root `identity_bundle` by the patch gate
+    — its element lives in the branch body — so a "wait for this element" insert of that kind carries
+    the source's selector and bundle as its one wait_for_one_of option instead of being refused."""
+    target = source_step.get("target")
+    bundle = source_step.get("identity_bundle")
+    if action_kind != "wait_for_one_of":
+        return {"identity_bundle": bundle, "target": target} if action_kind not in {"if_present", "try_dismiss"} else {"target": target}
+    selector = str((target or {}).get("primary_selector") or "").strip()
+    return {"branch": {"options": [{"selector": selector, "identity_bundle": bundle}]}} if selector else {}
+
+
 def resolve_step_index(doc: dict[str, Any], step_key: str) -> int:
     """Re-resolve `step_key` to the CURRENT `step_index` at accept time. Raises ProposalError
     (never a bare ValueError) when the step is gone — an insert/delete/reorder happened between

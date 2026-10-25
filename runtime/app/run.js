@@ -169,6 +169,10 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     if (cause.recoveryHaltReason) err.recoveryHaltReason = cause.recoveryHaltReason;
     if (cause.destructiveHalt) err.destructiveHalt = true;
     if (cause.frameNotFound) err.frameNotFound = true;
+    // Dropped here until now, so the class of a find-failure was lost before it reached the evidence.
+    if (cause.ambiguous) err.ambiguous = true;
+    if (cause.resolveMiss) err.resolveMiss = true;
+    if (Array.isArray(cause.signalCounts)) err.signalCounts = cause.signalCounts;
     if (cause.entityNotFound) err.entityNotFound = true;
     if (cause.entityAbsent) err.entityAbsent = true;
     if (cause.tabNotFound) err.tabNotFound = true;

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { clockTime, type ThreadItem } from '@/lib/thread'
 import type { StatusKind } from '@/lib/status'
@@ -82,6 +83,19 @@ export function CardShell({
       {children && <div className="mt-3 min-w-0 text-sm text-[var(--text-secondary)]">{children}</div>}
       {footer && <footer className="mt-4 flex flex-wrap items-center gap-2">{footer}</footer>}
     </section>
+  )
+}
+
+/** A closed-by-default "Technical details" / "Show exact change" row. One look for every disclosure in the thread. */
+export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="group mt-3">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 transition-transform group-open:rotate-90" aria-hidden />
+        {label}
+      </summary>
+      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[var(--bg-raised)] p-3 font-mono text-xs leading-[1.6] text-[var(--text-secondary)]">{children}</pre>
+    </details>
   )
 }
 

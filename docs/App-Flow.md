@@ -135,6 +135,9 @@ flowchart LR
     E --> T
     T --> TR[Test running<br/>guard pauses before steps that can't be undone]
     TR -- sign-in expired --> SX[Paused: sign in again, test again]
+    TR -- failed to find an element, and an input looks wrong --> IC[Ask: is this value right?<br/>input_check question]
+    IC -- value was wrong --> T
+    IC -- value is right --> AF
     TR -- failed --> AF[Auto-fix ≤ 3 attempts<br/>one gated change + Undo]
     AF --> TR
     AF -- stops --> E
