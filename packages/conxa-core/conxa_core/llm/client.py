@@ -902,6 +902,49 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                 ],
             },
         ]
+    if task == "timeline_understanding":
+        # Text-only, before compile: reads the merged timeline of one recording (browser events
+        # lined up with what a video model saw) and writes the understanding. Meaning only: it
+        # never sees or writes a selector, and conversation/timeline_understanding.py validates
+        # every field before anyone is shown it.
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "A person recorded a task in a browser. You get `rows`: the recording in time "
+                    "order. Each row has a `ref` (r1, r2...) and is either an `event` (what they "
+                    "did: action, target, value, url, and `seen`: what a video model saw at that "
+                    "moment, or null if it missed it) or an `observation` (something with no "
+                    "browser event: a wait, a native dialog, a download bar). You also get "
+                    "`task` (what the person said it is for, may be empty), `chat` (what they "
+                    "said while recording) and `candidates`: values taken from the recording. "
+                    "Write the understanding in plain words a non-technical person reads. "
+                    "Return ONLY a JSON object: {\"goal\": \"one sentence\", \"phases\": "
+                    "[{\"name\": \"...\", \"from_row\": \"r1\", \"to_row\": \"r4\"}], \"values\": "
+                    "[{\"ref\": \"<a candidate ref>\", \"verdict\": \"fixed|varies|unsure\", "
+                    "\"name\": \"short_snake_case_input_name (varies/unsure only)\", \"literal\": "
+                    "\"url candidates only: the exact part of the address that changes\"}], "
+                    "\"success_check\": \"how the end of the run shows it worked, or empty\", "
+                    "\"gaps\": [{\"row\": \"r3\", \"note\": \"something the video showed that the "
+                    "browser did not record, or the other way round\"}], \"short_summary\": "
+                    "\"one sentence for the whole task\", \"detailed_summary\": [{\"row\": "
+                    "\"r1\", \"text\": \"what happens here\"}], \"questions\": [{\"kind\": "
+                    "\"upload|confirm_before|popup_dismiss|fork|done_when|branch_or_oneoff\", "
+                    "\"row\": \"r5\", \"prompt\": \"the question, one sentence\", \"best_guess\": "
+                    "\"see below, or empty\", \"cost_rank\": 1}]}. \"varies\": the task describes "
+                    "a kind of thing, or does not name this one, so a future run would use a "
+                    "different one. \"fixed\": the task names this exact thing, or it is the "
+                    "same page every time. \"unsure\": you cannot tell; do not guess. Questions: "
+                    "only ask what the rows make worth asking; `cost_rank` 1 is the question "
+                    "where a wrong guess costs the most. best_guess by kind: upload "
+                    "\"each_run\"|\"fixed_path\"; confirm_before \"confirm\"|\"no_confirm\"; "
+                    "popup_dismiss \"dismiss\"|\"keep\"; branch_or_oneoff \"one_off\"|\"branch\"; "
+                    "fork and done_when: leave empty. Never invent a ref or a row, never write "
+                    "a selector, and never claim a gap you cannot see in the rows."
+                ),
+            },
+            {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
+        ]
     if task in _STUDIO_CHAT_SYSTEMS:
         # Build Studio's conversation harness (BUILD-37): general Chat and each workflow's
         # thread. The Studio builds the whole context (lifecycle, pinned facts, digest, rolling
@@ -972,6 +1015,9 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         body["max_tokens"] = 1024
     if task in ("workflow_understanding", "record_plan"):
         body["max_tokens"] = 2048
+    if task == "timeline_understanding":
+        # Summaries are written per row, so this scales with the recording.
+        body["max_tokens"] = 6144
     if task == "thread_summarize":
         body["max_tokens"] = 2048
     if json_mode:
