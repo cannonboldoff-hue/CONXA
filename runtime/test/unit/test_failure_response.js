@@ -22,6 +22,7 @@ const {
   executedStepsBreadcrumb,
   recordedContextBlock,
   anchorSentenceBlock,
+  videoContextBlock,
   phaseHintBlock,
 } = require("../../app/failure_response");
 const pageScripts = require("../../app/page_scripts");
@@ -447,6 +448,26 @@ test("anchorSentenceBlock: null when the pack predates the anchor sentence", () 
   assert.strictEqual(anchorSentenceBlock({ failedStep: { _anchor_sentence: "   " } }), null,
     "whitespace-only must not produce a meaningless block");
   assert.strictEqual(anchorSentenceBlock({}), null);
+});
+
+// videoContextBlock: what the video model saw around the step, in words -- the agent tier's
+// replacement for the recording-time screenshot.
+
+test("videoContextBlock: lists only the parts that were written down", () => {
+  const block = videoContextBlock({ failedStep: { _video_context: {
+    visible_target: "Download PDF button, top right", screen_before: "", screen_after: "Download bar shows the PDF", purpose: "  ",
+  } } });
+  assert.match(block, /- Target: Download PDF button, top right/);
+  assert.match(block, /- Screen after: Download bar shows the PDF/);
+  assert.doesNotMatch(block, /Screen before|Purpose/);
+  assert.match(block, /current page is ground truth/);
+});
+
+test("videoContextBlock: null for a pack built before it, or an empty context", () => {
+  assert.strictEqual(videoContextBlock({ failedStep: {} }), null);
+  assert.strictEqual(videoContextBlock({ failedStep: { _video_context: {} } }), null);
+  assert.strictEqual(videoContextBlock({ failedStep: { _video_context: { purpose: "" } } }), null);
+  assert.strictEqual(videoContextBlock({}), null);
 });
 
 // phaseHintBlock (BUILD-25 stage e): the compiler's second-opinion pass's label_phase

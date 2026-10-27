@@ -1033,6 +1033,10 @@ function enrichStepsWithRecovery(steps, recovery) {
       // Prose description written by the vision LLM at compile time (looked at 5 time-offset
       // frames around the action) — a plain-English caption alongside the short anchor phrases.
       _anchor_sentence: rec.anchor_sentence || "",
+      // What the video model saw around this step, in words (replaces the recording-time
+      // screenshot): { visible_target, screen_before, screen_after, purpose }. Read by
+      // failure_response.js's videoContextBlock; empty on a pack that predates it.
+      _video_context: asObject(rec.video_context),
       // BUILD-25 stage e: which part of the journey this step belongs to
       // (login/navigate/act/verify/cleanup), written by the compiler's
       // second-opinion pass. "" on any step the pass never ran on or didn't

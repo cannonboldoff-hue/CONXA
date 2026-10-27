@@ -1187,6 +1187,11 @@ def _build_saved_skill_recovery(
         anchor_sentence = _saved_recovery_anchor_sentence(step)
         if anchor_sentence:
             entry["anchor_sentence"] = anchor_sentence
+        # What the video model saw around this step, in words: the Tier B agent's replacement for
+        # the reference screenshot. Absent when the recording was never watched or missed this step.
+        video_context = step.get("video_context")
+        if isinstance(video_context, dict) and any(str(v or "").strip() for v in video_context.values()):
+            entry["video_context"] = {k: str(video_context.get(k) or "") for k in ("visible_target", "screen_before", "screen_after", "purpose")}
         # BUILD-25 stage e: the compiler's second-opinion pass's label_phase
         # finding. Read by runtime/app/failure_response.js's Tier B recovery
         # prompt as a workflow-position prior. Absent on any step the pass

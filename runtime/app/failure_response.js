@@ -340,6 +340,24 @@ function anchorSentenceBlock(err) {
   return `How this element was described when recorded: "${sentence}"`;
 }
 
+// What the video model saw around this step when it was recorded, in words (compiled into
+// recovery.json as `video_context`). It replaces the old recording-time screenshot: the agent gets
+// the target, the screen before and after, and why the step matters. Absent on a pack built
+// before this existed, or on a step the video model missed -- an ordinary state, not a failure.
+function videoContextBlock(err) {
+  const step = err && err.failedStep ? err.failedStep : null;
+  const ctx = step && step._video_context && typeof step._video_context === "object" ? step._video_context : null;
+  if (!ctx) return null;
+  const lines = [
+    ["Target", ctx.visible_target],
+    ["Screen before", ctx.screen_before],
+    ["Screen after", ctx.screen_after],
+    ["Purpose", ctx.purpose],
+  ].filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `- ${k}: ${v.trim()}`);
+  if (!lines.length) return null;
+  return `What the recording showed around this step (words only; the current page is ground truth):\n${lines.join("\n")}`;
+}
+
 // BUILD-25 stage e: a workflow-position prior from the compiler's
 // second-opinion pass (compiler/second_opinion.py's label_phase kind) — "this
 // step is in the login phase" is a strong hint for the agent tier about what
@@ -470,6 +488,8 @@ function buildContextSections(err, steps, failedAt, viewport, scrollY, stepAsser
   if (recorded) out.push(recorded);
   const anchorSentence = anchorSentenceBlock(err);
   if (anchorSentence) out.push(anchorSentence);
+  const videoContext = videoContextBlock(err);
+  if (videoContext) out.push(videoContext);
   const phaseHint = phaseHintBlock(err);
   if (phaseHint) out.push(phaseHint);
   const expected = expectedStateBlock(err, stepAssertions);
@@ -660,6 +680,7 @@ module.exports = {
   executedStepsBreadcrumb,
   recordedContextBlock,
   anchorSentenceBlock,
+  videoContextBlock,
   phaseHintBlock,
   gatherInventory,
   overlayNoteText,

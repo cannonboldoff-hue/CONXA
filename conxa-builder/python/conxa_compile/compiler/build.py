@@ -14,6 +14,7 @@ from conxa_compile.editor.action_registry import MARKER_ACTIONS
 from conxa_compile.compiler.decision_layer import rank_merged_anchors
 from conxa_compile.compiler.action_semantics import commit_intent_hit, is_editable_field_click
 from conxa_compile.compiler.destructive_semantics import classify_consequence, destructive_compiler_step
+from conxa_compile.compiler.video_context import apply_video_context
 from conxa_compile.compiler.commit_ordering import lint_commit_ordering
 from conxa_compile.compiler.entity_binding import (
     collect_input_literal_values,
@@ -1881,6 +1882,8 @@ def compile_skill_package(
     # A value the person marked "read this" while recording becomes an extract step (needs the 1:1
     # alignment with cleaned_events that holds right here).
     _finish_extract_steps(steps, cleaned_events)
+    for step, ev in zip(steps, cleaned_events):
+        step.source_event = (ev.get("extras") or {}).get("sequence")
     # Must build this while steps[i] still maps 1:1 onto cleaned_events[i] (the
     # leading-navigate insert below prepends, which shifts positions) — the
     # per-step screenshot the vision-anchor stage chose lives on the event
@@ -2000,6 +2003,9 @@ def compile_skill_package(
         loop_candidates=loop_candidates,
         extras_out=review_extras,
     )
+    # What the video model saw, in words, on every step it matched (a recording that was never
+    # watched has no merged timeline, so this is a no-op for it).
+    apply_video_context(steps, session_root)
     if review_extras.get("understanding"):
         # Read back by the question flow (conversation/understanding.py::understand), tied to this
         # compile so a stale file beside the recording can never be mistaken for it.

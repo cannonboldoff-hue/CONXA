@@ -210,6 +210,16 @@ class HandlerHints(BaseModel):
     choice: dict[str, Any] = Field(default_factory=dict)
 
 
+class VideoContext(BaseModel):
+    """What the video model saw around one step, in plain words. Replaces the reference screenshot
+    the recovery agent used to be handed: only the Tier B agent hand-off reads it."""
+
+    visible_target: str = ""
+    screen_before: str = ""
+    screen_after: str = ""
+    purpose: str = ""
+
+
 class SkillStep(BaseModel):
     """[mixed] — see field tags below. `action`/`intent`/`url`/`value`/`input_binding`/
     `validation`/`recovery`/`decision_policy`/`optional_hint`/`consequence` are [contract]: what
@@ -266,6 +276,12 @@ class SkillStep(BaseModel):
     # pass (compiler/second_opinion.py); read by runtime/app/failure_response.js's Tier B
     # recovery prompt (stage e) as a workflow-position prior for the agent tier.
     phase: str = ""
+    # [compile-only] The recorder sequence number of the event this step was compiled from. Lets the
+    # compiler tie a step to what the video saw and to a pre-compile answer; never executed.
+    source_event: int | None = None
+    # [contract] What the video model saw around this step, in words (see VideoContext). Read only by
+    # the Tier B agent hand-off; None when the recording was never watched or the model missed the step.
+    video_context: VideoContext | None = None
     snapshot_ref: str = ""                # [executor] which recorded DOM blob this step compiled against
     snapshot_dom_hash: str = ""           # [executor] for cross-compilation cache lookup
 
