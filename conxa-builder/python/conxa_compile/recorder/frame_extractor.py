@@ -34,55 +34,7 @@ from conxa_core.config import settings
 from conxa_compile.recorder.visual import crop_element_from_frame
 
 
-def _is_executable_file(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    if os.name == "nt" and path.suffix.lower() in {".exe", ".cmd", ".bat"}:
-        return True
-    return bool(path.stat().st_mode & 0o111)
-
-
-def _find_ffmpeg() -> str | None:
-    """Locate ffmpeg binary. Prefers Playwright, then imageio-ffmpeg, then PATH."""
-    # Search the Playwright browsers path (where ffmpeg is actually installed in
-    # production deployments — driven by PLAYWRIGHT_BROWSERS_PATH env var, often /opt/pw-browsers).
-    candidate_roots: list[Path] = []
-    pw_env = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "").strip()
-    if pw_env and pw_env != "0":
-        candidate_roots.append(Path(pw_env))
-    # Common default locations
-    # (Windows installs browsers under %LOCALAPPDATA%\ms-playwright.)
-    defaults = ["/opt/pw-browsers", str(Path.home() / ".cache" / "ms-playwright")]
-    if os.environ.get("LOCALAPPDATA"):
-        defaults.append(str(Path(os.environ["LOCALAPPDATA"]) / "ms-playwright"))
-    for default in defaults:
-        p = Path(default)
-        if p.is_dir() and p not in candidate_roots:
-            candidate_roots.append(p)
-    # Playwright package dir (for in-package bundled ffmpeg in older versions)
-    try:
-        import playwright
-        candidate_roots.append(Path(playwright.__file__).parent)
-    except ImportError:
-        pass
-    for root in candidate_roots:
-        try:
-            for candidate in root.rglob("ffmpeg*"):
-                if _is_executable_file(candidate):
-                    return str(candidate)
-        except OSError:
-            continue
-
-    try:
-        import imageio_ffmpeg
-
-        candidate = Path(imageio_ffmpeg.get_ffmpeg_exe())
-        if candidate.is_file():
-            return str(candidate)
-    except (ImportError, OSError, RuntimeError):
-        pass
-
-    return shutil.which("ffmpeg")
+from conxa_compile.video.ffmpeg import _is_executable_file, find_ffmpeg as _find_ffmpeg  # noqa: F401 - re-exported for callers/tests
 
 
 def _extract_frame(
