@@ -150,6 +150,68 @@ class UnderstandFlowMixin:
             return {"ok": True}
         raise _CommandError("card_action_unsupported", f"This card can’t “{action}”.")
 
+    # ── after the compile: replay the stored decisions ──────────────────────────────────────
+
+    def _flow_prior_understanding(self, workflow: Any) -> dict[str, Any] | None:
+        """The understanding written before this compile, shaped like ``understanding.understand()``'s
+        result (no candidates: they were asked about already). None for a recording that never went through it."""
+        import json
+
+        from conxa_core.config import settings
+
+        path = settings.data_dir / "sessions" / str(workflow.session_id) / "understanding.json"
+        try:
+            und = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        notes = " ".join(g.get("note", "") for g in und.get("gaps") or [])[:200]
+        return {"candidates": [], "goal_summary": und.get("goal") or "", "source": und.get("source") or "model",
+                "coverage": {"ok": not notes, "note": notes}}
+
+    def _flow_replay_decisions(self, workflow: Any, result: dict[str, Any], doc: dict[str, Any],
+                               questions: list[dict[str, Any]], look: Any, sink: Any) -> int:
+        """Apply the pre-compile answers to the compiled workflow through the same edits a button uses.
+        Marks the compile-time questions they answer, and adds a question for anything that could not
+        be applied. Returns the steps added. Never raises: the compile stands whatever happens here."""
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.conversation import decisions, replay
+        from conxa_core.config import settings
+        from conxa_core.storage.workflow_store import get_workflow, save_workflow
+
+        try:
+            stored = decisions.load(settings.data_dir / "sessions" / str(workflow.session_id))
+            if not stored:
+                return 0
+            steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+            seq_by_key = {k: ((look(s) or {}).get("extras") or {}).get("sequence") for k, s in zip(step_keys(steps), steps)}
+            plan = replay.plan(stored, doc, questions, lambda key: seq_by_key.get(key))
+        except Exception:  # noqa: BLE001
+            import traceback
+
+            traceback.print_exc()
+            return 0
+        added, failed_values = 0, []
+        for g in plan["groups"]:
+            try:
+                added += self._run_clarify_ops(result["skill_id"], g["ops"], f"replay_{uuid.uuid4().hex[:8]}")
+            except Exception:  # noqa: BLE001 -- one answer that no longer fits must not undo the rest
+                if g.get("value"):
+                    failed_values.append(g["value"])
+                continue
+            for q in questions:
+                if g.get("qid") and q["id"] == g["qid"]:
+                    q.update(status="answered", answer=g["answer"], receipt=g["receipt"])
+        if failed_values:
+            retry = replay.failed_values_question(failed_values)
+            if retry:
+                questions.insert(0, retry)
+        if plan["description"]:
+            fresh = get_workflow(workflow.id)
+            if fresh is not None and not fresh.task_description.strip():
+                fresh.task_description = plan["description"]
+                save_workflow(fresh)
+        return added
+
     # ── answers: stored, then the compile starts ────────────────────────────────────────────
 
     def _pre_compile_answer(self, thread_id: str, card: dict[str, Any], question: dict[str, Any],

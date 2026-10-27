@@ -208,26 +208,34 @@ class CompileFlowMixin:
         # Never raises, never blocks.
         from conxa_compile.conversation import understanding as understanding_mod
 
-        understood = understanding_mod.understand(doc, workflow.task_description, review=report.get("understanding"))
+        # A recording that went through the understanding-first flow already asked about its values
+        # and coverage (understanding.json); its answers are replayed below instead of asked again.
+        prior = self._flow_prior_understanding(workflow)
+        understood = prior or understanding_mod.understand(doc, workflow.task_description, review=report.get("understanding"))
         questions = clarify.generate_questions(
             doc,
             source_lookup=lambda s: find_source_event(s, doc),
             answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
             known_popups=known,
-            understanding=understood,
+            understanding=None if prior else understood,
             dropped=report.get("dropped") or [],
             today=datetime.date.today(),
             limit=None,
         )
+        replayed_steps = self._flow_replay_decisions(workflow, result, doc, questions, lambda s: find_source_event(s, doc), sink)
         # Ask the most important few now; keep the rest instead of silently dropping them.
-        for n, q in enumerate(questions):
-            if n >= clarify.MAX_QUESTIONS:
+        shown = 0
+        for q in questions:
+            if q.get("status") != "open":
+                continue
+            shown += 1
+            if shown > clarify.MAX_QUESTIONS:
                 q["status"] = "queued"
         # The questions go out in their plain template wording; a friendlier version follows in the
         # background (_flow_reword), so no question ever waits on a model.
         clarify_store.save(workflow_id, {
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
-            "added_steps": 0, "step_count_at_compile": len(steps), "questions": questions,
+            "added_steps": replayed_steps, "step_count_at_compile": len(steps), "questions": questions,
             "understanding": {k: understood[k] for k in ("goal_summary", "coverage", "source")},
         })
         # Questions now exist, so the lifecycle can see them; clear before the posts below, because

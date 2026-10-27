@@ -929,7 +929,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "browser did not record, or the other way round\"}], \"short_summary\": "
                     "\"one sentence for the whole task\", \"detailed_summary\": [{\"row\": "
                     "\"r1\", \"text\": \"what happens here\"}], \"questions\": [{\"kind\": "
-                    "\"upload|confirm_before|popup_dismiss|fork|done_when|branch_or_oneoff\", "
+                    "\"upload|confirm_before|popup_dismiss|fork\", "
                     "\"row\": \"r5\", \"prompt\": \"the question, one sentence\", \"best_guess\": "
                     "\"see below, or empty\", \"cost_rank\": 1}]}. \"varies\": the task describes "
                     "a kind of thing, or does not name this one, so a future run would use a "
@@ -938,8 +938,8 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "only ask what the rows make worth asking; `cost_rank` 1 is the question "
                     "where a wrong guess costs the most. best_guess by kind: upload "
                     "\"each_run\"|\"fixed_path\"; confirm_before \"confirm\"|\"no_confirm\"; "
-                    "popup_dismiss \"dismiss\"|\"keep\"; branch_or_oneoff \"one_off\"|\"branch\"; "
-                    "fork and done_when: leave empty. Never invent a ref or a row, never write "
+                    "popup_dismiss \"dismiss\"|\"keep\"; "
+                    "fork: leave empty. Never invent a ref or a row, never write "
                     "a selector, and never claim a gap you cannot see in the rows."
                 ),
             },

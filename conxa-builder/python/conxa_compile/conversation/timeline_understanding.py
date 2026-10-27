@@ -40,9 +40,7 @@ GUESSES: dict[str, set[str]] = {
     "upload": {"each_run", "fixed_path"},
     "confirm_before": {"confirm", "no_confirm"},
     "popup_dismiss": {"dismiss", "keep"},
-    "branch_or_oneoff": {"one_off", "branch"},
     "fork": set(),
-    "done_when": set(),
 }
 # A guess that would approve a step that cannot be undone, or choose a popup option, is never pre-filled.
 UNSAFE_GUESSES = {("confirm_before", "no_confirm")}
@@ -280,9 +278,6 @@ _Q = {
     "popup_dismiss": ("A message box appeared here. Should it close it when it shows up?", [
         ("dismiss", "Yes, close it", "If it shows up, it is closed. If not, it carries on."),
         ("keep", "No, leave it", "It does nothing special about it.")]),
-    "branch_or_oneoff": ("Was this step something you always do, or just this once?", [
-        ("branch", "Only sometimes", "It does this step only when it applies."),
-        ("one_off", "Every time", "It does this step each time.")]),
     "fork": ("A message box asked for a decision. What should happen when it does?", [
         ("by_input", "Let whoever uses it decide each time", "They get a question to answer before it starts."),
         ("ask_human", "Stop and ask a person each time", "It waits on the popup until someone decides."),
@@ -314,8 +309,9 @@ def questions_from_understanding(und: dict[str, Any], merged: list[dict[str, Any
         q["phase"] = "pre_compile"
         out.append(q)
 
+    # Typed text is already an input once compiled; the compile-time "values" question owns it.
     cands = [{**c, "supported": True, "step_keys": []} for c in und.get("candidates") or []
-             if c.get("verdict") in ("varies", "unsure") and c.get("name")]
+             if c["kind"] != "typed" and c.get("verdict") in ("varies", "unsure") and c.get("name")]
     chosen = _chosen_values_question({"candidates": cands}) if cands else None
     if chosen:
         by_ref = {c["ref"]: c for c in cands}
@@ -327,12 +323,7 @@ def questions_from_understanding(und: dict[str, Any], merged: list[dict[str, Any
         out.append(chosen)
 
     for q in und.get("questions") or []:
-        if q["kind"] == "done_when":
-            choices = [("success_check", und.get("success_check") or q["prompt"], "It checks for this at the end."),
-                       ("skip", "Don’t check", "It finishes without checking.")]
-            title = "How will you know it worked?"
-        else:
-            title, choices = _Q[q["kind"]]
+        title, choices = _Q[q["kind"]]
         out.append(_question(
             q["kind"], f"{q['kind']}:{q['row']}", q["prompt"] or title, "", _choices(list(choices)),
             phase="pre_compile", best_guess=q["best_guess"], row_ref=q["row"],

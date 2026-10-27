@@ -112,7 +112,7 @@ def test_questions_are_ranked_prefilled_and_capped_at_five_open():
     assert by_id["confirm_before:r5"]["best_guess"] == ""
     assert [q["status"] for q in qs] == ["open"] * 5 + ["queued"] * (len(qs) - 5)
     chosen = by_id["chosen_values"]
-    assert {c["id"] for c in chosen["choices"] if c.get("selected")} == {"url:2", "typed:3"}
+    assert {c["id"] for c in chosen["choices"] if c.get("selected")} == {"url:2"}   # typed text is not asked here
     assert chosen["items"][0]["event_ids"] == [2]
 
 

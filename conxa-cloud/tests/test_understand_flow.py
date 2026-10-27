@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from conxa_compile.conversation import clarify_store, decisions, runtime_state
@@ -19,11 +21,12 @@ def _event(n, action, target="", value=None, url="https://billing.example.test/n
             "page": {"url": url}, "tab": {"id": "tab_0"}, "visual": {"timestamp_ms": n * 1000}, "extras": {"sequence": n}}
 
 
-TIMED = [{"ev": _event(1, "type", "PO number", "PO-44821"), "tab": "tab_0", "wall": 101_000},
+TIMED = [{"ev": _event(1, "manual_navigate", value=json.dumps({"to_url": "https://billing.example.test/acme/invoices"})),
+          "tab": "tab_0", "wall": 100_500},
          {"ev": _event(2, "click", "Send invoice"), "tab": "tab_0", "wall": 102_000}]
 RAW = {
     "goal": "Create and send an invoice", "short_summary": "Types the PO number and sends the invoice.",
-    "values": [{"ref": "typed:1", "verdict": "varies", "name": "po_number"}],
+    "values": [{"ref": "url:1", "verdict": "varies", "name": "customer", "literal": "acme"}],
     "questions": [{"kind": "confirm_before", "row": "r2", "prompt": "Check before sending?", "best_guess": "confirm", "cost_rank": 1}],
 }
 
@@ -69,7 +72,7 @@ def test_watching_then_one_round_of_questions_and_no_compile_yet(flow):
 def test_answers_are_stored_as_decisions_and_the_last_one_starts_the_compile_once(flow):
     b, wf, compiled = flow
     b._flow_understand(wf.id, "rid")
-    answers = {"confirm_summary": {"choice": "yes"}, "chosen_values": {"selected": ["typed:1"]},
+    answers = {"confirm_summary": {"choice": "yes"}, "chosen_values": {"selected": ["url:1"]},
                "confirm_before": {"choice": "confirm"}}
     for _ in range(10):
         pending = _open_cards(wf)
@@ -79,7 +82,7 @@ def test_answers_are_stored_as_decisions_and_the_last_one_starts_the_compile_onc
     session = settings.data_dir / "sessions" / "sess1"
     stored = {d["qid"]: d for d in decisions.load(session)}
     assert stored["confirm_summary"]["description"] == "Types the PO number and sends the invoice."
-    assert [v["name"] for v in stored["chosen_values"]["values"]] == ["po_number"]
+    assert [v["name"] for v in stored["chosen_values"]["values"]] == ["customer"]
     assert stored["chosen_values"]["values"][0]["event_ids"] == [1]
     assert stored["confirm_before:r2"]["choice"] == "confirm" and stored["confirm_before:r2"]["event_ids"] == [2]
     assert compiled == [wf.id]                                               # exactly once
@@ -147,3 +150,59 @@ def test_a_watch_cut_short_by_a_restart_is_marked_failed_with_retry(flow, monkey
     assert _cards(wf.id, "watching_video")[0]["state"] == "failed"
     lc = lifecycle_for_workflow(get_workflow(wf.id))
     assert lc["substate"] == "video_failed" and lc["allowed_actions"] == ["retry_video", "re_record"]
+
+
+# --- replay after the compile -------------------------------------------------------------
+
+def _write_session(decs):
+    session = settings.data_dir / "sessions" / "sess1"
+    session.mkdir(parents=True, exist_ok=True)
+    (session / "understanding.json").write_text(json.dumps({"goal": "Create invoice", "source": "model", "gaps": []}))
+    (session / "decisions.json").write_text(json.dumps(decs))
+
+
+def _compile(b, wf, monkeypatch):
+    from tests.test_compile_flow import SOURCES, _fake_compile
+
+    sources = {**SOURCES, "send_invoice": {"action": {"value": None}, "extras": {"sequence": 7}}}
+    monkeypatch.setattr("conxa_compile.editor.retarget.find_source_event", lambda step, doc: sources.get(step.get("intent")))
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid")
+    return clarify_store.load(wf.id)
+
+
+def test_decisions_are_replayed_onto_the_compiled_steps_and_not_asked_again(env, monkeypatch):
+    b, wf, _ = env
+    _write_session([
+        {"qid": "confirm_summary", "kind": "confirm_summary", "event_ids": [], "skipped": False, "choice": "yes",
+         "description": "Create and send an invoice"},
+        {"qid": "confirm_before:r7", "kind": "confirm_before", "event_ids": [7], "skipped": False, "choice": "confirm"},
+        {"qid": "chosen_values", "kind": "chosen_values", "event_ids": [], "skipped": False,
+         "values": [{"ref": "url:1", "name": "customer", "literal": "no-such-text", "kind": "url", "event_ids": [1]}]},
+    ])
+    data = _compile(b, wf, monkeypatch)
+    by_kind = {q["kind"]: q for q in data["questions"]}
+    assert by_kind["confirm"]["status"] == "answered" and by_kind["confirm"]["receipt"] == "Someone approves it first"
+    assert data["added_steps"] == 1                                               # the confirm step the answer inserted
+    # the value that could not be applied is asked again instead of being lost
+    assert by_kind["chosen_values"]["status"] == "open" and "couldn’t find" in by_kind["chosen_values"]["body"]
+    from conxa_core.storage.workflow_store import get_workflow
+
+    assert get_workflow(wf.id).task_description == "Create and send an invoice"
+
+
+def test_a_recording_without_decisions_compiles_as_before(env, monkeypatch):
+    b, wf, _ = env
+    data = _compile(b, wf, monkeypatch)
+    assert data["added_steps"] == 0 and {q["kind"] for q in data["questions"]} >= {"confirm"}
+    assert all(q["status"] != "answered" for q in data["questions"])
+
+
+def test_a_skipped_or_unmatched_decision_changes_nothing(env, monkeypatch):
+    b, wf, _ = env
+    _write_session([
+        {"qid": "confirm_before:r9", "kind": "confirm_before", "event_ids": [7], "skipped": True},
+        {"qid": "upload:r1", "kind": "upload", "event_ids": [99], "skipped": False, "choice": "fixed_path"},
+    ])
+    data = _compile(b, wf, monkeypatch)
+    assert data["added_steps"] == 0 and next(q for q in data["questions"] if q["kind"] == "confirm")["status"] == "open"
