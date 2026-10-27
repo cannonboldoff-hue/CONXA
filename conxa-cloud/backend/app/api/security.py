@@ -108,6 +108,8 @@ def _body_limit_for_path(path: str, request: Request | None = None) -> int:
         return settings.build_artifact_upload_max_bytes
     if normalized == BUG_REPORT_UPLOAD_PATH:
         return BUG_REPORT_UPLOAD_MAX_BYTES
+    if normalized == "/api/v1/video/analyze":
+        return settings.video_analyze_max_bytes
     if normalized == "/api/v1/llm/proxy/vision":
         return settings.llm_vision_proxy_max_bytes
     if normalized in _EXECUTE_CHAT_PROXY_PATHS and request is not None:

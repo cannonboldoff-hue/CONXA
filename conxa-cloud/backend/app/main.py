@@ -27,6 +27,7 @@ from app.api.app_graph_routes import router as app_graph_router
 from app.api.job_routes import router as job_router
 from app.api.legal_routes import router as legal_router
 from app.api.llm_proxy_routes import router as llm_proxy_router
+from app.api.video_routes import router as video_router
 from app.api.workflow_routes import router as workflow_router
 from app.api.product_routes import router as product_router
 from app.api.publish_routes import admin_router as publish_admin_router, installers_router, router as publish_router
@@ -83,6 +84,8 @@ def _validate_production_config() -> None:
     # self-update manifest with signature="", which every runtime then discards outright.
     if not os.environ.get("CONXA_MANIFEST_SIGNING_KEY"):
         missing.append("CONXA_MANIFEST_SIGNING_KEY (required so self-update manifests are verifiable)")
+    if not settings.twelvelabs_api_key:
+        missing.append("SKILL_TWELVELABS_API_KEY (Pegasus video analysis is a hard dependency of the recording flow)")
     if missing:
         raise RuntimeError(
             "Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: "
@@ -183,6 +186,7 @@ app.include_router(entitlement_router, prefix="/api/v1")
 app.include_router(product_router, prefix="/api/v1")
 app.include_router(workflow_router, prefix="/api/v1")
 app.include_router(llm_proxy_router, prefix="/api/v1")
+app.include_router(video_router, prefix="/api/v1")
 app.include_router(publish_router, prefix="/api/v1")
 app.include_router(publish_admin_router, prefix="/api/v1")
 app.include_router(release_router, prefix="/api/v1")

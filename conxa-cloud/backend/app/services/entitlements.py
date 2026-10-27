@@ -394,6 +394,8 @@ def _limits_from_billing(billing: dict[str, Any]) -> dict[str, Any]:
         limits["byok"] = bool(overrides["byok"])
     if "vision_fallback_on_exhaustion" in overrides:
         limits["vision_fallback_on_exhaustion"] = bool(overrides["vision_fallback_on_exhaustion"])
+    if "blur_all_typed_values" in overrides:
+        limits["blur_all_typed_values"] = bool(overrides["blur_all_typed_values"])
     if "trial_days" in overrides:
         raw_value = overrides.get("trial_days")
         limits["trial_days"] = None if raw_value in (None, "") else max(0, int(raw_value))
@@ -1043,6 +1045,9 @@ def current_entitlements(principal: Principal) -> dict[str, Any]:
             # paid feature. Conxa can flip it for any workspace on any plan,
             # Free included, via entitlement_overrides at any time.
             "vision_fallback_on_exhaustion": limits["vision_fallback_on_exhaustion"],
+            # Studio blurs every typed-into field (not just passwords) in the
+            # video it sends to Pegasus. Off unless an entitlement override sets it.
+            "blur_all_typed_values": bool(limits.get("blur_all_typed_values", False)),
         },
         # Persistent workflow slot ledger — separate from the monthly
         # compile_credits meter above, which resets every period. This is what

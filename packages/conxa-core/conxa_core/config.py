@@ -222,6 +222,15 @@ class Settings(BaseSettings):
     llm_vision_proxy_max_bytes: int = 8 * 1024 * 1024
     build_artifact_upload_max_bytes: int = 250 * 1024 * 1024
 
+    # Recording-video analysis (Pegasus via TwelveLabs, POST /api/v1/video/analyze).
+    # The Studio sends a prepared 720p/10fps video; TwelveLabs caps local uploads at 200MB.
+    # Empty key makes the endpoint return 503 video_unavailable (required in prod).
+    twelvelabs_api_key: str = ""
+    twelvelabs_base_url: str = "https://api.twelvelabs.io/v1.3"
+    video_analyze_max_bytes: int = 200 * 1024 * 1024
+    # Seconds of recording video one workspace may analyze per month. 0 disables.
+    video_monthly_quota_seconds: int = 7200
+
     # Root logging level. Nothing configures Python's root logger otherwise, so the
     # effective level defaults to WARNING and every logger.info()/logger.warning()
     # call in the cloud backend (tracking.py, saas.py, cashfree_routes.py, ...) is

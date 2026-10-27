@@ -75,6 +75,38 @@ def record_usage(org_id: str, *, input_tokens: int, output_tokens: int) -> dict[
         return row
 
 
+_VIDEO_NAMESPACE = "video_usage"
+
+
+def get_video_usage(org_id: str, period: str | None = None) -> dict[str, float]:
+    row = db_get(_VIDEO_NAMESPACE, usage_key(org_id, period))
+    if not isinstance(row, dict):
+        return {"seconds": 0.0, "requests": 0}
+    return {"seconds": float(row.get("seconds") or 0), "requests": int(row.get("requests") or 0)}
+
+
+def video_quota_exceeded(org_id: str, quota_seconds: int) -> bool:
+    """True once this org has analyzed its monthly video allowance. ``quota_seconds <= 0`` disables."""
+    if quota_seconds <= 0:
+        return False
+    return get_video_usage(org_id)["seconds"] >= quota_seconds
+
+
+def record_video_usage(org_id: str, *, seconds: float) -> dict[str, Any]:
+    """Add one analyzed recording's duration to this org's monthly ``video_usage`` row."""
+    with _lock:
+        key = usage_key(org_id)
+        row = db_get(_VIDEO_NAMESPACE, key)
+        if not isinstance(row, dict):
+            row = {"seconds": 0.0, "requests": 0}
+        row["seconds"] = float(row.get("seconds") or 0) + max(0.0, seconds)
+        row["requests"] = int(row.get("requests") or 0) + 1
+        row["org_id"] = org_id
+        row["period"] = _period()
+        db_set(_VIDEO_NAMESPACE, key, row)
+        return row
+
+
 def _stringify(payload: Any) -> str:
     if isinstance(payload, str):
         return payload
