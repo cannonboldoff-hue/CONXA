@@ -1801,6 +1801,30 @@ def _deduplicate_input_bindings(steps: list[SkillStep]) -> None:
         step.value = rewrite_placeholder(step.value, binding, new_binding)
 
 
+def prepare_compile_events(
+    events: list[dict[str, Any]],
+    pol: dict[str, Any],
+    drop_ledger: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """B2: the compiler's event clean-up (noise, order, folded navigations, tab markers), shared
+    with the understanding-first merge so both see the same event list. ``drop_ledger`` collects
+    what was removed when the compiler wants the record."""
+    ledger = drop_ledger if drop_ledger is not None else []
+    cleaned_events = fix_step_order(clean_steps(events, pol), pol)
+    _record_drops(ledger, events, cleaned_events, "cleanup")
+    # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
+    # effect, not a step: drop it and keep only a generalized post-condition on the action.
+    # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
+    # _insert_start_navigate_step's start URL) are never candidates.
+    before_fold = cleaned_events
+    cleaned_events = fold_action_caused_navigations(cleaned_events)
+    _record_drops(ledger, before_fold, cleaned_events, "navigation_folded")
+    # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
+    # fix_step_order so the synthetic marker events never have to satisfy those functions'
+    # assumptions about real recorded event shape.
+    return _insert_tab_markers(cleaned_events)
+
+
 def compile_skill_package(
     events: list[dict[str, Any]],
     *,
@@ -1833,19 +1857,7 @@ def compile_skill_package(
         {"phase": "compiler_prepare", "event_count": len(events), "session_id": sid},
     )
     drop_ledger: list[dict[str, Any]] = []
-    cleaned_events = fix_step_order(clean_steps(events, pol), pol)
-    _record_drops(drop_ledger, events, cleaned_events, "cleanup")
-    # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
-    # effect, not a step: drop it and keep only a generalized post-condition on the action.
-    # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
-    # _insert_start_navigate_step's start URL) are never candidates.
-    before_fold = cleaned_events
-    cleaned_events = fold_action_caused_navigations(cleaned_events)
-    _record_drops(drop_ledger, before_fold, cleaned_events, "navigation_folded")
-    # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
-    # fix_step_order so the synthetic marker events never have to satisfy those functions'
-    # assumptions about real recorded event shape.
-    cleaned_events = _insert_tab_markers(cleaned_events)
+    cleaned_events = prepare_compile_events(events, pol, drop_ledger)
     _compile_log(
         "compile_phase",
         "Compiler inputs prepared.",
