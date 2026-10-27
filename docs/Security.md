@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
 
 ---
@@ -604,6 +605,44 @@ overwhelmingly application chrome, which is why only decision popups are reporte
 If a customer needs it, add a pack-level switch that disables `app_obs` while leaving other telemetry on.
 Cross-workspace sharing of popup shapes (TODO APP-1, phase 8) must not be enabled before this entry is
 re-reviewed.
+
+---
+
+## SG-21 — Recording Video Is Sent To TwelveLabs Through The Conxa Cloud
+
+**Severity:** Medium (mitigated)
+**Component:** Studio / Cloud API — `conxa_compile/video/prepare.py`, `services/video_analysis_client.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py`
+
+### Description
+
+Since the understanding-first pipeline (`docs/artifacts/understanding-first-pipeline/`), every recording's
+video leaves the machine: Studio prepares one 720p/10fps copy and uploads it to `POST /api/v1/video/analyze`,
+the cloud forwards it to TwelveLabs (Pegasus) and deletes the TwelveLabs copy afterwards. TwelveLabs is a
+**new processor of customer data** and needs a line in customer terms. Before this, no recording video
+ever left the computer.
+
+Mitigations in place: the TwelveLabs key lives only in the cloud (`SKILL_TWELVELABS_API_KEY`); the upload
+needs the same Clerk token, known-client header and trial/seat checks as the LLM proxy, and the job result
+is readable only by the workspace that started it; the uploaded asset is deleted in a `finally`; analyzed
+seconds are metered per workspace per month (`video_usage`) with a quota; **password fields are always
+blurred** in the prepared copy (from the first keystroke until the page changes), and the
+`blur_all_typed_values` entitlement blurs every typed-into field; click rings are drawn only on the copy
+that is sent, never on the page being recorded; the result is cached by the prepared video's SHA-256 so a
+recompile or edit never re-uploads.
+
+### Residual risk
+
+The blur follows recorded element positions (padded 8 px). A field that moves while it holds a value
+(a scroll, an animation) can slip past its box, and everything else on the screen is sent as recorded
+(names, amounts, other tabs' content). The job store is in memory, so a cloud restart loses an in-flight
+analysis (Studio resubmits). Pegasus is a hard dependency, so an outage blocks new recordings from being
+understood.
+
+### Recommended Fix
+
+Check every trial recording's `prepared.mp4` for blur leaks before trusting the blur; add the processor to
+customer terms and the DPA; consider a per-workspace switch to refuse video upload for customers whose
+policy forbids it; move the job store to the database (CLOUD-21) so a restart does not lose analyses.
 
 ---
 

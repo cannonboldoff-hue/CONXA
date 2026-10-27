@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 42 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 43 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **110** |
+| **Total** | **111** |
 
 ---
 
@@ -1131,6 +1131,14 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Description:** `runtime/app/handover.js` arms its "Done" banner with `context.exposeBinding("__conxaHandoverDone")` + `context.addInitScript(_bannerScript(...))`. When the runtime borrows a view from Conxa Execute or Build Studio's test panel (`host_browser.js`), Playwright's one context is the host app's default CDP context, which holds the app's own window and other runs' views — so the banner script and binding reach every page in the host process, including the app UI, until the runtime disconnects. Found while building BUILD-46 (`Done.md`; the recorder's embedded mode installs its bridge per run page for exactly this reason, TRD §4.7a).
 - **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
 - **Complexity:** S–M.
+
+### BUILD-58 — Understanding-first pipeline: finish the removals, the Q2 round, the cards and the docs
+- **Category:** Builder / Cloud / Runtime
+- **Source:** `docs/artifacts/understanding-first-pipeline/understanding-first-pipeline.html` (v4) and the plan it was built from; branch `feat/understanding-first-pipeline`.
+- **Done (2026-10-27):** cloud video endpoint + TwelveLabs client + metering; Track A (prepare, upload client, cache, rows); Track B + merge; pre-compile understanding, ranked pre-filled Q1, decisions stored per event; `_flow_understand` replacing the auto-compile, `understand` lifecycle stage, `retry_video`; decision replay onto the compiled workflow; `video_context` on steps, in `recovery.json` and in the Tier B prompt.
+- **Left:** (1) delete frame cutting (`recorder/frame_extractor.py`, `handlers/compile.py` call), the vision-anchor stage (`llm/anchor_vision_llm.py`, `_prefetch_vision_anchors`, per-step anchor call, `step_anchors` vision parts, `confidence/layered.py` vision assist, `editor/recording_visual.py` chooser, `patch.py` anchor regeneration, copilot images, `workflow_dto` frames) and the review call's images; make `workflow_review` text-only (drop `workflow_review` from `VISION_TASKS`) and take `understanding`/`intent_graph` prose out of it; (2) delete `visuals/` writing (`_write_saved_visual_assets`, `_saved_step_visual_ref`, the copies in `skill_packages_build.py` / `skill_package_builder_output.py`) while keeping `_resolveVisualRef` so older packs run; (3) `video/frame_at.py` cutting one frame on demand for the retarget "draw a region" path and its DTO; (4) Q2 leftovers (only steps the compiler added itself) and a `test_followup` check against `AutofixCard`; (5) renderer: `understanding_summary` and `watching_video` cards, pre-selected best guess + "More questions" group on `ClarifyQuestionCard`, the `understand` stage in `StagePath`/status, remove the frame UI, dashboard toggle for `blur_all_typed_values`; (6) docs: CLAUDE.md invariants, TRD, App-Flow, Backend-Schema, cost_model, UI-UX-Brief; (7) the live 5-recording trial (matched share, Pegasus intent vs today's, blur leaks, 720p/10fps loss, recovery on text alone) and checking the bundled ffmpeg ships libx264; (8) bump and rebuild the runtime app layer for `video_context`.
+- **Known gaps:** typed-text verdicts from the understanding call are not used to pre-tick the compile-time `values` question; chat said before recording is not passed to the understanding call; `phase` still comes from the second opinion (not the understanding phases); a recompile reuses `understanding.json` and decisions but not an edited description.
+- **Complexity:** L.
 
 ### BUILD-55 — Harden and slim the post-compile questions and the chat harness (audit 2026-10-26)
 - **Category:** Builder / LLM
