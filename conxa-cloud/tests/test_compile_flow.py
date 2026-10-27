@@ -328,10 +328,11 @@ def test_a_second_compile_waits_its_turn_with_a_real_position(env):
     assert _cards(other.id, "compile")[0]["state"] == "done"  # it started on its own once the first finished
 
 
-def test_finishing_a_recording_starts_the_compile_and_says_so(env, monkeypatch):
+def test_finishing_a_recording_starts_watching_it_and_says_so(env, monkeypatch):
     b, wf, _out = env
     started: list[str] = []
-    monkeypatch.setattr(b, "_flow_start_compile", lambda wid: started.append(wid))
+    monkeypatch.setattr(b, "_flow_start_compile", lambda wid: (_ for _ in ()).throw(AssertionError("compile waits for the questions")))
+    monkeypatch.setattr(b, "_flow_start_understand", lambda wid: started.append(wid))
     from handlers import workflow_flow
 
     class Sess:

@@ -462,10 +462,12 @@ class WorkflowFlowMixin:
         seconds = int(getattr(saved, "recording_duration_seconds", 0) or 0)
         count = int(result.get("event_count") or 0)
         harness.update_card(_thread(workflow.id), card["card_id"], state="saved", count=count, duration_seconds=seconds, actions=[], sink=sink)
-        self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}. I’m compiling them into steps that can find the right "
-                       "buttons and fields again, even when the page shifts a little. I’ll ask you a few things once that’s done.", sink)
         if payload.get("auto_compile", True):
-            self._flow_start_compile(workflow.id)
+            self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}. I’m watching the recording back and lining it up with "
+                           "what the browser saw. I’ll ask you a few things before I build it.", sink)
+            self._flow_start_understand(workflow.id)
+        else:
+            self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}.", sink)
         return {"ok": True, "event_count": count, "session_id": sid}
 
     # ── re-record from a step ───────────────────────────────────────────────────────────────

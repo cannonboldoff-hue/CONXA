@@ -42,6 +42,8 @@ ACTIONS: dict[str, ActionSpec] = {a.id: a for a in (
                ("discard recording", "discard it", "throw it away", "start over")),
     ActionSpec("re_record", "Record again", "flow", True, "Record the task again from the start",
                ("record again", "re-record", "rerecord", "redo the recording", "record it again")),
+    ActionSpec("retry_video", "Try again", "flow", False, "Watch the recording again (the video service didn't answer)",
+               ("try again", "retry", "retry the video", "watch it again")),
     ActionSpec("compile", "Compile", "flow", True, "Turn the recording into a workflow (uses a compile credit)",
                ("compile", "compile it", "compile again", "try compiling again", "retry compile")),
     ActionSpec("compile_later", "Compile later", "none", False, "Leave the recording for now"),

@@ -316,10 +316,11 @@ class ConversationMixin:
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
 
         flags = runtime_state.get_flags(workflow_id)
-        if flags.get("testing") or flags.get("autofix_attempt"):
+        if flags.get("testing") or flags.get("autofix_attempt") or flags.get("watching"):
             return
         thread = f"wf:{workflow_id}"
-        live = {"test_run": ("running", "waiting_guard", "waiting_confirm", "waiting_fork"), "autofix": ("running",)}
+        live = {"test_run": ("running", "waiting_guard", "waiting_confirm", "waiting_fork"), "autofix": ("running",),
+                "watching_video": ("watching",)}
         for card in ts.fold(ts.read_raw(thread)):
             if card.get("kind") != "card" or card.get("state") not in live.get(str(card.get("card_type")), ()):
                 continue
@@ -328,6 +329,11 @@ class ConversationMixin:
             except (TypeError, ValueError):
                 age = 1e9
             if age < 30:
+                continue
+            if card.get("card_type") == "watching_video":
+                reason = "The app closed while it was watching the recording."
+                runtime_state.set_flags(workflow_id, video_error=reason)
+                harness.update_card(thread, card["card_id"], state="failed", reason=reason, actions=["retry_video", "re_record"])
                 continue
             harness.update_card(thread, card["card_id"], state="interrupted", actions=["test_again"])
 
@@ -423,6 +429,9 @@ class ConversationMixin:
         if action == "cancel":
             self.cmd_flow_sign_in_cancel(need("sign_in", ("waiting",), "sign-in"), rid)
             return {"ok": True, "message": "Cancelled the sign-in."}
+        if action == "retry_video":
+            self._flow_start_understand(workflow_id)
+            return {"ok": True, "message": "Watching the recording again."}
         if action == "compile":
             self._flow_start_compile(workflow_id)
             return {"ok": True, "message": "Compiling the recording."}

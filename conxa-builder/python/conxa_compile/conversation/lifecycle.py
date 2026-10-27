@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-STAGES = ("describe", "configure", "record", "compile", "clarify", "edit", "test", "approve")
+STAGES = ("describe", "configure", "record", "understand", "compile", "clarify", "edit", "test", "approve")
 MAX_AUTOFIX_ATTEMPTS = 3
 
 # Glyph kinds — identical to the renderer's lib/status.ts vocabulary.
@@ -67,6 +67,21 @@ def derive_lifecycle(
         substate, note = ("paused", "Recording paused") if rt.get("recording_paused") else ("recording", "Recording")
     elif rt.get("signing_in"):
         stage, substate, glyph, note, actions = "configure", "signing_in", RUN, "Waiting for sign-in", ["finish_sign_in", "cancel"]
+    elif recorded and (rt.get("watching") or rt.get("video_error") or cl.get("stage") == "understand") and not (
+        rt.get("compiling") or rt.get("queued") or rt.get("out_of_credits") or rt.get("compile_error")
+    ):
+        # Before the compile: the recording is being watched and lined up with the browser's events,
+        # then one round of questions. Pegasus is a hard dependency, so a failure offers Retry, never a compile.
+        stage = "understand"
+        if rt.get("watching"):
+            substate, glyph, note, actions = "watching", RUN, "Watching your recording", []
+        elif rt.get("video_error"):
+            substate, glyph, note, actions = "video_failed", FAIL, str(rt["video_error"])[:120], ["retry_video", "re_record"]
+        elif open_q > 0:
+            substate, glyph, actions = "open", WARN, ["answer_clarify", "re_record"]
+            note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
+        else:
+            substate, glyph, note, actions = "ready", RUN, "Getting ready to build", []
     elif not recorded:
         if auth_missing:
             stage, substate, glyph, note, actions = "configure", "sign_in_needed", WARN, "Sign-in needed", ["sign_in"]

@@ -86,7 +86,7 @@ def summary(workflow_id: str) -> dict[str, Any] | None:
     if data is None:
         return None
     qs = [q for q in data.get("questions") or [] if isinstance(q, dict)]
-    return {
+    out = {
         "queued": sum(1 for q in qs if q.get("status") == "queued"),
         # An answer being applied is still open as far as the lifecycle goes: Test must not slip
         # through the gap between "applying" and "answered".
@@ -95,6 +95,9 @@ def summary(workflow_id: str) -> dict[str, Any] | None:
         "skipped": sum(1 for q in qs if q.get("status") == "skipped"),
         "total": len(qs),
     }
+    if data.get("stage"):
+        out["stage"] = data["stage"]   # "understand" while the pre-compile questions are being answered
+    return out
 
 
 def get_question(workflow_id: str, question_id: str) -> dict[str, Any] | None:

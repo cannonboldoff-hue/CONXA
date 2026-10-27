@@ -103,6 +103,7 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(b, "cmd_cancel_group_app_auth", lambda p, r: calls.append(("cancel_auth", p)) or {"ok": True})
     monkeypatch.setattr("handlers.workflow_flow._WATCH_INTERVAL_S", 0.01)
     monkeypatch.setattr(b, "_flow_start_compile", lambda wid: calls.append(("compile", wid)))
+    monkeypatch.setattr(b, "_flow_start_understand", lambda wid: calls.append(("understand", wid)))
     return b, reg, group, wf, calls, env_state, out
 
 

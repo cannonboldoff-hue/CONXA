@@ -65,6 +65,7 @@ from handlers.copilot import CopilotMixin  # noqa: E402
 from handlers.conversation import ConversationMixin  # noqa: E402
 from handlers.workflow_flow import WorkflowFlowMixin  # noqa: E402
 from handlers.compile_flow import CompileFlowMixin  # noqa: E402
+from handlers.understand_flow import UnderstandFlowMixin  # noqa: E402
 from handlers.test_flow import TestFlowMixin  # noqa: E402
 from handlers.app_graph import AppGraphMixin  # noqa: E402
 from conxa_core.progress import set_event_sink  # noqa: E402
@@ -154,6 +155,7 @@ class Backend(
     CopilotMixin,
     ConversationMixin,
     WorkflowFlowMixin,
+    UnderstandFlowMixin,
     CompileFlowMixin,
     TestFlowMixin,
     AppGraphMixin,

@@ -315,6 +315,9 @@ class CompileFlowMixin:
             clarify_store.save(workflow_id, {**data, "questions": questions})
             q = next((x for x in questions if x.get("status") == "open"), None)
         if q is None:
+            if data.get("stage") == "understand":
+                self._flow_after_understand(workflow_id, sink)   # last pre-compile answer: build it
+                return
             self._flow_post_summary(workflow_id, sink)
             return
         if q.get("kind") == "done_when":
@@ -433,6 +436,8 @@ class CompileFlowMixin:
         question = clarify_store.get_question(workflow_id, qid)
         if question is None:
             raise _CommandError("question_not_found", "That question isn’t available any more.")
+        if question.get("phase") == "pre_compile":
+            return self._pre_compile_answer(thread_id, card, question, action, body, sink)
         if card.get("state") not in ("open", "failed"):
             # A card stuck on "applying" after the app stopped mid-answer can be tried again once the
             # attempt is clearly dead; a live one (a double click) is still refused.

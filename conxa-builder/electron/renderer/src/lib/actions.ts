@@ -6,6 +6,7 @@ export const ACTION_INFO: Record<string, ActionInfo> = {
   sign_in: { label: 'Sign in', kind: 'flow', strip: true, primary: true },
   record: { label: 'Start recording', kind: 'flow', strip: true, primary: true },
   re_record: { label: 'Record again', kind: 'flow', strip: true },
+  retry_video: { label: 'Try again', kind: 'flow', strip: true, primary: true },
   compile: { label: 'Compile', kind: 'flow', strip: true, primary: true },
   answer_clarify: { label: 'Answer questions', kind: 'flow', strip: true, primary: true },
   test: { label: 'Test it', kind: 'flow', strip: true, primary: true },
