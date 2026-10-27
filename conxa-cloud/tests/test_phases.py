@@ -1258,13 +1258,12 @@ class PhaseTests(unittest.TestCase):
         self.assertNotIn("path", out)
         self.assertNotEqual(out, "click_path")
 
-    def test_compile_requires_source_session_for_vision_anchors(self) -> None:
+    def test_compile_requires_a_source_session(self) -> None:
         from conxa_compile.compiler.build import compile_skill_package
-        from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
         from conxa_compile.pipeline.run import run_pipeline
 
         evs = run_pipeline([_minimal_click_event()])
-        with self.assertRaises(VisionAnchorGenerationError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             compile_skill_package(
                 evs,
                 skill_id="x",
@@ -1272,66 +1271,7 @@ class PhaseTests(unittest.TestCase):
                 title="t",
                 version=1,
             )
-        self.assertEqual(ctx.exception.reason, "source_session_id_required")
-
-    def test_vision_llm_empty_response_aborts_compile(self) -> None:
-        # vision_llm_request_failed / vision_llm_empty_response are no longer recoverable:
-        # the router already retries and waits out provider cooldowns before giving up, so
-        # reaching this means every provider is genuinely unavailable. Compile must fail
-        # loudly (so the operator fixes the provider/keys) instead of silently degrading
-        # to keyword anchors.
-        from conxa_compile.compiler.build import compile_skill_package
-        from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
-        from conxa_compile.pipeline.run import run_pipeline
-
-        evs = run_pipeline([_minimal_click_event()])
-        data_dir, *patchers = _compile_with_vision_mocks("sess", evs, call_llm_return=None)
-        try:
-            with ExitStack() as stack:
-                for p in patchers:
-                    stack.enter_context(p)
-                with self.assertRaises(VisionAnchorGenerationError) as ctx:
-                    compile_skill_package(
-                        evs,
-                        skill_id="y",
-                        source_session_id="sess",
-                        title="t",
-                        version=1,
-                    )
-                self.assertEqual(ctx.exception.reason, "vision_llm_empty_response")
-        finally:
-            shutil.rmtree(data_dir, ignore_errors=True)
-
-    def test_vision_anchor_fallback_on_exhaustion_toggle_falls_back_instead(self) -> None:
-        # SKILL_VISION_ANCHOR_FALLBACK_ON_EXHAUSTION=true opts back into the old
-        # degrade-to-keyword-anchors behavior instead of hard-stopping the compile.
-        from conxa_core.config import settings
-        from conxa_compile.compiler.build import compile_skill_package
-        from conxa_compile.pipeline.run import run_pipeline
-
-        evs = run_pipeline([_minimal_click_event()])
-        data_dir, *patchers = _compile_with_vision_mocks("sess", evs, call_llm_return=None)
-        try:
-            with ExitStack() as stack:
-                for p in patchers:
-                    stack.enter_context(p)
-                stack.enter_context(patch.object(settings, "vision_anchor_fallback_on_exhaustion", True))
-                pkg = compile_skill_package(
-                    evs,
-                    skill_id="y",
-                    source_session_id="sess",
-                    title="t",
-                    version=1,
-                )
-                step = pkg.skills[0].steps[1].model_dump()
-                warning = ((step.get("confidence_protocol") or {}).get("compile_warnings") or {}).get(
-                    "vision_anchor_fallback"
-                )
-                self.assertIsInstance(warning, dict)
-                self.assertEqual(warning.get("reason"), "vision_llm_empty_response")
-                self.assertEqual(warning.get("fallback"), "deterministic_anchors")
-        finally:
-            shutil.rmtree(data_dir, ignore_errors=True)
+        self.assertEqual(str(ctx.exception), "source_session_id_required")
 
     def test_consequential_click_with_zero_evidence_flags_weak_evidence(self) -> None:
         # A commit-style click ("Submit") with no wait_for evidence and no recorded DOM/dom_diff
@@ -1597,3 +1537,29 @@ class PhaseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompileWithoutFramesTests(unittest.TestCase):
+    def test_compile_makes_no_vision_call_and_needs_no_screenshot(self) -> None:
+        """Understanding-first pipeline: the compile cuts no frames and asks no model to look at the
+        page. Anchors come from the recorded DOM; a recording with no screenshots compiles normally."""
+        from conxa_compile.compiler.build import compile_skill_package
+        from conxa_compile.pipeline.run import run_pipeline
+
+        evs = run_pipeline([_minimal_click_event()])
+        data_dir = Path(tempfile.mkdtemp())
+        try:
+            with patch.object(settings, "data_dir", data_dir), \
+                    patch("conxa_core.llm._router", _FakeRouter()), \
+                    patch("conxa_compile.llm.anchor_vision_llm.call_llm",
+                          side_effect=AssertionError("no vision call may be made")) as vision, \
+                    patch("conxa_compile.llm.workflow_review.infer_workflow_review", return_value=None):
+                pkg = compile_skill_package(evs, skill_id="nf", source_session_id="sess", title="t", version=1)
+            vision.assert_not_called()
+            step = pkg.skills[0].steps[1]
+            self.assertTrue(step.source_event is None or isinstance(step.source_event, int))
+            visual = step.signals.get("visual") or {}
+            self.assertEqual(set(visual), {"bbox", "viewport", "scroll_position"})      # no screenshot paths, no frames
+            self.assertNotIn("vision_anchor_fallback", (step.confidence_protocol.get("compile_warnings") or {}))
+        finally:
+            shutil.rmtree(data_dir, ignore_errors=True)

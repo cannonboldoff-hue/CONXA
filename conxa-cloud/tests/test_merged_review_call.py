@@ -34,7 +34,7 @@ def _doc(url="https://github.com/github/gitignore"):
 def _review_text(**extra):
     payload = {"input": {"steps": [{"key": "s0"}], "page_urls": [], "sibling_bindings": {}, **extra}}
     messages = _openai_messages_for_task("workflow_review", payload)
-    return messages[0]["content"], messages[1]["content"][0]["text"]
+    return messages[0]["content"], messages[1]["content"]       # text only: a plain JSON string
 
 
 def test_candidates_and_loops_are_sent_only_when_asked_for():

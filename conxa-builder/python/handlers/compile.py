@@ -26,9 +26,8 @@ class CompileMixin:
         from conxa_compile.pipeline.run import run_pipeline
         from conxa_core.storage.json_store import read_skill, write_skill
         from conxa_core.storage.workflow_store import get_workflow, save_workflow
-        from conxa_core.storage.session_events import read_session_events, session_events_path
+        from conxa_core.storage.session_events import read_session_events
         from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, QuotaExceeded
-        from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
         registry = _recorder_registry
 
         session_id = _safe_id(payload.get("session_id"), "session_id")
@@ -82,28 +81,7 @@ class CompileMixin:
                     _log("Waiting for recording to finalize…")
                     thread.join(timeout=30)
                     if thread.is_alive():
-                        _log("Recording finalize still running after 30 s — compiling without frames.", level="warn")
-
-            session_dir = session_events_path(session_id).parent
-            if (session_dir / "recording.webm").is_file():
-                from conxa_compile.recorder.frame_extractor import extract_frames_for_session
-
-                _log("Extracting frames from the recording…")
-
-                def _on_frame_progress(done: int, total: int) -> None:
-                    _log(f"Extracted frames for event {done}/{total}.")
-
-                try:
-                    _, frame_failures = extract_frames_for_session(
-                        session_dir, on_progress=_on_frame_progress
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    # Session-wide extraction problem (missing ffmpeg, corrupt video, etc.) —
-                    # compile continues with DOM-only anchors rather than blocking.
-                    _log(f"Warning: frame_extraction_error: {exc!s}", level="warn")
-                else:
-                    for idx, message in frame_failures:
-                        _log(f"Warning: frame_extraction_error: event {idx + 1}: {message}", level="warn")
+                        _log("Recording finalize still running after 30 s — compiling anyway.", level="warn")
 
             _log("Reading normalized events from disk…")
             raw = read_session_events(session_id)
@@ -127,7 +105,6 @@ class CompileMixin:
                 raise
 
         self._install_proxy_router(sink=sink, usage_class=usage_class)
-        self._apply_vision_fallback_entitlement()
         _log(f"Running normalization pipeline on {len(raw)} events…")
         try:
             normalized = run_pipeline(raw)
@@ -187,25 +164,6 @@ class CompileMixin:
             if reservation_id and reservation_committed:
                 self._refund_compile_credit(reservation_id)
             raise _CommandError("cloud_unreachable", str(exc)) from exc
-        except VisionAnchorGenerationError as exc:
-            _log(str(exc), level="error")
-            sink({"phase": "compile_error", "message": str(exc), "failed_step": "selectors"})
-            # Only the infra-class reason (the proxy call itself failed, after the
-            # client's own retries and the router's own pool failover) is worth a
-            # refund. vision_llm_empty_response / vision_llm_invalid_anchor_sentence
-            # are content-quality outcomes — the LLM answered, just not usefully —
-            # not something a refund is meant to cover.
-            if exc.reason == "vision_llm_request_failed" and reservation_id and reservation_committed:
-                self._refund_compile_credit(reservation_id)
-            # Wrap into _CommandError (matching the cloud_unreachable pattern just
-            # above) instead of a bare raise: VisionAnchorGenerationError isn't a
-            # _CommandError, so backend.py's dispatcher used to fall through to its
-            # generic "internal_error" arm — which the renderer shows as "Something
-            # went wrong inside the app. Please try again." — even though the
-            # specific, correct message (errorMessages.ts, code
-            # vision_anchors_failed) already existed and exc.api_detail() already
-            # knew to ask for it.
-            raise _CommandError(exc.api_detail()["code"], str(exc)) from exc
         except Exception as exc:
             _log(str(exc), level="error")
             sink({"phase": "compile_error", "message": str(exc), "failed_step": "selectors"})

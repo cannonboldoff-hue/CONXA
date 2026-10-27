@@ -1,0 +1,641 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Understanding-First Pipeline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one architecture sheet. Header, the two-track drawing, then each part in order: what goes away, track A, track B, the merge, the model call, the question round, what the package carries, every stage, rules affected, limits. */
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --ink: #18202c;
+    --ink-2: #4e5869;
+    --line: #d3d8e0;
+    --code: #3b6ea8;   /* deterministic code */
+    --llm: #b8661a;    /* model, advisory */
+    --you: #11905c;    /* the person, authoritative */
+    --video: #7a58c2;  /* Pegasus video model */
+    --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121519; --surface: #1a1e24; --ink: #e6e9ee; --ink-2: #a3acb9; --line: #343b46;
+      --code: #5f95dc; --llm: #c97b2f; --you: #2fa070; --video: #9a7ce0; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121519; --surface: #1a1e24; --ink: #e6e9ee; --ink-2: #a3acb9; --line: #343b46;
+    --code: #5f95dc; --llm: #c97b2f; --you: #2fa070; --video: #9a7ce0; color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+  .wrap {
+    max-width: 1280px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 40px 64px;
+    display: grid; gap: 44px;
+  }
+  header { display: grid; gap: 10px; max-width: 74ch; }
+  .eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+  h1 { font: 700 clamp(28px, 4vw, 42px)/1.1 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  h2 { font: 600 21px/1.2 var(--f-display); margin: 0; text-wrap: balance; }
+  h3 { font: 600 15px/1.3 var(--f-body); margin: 0; }
+  p { margin: 0; }
+  .lede { color: var(--ink-2); font-size: 16px; }
+  code { font: 13px var(--f-mono); }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13px; }
+
+  section { display: grid; gap: 14px; min-width: 0; }
+  .prose { display: grid; gap: 10px; max-width: 78ch; }
+  .sechead { display: grid; gap: 6px; max-width: 78ch; }
+  .sechead p { color: var(--ink-2); }
+
+  /* Architecture sheet */
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+  .scroll { overflow-x: auto; }
+  .scroll svg { display: block; width: 100%; min-width: 1040px; height: auto; color: var(--ink-2); }
+  figure { margin: 0; display: grid; gap: 14px; }
+  figcaption { color: var(--ink-2); font-size: 14px; max-width: 82ch; }
+
+  .lane.a { fill: color-mix(in oklab, var(--video) 5%, var(--surface)); stroke: color-mix(in oklab, var(--video) 30%, var(--surface)); }
+  .lane.b { fill: color-mix(in oklab, var(--code) 5%, var(--surface)); stroke: color-mix(in oklab, var(--code) 30%, var(--surface)); }
+  .box { stroke-width: 1.5; }
+  .box.code  { stroke: var(--code);  fill: color-mix(in oklab, var(--code) 8%, var(--surface)); }
+  .box.llm   { stroke: var(--llm);   fill: color-mix(in oklab, var(--llm) 9%, var(--surface)); }
+  .box.you   { stroke: var(--you);   fill: color-mix(in oklab, var(--you) 9%, var(--surface)); }
+  .box.video { stroke: var(--video); fill: color-mix(in oklab, var(--video) 10%, var(--surface)); stroke-width: 2; }
+  .box.end   { stroke: var(--ink); fill: var(--surface); }
+  .dot.code { fill: var(--code); } .dot.llm { fill: var(--llm); } .dot.you { fill: var(--you); } .dot.video { fill: var(--video); }
+  .t-title { font: 600 14px var(--f-body); fill: var(--ink); }
+  .t-sub { font: 400 12px var(--f-body); fill: var(--ink-2); }
+  .t-kind { font: 500 10.5px var(--f-mono); fill: var(--ink-2); letter-spacing: .04em; text-transform: uppercase; }
+  .t-lane { font: 500 11px var(--f-mono); fill: var(--ink-2); letter-spacing: .06em; text-transform: uppercase; }
+  .t-edge { font: 500 11px var(--f-mono); fill: var(--ink-2); }
+  .edge { fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .edge.dashed { stroke-dasharray: 5 4; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--ink-2); list-style: none; margin: 0; padding: 0; }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid; flex: none; }
+  .sw.code { border-color: var(--code); background: color-mix(in oklab, var(--code) 12%, var(--surface)); }
+  .sw.llm { border-color: var(--llm); background: color-mix(in oklab, var(--llm) 12%, var(--surface)); }
+  .sw.you { border-color: var(--you); background: color-mix(in oklab, var(--you) 12%, var(--surface)); }
+  .sw.video { border-color: var(--video); border-width: 2px; background: color-mix(in oklab, var(--video) 14%, var(--surface)); }
+  .sw.dash { width: 22px; height: 0; border: 0; border-top: 1.5px dashed var(--ink-2); border-radius: 0; }
+
+  /* Tables */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font: 500 12px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+  td:first-child { font-weight: 600; }
+  .nowrap { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+  .kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--ink-2); }
+  .kind::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .k-code { --c: var(--code); } .k-llm { --c: var(--llm); } .k-you { --c: var(--you); } .k-video { --c: var(--video); }
+  td .sub { display: block; color: var(--ink-2); font-size: 13px; font-weight: 400; }
+
+  /* Panels */
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+  .panel.a { border-top: 3px solid var(--video); }
+  .panel.b { border-top: 3px solid var(--code); }
+  .tag { justify-self: start; font: 500 11px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+  pre { margin: 0; overflow-x: auto; font: 12.5px/1.55 var(--f-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
+  .short { font-size: 15px; border-left: 3px solid var(--you); padding-left: 12px; }
+  .walk { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+  .walk li { display: grid; grid-template-columns: 96px 1fr; gap: 10px; }
+  .walk .num { color: var(--ink-2); }
+  .steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; }
+  .steps li::marker { color: var(--ink-2); font-family: var(--f-mono); }
+  .rules { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 80ch; }
+  .rules li::marker { color: var(--ink-2); font-family: var(--f-mono); }
+
+  .limits { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+  .limit { border-top: 2px solid var(--line); padding-top: 10px; display: grid; gap: 4px; }
+  .limit p { font-size: 14px; color: var(--ink-2); }
+
+  footer { color: var(--ink-2); font-size: 13px; }
+  @media (max-width: 520px) { .walk li { grid-template-columns: 1fr; gap: 0; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Build Studio · architecture proposal v4 · not built</span>
+    <h1>Two tracks in, one workflow out</h1>
+    <p class="lede">A recording is processed along two tracks at the same time. Track A shrinks the video, cuts its idle stretches, blurs what was typed, marks every click, and sends it to Pegasus once. Pegasus says what happened, why, and what the screen looked like. Track B processes the browser's own signals: exact clicks, elements, timings and page changes. The two are lined up in order on one clock, and one model call turns the result into an understanding of the task and a single round of questions. Then come the answers, compile, and the test. Studio no longer cuts frames, stores screenshots in the skill package, or asks a model to write each step's intent.</p>
+  </header>
+
+  <section aria-labelledby="h-arch">
+    <h2 id="h-arch">The architecture</h2>
+    <div class="sheet">
+      <figure>
+        <div class="scroll">
+          <svg viewBox="0 0 1280 800" role="img" aria-label="Architecture. A recording splits into two parallel tracks. Track A, video: combine tab videos, cut idle time, shrink to 720p, blur typed values and draw click rings, keeping a splice map; send to Pegasus once for segments, with the result cached; extract video signals. Track B, browser: normalize events, clean and fold them, extract browser signals including IdentityBundle. Both feed a merge step that lines them up in order on one clock. The merged timeline goes to one model call that builds the understanding, the summaries and one ranked round of questions with pre-filled best guesses. The person confirms, answers are stored as decisions, and the workflow compiles and replays them. Only questions about steps the compiler added on its own are asked afterwards, those answers are applied, and the workflow is tested, then approved. A failed test leads back to a follow-up question.">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <!-- Lanes -->
+            <rect class="lane a" x="250" y="100" width="760" height="144" rx="8"/>
+            <text class="t-lane" x="264" y="117">Track A · video signals</text>
+            <rect class="lane b" x="250" y="258" width="760" height="144" rx="8"/>
+            <text class="t-lane" x="264" y="275">Track B · browser signals</text>
+            <text class="t-edge" x="630" y="255" text-anchor="middle">A and B run in parallel</text>
+
+            <!-- Record -->
+            <g>
+              <rect class="box code" x="30" y="200" width="170" height="110" rx="6"/>
+              <circle class="dot code" cx="46" cy="218" r="4"/><text class="t-kind" x="56" y="222">recorder</text>
+              <text class="t-title" x="46" y="246">Record</text>
+              <text class="t-sub" x="46" y="266">one browser session</text>
+              <text class="t-sub" x="46" y="282">→ tab videos</text>
+              <text class="t-sub" x="46" y="298">→ events, DOM, a11y</text>
+            </g>
+
+            <!-- Track A: y 124–228 -->
+            <g>
+              <rect class="box code" x="270" y="124" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="286" cy="142" r="4"/><text class="t-kind" x="296" y="146">code · ffmpeg</text>
+              <text class="t-title" x="286" y="170">A1 Prepare video</text>
+              <text class="t-sub" x="286" y="190">stitch tabs, cut idle time</text>
+              <text class="t-sub" x="286" y="206">720p, blur, click rings</text>
+              <text class="t-sub" x="286" y="222">→ 1 video + splice map</text>
+            </g>
+            <g>
+              <rect class="box video" x="530" y="124" width="200" height="104" rx="6"/>
+              <circle class="dot video" cx="546" cy="142" r="4"/><text class="t-kind" x="556" y="146">pegasus</text>
+              <text class="t-title" x="546" y="170">A2 Pegasus watches</text>
+              <text class="t-sub" x="546" y="190">segments only</text>
+              <text class="t-sub" x="546" y="206">1 async request, cached</text>
+            </g>
+            <g>
+              <rect class="box code" x="790" y="124" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="806" cy="142" r="4"/><text class="t-kind" x="816" y="146">code</text>
+              <text class="t-title" x="806" y="170">A3 Video signals</text>
+              <text class="t-sub" x="806" y="190">intent, purpose, target</text>
+              <text class="t-sub" x="806" y="206">screen before / after</text>
+              <text class="t-sub" x="806" y="222">off-page moments</text>
+            </g>
+
+            <!-- Track B: y 282–386 -->
+            <g>
+              <rect class="box code" x="270" y="282" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="286" cy="300" r="4"/><text class="t-kind" x="296" y="304">code</text>
+              <text class="t-title" x="286" y="328">B1 Normalize</text>
+              <text class="t-sub" x="286" y="348">normalize, dedupe, enrich</text>
+              <text class="t-sub" x="286" y="364">existing pipeline</text>
+            </g>
+            <g>
+              <rect class="box code" x="530" y="282" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="546" cy="300" r="4"/><text class="t-kind" x="556" y="304">code</text>
+              <text class="t-title" x="546" y="328">B2 Clean + fold</text>
+              <text class="t-sub" x="546" y="348">drop noise, fold redirects</text>
+              <text class="t-sub" x="546" y="364">insert tab markers</text>
+            </g>
+            <g>
+              <rect class="box code" x="790" y="282" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="806" cy="300" r="4"/><text class="t-kind" x="816" y="304">code</text>
+              <text class="t-title" x="806" y="328">B3 Browser signals</text>
+              <text class="t-sub" x="806" y="348">IdentityBundle per element</text>
+              <text class="t-sub" x="806" y="364">page changes, downloads</text>
+              <text class="t-sub" x="806" y="380">dialogs, ms timings</text>
+            </g>
+
+            <!-- Merge -->
+            <g>
+              <rect class="box code" x="1060" y="124" width="190" height="262" rx="6"/>
+              <circle class="dot code" cx="1076" cy="142" r="4"/><text class="t-kind" x="1086" y="146">code</text>
+              <text class="t-title" x="1076" y="170">M Merge</text>
+              <text class="t-sub" x="1076" y="194">one clock via splice map</text>
+              <text class="t-sub" x="1076" y="214">order-keeping alignment</text>
+              <text class="t-sub" x="1076" y="234">off-page + cut waits</text>
+              <text class="t-sub" x="1076" y="254">events Pegasus missed</text>
+              <text class="t-sub" x="1076" y="274">values seen in both</text>
+              <text class="t-sub" x="1076" y="306">→ merged timeline</text>
+            </g>
+
+            <!-- Row C (right to left): y 470–574 -->
+            <text class="t-kind" x="30" y="516">Understand</text>
+            <text class="t-kind" x="30" y="532">and ask</text>
+            <g>
+              <rect class="box llm" x="1060" y="470" width="190" height="104" rx="6"/>
+              <circle class="dot llm" cx="1076" cy="488" r="4"/><text class="t-kind" x="1086" y="492">model · 1 text call</text>
+              <text class="t-title" x="1076" y="516">U Understand</text>
+              <text class="t-sub" x="1076" y="536">goal, phases, values</text>
+              <text class="t-sub" x="1076" y="552">success check, gaps</text>
+              <text class="t-sub" x="1076" y="568">short + detailed summary</text>
+            </g>
+            <g>
+              <rect class="box you" x="790" y="470" width="200" height="104" rx="6"/>
+              <circle class="dot you" cx="806" cy="488" r="4"/><text class="t-kind" x="816" y="492">you · one round</text>
+              <text class="t-title" x="806" y="516">Q1 Confirm + ask</text>
+              <text class="t-sub" x="806" y="536">ranked, best guess filled</text>
+              <text class="t-sub" x="806" y="552">values, uploads, popups</text>
+              <text class="t-sub" x="806" y="568">success check</text>
+            </g>
+            <g>
+              <rect class="box code" x="530" y="470" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="546" cy="488" r="4"/><text class="t-kind" x="556" y="492">code</text>
+              <text class="t-title" x="546" y="516">I1 Incorporate</text>
+              <text class="t-sub" x="546" y="536">answers → decisions</text>
+              <text class="t-sub" x="546" y="552">stored, not applied</text>
+            </g>
+            <g>
+              <rect class="box code" x="270" y="470" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="286" cy="488" r="4"/><text class="t-kind" x="296" y="492">compiler</text>
+              <text class="t-title" x="286" y="516">C Compile</text>
+              <text class="t-sub" x="286" y="536">steps from IdentityBundle</text>
+              <text class="t-sub" x="286" y="552">intent from Pegasus</text>
+              <text class="t-sub" x="286" y="568">replay decisions</text>
+            </g>
+
+            <!-- Row D (left to right): y 650–754 -->
+            <text class="t-kind" x="30" y="696">Build</text>
+            <text class="t-kind" x="30" y="712">and check</text>
+            <g>
+              <rect class="box you" x="270" y="650" width="200" height="104" rx="6"/>
+              <circle class="dot you" cx="286" cy="668" r="4"/><text class="t-kind" x="296" y="672">you · only if needed</text>
+              <text class="t-title" x="286" y="696">Q2 Leftover asks</text>
+              <text class="t-sub" x="286" y="716">steps the compiler</text>
+              <text class="t-sub" x="286" y="732">added on its own</text>
+            </g>
+            <g>
+              <rect class="box code" x="530" y="650" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="546" cy="668" r="4"/><text class="t-kind" x="556" y="672">code</text>
+              <text class="t-title" x="546" y="696">I2 Incorporate</text>
+              <text class="t-sub" x="546" y="716">safe, gated edits</text>
+              <text class="t-sub" x="546" y="732">applied to the skill</text>
+            </g>
+            <g>
+              <rect class="box code" x="790" y="650" width="200" height="104" rx="6"/>
+              <circle class="dot code" cx="806" cy="668" r="4"/><text class="t-kind" x="816" y="672">runtime</text>
+              <text class="t-title" x="806" y="696">T Test</text>
+              <text class="t-sub" x="806" y="716">runs the workflow</text>
+              <text class="t-sub" x="806" y="732">unlocks only now</text>
+            </g>
+            <g>
+              <rect class="box end" x="1060" y="650" width="190" height="104" rx="52"/>
+              <text class="t-title" x="1155" y="698" text-anchor="middle">Approve</text>
+              <text class="t-sub" x="1155" y="718" text-anchor="middle">workflow delivered</text>
+            </g>
+
+            <!-- Record splits into both tracks -->
+            <path class="edge" d="M200,234 H236 V176 H268" marker-end="url(#arrow)"/>
+            <path class="edge" d="M200,276 H236 V334 H268" marker-end="url(#arrow)"/>
+
+            <!-- Track A edges -->
+            <line class="edge" x1="470" y1="176" x2="528" y2="176" marker-end="url(#arrow)"/>
+            <line class="edge" x1="730" y1="176" x2="788" y2="176" marker-end="url(#arrow)"/>
+            <line class="edge" x1="990" y1="176" x2="1058" y2="176" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="1024" y="168" text-anchor="middle">video</text>
+
+            <!-- Track B edges -->
+            <line class="edge" x1="470" y1="334" x2="528" y2="334" marker-end="url(#arrow)"/>
+            <line class="edge" x1="730" y1="334" x2="788" y2="334" marker-end="url(#arrow)"/>
+            <line class="edge" x1="990" y1="334" x2="1058" y2="334" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="1024" y="326" text-anchor="middle">browser</text>
+
+            <!-- Merge to understanding -->
+            <line class="edge" x1="1155" y1="386" x2="1155" y2="468" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="1145" y="432" text-anchor="end">merged timeline</text>
+
+            <!-- Row C edges -->
+            <line class="edge" x1="1060" y1="522" x2="992" y2="522" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="1026" y="514" text-anchor="middle">draft</text>
+            <line class="edge" x1="790" y1="522" x2="732" y2="522" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="761" y="514" text-anchor="middle">answers</text>
+            <line class="edge" x1="530" y1="522" x2="472" y2="522" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="501" y="514" text-anchor="middle">stored</text>
+
+            <!-- Compile down to round 2 -->
+            <line class="edge" x1="370" y1="574" x2="370" y2="648" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="380" y="616">skill</text>
+
+            <!-- Row D edges -->
+            <line class="edge" x1="470" y1="702" x2="528" y2="702" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="499" y="694" text-anchor="middle">answers</text>
+            <line class="edge" x1="730" y1="702" x2="788" y2="702" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="759" y="694" text-anchor="middle">applied</text>
+            <line class="edge" x1="990" y1="702" x2="1058" y2="702" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="1024" y="694" text-anchor="middle">passes</text>
+
+            <!-- Test failure loops back to a follow-up question -->
+            <path class="edge dashed" d="M890,754 V778 H370 V756" marker-end="url(#arrow)"/>
+            <text class="t-edge" x="630" y="772" text-anchor="middle">test fails: follow-up question</text>
+          </svg>
+        </div>
+        <figcaption>Tracks A and B start the moment recording stops and run side by side. Neither waits for the other until the merge. Pegasus says what happened, why, and what the screen showed. The browser says exactly when, on which element, and with what value. Everything after the merge happens in order: understand, ask once, store the answers, compile, test. A second question only appears for a step the compiler added on its own. The compiler is still the only thing that writes steps and selectors.</figcaption>
+      </figure>
+      <ul class="legend" aria-label="Legend">
+        <li><span class="sw code"></span>Deterministic code</li>
+        <li><span class="sw video"></span>Pegasus video model</li>
+        <li><span class="sw llm"></span>Language model, checked in code</li>
+        <li><span class="sw you"></span>You decide</li>
+        <li><span class="sw dash"></span>Loop back on a failed test</li>
+      </ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-removed">
+    <div class="sechead">
+      <h2 id="h-removed">What goes away</h2>
+      <p>Pegasus has already watched the whole video, so three jobs done with frames and per-step model calls today are no longer needed.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Removed</th><th>Used for today</th><th>Replaced by</th><th>What to watch</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Cutting frames from the video<span class="sub">5 per event, at compile time</span></td>
+            <td>Vision anchors and images for the review call</td>
+            <td>Nothing. Pegasus works from the video itself.</td>
+            <td>The Human Edit "draw a new region" fix needs one picture. Cut that single frame on demand from the local video, only when a person uses that fix.</td>
+          </tr>
+          <tr>
+            <td>A vision model choosing frames and visual anchors</td>
+            <td>Choosing the best of 5 frames for each step, and finding visual neighbours of an element</td>
+            <td>IdentityBundle signals from the page, plus Pegasus's description of the visible target</td>
+            <td>Elements with no text or label, such as an icon-only button or a canvas, lose their visual anchor. Measure this in the trial.</td>
+          </tr>
+          <tr>
+            <td>A model writing each step's intent</td>
+            <td>The intent graph: per-step intent and phase labels</td>
+            <td>Pegasus segment fields <code>intent</code> and <code>purpose</code>, with phases from the understanding call</td>
+            <td>An event Pegasus missed falls back to the recorder's own heuristic intent.</td>
+          </tr>
+          <tr>
+            <td>Screenshots in the skill package<span class="sub"><code>visuals/</code>, <code>visual_ref</code> in recovery.json</span></td>
+            <td>The reference picture handed to the recovery agent when a run gets stuck</td>
+            <td>Pegasus's text for that step, stored in recovery.json: target, screen before, screen after, purpose</td>
+            <td>The agent gets words instead of a picture. The runtime already handles a missing image (it returns none and adapts its message), so older packs keep working.</td>
+          </tr>
+          <tr>
+            <td>Images in the understanding call</td>
+            <td>Up to one image per step</td>
+            <td>A text-only call over the merged timeline</td>
+            <td>Cheaper and faster. It relies on Pegasus's screen descriptions being accurate.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tracks">
+    <div class="sechead">
+      <h2 id="h-tracks">The two tracks</h2>
+      <p>Both tracks start as soon as you stop recording. Track B finishes in seconds on your machine. Track A waits on Pegasus, so the merge starts once both are done.</p>
+    </div>
+    <div class="pair">
+      <div class="panel a">
+        <span class="tag">Track A · video</span>
+        <ol class="steps">
+          <li><strong>A1 Prepare video.</strong> Stitch the tab videos into one, cut idle stretches, shrink it, blur typed values and draw a ring at each click. All of it is driven by the recorder's own event times and positions, and every cut and join goes in the splice map. Details below.</li>
+          <li><strong>A2 Pegasus watches.</strong> First look in the cache. On a miss, upload through the Conxa cloud, which holds the TwelveLabs key, meters the call, and deletes the uploaded video afterwards. One async request runs on it: time-based segments. There is no separate walkthrough request, because the understanding call writes both summaries.</li>
+          <li><strong>A3 Video signals.</strong> Code reads the segments into rows: time range, action kind, visible target, intent, purpose, screen before, screen after, and whether it happened outside the page.</li>
+        </ol>
+      </div>
+      <div class="panel b">
+        <span class="tag">Track B · browser</span>
+        <ol class="steps">
+          <li><strong>B1 Normalize.</strong> The existing event pipeline: normalize, dedupe, enrich the recorded events.</li>
+          <li><strong>B2 Clean and fold.</strong> Existing compiler preparation: drop noise, fold a redirect into the click that caused it, add tab-open and tab-switch markers.</li>
+          <li><strong>B3 Browser signals.</strong> For each event: the element's IdentityBundle (role, test id, text, relations, stable hash), its frame and tab chain, the typed or chosen value, page changes, downloads, dialogs, popups, and the exact millisecond time. No model is involved.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="pair">
+      <div class="panel">
+        <span class="tag">A1 · preparing the video</span>
+        <ol class="steps">
+          <li><strong>Stitch.</strong> Join the tab videos in the order they happened, using whichever tab was in front. Scale tabs recorded at different sizes to one size. Pad a video under 4 seconds by holding its last frame.</li>
+          <li><strong>Cut idle time.</strong> Any stretch over 5 seconds with no browser event keeps its first and last second, so Pegasus still sees the spinner. The middle is cut, and the splice map records where and how long.</li>
+          <li><strong>Shrink.</strong> Re-encode at 720p and 10 frames a second. That is enough to read buttons and text, and far less to upload. Check TwelveLabs' minimum resolution and frame rate before building.</li>
+          <li><strong>Blur.</strong> Password fields are always blurred, from the first keystroke until the page changes. A company setting, "blur all typed values", does the same for every field typed into. The boxes come from the recorder's page-level positions, padded by 8 px.</li>
+          <li><strong>Click rings.</strong> Draw a ring for 0.6 seconds at each click's recorded position and time. Video models notice a click far more reliably when they can see it. The rings go into the copy sent to Pegasus only, never into the page during recording, so page snapshots stay clean.</li>
+          <li><strong>Fingerprint.</strong> The SHA-256 of the prepared video is the cache key. Pegasus's result is saved beside the session. A recompile, an edit or a re-answered question reuses it. Only a new recording, or a change to the blur setting, calls Pegasus again.</li>
+        </ol>
+      </div>
+      <div class="panel">
+        <span class="tag">A2 · the one request · segments</span>
+        <pre><code>{
+  "model_name": "pegasus1.6",
+  "analysis_mode": "time_based_metadata",
+  "response_format": {
+    "type": "segment_definitions",
+    "segment_definitions": [{
+      "id": "ui_action",
+      "description": "One thing the person did on screen, or one thing the screen did by itself",
+      "fields": [
+        { "name": "action_kind", "enum": ["click", "type", "select",
+          "navigate", "scroll", "upload", "download", "dialog", "wait"] },
+        { "name": "visible_target" },
+        { "name": "intent" },
+        { "name": "purpose" },
+        { "name": "screen_before" },
+        { "name": "screen_after" },
+        { "name": "outside_page" }
+      ]
+    }]
+  }
+}</code></pre>
+        <p class="muted small">The shape follows the TwelveLabs docs. Check the exact field syntax against the API reference before building.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-merge">
+    <div class="sechead">
+      <h2 id="h-merge">M: merging the tracks</h2>
+      <p>The merge is plain code. It decides nothing about meaning. It only puts each video row next to the browser event it describes.</p>
+    </div>
+    <ol class="rules">
+      <li><strong>One clock.</strong> A Pegasus time on the combined video goes back through the splice map to a tab and a wall-clock time. A browser event's time is its tab video's <code>start_wall_ms</code> plus its <code>timestamp_ms</code>.</li>
+      <li><strong>Cuts become waits.</strong> Each idle stretch cut in A1 becomes an off-page observation: a long wait, with its real length from the splice map.</li>
+      <li><strong>Split at tab switches.</strong> A segment that runs across a tab switch is split there, so each half belongs to one tab.</li>
+      <li><strong>Line up in order.</strong> Both lists already run in time order, so they are lined up the way a diff tool lines up two files: one pass that never reorders either list. Pairing an event with a segment costs more the further the event sits outside the segment, with 1 second of slack because Pegasus rounds to whole seconds, and more again when <code>action_kind</code> differs. Leaving an event or a segment unpaired has a fixed cost. One segment may take several events, such as typing and then pressing Enter. The lowest total cost wins. Two clicks in the same second can't swap, because order is never broken.</li>
+      <li><strong>Off-page observation.</strong> A segment with no event is kept as an observation, such as a native dialog, the download bar or a short wait.</li>
+      <li><strong>Pegasus missed it.</strong> An event with no segment is kept and flagged. The browser always wins, because it is the record of what actually happened.</li>
+      <li><strong>Values seen in both.</strong> A typed or clicked value that also appears in Pegasus's target text is marked, which helps the model decide whether it is fixed or changes each run.</li>
+    </ol>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Pegasus segment</th><th>Browser event</th><th>Merged row</th></tr></thead>
+        <tbody>
+          <tr><td class="muted">none</td><td>#4 scroll at <span class="num">4.901 s</span></td><td>Pegasus missed it. Heuristic intent.</td></tr>
+          <tr><td class="num">00:05–00:06</td><td class="muted">none</td><td>Off-page observation: wait while the list loads.</td></tr>
+          <tr><td class="num">00:07–00:09</td><td>#6 type “INV-20931” at <span class="num">7.412 s</span></td><td>Matched. Intent “find the invoice”, value seen in both.</td></tr>
+          <tr><td class="num">00:10–00:11</td><td>#7 click row at <span class="num">10.120 s</span>, #8 click “Open” at <span class="num">10.640 s</span></td><td>Both matched to one segment, kept in recorded order.</td></tr>
+          <tr><td class="num">00:12–00:15</td><td>#9 click “Download PDF” at <span class="num">12.288 s</span>, plus a download event</td><td>Matched. Screen after: download bar shows the file.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small">Example rows, not a real recording.</p>
+  </section>
+
+  <section aria-labelledby="h-understand">
+    <div class="sechead">
+      <h2 id="h-understand">U: the one model call</h2>
+      <p>One text call reads the merged timeline and returns an understanding that code checks before anyone sees it. It never sees or writes a selector.</p>
+    </div>
+    <div class="pair">
+      <div class="panel">
+        <span class="tag">Takes in</span>
+        <ul class="steps">
+          <li>The merged timeline: each event with its matched segment, plus off-page observations and missed events</li>
+          <li>Anything you said in the chat before or during recording</li>
+          <li>Candidate values: page addresses, clicked items and typed text</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <span class="tag">Puts out · checked in code</span>
+        <ul class="steps">
+          <li>Goal, and the phases of the task</li>
+          <li>For each candidate value: fixed, changes each run, or unsure, and a name for it as an input</li>
+          <li>How success shows at the end</li>
+          <li>Gaps: anything Pegasus saw that the browser did not record, or the other way round</li>
+          <li>A short summary and a detailed summary. This is the only place summaries are written.</li>
+          <li>Every question that doesn't need a compiled step, each tied to a row of the timeline, ranked by how much a wrong guess would cost, with a best-guess answer where one is safe</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel">
+      <span class="tag">U output · summaries · example</span>
+      <h3>Short form, shown to you in Q1</h3>
+      <p class="short">Signs in to the billing portal, searches for an invoice by its number, opens it, and downloads the PDF.</p>
+      <h3>Detailed form, kept for the questions and the workflow's description</h3>
+      <ul class="walk">
+        <li><span class="num">00:00–00:04</span><span>Billing portal sign-in page; email and password entered, Sign in clicked.</span></li>
+        <li><span class="num">00:05–00:06</span><span>Invoices list loads; a spinner shows for about a second.</span></li>
+        <li><span class="num">00:07–00:09</span><span>Types INV-20931 into the search box; the list narrows to one row.</span></li>
+        <li><span class="num">00:10–00:11</span><span>Opens the row; invoice detail page shows the amount due.</span></li>
+        <li><span class="num">00:12–00:15</span><span>Clicks Download PDF; the browser's download bar shows the file.</span></li>
+      </ul>
+      <p class="muted small">Example only, not a real run.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-rounds">
+    <div class="sechead">
+      <h2 id="h-rounds">One round of questions</h2>
+      <p>Uploads, risky clicks, popups and the end screen are all in the browser signals before anything is built, so they are asked in the same round as the meaning of the task. After compile, a question appears only for a step the compiler added on its own. Test stays locked while any shown question is open.</p>
+    </div>
+    <ol class="rules">
+      <li><strong>Ranked.</strong> The top five questions show first. The rest sit under "More questions". A question left closed there keeps the recording as it is and changes nothing.</li>
+      <li><strong>Pre-filled.</strong> Each shown question carries the model's best guess, so most answers take one click. A guess counts only once you press Confirm.</li>
+      <li><strong>Never guessed for you.</strong> An answer that would approve a step that can't be undone, or pick an option in a decision popup, is never pre-filled. You choose it yourself.</li>
+    </ol>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Round</th><th>Asks</th><th>Answers become</th><th class="nowrap">Applied</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 → I1<span class="sub">before compile</span></td><td>Is this summary right? Which values change each run? Is this a branch or a one-off? What should the inputs be called? Is anything missing from the recording? Ask for the file each run or keep a fixed path? Confirm before a step that can't be undone? Always dismiss this popup? How do we know it worked? How to handle a decision popup?</td><td>Stored decisions. A confirmed summary becomes the workflow's description. "Something is missing" offers to record again.</td><td>By the compile, which replays them through today's safe edits</td></tr>
+          <tr><td>Q2 → I2<span class="sub">after compile, often none</span></td><td>Keep this popup-dismiss step or success check the compiler added on its own?</td><td>Gated edits to the compiled workflow</td><td>Straight away, all or nothing</td></tr>
+          <tr><td>Follow-up<span class="sub">after a failed test</span></td><td>Questions about the failure, such as a test value that differs from the recording</td><td>Gated edits, then test again</td><td>Straight away</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-package">
+    <div class="sechead">
+      <h2 id="h-package">What the skill package carries</h2>
+      <p>Steps and selectors are unchanged. The recovery hint for each step swaps its screenshot for Pegasus's words.</p>
+    </div>
+    <div class="pair">
+      <div class="panel">
+        <span class="tag">Today · recovery.json entry</span>
+        <pre><code>{
+  "step": 9,
+  "intent": "click_download",
+  "visual_ref": "visuals/Image_9.jpg"
+}</code></pre>
+      </div>
+      <div class="panel">
+        <span class="tag">Proposed · recovery.json entry</span>
+        <pre><code>{
+  "step": 9,
+  "intent": "download the invoice PDF",
+  "video_context": {
+    "visible_target": "Download PDF button, top right of the invoice",
+    "screen_before": "Invoice INV-20931 detail page",
+    "screen_after": "Browser download bar shows the PDF",
+    "purpose": "Save the invoice for the records"
+  }
+}</code></pre>
+        <p class="muted small">Field names are a proposal. The first two layers of recovery stay free of model calls. Only the agent hand-off reads this text.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-stages">
+    <h2 id="h-stages">Every stage</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Stage</th><th>Takes in</th><th>Puts out</th><th class="nowrap">Who</th></tr></thead>
+        <tbody>
+          <tr><td>Record</td><td>Your actions in the panel browser</td><td>One video per tab, events with millisecond times, page and accessibility snapshots</td><td><span class="kind k-code">Recorder</span></td></tr>
+          <tr><td>A1 Prepare video</td><td>Tab videos, recorded event times and positions, blur setting</td><td>One shrunk, blurred video with click rings, its splice map including cuts, and its fingerprint</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>A2 Pegasus watches</td><td>The prepared video, or a cached result</td><td>Timestamped segments, cached by fingerprint</td><td><span class="kind k-video">Pegasus</span></td></tr>
+          <tr><td>A3 Video signals</td><td>Segments</td><td>Video rows: target, intent, purpose, screen before and after, off-page flag</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>B1 Normalize</td><td>Recorded events</td><td>Normalized, deduplicated, enriched events</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>B2 Clean + fold</td><td>Normalized events</td><td>Clean events with tab markers</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>B3 Browser signals</td><td>Clean events, DOM and accessibility snapshots</td><td>IdentityBundle per element, values, page changes, downloads, dialogs, timings</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>M Merge</td><td>Video rows, browser signals, splice map</td><td>Merged timeline: rows lined up in order, off-page observations and cut waits, missed events, values seen in both</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>U Understand</td><td>Merged timeline, chat</td><td>Goal, phases, value verdicts, success check, gaps, both summaries, ranked questions with safe best guesses</td><td><span class="kind k-llm">Model</span></td></tr>
+          <tr><td>Q1 Confirm + ask</td><td>The understanding</td><td>A confirmed summary and every answer that doesn't need a compiled step</td><td><span class="kind k-you">You</span></td></tr>
+          <tr><td>I1 Incorporate</td><td>Answers</td><td>Stored decisions</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>C Compile</td><td>Browser signals, merged timeline, confirmed summary, decisions</td><td>The workflow: steps from IdentityBundle, intent from Pegasus, Pegasus text in recovery.json, decisions replayed</td><td><span class="kind k-code">Compiler</span></td></tr>
+          <tr><td>Q2 Leftover asks</td><td>Steps the compiler added on its own</td><td>Answers, often none</td><td><span class="kind k-you">You</span></td></tr>
+          <tr><td>I2 Incorporate</td><td>Answers</td><td>Gated edits applied</td><td><span class="kind k-code">Code</span></td></tr>
+          <tr><td>T Test</td><td>The finished workflow</td><td>A pass, or a follow-up question</td><td><span class="kind k-code">Runtime</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-rules">
+    <div class="sechead">
+      <h2 id="h-rules">Project rules this touches</h2>
+      <p>Each needs its wording updated in the project guide when this is built.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Rule</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>No model writes selectors on the main compile path</td><td>Still holds. Pegasus and the understanding call write meaning only. The rule's list of model uses changes: relational vision anchors and the intent graph go, and Pegasus intent is added.</td></tr>
+          <tr><td>The first recovery layer makes no model calls</td><td>Still holds. Pegasus runs once, while building the workflow, never during a run. Its text is read only at the agent hand-off.</td></tr>
+          <tr><td>The understanding check labels meaning; code does every rewrite</td><td>Widened. The check now also writes questions, best-guess answers and summaries, and compile waits for its answers as well as test. A best guess counts only once a person presses Confirm.</td></tr>
+          <tr><td>A popup that asks for a decision is never answered on anyone's behalf</td><td>Still holds. Its question moves before compile, but its answer is never pre-filled, so a person still picks the option.</td></tr>
+          <tr><td>The cloud does not compile or execute</td><td>Still holds. The cloud passes the video to Pegasus and returns the result; compile stays on your machine.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">Limits to plan around</h2>
+    <div class="limits">
+      <div class="limit"><h3>Pegasus timing is coarse</h3><p>Whole seconds, in segments at least about 2 seconds long. The merge keeps the browser's order and uses Pegasus only for meaning, so coarse times can leave an event unmatched but can't swap two events.</p></div>
+      <div class="limit"><h3>Every recording leaves the machine</h3><p>The prepared video goes to TwelveLabs through the Conxa cloud and is deleted after analysis. Passwords are blurred, and typed values too when the company turns that on, but the rest of the screen is sent as is. TwelveLabs is still a new processor of customer data, which needs an entry in the security gap tracker and a line in customer terms.</p></div>
+      <div class="limit"><h3>Blur follows recorded positions</h3><p>A field that moves while it holds a value, through a scroll or an animation, can slip past its padded box. Check every trial recording for leaks before trusting the blur.</p></div>
+      <div class="limit"><h3>Pegasus becomes a hard dependency</h3><p>With no fallback path, nothing past the merge can start while TwelveLabs is down or slow. Plan for retries and a clear "still watching your recording" state.</p></div>
+      <div class="limit"><h3>Cost and wait</h3><p>The v3 estimate for two requests was about $0.06–0.10 per recorded minute. One request on a shorter, smaller video should cost well under that, and a cache hit costs nothing. Neither the new price nor the async wait has been measured.</p></div>
+      <div class="limit"><h3>Text instead of pictures in recovery</h3><p>The recovery agent loses its reference image. Check in the trial whether stuck runs on icon-only or visually similar elements recover as often with words alone.</p></div>
+      <div class="limit"><h3>Prove it first</h3><p>Run a 5-recording trial. Measure how many events Pegasus matches, how good its intent is next to today's, how many useful off-page moments it finds, how stuck runs recover without screenshots, whether 720p at 10 frames a second loses anything, whether the blur leaks, and how many questions people answer before pressing Confirm.</p></div>
+    </div>
+  </section>
+
+  <footer>v1 and the gap analysis: <code>docs/Understanding-First-Harness.md</code>. This page is v4 and replaces that doc's sections 4–7: the two parallel tracks, no frames, no screenshots in packages, intent from Pegasus. v4 adds one Pegasus request instead of two, video preparation (idle cuts, 720p, blur, click rings), a fingerprint cache, order-keeping alignment, and a single ranked, pre-filled round of questions.</footer>
+</div>
+
+</body></html>

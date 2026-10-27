@@ -22,8 +22,10 @@ def _payload(steps):
     return {"input": {"steps": steps, "page_urls": ["https://example.com"], "sibling_bindings": {}}}
 
 
-def test_workflow_review_is_a_vision_task():
-    assert _is_vision_task("workflow_review")
+def test_workflow_review_is_a_text_task():
+    """The recording's frames are gone: the review reads text only, so it must not route to a vision model."""
+    assert not _is_vision_task("workflow_review")
+    assert "workflow_review" not in VISION_TASKS
 
 
 def test_workflow_review_never_falls_through_to_the_no_system_prompt_default():
@@ -44,26 +46,16 @@ def test_workflow_review_forbids_selector_fields_in_its_own_system_prompt():
         or "never invent" in system.lower()
 
 
-def test_workflow_review_attaches_images_as_image_url_blocks_not_inlined_text():
+def test_workflow_review_sends_one_text_message_and_never_an_image():
     steps = [
-        {"key": "s0", "action": "click", "image_base64": "AAA", "image_mime": "image/png"},
+        {"key": "s0", "action": "click", "image_base64": "AAA", "image_mime": "image/png"},   # a stray image field is not rendered as an image
         {"key": "s1", "action": "type"},
     ]
     messages = _openai_messages_for_task("workflow_review", _payload(steps))
     user_content = messages[1]["content"]
-    assert isinstance(user_content, list)
-
-    image_blocks = [b for b in user_content if b.get("type") == "image_url"]
-    assert len(image_blocks) == 1
-    assert image_blocks[0]["image_url"]["url"] == "data:image/png;base64,AAA"
-
-    # The regression this test exists for: before the branch was written, the whole payload
-    # (images included) was json.dumps'd into a single text block — the raw base64 string must
-    # never appear inside any text block now that images ride as separate content blocks.
-    text_blocks = [b for b in user_content if b.get("type") == "text"]
-    assert all("AAA" not in b["text"] for b in text_blocks)
-    # And the step that never had an image contributes no image block or stray label.
-    assert not any("s1 ---" in b["text"] for b in text_blocks if "Step:" in b["text"])
+    assert isinstance(user_content, str)
+    assert "image_url" not in user_content
+    assert "screenshot" not in messages[0]["content"].lower()
 
 
 def test_workflow_review_body_gets_its_own_token_budget():
@@ -78,30 +70,7 @@ def test_vision_task_set_has_exactly_one_definition():
     from app.llm.router import _VISION_TASK_NAMES
 
     assert _VISION_TASK_NAMES is VISION_TASKS
-    assert "workflow_review" in _VISION_TASK_NAMES
-
-
-def test_review_image_budget_keeps_low_confidence_images_drops_high_confidence_first():
-    from conxa_compile.compiler.build import _REVIEW_IMAGE_BUDGET_BYTES, _trim_review_images
-
-    big = "x" * (_REVIEW_IMAGE_BUDGET_BYTES // 2 + 1)
-    items = [
-        {"key": "hi_conf", "low_confidence": False, "image_base64": big, "image_mime": "image/jpeg"},
-        {"key": "lo_conf", "low_confidence": True, "image_base64": big, "image_mime": "image/jpeg"},
-    ]
-    _trim_review_images(items)
-
-    by_key = {it["key"]: it for it in items}
-    assert "image_base64" not in by_key["hi_conf"]
-    assert by_key["lo_conf"]["image_base64"] == big
-
-
-def test_review_image_budget_no_op_when_under_budget():
-    from conxa_compile.compiler.build import _trim_review_images
-
-    items = [{"key": "s0", "low_confidence": False, "image_base64": "AAA", "image_mime": "image/jpeg"}]
-    _trim_review_images(items)
-    assert items[0]["image_base64"] == "AAA"
+    assert "workflow_review" not in _VISION_TASK_NAMES
 
 
 def test_workflow_review_cache_key_ignores_images():

@@ -237,31 +237,6 @@ class Backend(
         if threading.current_thread() is not threading.main_thread():
             core_llm.set_scoped_router(client)
 
-    def _apply_vision_fallback_entitlement(self) -> None:
-        """Fetch this workspace's vision_fallback_on_exhaustion capability and
-        apply it as the local process-global setting for the scope of this
-        compile — mirroring _install_proxy_router's existing per-compile setup
-        pattern. The compiler itself is local-only (see build.py's own comment
-        on this); this is only the cloud-controlled policy VALUE for it, fetched
-        once per compile rather than requiring a Windows environment variable on
-        every Build Studio install.
-
-        Best-effort: on any failure (cloud unreachable, entitlements service
-        down) this leaves conxa_core.config.settings.vision_anchor_fallback_on_exhaustion
-        untouched — whatever the local env var / default already set it to —
-        rather than blocking or failing the compile over one policy lookup.
-        """
-        from conxa_core.config import settings as core_settings
-
-        try:
-            entitlements = self._cloud_json("/api/v1/entitlements/current")
-            capabilities = entitlements.get("capabilities") or {}
-            value = capabilities.get("vision_fallback_on_exhaustion")
-            if isinstance(value, bool):
-                core_settings.vision_anchor_fallback_on_exhaustion = value
-        except Exception:
-            pass
-
     def _cloud_api_base(self) -> str:
         return (self._cloud_api or "https://apis.conxa.in").rstrip("/")
 

@@ -7,7 +7,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from conxa_compile.compiler.action_policy import no_recovery_block, recovery_enabled_for_action
 from conxa_compile.editor.action_registry import MARKER_ACTIONS
@@ -57,12 +57,6 @@ from conxa_compile.compiler.selector_grammar import display_to_signal, signal_to
 from conxa_compile.compiler.state_validation import capture_state_snapshot, compare_state, merge_dom_diff_evidence, optimize_scroll, scroll_payload, validation_from_diff
 from conxa_compile.compiler.step_anchors import clean_anchors, clean_steps, fix_step_order, generate_stable_selector
 from conxa_core.config import settings
-# anchor_vision_llm pulls in PIL -> numpy, whose native-extension import is slow on some
-# machines (multi-second to tens of seconds the first time a process touches it). Deferred
-# to the two call sites below (both compile-only) so read paths like the workflow editor
-# (which import this package for lightweight helpers, never compile) don't pay that cost.
-if TYPE_CHECKING:
-    from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
 from conxa_core.models.events import RecordedEvent
 from conxa_core.models.skill_spec import (
     Assertion,
@@ -88,35 +82,6 @@ from conxa_core.storage import snapshots
 from conxa_core.progress import append_current_job_event
 
 
-_RECOVERABLE_VISION_ANCHOR_REASONS = frozenset({
-    "vision_anchors_disabled_in_policy",
-    "llm_disabled",
-    "llm_anchor_vision_disabled",
-    "llm_endpoint_unset",
-    "llm_endpoint_not_multimodal_capable",
-    "vision_llm_invalid_anchor_sentence",
-    # Frame extraction deferred to session shutdown; in-memory events won't have
-    # full_screenshot set if extraction hasn't completed yet (e.g. stop() timeout).
-    "full_screenshot_path_missing",
-})
-# vision_llm_request_failed / vision_llm_empty_response mean every provider is genuinely
-# unavailable — the router already retries across the whole pool and waits out a 429
-# cooldown (bounded by llm_router_wait_ceiling_secs) before giving up. Whether that then
-# hard-stops the compile or degrades to keyword anchors is an operator choice: see
-# settings.vision_anchor_fallback_on_exhaustion. This is a per-workspace cloud
-# entitlement (capabilities.vision_fallback_on_exhaustion, fetched via
-# GET /api/v1/entitlements/current and applied for the scope of one compile in
-# handlers/compile.py::cmd_compile, right alongside _install_proxy_router) — NOT
-# a cloud/Render env var; setting SKILL_VISION_ANCHOR_FALLBACK_ON_EXHAUSTION on
-# the Render backend has zero effect, since this compiler only ever runs inside
-# Build Studio's local process. The local env var still works as a fallback for
-# dev / when the entitlement fetch itself fails.
-_EXHAUSTION_VISION_ANCHOR_REASONS = frozenset({
-    "vision_llm_request_failed",
-    "vision_llm_empty_response",
-})
-
-_RECOVERABLE_VISION_ANCHOR_REASON_PREFIXES = ("screenshot_file_missing:",)
 
 
 def _compile_log(event: str, message: str, data: dict[str, Any] | None = None) -> None:
@@ -336,13 +301,10 @@ def _merge_compile_warnings(
     merged_anchors: list[dict[str, Any]],
     policy: dict[str, Any],
     *,
-    vision_anchor_warning: dict[str, Any] | None = None,
     weak_fingerprint: bool = False,
 ) -> dict[str, Any]:
     out = dict(protocol)
     cw = dict(out.get("compile_warnings") or {})
-    if vision_anchor_warning:
-        cw["vision_anchor_fallback"] = vision_anchor_warning
     if weak_fingerprint:
         cw["weak_fingerprint"] = True
     unc = policy.get("uncertainty") if isinstance(policy.get("uncertainty"), dict) else {}
@@ -355,17 +317,6 @@ def _merge_compile_warnings(
     if cw:
         out["compile_warnings"] = cw
     return out
-
-
-def _vision_anchor_failure_is_recoverable(exc: VisionAnchorGenerationError) -> bool:
-    reason = str(exc.reason or "")
-    if reason in _RECOVERABLE_VISION_ANCHOR_REASONS or any(
-        reason.startswith(p) for p in _RECOVERABLE_VISION_ANCHOR_REASON_PREFIXES
-    ):
-        return True
-    if reason in _EXHAUSTION_VISION_ANCHOR_REASONS:
-        return bool(settings.vision_anchor_fallback_on_exhaustion)
-    return False
 
 
 def _fallback_anchors_from_event(ev_with_intent: dict[str, Any], policy: dict[str, Any]) -> list[dict[str, Any]]:
@@ -392,46 +343,8 @@ def _fallback_anchors_from_event(ev_with_intent: dict[str, Any], policy: dict[st
     return anchors
 
 
-def _vision_anchor_warning(exc: VisionAnchorGenerationError, *, step_index: int) -> dict[str, Any]:
-    warning: dict[str, Any] = {
-        "reason": str(exc.reason or ""),
-        "step_index": exc.step_index if exc.step_index is not None else step_index,
-        "fallback": "deterministic_anchors",
-    }
-    if exc.hint:
-        warning["hint"] = exc.hint
-    return warning
-
-
-def _log_vision_anchor_fallback_summary(steps: list[SkillStep]) -> None:
-    """Emit one aggregate event when steps fell back to keyword anchors.
-
-    Per-step `vision_anchor_fallback` warnings are easy to miss buried in a long compile
-    log — a provider cooldown degrading 30 of 41 steps should be obvious at a glance, not
-    something you notice only after runtime recovery starts flaking.
-    """
-    fallbacks = [
-        step.confidence_protocol.get("compile_warnings", {}).get("vision_anchor_fallback")
-        for step in steps
-        if isinstance(step.confidence_protocol, dict)
-        and (step.confidence_protocol.get("compile_warnings") or {}).get("vision_anchor_fallback")
-    ]
-    if not fallbacks:
-        return
-    first = fallbacks[0] if isinstance(fallbacks[0], dict) else {}
-    _compile_log(
-        "compile_phase",
-        f"Vision anchors fell back to keyword anchors for {len(fallbacks)} of {len(steps)} step(s).",
-        {
-            "phase": "vision_anchor_fallback_summary",
-            "fallback_count": len(fallbacks),
-            "step_count": len(steps),
-            "first_reason": first.get("reason"),
-            "first_hint": first.get("hint"),
-        },
-    )
-
-
+# Kept for the Human Edit screenshot tools (editor/recording_visual.py, copilot_retrieval.py); the
+# compiler itself no longer records screenshot paths on steps.
 def _persisted_visual_asset_path(
     ev: dict[str, Any],
     rel: str | None,
@@ -1081,8 +994,6 @@ def _build_signals(
     resolved_intent: str,
     policy: dict[str, Any],
     anchors_override: list[dict[str, Any]] | None = None,
-    asset_session_id: str = "",
-    default_frame_label: str | None = None,
 ) -> dict[str, Any]:
     visual = ev.get("visual") or {}
     target = dict(ev.get("target") or {})
@@ -1140,18 +1051,6 @@ def _build_signals(
             "bbox": visual.get("bbox") or {},
             "viewport": visual.get("viewport") or "",
             "scroll_position": visual.get("scroll_position") or "",
-            "full_screenshot": _persisted_visual_asset_path(
-                ev, visual.get("full_screenshot"), session_id_fallback=asset_session_id
-            ),
-            "element_snapshot": _persisted_visual_asset_path(
-                ev, visual.get("element_snapshot"), session_id_fallback=asset_session_id
-            ),
-            "frames": {
-                label: _persisted_visual_asset_path(ev, path, session_id_fallback=asset_session_id)
-                for label, path in (visual.get("frames") or {}).items()
-                if path and isinstance(path, str)
-            },
-            "default_frame_label": default_frame_label or "before_near",
         },
     }
     if is_scroll:
@@ -1185,88 +1084,6 @@ def _build_validation(ev: dict[str, Any], state_diff: dict[str, Any], policy: di
         success_conditions=dynamic.get("success_conditions") or {},
     )
 
-_PREFETCH_VISION_ANCHORS_DEADLINE_SECS = 60.0
-
-
-def _prefetch_vision_anchors(
-    cleaned_events: list[dict[str, Any]],
-    *,
-    session_root: Path,
-    policy: dict[str, Any],
-    graph_intent_tokens: dict[int, str] | None = None,
-) -> list[dict[str, Any]]:
-    """Best-effort parallel prefetch of every step's vision anchor request before
-    the main per-step loop runs (see prefetch_vision_anchors_parallel's docstring).
-    Mirrors _build_step's own
-    skip conditions (scroll / MARKER_ACTIONS never call vision) and intent
-    resolution (workflow-intent graph token, else blank -> normalize_compiler_intent)
-    exactly, so the cache key this computes matches what _build_step computes later.
-
-    graph_intent_tokens holds the tokens the single workflow-intent LLM call
-    (run before this) produced. A step it left tokenless just gets a blank
-    intent here — no per-step LLM call, no network round trip.
-
-    Never raises: prefetch failing outright just means _build_step's per-step vision
-    call does the normal single-image work it always has — a step that needs vision
-    still gets its anchor, just without the parallel speedup. Returns a list (usually
-    empty) of degradation entries for the compile report's `degraded` channel, so a
-    systematic prefetch failure is visible to a reviewer instead of only showing up as
-    "this compile took longer than usual" with no explanation."""
-    from conxa_compile.llm.anchor_vision_llm import prefetch_vision_anchors_parallel
-
-    candidates: list[tuple[int, dict[str, Any]]] = []
-    for i, ev in enumerate(cleaned_events):
-        action_payload = optimize_scroll(ev)
-        # manual_navigate (retyped address bar, or the synthetic event
-        # _make_tab_navigate_event inserts for a user-opened tab) compiles straight to a
-        # `navigate` step with no element target — same as scroll and the MARKER_ACTIONS
-        # no-ops, _build_step never reads a vision anchor for it, so prefetching one here is
-        # pure waste.
-        if action_payload in ("scroll", "manual_navigate") or action_payload in MARKER_ACTIONS:
-            continue
-        candidates.append((i, ev))
-    if not candidates:
-        return []
-
-    _compile_log(
-        "compile_phase",
-        f"Prefetching vision anchors for {len(candidates)} step(s)…",
-        {"phase": "vision_anchor_prefetch_start", "step_count": len(candidates)},
-    )
-
-    deadline = time.monotonic() + _PREFETCH_VISION_ANCHORS_DEADLINE_SECS
-    items: list[tuple[int, dict[str, Any], str]] = []
-    try:
-        for i, ev in candidates:
-            if time.monotonic() >= deadline:
-                _compile_log(
-                    "compile_phase",
-                    "Vision anchor prefetch deadline reached — continuing without it.",
-                    {"phase": "vision_anchor_prefetch_deadline", "level": "warn"},
-                )
-                return [{
-                    "pass": "vision_anchor_prefetch",
-                    "reason": "deadline_reached",
-                    "detail": f"Prefetch exceeded {_PREFETCH_VISION_ANCHORS_DEADLINE_SECS:.0f}s "
-                              f"with {len(candidates) - len(items)} of {len(candidates)} step(s) "
-                              "still unqueued; each falls back to its own per-step vision call.",
-                }]
-            # The workflow-intent graph call already resolved this step's intent
-            # token when it could. A step it left tokenless just gets a blank
-            # intent — no per-step LLM call.
-            llm_raw = (graph_intent_tokens or {}).get(i) or ""
-            intent = normalize_compiler_intent(ev, llm_raw, policy)
-            items.append((i, ev, intent))
-        prefetch_vision_anchors_parallel(items, session_root=session_root, policy=policy)
-    except Exception as exc:  # noqa: BLE001 — prefetch is pure optimization, never fatal
-        return [{
-            "pass": "vision_anchor_prefetch",
-            "reason": "exception",
-            "detail": f"{type(exc).__name__}: {exc}",
-        }]
-    return []
-
-
 def _build_step(
     ev: dict[str, Any],
     bundle: PolicyBundle,
@@ -1286,16 +1103,8 @@ def _build_step(
     if action_payload == "scroll":
         scroll_action = scroll_payload(ev, policy)
         visual = ev.get("visual") or {}
-        scroll_rel = visual.get("full_screenshot") or visual.get("element_snapshot")
-        scroll_screenshot = _persisted_visual_asset_path(
-            ev,
-            scroll_rel if isinstance(scroll_rel, str) else None,
-            session_id_fallback=session_root.name,
-        )
         scroll_position = visual.get("scroll_position") or ""
         visual_signals: dict[str, Any] = {"scroll_position": scroll_position}
-        if scroll_screenshot:
-            visual_signals["scroll_screenshot"] = scroll_screenshot
         step = SkillStep(
             action=scroll_action,
             intent="scroll_viewport",
@@ -1461,60 +1270,9 @@ def _build_step(
     semantic["llm_intent"] = intent
     semantic["intent_specificity_score"] = intent_specificity_score(intent, policy)
     ev_with_intent["semantic"] = semantic
-    from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError, generate_anchors_for_step_or_raise
-
-    vision_anchor_warning: dict[str, Any] | None = None
-    chosen_frame: str | None = None
-    try:
-        _compile_log(
-            "compile_step",
-            f"Generating vision anchors for step {step_index + 1}.",
-            {"phase": "vision_anchor_start", "step_index": step_index, "intent": intent},
-        )
-        vision_result = generate_anchors_for_step_or_raise(
-            ev_with_intent,
-            session_root=session_root,
-            final_intent=intent,
-            policy=policy,
-            step_index=step_index,
-        )
-        chosen_frame = str(vision_result.get("chosen_frame") or "") or None
-        # anchor_phrases: short strings extracted from the vision LLM's sentence, for the
-        # existing anchor-consuming paths (recovery.json's short-anchor list). One extra
-        # entry carries the FULL sentence, tagged so it's never mistaken for a short
-        # phrase downstream — see skill_package_builder_saved_skill.py::
-        # _saved_recovery_anchor_sentence, the only reader of this tag.
-        # The first extracted phrase is the primary/most-discriminative one (the sentence's
-        # own leading noun phrase) — tagged "target" so priority-aware consumers (e.g.
-        # _saved_recovery_anchors) keep treating it as the best anchor, matching the old
-        # primary_phrase convention.
-        phrases = list(vision_result.get("anchor_phrases") or [])
-        merged_anchors: list[dict[str, Any]] = [
-            {"element": p, "relation": "target" if i == 0 else "near"} for i, p in enumerate(phrases)
-        ]
-        anchor_sentence = str(vision_result.get("anchor_sentence") or "")
-        if anchor_sentence:
-            merged_anchors.append({"element": anchor_sentence, "relation": "target_sentence"})
-        _compile_log(
-            "compile_step",
-            f"Vision anchors generated for step {step_index + 1}.",
-            {"phase": "vision_anchor_done", "step_index": step_index, "anchor_count": len(merged_anchors)},
-        )
-    except VisionAnchorGenerationError as exc:
-        if not _vision_anchor_failure_is_recoverable(exc):
-            raise
-        merged_anchors = _fallback_anchors_from_event(ev_with_intent, policy)
-        vision_anchor_warning = _vision_anchor_warning(exc, step_index=step_index)
-        _compile_log(
-            "compile_step",
-            f"Vision anchors fell back for step {step_index + 1}.",
-            {
-                "phase": "vision_anchor_fallback",
-                "step_index": step_index,
-                "reason": exc.reason,
-                "anchor_count": len(merged_anchors),
-            },
-        )
+    # Anchors come from the recorded DOM (neighbours, labels, relations). No model looks at the page here:
+    # what the video model saw is attached to the step later, as words (compiler/video_context.py).
+    merged_anchors = _fallback_anchors_from_event(ev_with_intent, policy)
     merged_anchors = rank_merged_anchors(merged_anchors, ev_with_intent, intent, policy)
     validation = _build_validation(ev_with_intent, state_diff, policy)
     if recovery_enabled_for_action(action_payload):
@@ -1547,8 +1305,6 @@ def _build_step(
         resolved_intent=intent,
         policy=policy,
         anchors_override=merged_anchors,
-        asset_session_id=session_root.name,
-        default_frame_label=chosen_frame,
     )
     # The popup this action was made inside, with every button it offered (recorder dialog_context).
     # Transient: compiler/outcome_fork.py reads it to decide whether this step is a decision
@@ -1584,7 +1340,6 @@ def _build_step(
         ev_with_intent,
         merged_anchors,
         policy,
-        vision_anchor_warning=vision_anchor_warning,
         weak_fingerprint=_fingerprint_is_weak(identity_bundle.fingerprint),
     )
     sel_conf = target.get("selector_confidence", 1.0)
@@ -1842,15 +1597,13 @@ def compile_skill_package(
     ``task_description`` is what the person said the workflow is for. It rides to the second
     opinion as meaning-only context (never a selector input), so a name or phase can be chosen
     knowing the goal."""
-    from conxa_compile.llm.anchor_vision_llm import VisionAnchorGenerationError
-
     bundle = policy_bundle or get_policy_bundle()
     pol = bundle.data
     for e in events:
         RecordedEvent.model_validate(e)
     sid = str(source_session_id or "").strip()
     if not sid:
-        raise VisionAnchorGenerationError("source_session_id_required")
+        raise ValueError("source_session_id_required")
     session_root = (settings.data_dir / "sessions" / sid).resolve()
     _compile_log(
         "compile_phase",
@@ -1874,7 +1627,6 @@ def compile_skill_package(
     # content-derived path) instead of an LLM token — see workflow_review.py's
     # module docstring for the quality trade this accepts.
     page_urls = sorted({(ev.get("page") or {}).get("url") or "" for ev in cleaned_events} - {""})
-    prefetch_degraded = _prefetch_vision_anchors(cleaned_events, session_root=session_root, policy=pol)
     steps = [
         _build_step(e, bundle, session_root=session_root, step_index=i)
         for i, e in enumerate(cleaned_events)
@@ -1884,17 +1636,6 @@ def compile_skill_package(
     _finish_extract_steps(steps, cleaned_events)
     for step, ev in zip(steps, cleaned_events):
         step.source_event = (ev.get("extras") or {}).get("sequence")
-    # Must build this while steps[i] still maps 1:1 onto cleaned_events[i] (the
-    # leading-navigate insert below prepends, which shifts positions) — the
-    # per-step screenshot the vision-anchor stage chose lives on the event
-    # (ev["visual"]), not on the compiled SkillStep. Keyed by step_key so the
-    # merged review call, which runs after every reshuffling pass below, can
-    # still look an image up for any step that survived unchanged; a step a
-    # collapse pass merged or reordered just loses its image and gets text
-    # only, same as any step with no vision anchor.
-    image_by_step_key = _build_image_by_step_key(steps, cleaned_events, session_root=session_root, policy=pol)
-    _log_vision_anchor_fallback_summary(steps)
-
     # Phase 7: populate hover_chain handler hints from hover-then-act sequences. Must run before
     # _insert_start_navigate_step below: it indexes steps[i] against cleaned_events[i], and the
     # leading navigate that function prepends has no matching cleaned_event.
@@ -1947,7 +1688,7 @@ def compile_skill_package(
         "Building compile confidence report.",
         {"phase": "compile_report_start", "step_count": len(steps)},
     )
-    compile_report = _build_compile_report(steps, degraded=prefetch_degraded)
+    compile_report = _build_compile_report(steps)
     _compile_log(
         "compile_phase",
         "Compile confidence report finished.",
@@ -1996,7 +1737,6 @@ def compile_skill_package(
         skill_id=skill_id,
         page_urls=page_urls,
         visited_hosts=visited_hosts,
-        image_by_step_key=image_by_step_key,
         task_description=task_description,
         sidecar=session_root / "second_opinion.json",
         review_inputs=review_inputs,
@@ -2071,44 +1811,6 @@ def compile_skill_package(
     )
 
 
-def _build_image_by_step_key(
-    steps: list[SkillStep],
-    cleaned_events: list[dict[str, Any]],
-    *,
-    session_root: Path,
-    policy: dict[str, Any],
-) -> dict[str, tuple[str, str]]:
-    """Re-derive the vision-anchor stage's already-chosen frame for each step,
-    keyed by step_key, for the merged workflow-review call (BUILD-26). Must run
-    while steps[i] still maps 1:1 onto cleaned_events[i] — see the call site.
-
-    Recomputes the same `intent` _build_step/_prefetch_vision_anchors used
-    (normalize_compiler_intent with no LLM token, since no graph_intent_token
-    exists at this point in the pipeline) so get_chosen_frame_image's cache
-    lookup hits without re-running the vision LLM. A step with no cached
-    choice (vision anchors disabled/failed, or a scroll/marker/navigate step
-    that never requested one) is simply absent from the returned map — the
-    review call just sends text for it, same as any step with no anchor."""
-    from conxa_compile.llm.anchor_vision_llm import get_chosen_frame_image
-
-    keys = step_keys(steps)
-    out: dict[str, tuple[str, str]] = {}
-    for i, ev in enumerate(cleaned_events):
-        action_payload = optimize_scroll(ev)
-        if action_payload in ("scroll", "manual_navigate") or action_payload in MARKER_ACTIONS:
-            continue
-        intent = normalize_compiler_intent(ev, "", policy)
-        try:
-            chosen = get_chosen_frame_image(
-                ev, session_root=session_root, final_intent=intent, policy=policy, step_index=i
-            )
-        except Exception:  # noqa: BLE001 — best-effort, matches get_chosen_frame_image's own contract
-            chosen = None
-        if chosen:
-            out[keys[i]] = chosen
-    return out
-
-
 def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowIntentGraph) -> int:
     """Write the merged review call's per-step prose onto the already-compiled,
     already-collapsed `steps` list, and backfill `step.intent` from
@@ -2137,32 +1839,6 @@ def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowInten
             step.intent = entry.intent_token
             backfilled += 1
     return backfilled
-
-
-# BUILD-29: images are already individually bounded (anchor_vision_llm.py downscales every
-# frame to ~1024px JPEG before it's ever cached), so this only has to bound the *count* on a
-# long workflow — router.py treats an oversized request as a 400/413 with no retry/failover,
-# which would silently reproduce the exact no-op this budget exists to prevent.
-# ponytail: a flat byte budget across all attached base64 images, not provider-aware; raise if
-# a real provider's multipart limit turns out smaller/larger than this guess.
-_REVIEW_IMAGE_BUDGET_BYTES = 6_000_000
-
-
-def _trim_review_images(items: list[dict[str, Any]]) -> None:
-    """In place: drop image_base64/image_mime from the highest-confidence steps first until
-    the total base64 size is under budget. A low_confidence step's picture survives longest —
-    that's the step the second opinion most needs a picture for."""
-    with_images = [it for it in items if it.get("image_base64")]
-    total = sum(len(it["image_base64"]) for it in with_images)
-    if total <= _REVIEW_IMAGE_BUDGET_BYTES:
-        return
-    with_images.sort(key=lambda it: it.get("low_confidence") is True)  # high-confidence first
-    for it in with_images:
-        if total <= _REVIEW_IMAGE_BUDGET_BYTES:
-            break
-        total -= len(it["image_base64"])
-        it.pop("image_base64", None)
-        it.pop("image_mime", None)
 
 
 def _step_action_name(step: SkillStep) -> str | None:
@@ -2195,7 +1871,6 @@ def _next_effect_cause(steps: list[SkillStep], i: int) -> str | None:
 def _review_inputs(
     steps: list[SkillStep],
     compile_report: dict[str, Any],
-    image_by_step_key: dict[str, tuple[str, str]],
 ) -> list[dict[str, Any]]:
     """Compact per-step payload for the merged workflow-review call (BUILD-25's
     second opinion + BUILD-26's intent-graph merge) — action, text, url,
@@ -2236,11 +1911,7 @@ def _review_inputs(
         causes = _next_effect_cause(steps, i)
         if causes:
             item["causes"] = causes
-        image = image_by_step_key.get(keys[i])
-        if image:
-            item["image_base64"], item["image_mime"] = image
         out.append(item)
-    _trim_review_images(out)
     return out
 
 
@@ -2346,7 +2017,6 @@ def _apply_second_opinion(
     skill_id: str,
     page_urls: list[str],
     visited_hosts: list[str],
-    image_by_step_key: dict[str, tuple[str, str]],
     task_description: str = "",
     sidecar: Path | None = None,
     review_inputs: dict[str, Any] | None = None,
@@ -2387,7 +2057,7 @@ def _apply_second_opinion(
     error_detail: list[str] = []
     try:
         graph, findings = build_workflow_review(
-            _review_inputs(steps, compile_report, image_by_step_key),
+            _review_inputs(steps, compile_report),
             page_urls=page_urls,
             sibling_bindings=_sibling_bindings(visited_hosts, skill_id),
             task_description=task_description,

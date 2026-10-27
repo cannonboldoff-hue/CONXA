@@ -57,10 +57,18 @@ def compile_selectors_for_region(
 
     visual = matching_event.get("visual") if isinstance(matching_event.get("visual"), dict) else {}
     rel_path = str(visual.get("full_screenshot") or "").strip()
-    if not rel_path:
-        return []
-
     session_root = (settings.data_dir / "sessions" / session_id).resolve()
+    if not rel_path:
+        # A recording made since the understanding-first pipeline stores no screenshots: cut the one
+        # frame this fix needs from the local video, now, the first time a person uses it.
+        try:
+            from conxa_compile.video.frame_at import event_frame
+
+            rel_path = event_frame(session_root, matching_event) or ""
+        except RuntimeError:
+            return []
+        if not rel_path:
+            return []
     try:
         abs_path = resolve_screenshot_path(session_root, rel_path)
     except VisionAnchorGenerationError:

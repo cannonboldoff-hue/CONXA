@@ -44,7 +44,7 @@ def _debug_log(message: str) -> None:
 # silently dropped workflow_review and every compile went rules-only with no error.)
 VISION_TASKS = frozenset({
     "anchor_vision", "anchor_vision_frameset", "vision_reasoning", "region_selector",
-    "copilot_diagnose", "copilot_reply", "workflow_review",
+    "copilot_diagnose", "copilot_reply",
 })
 
 
@@ -451,22 +451,13 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
     # built from, and their modules (workflow_intent.py::_graph_from_raw,
     # workflow_semantics.py::_validate_findings) still own response parsing/validation.
     if task == "workflow_review":
-        # Compile-time: one multimodal call that replaces the two calls above — same contracts,
-        # merged into one response object, plus (new) each step may carry the screenshot the
-        # vision-anchor stage already chose for it. Image trimming/budgeting happens upstream
-        # in compiler/build.py::_review_inputs, before this payload is built — this branch only
-        # renders whatever images survive that trim; it does not decide which ones to drop.
+        # Compile-time: one text call that replaces the two calls above, same contracts, merged
+        # into one response object. Text only: the recording's frames and per-step screenshots are
+        # gone (what the video saw is attached to steps as words, compiler/video_context.py).
         steps_in = list((data or {}).get("steps") or [])
         page_urls = (data or {}).get("page_urls")
         sibling_bindings = (data or {}).get("sibling_bindings")
-        # Strip images out of the JSON text block — they ride along as separate image_url
-        # blocks below instead. Sending them both ways would double the payload for nothing
-        # and (before this branch existed at all) was silently serializing raw base64 as text.
-        text_steps = [
-            {k: v for k, v in s.items() if k not in ("image_base64", "image_mime")}
-            for s in steps_in
-            if isinstance(s, dict)
-        ]
+        text_steps = [dict(s) for s in steps_in if isinstance(s, dict)]
         text_payload = {"steps": text_steps, "page_urls": page_urls, "sibling_bindings": sibling_bindings}
         task_description = str((data or {}).get("task_description") or "").strip()
         if task_description:
@@ -483,31 +474,14 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
         loop_candidates = (data or {}).get("loop_candidates")
         if loop_candidates:
             text_payload["loop_candidates"] = loop_candidates
-        content: list[dict[str, Any]] = [
-            {"type": "text", "text": json.dumps(text_payload, ensure_ascii=False)},
-        ]
-        for s in steps_in:
-            if not isinstance(s, dict):
-                continue
-            image_b64 = str(s.get("image_base64") or "")
-            if not image_b64:
-                continue
-            mime = str(s.get("image_mime") or "image/jpeg")
-            content.append({"type": "text", "text": f"--- Step: {s.get('key')} ---"})
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{image_b64}"},
-            })
+        content = json.dumps(text_payload, ensure_ascii=False)
         return [
             {
                 "role": "system",
                 "content": (
                     "You build a workflow intent graph from a sequence of recorded actions AND "
                     "review the same workflow for improvements that will be applied "
-                    "automatically, so only report ones you are confident about. Some steps are "
-                    "followed by a labelled screenshot (\"--- Step: <key> ---\") showing the "
-                    "target at the moment it was recorded — use it as extra context, never as "
-                    "the only evidence for a finding.\n\n"
+                    "automatically, so only report ones you are confident about. "
                     "If the input has task_description, it is what the person said this workflow "
                     "is for. Use it only to pick better names, goals and phases; the recorded "
                     "steps remain the source of truth and it never justifies a step that was "
