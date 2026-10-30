@@ -1,0 +1,167 @@
+[
+  {
+    "name": "navigation that never completed -> unverified",
+    "app": { "login_url": "https://app.acme.com/login" },
+    "observation": { "final_url": "about:blank", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "unverified" }
+  },
+  {
+    "name": "password box on the landing page -> expired",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/home", "password_box": true, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/welcome", "hasPasswordBox": false },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "Google account chooser (sign-in segment at depth) -> expired",
+    "app": { "login_url": "https://accounts.google.com/" },
+    "observation": { "final_url": "https://accounts.google.com/v3/signin/accountchooser?continue=x", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://accounts.google.com/v3/signin/identifier", "hasPasswordBox": false },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "sso / oauth / auth path segments -> expired",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/oauth2/authorize?client_id=1", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/welcome", "hasPasswordBox": false },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "a path that merely contains the word login is not a sign-in page -> ready",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/settings/login-history", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/welcome", "hasPasswordBox": false },
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "login_url is a site root: any other page on the host is not a sign-in page -> ready",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/dashboard", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/welcome", "hasPasswordBox": false },
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "success page matched -> ready, even with a Sign up control on it",
+    "app": { "login_url": "https://app.acme.com/login", "success_url": "https://app.acme.com/dashboard/{}" },
+    "observation": { "final_url": "https://app.acme.com/dashboard/home", "password_box": false, "otp_like": false, "markers": [{ "role": "button", "name": "Sign up" }], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "success page prefix on a login-shaped address -> expired (sign-in check runs first)",
+    "app": { "login_url": "https://app.acme.com/login", "success_url": "https://app.acme.com/{}" },
+    "observation": { "final_url": "https://app.acme.com/login?next=%2F", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "Sign in control on a page that is not the success page -> expired",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/welcome", "password_box": false, "otp_like": false, "markers": [{ "role": "a", "name": "Sign in" }], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/", "hasPasswordBox": false },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "success page set but not matched, address differs from the cookie-less login page -> ready",
+    "app": { "login_url": "https://app.acme.com/login", "success_url": "https://app.acme.com/dashboard" },
+    "observation": { "final_url": "https://app.acme.com/onboarding", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "same address as the cookie-less login page and no sign-in evidence -> unverified",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/", "hasPasswordBox": false },
+    "expect": { "state": "unverified" }
+  },
+  {
+    "name": "no baseline and no Execute allowance (the baseline fetch failed) -> unverified",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/dashboard", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": null,
+    "expect": { "state": "unverified" }
+  },
+  {
+    "name": "no baseline in Conxa Execute (noBaselineOk) and not login-shaped -> ready",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/dashboard", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": null,
+    "noBaselineOk": true,
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "no baseline in Conxa Execute but a password box -> expired",
+    "app": { "login_url": "https://app.acme.com/" },
+    "observation": { "final_url": "https://app.acme.com/dashboard", "password_box": true, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": null,
+    "noBaselineOk": true,
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "learned rule says yes -> ready",
+    "app": {
+      "login_url": "https://app.acme.com/login",
+      "auth_definition": {
+        "version": 1,
+        "probe_url": "https://app.acme.com/login",
+        "signed_out": { "final_path": "/login", "markers": [{ "role": "button", "name": "Sign in" }], "password_box": true },
+        "signed_in": { "final_path": "/home", "endpoints": [{ "method": "GET", "path": "/api/me", "ok": "2xx", "denied": "401" }] },
+        "session_keys": ["_app_session"]
+      }
+    },
+    "observation": { "final_url": "https://app.acme.com/home", "password_box": false, "otp_like": false, "markers": [], "responses": [{ "method": "GET", "path": "/api/me", "status": 200 }], "cookie_names": ["_app_session"] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "ready" }
+  },
+  {
+    "name": "learned rule says no -> expired",
+    "app": {
+      "login_url": "https://app.acme.com/login",
+      "auth_definition": {
+        "version": 1,
+        "probe_url": "https://app.acme.com/login",
+        "signed_out": { "final_path": "/login", "markers": [{ "role": "button", "name": "Sign in" }], "password_box": true },
+        "signed_in": { "final_path": "/home", "endpoints": [{ "method": "GET", "path": "/api/me", "ok": "2xx", "denied": "401" }] },
+        "session_keys": ["_app_session"]
+      }
+    },
+    "observation": { "final_url": "https://app.acme.com/login", "password_box": true, "otp_like": false, "markers": [{ "role": "button", "name": "Sign in" }], "responses": [{ "method": "GET", "path": "/api/me", "status": 401 }], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "expired" }
+  },
+  {
+    "name": "learned rule unsure, nothing says signed out, address differs from baseline -> unverified (baseline is not a second opinion here)",
+    "app": {
+      "login_url": "https://app.acme.com/login",
+      "success_url": "https://app.acme.com/other",
+      "auth_definition": {
+        "version": 1,
+        "probe_url": "https://app.acme.com/login",
+        "signed_out": { "final_path": "/login", "markers": [{ "role": "button", "name": "Sign in" }], "password_box": true },
+        "signed_in": { "final_path": "/home", "endpoints": [{ "method": "GET", "path": "/api/me", "ok": "2xx", "denied": "401" }] },
+        "session_keys": ["_app_session"]
+      }
+    },
+    "observation": { "final_url": "https://app.acme.com/other", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "unverified" }
+  },
+  {
+    "name": "learned rule unsure but the page is login-shaped -> expired",
+    "app": {
+      "login_url": "https://app.acme.com/login",
+      "auth_definition": {
+        "version": 1,
+        "probe_url": "https://app.acme.com/login",
+        "signed_out": { "final_path": "/login", "markers": [{ "role": "button", "name": "Sign in" }], "password_box": true },
+        "signed_in": { "final_path": "/home", "endpoints": [{ "method": "GET", "path": "/api/me", "ok": "2xx", "denied": "401" }] },
+        "session_keys": ["_app_session"]
+      }
+    },
+    "observation": { "final_url": "https://app.acme.com/sso/start", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
+    "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
+    "expect": { "state": "expired" }
+  }
+]

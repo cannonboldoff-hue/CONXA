@@ -37,15 +37,17 @@ def decision_from_answer(question: dict[str, Any], answer: dict[str, Any] | None
     }
     if answer.get("choice"):
         decision["choice"] = str(answer["choice"])
-    if question["kind"] == "chosen_values":
-        picked = {str(r) for r in answer.get("selected") or []}
+    if question["kind"] == "value":
+        # Only "different every time" changes anything; "always this one" leaves the recording as it is.
+        picked = answer.get("choice") == "varies"
         decision["values"] = [
             {"ref": i["ref"], "name": i["name"], "literal": i["literal"], "kind": i.get("kind", ""),
              "event_ids": i.get("event_ids") or []}
-            for i in question.get("items") or [] if i.get("ref") in picked
+            for i in question.get("items") or [] if picked
         ]
-    if question["kind"] == "confirm_summary" and decision.get("choice") == "yes":
-        decision["description"] = str(question.get("summary") or "")
+    if question["kind"] == "note" and decision.get("choice"):
+        label = next((c["label"] for c in question.get("choices") or [] if c.get("id") == decision["choice"]), "")
+        decision["note"] = f"{question.get('title') or ''} {label}".strip()
     return decision
 
 

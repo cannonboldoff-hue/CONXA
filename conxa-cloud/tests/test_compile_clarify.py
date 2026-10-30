@@ -362,22 +362,6 @@ def test_input_check_names_the_doubtful_values_in_plain_words_and_edits_nothing(
     assert input_check_question([], defs, {}, "r_1") is None
 
 
-def test_record_plan_keeps_a_short_readable_checklist_and_never_raises():
-    from conxa_compile.conversation import record_plan
-
-    assert record_plan.generate("") == []
-    good = {"steps": ["Open the invoices page", " Open the  invoices page ", "Click New invoice", "x" * 300]}
-    steps = record_plan.generate("Create an invoice", call=lambda *_: good)
-    assert steps[:2] == ["Open the invoices page", "Click New invoice"] and len(steps[2]) == 100
-    assert record_plan.generate("t", call=lambda *_: {"steps": ["only one"]}) == []     # too thin to be a plan
-    assert record_plan.generate("t", call=lambda *_: None) == []
-
-    def boom(*_):
-        raise RuntimeError("no providers")
-
-    assert record_plan.generate("t", call=boom) == []
-
-
 def test_clarify_offers_skip_when_empty_and_missing_item_and_each_answer_is_one_gated_patch():
     from conxa_compile.conversation.clarify import plan_answer
 

@@ -90,7 +90,7 @@ def _detect_warning(success_url: str, reached: bool, has_definition: bool) -> st
     Without one (a re-connect that was force-saved past a failed self-test, or a login window
     closed by hand — see cmd_finish_group_app_auth), the runtime falls back to its generic
     detection ladder, which itself doesn't require success_url either — but a missing success_url
-    also means Build Studio's own "Check now" probe (check_app_session_sync) has no target to
+    also means Build Studio's own "Check now" probe (check_group_sessions_sync) has no target to
     verify against beyond the login page itself, so it's still worth flagging.
     """
     if has_definition:
@@ -571,9 +571,10 @@ class GroupsMixin:
         besides the recording gate that spends a real headless navigation on a
         session check — group_auth_status's "ready" badge is otherwise cheap
         and can be stale (see its docstring). Pass app_id to check one app;
-        omit it to check every captured app in the group concurrently."""
-        from concurrent.futures import ThreadPoolExecutor
-        from conxa_compile.recorder.session import check_app_session_sync
+        omit it to check every captured app in the group at once. Either way the check runs in
+        one browser seeded with the whole group's sessions, the same as a run (see
+        check_group_sessions_sync)."""
+        from conxa_compile.recorder.session import check_group_sessions_sync
         from conxa_core.storage.group_store import get_group, set_group_app_checked
 
         group_id = _safe_id(payload.get("group_id"), "group_id")
@@ -591,9 +592,8 @@ class GroupsMixin:
             targets = [a for a in group.apps if a.captured_at and a.storage_state_path]
 
         if targets:
-            with ThreadPoolExecutor(max_workers=len(targets)) as pool:
-                results = list(zip(targets, pool.map(check_app_session_sync, targets)))
-            for app, state in results:
-                group = set_group_app_checked(group_id, app.id, state)
+            verdicts = check_group_sessions_sync(targets, group.apps)
+            for app in targets:
+                group = set_group_app_checked(group_id, app.id, verdicts[app.id])
 
         return {"group": group.model_dump(mode="json"), "auth": group_auth_status(group)}

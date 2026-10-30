@@ -11,9 +11,9 @@ from conxa_compile.conversation import timeline_understanding as tu
 from conxa_compile.conversation.lifecycle import lifecycle_for_workflow
 from conxa_compile.video import track_a, track_b
 from conxa_core.config import settings
-from conxa_core.storage.workflow_store import get_workflow
+from conxa_core.storage.workflow_store import get_workflow, save_workflow
 from services.video_analysis_client import VideoUnavailable
-from tests.test_compile_flow import _cards, env  # noqa: F401 -- env is a fixture
+from tests.test_compile_flow import _cards, _texts, env  # noqa: F401 -- env is a fixture
 
 
 def _event(n, action, target="", value=None, url="https://billing.example.test/new"):
@@ -63,7 +63,10 @@ def test_watching_then_one_round_of_questions_and_no_compile_yet(flow):
     assert lc["allowed_actions"] == ["answer_clarify", "re_record"]
     data = clarify_store.load(wf.id)
     assert data["stage"] == "understand" and all(q["phase"] == "pre_compile" for q in data["questions"])
-    assert [c["question_kind"] for c in _open_cards(wf)] == ["confirm_summary"]       # one at a time, summary first
+    assert [c["question_kind"] for c in _open_cards(wf)] == ["confirm_before"]        # one at a time, most costly first
+    assert {q["kind"] for q in data["questions"]} == {"confirm_before", "value"}      # no fixed summary/coverage card
+    said = _texts(wf.id, "assistant_message")[-1]
+    assert said.startswith("Types the PO number and sends the invoice.") and "A few quick questions" in said
     assert runtime_state.get_flags(wf.id) == {} and compiled == []
     session = settings.data_dir / "sessions" / "sess1"
     assert (session / "understanding.json").is_file() and (session / "merged_timeline.json").is_file()
@@ -72,8 +75,7 @@ def test_watching_then_one_round_of_questions_and_no_compile_yet(flow):
 def test_answers_are_stored_as_decisions_and_the_last_one_starts_the_compile_once(flow):
     b, wf, compiled = flow
     b._flow_understand(wf.id, "rid")
-    answers = {"confirm_summary": {"choice": "yes"}, "chosen_values": {"selected": ["url:1"]},
-               "confirm_before": {"choice": "confirm"}}
+    answers = {"value": {"choice": "varies"}, "confirm_before": {"choice": "confirm"}}
     for _ in range(10):
         pending = _open_cards(wf)
         if not pending:
@@ -81,23 +83,20 @@ def test_answers_are_stored_as_decisions_and_the_last_one_starts_the_compile_onc
         _answer(b, wf, pending[0], **answers[pending[0]["question_kind"]])
     session = settings.data_dir / "sessions" / "sess1"
     stored = {d["qid"]: d for d in decisions.load(session)}
-    assert stored["confirm_summary"]["description"] == "Types the PO number and sends the invoice."
-    assert [v["name"] for v in stored["chosen_values"]["values"]] == ["customer"]
-    assert stored["chosen_values"]["values"][0]["event_ids"] == [1]
+    assert [v["name"] for v in stored["value:url:1"]["values"]] == ["customer"]
+    assert stored["value:url:1"]["values"][0]["event_ids"] == [1]
     assert stored["confirm_before:r2"]["choice"] == "confirm" and stored["confirm_before:r2"]["event_ids"] == [2]
     assert compiled == [wf.id]                                               # exactly once
     assert clarify_store.load(wf.id)["stage"] == "building"
     assert runtime_state.get_flags(wf.id).get("compiling") is True
 
 
-def test_saying_the_summary_is_wrong_stops_before_building(flow):
+def test_nothing_to_ask_builds_at_once_and_a_free_description_comes_from_the_summary(flow, monkeypatch):
     b, wf, compiled = flow
+    monkeypatch.setattr(tu, "_default_call", lambda task, payload, ms: {**RAW, "values": [], "questions": []})
     b._flow_understand(wf.id, "rid")
-    _answer(b, wf, _open_cards(wf)[0], choice="no")
-    assert compiled == [] and clarify_store.load(wf.id)["stage"] == "rejected"
-    lc = lifecycle_for_workflow(get_workflow(wf.id))
-    assert (lc["stage"], lc["substate"]) == ("compile", "ready") and "re_record" in lc["allowed_actions"]
-    assert not _open_cards(wf)
+    assert not _open_cards(wf) and compiled == [wf.id]
+    assert "building it now" in " ".join(_texts(wf.id, "assistant_message"))
 
 
 def test_video_service_down_blocks_everything_past_the_merge_and_retry_resumes(flow, monkeypatch):
@@ -125,15 +124,19 @@ def test_video_service_down_blocks_everything_past_the_merge_and_retry_resumes(f
     assert runtime_state.get_flags(wf.id) == {}
 
 
-def test_a_failed_model_call_still_asks_the_summary_question(flow, monkeypatch):
+def test_a_failed_model_call_still_asks_about_the_value_it_could_not_judge(flow, monkeypatch):
     b, wf, _ = flow
 
     def boom(task, payload, ms):
         raise RuntimeError("proxy down")
 
     monkeypatch.setattr(tu, "_default_call", boom)
+    stored = get_workflow(wf.id)
+    stored.task_description = "Create and send an invoice"
+    save_workflow(stored)
     b._flow_understand(wf.id, "rid")
-    assert [c["question_kind"] for c in _open_cards(wf)] == ["confirm_summary"]
+    assert [c["question_kind"] for c in _open_cards(wf)] == ["value"]
+    assert _open_cards(wf)[0]["choices"] and not any(c.get("selected") for c in _open_cards(wf)[0]["choices"])
     assert clarify_store.load(wf.id)["understanding"]["source"] == "fallback"
 
 
@@ -174,21 +177,18 @@ def _compile(b, wf, monkeypatch):
 def test_decisions_are_replayed_onto_the_compiled_steps_and_not_asked_again(env, monkeypatch):
     b, wf, _ = env
     _write_session([
-        {"qid": "confirm_summary", "kind": "confirm_summary", "event_ids": [], "skipped": False, "choice": "yes",
-         "description": "Create and send an invoice"},
         {"qid": "confirm_before:r7", "kind": "confirm_before", "event_ids": [7], "skipped": False, "choice": "confirm"},
-        {"qid": "chosen_values", "kind": "chosen_values", "event_ids": [], "skipped": False,
+        {"qid": "value:url:1", "kind": "value", "event_ids": [1], "skipped": False, "choice": "varies",
          "values": [{"ref": "url:1", "name": "customer", "literal": "no-such-text", "kind": "url", "event_ids": [1]}]},
     ])
     data = _compile(b, wf, monkeypatch)
     by_kind = {q["kind"]: q for q in data["questions"]}
     assert by_kind["confirm"]["status"] == "answered" and by_kind["confirm"]["receipt"] == "Someone approves it first"
     assert data["added_steps"] == 1                                               # the confirm step the answer inserted
-    # the value that could not be applied is asked again instead of being lost
-    assert by_kind["chosen_values"]["status"] == "open" and "couldn’t find" in by_kind["chosen_values"]["body"]
-    from conxa_core.storage.workflow_store import get_workflow
-
-    assert get_workflow(wf.id).task_description == "Create and send an invoice"
+    # a value that could not be applied is said once in the chat, never asked a second time
+    assert "chosen_values" not in by_kind and "values" not in by_kind
+    assert any("couldn’t make “no-such-text” change each run" in t for t in _texts(wf.id, "assistant_message"))
+    assert {q["kind"] for q in data["questions"]} <= {"fork", "known_popup", "popup", "confirm"}
 
 
 def test_a_recording_without_decisions_compiles_as_before(env, monkeypatch):
@@ -206,3 +206,33 @@ def test_a_skipped_or_unmatched_decision_changes_nothing(env, monkeypatch):
     ])
     data = _compile(b, wf, monkeypatch)
     assert data["added_steps"] == 0 and next(q for q in data["questions"] if q["kind"] == "confirm")["status"] == "open"
+
+
+# --- replay.plan on its own --------------------------------------------------------------
+
+def _doc_with_click():
+    step = {"intent": "open_file", "action": {"action": "click"}, "identity_bundle": {
+        "fingerprint": {"inner_text": "Report.gitignore", "aria_label": "Report.gitignore, (File)"},
+        "signals": [{"engine": "role", "selector": "internal:role=link[name=\"Report.gitignore\"i]"}]}}
+    return {"skills": [{"steps": [step]}], "inputs": []}
+
+
+def test_a_clicked_value_replays_with_the_label_the_compiled_step_is_known_by():
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.conversation import replay
+
+    doc = _doc_with_click()
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    stored = [{"qid": "value:click:1", "kind": "value", "event_ids": [1], "skipped": False, "choice": "varies",
+               "values": [{"ref": "click:1", "name": "target_file", "kind": "click", "event_ids": [1],
+                           "literal": "Report.gitignore, (File)"}]}]    # what the timeline called it
+    groups = replay.plan(stored, doc, [], lambda k: 1 if k == key else None)["groups"]
+    assert groups[0]["ops"][0]["literal"] == "Report.gitignore"
+
+
+def test_a_fork_answer_is_never_applied_to_a_popup_it_does_not_trace_back_to():
+    from conxa_compile.conversation import replay
+
+    forks = [{"id": "fork:s1", "kind": "fork", "status": "open", "title": "Upload options", "step_keys": ["s1"], "choices": []}]
+    stored = [{"qid": "fork:r2", "kind": "fork", "event_ids": [1], "skipped": False, "choice": "ask_human"}]
+    assert replay.plan(stored, {"skills": [{"steps": []}]}, forks, lambda k: 10)["groups"] == []

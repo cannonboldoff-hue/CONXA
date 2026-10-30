@@ -1,0 +1,496 @@
+<title>Sign-in Check Comparison</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:wght@600;700&display=swap">
+<style>
+  /* Layout: one summary band, a "who calls what" map, a row-by-row comparison, then effects and fix options. */
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --fg: #1a2230;
+    --muted: #556073;
+    --line: #dce0e8;
+    --studio: #0d6573;
+    --studio-tint: #e2f0f2;
+    --runtime: #a0460c;
+    --runtime-tint: #f8eadd;
+    --warn: #8a5a00;
+    --warn-tint: #fbf0d4;
+    --good: #1e6b3a;
+    --good-tint: #e0f1e6;
+    --code-bg: #eceef3;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11151c;
+      --card: #1a202a;
+      --fg: #e5e8ee;
+      --muted: #9aa5b7;
+      --line: #2c3442;
+      --studio: #62c4d3;
+      --studio-tint: #16303a;
+      --runtime: #f2a368;
+      --runtime-tint: #35261a;
+      --warn: #f0c36a;
+      --warn-tint: #352b12;
+      --good: #7fd49b;
+      --good-tint: #163021;
+      --code-bg: #232a36;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11151c;
+    --card: #1a202a;
+    --fg: #e5e8ee;
+    --muted: #9aa5b7;
+    --line: #2c3442;
+    --studio: #62c4d3;
+    --studio-tint: #16303a;
+    --runtime: #f2a368;
+    --runtime-tint: #35261a;
+    --warn: #f0c36a;
+    --warn-tint: #352b12;
+    --good: #7fd49b;
+    --good-tint: #163021;
+    --code-bg: #232a36;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    padding-block: 32px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 40px; }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+  h1 { font-size: clamp(28px, 5vw, 40px); }
+  h2 { font-size: 24px; }
+  h3 { font-size: 18px; }
+  p { margin: 0; max-width: 68ch; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  .kicker {
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 10px;
+  }
+  .lede { color: var(--muted); font-size: 18px; margin-top: 12px; }
+  section { display: grid; gap: 16px; }
+  .sub { color: var(--muted); }
+
+  /* verdict band */
+  .verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .verdict > div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .verdict .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .verdict .same .tag { color: var(--good); }
+  .verdict .diff .tag { color: var(--runtime); }
+  .verdict b { font-size: 18px; font-family: var(--font-display); }
+
+  /* map */
+  .map { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .lane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+  .lane.studio { border-top: 4px solid var(--studio); }
+  .lane.runtime { border-top: 4px solid var(--runtime); }
+  .lane-title { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
+  .lane-title span { font-size: 13px; color: var(--muted); }
+  .flow { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 8px; align-items: center; }
+  .entries { display: grid; gap: 8px; min-width: 0; }
+  .box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; min-width: 0; }
+  .box small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .box.entry { background: var(--bg); }
+  .studio .box.core { background: var(--studio-tint); border-color: var(--studio); }
+  .runtime .box.core { background: var(--runtime-tint); border-color: var(--runtime); }
+  .arrow { text-align: center; color: var(--muted); font-size: 20px; }
+  .bridge { background: var(--warn-tint); border: 1px dashed var(--warn); border-radius: 10px; padding: 12px 16px; font-size: 14.5px; color: var(--fg); }
+  .bridge b { color: var(--warn); }
+  @media (max-width: 560px) {
+    .flow { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); }
+  }
+
+  /* comparison table built from rows so it can stack on phones */
+  .cmp { border: 1px solid var(--line); border-radius: 10px; background: var(--card); overflow: hidden; }
+  .row { display: grid; grid-template-columns: 170px 1fr 1fr; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row > div { padding: 12px 14px; min-width: 0; font-size: 14.5px; }
+  .row.head > div { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+  .row.head .s { color: var(--studio); background: var(--studio-tint); }
+  .row.head .r { color: var(--runtime); background: var(--runtime-tint); }
+  .row .k { font-weight: 600; color: var(--fg); }
+  .row .s { border-left: 1px solid var(--line); }
+  .row .r { border-left: 1px solid var(--line); }
+  .row.shared .s, .row.shared .r { grid-column: 2 / 4; border-left: 1px solid var(--line); background: var(--good-tint); }
+  .row.shared .r { display: none; }
+  @media (max-width: 700px) {
+    .row, .row.shared { grid-template-columns: 1fr; }
+    .row.head { display: none; }
+    .row .s, .row .r, .row.shared .s { border-left: 0; grid-column: auto; }
+    .row .s::before { content: "Studio checks (Check now / Check all / recording)"; display: block; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--studio); font-weight: 600; margin-bottom: 2px; }
+    .row .r::before { content: "Runtime checks"; display: block; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--runtime); font-weight: 600; margin-bottom: 2px; }
+    .row.shared .s::before { content: "Both"; color: var(--good); }
+  }
+
+  /* when it is checked: one table per side, four columns that stack on phones */
+  .when-tbl { border: 1px solid var(--line); border-radius: 10px; background: var(--card); overflow: hidden; }
+  .when-tbl .row { grid-template-columns: 190px 1fr 140px 1fr; }
+  .when-tbl .row.head > div { font-size: 13px; color: var(--muted); background: var(--bg); }
+  .when-tbl .row > div + div { border-left: 1px solid var(--line); }
+  .when-tbl.studio-side .row.head > div:first-child { color: var(--studio); }
+  .when-tbl.runtime-side .row.head > div:first-child { color: var(--runtime); }
+  .tag-live, .tag-cheap, .tag-own { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+  .tag-live { background: var(--good-tint); color: var(--good); }
+  .tag-cheap { background: var(--code-bg); color: var(--muted); }
+  .tag-own { background: var(--warn-tint); color: var(--warn); }
+  @media (max-width: 700px) {
+    .when-tbl .row { grid-template-columns: 1fr; }
+    .when-tbl .row > div + div { border-left: 0; }
+    .when-tbl .row > div[data-l]::before { content: attr(data-l); display: block; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  }
+
+  /* three studio paths */
+  .paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .paths > div { background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--studio); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .paths ul, .effects ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px; }
+
+  /* effects */
+  .effects { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .effects > div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .effects .when { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .effects .out { font-size: 14.5px; }
+  .out b.s { color: var(--studio); }
+  .out b.r { color: var(--runtime); }
+
+  /* options */
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .opt { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .opt.rec { border: 2px solid var(--good); }
+  .opt .badge { justify-self: start; font-size: 12px; font-weight: 600; background: var(--good-tint); color: var(--good); padding: 2px 8px; border-radius: 999px; }
+  .opt ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px; }
+  .note { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; max-width: none; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Conxa sign-in checks</div>
+    <h1>Is this app signed in? Studio and the runtime now answer it with one rule.</h1>
+    <p class="lede">Check now, Check all and the recording gate ran one checker inside Build Studio, and the runtime, which runs your skills, ran its own. Since 2026-10-30 both follow the same rule in the same kind of browser. The sections below show what each side did before, and what changed.</p>
+  </header>
+
+  <section>
+    <h2>What changed</h2>
+    <div class="paths">
+      <div>
+        <h3>One rule</h3>
+        <ul>
+          <li>The same checks in the same order on both sides: password box, sign-in word in the address, success page, sign-in button, then a comparison with what a signed-out visitor sees.</li>
+          <li>Anything unclear is "unverified" and counts as not signed in, on both sides.</li>
+          <li>A shared test file runs the rule in Python and JavaScript, so they cannot drift apart.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>One kind of browser</h3>
+        <ul>
+          <li>One Chromium holding the merged sessions of every app in the group, one tab per app, stealth options on. Studio now checks the way a run does.</li>
+          <li>Check now on one app loads the whole group's sessions too.</li>
+          <li>Both sides open the app's login page.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>One trust time</h3>
+        <ul>
+          <li>A "signed in" answer is trusted for 10 minutes on both sides. The runtime used 6 hours.</li>
+          <li>Check now and Check all still always re-check.</li>
+          <li>Apps whose login page is the site's home page are no longer wrongly marked expired.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="same">
+        <span class="tag">Same code</span>
+        <b>Check now = Check all = recording gate</b>
+        <span class="sub">All three call <code>check_app_session_sync</code> in Python. The decision logic is identical.</span>
+      </div>
+      <div class="diff">
+        <span class="tag">Different code</span>
+        <b>The runtime</b>
+        <span class="sub">It uses <code>_isAuthenticated</code> in JavaScript. It opens a different page, follows different rules and keeps its answer for much longer.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>When is the sign-in checked?</h2>
+    <p class="sub">Every moment a check can happen, in Build Studio and in the runtime. <span class="tag-live">Live check</span> means a real browser opens the login page and applies the shared rule. <span class="tag-cheap">No check</span> means only a saved answer is read. <span class="tag-own">Own rule</span> means a different check, not the shared one.</p>
+
+    <h3 style="color: var(--studio)">In Build Studio</h3>
+    <div class="when-tbl studio-side">
+      <div class="row head"><div>You do this</div><div>What happens</div><div>Browser check?</div><div>Reuses a recent answer?</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Press Check now on an app</div>
+        <div data-l="What happens">That one app is checked, in a browser that holds the whole group's sessions. The app's badge is updated.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span></div>
+        <div data-l="Reuses a recent answer?">Never. It always checks again.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Press Check all on the Group page</div>
+        <div data-l="What happens">Every connected app is checked together in one browser. Apps that were never connected are skipped. Every badge is updated.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span></div>
+        <div data-l="Reuses a recent answer?">Never.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Press Record (new recording or re-record)</div>
+        <div data-l="What happens">The recording gate checks every app in the group before the recording browser opens. It stops and names any app that is never connected, expired or unconfirmed.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span> only for apps not checked in the last 10 minutes</div>
+        <div data-l="Reuses a recent answer?">Yes, for 10 minutes. Apps checked within that time are trusted as they are.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Start a workflow from the chat</div>
+        <div data-l="What happens">Runs the same gate to decide which sign-in cards to show. After you finish a sign-in during a re-test, after "sign in then test", and when Record refuses, it runs the gate again. Recording opens only when no app is left.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span> through the same gate</div>
+        <div data-l="Reuses a recent answer?">Yes, 10 minutes, so the repeats cost one real check at most.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Connect an app (press Done in its sign-in window)</div>
+        <div data-l="What happens">Studio loads the login page three ways (signed in, signed out, reloaded from the saved session) to learn a rule for that app, then tests the rule. A failed test keeps the window open. "Save anyway" skips learning and leaves the app unconfirmed.</div>
+        <div data-l="Browser check?"><span class="tag-own">Own rule</span> the learning step, not the shared rule</div>
+        <div data-l="Reuses a recent answer?">Not applicable. A confirmed sign-in counts as checked.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">A recording ends</div>
+        <div data-l="What happens">Nothing is checked. Any cookies the site changed are saved back, and each app's "recently checked" mark is cleared, so the next Record checks again.</div>
+        <div data-l="Browser check?"><span class="tag-cheap">No check</span></div>
+        <div data-l="Reuses a recent answer?">It removes the saved answer on purpose.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Open the Group page, the home screen or the chat</div>
+        <div data-l="What happens">Studio only reads the saved answer, refreshed about every 15 seconds. An app shows as signed in only if a check confirmed it in the last 10 minutes. Nothing is checked on page load.</div>
+        <div data-l="Browser check?"><span class="tag-cheap">No check</span></div>
+        <div data-l="Reuses a recent answer?">It only reads the saved answer.</div></div>
+
+      <div class="row"><div class="k" data-l="You do this">Press Run Test on a workflow</div>
+        <div data-l="What happens">Studio first reads the saved answer. If any app is not ready it opens the sign-in dialog. The real check happens next, inside the runtime (see below).</div>
+        <div data-l="Browser check?"><span class="tag-cheap">No check</span> in Studio itself</div>
+        <div data-l="Reuses a recent answer?">It only reads the saved answer.</div></div>
+    </div>
+
+    <h3 style="color: var(--runtime)">In the runtime</h3>
+    <div class="when-tbl runtime-side">
+      <div class="row head"><div>This happens</div><div>What happens</div><div>Browser check?</div><div>Reuses a recent answer?</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">Claude runs a skill (<code>execute_skill</code> or <code>execute_sequence</code>)</div>
+        <div data-l="What happens">Before any step, every app in the skill's group is checked. Apps that pass are used. Each app that is missing or expired gets its own sign-in tab, and the run waits for you in the background.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span> for apps without a fresh answer</div>
+        <div data-l="Reuses a recent answer?">Yes. An answer is trusted for 10 minutes (only if the session has cookies). A browser parked by a run in the last 90 seconds skips the check entirely.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">A scheduled run starts</div>
+        <div data-l="What happens">Same check, but it never opens a sign-in window. If an app is not signed in, the run fails with a message naming the app.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span></div>
+        <div data-l="Reuses a recent answer?">Yes, 10 minutes.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">Claude calls <code>authenticate</code></div>
+        <div data-l="What happens">Same check, then sign-in windows for what is missing. After you finish (it waits 45 seconds by default), it checks again to confirm.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span> before and after</div>
+        <div data-l="Reuses a recent answer?">Yes, 10 minutes. A just-finished sign-in counts as confirmed.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">Studio's Run Test starts</div>
+        <div data-l="What happens">The same check in Studio's sandbox runtime, which holds the group's staged sessions. It never waits for a late sign-in: it fails at once with the sign-in message.</div>
+        <div data-l="Browser check?"><span class="tag-live">Live check</span></div>
+        <div data-l="Reuses a recent answer?">Yes, 10 minutes.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">A waiting run resumes after you sign in</div>
+        <div data-l="What happens">No new check. The run continues in the warm browser your sign-in just filled.</div>
+        <div data-l="Browser check?"><span class="tag-cheap">No check</span></div>
+        <div data-l="Reuses a recent answer?">It reuses that browser.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">You sign in during a run's sign-in window</div>
+        <div data-l="What happens">While you sign in, the runtime watches for the moment you finish (it re-fetches the login page before and after, and watches the password box and cookies). After it saves your session, it re-tests the saved session with the shared rule.</div>
+        <div data-l="Browser check?"><span class="tag-own">Own rule</span> while waiting, <span class="tag-live">shared rule</span> for the final re-test</div>
+        <div data-l="Reuses a recent answer?">A successful re-test is saved as a fresh answer.</div></div>
+
+      <div class="row"><div class="k" data-l="This happens">A step fails and the page looks like a login page, mid-run</div>
+        <div data-l="What happens">The run stops its normal recovery and treats it as an expired sign-in. It clears that app's saved answer, then (when the app has a learned rule) starts one sign-in and resume. The next pre-flight checks that app again.</div>
+        <div data-l="Browser check?"><span class="tag-own">Own rule</span> a login-looking address after a failed step</div>
+        <div data-l="Reuses a recent answer?">It removes the saved answer on purpose.</div></div>
+    </div>
+
+    <p class="note">Not the same code yet: the Connect learning step, the runtime's wait-while-you-sign-in watcher, and the mid-run login-redirect check each have their own rules. Only the checks marked "Live check" use the shared rule.</p>
+  </section>
+
+  <section>
+    <h2>Who calls what, before the change</h2>
+    <p class="sub">Solid boxes on the left are the places a person triggers a check. The coloured box is the code that decides.</p>
+    <div class="map">
+      <div class="lane studio">
+        <div class="lane-title"><h3>Inside Build Studio (Python)</h3><span>conxa_compile/recorder/session.py</span></div>
+        <div class="flow">
+          <div class="entries">
+            <div class="box entry"><b>Check now</b><small>one app, Group page</small></div>
+            <div class="box entry"><b>Check all</b><small>every connected app, Group page</small></div>
+            <div class="box entry"><b>Recording gate</b><small>when you press Record</small></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="box core"><b><code>check_app_session_sync</code></b><small>starts a fresh headless browser per app, loads that app's saved session, opens a page, answers <b>ready</b>, <b>expired</b> or <b>unverified</b></small></div>
+        </div>
+      </div>
+      <div class="lane runtime">
+        <div class="lane-title"><h3>Inside the runtime (JavaScript)</h3><span>runtime/app/browser.js, login_signals.js</span></div>
+        <div class="flow">
+          <div class="entries">
+            <div class="box entry"><b>Running a skill</b><small>execute_skill pre-flight, before any step runs</small></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="box core"><b><code>_isAuthenticated</code></b><small>opens a tab in the run's one shared browser, answers <b>true</b> or <b>false</b></small></div>
+        </div>
+      </div>
+      <div class="bridge"><b>Only thing they share.</b> When an app has a learned rule (<code>auth_definition</code>), both sides score it with the same rules. A shared test file (<code>auth_definition_cases.json</code>) keeps the Python and JavaScript versions from drifting. Apps with no learned rule have no such guard.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The three Studio paths are not exactly alike</h2>
+    <p class="sub">They share the decision. They differ in when they ask and what they do with the answer.</p>
+    <div class="paths">
+      <div>
+        <h3>Check now</h3>
+        <ul>
+          <li>Checks one app, whenever you press it.</li>
+          <li>Always opens a real browser. Never reuses an earlier answer.</li>
+          <li>Updates that app's badge on the Group page.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Check all</h3>
+        <ul>
+          <li>Same as Check now, for every connected app at once.</li>
+          <li>Apps that were never connected are skipped.</li>
+          <li>Updates every badge on the Group page.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Recording gate</h3>
+        <ul>
+          <li>Runs when you start a recording.</li>
+          <li>Skips any app checked in the last 10 minutes and trusts that result.</li>
+          <li>Blocks the recording if any app is never connected, expired or unconfirmed.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Studio checker versus runtime checker, before the change</h2>
+    <p class="sub">This covers apps with no learned rule, the generic path. The last row is the exception. Every difference in this table except the Python/JavaScript split is now gone.</p>
+    <div class="cmp">
+      <div class="row head"><div></div><div class="s">Studio (Check now / Check all / recording)</div><div class="r">Runtime (running a skill)</div></div>
+
+      <div class="row"><div class="k">Language and file</div>
+        <div class="s">Python, <code>recorder/session.py</code></div>
+        <div class="r">JavaScript, <code>browser.js</code> and <code>login_signals.js</code></div></div>
+
+      <div class="row"><div class="k">Page it opens</div>
+        <div class="s">The app's success page if one is set, otherwise the login page.</div>
+        <div class="r">Always the login page.</div></div>
+
+      <div class="row"><div class="k">Calls it "signed out" when</div>
+        <div class="s">There is a password box, or the address looks like sign-in (wide pattern: sign-in, login, sso, oauth, challenge, and more), or a visible "Sign in" / "Log in" / "Sign up" button.</div>
+        <div class="r">There is a password box, or the address has a path piece named <code>login</code>, <code>signin</code>, <code>sign-in</code> or <code>session-expired</code>. It does not look for sign-in buttons.</div></div>
+
+      <div class="row"><div class="k">Calls it "signed in" when</div>
+        <div class="s">The page matches the success page. With no success page set, it just has to be a different page from the login page. Anything unclear is "unverified".</div>
+        <div class="r">The page does not look like sign-in and is a different page from what a cookie-less browser sees at the login address.</div></div>
+
+      <div class="row"><div class="k">Possible answers</div>
+        <div class="s">Three: ready, expired, unverified.</div>
+        <div class="r">Two: true or false. An error or timeout counts as false.</div></div>
+
+      <div class="row"><div class="k">Browser setup</div>
+        <div class="s">A fresh headless Chromium for each app. It holds only that app's own saved session.</div>
+        <div class="r">One shared Chromium holding the merged sessions of every app in the group. Each app is checked in its own tab, with stealth options on.</div></div>
+
+      <div class="row"><div class="k">Waiting</div>
+        <div class="s">Waits up to 10 s for the page, plus 1.5 s to settle, with a 20 s hard stop.</div>
+        <div class="r">Waits up to 30 s for the page, then re-reads for up to 3 s.</div></div>
+
+      <div class="row"><div class="k">How long it trusts an answer</div>
+        <div class="s">10 minutes, and only the recording gate uses it. Check now and Check all always re-check.</div>
+        <div class="r">6 hours, saved on disk against the session file's save time. Skipped when the session has no cookies.</div></div>
+
+      <div class="row"><div class="k">Inside Conxa Execute</div>
+        <div class="s">Not applicable.</div>
+        <div class="r">Cannot make a clean cookie-less copy there. Falls back to "not login-shaped means signed in", which is weaker.</div></div>
+
+      <div class="row shared"><div class="k">App has a learned rule</div>
+        <div class="s">Both sides score the page with the same rule and the same shared test file. Studio adds one extra step: if the rule says "no" or "unsure", it also looks for sign-in signs, so it can say "expired" instead of "unverified". Either way the app is not treated as signed in, so the pass or fail result matches.</div>
+        <div class="r"></div></div>
+    </div>
+  </section>
+
+  <section class="effects">
+    <div style="grid-column: 1 / -1">
+      <h2>When the two could disagree (now fixed)</h2>
+      <p class="sub">These come from reading the old code. I did not reproduce them in a live run.</p>
+    </div>
+    <div>
+      <span class="when">Different page</span>
+      <b>App with a success page</b>
+      <p class="out"><b class="s">Studio</b> opens the dashboard. <b class="r">Runtime</b> opens the login page. A dead session can look different on each, so the verdicts can differ.</p>
+    </div>
+    <div>
+      <span class="when">Different browser</span>
+      <b>Shared sign-in cookie</b>
+      <p class="out"><b class="s">Studio</b> loads only this app's session. <b class="r">Runtime</b> loads every app's session together, so a shared single-sign-on cookie from another app can make this one look signed in.</p>
+    </div>
+    <div>
+      <span class="when">Different patience</span>
+      <b>Slow page</b>
+      <p class="out">A page that takes 12 s to load can leave <b class="s">Studio</b> at "unverified" (10 s limit), while <b class="r">Runtime</b> (30 s limit) waits and may say signed in.</p>
+    </div>
+    <div>
+      <span class="when">Different memory</span>
+      <b>Signed out elsewhere</b>
+      <p class="out">If the site ends your session on its side, <b class="s">Studio</b> can notice within 10 minutes. <b class="r">Runtime</b> may trust its saved "signed in" for up to 6 hours.</p>
+    </div>
+    <div>
+      <span class="when">Different sign-in signs</span>
+      <b>Sign-in button, no password box</b>
+      <p class="out"><b class="s">Studio</b> reads a visible "Sign in" button as signed out. <b class="r">Runtime</b> does not look for it and relies on the address and the clean-browser comparison.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How they were made to agree</h2>
+    <p class="sub">The two sides cannot be literally one file, because Studio is Python and the runtime is JavaScript. Option A was built.</p>
+    <div class="opts">
+      <div class="opt rec">
+        <span class="badge">Built</span>
+        <h3>A. Same rules, same tests</h3>
+        <ul>
+          <li>Make the generic path use the same page, same signed-out signs and same three answers on both sides.</li>
+          <li>Add a shared test file for the generic path, like the one the learned path already has.</li>
+          <li>Smaller change. Keeps Studio fast and independent of the runtime version.</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>B. Studio calls the real runtime</h3>
+        <ul>
+          <li>Studio would launch the runtime it already stages in its sandbox and ask it to run the check.</li>
+          <li>Literally one implementation.</li>
+          <li>Heavier: every Check all starts the runtime, and Studio depends on the runtime's version.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Source files read: <code>conxa-builder/python/handlers/groups.py</code>, <code>handlers/session.py</code>, <code>conxa_compile/recorder/session.py</code>, <code>runtime/app/browser.js</code>, <code>runtime/app/login_signals.js</code>, <code>docs/TRD.md</code> section 5.3. Nothing was changed.</p>
+  </section>
+
+</div>

@@ -98,7 +98,7 @@ def test_unconnected_app_the_start_url_does_not_match_still_gates_recording(isol
     workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
 
     created = []
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "ready")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "ready" for a in targets})
     monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: created.append(1) or _FakeSess())
 
     h = _Harness()
@@ -213,7 +213,7 @@ def test_expired_required_app_blocks_recording(isolated_data_dir, monkeypatch):
     _age_checked_at(group.id, render_id, 700)  # past the gate's probe TTL, so it re-checks
     workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
 
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "expired" for a in targets})
 
     h = _Harness()
     with pytest.raises(_CommandError) as exc_info:
@@ -232,7 +232,7 @@ def test_unconfirmed_session_blocks_recording(isolated_data_dir, monkeypatch):
     _age_checked_at(group.id, render_id, 700)
     workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
     created = []
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "unverified")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "unverified" for a in targets})
     monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: created.append(1) or _FakeSess())
 
     h = _Harness()
@@ -261,7 +261,7 @@ def test_expired_sibling_app_blocks_recording(isolated_data_dir, monkeypatch):
     def _probe(app):
         return "expired" if app.name == "Slack" else "ready"
 
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", _probe)
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: _probe(a) for a in targets})
 
     h = _Harness()
     with pytest.raises(_CommandError) as exc_info:
@@ -281,7 +281,7 @@ def test_a_discarded_recording_does_not_clear_an_expired_verdict(isolated_data_d
     )
     _age_checked_at(group.id, slack_id, 700)
     workflow = create_workflow("Create a lead", "https://slack.test/app", group_id=group.id)
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "expired" for a in targets})
 
     h = _Harness()
     with pytest.raises(_CommandError):
@@ -318,7 +318,7 @@ def test_recently_checked_app_is_not_reprobed(isolated_data_dir, monkeypatch):
         calls.append(app.id)
         return "ready"
 
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", _probe)
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: _probe(a) for a in targets})
     monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: _FakeSess())
     monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
 

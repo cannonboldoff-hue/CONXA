@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 from conxa_compile.recorder import session as recorder_session
-from conxa_compile.recorder.session import RecordingSession, check_app_session_sync, url_matches_pattern
+from conxa_compile.recorder.session import RecordingSession, check_group_sessions_sync, url_matches_pattern
 from conxa_core.models.workflow import GroupApp
 
 
@@ -443,7 +443,7 @@ def test_finalize_video_file_renames_webm_without_touching_events(tmp_path) -> N
     assert sess.binding_errors == []
 
 
-def test_check_app_session_sync_returns_unverified_within_deadline_when_probe_wedges(monkeypatch, tmp_path) -> None:
+def test_check_group_sessions_sync_returns_unverified_within_deadline_when_probe_wedges(monkeypatch, tmp_path) -> None:
     """Regression guard: a wedged Playwright driver inside the probe body must
     not be able to hang the calling thread forever — see FIX.md. Bound the
     probe with a short deadline and confirm it returns (rather than blocking
@@ -453,17 +453,17 @@ def test_check_app_session_sync_returns_unverified_within_deadline_when_probe_we
     state_path.write_text("{}", encoding="utf-8")
     app = GroupApp(id="a", name="App", login_url="https://x.test/login", storage_state_path=str(state_path))
 
-    def _wedge(_app):
+    def _wedge(_targets, _apps):
         time.sleep(60)
-        return "expired"
+        return {"a": "expired"}
 
-    monkeypatch.setattr(recorder_session, "_probe_app_session_sync", _wedge)
+    monkeypatch.setattr(recorder_session, "_probe_group_sessions_sync", _wedge)
 
     started = time.monotonic()
-    result = check_app_session_sync(app, timeout_s=0.2)
+    result = check_group_sessions_sync([app], [app], timeout_s=0.2)
     elapsed = time.monotonic() - started
 
-    assert result == "unverified"
+    assert result == {"a": "unverified"}
     assert elapsed < 5, f"probe should return near the 0.2s deadline, took {elapsed:.2f}s"
 
 
@@ -1130,66 +1130,167 @@ def test_drain_dialog_server_events_records_a_dialog_accept_step() -> None:
     assert src_page is page
 
 
-def _obs(final_url="https://app.test/home", password_box=False, markers=None):
-    return {"final_url": final_url, "password_box": password_box, "markers": markers or [], "responses": [], "cookie_names": []}
+class _FakeGroupPage:
+    """A page that lands wherever the fake web says this address lands for this kind of visitor."""
+
+    def __init__(self, landing):
+        self._landing = landing
+        self.url = "about:blank"
+        self._probe: dict = {}
+
+    def on(self, *_a):
+        pass
+
+    def remove_listener(self, *_a):
+        pass
+
+    def goto(self, url, **_kw):
+        self.url, self._probe = self._landing[url]
+
+    def wait_for_load_state(self, *_a, **_kw):
+        pass
+
+    def wait_for_timeout(self, _ms):
+        pass
+
+    def evaluate(self, _script):
+        return self._probe
 
 
-def _stub_probe(monkeypatch, observation=None, raises=False):
+class _FakeGroupContext:
+    def __init__(self, landing, kwargs):
+        self.kwargs = kwargs
+        self.init_scripts: list[str] = []
+        self._landing = landing
+
+    def add_init_script(self, script):
+        self.init_scripts.append(script)
+
+    def new_page(self):
+        return _FakeGroupPage(self._landing)
+
+    def cookies(self):
+        return []
+
+
+class _FakeGroupBrowser:
+    def __init__(self, landing_in, landing_out):
+        self.contexts: list[_FakeGroupContext] = []
+        self._in, self._out = landing_in, landing_out
+        self.closed = False
+
+    def new_context(self, **kwargs):
+        ctx = _FakeGroupContext(self._in if "storage_state" in kwargs else self._out, kwargs)
+        self.contexts.append(ctx)
+        return ctx
+
+    def close(self):
+        self.closed = True
+
+
+def _fake_group_playwright(monkeypatch, landing_in, landing_out):
+    browser = _FakeGroupBrowser(landing_in, landing_out)
+    launches: list[bool] = []
+
     class _Pw:
+        chromium = type("C", (), {"launch": staticmethod(lambda headless=True: launches.append(headless) or browser)})()
+
         def __enter__(self):
-            if raises:
-                raise RuntimeError("driver died")
             return self
 
         def __exit__(self, *a):
             return False
 
-        chromium = type("C", (), {"launch": staticmethod(lambda headless=True: type("B", (), {
-            "new_context": lambda self, storage_state=None: type("X", (), {"new_page": lambda self: None})(),
-            "close": lambda self: None,
-        })())})()
-
     monkeypatch.setattr(recorder_session, "sync_playwright", lambda: _Pw())
-    monkeypatch.setattr(recorder_session, "_navigate_and_observe_sync", lambda *a, **k: observation)
+    return browser, launches
 
 
-def _probe_app(**kw):
-    return GroupApp(id="a", name="App", login_url="https://accounts.test/", storage_state_path="x.json", **kw)
+def _saved_app(tmp_path, app_id, host, cookie, **kw):
+    path = tmp_path / f"{app_id}.json"
+    path.write_text(json.dumps({"cookies": [{"name": cookie, "value": "v", "domain": host, "path": "/"}], "origins": []}), encoding="utf-8")
+    return GroupApp(id=app_id, name=app_id.upper(), login_url=f"https://{host}/login", storage_state_path=str(path), **kw)
 
 
-def test_probe_driver_failure_is_unverified_not_ready(monkeypatch) -> None:
-    _stub_probe(monkeypatch, raises=True)
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "unverified"
+_SIGNED_OUT_PAGE = {"passwordBox": True, "otpLike": False, "markers": []}
+_SIGNED_IN_PAGE = {"passwordBox": False, "otpLike": False, "markers": []}
 
 
-def test_probe_navigation_that_never_completed_is_unverified(monkeypatch) -> None:
-    _stub_probe(monkeypatch, _obs(final_url="about:blank"))
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "unverified"
+def test_group_probe_uses_one_browser_with_every_apps_session_and_stealth_options(monkeypatch, tmp_path) -> None:
+    """The check runs the way a run does: ONE Chromium, one context holding the merged sessions of
+    every app in the group, a tab per checked app, plus a cookie-less context for the baseline."""
+    a = _saved_app(tmp_path, "a", "a.test", "ca")
+    b = _saved_app(tmp_path, "b", "b.test", "cb")
+    landing_in = {
+        "https://a.test/login": ("https://a.test/home", _SIGNED_IN_PAGE),
+        "https://b.test/login": ("https://b.test/login", _SIGNED_OUT_PAGE),
+    }
+    landing_out = {
+        "https://a.test/login": ("https://a.test/login", _SIGNED_OUT_PAGE),
+        "https://b.test/login": ("https://b.test/login", _SIGNED_OUT_PAGE),
+    }
+    browser, launches = _fake_group_playwright(monkeypatch, landing_in, landing_out)
+
+    result = recorder_session.check_group_sessions_sync([a, b], [a, b])
+
+    assert result == {"a": "ready", "b": "expired"}
+    assert launches == [True]  # one headless Chromium for the whole group
+    session_ctx, baseline_ctx = browser.contexts
+    assert {c["name"] for c in session_ctx.kwargs["storage_state"]["cookies"]} == {"ca", "cb"}
+    assert "storage_state" not in baseline_ctx.kwargs  # genuinely signed out
+    for ctx in (session_ctx, baseline_ctx):
+        assert ctx.kwargs["user_agent"] == recorder_session._STEALTH_CONTEXT_OPTIONS["user_agent"]
+        assert ctx.kwargs["timezone_id"] == "America/New_York"
+    assert session_ctx.init_scripts == [recorder_session._MASK_AUTOMATION_SCRIPT]
+    assert browser.closed
 
 
-def test_probe_signin_page_on_a_different_path_is_expired(monkeypatch) -> None:
-    """The login URL's prefix didn't match where the bounce landed, which used to read as ready."""
-    _stub_probe(monkeypatch, _obs(final_url="https://accounts.test/v3/signin/identifier"))
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
+def test_checking_one_app_still_loads_the_whole_groups_sessions(monkeypatch, tmp_path) -> None:
+    """"Check now" on one app sees the same cookies a run would: a shared sign-in cookie belonging
+    to a sibling app is in the browser too."""
+    a = _saved_app(tmp_path, "a", "a.test", "ca")
+    b = _saved_app(tmp_path, "b", "b.test", "cb")
+    landing = {"https://a.test/login": ("https://a.test/home", _SIGNED_IN_PAGE)}
+    landing_out = {"https://a.test/login": ("https://a.test/login", _SIGNED_OUT_PAGE)}
+    browser, _launches = _fake_group_playwright(monkeypatch, landing, landing_out)
+
+    assert recorder_session.check_group_sessions_sync([a], [a, b]) == {"a": "ready"}
+    assert {c["name"] for c in browser.contexts[0].kwargs["storage_state"]["cookies"]} == {"ca", "cb"}
 
 
-def test_probe_signin_button_or_password_box_is_expired(monkeypatch) -> None:
-    _stub_probe(monkeypatch, _obs(markers=[{"role": "a", "name": "Sign in"}]))
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
-    _stub_probe(monkeypatch, _obs(password_box=True))
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "expired"
+def test_group_probe_page_matching_the_signed_out_baseline_is_not_ready(monkeypatch, tmp_path) -> None:
+    a = _saved_app(tmp_path, "a", "a.test", "ca")
+    same = ("https://a.test/login", _SIGNED_IN_PAGE)
+    _fake_group_playwright(monkeypatch, {"https://a.test/login": same}, {"https://a.test/login": same})
+    # not login-shaped by password box, but /login is a sign-in address, so this reads as expired
+    assert recorder_session.check_group_sessions_sync([a], [a]) == {"a": "expired"}
+
+    b = _saved_app(tmp_path, "b", "b.test", "cb")
+    root = ("https://b.test/", _SIGNED_IN_PAGE)
+    _fake_group_playwright(monkeypatch, {"https://b.test/login": root}, {"https://b.test/login": root})
+    assert recorder_session.check_group_sessions_sync([b], [b]) == {"b": "unverified"}
 
 
-def test_probe_leaving_login_with_no_signin_evidence_is_ready(monkeypatch) -> None:
-    _stub_probe(monkeypatch, _obs(final_url="https://myaccount.test/"))
-    assert recorder_session._probe_app_session_sync(_probe_app()) == "ready"
+def test_group_probe_driver_failure_is_unverified_not_ready(monkeypatch, tmp_path) -> None:
+    a = _saved_app(tmp_path, "a", "a.test", "ca")
+
+    def _boom():
+        raise RuntimeError("driver died")
+
+    monkeypatch.setattr(recorder_session, "sync_playwright", _boom)
+    assert recorder_session.check_group_sessions_sync([a], [a]) == {"a": "unverified"}
 
 
-def test_probe_unmatched_page_with_success_url_is_unverified(monkeypatch) -> None:
-    _stub_probe(monkeypatch, _obs(final_url="https://app.test/onboarding"))
-    assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "unverified"
-    _stub_probe(monkeypatch, _obs(final_url="https://app.test/dashboard"))
-    assert recorder_session._probe_app_session_sync(_probe_app(success_url="https://app.test/dashboard")) == "ready"
+def test_missing_or_corrupt_saved_session_is_expired_without_a_browser(monkeypatch, tmp_path) -> None:
+    corrupt = tmp_path / "bad.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    missing = GroupApp(id="m", name="M", login_url="https://m.test/login", storage_state_path=str(tmp_path / "gone.json"))
+    broken = GroupApp(id="c", name="C", login_url="https://c.test/login", storage_state_path=str(corrupt))
+
+    def _no_browser():
+        raise AssertionError("no browser should start")
+
+    monkeypatch.setattr(recorder_session, "sync_playwright", _no_browser)
+    assert recorder_session.check_group_sessions_sync([missing, broken], [missing, broken]) == {"m": "expired", "c": "expired"}
 
 
 def test_a_download_waits_for_its_click_report_before_it_is_queued(monkeypatch):

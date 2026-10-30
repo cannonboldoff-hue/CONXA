@@ -196,15 +196,6 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "candidates only: the exact part of the recorded address that changes\"}]}. Never "
         "invent a ref, never write a selector, and never claim a gap you cannot see in the steps."
     ),
-    # JSON: before recording, a short checklist of what the person will need to do, from their own description.
-    "record_plan": (
-        "A person is about to record a task in a browser and described what it is for (task), "
-        "with the address they start from (start_url). Write the short checklist of actions they "
-        "will most likely need to perform, in order, in plain words a non-technical person "
-        "understands. 3 to 8 items, each under 12 words, each starting with a verb. Only what the "
-        "description says or clearly implies: never invent a button name, field name or value. "
-        "Return ONLY a JSON object: {\"steps\": [\"...\"]}."
-    ),
     # JSON: is the person's message a command for one of the actions available right now?
     "chat_route_intent": (
         "The person is chatting inside a Build Studio workflow conversation. You get the "
@@ -880,18 +871,20 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
         # Text-only, before compile: reads the merged timeline of one recording (browser events
         # lined up with what a video model saw) and writes the understanding. Meaning only: it
         # never sees or writes a selector, and conversation/timeline_understanding.py validates
-        # every field before anyone is shown it.
+        # every field before anyone is shown it. The model writes the questions; code only checks them.
         return [
             {
                 "role": "system",
                 "content": (
                     "A person recorded a task in a browser. You get `rows`: the recording in time "
                     "order. Each row has a `ref` (r1, r2...) and is either an `event` (what they "
-                    "did: action, target, value, url, and `seen`: what a video model saw at that "
-                    "moment, or null if it missed it) or an `observation` (something with no "
-                    "browser event: a wait, a native dialog, a download bar). You also get "
-                    "`task` (what the person said it is for, may be empty), `chat` (what they "
-                    "said while recording) and `candidates`: values taken from the recording. "
+                    "did: action, target, value, url, `dialog` when it happened inside a popup, and "
+                    "`seen`: what a video model saw at that moment, or null if it missed it) or an "
+                    "`observation` (something with no browser event: a wait, a native dialog, a "
+                    "download bar). You also get `task` (what the person said it is for, may be "
+                    "empty), `chat` (what they said while recording), `candidates`: values taken "
+                    "from the recording, and `must_ask`: moments that always need a person (a "
+                    "popup asking for a decision = effect fork, a file going in = effect upload). "
                     "Write the understanding in plain words a non-technical person reads. "
                     "Return ONLY a JSON object: {\"goal\": \"one sentence\", \"phases\": "
                     "[{\"name\": \"...\", \"from_row\": \"r1\", \"to_row\": \"r4\"}], \"values\": "
@@ -902,19 +895,32 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "\"gaps\": [{\"row\": \"r3\", \"note\": \"something the video showed that the "
                     "browser did not record, or the other way round\"}], \"short_summary\": "
                     "\"one sentence for the whole task\", \"detailed_summary\": [{\"row\": "
-                    "\"r1\", \"text\": \"what happens here\"}], \"questions\": [{\"kind\": "
-                    "\"upload|confirm_before|popup_dismiss|fork\", "
-                    "\"row\": \"r5\", \"prompt\": \"the question, one sentence\", \"best_guess\": "
-                    "\"see below, or empty\", \"cost_rank\": 1}]}. \"varies\": the task describes "
-                    "a kind of thing, or does not name this one, so a future run would use a "
-                    "different one. \"fixed\": the task names this exact thing, or it is the "
-                    "same page every time. \"unsure\": you cannot tell; do not guess. Questions: "
-                    "only ask what the rows make worth asking; `cost_rank` 1 is the question "
-                    "where a wrong guess costs the most. best_guess by kind: upload "
-                    "\"each_run\"|\"fixed_path\"; confirm_before \"confirm\"|\"no_confirm\"; "
-                    "popup_dismiss \"dismiss\"|\"keep\"; "
-                    "fork: leave empty. Never invent a ref or a row, never write "
-                    "a selector, and never claim a gap you cannot see in the rows."
+                    "\"r1\", \"text\": \"what happens here\"}], \"decided\": [{\"row\": \"r2\", "
+                    "\"text\": \"a point you settled yourself\", \"reason\": \"why\"}], "
+                    "\"questions\": [{\"effect\": "
+                    "\"value|upload|confirm_before|popup_dismiss|fork|note\", \"row\": \"r5\", "
+                    "\"ref\": \"candidate ref, value only\", \"prompt\": \"the question, one plain "
+                    "sentence about their task\", \"why\": \"one line on why it matters\", "
+                    "\"choices\": [{\"id\": \"<id below>\", \"label\": \"short answer in your own "
+                    "words\"}], \"best_guess\": \"an id, or empty\", \"cost_rank\": 1}]}. "
+                    "\"varies\": the task describes a kind of thing, or does not name this one, so "
+                    "a future run would use a different one. \"fixed\": the task names this exact "
+                    "thing, or it is the same page every time. \"unsure\": you cannot tell; do not "
+                    "guess. Decide every open point you can from the rows, the task and the chat, "
+                    "and list it in `decided` with the reason. Ask only what only the person "
+                    "knows or must approve, and only once: never two questions about the same "
+                    "thing. Most recordings need 0 to 3 questions. Each effect changes the run in "
+                    "one way and has fixed choice ids, use exactly these: value (a clicked item or "
+                    "address in `candidates`: is it the same every run?) varies|fixed; upload "
+                    "each_run|fixed_path; confirm_before (a step that cannot be undone) "
+                    "confirm|no_confirm; popup_dismiss (a plain popup that may be closed) "
+                    "dismiss|keep; fork (a popup that asks for a decision: replace/keep, "
+                    "yes/no) by_input|ask_human|stop; note (anything else only the person "
+                    "knows, such as what to do when nothing matches) with 2 or 3 choices whose "
+                    "ids you leave out. Give a `ref` for value. Never answer a fork or a "
+                    "confirm_before yourself: leave best_guess empty. `cost_rank` 1 is the "
+                    "question where a wrong guess costs the most. Never invent a ref or a row, "
+                    "never write a selector, and never claim a gap you cannot see in the rows."
                 ),
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
@@ -987,7 +993,7 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         body["max_tokens"] = 16384
     if task in ("chat_map_answer", "studio_chat_actions", "chat_route_intent"):
         body["max_tokens"] = 1024
-    if task in ("workflow_understanding", "record_plan"):
+    if task == "workflow_understanding":
         body["max_tokens"] = 2048
     if task == "timeline_understanding":
         # Summaries are written per row, so this scales with the recording.

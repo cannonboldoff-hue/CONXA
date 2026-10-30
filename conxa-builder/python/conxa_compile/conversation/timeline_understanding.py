@@ -23,7 +23,7 @@ import re
 from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
-from conxa_compile.conversation.clarify import _chosen_values_question, _coverage_question, _question
+from conxa_compile.conversation.clarify import _question
 
 TASK = "timeline_understanding"
 MAX_ROWS = 150
@@ -31,19 +31,43 @@ MAX_QUESTIONS = 5                 # shown at once; the rest are queued under "Mo
 MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
 MAX_URL_CANDIDATES = 8
+MAX_DECIDED = 8
 _NAME_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _VERDICTS = ("fixed", "varies", "unsure")
 _FALLBACK_NAME = {"url": "page_address", "click": "item", "typed": "value"}
 
-# kind -> {allowed best_guess: choice id}. A kind with no entry is never pre-filled.
+# What a question's answer can do. The ids are code's (an answer maps to an edit by id); the model
+# writes the sentence and the labels. ``note`` changes nothing: its answer rides into the compile as text.
+FALLBACK_CHOICES: dict[str, list[tuple[str, str, str]]] = {
+    "value": [("varies", "Different every time", "Whoever uses it types or picks it."),
+              ("fixed", "Always this one", "It stays exactly as you recorded it.")],
+    "upload": [("each_run", "No, whoever uses it picks the file", "They are asked for the file before it starts."),
+               ("fixed_path", "Yes, always use this file", "It uses the file you picked while recording.")],
+    "confirm_before": [("confirm", "Yes, ask first", "A person approves this step each time before it happens."),
+                       ("no_confirm", "No, just do it", "It runs on its own.")],
+    "popup_dismiss": [("dismiss", "Yes, close it", "If it shows up, it is closed. If not, it carries on."),
+                      ("keep", "No, leave it", "It does nothing special about it.")],
+    "fork": [("by_input", "Let whoever uses it decide each time", "They get a question to answer before it starts."),
+             ("ask_human", "Stop and ask a person each time", "It waits on the popup until someone decides."),
+             ("stop", "Stop completely", "Treat this popup as a problem and end here.")],
+}
+_FALLBACK_PROMPT = {
+    "upload": "Is the file the same every time?",
+    "confirm_before": "Should it check with someone before this step?",
+    "popup_dismiss": "A message box appeared here. Should it close it when it shows up?",
+    "fork": "A message box asked for a decision. What should happen when it does?",
+}
+# effect -> best_guess it may carry. An effect with no entry is never pre-filled.
 GUESSES: dict[str, set[str]] = {
+    "value": {"varies", "fixed"},
     "upload": {"each_run", "fixed_path"},
     "confirm_before": {"confirm", "no_confirm"},
     "popup_dismiss": {"dismiss", "keep"},
-    "fork": set(),
 }
+EFFECTS = (*FALLBACK_CHOICES, "note")
 # A guess that would approve a step that cannot be undone, or choose a popup option, is never pre-filled.
 UNSAFE_GUESSES = {("confirm_before", "no_confirm")}
+_UPLOAD_ACTIONS = ("upload", "upload_intent")
 
 Caller = Callable[[str, dict[str, Any], int], "dict[str, Any] | None"]
 
@@ -127,6 +151,18 @@ def _seen(segment: dict[str, Any] | None) -> dict[str, Any] | None:
     return {k: segment[k] for k in keep if segment.get(k)}
 
 
+def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Moments that always need a person, found in the browser's own signals: a popup asking for a
+    decision, and a file going in. The model words these; it cannot drop them (validate puts them back)."""
+    out = []
+    for r in _events(merged):
+        if r.get("dialog") == "decision":
+            out.append({"row": r["row_ref"], "effect": "fork"})
+        elif r.get("action") in _UPLOAD_ACTIONS:
+            out.append({"row": r["row_ref"], "effect": "upload"})
+    return out
+
+
 def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for r in merged[:MAX_ROWS]:
@@ -136,6 +172,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
                 "ref": r["row_ref"], "kind": "event", "action": r.get("action"), "target": r.get("target"),
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:80] if value else None),
                 "url": r.get("url"), "seen": _seen(r.get("segment")),
+                **({"dialog": r["dialog"]} if r.get("dialog") else {}),
             })
         else:
             rows.append({"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
@@ -144,11 +181,99 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
         "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"]}
                        for c in candidates],
+        "must_ask": must_ask(merged),
     }
 
 
 def _text(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
+
+
+def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
+    """Code's ids, the model's labels. A label that is missing or unusable falls back to the stock one."""
+    if effect == "note":
+        picked = [c for c in offered or [] if isinstance(c, dict) and _text(c.get("label"), 90)][:3]
+        if len(picked) < 2:
+            return []
+        return [{"id": f"c{i}", "label": _text(c["label"], 90), "detail": ""} for i, c in enumerate(picked, 1)]
+    given = {str(c.get("id")): c for c in offered or [] if isinstance(c, dict)}
+    out = []
+    for cid, label, detail in FALLBACK_CHOICES[effect]:
+        mine = given.get(cid) or {}
+        out.append({"id": cid, "label": _text(mine.get("label"), 90) or label, "detail": detail})
+    return out
+
+
+def _fallback_question(effect: str, row_ref: str, row: dict[str, Any]) -> dict[str, Any]:
+    return {"kind": effect, "row": row_ref, "event_id": row.get("event_id"), "prompt": _FALLBACK_PROMPT[effect], "why": "",
+            "choices": _choices_for(effect, None), "best_guess": "", "cost_rank": 1}
+
+
+def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> dict[str, Any]:
+    label = (cand.get("label") or cand["recorded"])[:60]
+    return {"kind": "value", "row": row["row_ref"], "event_id": row.get("event_id"), "ref": cand["ref"],
+            "prompt": f"Is “{label}” the same every time, or different each run?", "why": "",
+            "choices": _choices_for("value", None), "best_guess": guess, "cost_rank": 3}
+
+
+def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
+                       values: dict[str, dict[str, Any]], taken: set[str]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for q in raw_questions or []:
+        if not isinstance(q, dict):
+            continue
+        effect = q.get("effect") or q.get("kind")
+        row = rows.get(q.get("row"))
+        prompt = _text(q.get("prompt"), 240)
+        if effect not in EFFECTS or row is None or not prompt:
+            continue
+        ref = ""
+        if effect == "value":
+            ref = str(q.get("ref") or "")
+            cand = by_ref.get(ref)
+            if cand is None or cand["kind"] == "typed":      # typed text is already an input once compiled
+                continue
+            if ref not in values or values[ref]["verdict"] == "fixed":
+                values[ref] = {"verdict": "unsure", "literal": cand["literal"],
+                               "name": _unique_name("", taken, _FALLBACK_NAME[cand["kind"]])}
+        elif effect in ("fork", "popup_dismiss"):
+            # The page decides which, not the model: a decision popup is a fork, anything else is not.
+            if row.get("dialog") == "decision":
+                effect = "fork"
+            elif effect == "fork":
+                continue
+        choices = _choices_for(effect, q.get("choices"))
+        if not choices:
+            continue
+        guess = str(q.get("best_guess") or "")
+        if guess not in GUESSES.get(effect, set()) or (effect, guess) in UNSAFE_GUESSES:
+            guess = ""
+        rank = q.get("cost_rank")
+        out.append({"kind": effect, "row": row["row_ref"], "event_id": row.get("event_id"), "prompt": prompt,
+                    "why": _text(q.get("why"), 200), "choices": choices, "best_guess": guess,
+                    "cost_rank": rank if isinstance(rank, int) and not isinstance(rank, bool) else 99,
+                    **({"ref": ref} if ref else {})})
+    return out
+
+
+def _dedupe(questions: list[dict[str, Any]], rows: dict[str, Any]) -> list[dict[str, Any]]:
+    """One question per recorded value and per (row, effect). A value question yields to a decision
+    popup on its row; any other question on a row yields to that row's value question."""
+    questions = sorted(questions, key=lambda q: q["cost_rank"])
+    value_rows = {q["row"] for q in questions if q["kind"] == "value" and rows[q["row"]].get("dialog") != "decision"}
+    seen: set[Any] = set()
+    out = []
+    for q in questions:
+        if q["kind"] == "value" and rows[q["row"]].get("dialog") == "decision":
+            continue
+        if q["kind"] not in ("value", "fork") and q["row"] in value_rows:
+            continue
+        key = ("ref", q["ref"]) if q["kind"] == "value" else (q["row"], q["kind"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(q)
+    return out
 
 
 def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, Any]],
@@ -187,26 +312,28 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     detailed = [{"row": d["row"], "text": _text(d.get("text"), 240)} for d in raw.get("detailed_summary") or []
                 if isinstance(d, dict) and d.get("row") in rows and _text(d.get("text"), 240)]
 
-    questions = []
-    for q in raw.get("questions") or []:
-        if not isinstance(q, dict) or q.get("kind") not in GUESSES or q.get("row") not in rows or not _text(q.get("prompt"), 240):
+    decided = [{"row": d["row"], "text": _text(d.get("text"), 160), "reason": _text(d.get("reason"), 160)}
+               for d in raw.get("decided") or []
+               if isinstance(d, dict) and d.get("row") in rows and _text(d.get("text"), 160)][:MAX_DECIDED]
+
+    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken)
+    for m in must_ask(merged):
+        if not any(q["row"] == m["row"] and q["kind"] == m["effect"] for q in questions):
+            questions.append(_fallback_question(m["effect"], m["row"], rows[m["row"]]))
+    have = {q.get("ref") for q in questions}
+    for ref, v in values.items():
+        cand = by_ref[ref]
+        if v["verdict"] == "fixed" or cand["kind"] == "typed" or ref in have:
             continue
-        guess = str(q.get("best_guess") or "")
-        if guess not in GUESSES[q["kind"]] or (q["kind"], guess) in UNSAFE_GUESSES:
-            guess = ""
-        rank = q.get("cost_rank")
-        questions.append({
-            "kind": q["kind"], "row": q["row"], "event_id": rows[q["row"]].get("event_id"),
-            "prompt": _text(q["prompt"], 240), "best_guess": guess,
-            "cost_rank": rank if isinstance(rank, int) and not isinstance(rank, bool) else 99,
-        })
+        questions.append(_value_question(cand, rows[cand["row_refs"][0]], "varies" if v["verdict"] == "varies" else ""))
+    questions = _dedupe(questions, rows)
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
     return {
         "goal": _text(raw.get("goal"), 200), "phases": phases, "values": values,
         "success_check": _text(raw.get("success_check"), 200), "gaps": gaps,
         "short_summary": _text(raw.get("short_summary"), 300), "detailed_summary": detailed,
-        "questions": questions,
+        "decided": decided, "questions": questions,
     }
 
 
@@ -240,7 +367,7 @@ def understand_timeline(
     look at). Never raises."""
     candidates = candidates_from_timeline(merged)
     result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "phases": [], "values": {},
-                              "success_check": "", "gaps": [], "short_summary": "", "detailed_summary": [], "questions": []}
+                              "success_check": "", "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
         return result
     try:
@@ -258,6 +385,8 @@ def understand_timeline(
                 if c["kind"] == "url":
                     result["values"][c["ref"]] = {"verdict": "unsure", "literal": c["literal"],
                                                   "name": _unique_name("", taken, _FALLBACK_NAME["url"])}
+                    row = next(r for r in merged if r["row_ref"] == c["row_refs"][0])
+                    result["questions"].append(_value_question(c, row, ""))      # asked, nothing pre-ticked
         result["short_summary"] = f"{len(_events(merged))} recorded actions."
     if not result["detailed_summary"]:
         result["detailed_summary"] = _fallback_detailed(merged)
@@ -268,68 +397,29 @@ def understand_timeline(
 
 # --- questions ------------------------------------------------------------------------------
 
-_Q = {
-    "upload": ("Is the file the same every time?", [
-        ("each_run", "No, whoever uses it picks the file", "They are asked for the file before it starts."),
-        ("fixed_path", "Yes, always use this file", "It uses the file you picked while recording.")]),
-    "confirm_before": ("Should it check with someone before this step?", [
-        ("confirm", "Yes, ask first", "A person approves this step each time before it happens."),
-        ("no_confirm", "No, just do it", "It runs on its own.")]),
-    "popup_dismiss": ("A message box appeared here. Should it close it when it shows up?", [
-        ("dismiss", "Yes, close it", "If it shows up, it is closed. If not, it carries on."),
-        ("keep", "No, leave it", "It does nothing special about it.")]),
-    "fork": ("A message box asked for a decision. What should happen when it does?", [
-        ("by_input", "Let whoever uses it decide each time", "They get a question to answer before it starts."),
-        ("ask_human", "Stop and ask a person each time", "It waits on the popup until someone decides."),
-        ("stop", "Stop completely", "Treat this popup as a problem and end here.")]),
-}
-
-
-def _choices(rows: list[tuple[str, str, str]]) -> list[dict[str, Any]]:
-    return [{"id": i, "label": label, "detail": detail} for i, label, detail in rows]
-
-
 def questions_from_understanding(und: dict[str, Any], merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Clarify-shaped questions (``phase: "pre_compile"``), most important first. The first
-    MAX_QUESTIONS are ``open``; the rest ``queued``. A card pre-selects ``best_guess`` but it only
-    counts when the person presses Confirm. Answers become decisions (decisions.py), not edits."""
+    """Clarify-shaped questions (``phase: "pre_compile"``), most important first, exactly the ones
+    ``validate`` kept: nothing is added here. The first MAX_QUESTIONS are ``open``; the rest
+    ``queued``. A card pre-selects ``best_guess`` but it only counts when the person presses Confirm.
+    Answers become decisions (decisions.py), not edits."""
     rows = {r["row_ref"]: r for r in merged}
+    cands = {c["ref"]: c for c in und.get("candidates") or []}
     out: list[dict[str, Any]] = []
-
-    short = und.get("short_summary") or ""
-    steps = [f"{d['text']}" for d in und.get("detailed_summary") or []]
-    body = short + ("\n\n" + "\n".join(f"• {s}" for s in steps[:12]) if steps else "")
-    out.append(_question("confirm_summary", "confirm_summary", "Is this what you recorded?", body, _choices([
-        ("yes", "Yes, that’s right", "I’ll build it from this."),
-        ("no", "No, something is wrong", "I’ll stop here so you can record it again.")]),
-        phase="pre_compile", best_guess="yes", summary=short, goal=und.get("goal") or ""))
-
-    if und.get("gaps"):
-        q = _coverage_question(" ".join(g["note"] for g in und["gaps"][:2]))
-        q["phase"] = "pre_compile"
-        out.append(q)
-
-    # Typed text is already an input once compiled; the compile-time "values" question owns it.
-    cands = [{**c, "supported": True, "step_keys": []} for c in und.get("candidates") or []
-             if c["kind"] != "typed" and c.get("verdict") in ("varies", "unsure") and c.get("name")]
-    chosen = _chosen_values_question({"candidates": cands}) if cands else None
-    if chosen:
-        by_ref = {c["ref"]: c for c in cands}
-        chosen["phase"] = "pre_compile"
-        chosen["event_ids"] = sorted({e for c in cands for e in c.get("event_ids") or [] if e is not None})
-        for item in chosen["items"]:
-            item["event_ids"] = by_ref[item["ref"]].get("event_ids") or []
-            item["kind"] = by_ref[item["ref"]]["kind"]
-        out.append(chosen)
-
     for q in und.get("questions") or []:
-        title, choices = _Q[q["kind"]]
+        extra: dict[str, Any] = {}
+        qid = f"{q['kind']}:{q['row']}"
+        if q["kind"] == "value":
+            c = cands.get(q["ref"])
+            if c is None or not c.get("name"):
+                continue
+            qid = f"value:{q['ref']}"
+            extra["items"] = [{"ref": c["ref"], "name": c["name"], "literal": c["literal"], "recorded": c["recorded"],
+                               "kind": c["kind"], "event_ids": c.get("event_ids") or []}]
         out.append(_question(
-            q["kind"], f"{q['kind']}:{q['row']}", q["prompt"] or title, "", _choices(list(choices)),
+            q["kind"], qid, q["prompt"], q.get("why") or "", [dict(c) for c in q["choices"]],
             phase="pre_compile", best_guess=q["best_guess"], row_ref=q["row"],
             event_ids=[q["event_id"]] if q.get("event_id") is not None else [],
-            target=rows.get(q["row"], {}).get("target") or ""))
-
+            target=rows.get(q["row"], {}).get("target") or "", **extra))
     for n, q in enumerate(out):
         q["status"] = "open" if n < MAX_QUESTIONS else "queued"
     return out

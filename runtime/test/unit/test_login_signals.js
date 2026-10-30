@@ -24,6 +24,8 @@ const {
   templatePath,
   statusMatchesSpec,
   evaluateAuthDefinition,
+  classifySession,
+  matchesSuccessUrl,
 } = require("../../app/login_signals");
 
 test("ticketSignature sorts names/keys so signature comparison isn't order-sensitive", () => {
@@ -317,6 +319,27 @@ for (const c of AUTH_CASES) {
     assert.strictEqual(result.verdict, c.expect.verdict, JSON.stringify(result));
   });
 }
+
+// ── classifySession — shared fixture with auth_learning.py::classify_session ────────────────────
+// Same cases run through the Python twin in conxa-cloud/tests/test_session_check.py. One rule for
+// pre-flight and for Build Studio's Check now / Check all / recording gate.
+const SESSION_CASES = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "fixtures", "session_check_cases.json"), "utf-8"),
+);
+
+for (const c of SESSION_CASES) {
+  test(`classifySession fixture: ${c.name}`, () => {
+    const state = classifySession(c.observation, c.baseline, c.app, { noBaselineOk: Boolean(c.noBaselineOk) });
+    assert.strictEqual(state, c.expect.state);
+  });
+}
+
+test("matchesSuccessUrl: a literal {} is a wildcard, anything else is a prefix", () => {
+  assert.ok(matchesSuccessUrl("https://drive.google.com/drive/my-drive", "https://drive.google.com/{}"));
+  assert.ok(!matchesSuccessUrl("https://accounts.google.com/", "https://drive.google.com/{}"));
+  assert.ok(!matchesSuccessUrl("https://a.test/", ""));
+  assert.ok(!matchesSuccessUrl("https://a.test/", "{}"));
+});
 
 test("evaluateAuthDefinition: no definition or no observation -> unsure, never a false yes", () => {
   assert.strictEqual(evaluateAuthDefinition(null, { final_url: "https://a.test/" }).verdict, "unsure");

@@ -26,7 +26,7 @@ class GroupApp(BaseModel):
     # When this app's session was last actually probed (headless navigation to
     # success_url) rather than merely captured. None means "never verified since
     # capture" — group_auth_status treats that as unverified even if captured_at
-    # is set. Set by check_app_session_sync callers (recording gate, "Check now").
+    # is set. Set by check_group_sessions_sync callers (recording gate, "Check now").
     checked_at: float | None = None
     # Why the last probe could not confirm this session either way (timeout, network error,
     # an unrecognised page). Empty when the last probe reached a verdict. Distinct from

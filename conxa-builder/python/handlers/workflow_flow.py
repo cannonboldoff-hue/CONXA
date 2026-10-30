@@ -262,26 +262,6 @@ class WorkflowFlowMixin:
 
     # ── recording ───────────────────────────────────────────────────────────────────────────
 
-    def _flow_post_record_plan(self, workflow: Any, sink: Any) -> None:
-        """A checklist from the person's own description, posted a moment after recording opens (a
-        model call must not delay the browser). Nothing is posted without a description or a plan."""
-        task = (workflow.task_description or "").strip()
-        if not task:
-            return
-        workflow_id, target = workflow.id, workflow.target_url or ""
-
-        def work() -> None:
-            try:
-                from conxa_compile.conversation import harness, record_plan
-
-                steps = record_plan.generate(task, target)
-                if steps:
-                    harness.post_card(_thread(workflow_id), "record_plan", "open", sink=sink, steps=steps, actions=[])
-            except Exception:  # noqa: BLE001 -- advisory only
-                pass
-
-        threading.Thread(target=work, daemon=True, name="record-plan").start()
-
     def _flow_open_recording(self, workflow: Any, rid: str, sink: Any, variant_of: str = "",
                              segment_from: str = "", adopt_run_id: str = "", segment_mode: str = "replace") -> dict[str, Any]:
         """Open the recording browser. ``variant_of`` (an outcome fork's step key) makes it a
@@ -355,7 +335,6 @@ class WorkflowFlowMixin:
         else:
             self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
                            "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
-            self._flow_post_record_plan(workflow, sink)
         card = harness.post_card(
             _thread(workflow_id), "recording", "recording", sink=sink,
             refs={"session_id": session_id, "embedded": embedded, **({"variant_of": variant_of} if variant_of else {}),

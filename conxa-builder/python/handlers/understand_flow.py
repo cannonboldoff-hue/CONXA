@@ -113,9 +113,20 @@ class UnderstandFlowMixin:
         # renderer re-reads the lifecycle on each one.
         runtime_state.set_flags(workflow_id, watching=False)
         harness.update_card(thread, card_id, sink=sink, state="done", elapsed_s=0, reason="", actions=[])
-        self._flow_say(workflow_id, "I watched the recording and lined it up with what the browser saw. "
-                       "A few quick questions first — most already have my best guess filled in.", sink)
-        self._flow_post_next_question(workflow_id, sink)
+        self._flow_say(workflow_id, self._understood_message(und, bool(questions)), sink)
+        self._flow_post_next_question(workflow_id, sink)   # builds straight away when there is nothing to ask
+
+    @staticmethod
+    def _understood_message(und: dict[str, Any], has_questions: bool) -> str:
+        """What the model understood, as one chat message: the summary, the few points it settled by
+        itself (with the reason, so a wrong call is easy to spot), and a gap if there is one."""
+        extra = [f"• {d['text']}" + (f" — {d['reason']}" if d.get("reason") else "") for d in (und.get("decided") or [])[:3]]
+        if und.get("gaps"):
+            extra.append(f"Worth a look: {und['gaps'][0]['note']}")
+        closing = ("A few quick questions first — most already have my best guess filled in." if has_questions
+                   else "That's all I need — building it now.")
+        head = und.get("short_summary") or und.get("goal") or "I watched the recording."
+        return "\n\n".join([head, *(["\n".join(extra)] if extra else []), closing])
 
     @staticmethod
     def _video_blocked_message(code: str) -> str:
@@ -176,7 +187,6 @@ class UnderstandFlowMixin:
         from conxa_compile.compiler.step_key import step_keys
         from conxa_compile.conversation import decisions, replay
         from conxa_core.config import settings
-        from conxa_core.storage.workflow_store import get_workflow, save_workflow
 
         try:
             stored = decisions.load(settings.data_dir / "sessions" / str(workflow.session_id))
@@ -202,14 +212,9 @@ class UnderstandFlowMixin:
                 if g.get("qid") and q["id"] == g["qid"]:
                     q.update(status="answered", answer=g["answer"], receipt=g["receipt"])
         if failed_values:
-            retry = replay.failed_values_question(failed_values)
-            if retry:
-                questions.insert(0, retry)
-        if plan["description"]:
-            fresh = get_workflow(workflow.id)
-            if fresh is not None and not fresh.task_description.strip():
-                fresh.task_description = plan["description"]
-                save_workflow(fresh)
+            names = ", ".join(f"“{v['literal']}”" for v in failed_values[:3])
+            self._flow_say(workflow.id, f"I couldn’t make {names} change each run, so it stays as you recorded. "
+                           "You can change it in Human Edit.", sink)
         return added
 
     # ── answers: stored, then the compile starts ────────────────────────────────────────────
@@ -242,27 +247,8 @@ class UnderstandFlowMixin:
         receipt = "Noted"
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[])
-        # "This isn't what I recorded" / "a part is missing": stop here so the person can record again.
-        if (question["kind"] == "confirm_summary" and answer.get("choice") == "no") or (
-                question["kind"] == "coverage" and answer.get("choice") == "incomplete"):
-            self._flow_stop_for_rerecord(workflow_id, sink)
-            return {"ok": True, "receipt": receipt}
         self._flow_post_next_question(workflow_id, sink)
         return {"ok": True, "receipt": receipt}
-
-    def _flow_stop_for_rerecord(self, workflow_id: str, sink: Any) -> None:
-        from conxa_compile.conversation import clarify_store
-
-        def edit(data: dict[str, Any]) -> None:
-            data["stage"] = "rejected"
-            for q in data.get("questions") or []:
-                if isinstance(q, dict) and q.get("status") in ("open", "queued"):
-                    q["status"] = "skipped"
-                    q["receipt"] = "Stopped before building"
-
-        clarify_store.mutate(workflow_id, edit)
-        self._flow_say(workflow_id, "Okay — I’ll hold off on building. Record it again when you’re ready, "
-                       "or compile this recording as it is.", sink)
 
     def _flow_after_understand(self, workflow_id: str, sink: Any) -> None:
         """Every shown question is answered: build it. Runs once per recording."""
@@ -277,9 +263,29 @@ class UnderstandFlowMixin:
 
         clarify_store.mutate(workflow_id, edit)
         if started:
+            _fill_description(workflow_id)
             runtime_state.set_flags(workflow_id, compiling=True)   # no moment where the lifecycle offers anything else
             self._flow_say(workflow_id, "Thanks — building it now.", sink)
             self._flow_start_compile(workflow_id)
+
+
+def _fill_description(workflow_id: str) -> None:
+    """A workflow recorded with no description gets the one the model wrote for it."""
+    import json
+
+    from conxa_core.config import settings
+    from conxa_core.storage.workflow_store import get_workflow, save_workflow
+
+    workflow = get_workflow(workflow_id)
+    if workflow is None or not workflow.session_id or workflow.task_description.strip():
+        return
+    try:
+        und = json.loads((settings.data_dir / "sessions" / workflow.session_id / "understanding.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if str(und.get("short_summary") or "").strip():
+        workflow.task_description = str(und["short_summary"]).strip()
+        save_workflow(workflow)
 
 
 def _dumps(value: Any) -> str:

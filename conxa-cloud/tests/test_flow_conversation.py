@@ -134,7 +134,7 @@ def test_begin_with_an_expired_sign_in_asks_for_it_again_before_recording(env, m
     g = get_group(group.id)
     g.apps[0].checked_at = time.time() - 3600  # past the gate's trust window, so it re-checks
     save_group(g)
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "expired" for a in targets})
 
     res = b.cmd_flow_begin({"workflow_id": wf.id}, "r")
     assert res["next"] == "sign_in"

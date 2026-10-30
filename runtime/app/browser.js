@@ -98,7 +98,7 @@ function _loadPack(workspace_id) {
 }
 
 // The navigable prefix of a success_url pattern — "https://drive.google.com/{}" is a matcher, not
-// an address; goto() on it lands on /%7B%7D. Python twin: recorder/session.py::_probe_app_session_sync.
+// an address; goto() on it lands on /%7B%7D. Python twin: recorder/session.py::_probe_group_sessions_sync (which navigates to login_url).
 // Still used to pre-navigate a freshly authenticated run to a sensible starting page (server.js) —
 // NOT for sign-in detection, which no longer needs success_url at all (see _signedOutBaseline).
 function _successPrefix(app) {
@@ -289,7 +289,7 @@ async function _loadGroupAppSession(workspace_id, app, authManager, logFn) {
  * mid-run arrives signed in to each.
  *
  * Cost model: every app pays a live network validation (one shared headless browser for the
- * whole batch) unless its session validated within CONXA_AUTH_VALIDATION_TTL_MS (default 6h, see
+ * whole batch) unless its session validated within CONXA_AUTH_VALIDATION_TTL_MS (default 10 min, see
  * _readValidationCache), which skips that app's check.
  *
  * Any missing/expired app opens its own login window — ALL of them at once, not one at a time,
@@ -329,11 +329,14 @@ async function getGroupAuthContext(workspace_id, group, authManager, opts = {}) 
       results.push({ app, stored, sessionPath, valid: true, fromCache: true });
       return;
     }
-    // navUrl is always login_url now — detection re-probes the sign-in address itself (see
-    // _isAuthenticated/_signedOutBaseline), so it no longer matters whether success_url is set.
-    // def: the app's learned auth definition (P0: Application Authentication Recording), if any —
-    // when set, _isAuthenticated evaluates it directly instead of the generic baseline compare.
-    batch.push({ key, stored, navUrl: app.login_url, sessionPath, label: app.name, def: app.auth_definition });
+    // navUrl is always login_url — detection re-probes the sign-in address itself (see
+    // _isAuthenticated/_signedOutBaseline). app: what login_signals.js::classifySession reads —
+    // the learned auth definition (P0: Application Authentication Recording), if any, which then
+    // decides alone, and success_url, which counts as proof when the landing page matches it.
+    batch.push({
+      key, stored, navUrl: app.login_url, sessionPath, label: app.name,
+      app: { success_url: app.success_url, auth_definition: app.auth_definition },
+    });
     results.push({ app, stored, sessionPath, valid: null, _batchIndex: batch.length - 1 });
   });
   // The `authenticate` tool with nothing to probe and nothing missing: report success without
@@ -598,15 +601,15 @@ async function _closeSessionPage(session, { page, hostTabId }) {
 }
 
 // Live-check stored sessions in throwaway tabs of the session's own context — no separate browser.
-// Each entry: { key, navUrl, label }. A failure on one entry marks just that entry invalid.
+// Each entry: { key, navUrl, label, app }. A failure on one entry marks just that entry invalid.
+// _isAuthenticated owns the navigation (it attaches its response listener first).
 async function _probeInSession(session, entries) {
   const outcomes = new Map();
   await Promise.all(entries.map(async (entry) => {
     let tab;
     try {
       tab = await _newSessionPage(session, { label: entry.label, focus: false });
-      await tab.page.goto(entry.navUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-      outcomes.set(entry.key, await _isAuthenticated(session, tab.page, entry.navUrl, entry.def));
+      outcomes.set(entry.key, await _isAuthenticated(session, tab.page, entry.navUrl, entry.app));
     } catch (_) {
       outcomes.set(entry.key, false);
     } finally {
@@ -773,21 +776,44 @@ async function _probeAuthDefinitionVerdict(session, definition) {
   }
 }
 
-async function _isAuthenticated(session, page, entryUrl, definition) {
-  if (definition) {
-    try { return (await _evaluateAgainstDefinition(page, definition)).verdict === "yes"; }
-    catch (_) { return false; }
-  }
+// A page that still looks like a sign-in page may be mid client-side redirect: re-read it every
+// 200 ms for up to 3 s. Updates `observation` in place; the markers are re-read too, since the ones
+// gathered on the login page would otherwise mark the page it redirected to as signed out.
+// Python twin: recorder/session.py::_settle_off_login.
+async function _settleOffLogin(page, observation) {
   const deadline = Date.now() + 3000;
-  let current = null;
-  while (Date.now() < deadline) {
-    let hasPasswordBox = false;
-    try { hasPasswordBox = (await evalOn(page, pageScripts.passwordBoxProbe, undefined, 1200)) === true; } catch (_) {}
-    current = { url: page.url(), hasPasswordBox };
-    if (!loginSignals.looksLikeLoginAnswer(current)) break;
-    await new Promise(r => setTimeout(r, 200));
+  while (loginSignals.looksLikeSessionLogin(observation) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 200));
+    let passwordBox = false;
+    try { passwordBox = (await evalOn(page, pageScripts.passwordBoxProbe, undefined, 1200)) === true; } catch (_) {}
+    let markers = [];
+    try {
+      const m = await evalOn(page, pageScripts.authDefinitionMarkersProbe, undefined, 1200);
+      if (m !== EVAL_TIMED_OUT && Array.isArray(m)) markers = m;
+    } catch (_) {}
+    observation.final_url = page.url();
+    observation.password_box = passwordBox;
+    observation.markers = markers;
   }
-  return loginSignals.isSignedInAgainstBaseline(await _signedOutBaseline(session, entryUrl), current);
+}
+
+// Is this app's saved session still signed in? Navigates `page` to the app's login address and
+// applies login_signals.js::classifySession, the one rule Build Studio's Check now / Check all /
+// recording gate share (recorder/session.py::_probe_group_sessions_sync). `app`: { success_url,
+// auth_definition }. Only a positive "ready" counts; "expired" and "unverified" are both false.
+async function _isAuthenticated(session, page, entryUrl, app = {}) {
+  try {
+    const definition = app.auth_definition;
+    const observation = await _gatherDefinitionObservation(
+      page, (definition && (definition.probe_url || definition.probeUrl)) || entryUrl);
+    // A learned rule decides alone; the settle loop and the baseline are the generic path's.
+    if (!definition) await _settleOffLogin(page, observation);
+    const baseline = definition ? null : await _signedOutBaseline(session, entryUrl);
+    const state = loginSignals.classifySession(observation, baseline, app, { noBaselineOk: Boolean(session.hostOwned) });
+    return state === "ready";
+  } catch (_) {
+    return false;
+  }
 }
 
 // ── Multi-signal login-completion detection ─────────────────────────────────────────────────
@@ -970,11 +996,10 @@ async function _proveSession(entryUrl, { hostOwned, context, hostRunId, browser,
     try {
       const opened = await hostBrowser.openTab({ context, runId: hostRunId, label: "verify", focus: false });
       tab = opened;
-      await tab.page.goto(entryUrl, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
       // hostOwned:true short-circuits _signedOutBaseline to null (no isolated context available —
       // see its own comment); _isAuthenticated falls back to its weaker, accepted best-effort check.
       // A definition, when present, sidesteps that gap entirely — it needs no isolated baseline.
-      return await _isAuthenticated({ hostOwned: true }, tab.page, entryUrl, definition);
+      return await _isAuthenticated({ hostOwned: true }, tab.page, entryUrl, { auth_definition: definition });
     } catch (_) {
       return false;
     } finally {
@@ -988,8 +1013,7 @@ async function _proveSession(entryUrl, { hostOwned, context, hostRunId, browser,
   try {
     freshCtx = await browser.newContext({ storageState: state });
     const page = await freshCtx.newPage();
-    await page.goto(entryUrl, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
-    return await _isAuthenticated({ hostOwned: false, browser }, page, entryUrl, definition);
+    return await _isAuthenticated({ hostOwned: false, browser }, page, entryUrl, { auth_definition: definition });
   } catch (_) {
     return false;
   } finally {

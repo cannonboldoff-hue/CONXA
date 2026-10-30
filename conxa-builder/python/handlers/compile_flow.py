@@ -26,6 +26,11 @@ _THROTTLE_S = 0.5
 _APPLY_STALE_S = 60.0
 
 
+# A recording that was understood before the build is asked again only about popups and the
+# irreversible steps the compiler found: values, files and coverage were settled earlier.
+_ASKED_AFTER_UNDERSTANDING = {"fork", "known_popup", "popup", "confirm"}
+
+
 def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
 
@@ -223,6 +228,9 @@ class CompileFlowMixin:
             limit=None,
         )
         replayed_steps = self._flow_replay_decisions(workflow, result, doc, questions, lambda s: find_source_event(s, doc), sink)
+        if prior:
+            # Everything that could be asked before the build already was; what is left can only exist now.
+            questions = [q for q in questions if q["kind"] in _ASKED_AFTER_UNDERSTANDING]
         # Ask the most important few now; keep the rest instead of silently dropping them.
         shown = 0
         for q in questions:

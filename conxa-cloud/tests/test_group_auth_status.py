@@ -43,7 +43,7 @@ def test_captured_app_with_no_error_is_ready() -> None:
 
 
 def test_captured_app_with_last_error_is_expired() -> None:
-    """This is how the recording gate's bounded probe (check_app_session_sync,
+    """This is how the recording gate's bounded probe (check_group_sessions_sync,
     called from cmd_start_recording) now surfaces a stale session — by writing
     last_error — rather than group_auth_status launching its own browser."""
     group = _group(

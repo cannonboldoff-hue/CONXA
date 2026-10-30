@@ -137,6 +137,89 @@ def evaluate(definition: dict | None, observation: dict | None) -> dict:
     return {"verdict": "unsure", "classes": positives}
 
 
+# ── Session check (Check now / Check all, the recording gate, and the runtime's pre-flight) ────
+# Twin of runtime/app/login_signals.js::classifySession; kept honest by one shared fixture,
+# runtime/test/fixtures/session_check_cases.json, run by both languages' unit tests.
+_SESSION_LOGIN_PATH_RE = re.compile(
+    r"/(login|log-in|signin|sign-in|logon|signon|sso|oauth2?|auth|authorize|authenticate|servicelogin|session-expired)(/|$)",
+    re.IGNORECASE,
+)
+# Visible control names that only appear when nobody is signed in.
+_SIGNED_OUT_MARKER_RE = re.compile(
+    r"^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$",
+    re.IGNORECASE,
+)
+
+
+def matches_success_url(url: str, pattern: str) -> bool:
+    """success_url may carry a literal "{}" wildcard; only the part before it is a prefix to match."""
+    prefix = (pattern or "").split("{}", 1)[0]
+    return bool(prefix) and (url or "").startswith(prefix)
+
+
+def _same_address(a: str, b: str) -> bool:
+    """Same origin + path, ignoring query and fragment."""
+    try:
+        pa, pb = urlsplit(a), urlsplit(b)
+    except ValueError:
+        return a == b
+    return (pa.scheme, pa.netloc, pa.path or "/") == (pb.scheme, pb.netloc, pb.path or "/")
+
+
+def looks_like_session_login(observation: dict) -> bool:
+    """A password box, or an address with a sign-in word as a whole path segment at any depth. An
+    unreadable address is no evidence either way. Also what the settle loop in recorder/session.py
+    watches, so a client-side redirect off the login page can finish."""
+    if observation.get("password_box"):
+        return True
+    try:
+        return bool(_SESSION_LOGIN_PATH_RE.search(urlsplit(str(observation.get("final_url") or "")).path))
+    except ValueError:
+        return False
+
+
+def _looks_signed_out_session(observation: dict) -> bool:
+    return looks_like_session_login(observation) or any(
+        _SIGNED_OUT_MARKER_RE.match(str(m.get("name") or "").strip()) for m in observation.get("markers") or []
+    )
+
+
+def classify_session(observation: dict | None, baseline: dict | None, app: dict | None = None, *, no_baseline_ok: bool = False) -> str:
+    """"ready" | "expired" | "unverified". Only a positive confirmation is "ready"; anything that
+    could not be read is "unverified", never "ready".
+
+    observation  the evaluate() observation shape, gathered after navigating to the app's login_url
+    baseline     {"url", "hasPasswordBox"}: what that login_url shows a cookie-less browser, or None
+    app          {"success_url", "auth_definition"}
+    no_baseline_ok  Conxa Execute cannot open a cookie-less context, so it accepts "not login-shaped"
+    """
+    obs = observation or {}
+    app = app or {}
+    final_url = str(obs.get("final_url") or "")
+    if not final_url.lower().startswith(("http://", "https://")):
+        return "unverified"  # navigation never completed
+
+    if app.get("auth_definition"):
+        # A learned rule decides alone. When it cannot tell, only positive sign-out evidence moves
+        # the answer off "unverified": success page and baseline are the generic path's proof.
+        verdict = evaluate(app["auth_definition"], obs)["verdict"]
+        if verdict == "yes":
+            return "ready"
+        if verdict == "no" or _looks_signed_out_session(obs):
+            return "expired"
+        return "unverified"
+
+    if looks_like_session_login(obs):
+        return "expired"
+    if matches_success_url(final_url, app.get("success_url", "")):
+        return "ready"
+    if _looks_signed_out_session(obs):
+        return "expired"
+    if baseline:
+        return "unverified" if _same_address(baseline.get("url", ""), final_url) else "ready"
+    return "ready" if no_baseline_ok else "unverified"
+
+
 # ── Learning (Studio-only: builds a definition from LIVE vs. OUT) ──────────────────────────────
 
 _PERSONAL_RE = re.compile(r"@|^\d{2,}$")

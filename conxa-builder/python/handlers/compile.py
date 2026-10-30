@@ -20,6 +20,15 @@ class CompileMixin:
         normalized = run_pipeline(raw)
         return {"session_id": session_id, "event_count": len(normalized)}
 
+    @staticmethod
+    def _setup_notes(session_id: str) -> list[str]:
+        """Free-form answers the person gave before the build (a ``note`` decision). They only ever reach
+        the compile's AI pass as text; no step changes because of one."""
+        from conxa_compile.conversation import decisions
+        from conxa_core.config import settings
+
+        return [str(d["note"])[:300] for d in decisions.load(settings.data_dir / "sessions" / session_id) if d.get("note")][:5]
+
     def cmd_compile(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         import time as _time
         from conxa_compile.compiler.build import compile_skill_package
@@ -137,6 +146,10 @@ class CompileMixin:
         existing = read_skill(skill_id)
         version = int((existing.get("meta") or {}).get("version") or 0) + 1 if existing else 1
 
+        task_text = workflow.task_description.strip() if workflow is not None else ""
+        notes = self._setup_notes(session_id)
+        if task_text and notes:
+            task_text += "\n\nAnswers given before the build: " + " | ".join(notes)
         _log("Starting compiler — generating selectors, assertions, recovery blocks…")
         sink({"phase": "compiler_start"})
         try:
@@ -149,8 +162,7 @@ class CompileMixin:
                     version=version,
                     # Only when the person gave one, so a compile without a description is called
                     # exactly as it always was.
-                    **({"task_description": workflow.task_description}
-                       if workflow is not None and workflow.task_description.strip() else {}),
+                    **({"task_description": task_text} if task_text else {}),
                     # Picks up on a page that is already open: no start-page navigation is added.
                     **({"segment": True} if payload.get("segment") else {}),
                 )

@@ -36,7 +36,7 @@ _RETRY_BACKOFFS_S = (1.0, 4.0)
 _DEADLINE_SLACK_S = 5.0
 _INTERACTIVE_TEXT_TASKS = frozenset({
     "workflow_understanding", "timeline_understanding", "clarify_question_copy", "fork_question_copy", "chat_map_answer",
-    "chat_route_intent", "studio_chat_actions", "thread_summarize", "record_plan",
+    "chat_route_intent", "studio_chat_actions", "thread_summarize",
 })
 
 

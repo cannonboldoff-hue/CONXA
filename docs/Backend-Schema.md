@@ -190,7 +190,7 @@ class GroupApp(BaseModel):
     last_error: str            # Most recent capture failure, if any
     check_note: str            # why the last probe was inconclusive ("" if it reached a verdict); never blocks recording
     checked_at: float | None   # Unix timestamp of the last actual probe verdict (any
-                                # check_app_session_sync call), None if never probed since
+                                # check_group_sessions_sync call), None if never probed since
                                 # capture. Distinct from captured_at ("a session file
                                 # exists") — group_auth_status derives a `verified` flag
                                 # from this (set + within a 600s TTL), so a `ready` badge

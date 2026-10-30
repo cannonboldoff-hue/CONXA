@@ -329,7 +329,75 @@ function evaluateAuthDefinition(definition, observation) {
   return { verdict: "unsure", classes: positives };
 }
 
+// ── Session check (pre-flight, Check now / Check all, the recording gate) ───────────────────────
+// ONE rule for "is this saved session still signed in?", written twice: here and in
+// conxa_compile/auth_learning.py::classify_session. Both run the shared fixture
+// runtime/test/fixtures/session_check_cases.json, so Build Studio's badge and a run's pre-flight
+// cannot disagree about the same page.
+//
+// Wider than LOGIN_PATH_RE above on purpose: that one also drives the live sign-in ladder, where a
+// false "still on a login page" would hold a finished sign-in open. A saved-session check can lean
+// the other way, since the cost of a wrong "expired" is one extra sign-in.
+const SESSION_LOGIN_PATH_RE = /\/(login|log-in|signin|sign-in|logon|signon|sso|oauth2?|auth|authorize|authenticate|servicelogin|session-expired)(\/|$)/i;
+// Visible control names that only appear when nobody is signed in.
+const SIGNED_OUT_MARKER_RE = /^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$/i;
+
+// success_url may carry a literal "{}" wildcard ("https://drive.google.com/{}"); only the part
+// before it is a prefix to match. Python twin: recorder/session.py::url_matches_pattern.
+function matchesSuccessUrl(url, pattern) {
+  const prefix = String(pattern || "").split("{}", 1)[0];
+  return Boolean(prefix) && String(url || "").startsWith(prefix);
+}
+
+// A password box, or an address with a sign-in word as a whole path segment at any depth. An
+// unreadable address is no evidence either way. Also what the settle loop in
+// browser.js::_isAuthenticated watches, so a client-side redirect off the login page can finish.
+function looksLikeSessionLogin(observation) {
+  if (observation.password_box) return true;
+  try {
+    return SESSION_LOGIN_PATH_RE.test(new URL(observation.final_url).pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function _looksSignedOutSession(observation) {
+  return looksLikeSessionLogin(observation)
+    || (observation.markers || []).some((m) => SIGNED_OUT_MARKER_RE.test(String(m.name || "").trim()));
+}
+
+// "ready" | "expired" | "unverified". Only a positive confirmation is "ready"; anything that could
+// not be read is "unverified", never "ready".
+//   observation  the auth_definition observation shape (final_url, password_box, otp_like, markers,
+//                responses, cookie_names) gathered after navigating to the app's login_url
+//   baseline     { url, hasPasswordBox } the same login_url shows a cookie-less browser, or null
+//   app          { success_url, auth_definition }
+//   noBaselineOk Conxa Execute cannot open a cookie-less context, so it accepts "not login-shaped"
+function classifySession(observation, baseline, app = {}, { noBaselineOk = false } = {}) {
+  const obs = observation || {};
+  const finalUrl = String(obs.final_url || "");
+  if (!/^https?:\/\//i.test(finalUrl)) return "unverified"; // navigation never completed
+
+  if (app.auth_definition) {
+    // A learned rule decides alone. When it cannot tell, only positive sign-out evidence moves the
+    // answer off "unverified": success page and baseline are the generic path's proof, not this one's.
+    const verdict = evaluateAuthDefinition(app.auth_definition, obs).verdict;
+    if (verdict === "yes") return "ready";
+    if (verdict === "no" || _looksSignedOutSession(obs)) return "expired";
+    return "unverified";
+  }
+
+  if (looksLikeSessionLogin(obs)) return "expired";
+  if (matchesSuccessUrl(finalUrl, app.success_url)) return "ready";
+  if (_looksSignedOutSession(obs)) return "expired";
+  if (baseline) return sameAddress(baseline, { url: finalUrl }) ? "unverified" : "ready";
+  return noBaselineOk ? "ready" : "unverified";
+}
+
 module.exports = {
+  classifySession,
+  looksLikeSessionLogin,
+  matchesSuccessUrl,
   ticketSignature,
   sameTickets,
   ticketsChanged,

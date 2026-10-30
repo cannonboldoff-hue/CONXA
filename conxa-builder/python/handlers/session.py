@@ -89,8 +89,9 @@ def group_apps_needing_sign_in(group: Any) -> list[Any]:
     app before a run (AUTH-14), so recording holds the same rule (AUTH-16).
 
     Apps checked within the TTL are trusted as is, so a record click doesn't relaunch a
-    headless browser per app; the rest are probed concurrently (each probe caps itself at 20s,
-    see check_app_session_sync), so N apps cost one wait. Returns the apps in group order."""
+    headless browser; the rest are probed together in one browser seeded with the whole group's
+    sessions (capped at 30s, see check_group_sessions_sync), so N apps cost one wait. Returns the
+    apps in group order."""
     from conxa_core.storage.group_store import get_group, set_group_app_checked
 
     now = time.time()
@@ -99,13 +100,11 @@ def group_apps_needing_sign_in(group: Any) -> list[Any]:
         if a.captured_at and a.storage_state_path and (not a.checked_at or (now - a.checked_at) > _PROBE_TTL_S)
     ]
     if to_probe:
-        from concurrent.futures import ThreadPoolExecutor
-        from conxa_compile.recorder.session import check_app_session_sync
+        from conxa_compile.recorder.session import check_group_sessions_sync
 
-        with ThreadPoolExecutor(max_workers=len(to_probe)) as pool:
-            verdicts = list(pool.map(check_app_session_sync, to_probe))
-        for a, state in zip(to_probe, verdicts):
-            set_group_app_checked(group.id, a.id, state)
+        verdicts = check_group_sessions_sync(to_probe, group.apps)
+        for a in to_probe:
+            set_group_app_checked(group.id, a.id, verdicts[a.id])
         group = get_group(group.id) or group  # set_group_app_checked persisted the verdicts
     # A saved session file proves nothing. Only a stamped checked_at (written on a positive probe,
     # or a just-completed login) counts as signed in; an inconclusive probe clears it, so that app

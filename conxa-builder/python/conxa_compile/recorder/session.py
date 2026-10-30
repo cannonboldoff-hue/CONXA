@@ -31,6 +31,7 @@ from conxa_compile.policy.bundle import get_policy_bundle
 from conxa_compile.policy.timing import resolve_event_timing
 from conxa_core.sanitize import scrub_surrogates as _sanitize_surrogates
 from conxa_core.storage import snapshots as snapshot_store
+from conxa_core.storage.storage_state import merge_storage_states
 
 
 from conxa_compile.recorder import host_view
@@ -158,11 +159,8 @@ def _gather_page_observation_sync(page: Any, context: Any, responses: list[dict]
     }
 
 
-def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms: int = 8000) -> dict:
-    """Navigate `page` to `url`, capturing same-origin XHR/fetch responses along the way, then
-    gather one auth_learning observation. Used for all three of learn_auth's LIVE/OUT/RELOAD
-    captures — same probe, different browser context each time."""
-    responses: list[dict] = []
+def _response_recorder(responses: list[dict]) -> Any:
+    """A page.on("response") callback that appends method/path/status of up to 30 XHR/fetch responses."""
 
     def _on_response(resp: Any) -> None:
         try:
@@ -170,16 +168,23 @@ def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms:
                 return
             if resp.request.resource_type not in ("xhr", "fetch"):
                 return
-            from urllib.parse import urlsplit as _urlsplit
-
             responses.append({
                 "method": resp.request.method,
-                "path": _urlsplit(resp.url).path or "/",
+                "path": urlsplit(resp.url).path or "/",
                 "status": resp.status,
             })
         except Exception:  # noqa: BLE001
             pass
 
+    return _on_response
+
+
+def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms: int = 8000) -> dict:
+    """Navigate `page` to `url`, capturing same-origin XHR/fetch responses along the way, then
+    gather one auth_learning observation. Used for all three of learn_auth's LIVE/OUT/RELOAD
+    captures — same probe, different browser context each time."""
+    responses: list[dict] = []
+    _on_response = _response_recorder(responses)
     page.on("response", _on_response)
     try:
         page.goto(url, wait_until="load", timeout=timeout_ms)
@@ -196,120 +201,193 @@ def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms:
 
 SessionProbe = Literal["ready", "expired", "unverified"]
 
-# A URL path/host that names a sign-in step. Generic on purpose (no per-app list): any app that
-# bounces an unauthenticated visitor lands on something that says so in its address.
-_LOGIN_URL_RE = re.compile(
-    r"sign[-_ ]?in|log[-_ ]?in|signon|(?<![a-z])sso(?![a-z])|oauth|(?<![a-z])(?:identifier|challenge)(?![a-z])|servicelogin|/auth(?:enticate|orize)?(?:/|$)",
-    re.IGNORECASE,
+# The check must look like the browser a run uses, so a site cannot answer one differently from the
+# other. Mirrors runtime/app/browser.js::STEALTH_CONTEXT_OPTIONS and ::_maskAutomation.
+_STEALTH_CONTEXT_OPTIONS: dict[str, Any] = {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "viewport": {"width": 1280, "height": 720},
+    "locale": "en-US",
+    "timezone_id": "America/New_York",
+}
+_MASK_AUTOMATION_SCRIPT = (
+    "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+    "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });"
 )
-# Visible control names that only appear when nobody is signed in.
-_SIGNED_OUT_MARKER_RE = re.compile(
-    r"^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$",
-    re.IGNORECASE,
-)
+_PROBE_NAV_TIMEOUT_MS = 15000
+_PROBE_SETTLE_MS = 1500  # let SPA XHRs fired on load finish before reading responses
+_PROBE_LOGIN_SETTLE_S = 3.0
 
 
-def _looks_signed_out(observation: dict, login_url: str) -> bool:
-    """Positive evidence that the page the probe landed on is a sign-in page: a password box, a
-    sign-in-shaped address, or a Sign in / Log in control. Reads only the auth_learning
-    observation shape (final_url, password_box, markers)."""
-    if observation.get("password_box"):
-        return True
-    final_url = str(observation.get("final_url") or "")
-    login_base = login_url.split("?")[0].split("#")[0].rstrip("/")
-    if login_base and final_url.split("?")[0].split("#")[0].rstrip("/").startswith(login_base):
-        return True
+def _settle_off_login(page: Any, observation: dict) -> None:
+    """A page that still looks like a sign-in page may be mid client-side redirect: re-read it every
+    200 ms for up to 3 s. Updates `observation` in place; the markers are re-read too, since the ones
+    gathered on the login page would otherwise mark the page it redirected to as signed out.
+    Twin of runtime/app/browser.js::_settleOffLogin."""
+    deadline = time.monotonic() + _PROBE_LOGIN_SETTLE_S
+    while auth_learning.looks_like_session_login(observation) and time.monotonic() < deadline:
+        page.wait_for_timeout(200)
+        try:
+            probe = page.evaluate(auth_learning.PROBE_SCRIPT)
+        except Exception:  # noqa: BLE001
+            probe = {}
+        observation["final_url"] = page.url
+        observation["password_box"] = bool(probe.get("passwordBox"))
+        observation["markers"] = probe.get("markers") or []
+
+
+def _start_tab(context: Any, url: str) -> tuple[Any, list[dict], Any]:
+    """Open a tab and start loading `url`. Returns once the response commits, so every tab of a
+    group loads at the same time even though the sync API makes one call at a time."""
+    page = context.new_page()
+    responses: list[dict] = []
+    on_response = _response_recorder(responses)
+    page.on("response", on_response)
     try:
-        parts = urlsplit(final_url)
-    except ValueError:
-        return False
-    if _LOGIN_URL_RE.search(f"{parts.netloc}{parts.path}"):
-        return True
-    return any(_SIGNED_OUT_MARKER_RE.match(str(m.get("name") or "").strip()) for m in observation.get("markers") or [])
+        page.goto(url, wait_until="commit", timeout=_PROBE_NAV_TIMEOUT_MS)
+    except Exception:  # noqa: BLE001 — an unreachable page shows up as an unreadable observation
+        pass
+    return page, responses, on_response
 
 
-def _probe_app_session_sync(app: GroupApp) -> SessionProbe:
-    """The actual headless probe body — see check_app_session_sync for the
-    policy this implements. Split out so it can be run on a bounded thread.
+def _probe_group_sessions_sync(targets: list[GroupApp], seed_apps: list[GroupApp]) -> dict[str, SessionProbe]:
+    """Is each of `targets` still signed in? The same browser a run uses: ONE Chromium seeded with
+    the merged saved sessions of every app in `seed_apps` (newest file first, so a stale shared SSO
+    cookie cannot beat a fresh one), one tab per target, stealth options on. A second, cookie-less
+    context fetches each login address as a genuinely signed-out visitor sees it (the baseline).
+    The verdict is auth_learning.classify_session, the rule runtime/app/login_signals.js::
+    classifySession shares through runtime/test/fixtures/session_check_cases.json.
 
     Only a positive confirmation returns "ready". Anything that could not be read (navigation
     failed, the driver errored, the page is neither clearly signed in nor clearly signed out)
-    returns "unverified" — never "ready"."""
-    definition = app.auth_definition
-    probe_url = (definition or {}).get("probe_url") or (
-        (app.success_url.split("{}", 1)[0] if app.success_url else "") or app.login_url
-    )
+    returns "unverified" for that app, never "ready"."""
+    results: dict[str, SessionProbe] = {a.id: "unverified" for a in targets}
+
+    seed_files = [Path(a.storage_state_path) for a in seed_apps if a.storage_state_path and Path(a.storage_state_path).is_file()]
+    seed_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    states: list[dict[str, Any]] = []
+    for path in seed_files:
+        try:
+            states.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             try:
-                context = browser.new_context(storage_state=app.storage_state_path)
-                page = context.new_page()
-                observation = _navigate_and_observe_sync(page, context, probe_url, timeout_ms=10000)
+                session_ctx = browser.new_context(storage_state=merge_storage_states(states), **_STEALTH_CONTEXT_OPTIONS)
+                session_ctx.add_init_script(_MASK_AUTOMATION_SCRIPT)
+                baseline_ctx = browser.new_context(**_STEALTH_CONTEXT_OPTIONS)  # no storage_state: signed out
+
+                tabs: dict[str, tuple[Any, list[dict], Any]] = {}
+                for app in targets:
+                    probe_url = (app.auth_definition or {}).get("probe_url") or app.login_url
+                    try:
+                        tabs[app.id] = _start_tab(session_ctx, probe_url)
+                    except Exception:  # noqa: BLE001 — this app stays "unverified"
+                        pass
+                baseline_tabs: dict[str, tuple[Any, list[dict], Any]] = {}
+                for url in {a.login_url for a in targets if not a.auth_definition}:  # a learned rule needs none
+                    try:
+                        baseline_tabs[url] = _start_tab(baseline_ctx, url)
+                    except Exception:  # noqa: BLE001 — no baseline: such an app stays "unverified"
+                        pass
+
+                pages = [t[0] for t in [*tabs.values(), *baseline_tabs.values()]]
+                for page in pages:
+                    try:
+                        page.wait_for_load_state("domcontentloaded", timeout=_PROBE_NAV_TIMEOUT_MS)
+                    except Exception:  # noqa: BLE001
+                        pass
+                if pages:
+                    try:
+                        # One wait serves every tab: the sync API pumps all pages during any call.
+                        pages[0].wait_for_timeout(_PROBE_SETTLE_MS)
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                baselines: dict[str, dict] = {}
+                for url, (page, _responses, on_response) in baseline_tabs.items():
+                    try:
+                        page.remove_listener("response", on_response)
+                        probe = page.evaluate(auth_learning.PROBE_SCRIPT)
+                        baselines[url] = {"url": page.url, "hasPasswordBox": bool(probe.get("passwordBox"))}
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                for app in targets:
+                    if app.id not in tabs:
+                        continue
+                    page, responses, on_response = tabs[app.id]
+                    try:
+                        page.remove_listener("response", on_response)
+                        observation = _gather_page_observation_sync(page, session_ctx, responses)
+                        if not app.auth_definition:  # a learned rule decides alone
+                            _settle_off_login(page, observation)
+                        results[app.id] = auth_learning.classify_session(
+                            observation,
+                            baselines.get(app.login_url),
+                            {"success_url": app.success_url, "auth_definition": app.auth_definition},
+                        )
+                    except Exception:  # noqa: BLE001 — this app stays "unverified"
+                        pass
             finally:
                 browser.close()
     except Exception:  # noqa: BLE001 — a probe failure is inconclusive, not a verdict
-        return "unverified"
-
-    landed = str(observation.get("final_url") or "")
-    if not landed.startswith(("http://", "https://")):
-        return "unverified"  # navigation never completed (about:blank / error page)
-
-    if definition:
-        verdict = auth_learning.evaluate(definition, observation)["verdict"]
-        if verdict == "yes":
-            return "ready"
-        if verdict == "no" or _looks_signed_out(observation, app.login_url):
-            return "expired"
-        return "unverified"
-
-    if _looks_signed_out(observation, app.login_url):
-        return "expired"
-    if app.success_url and url_matches_pattern(landed, app.success_url):
-        return "ready"
-    if not app.success_url and landed.split("#")[0] != app.login_url.split("#")[0]:
-        # No success page to match against: the best available evidence is that the login URL
-        # let us through to a different page that shows no sign-in form or control.
-        return "ready"
-    return "unverified"
+        pass
+    return results
 
 
-def check_app_session_sync(app: GroupApp, *, timeout_s: float = 20.0) -> SessionProbe:
-    """Headless probe: is `app`'s saved session still authenticated?
+def check_group_sessions_sync(
+    targets: list[GroupApp], group_apps: list[GroupApp], *, timeout_s: float = 30.0
+) -> dict[str, SessionProbe]:
+    """Headless probe: is each of `targets` (apps of one group) still authenticated?
 
-    Loads the app's saved storage state into a throwaway headless browser, navigates to its
-    success page (or login page if no success_url is set), and reads what it lands on.
+    Loads every captured session of `group_apps` into one throwaway headless browser, checks each
+    target in its own tab and reads what it lands on — see _probe_group_sessions_sync. Backs
+    "Check now", "Check all" and the recording gate; the runtime's pre-flight applies the same rule.
 
-    Three outcomes, and the middle one is the point:
+    Three outcomes per app, and the middle one is the point:
       "ready"      — positively confirmed signed in.
       "expired"    — a missing/corrupt saved session, or the app showed a sign-in page.
       "unverified" — could not tell (timeout, network error, a wedged driver, an unrecognised
                      page). Callers must NOT show this as signed in; the recording gate also holds
                      the app back and asks for a fresh sign-in, never trusting a saved file alone.
 
-    The probe body's only internal timeout covers page.goto(); launching the driver, opening a
-    context, and closing the browser are all unbounded, so a wedged Playwright driver can hang
-    forever and take its caller down with it (this happened — see FIX.md). Run the whole probe on
-    a daemon thread with a hard deadline instead: on timeout report "unverified".
+    The probe's own timeouts cover page loads only; launching the driver, opening a context, and
+    closing the browser are unbounded, so a wedged Playwright driver can hang forever and take its
+    caller down with it (this happened — see FIX.md). Run the whole probe on a daemon thread with a
+    hard deadline instead: on timeout every app that needed the browser is "unverified".
     """
-    if not app.storage_state_path or not Path(app.storage_state_path).is_file():
-        return "expired"
-    try:
-        with open(app.storage_state_path, encoding="utf-8") as f:
-            json.load(f)
-    except (OSError, ValueError):
-        return "expired"
+    results: dict[str, SessionProbe] = {}
+    probeable: list[GroupApp] = []
+    for app in targets:
+        if not app.storage_state_path or not Path(app.storage_state_path).is_file():
+            results[app.id] = "expired"
+            continue
+        try:
+            with open(app.storage_state_path, encoding="utf-8") as f:
+                json.load(f)
+        except (OSError, ValueError):
+            results[app.id] = "expired"
+            continue
+        probeable.append(app)
 
-    result: list[SessionProbe] = []
-    # ponytail: a timed-out probe thread (and its Playwright driver/browser)
-    # keeps running in the background until it finishes or the backend exits
-    # — daemon=True only stops it from blocking process shutdown. Kill-able
-    # subprocess isolation if that leak shows up in practice; sys.executable
-    # is the backend exe in frozen builds, so it's not a one-liner.
-    thread = threading.Thread(target=lambda: result.append(_probe_app_session_sync(app)), daemon=True)
-    thread.start()
-    thread.join(timeout_s)
-    return result[0] if result else "unverified"
+    if probeable:
+        probed: dict[str, SessionProbe] = {}
+        # ponytail: a timed-out probe thread (and its Playwright driver/browser)
+        # keeps running in the background until it finishes or the backend exits
+        # — daemon=True only stops it from blocking process shutdown. Kill-able
+        # subprocess isolation if that leak shows up in practice; sys.executable
+        # is the backend exe in frozen builds, so it's not a one-liner.
+        thread = threading.Thread(
+            target=lambda: probed.update(_probe_group_sessions_sync(probeable, group_apps)), daemon=True
+        )
+        thread.start()
+        thread.join(timeout_s)
+        for app in probeable:
+            results[app.id] = probed.get(app.id, "unverified")
+    return results
 
 
 @dataclass
@@ -930,7 +1008,7 @@ class RecordingSession:
     def _standalone_probe_observation_sync(self, url: str, *, storage_state: str | None) -> dict | None:
         """A throwaway headless browser, launched from this session's already-running
         sync_playwright driver (self._playwright) without disturbing the live login browser —
-        same pattern check_app_session_sync/_probe_app_session_sync use standalone. `storage_state`
+        same pattern check_group_sessions_sync/_probe_group_sessions_sync use standalone. `storage_state`
         is a path to load (the RELOAD capture) or None for a genuinely fresh, cookie-less context
         (the OUT capture)."""
         if self._playwright is None:
@@ -3039,7 +3117,9 @@ class RecordingSession:
     async def stop(self) -> None:
         self._stop_requested.set()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5)
+            # Teardown flushes every tab's video and writes videos.json; the understand step reads
+            # it as soon as this returns, so a short timeout races it (two tabs take >5s).
+            self._thread.join(timeout=60)
         if self._thread and not self._thread.is_alive():
             self._thread = None
         self.browser_open = False

@@ -15,10 +15,11 @@ module.exports = function authCache(sessionsDir) {
 
   // ─── Auth-validation TTL cache ──────────────────────────────────────────────
   // A successful network validation is stamped per app key; repeat runs within
-  // CONXA_AUTH_VALIDATION_TTL_MS (default 6h) skip the live check entirely. The
-  // stamp records the session file's mtime — a fresh interactive login rewrites
-  // that file, invalidating the cached verdict (which described the OLD state).
-  const AUTH_VALIDATION_TTL_MS = Number(process.env.CONXA_AUTH_VALIDATION_TTL_MS) || 6 * 60 * 60 * 1000;
+  // CONXA_AUTH_VALIDATION_TTL_MS (default 10 min) skip the live check entirely. 10 min matches
+  // Build Studio's recording gate (handlers/session.py::_PROBE_TTL_S), so both sides trust a
+  // "signed in" answer for the same time. The stamp records the session file's mtime — a fresh
+  // interactive login rewrites that file, invalidating the cached verdict (which described the OLD state).
+  const AUTH_VALIDATION_TTL_MS = Number(process.env.CONXA_AUTH_VALIDATION_TTL_MS) || 10 * 60 * 1000;
   const VALIDATION_FILE = "_auth_validation_cache.json";
 
   function readValidationCache(key, sessionPath) {

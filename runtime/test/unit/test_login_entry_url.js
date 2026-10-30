@@ -33,6 +33,8 @@ function fakePage(url, hasPasswordBox) {
   return {
     goto: async () => {}, url: () => url, isClosed: () => false, close: async () => {},
     evaluate: async () => hasPasswordBox,
+    // _isAuthenticated attaches a response listener before it navigates, then lets the page settle.
+    on: () => {}, off: () => {}, waitForTimeout: async () => {},
   };
 }
 function fakeSession({ probeUrl, probeHasPasswordBox, baselineUrl, baselineHasPasswordBox }) {

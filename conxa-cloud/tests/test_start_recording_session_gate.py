@@ -61,7 +61,7 @@ def test_expired_app_session_fails_fast_and_records_why(isolated_data_dir, monke
     _age_checked_at(group.id, group.apps[0].id, 700)
     workflow = create_workflow("Create a lead", "https://x.test/app", group_id=group.id)
 
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "expired")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "expired" for a in targets})
 
     h = _Harness()
     started = time.monotonic()
@@ -83,7 +83,7 @@ def test_ready_app_session_proceeds_past_the_gate(isolated_data_dir, monkeypatch
     group = _group_with_captured_app(isolated_data_dir, '{"cookies": [], "origins": []}')
     workflow = create_workflow("Create a lead", "https://x.test/app", group_id=group.id)
 
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "ready")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "ready" for a in targets})
 
     class _FakeSess:
         session_id = "sess1"

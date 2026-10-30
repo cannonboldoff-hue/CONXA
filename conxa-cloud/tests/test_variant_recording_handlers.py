@@ -55,7 +55,7 @@ def wf(tmp_path, monkeypatch):
     state.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
     group = set_group_app_auth(group.id, app.id, str(state))
     set_group_app_checked(group.id, app.id, "ready")
-    monkeypatch.setattr("conxa_compile.recorder.session.check_app_session_sync", lambda _app: "ready")
+    monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync", lambda targets, _apps, **_kw: {a.id: "ready" for a in targets})
     workflow = create_workflow("Upload a file", "https://drive.test/app", group_id=group.id)
     set_recording(workflow.id, "primary")
     workflow = get_workflow(workflow.id)

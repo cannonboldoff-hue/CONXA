@@ -343,7 +343,7 @@ def set_group_app_error(group_id: str, app_id: str, error: str) -> WorkflowGroup
 
 
 def set_group_app_checked(group_id: str, app_id: str, state: str) -> WorkflowGroup | None:
-    """Record the outcome of a probe (check_app_session_sync).
+    """Record the outcome of a probe (check_group_sessions_sync).
 
     "ready"      — confirmed signed in: stamps checked_at (the only thing that makes an app read
                    as verified) and clears last_error / check_note.
