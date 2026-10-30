@@ -66,3 +66,33 @@ The Studio buttons (Check now, Check all and the check before recording) and the
 **Listed every moment the app checks whether you are signed in — 2026-10-30**
 We went through the whole product and wrote down each place a sign-in check can happen, in Build Studio and when a skill runs, and whether it opens a real browser or only reads a saved answer. The list is now on the comparison page. It also shows which few checks still use their own rules instead of the shared one. Nothing in the product changed.
 — 2026-10-30
+
+
+**Wrote a plain-language plan for building workflows out of ready-made blocks — 2026-10-30**
+We wrote a guide that explains the idea of the product keeping a box of small ready-made actions, and each workflow being just an instruction sheet that arranges them. It shows which blocks already exist, where the product already changes its plan based on answers or surprises, and what is still missing. It also lists a safe order for building the missing parts. Nothing in the product changed.
+— 2026-10-30
+
+
+**Settled the first decisions for the "ready-made blocks" plan — 2026-10-30**
+We wrote down four choices: show the full list of steps a run will do before it starts, let answers only switch steps off or repeat them, keep the order of agent first and then a person when something goes wrong, and keep one fixed list of allowed on-the-fly changes owned by Conxa. The plan guide now has a clear first phase to build and a later phase that waits. Nothing in the product changed.
+— 2026-10-30
+
+
+**Added an honest "what can and cannot be automated" section to the blocks plan — 2026-10-30**
+The plan now says plainly that not every website workflow can be automated. It lists the missing building blocks we could add, such as calculating a value, calling another workflow, and reading a downloaded file. It also lists what no block can fix, such as CAPTCHA tests and apps drawn as pictures. It ends with a safe sentence to use when describing the product to customers. Nothing in the product changed.
+— 2026-10-30
+
+
+**Added the idea of letting the connected AI assistant do the thinking to the blocks plan — 2026-10-30**
+The plan now explains that when a workflow needs real judgement, the product can stop, ask the AI assistant it is running inside, and carry on with a short, checked answer. This already works in a limited form and costs the customer, not us. The plan also lists the safety rules that stay, such as never letting that answer drive an irreversible action, and the cases where nobody is there to answer, like scheduled runs. Nothing in the product changed.
+— 2026-10-30
+
+
+**Rewrote the blocks plan as one clean, easy-to-read guide — 2026-10-30**
+The plan had grown by several add-ons and read like a patchwork. It is now one guide in a clear order: the idea, what we already have, what is missing, the choices we made, the rules that stay, an example, the build plan and what can and cannot be automated. The ideas are the same, just easier to follow. Nothing in the product changed.
+— 2026-10-30
+
+
+**Added five new building blocks to workflows, and made the AI review step able to do more — 2026-10-30**
+Workflows can now wait for something to happen on a page, copy and read text through the browser clipboard, and run another saved workflow in the middle of the current one. The AI review step can now be used to work out a value, read a downloaded file, or pick between steps, and its answer can be used by later steps. Each new block has safety limits, such as never letting an AI answer decide an irreversible action, and each is covered by automatic tests.
+— 2026-10-30

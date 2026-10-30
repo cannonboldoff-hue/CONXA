@@ -246,6 +246,7 @@ let uniqueDownloadName;
 let sweepOldRuns;
 let extractZipOnce;
 let declaredOutputNames;
+let flattenAnswer;
 let getCachedBrowser;
 let getAuthContext;
 let awaitAuthPending;
@@ -257,6 +258,7 @@ let captureReAuth;
 let gracefulShutdown;
 let resolveGroup;
 let resolveTargetHosts;
+let callWorkflow;
 let createTracker;
 let mapErrorToCode;
 let drainSpill;
@@ -271,11 +273,12 @@ try {
   skillLoader  = require("./skill_loader");
   sync         = require("./sync");
   authManager  = require("./auth_manager");
-  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce, declaredOutputNames } = require("./run"));
+  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce, declaredOutputNames, flattenAnswer } = require("./run"));
   ({ getCachedBrowser, releaseCachedBrowser, teardownExecBrowser, captureReAuth, gracefulShutdown,
      getAuthContext, awaitAuthPending, describeAuthWait, authAppStatus,
      _resolveGroup: resolveGroup } = require("./browser"));
   ({ resolveTargetHosts } = require("./target_hosts"));
+  callWorkflow = require("./call_workflow");
   ({ createTracker, mapErrorToCode, drainSpill } = require("./tracker"));
   ({ closeExtraTabs } = require("./tabs"));
   policyGate = require("./policy_gate");
@@ -464,13 +467,34 @@ function _readDeclaredInputs(entry) {
   return [];
 }
 
-// What a paused run has produced so far: every extract output that holds a value.
+// What a paused run has produced so far: every extract / ai_review output that holds a value.
 function _producedInputs(primary) {
   const out = {};
-  for (const n of declaredOutputNames(primary.steps || [])) {
-    if (primary.inputs && primary.inputs[n] !== undefined) out[n] = primary.inputs[n];
+  for (const n of declaredOutputNames(primary.steps || [], true)) {
+    if (primary.inputs && primary.inputs[n] !== undefined) {
+      out[n] = primary.inputs[n];
+      Object.assign(out, flattenAnswer(n, primary.inputs[n]));
+    }
   }
   return out;
+}
+
+// A skill's runnable steps: execution.json with its recovery hints folded in. Shared by a run's own
+// skill and by every workflow it calls (call_workflow.js), so both are read the same way.
+function _loadSkillSteps(entry) {
+  const execPath = path.join(entry.skillDir, "execution.json");
+  const recPath = path.join(entry.skillDir, "recovery.json");
+  if (!fs.existsSync(execPath)) throw new Error("execution.json is missing from this skill's files");
+  const rawExec = JSON.parse(fs.readFileSync(execPath, "utf8"));
+  if (!Array.isArray(rawExec)) throw new Error("execution.json is not the expected step-list shape");
+  const rawRec = fs.existsSync(recPath) ? JSON.parse(fs.readFileSync(recPath, "utf8")) : null;
+  return enrichStepsWithRecovery(rawExec, rawRec);
+}
+
+// Every skill a run touches: the ones asked for plus the ones they call. The platform lock and the
+// execution policy must see all of them -- a called workflow reaches its own host.
+function _withCallees(resolved) {
+  return resolved.flatMap((r) => [r, ...(r.calleeEntries || []).map((entry) => ({ entry }))]);
 }
 
 function _skillOutputNames(entry) {
@@ -1109,6 +1133,22 @@ async function _handleTool(name, args, extra) {
       const steps = _entryAgentEnabled
         ? applyStepOverrides(enriched, run.step_overrides, { resolveCandidateIndex: _resolveCandidateIndex })
         : enriched;
+      // call_workflow: load and check every workflow this one calls BEFORE anything runs (installed,
+      // intact, the pinned version, no cycle, matching inputs), so a bad call is a clear refusal here.
+      const _calls = callWorkflow.loadCallees({ entry, steps }, {
+        resolveSkill: _resolveSkill,
+        ensureIntegrity: (e) => {
+          const checked = skillLoader.ensureSkillIntegrity(SKILL_PACKS_DIR, skillIndex, e.workspace_id, e.slug);
+          const lacking = (Array.isArray(checked.manifest.required_capabilities) ? checked.manifest.required_capabilities : [])
+            .filter((c) => APP_CAPABILITIES && !APP_CAPABILITIES.has(c));
+          if (lacking.length) throw new Error(`it needs a newer Conxa engine (${lacking.join(", ")})`);
+          return checked;
+        },
+        loadSteps: _loadSkillSteps,
+        declaredInputs: _readDeclaredInputs,
+        declaredOutputNames,
+      });
+      if (_calls.error) return err(`Skill ${run.skill}: ${_calls.error}`);
       const overrideCount = _entryAgentEnabled && run.step_overrides && typeof run.step_overrides === "object"
         ? Object.keys(run.step_overrides).length : 0;
       if (overrideCount) {
@@ -1131,6 +1171,8 @@ async function _handleTool(name, args, extra) {
         // applyStepOverrides to inject, only a structured answer bound into `inputs`.
         reviewResults: (run.review_results && typeof run.review_results === "object") ? run.review_results : {},
         dryRun: run.dry_run === true,
+        callees: _calls.callees,
+        calleeEntries: _calls.entries,
       });
     }
 
@@ -1487,6 +1529,7 @@ async function _handleTool(name, args, extra) {
           const reviewResp = await _buildReviewRequest(reviewPark.page, stepDef, primary.resumeFrom, primary.entry, {
             validationErrors: validation.valid ? null : validation.errors,
             pageDrifted: diverged,
+            inputs: primary.inputs,
           });
           if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
           runRegistry.end(_runId);
@@ -1721,7 +1764,7 @@ async function _handleTool(name, args, extra) {
         // this run's original admission, and a resumed park continues that same run rather than
         // starting a new one.
         if (_hostRelease == null) {
-          const _targetHosts = resolveTargetHosts(resolved, { resolveGroup });
+          const _targetHosts = resolveTargetHosts(_withCallees(resolved), { resolveGroup });
           exec.waitingForHost = _targetHosts;
           const _lock = await hostLock.acquireHosts(_targetHosts, { runId: _runId, slug: primary.entry.slug }, {
             isDone: _execCancelled,
@@ -1750,7 +1793,7 @@ async function _handleTool(name, args, extra) {
         // run in the scheduler daemon's engine and this chat-driven run can never double-hit the
         // same platform. Filesystem trouble degrades to in-process-only (fail open — see
         // file_lock.js); unit tests omit locksDir and stay hermetic by design.
-        const _targetHosts = resolveTargetHosts(resolved, { resolveGroup });
+        const _targetHosts = resolveTargetHosts(_withCallees(resolved), { resolveGroup });
 
         // PROD-18 policy gate: refuse before any browser work — before the host lock, before
         // a page is ever opened. Only on a fresh start; a resumed park is continuing a run
@@ -1776,7 +1819,7 @@ async function _handleTool(name, args, extra) {
           };
         } else if (_policyLoad.status === "fresh" || _policyLoad.status === "cache") {
           const _verdict = policyGate.evaluate(_policyLoad.doc, {
-            skills: resolved.map((r) => r.entry.slug), hosts: _targetHosts,
+            skills: _withCallees(resolved).map((r) => r.entry.slug), hosts: _targetHosts,
           });
           if (!_verdict.allow) {
             _runTracker.emit("policy_block", { code: _verdict.code, pv: _policyLoad.doc.policy_version, enf: Boolean(_policyLoad.doc.enforce) });
@@ -1980,7 +2023,7 @@ async function _handleTool(name, args, extra) {
       // (_detachContextListeners itself is declared above, outside the try block — see comment there.)
 
       for (let si = 0; si < resolved.length; si++) {
-        const { entry, steps, inputs, resumeFrom, dryRun, isResume } = resolved[si];
+        const { entry, steps, inputs, resumeFrom, dryRun, isResume, callees } = resolved[si];
         const startAt = si === 0 ? resumeFrom : 0;
         // Only the primary skill's own resume actually resumes a call chain (see startAt above) —
         // a later skill in an execute_sequence always starts fresh at step 0.
@@ -2015,6 +2058,7 @@ async function _handleTool(name, args, extra) {
             guard: _guardPause ? { pause: true, released: _guardRelease } : undefined, // RT-9
             stopBefore: si === 0 ? _stopBefore : undefined,
             resumeLoop: isResuming && _park ? _park.loopCursor : undefined, // a guard pause inside a loop body
+            callees, // call_workflow: the workflows this skill calls, already loaded and checked
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
           if (result && result.outputs) Object.assign(_outputs, result.outputs);
@@ -2285,7 +2329,7 @@ async function _handleTool(name, args, extra) {
         appendRecoveryEvent({ event: "review_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
         log("info", "review_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
         _runTracker.emit("park_created", { si: runErr.stepIndex });
-        const reviewResp = await _buildReviewRequest(_reviewPage, runErr.step, runErr.stepIndex, primary.entry, {});
+        const reviewResp = await _buildReviewRequest(_reviewPage, runErr.step, runErr.stepIndex, primary.entry, { inputs: primary.inputs });
         if (reviewResp && Array.isArray(reviewResp.content)) {
           reviewResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }

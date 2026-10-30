@@ -109,6 +109,8 @@
       "_note": "Pure date-picker replay math (handlers.js's date_pick adapter uses it) — parse/format/header/selector helpers, no Playwright." },
     { "name": "choice.js",            "profile": "default",
       "_note": "Pure multiple-choice replay math (handlers.js's set_radio/select/select_option/set_checkbox adapters use it), same split as date_picker.js." },
+    { "name": "call_workflow.js",     "profile": "default",
+      "_note": "server.js and run.js require this: loads and checks the workflows a call_workflow step runs (installed, pinned version, no cycle, inputs match)." },
     { "name": "cascade.js",           "profile": "default",
       "_note": "run.js seam: recovery cascade orchestration." },
     { "name": "overlay_capture.js",   "profile": "default",

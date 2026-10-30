@@ -52,6 +52,12 @@ def execution_capabilities(steps: list[Any]) -> list[str]:
                 need.add("ask_missing")
             if s.get("type") == "wait_for_one_of" and s.get("flow"):
                 need.add("variant_branch")
+            if s.get("type") == "wait_until":
+                need.add("wait_until")
+            if s.get("type") in {"clipboard_write", "clipboard_read"}:
+                need.add("clipboard")
+            if s.get("type") == "call_workflow":
+                need.add("call_workflow")
             bundle = s.get("identity_bundle") if isinstance(s.get("identity_bundle"), dict) else {}
             if "{{" in json.dumps([bundle.get("signals"), bundle.get("fingerprint")], default=str):
                 need.add("templated_click")
@@ -79,6 +85,9 @@ def _compute_inputs_required(idata: dict[str, Any]) -> list[str]:
             if isinstance(i, dict) and "name" in i and not i.get("optional")
         ]
     return []
+
+
+from conxa_compile.call_workflow_pin import pin_called_workflows  # noqa: E402
 
 
 def _write_skill_packs_format(
@@ -167,6 +176,12 @@ def _write_skill_packs_format(
             if dest_visuals.exists():
                 shutil.rmtree(dest_visuals)
             shutil.copytree(src_dir / "visuals", dest_visuals)
+
+        # A workflow that calls another is checked against it and stamped with its version.
+        pin_called_workflows(
+            dest_dir=dest_dir, slug=slug, version=version, skill_packs=skill_packs,
+            building={s: bundle_root / "skills" / s for s in skill_slugs},
+        )
 
         # inputs.json (rename from input.json)
         input_src = src_dir / "input.json"

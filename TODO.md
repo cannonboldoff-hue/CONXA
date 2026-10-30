@@ -44,9 +44,9 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
 | P2 — High Value, Do Soon (incl. Discovered Items) | 43 |
-| P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 20 |
+| P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **111** |
+| **Total** | **112** |
 
 ---
 
@@ -1190,7 +1190,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** M — needs a fresh recording of a react-datepicker (or similar) field with intervening month/year `<select>` use to confirm whether `_lastFocusedEditableForDate` is being cleared/overwritten by the select interactions, or never set for this widget shape at all.
 - **Success criteria:** recompiling a react-datepicker Date of Birth field recorded via the month/year `<select>` path yields `handler_hints.date_picker.strategy: "typed_first"` with `open` naming the real anchored input.
 
-## P3 — Valuable, Sequence Around Other Work (17 remaining; +4 more in "P3 Discovered Items" below)
+## P3 — Valuable, Sequence Around Other Work (18 remaining; +4 more in "P3 Discovered Items" below)
 
 ### PROD-2 — Recordability pre-check (green/yellow/red compile-time score)
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1449,6 +1449,12 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Partially resolved 2026-09-01:** item (2) — `_capture_a11y_async` is fixed, not removed, per the "reimplemented" branch above; see `~~BUILD-10~~` for the implementation. Still one thread per event (unchanged scope — the thread+2s-timeout structure is what isolates a slow/hung call, not incidental), but it now does real work instead of instantly raising and being swallowed. Item (1), the per-event diagnostics dump, is untouched — still open.
 
 ---
+
+### EXEC-48 — Follow-ups after the new blocks (`ai_review` data, `wait_until`, clipboard, `call_workflow`)
+- **Category:** Execution & Recovery / Build Studio
+- **Description:** EXEC-47 (`Done.md`) shipped the first version. Left open on purpose: (1) `ai_review_attach` shows text files only, a PDF or other binary is not shown; (2) `run_if` has only `not_empty` / `equals` / `not_equals`, so a number cannot be compared, and `if_present` / `outcome_fork` still probe the page rather than a model's answer; (3) `wait_until` cannot wait for a clock time or longer than 120 s (that is the scheduler's job), and `scheduler_daemon.js` calls `execute_skill` with no timeout, so the MCP SDK default of 60 s may already cut a longer scheduled run short, unchecked for the runtime's bundled SDK; (4) a sign-in expiry inside a called workflow is reported as a plain failure and not auto-retried (a called step has no resume point); (5) the "Call another workflow" form takes the workflow id as text, with no picker of the workspace's workflows and no check against them while editing (the build checks it); (6) mark inputs as secret and refuse them in `clipboard_write` and `ai_review` prompts, and offer "restore the previous clipboard after the step" (`docs/Security.md` SG-22); (7) Studio test: the destructive-step guard cannot pause inside a called workflow, so a test of a caller whose callee has a destructive step needs the guard off.
+- **Why required:** each is a known limit of the first version; none blocks it.
+- **Complexity:** M (each item is S-M on its own).
 
 ## P4 — Low Urgency, Opportunistic (33 remaining)
 

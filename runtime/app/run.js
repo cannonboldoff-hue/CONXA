@@ -26,6 +26,7 @@ const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs
 
 const { appendRecoveryEvent } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
+const { MAX_CALL_DEPTH } = require("./call_workflow");
 const fork = require("./fork");
 const appKnowledge = require("./app_knowledge");
 const {
@@ -294,7 +295,9 @@ async function executeOneStep(ctx, state, steps, i) {
     const answerKey = `__ai_review_answer_${i}`;
     if (Object.prototype.hasOwnProperty.call(state.inputs, answerKey)) {
       const outputName = step.output_name || `ai_review_output_${i}`;
-      state.inputs[outputName] = state.inputs[answerKey];
+      const answer = state.inputs[answerKey];
+      state.inputs[outputName] = answer;
+      Object.assign(state.inputs, flattenAnswer(outputName, answer));
       delete state.inputs[answerKey];
       state.hasExecutedStep = true;
       state.prevStepType = step.type;
@@ -358,6 +361,17 @@ async function executeOneStep(ctx, state, steps, i) {
   // runForEachStep below.
   if (step.type === "for_each") {
     await runForEachStep(ctx, state, step, page, i);
+    state.hasExecutedStep = true;
+    state.prevStepType = step.type;
+    state.prevPage = page;
+    return;
+  }
+
+  // Run another installed workflow's steps here ("call another workflow"). Like for_each it re-enters
+  // THIS function for every step, so tabs, recovery, GATE/VERIFY and dry-run all apply unchanged. See
+  // call_workflow.js for everything checked before the run started, and runCallWorkflowStep below.
+  if (step.type === "call_workflow") {
+    await runCallWorkflowStep(ctx, state, step, page, i);
     state.hasExecutedStep = true;
     state.prevStepType = step.type;
     state.prevPage = page;
@@ -677,6 +691,77 @@ async function executeOneStep(ctx, state, steps, i) {
   state.hasExecutedStep = true;
   state.prevStepType = step.type;
   state.prevPage = page;
+}
+
+// Keys the runtime itself binds for downloads. A called workflow can download a file and a later step
+// of the caller can upload it, so these cross the call boundary in both directions; nothing else does.
+const DOWNLOAD_INPUT_KEY_RE = /^(downloaded_file|__downloadCount)/;
+
+// "Call another workflow": runs a callee's steps in a scope of their own. The callee sees only the
+// inputs the call hands it (plus declared defaults and this run's download bindings), never the
+// caller's other values; the caller gets back only the results the call asks for. state.inputs is
+// emptied and refilled in place -- other code holds that same object -- and restored in `finally`.
+//
+// A failure inside the callee is final: it is reported without a step number the caller could resume
+// from (a resume would re-run the whole call, repeating work that already happened), and it never
+// reaches the agent-recovery round trip, which addresses top-level steps only. Tier A recovery of
+// each callee step still runs, inside executeOneStep. A destructive-step guard pause fails closed for
+// the same reason it does inside a loop (loopDepth is raised for the duration).
+async function runCallWorkflowStep(ctx, state, step, page, i) {
+  const call = step.call && typeof step.call === "object" ? step.call : {};
+  const slug = String(call.skill || "");
+  const stop = (message) => {
+    ctx.tracker.emit("step_fail", { si: i, fc: "bad_input" });
+    throw stepFailure(step, i, Object.assign(new Error(message), { badInput: true }), null, state.warnings);
+  };
+  const info = ctx.callees ? ctx.callees[slug] : null;
+  if (!info) stop(`The workflow "${slug}" was not loaded for this run.`);
+  const stack = ctx.callStack || [];
+  if (stack.includes(slug) || stack.length >= MAX_CALL_DEPTH) stop(`The workflow "${slug}" cannot be called from here (it would call itself, or go too many levels deep).`);
+
+  const handed = {};
+  for (const f of info.declaredInputs) {
+    if (f && f.name && f.default !== undefined && f.default !== null && f.default !== "") handed[f.name] = f.default;
+  }
+  for (const [name, value] of Object.entries(call.inputs && typeof call.inputs === "object" ? call.inputs : {})) {
+    handed[name] = interpolate(String(value), state.inputs);
+  }
+  const missing = ((info.entry.manifest && info.entry.manifest.inputs_required) || [])
+    .filter((n) => handed[n] === undefined || handed[n] === null || String(handed[n]).trim() === "");
+  if (missing.length) stop(`The workflow "${slug}" needs ${missing.join(", ")}, but the value is empty.`);
+
+  const saved = { ...state.inputs };
+  const carried = {};
+  for (const k of Object.keys(state.inputs)) if (DOWNLOAD_INPUT_KEY_RE.test(k)) carried[k] = state.inputs[k];
+  for (const k of Object.keys(state.inputs)) delete state.inputs[k];
+  Object.assign(state.inputs, carried, handed);
+
+  const subCtx = { ...ctx, slug: `${ctx.slug}>${slug}`, callStack: [...stack, slug], onStep: undefined };
+  const results = {};
+  const carriedBack = {};
+  state.loopDepth = (state.loopDepth || 0) + 1;
+  ctx.tracker.emit("call_start", { si: i, n: info.steps.length });
+  try {
+    for (let j = 0; j < info.steps.length; j++) await executeOneStep(subCtx, state, info.steps, j);
+    for (const [from, as] of Object.entries(call.outputs && typeof call.outputs === "object" ? call.outputs : {})) {
+      if (state.inputs[from] !== undefined) results[String(as)] = state.inputs[from];
+      else state.warnings.push(`The workflow "${slug}" did not produce "${from}", so "${as}" was not set.`);
+    }
+    for (const k of Object.keys(state.inputs)) if (DOWNLOAD_INPUT_KEY_RE.test(k)) carriedBack[k] = state.inputs[k];
+    ctx.tracker.emit("call_done", { si: i });
+  } catch (err) {
+    if (err && !err.cancelled) {
+      err.message = `In the called workflow "${slug}": ${err.message}`;
+      delete err.failedAt;
+      err.calledWorkflow = slug;
+    }
+    throw err;
+  } finally {
+    state.loopDepth -= 1;
+    for (const k of Object.keys(state.inputs)) delete state.inputs[k];
+    Object.assign(state.inputs, saved);
+  }
+  Object.assign(state.inputs, carriedBack, results);
 }
 
 // EXEC-38 — "for each row matching X, do steps A-C." Snapshots the row list ONCE (see
@@ -1118,7 +1203,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1234,6 +1319,8 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     stopBefore, // Studio-only: park just before this step (segment re-recording)
     resumeLoop: resumeLoop || null, // a guard pause inside a for_each body: {stepIndex, rowId, bodyIndex, perRow}
     appKnowledge: knowledge || null, // advisory popup knowledge for an unrecognised dialog (app_knowledge.js)
+    callees: callees || null, // call_workflow: the workflows this one calls, loaded and checked at run start
+    callStack: [slug],
   };
 
   for (let i = startFrom; i < steps.length; i++) {
@@ -1264,13 +1351,31 @@ function runIfDecision(step, inputs) {
   return { skip: !run, input: String(cond.input) };
 }
 
-// Every extract step's output_name, nested bodies included.
-function declaredOutputNames(steps) {
+// A {{placeholder}} cannot reach inside an object, so each plain field of an ai_review answer is also
+// bound on its own as `<output_name>_<field>`. That is what lets a later step use the answer, and what
+// `run_if` reads to choose between steps.
+function flattenAnswer(outputName, answer) {
+  const out = {};
+  if (answer && typeof answer === "object" && !Array.isArray(answer)) {
+    for (const [k, v] of Object.entries(answer)) {
+      if (/^[a-zA-Z][a-zA-Z0-9_]*$/.test(k) && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
+        out[`${outputName}_${k}`] = v;
+      }
+    }
+  }
+  return out;
+}
+
+// Every extract / ai_review output_name, nested bodies included. `withPrivate` also lists a
+// clipboard_read's name: it must survive a pause (server.js carries it across) but is never reported
+// to the caller, because the clipboard may hold anything the person copied.
+function declaredOutputNames(steps, withPrivate = false) {
   const names = [];
   const walk = (list) => {
     for (const s of Array.isArray(list) ? list : []) {
       if (!s || typeof s !== "object") continue;
-      if (s.type === "extract" && s.output_name) names.push(String(s.output_name));
+      if ((s.type === "extract" || s.type === "ai_review") && s.output_name) names.push(String(s.output_name));
+      if (withPrivate && s.type === "clipboard_read" && s.output_name) names.push(String(s.output_name));
       walk(s.steps);
       if (s.for_each) walk(s.for_each.steps);
       if (s.branch) walk(s.branch.steps);
@@ -1335,6 +1440,7 @@ module.exports = {
   runIfDecision,
   collectOutputs,
   declaredOutputNames,
+  flattenAnswer,
   checkRetryBudget,
   clearRetryBudget,
   mapErrorToCode,

@@ -7,7 +7,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | Area | Done | Items |
 |---|---|---|
 | BUILD — Build Studio | 37 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57 |
-| EXEC — Execution & Recovery | 27 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46 |
+| EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 18 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **97** | |
+| **Total** | **98** | |
 
 ---
 
@@ -739,7 +739,7 @@ inferred from `outer_html`, not read directly.
 - **Resolution:** the packager now ships `pattern` in `inputs.json`; `server.js` refuses a non-matching value by input name before any step (`interpolate.js::inputsFailingPattern`) and forwards `pattern` in the tool schema.
 
 
-## EXEC — Execution & Recovery (27 done)
+## EXEC — Execution & Recovery (28 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -1112,6 +1112,14 @@ inferred from `outer_html`, not read directly.
 - **Cause:** each run's views live in their own Electron partition, so Electron's download manager handles every file. With no `will-download` handler it asks the user where to save. Playwright's `download` event still fires, but `download.saveAs()` can never work: it copies from Playwright's artifacts folder, where Electron never writes (ENOENT, confirmed on real Electron for both attachment and blob downloads).
 - **Resolution:** `browser_panel.js::_hookDownloads` gives every run partition a `will-download` handler that sets a save path up front (no dialog) under `%TEMP%/conxa-execute-downloads/<runId>/`, wiped at `run_end`. A new control op `save_download {runId, url, dest}` (`browser_panel.js::saveDownload`) hands the finished file for that URL to the runtime; `server.js`'s download listener calls `host_browser.js::saveDownload` instead of `download.saveAs()` for host-owned runs. Launched runs are unchanged. Tests: `conxa-execute/app/electron/test/browser_panel.test.js` (EXEC-46 case); verified on real Electron with a GitHub-style blob download (file reaches the runtime, zero dialogs).
 - **Complexity:** S
+
+### EXEC-47 — Fill the missing blocks: compute / read a file / if-else through `ai_review`, `wait_until`, clipboard, `call_workflow`
+**Resolved:** 2026-10-30
+- **Category:** Execution & Recovery / Build Studio
+- **Description:** `docs/Block-Runtime-Vision.md` §10.2 listed nine blocks a workflow could not express: set or compute a value, read a downloaded file, if/else on page content, human approve/reject, wait until an event, call another workflow, clipboard (the other two, an API call and reading an emailed code, were left undecided).
+- **Resolution:** (1) `ai_review` now does the first three: each plain field of its answer is bound as `<output_name>_<field>` (usable as `{{x_field}}` and by `run_if`), a named answer is reported in `outputs`, `{{inputs}}` are filled into the prompt, and `ai_review_attach` shows a text file from the run's downloads (64 KB, untrusted-data framing). `patch_gate` refuses a `run_if` on a destructive step fed by a free-form answer. (2) Approve/reject = `handover` (decision; documented, no code). (3) New `wait_until` step (element shows/goes, text, address fragment, load state; 1-120 s; events only). (4) New `clipboard_write` / `clipboard_read` steps (browser clipboard, per-origin grant, never logged or reported). (5) New `call_workflow` step: callee loaded and checked at run start (installed, intact, pinned version, no circle, depth 3, no pause inside, inputs/results match), scoped inputs and results, version pinned at build (`conxa_compile/call_workflow_pin.py`), callee host added to the platform lock and the policy gate. Build Studio: all new kinds insertable with forms; produced names are no longer asked of the caller. Docs: TRD §11.3/§11.4/§11.6, Backend-Schema §3 and events, Security SG-22.
+- **Tests:** `runtime/test/unit/test_ai_review.js`, `test_wait_until.js`, `test_clipboard.js`, `test_call_workflow.js`; `conxa-cloud/tests/test_ai_review_gates_run_if.py`, `test_wait_until_step.py`, `test_clipboard_step.py`, `test_call_workflow_step.py`.
+- **Complexity:** L
 
 ---
 

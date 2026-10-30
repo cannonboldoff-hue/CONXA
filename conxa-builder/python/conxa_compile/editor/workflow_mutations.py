@@ -440,6 +440,10 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
         "check": "check_page_state",
         "assert": "assert_page_state",
         "wait": "wait_for_page",
+        "wait_until": "wait_until_condition",
+        "call_workflow": "call_another_workflow",
+        "clipboard_write": "copy_to_clipboard",
+        "clipboard_read": "read_clipboard",
         "screenshot": "capture_screenshot",
         "upload": "upload_file",
         "if_present": "dismiss_if_present",
@@ -507,6 +511,13 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
             step["branch"] = {"candidates": [], "timeout_ms": 3000, "fallback_escape": True}
         else:  # wait_for_one_of
             step["branch"] = {"options": [], "timeout_ms": 5000, "required": True}
+    if kind == "call_workflow":
+        step["call_workflow_inputs"] = {}
+        step["call_workflow_outputs"] = {}
+    if kind == "wait_until":
+        step["wait_until_kind"] = "load_state"
+        step["wait_until_timeout_ms"] = 30000
+        step["wait_until_on_timeout"] = "fail"
     if kind == "for_each":
         # EXEC-38: same best-effort-scaffold pattern as the branch primitives above, but
         # max_iterations is REQUIRED (the runtime refuses to run an uncapped loop) — scaffold a

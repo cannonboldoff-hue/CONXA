@@ -13,7 +13,7 @@ Step = dict[str, Any]
 # PROD-3: action kinds that never mutate page/application state — never irreversible regardless
 # of intent text. Mirrors ActionKind (conxa_core.models.events) minus every mutating kind.
 _READ_ONLY_ACTIONS = frozenset({
-    "scroll", "hover", "screenshot", "wait", "focus", "check", "assert",
+    "scroll", "hover", "screenshot", "wait", "wait_until", "clipboard_write", "clipboard_read", "focus", "check", "assert",
     "frame_enter", "frame_exit", "browser_back", "browser_forward",
     "clipboard_copy", "dialog_appeared", "file_chooser_opened",
 })

@@ -380,6 +380,11 @@ async function _evaluateCheckLikeStep(page, step, inputs) {
   throw new Error(`${step.type} step has an unsupported check type "${kind || "(none)"}" — republish this skill`);
 }
 
+// wait_until: default and ceiling for one wait. The ceiling keeps a single wait well inside the
+// ~210 s a whole MCP call may run (server.js EXECUTION_DEADLINE_MS).
+const WAIT_UNTIL_DEFAULT_MS = 30000;
+const WAIT_UNTIL_MAX_MS = 120000;
+
 const HANDLERS = {
   wait: async (page, step) => {
     await page.waitForTimeout(Math.min(Number(step.ms) || 250, 1000));
@@ -825,7 +830,103 @@ const HANDLERS = {
       throw new Error("wait_for_one_of: none of the candidate selectors appeared before timeout");
     }
   },
+
+  // Waits for something that happens on its own: an element shows or goes, text appears, the address
+  // gains a fragment, the page finishes loading. Event waits only -- one MCP call is cut off at about
+  // 210 s (server.js EXECUTION_DEADLINE_MS), so a single wait never runs longer than 120 s, and a clock
+  // time or an hours-long wait is not this step's job. A timeout is a plain, non-retryable failure
+  // (re-finding an element cannot make a thing happen) unless the author chose `on_timeout: "continue"`.
+  wait_until: async (page, step, inputs) => {
+    const until = asObject(step.until);
+    const kind = String(until.kind || "");
+    const timeout = Math.min(Math.max(Number(step.timeout_ms) || WAIT_UNTIL_DEFAULT_MS, 1000), WAIT_UNTIL_MAX_MS);
+    const bad = (why) => Object.assign(new Error(`wait_until: ${why}`), { badInput: true });
+    const read = (key) => String(interpolate(String(until[key] ?? ""), inputs)).trim();
+    let run;
+    let what;
+    if (kind === "element_visible" || kind === "element_hidden") {
+      const selector = read("selector");
+      if (!selector) throw bad("no element was given to wait for");
+      what = kind === "element_visible" ? `${selector} to show` : `${selector} to go away`;
+      run = () => page.waitForSelector(selector, { state: kind === "element_visible" ? "visible" : "hidden", timeout });
+    } else if (kind === "text_visible") {
+      const text = read("text");
+      if (!text) throw bad("no text was given to wait for");
+      what = `the text "${text}" to show`;
+      run = () => page.getByText(text).first().waitFor({ state: "visible", timeout });
+    } else if (kind === "url_contains") {
+      const fragment = read("url");
+      if (!fragment) throw bad("no address fragment was given to wait for");
+      what = `the address to contain "${fragment}"`;
+      run = () => page.waitForURL((u) => String(u.href || u).includes(fragment), { timeout });
+    } else if (kind === "load_state") {
+      const state = read("state");
+      if (!["load", "domcontentloaded", "networkidle"].includes(state)) throw bad(`"${state}" is not a page load state`);
+      what = `the page to reach "${state}"`;
+      run = () => page.waitForLoadState(state, { timeout });
+    } else {
+      throw bad(`"${kind}" is not something this step can wait for`);
+    }
+    try {
+      await run();
+    } catch (err) {
+      if (!err || err.name !== "TimeoutError") throw err;
+      if (step.on_timeout === "continue") return;
+      throw bad(`waited ${Math.round(timeout / 1000)}s for ${what}, but it did not happen`);
+    }
+  },
+
+  // The browser's clipboard, for a site that needs a real paste. The browser clipboard IS the computer's
+  // clipboard: what clipboard_write puts there stays until something replaces it, and clipboard_read can
+  // see anything the person copied. So a read binds ONLY into this run's inputs (never an event, a
+  // failure report or the run's outputs -- see run.js declaredOutputNames), and no error message here
+  // ever contains clipboard text.
+  clipboard_write: async (page, step, inputs) => {
+    const text = interpolate(String(step.value ?? ""), inputs);
+    if (!text.trim()) throw clipboardError("there is no text to copy");
+    await grantClipboard(page);
+    const wrote = await evalOn(page, (t) => navigator.clipboard.writeText(t), text, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
+    if (wrote === EVAL_TIMED_OUT) throw clipboardNoAnswer();
+  },
+
+  clipboard_read: async (page, step, inputs) => {
+    const name = String(step.output_name || "");
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) throw clipboardError("no valid name was given to keep the text under");
+    await grantClipboard(page);
+    const text = await evalOn(page, () => navigator.clipboard.readText(), undefined, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
+    if (text === EVAL_TIMED_OUT) throw clipboardNoAnswer();
+    if (!text) throw clipboardError("the clipboard is empty");
+    inputs[name] = text;
+  },
 };
+
+function clipboardError(why) {
+  return Object.assign(new Error(`Clipboard: ${why}.`), { badInput: true });
+}
+
+// A clipboard call can sit waiting when the page is not in front; the seam (page_eval.js) bounds it.
+const CLIPBOARD_DEADLINE_MS = 5000;
+
+function clipboardNoAnswer() {
+  return clipboardError("the browser did not answer in time (the page may need to be the one in front)");
+}
+
+function clipboardBlocked() {
+  throw clipboardError("the browser would not let the workflow use the clipboard on this page (it needs a secure https page that is in front)");
+}
+
+// Clipboard access is per site and Chromium-only: grant it for the page's own origin, just in time,
+// rather than for every page of the context.
+async function grantClipboard(page) {
+  let origin = "";
+  try { origin = new URL(page.url()).origin; } catch (_) { /* no usable address */ }
+  if (!origin || origin === "null") throw clipboardError("it can only be used on a web page, not a blank page");
+  try {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  } catch (_) {
+    throw clipboardError("this browser would not allow clipboard access");
+  }
+}
 
 for (const type of NOOP_STEP_TYPES) {
   HANDLERS[type] = async () => {};
@@ -960,7 +1061,7 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
 // is never one of these by the time executeStep runs — this set only matters if something calls
 // executeStep directly, bypassing run.js (a test harness, say), where the correct behavior is
 // still "do nothing" rather than the throw below.
-const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each", "outcome_fork"]);
+const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each", "outcome_fork", "call_workflow"]);
 
 // What an extract step reads. `source`: text (visible text, the default), value (an input's value) or
 // attribute (named by `attribute`). `pattern`, if given, keeps the first capture group (or the whole

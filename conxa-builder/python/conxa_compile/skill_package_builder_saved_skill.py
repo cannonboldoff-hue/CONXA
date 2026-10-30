@@ -624,6 +624,55 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
             return None
         return _copy_saved_common(step, {"type": "wait", "ms": max(ms, 0)})
 
+    if action == "wait_until":
+        # Value-bearing like handover: `value` is what to wait for; kind, timeout and the timeout
+        # policy are top-level `wait_until_*` fields. Nothing to resolve, so no selector/identity.
+        what = _action_value_text(step).strip()
+        kind = str(step.get("wait_until_kind") or "load_state").strip().lower()
+        if not what or kind not in {"element_visible", "element_hidden", "text_visible", "url_contains", "load_state"}:
+            return None
+        field = {"element_visible": "selector", "element_hidden": "selector", "text_visible": "text",
+                 "url_contains": "url", "load_state": "state"}[kind]
+        timeout_ms = step.get("wait_until_timeout_ms")
+        timeout_ms = int(timeout_ms) if isinstance(timeout_ms, (int, float)) and not isinstance(timeout_ms, bool) else 30000
+        return _copy_saved_common(step, {
+            "type": "wait_until",
+            "until": {"kind": kind, field: what},
+            "timeout_ms": max(1000, min(timeout_ms, 120000)),
+            "on_timeout": "continue" if str(step.get("wait_until_on_timeout") or "").strip().lower() == "continue" else "fail",
+        })
+
+    if action == "call_workflow":
+        # Runs another installed workflow here. `value` is the called workflow's id; the version it is
+        # tested against is added at build (call_workflow_pin.py), not here.
+        callee = _action_value_text(step).strip()
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", callee):
+            return None
+        call: dict[str, Any] = {"skill": callee}
+        given = step.get("call_workflow_inputs")
+        if isinstance(given, dict) and given:
+            call["inputs"] = {str(k): str(v) for k, v in given.items()}
+        asked = step.get("call_workflow_outputs")
+        if isinstance(asked, dict) and asked:
+            call["outputs"] = {str(k): str(v) for k, v in asked.items()}
+        return _copy_saved_common(step, {"type": "call_workflow", "call": call})
+
+    if action == "clipboard_write":
+        # Puts text on the clipboard so a site that needs a real paste can read it. `value` is the
+        # text (may hold {{inputs}}).
+        text = _action_value_text(step)
+        if not text.strip():
+            return None
+        return _copy_saved_common(step, {"type": "clipboard_write", "value": text})
+
+    if action == "clipboard_read":
+        # Reads the clipboard into a named value later steps use as {{name}}. Never reported as a run
+        # output (it may hold anything the user copied).
+        name = _action_value_text(step).strip()
+        if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+            return None
+        return _copy_saved_common(step, {"type": "clipboard_read", "output_name": name})
+
     if action == "screenshot":
         return _copy_saved_common(step, {"type": "screenshot"})
 
@@ -683,6 +732,11 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
         reference_ref = str(step.get("ai_review_reference_screenshot_ref") or "").strip()
         if reference_ref:
             out["reference_screenshot_ref"] = reference_ref
+        attach = step.get("ai_review_attach")
+        if isinstance(attach, list):
+            names = [str(n) for n in attach if isinstance(n, str) and n.strip()]
+            if names:
+                out["attach"] = names
         if out["on_failure"] == "use_default":
             out["default_value"] = step.get("ai_review_default_value")
         output_name = _action_value_text(step).strip()
@@ -855,6 +909,36 @@ def _dialog_input_descriptions(source_steps: list[dict[str, Any]]) -> dict[str, 
     return {}
 
 
+def _produced_names(steps: Any) -> set[str]:
+    """Names a run binds into its own inputs: extract / clipboard_read ``output_name``, and an
+    ai_review's ``output_name`` plus ``<output_name>_<field>`` for each plain field of its schema
+    (run.js binds those so a later step can use ``{{x_field}}``)."""
+    out: set[str] = set()
+
+    def walk(items: Any) -> None:
+        for s in items if isinstance(items, list) else []:
+            if not isinstance(s, dict):
+                continue
+            kind, name = s.get("type"), str(s.get("output_name") or "")
+            if name and kind in {"extract", "clipboard_read", "ai_review"}:
+                out.add(name)
+                if kind == "ai_review":
+                    props = (s.get("output_schema") or {}).get("properties") if isinstance(s.get("output_schema"), dict) else None
+                    for field in props if isinstance(props, dict) else []:
+                        out.add(f"{name}_{field}")
+            if kind == "call_workflow" and isinstance(s.get("call"), dict) and isinstance(s["call"].get("outputs"), dict):
+                out.update(str(v) for v in s["call"]["outputs"].values())
+            walk(s.get("steps"))
+            for key in ("for_each", "branch"):
+                if isinstance(s.get(key), dict):
+                    walk(s[key].get("steps"))
+            for o in s.get("options") if isinstance(s.get("options"), list) else []:
+                walk(o.get("steps") if isinstance(o, dict) else None)
+
+    walk(steps)
+    return out
+
+
 def _merge_saved_inputs_with_execution_placeholders(
     declared_inputs: list[Any],
     execution_steps: list[dict[str, Any]],
@@ -871,6 +955,9 @@ def _merge_saved_inputs_with_execution_placeholders(
     # A for_each loop's own {{<as>_id}}/{{<as>_index}} are populated by run.js at replay time,
     # never something a user/agent supplies — same reason downloaded_file* is excluded below.
     loop_vars = for_each_loop_variable_names(execution_steps)
+    # Values the run itself produces (an extract, an ai_review answer and its fields, a clipboard read)
+    # are filled in by the runtime, never something the caller supplies.
+    produced = _produced_names(execution_steps)
     # The primary record->compile path (compiler/build.py) already declares file_path with a
     # generic humanized label ("File Path") before this function ever sees it, so the "not yet
     # seen" branch below never fires for it. Overwrite it here too, since the upload-derived
@@ -887,7 +974,7 @@ def _merge_saved_inputs_with_execution_placeholders(
             # run.js's download_observed handler from an earlier download in the same run
             # (see _bind_downloads_to_uploads), never something a user/agent supplies.
             continue
-        if name in loop_vars:
+        if name in loop_vars or name in produced:
             continue
         seen.add(name)
         inputs.append(
@@ -1269,6 +1356,12 @@ def _build_workflow_from_saved_skill(
             if normalize_action_kind(action) == "extract":
                 if on_warning:
                     on_warning(f"Step {raw_index}: a value to read needs both a target element and an output name, so it was removed from the skill. Set them in Human Edit, then rebuild.")
+                continue
+            if normalize_action_kind(action) in {"wait_until", "clipboard_write", "clipboard_read", "call_workflow"}:
+                # Unfinished: what to wait for / what to copy / the name to keep it under is missing or
+                # not valid. Same drop-and-warn shape as the cases around it.
+                if on_warning:
+                    on_warning(f"Step {raw_index}: this step is not finished (something to fill in is missing or not valid), so it was removed from the skill. Complete it in Human Edit, then rebuild.")
                 continue
             if normalize_action_kind(action) == "outcome_fork":
                 # A fork none of whose options can run (every body step was unexportable) has

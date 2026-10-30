@@ -114,7 +114,7 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
         patch = _patch_for(field, value)
         previous_step = steps[step_index - 1] if step_index > 0 else None
         try:
-            validate_editor_patch(step, patch, policy, previous_step=previous_step)
+            validate_editor_patch(step, patch, policy, previous_step=previous_step, earlier_steps=steps[:step_index])
         except ValueError:
             continue
         out.append({

@@ -47,7 +47,13 @@ type FormValues = {
   check_selector: string
   check_text: string
   ai_review_prompt: string
-  ai_review_output_schema_preset: 'yes_no' | 'text' | 'none' | 'custom'
+  ai_review_output_schema_preset: 'yes_no' | 'text' | 'choice' | 'none' | 'custom'
+  ai_review_attach: string
+  wait_until_kind: 'element_visible' | 'element_hidden' | 'text_visible' | 'url_contains' | 'load_state'
+  wait_until_timeout_s: string
+  call_inputs_text: string
+  call_outputs_text: string
+  wait_until_on_timeout: 'fail' | 'continue'
   ai_review_output_schema_json: string
   ai_review_on_failure: 'abort' | 'use_default' | 'continue'
   ai_review_default_value: string
@@ -62,10 +68,30 @@ type FormValues = {
   extract_pattern: string
 }
 
+// call_workflow: the two name maps are edited as one `name = value` per line.
+function mapToLines(map: Record<string, string> | null | undefined): string {
+  return Object.entries(map || {}).map(([k, v]) => `${k} = ${v}`).join('\n')
+}
+
+// Returns null when a line is not `name = value` (the name must start with a letter).
+function linesToMap(text: string): Record<string, string> | null {
+  const out: Record<string, string> = {}
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const eq = line.indexOf('=')
+    const key = eq < 0 ? '' : line.slice(0, eq).trim()
+    const value = eq < 0 ? '' : line.slice(eq + 1).trim()
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key) || !value) return null
+    out[key] = value
+  }
+  return out
+}
+
 // EXEC-13: canonical shapes the preset picker offers — 'custom' isn't a real option, it's what
 // defaultsFromStep falls back to when a saved schema doesn't match any preset, so the raw JSON
 // textarea (always editable underneath) is the source of truth rather than the picker.
-const AI_REVIEW_SCHEMA_PRESETS: Record<'yes_no' | 'text' | 'none', Record<string, unknown> | null> = {
+const AI_REVIEW_SCHEMA_PRESETS: Record<'yes_no' | 'text' | 'choice' | 'none', Record<string, unknown> | null> = {
   yes_no: {
     type: 'object',
     required: ['answer', 'why'],
@@ -76,13 +102,19 @@ const AI_REVIEW_SCHEMA_PRESETS: Record<'yes_no' | 'text' | 'none', Record<string
     required: ['value'],
     properties: { value: { type: 'string' } },
   },
+  // One pick from a fixed list: edit the enum below. A later step reads it as {{<name>_choice}}.
+  choice: {
+    type: 'object',
+    required: ['choice'],
+    properties: { choice: { type: 'string', enum: ['option_a', 'option_b'] } },
+  },
   none: null,
 }
 
 function presetForAiReviewSchema(schema: unknown): FormValues['ai_review_output_schema_preset'] {
   if (!schema || typeof schema !== 'object') return 'none'
   const json = JSON.stringify(schema)
-  for (const key of ['yes_no', 'text'] as const) {
+  for (const key of ['yes_no', 'text', 'choice'] as const) {
     if (JSON.stringify(AI_REVIEW_SCHEMA_PRESETS[key]) === json) return key
   }
   return 'custom'
@@ -111,6 +143,12 @@ const emptyForm: FormValues = {
   ai_review_output_schema_json: JSON.stringify(AI_REVIEW_SCHEMA_PRESETS.yes_no, null, 2),
   ai_review_on_failure: 'abort',
   ai_review_default_value: '',
+  ai_review_attach: '',
+  wait_until_kind: 'load_state',
+  wait_until_timeout_s: '30',
+  call_inputs_text: '',
+  call_outputs_text: '',
+  wait_until_on_timeout: 'fail',
   assertions: [],
   run_if_input: '',
   run_if_op: 'not_empty',
@@ -177,6 +215,12 @@ function defaultsFromStep(step: StepEditorDTO): FormValues {
       ? JSON.stringify(step.ai_review_output_schema, null, 2)
       : '',
     ai_review_on_failure: (step.ai_review_on_failure as FormValues['ai_review_on_failure']) || 'abort',
+    ai_review_attach: Array.isArray(step.ai_review_attach) ? step.ai_review_attach.join(', ') : '',
+    wait_until_kind: (step.wait_until_kind as FormValues['wait_until_kind']) || 'load_state',
+    wait_until_timeout_s: String(Math.round((step.wait_until_timeout_ms ?? 30000) / 1000)),
+    call_inputs_text: mapToLines(step.call_workflow_inputs),
+    call_outputs_text: mapToLines(step.call_workflow_outputs),
+    wait_until_on_timeout: step.wait_until_on_timeout === 'continue' ? 'continue' : 'fail',
     ai_review_default_value:
       step.ai_review_default_value === undefined || step.ai_review_default_value === null
         ? ''
@@ -379,6 +423,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
           ai_review_prompt: prompt,
           ai_review_output_schema: outputSchema,
           ai_review_on_failure: onFailure,
+          ai_review_attach: values.ai_review_attach.split(',').map((n) => n.trim()).filter(Boolean),
         }
         if (onFailure === 'use_default') {
           // A default value is free-form: an author typing `{"answer":"no"}` gets a real object
@@ -428,6 +473,116 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
         }
         if (canEditField('validation')) {
           patch.validation = { ...(patch.validation as Record<string, unknown>), assertions: values.assertions }
+        }
+        try {
+          const res = await patchStep(skillId, patchIndex, patch, false, path)
+          onWorkflowUpdated(res.workflow)
+          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
+          const next = findUpdatedStep(res.workflow, step.id)
+          if (next) methods.reset(defaultsFromStep(next))
+          if (!silent) toast.success('Step saved')
+          return
+        } catch (e) {
+          const msg = errorMessage(e, 'Save failed')
+          methods.setError('root', { message: msg })
+          if (!silent) toast.error(msg)
+          throw e
+        }
+      }
+      if (actionKind === 'call_workflow') {
+        const callee = values.value.trim()
+        const given = linesToMap(values.call_inputs_text)
+        const asked = linesToMap(values.call_outputs_text)
+        const problem = !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(callee)
+          ? 'Say which workflow to call (its id: letters, numbers, - and _)'
+          : given === null
+            ? 'Inputs: use one `name = value` per line'
+            : asked === null || Object.values(asked).some((v) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(v))
+              ? 'Results: use one `name_in_that_workflow = your_name` per line (your name: letters, numbers, _)'
+              : ''
+        if (problem) {
+          const err = new Error(problem)
+          methods.setError('value', { message: err.message })
+          if (!silent) toast.error(err.message)
+          throw err
+        }
+        const patch: Record<string, unknown> = {
+          semantic_description: values.intent,
+          value: callee,
+          action: { action: 'call_workflow', value: callee },
+          call_workflow_inputs: given,
+          call_workflow_outputs: asked,
+          ...conditionPatch(step, values),
+        }
+        try {
+          const res = await patchStep(skillId, patchIndex, patch, false, path)
+          onWorkflowUpdated(res.workflow)
+          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
+          const next = findUpdatedStep(res.workflow, step.id)
+          if (next) methods.reset(defaultsFromStep(next))
+          if (!silent) toast.success('Step saved')
+          return
+        } catch (e) {
+          const msg = errorMessage(e, 'Save failed')
+          methods.setError('root', { message: msg })
+          if (!silent) toast.error(msg)
+          throw e
+        }
+      }
+      if (actionKind === 'clipboard_write' || actionKind === 'clipboard_read') {
+        const what = values.value.trim()
+        if (!what || (actionKind === 'clipboard_read' && !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(what))) {
+          const err = new Error(actionKind === 'clipboard_read'
+            ? 'Use a name made of letters, numbers and underscores, starting with a letter'
+            : 'Say what text to copy')
+          methods.setError('value', { message: err.message })
+          if (!silent) toast.error(err.message)
+          throw err
+        }
+        const patch: Record<string, unknown> = {
+          semantic_description: values.intent,
+          value: what,
+          action: { action: actionKind, value: what },
+          ...conditionPatch(step, values),
+        }
+        try {
+          const res = await patchStep(skillId, patchIndex, patch, false, path)
+          onWorkflowUpdated(res.workflow)
+          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
+          const next = findUpdatedStep(res.workflow, step.id)
+          if (next) methods.reset(defaultsFromStep(next))
+          if (!silent) toast.success('Step saved')
+          return
+        } catch (e) {
+          const msg = errorMessage(e, 'Save failed')
+          methods.setError('root', { message: msg })
+          if (!silent) toast.error(msg)
+          throw e
+        }
+      }
+      if (actionKind === 'wait_until') {
+        const what = values.value.trim()
+        if (!what) {
+          const err = new Error('Say what to wait for')
+          methods.setError('value', { message: err.message })
+          if (!silent) toast.error(err.message)
+          throw err
+        }
+        const seconds = Number(values.wait_until_timeout_s)
+        if (!Number.isFinite(seconds) || seconds < 1 || seconds > 120) {
+          const err = new Error('Wait time must be between 1 and 120 seconds')
+          methods.setError('wait_until_timeout_s', { message: err.message })
+          if (!silent) toast.error(err.message)
+          throw err
+        }
+        const patch: Record<string, unknown> = {
+          semantic_description: values.intent,
+          value: what,
+          action: { action: 'wait_until', value: what },
+          wait_until_kind: values.wait_until_kind,
+          wait_until_timeout_ms: Math.round(seconds * 1000),
+          wait_until_on_timeout: values.wait_until_on_timeout,
+          ...conditionPatch(step, values),
         }
         try {
           const res = await patchStep(skillId, patchIndex, patch, false, path)
@@ -712,6 +867,9 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const isNavigateStep = actionKind === 'navigate'
   const isScrollStep = step.flags.is_scroll || actionKind === 'scroll'
   const isWaitStep = actionKind === 'wait'
+  const isWaitUntilStep = actionKind === 'wait_until'
+  const isClipboardStep = actionKind === 'clipboard_write' || actionKind === 'clipboard_read'
+  const isCallWorkflowStep = actionKind === 'call_workflow'
   const isScreenshotStep = actionKind === 'screenshot'
   const isAiReviewStep = actionKind === 'ai_review'
   const isExtractStep = actionKind === 'extract'
@@ -845,14 +1003,27 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                 ) : null}
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="ai_review_attach">Files to show (optional)</Label>
+                <Input
+                  id="ai_review_attach"
+                  type="text"
+                  placeholder="e.g., downloaded_file"
+                  {...methods.register('ai_review_attach')}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Names of inputs that hold a downloaded file. Text files only (csv, txt, json), up to 64 KB, from this run's downloads.
+                  You can also use {'{{input_name}}'} in the question.
+                </p>
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="ai_review_output_schema_preset">Expected answer</Label>
                 <select
                   id="ai_review_output_schema_preset"
                   className={fieldSelectClass}
                   {...methods.register('ai_review_output_schema_preset', {
                     onChange: (e) => {
-                      const key = e.target.value as 'yes_no' | 'text' | 'none' | 'custom'
-                      if (key === 'yes_no' || key === 'text') {
+                      const key = e.target.value as 'yes_no' | 'text' | 'choice' | 'none' | 'custom'
+                      if (key === 'yes_no' || key === 'text' || key === 'choice') {
                         methods.setValue(
                           'ai_review_output_schema_json',
                           JSON.stringify(AI_REVIEW_SCHEMA_PRESETS[key], null, 2),
@@ -865,7 +1036,8 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                   })}
                 >
                   <option value="yes_no">Yes / no, with a reason</option>
-                  <option value="text">A single text value</option>
+                  <option value="text">A single text value (a computed or read value)</option>
+                  <option value="choice">One choice from a list</option>
                   <option value="none">No schema — accept anything</option>
                   <option value="custom" disabled hidden>
                     Custom (edit the JSON below)
@@ -982,7 +1154,76 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
               {methods.formState.errors.value ? (
                 <p className="text-destructive text-xs">{methods.formState.errors.value.message}</p>
               ) : null}
+              {isClipboardStep ? (
+                <p className="text-muted-foreground text-xs">
+                  {actionKind === 'clipboard_read'
+                    ? 'Later steps use the text as {{name}}. It is kept for this run only and is not reported back to whoever ran it. Needs a secure (https) page.'
+                    : 'You can use {{input_name}} in the text. The text stays on this computer\'s clipboard until something else replaces it, so avoid secrets. Needs a secure (https) page.'}
+                </p>
+              ) : null}
             </div>
+          ) : null}
+          {isCallWorkflowStep ? (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="call_inputs_text">What to hand over (one per line)</Label>
+                <Textarea
+                  id="call_inputs_text"
+                  className={cn(fieldTextareaClass, 'min-h-16 w-full font-mono text-xs')}
+                  placeholder={'order_id = {{id}}'}
+                  {...methods.register('call_inputs_text')}
+                />
+                <p className="text-muted-foreground text-xs">
+                  <code>input_that_workflow_takes = your value</code>. It sees only these, none of this workflow's other values.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="call_outputs_text">What to bring back (one per line)</Label>
+                <Textarea
+                  id="call_outputs_text"
+                  className={cn(fieldTextareaClass, 'min-h-16 w-full font-mono text-xs')}
+                  placeholder={'total = order_total'}
+                  {...methods.register('call_outputs_text')}
+                />
+                <p className="text-muted-foreground text-xs">
+                  <code>result_that_workflow_reads = your_name</code>. Later steps use it as {'{{your_name}}'}. The workflow you call must be built first
+                  (a version is pinned when you build). It cannot contain an AI review, a hand-over or a popup decision.
+                </p>
+              </div>
+            </>
+          ) : null}
+          {isWaitUntilStep ? (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="wait_until_kind">Wait until</Label>
+                <select id="wait_until_kind" className={fieldSelectClass} {...methods.register('wait_until_kind')}>
+                  <option value="element_visible">An element shows up (CSS selector below)</option>
+                  <option value="element_hidden">An element goes away (CSS selector below)</option>
+                  <option value="text_visible">Some text shows up (text below)</option>
+                  <option value="url_contains">The address contains (text below)</option>
+                  <option value="load_state">The page finishes loading (load, domcontentloaded or networkidle below)</option>
+                </select>
+                <p className="text-muted-foreground text-xs">
+                  You can use {'{{input_name}}'} in the text below. For events only, up to 2 minutes. To wait for a download, use the download step.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="wait_until_timeout_s">Give up after (seconds)</Label>
+                  <Input id="wait_until_timeout_s" type="number" min={1} max={120} {...methods.register('wait_until_timeout_s')} />
+                  {methods.formState.errors.wait_until_timeout_s ? (
+                    <p className="text-destructive text-xs">{methods.formState.errors.wait_until_timeout_s.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="wait_until_on_timeout">If it never happens</Label>
+                  <select id="wait_until_on_timeout" className={fieldSelectClass} {...methods.register('wait_until_on_timeout')}>
+                    <option value="fail">Stop the run</option>
+                    <option value="continue">Carry on</option>
+                  </select>
+                </div>
+              </div>
+            </>
           ) : null}
 
           {isExtractStep ? (

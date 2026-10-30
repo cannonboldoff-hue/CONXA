@@ -140,6 +140,12 @@ export type StepEditorDTO = {
   ai_review_output_schema?: Record<string, unknown> | null
   ai_review_on_failure?: string | null
   ai_review_default_value?: unknown
+  ai_review_attach?: string[] | null
+  wait_until_kind?: string | null
+  call_workflow_inputs?: Record<string, string> | null
+  call_workflow_outputs?: Record<string, string> | null
+  wait_until_timeout_ms?: number | null
+  wait_until_on_timeout?: string | null
   /** BUILD-51: run only when an input says so / what to do when the bound record is gone / what an
    * `extract` step reads. Empty or null when the step has none. */
   run_if?: { input?: string; op?: string; value?: string }

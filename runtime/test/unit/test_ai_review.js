@@ -21,8 +21,9 @@ const {
   clearReviewRetry,
   validateReviewAnswer,
   buildReviewRequest,
+  readAttachments,
 } = require("../../app/review_pause");
-const { runPlan } = require("../../app/run");
+const { runPlan, collectOutputs, runIfDecision } = require("../../app/run");
 
 // ── validateReviewAnswer ─────────────────────────────────────────────────────
 
@@ -228,4 +229,83 @@ test("runPlan: default output_name is used when the step carries none", async ()
   await runPlan(idlePage, steps, inputs, 0, "review-default-name");
   assert.strictEqual(inputs.ai_review_output_0, "yes");
   assert.strictEqual(inputs.__ai_review_answer_0, undefined);
+});
+
+// ── answers a later step can use, and values the reviewer is handed ───────────────────────────
+
+test("runPlan: each plain field of an answer is bound as <output_name>_<field>, so run_if can read it", async () => {
+  const steps = [{ type: "ai_review", prompt: "Pick one", output_name: "verdict" }];
+  const inputs = { __ai_review_answer_0: { choice: "refund", amount: 12, urgent: true, nested: { a: 1 }, "bad-key": "x" } };
+  await runPlan(idlePage, steps, inputs, 0, "review-flatten");
+  assert.strictEqual(inputs.verdict_choice, "refund");
+  assert.strictEqual(inputs.verdict_amount, 12);
+  assert.strictEqual(inputs.verdict_urgent, true);
+  assert.strictEqual(inputs.verdict_nested, undefined, "objects are not flattened");
+  assert.deepStrictEqual(inputs.verdict, inputs.verdict, "the whole answer stays bound too");
+  const gate = runIfDecision({ run_if: { input: "verdict_choice", op: "equals", value: "refund" } }, inputs);
+  assert.strictEqual(gate.skip, false);
+  const other = runIfDecision({ run_if: { input: "verdict_choice", op: "equals", value: "keep" } }, inputs);
+  assert.strictEqual(other.skip, true);
+});
+
+test("collectOutputs: a named ai_review answer is reported like an extract", () => {
+  const steps = [{ type: "ai_review", prompt: "p", output_name: "verdict" }, { type: "ai_review", prompt: "unnamed" }];
+  assert.deepStrictEqual(collectOutputs(steps, { verdict: { a: 1 }, ai_review_output_1: "x" }), { verdict: { a: 1 } });
+});
+
+test("buildReviewRequest: {{inputs}} in the prompt are filled in", async () => {
+  const step = { type: "ai_review", prompt: "Is {{customer}} a duplicate?" };
+  const resp = await buildReviewRequest(mockPage(), step, 0, { slug: "s", skillDir: tmpSkillDir() }, { inputs: { customer: "Acme" } });
+  assert.match(resp.content[0].text, /Is Acme a duplicate\?/);
+  assert.strictEqual(resp._meta["conxa/ai_review"].prompt, "Is Acme a duplicate?");
+});
+
+test("readAttachments: only a text file inside this run's download folder is read", () => {
+  const dir = tmpSkillDir();
+  const outside = tmpSkillDir();
+  const csv = path.join(dir, "report.csv");
+  fs.writeFileSync(csv, "a,b\n1,2\n");
+  const secret = path.join(outside, "secret.txt");
+  fs.writeFileSync(secret, "do not read");
+  const pdf = path.join(dir, "invoice.pdf");
+  fs.writeFileSync(pdf, "%PDF");
+  const inputs = { downloaded_files_dir: dir, downloaded_file: csv, other: secret, doc: pdf };
+  const [ok, out, bin, none] = readAttachments({ attach: ["downloaded_file", "other", "doc", "missing"] }, inputs);
+  assert.strictEqual(ok.text, "a,b\n1,2\n");
+  assert.strictEqual(out.text, "");
+  assert.match(out.note, /outside this run's download folder/);
+  assert.strictEqual(bin.text, "");
+  assert.match(bin.note, /text files only/);
+  assert.match(none.note, /no file was available/);
+});
+
+test("readAttachments: a file with no download folder known is never read", () => {
+  const dir = tmpSkillDir();
+  const csv = path.join(dir, "report.csv");
+  fs.writeFileSync(csv, "a");
+  const [item] = readAttachments({ attach: ["f"] }, { f: csv });
+  assert.strictEqual(item.text, "");
+});
+
+test("readAttachments: a large file is cut and says so", () => {
+  const dir = tmpSkillDir();
+  const big = path.join(dir, "big.txt");
+  fs.writeFileSync(big, "x".repeat(70 * 1024));
+  const [item] = readAttachments({ attach: ["f"] }, { downloaded_files_dir: dir, f: big });
+  assert.strictEqual(item.text.length, 64 * 1024);
+  assert.match(item.note, /only the first/);
+});
+
+test("buildReviewRequest: attached file text is framed as untrusted data and mirrored in _meta", async () => {
+  const dir = tmpSkillDir();
+  const csv = path.join(dir, "report.csv");
+  fs.writeFileSync(csv, "total,42\n");
+  const step = { type: "ai_review", prompt: "What is the total?", attach: ["downloaded_file"] };
+  const resp = await buildReviewRequest(mockPage(), step, 0, { slug: "s", skillDir: tmpSkillDir() },
+    { inputs: { downloaded_files_dir: dir, downloaded_file: csv } });
+  const text = resp.content.map((c) => c.text || "").join("\n");
+  assert.match(text, /BEGIN FILE DATA/);
+  assert.match(text, /total,42/);
+  assert.match(text, /untrusted data/);
+  assert.strictEqual(resp._meta["conxa/ai_review"].attachments[0].text, "total,42\n");
 });

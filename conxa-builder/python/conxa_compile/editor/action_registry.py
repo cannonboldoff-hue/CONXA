@@ -37,6 +37,11 @@ ACTION_KIND_ORDER = (
     "check",
     "assert",
     "wait",
+    # Wait for something that happens on its own (an element shows or goes, text appears, the
+    # address changes, the page finishes loading), up to 120 s. `wait` above is capped at 1 s.
+    # Value-bearing like handover: the generic value is WHAT to wait for; the kind, timeout and
+    # what to do on a timeout are top-level `wait_until_*` fields validated by patch_gate.py.
+    "wait_until",
     "screenshot",
     # Read one value off the page into a named output the run returns to its caller. Target comes
     # from the recording (full IdentityBundle) like any click; the step's `value` is the output name
@@ -56,6 +61,16 @@ ACTION_KIND_ORDER = (
     # (on_failure, an optional resume_when probe) is a top-level `handover_*` field validated by
     # patch_gate.py, same convention as ai_review's own `ai_review_*` fields.
     "handover",
+    # Browser clipboard, for a site that needs a real paste. NOTE the browser clipboard IS the
+    # computer's clipboard, so what is written stays there until something replaces it. Value-bearing:
+    # write's value is the text; read's value is the name the text is kept under (like extract).
+    "clipboard_write",
+    "clipboard_read",
+    # Run another installed workflow's steps here, handing it inputs and taking results back. The
+    # generic value is the called workflow's id; the input and result maps are top-level
+    # `call_workflow_*` fields. The version it is tested against is pinned at build
+    # (call_workflow_pin.py).
+    "call_workflow",
     "upload_intent",
     "upload",
     "tab_open",
@@ -127,10 +142,14 @@ INSERTABLE_ACTIONS = frozenset(
         "check",
         "assert",
         "wait",
+        "wait_until",
         "screenshot",
         "extract",
         "ai_review",
         "handover",
+        "clipboard_write",
+        "clipboard_read",
+        "call_workflow",
         "upload",
         "if_present",
         "try_dismiss",
@@ -174,6 +193,7 @@ VALUE_ACTIONS = frozenset(
         "drag_drop",
         "keyboard_shortcut",
         "wait",
+        "wait_until",
         "upload",
         # The output name the run reports the read value under (see VALUE_LABELS below).
         "extract",
@@ -183,6 +203,9 @@ VALUE_ACTIONS = frozenset(
         # EXEC-21: likewise not a page-interaction value — this is the message shown to the
         # person in the hand-over banner (see VALUE_LABELS below).
         "handover",
+        "clipboard_write",
+        "clipboard_read",
+        "call_workflow",
     }
 )
 
@@ -208,9 +231,13 @@ ACTION_LABELS = {
     "check": "Check",
     "assert": "Assert",
     "wait": "Wait",
+    "wait_until": "Wait until",
     "screenshot": "Screenshot",
     "ai_review": "AI Review",
     "handover": "Hand over to person",
+    "clipboard_write": "Copy to clipboard",
+    "clipboard_read": "Read clipboard",
+    "call_workflow": "Call another workflow",
     "upload_intent": "Upload intent",
     "upload": "Upload",
     "tab_open": "Tab open",
@@ -240,10 +267,14 @@ CATEGORIES = {
     "check": "validation",
     "assert": "validation",
     "wait": "validation",
+    "wait_until": "validation",
     "screenshot": "validation",
     "extract": "validation",
     "ai_review": "validation",
     "handover": "validation",
+    "clipboard_write": "advanced",
+    "clipboard_read": "advanced",
+    "call_workflow": "flow",
     "click": "pointer",
     "dblclick": "pointer",
     "right_click": "pointer",
@@ -278,10 +309,14 @@ VALUE_LABELS = {
     "drag_drop": "Drag payload JSON",
     "keyboard_shortcut": "Shortcut JSON or key combo",
     "wait": "Milliseconds",
+    "wait_until": "What to wait for",
     "upload": "File path input",
     "ai_review": "Output binding name",
     "extract": "Output name",
     "handover": "Message shown to the person",
+    "clipboard_write": "Text to copy",
+    "clipboard_read": "Name to keep it under",
+    "call_workflow": "Workflow to call (its id)",
 }
 
 
@@ -362,6 +397,9 @@ def default_action_value(kind: str) -> Any:
         return '{"src_selector":"","dst_selector":""}'
     if normalized == "wait":
         return "1000"
+    if normalized == "wait_until":
+        # Matches the scaffold's default kind (load_state): wait for the page to go quiet.
+        return "networkidle"
     if normalized == "upload":
         return "{{file_path}}"
     if normalized == "extract":
@@ -370,6 +408,10 @@ def default_action_value(kind: str) -> Any:
         # EXEC-13: not a page-interaction value — the output binding name later steps read the
         # reviewed answer back from (see VALUE_LABELS above).
         return "review_answer"
+    if normalized == "clipboard_write":
+        return "Text to copy"
+    if normalized == "clipboard_read":
+        return "clipboard_text"
     if normalized == "handover":
         # EXEC-21: not a page-interaction value — the message shown to the person (see
         # VALUE_LABELS above).

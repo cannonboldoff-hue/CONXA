@@ -22,6 +22,7 @@ class WorkflowEditorMixin:
         in_branch_body: bool = False,
         previous_step: dict[str, Any] | None = None,
         next_step: dict[str, Any] | None = None,
+        earlier_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Validate + deep-merge a patch into a single (possibly nested) step dict, rebuilding
         identity_bundle.signals when the target selector list changed. Shared by cmd_patch_step's
@@ -41,7 +42,8 @@ class WorkflowEditorMixin:
 
         try:
             validate_editor_patch(step, patch, get_policy_bundle().data, in_branch_body=in_branch_body,
-                                   previous_step=previous_step, next_step=next_step)
+                                   previous_step=previous_step, next_step=next_step,
+                                   earlier_steps=earlier_steps)
         except ValueError as exc:
             raise _CommandError(str(exc), f"Patch rejected: {exc}") from exc
 
@@ -135,7 +137,7 @@ class WorkflowEditorMixin:
             previous_step = steps[step_index - 1] if step_index > 0 else None
             following = steps[step_index + 1] if step_index + 1 < len(steps) else None
             step = self._apply_step_patch(parent_step, patch, in_branch_body=False, previous_step=previous_step,
-                                          next_step=following)
+                                          next_step=following, earlier_steps=steps[:step_index])
             revalidation_target = step
 
         steps[step_index] = step

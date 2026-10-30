@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-22](#sg-22-clipboard-steps-and-the-data-an-ai-review-is-shown) | Clipboard steps and the data an AI review is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/review_pause.js` |
 | [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
 
@@ -643,6 +644,46 @@ understood.
 Check every trial recording's `prepared.mp4` for blur leaks before trusting the blur; add the processor to
 customer terms and the DPA; consider a per-workspace switch to refuse video upload for customers whose
 policy forbids it; move the job store to the database (CLOUD-21) so a restart does not lose analyses.
+
+---
+
+## SG-22 — Clipboard Steps And The Data An AI Review Is Shown
+
+**Severity:** Low (mitigated)
+**Component:** Runtime — `runtime/app/handlers.js` (`clipboard_write`, `clipboard_read`), `runtime/app/review_pause.js` (`readAttachments`, prompt fill-in)
+
+### Description
+
+Two runtime features move customer data to places it did not go before.
+
+1. **Clipboard steps.** The browser clipboard is the computer's clipboard. `clipboard_write` leaves its text
+   there until something replaces it, so a workflow that writes a secret (a `{{password}}` input) leaves it
+   readable by other programs. `clipboard_read` can see whatever the person last copied, in any program.
+2. **AI review data.** `{{inputs}}` named in an `ai_review` prompt, and files named in `attach`, are sent to
+   the MCP client's model. Text in a downloaded file (or on a page) is third-party content and can try to give
+   the model orders (prompt injection).
+
+### Mitigations in place
+
+Clipboard: runs only on a secure page in front, per origin, behind a deadline; a read binds into the run's
+inputs only (never an event, a failure report or the run's `outputs`) and no error contains clipboard text; the
+editor says plainly that written text stays on the clipboard. AI review: only inputs the author names in the
+prompt are filled in; attachments are limited to text files inside this run's own download folder (a
+caller-supplied path elsewhere is refused), cut at 64 KB, and framed as untrusted data; the answer is checked
+against `output_schema`; `patch_gate` stops a destructive step from directly following a free-form review or
+being gated by its answer (only a confirm-only `{confirmed: true}` review may), and a decision popup is never
+answered by a model.
+
+### Residual risk
+
+An author can still put a secret in an `ai_review` prompt or write one to the clipboard; the runtime cannot tell
+a secret input from any other. Clipboard text is not cleared after a run. A model that follows instructions
+hidden in an attached file can still give a misleading answer to a safe step.
+
+### Recommended Fix
+
+Mark inputs as secret in the editor and refuse them in `clipboard_write` and `ai_review` prompts; offer
+`restore previous clipboard after the step`; show attached file names to the person before an unattended run.
 
 ---
 

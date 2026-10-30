@@ -33,6 +33,19 @@ _ON_MISSING = frozenset({"on_missing"})
 NAVIGATE_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "url", "validation", "recovery", "frame"}) | _RUN_IF
 SCROLL_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame"}) | _RUN_IF
 WAIT_SCREENSHOT_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "validation", "recovery", "value", "frame"}) | _RUN_IF
+CALL_WORKFLOW_ALLOWED_KEYS = frozenset({
+    "intent", "semantic_description", "action", "value", "frame",
+    "call_workflow_inputs", "call_workflow_outputs",
+}) | _RUN_IF
+_IDENT = re.compile(r"[a-zA-Z][a-zA-Z0-9_]*")
+CLIPBOARD_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "value", "frame"}) | _RUN_IF
+WAIT_UNTIL_KINDS = frozenset({"element_visible", "element_hidden", "text_visible", "url_contains", "load_state"})
+WAIT_UNTIL_LOAD_STATES = frozenset({"load", "domcontentloaded", "networkidle"})
+WAIT_UNTIL_MAX_MS = 120_000
+WAIT_UNTIL_ALLOWED_KEYS = frozenset({
+    "intent", "semantic_description", "action", "value", "frame",
+    "wait_until_kind", "wait_until_timeout_ms", "wait_until_on_timeout",
+}) | _RUN_IF
 CHECK_ASSERT_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "check_kind", "check_pattern", "check_threshold",
     "check_selector", "check_text", "signals", "recovery", "frame",
@@ -40,7 +53,7 @@ CHECK_ASSERT_ALLOWED_KEYS = frozenset({
 AI_REVIEW_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
     "ai_review_prompt", "ai_review_output_schema", "ai_review_on_failure",
-    "ai_review_default_value", "ai_review_reference_screenshot_ref",
+    "ai_review_default_value", "ai_review_reference_screenshot_ref", "ai_review_attach",
 })
 HANDOVER_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
@@ -137,6 +150,34 @@ def _validate_run_if(raw: Any) -> None:
         raise ValueError("run_if_op_invalid")
     if op in ("equals", "not_equals") and raw.get("value") in (None, ""):
         raise ValueError("run_if_value_required")
+
+
+def _validate_ai_review_attach(raw: Any) -> None:
+    """Names of run inputs that hold a file path the reviewer is shown. None / [] clears it."""
+    if raw in (None, []):
+        return
+    if not isinstance(raw, list) or len(raw) > 5:
+        raise ValueError("ai_review_attach_invalid")
+    for name in raw:
+        if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+            raise ValueError("ai_review_attach_invalid")
+
+
+def _model_gated_run_if_input(run_if: Any, earlier_steps: list[dict[str, Any]] | None) -> bool:
+    """True when ``run_if`` reads an answer a free-form ``ai_review`` produced.
+
+    An ai_review binds its answer as ``<output_name>`` and one input per plain field,
+    ``<output_name>_<field>``. A confirm-only review is exempt: it can only gate *whether* a step runs."""
+    if not isinstance(run_if, dict) or not run_if.get("input"):
+        return False
+    wanted = str(run_if["input"])
+    for earlier in earlier_steps or []:
+        if action_name(earlier).lower() != "ai_review" or is_confirm_only_review(earlier):
+            continue
+        out = str(earlier.get("value") or "").strip()
+        if out and (wanted == out or wanted.startswith(out + "_")):
+            return True
+    return False
 
 
 def _validate_extract_spec(raw: Any) -> None:
@@ -374,6 +415,7 @@ def validate_editor_patch(
     in_branch_body: bool = False,
     previous_step: dict[str, Any] | None = None,
     next_step: dict[str, Any] | None = None,
+    earlier_steps: list[dict[str, Any]] | None = None,
 ) -> None:
     """Raise ValueError with a human-readable message if the patch is not allowed.
 
@@ -394,6 +436,11 @@ def validate_editor_patch(
     (top-level only — EXEC-13's destructive-after-ai_review lint below only makes sense there;
     branch bodies never enter recovery and don't carry ai_review either). Omitted by callers that
     can't cheaply resolve it (e.g. a first step has none); the lint below simply doesn't fire.
+
+    `earlier_steps`, when given, is every top-level step before this one. It lets the gate refuse a
+    `run_if` on a destructive step that reads a free-form ai_review answer (a model may gate whether a
+    step runs only when its answer is a plain yes/no confirmation, never choose which irreversible
+    action runs). Omitted by callers that can't resolve it; the lint then doesn't fire.
     """
     if in_branch_body and ("recovery" in patch or "validation" in patch):
         raise ValueError("branch_body_step_cannot_patch_recovery_or_validation")
@@ -406,6 +453,11 @@ def validate_editor_patch(
 
     if "run_if" in patch:
         _validate_run_if(patch.get("run_if"))
+
+    if earlier_steps:
+        effective_run_if = patch["run_if"] if "run_if" in patch else step.get("run_if")
+        if _model_gated_run_if_input(effective_run_if, earlier_steps) and _is_destructive({**step, **patch}, policy):
+            raise ValueError("destructive_step_cannot_be_gated_by_ai_review_answer")
 
     if "on_missing" in patch:
         if patch.get("on_missing") not in (None, "", "fail", "skip", "ask"):
@@ -514,6 +566,8 @@ def validate_editor_patch(
             output_schema = patch.get("ai_review_output_schema")
             if output_schema is not None and not isinstance(output_schema, dict):
                 raise ValueError("ai_review_output_schema_must_be_object")
+        if "ai_review_attach" in patch:
+            _validate_ai_review_attach(patch.get("ai_review_attach"))
         if "ai_review_reference_screenshot_ref" in patch:
             reference_ref = patch.get("ai_review_reference_screenshot_ref")
             if reference_ref is not None and not str(reference_ref).strip():
@@ -553,6 +607,64 @@ def validate_editor_patch(
             timeout_ms = patch.get("handover_resume_when_timeout_ms")
             if timeout_ms is not None and (not isinstance(timeout_ms, (int, float)) or timeout_ms <= 0):
                 raise ValueError("handover_resume_when_timeout_ms_invalid")
+    if act == "call_workflow":
+        # Runs another workflow's steps, so nothing here to re-locate. The called workflow's id rides
+        # the generic `value`; what is handed over and brought back are two name maps. Whether that
+        # workflow exists, takes these inputs and produces these results is checked at build, where
+        # every workflow is known (call_workflow_pin.py).
+        if "recovery" in patch:
+            raise ValueError("call_workflow_step_cannot_patch_recovery")
+        invalid_keys = sorted(set(patch) - CALL_WORKFLOW_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError("call_workflow_step_allows_only_call_fields")
+        if "value" in patch and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", str(patch.get("value") or "").strip()):
+            raise ValueError("call_workflow_value_invalid")
+        if "call_workflow_inputs" in patch:
+            given = patch.get("call_workflow_inputs")
+            if given is not None and (not isinstance(given, dict) or len(given) > 20
+                                      or any(not _IDENT.fullmatch(str(k)) or not isinstance(v, str) for k, v in given.items())):
+                raise ValueError("call_workflow_inputs_invalid")
+        if "call_workflow_outputs" in patch:
+            asked = patch.get("call_workflow_outputs")
+            if asked is not None and (not isinstance(asked, dict) or len(asked) > 20
+                                      or any(not _IDENT.fullmatch(str(k)) or not isinstance(v, str) or not _IDENT.fullmatch(v) for k, v in asked.items())):
+                raise ValueError("call_workflow_outputs_invalid")
+    if act in {"clipboard_write", "clipboard_read"}:
+        # Nothing to re-locate, so no recovery block; config is the generic `value` only.
+        if "recovery" in patch:
+            raise ValueError(f"{act}_step_cannot_patch_recovery")
+        invalid_keys = sorted(set(patch) - CLIPBOARD_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError(f"{act}_step_allows_only_value_and_description")
+        text = str((patch["value"] if "value" in patch else merged.get("value")) or "").strip()
+        if not text:
+            raise ValueError(f"{act}_value_empty")
+        if act == "clipboard_read" and not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", text):
+            raise ValueError("clipboard_read_name_invalid")
+    if act == "wait_until":
+        # Waits for something that happens on its own, so there is nothing to re-locate and no
+        # recovery block. WHAT to wait for rides the generic `value` (selector / text / address
+        # fragment / load state); the rest are top-level `wait_until_*` fields.
+        if "recovery" in patch:
+            raise ValueError("wait_until_step_cannot_patch_recovery")
+        invalid_keys = sorted(set(patch) - WAIT_UNTIL_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError("wait_until_step_allows_only_wait_until_fields")
+        kind = str(patch.get("wait_until_kind", step.get("wait_until_kind")) or "load_state").strip().lower()
+        if kind not in WAIT_UNTIL_KINDS:
+            raise ValueError("wait_until_kind_invalid")
+        what = str((patch["value"] if "value" in patch else merged.get("value")) or "").strip()
+        if not what:
+            raise ValueError("wait_until_value_empty")
+        if kind == "load_state" and what not in WAIT_UNTIL_LOAD_STATES:
+            raise ValueError("wait_until_load_state_invalid")
+        if "wait_until_timeout_ms" in patch:
+            timeout_ms = patch.get("wait_until_timeout_ms")
+            if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, (int, float)) or not 1000 <= timeout_ms <= WAIT_UNTIL_MAX_MS:
+                raise ValueError("wait_until_timeout_ms_invalid")
+        if "wait_until_on_timeout" in patch:
+            if str(patch.get("wait_until_on_timeout") or "").strip().lower() not in {"fail", "continue"}:
+                raise ValueError("wait_until_on_timeout_invalid")
     if act in {"if_present", "try_dismiss", "wait_for_one_of"}:
         invalid_keys = sorted(set(patch) - BRANCH_ALLOWED_KEYS)
         if invalid_keys:

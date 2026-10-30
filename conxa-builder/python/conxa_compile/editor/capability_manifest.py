@@ -34,6 +34,9 @@ from conxa_compile.editor.patch_gate import (
     NAVIGATE_ALLOWED_KEYS,
     SCROLL_ALLOWED_KEYS,
     WAIT_SCREENSHOT_ALLOWED_KEYS,
+    WAIT_UNTIL_ALLOWED_KEYS,
+    CLIPBOARD_ALLOWED_KEYS,
+    CALL_WORKFLOW_ALLOWED_KEYS,
 )
 
 # One line per insertable kind, naming what the RUNTIME (not the editor) actually requires or
@@ -62,6 +65,26 @@ RUNTIME_NOTES: dict[str, str] = {
     "check": "Regex-matches page.url() against pattern/check_pattern — no recovery on a miss.",
     "assert": "assert_kind in {url, selector, visible, text}; fails the run on a miss.",
     "wait": "Milliseconds, clamped to a 1000ms ceiling regardless of the configured value.",
+    "call_workflow": (
+        "Runs another installed workflow's steps here in a scope of their own: it sees only the inputs "
+        "handed to it and returns only the results asked for. The version it was built against is "
+        "pinned; the run refuses if another version is installed. A pause inside it is not allowed, a "
+        "failure inside it is final (no resume point), and a destructive-step test guard cannot pause "
+        "inside it."
+    ),
+    "clipboard_write": (
+        "Writes the value to the browser clipboard (needs a secure https page). The browser clipboard "
+        "is the computer's clipboard, so the text stays there until something replaces it."
+    ),
+    "clipboard_read": (
+        "Reads the browser clipboard into the named value for later steps ({{name}}). Never reported as "
+        "a run output; an empty clipboard fails the step."
+    ),
+    "wait_until": (
+        "Waits up to 120s for an element to show or go, text to appear, the address to contain a "
+        "fragment, or the page to finish loading. A timeout fails the run (never retried) unless "
+        "on_timeout is continue. Never enters the recovery cascade."
+    ),
     "screenshot": "Capture-and-discard — produces no artifact a later step can read.",
     "ai_review": (
         "Pauses the run and asks the MCP caller (or the Studio sandbox) the stored prompt against "
@@ -92,6 +115,10 @@ _PER_KIND_ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "navigate": NAVIGATE_ALLOWED_KEYS,
     "scroll": SCROLL_ALLOWED_KEYS,
     "wait": WAIT_SCREENSHOT_ALLOWED_KEYS,
+    "wait_until": WAIT_UNTIL_ALLOWED_KEYS,
+    "call_workflow": CALL_WORKFLOW_ALLOWED_KEYS,
+    "clipboard_write": CLIPBOARD_ALLOWED_KEYS,
+    "clipboard_read": CLIPBOARD_ALLOWED_KEYS,
     "screenshot": WAIT_SCREENSHOT_ALLOWED_KEYS,
     "check": CHECK_ASSERT_ALLOWED_KEYS,
     "assert": CHECK_ASSERT_ALLOWED_KEYS,
@@ -168,7 +195,7 @@ if __name__ == "__main__":
             assert row["runtime_note"], f"{row['kind']} is insertable but has no runtime_note"
 
     policy = get_policy_bundle().data
-    for kind in ("navigate", "scroll", "wait", "check", "ai_review", "handover", "if_present", "for_each"):
+    for kind in ("navigate", "scroll", "wait", "wait_until", "check", "ai_review", "handover", "if_present", "for_each"):
         scaffold = _new_manual_step(kind, "")
         allowed = _PER_KIND_ALLOWED_KEYS[kind if kind != "screenshot" else "wait"]
         for key in allowed:

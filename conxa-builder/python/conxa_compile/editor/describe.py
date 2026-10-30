@@ -94,6 +94,10 @@ _ACTION_VERBS = {
 
 _STATIC_ACTION_LABELS = {
     "wait": "Wait",
+    "wait_until": "Wait until",
+    "call_workflow": "Call another workflow",
+    "clipboard_write": "Copy to clipboard",
+    "clipboard_read": "Read clipboard",
     "assert": "Check condition",
     "screenshot": "Take screenshot",
     "check": "Check page state",

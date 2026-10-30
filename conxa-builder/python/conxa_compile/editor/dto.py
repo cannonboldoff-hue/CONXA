@@ -88,6 +88,15 @@ class StepEditorDTO(BaseModel):
     ai_review_output_schema: dict[str, Any] | None = None
     ai_review_on_failure: str | None = None
     ai_review_default_value: Any = None
+    # Names of run inputs holding a file path (e.g. "downloaded_file") the reviewer is shown.
+    ai_review_attach: list[str] | None = None
+    # wait_until (a value-bearing step: `value` is what to wait for). None on every other kind.
+    # call_workflow (value-bearing: `value` is the called workflow's id): names handed over / brought back.
+    call_workflow_inputs: dict[str, str] | None = None
+    call_workflow_outputs: dict[str, str] | None = None
+    wait_until_kind: str | None = None
+    wait_until_timeout_ms: int | None = None
+    wait_until_on_timeout: str | None = None
     # Going-forward selector signals from identity_bundle — drives the runtime hot path.
     # Each entry: {selector (public display string), engine, durability, orthogonality_class,
     # unique_at_compile, source}. The editor's selector list is authoritative; this field

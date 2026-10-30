@@ -1657,11 +1657,17 @@ An unanswered pause is closed by the park TTL sweep.
 
 **Safety:** `patch_gate` refuses a destructive step directly after an `ai_review` (`destructive_step_cannot_directly_follow_ai_review`). A model's answer may gate whether a later step runs, never supply what a destructive step acts on. **Exemption (BUILD-39):** a *confirm-only* review — output schema exactly `{confirmed: boolean}`, `on_failure: abort` (`patch_gate.is_confirm_only_review`) — can only gate *whether* the next step runs, so it may sit directly before it; this is what Clarify's "a person confirms before sending" inserts. Anything wider (extra fields, a string answer, `continue`/`use_default`) is still refused.
 
-**Not built** (TODO.md): writing a reference screenshot for an inserted `ai_review` (the field, gate, and loader exist; `_write_saved_visual_assets` only walks recorded steps), and branching on an answer (branches probe the DOM, not `inputs`).
+**Using the answer (compute, read a file, choose a path).** The answer is bound whole under `output_name`, and every plain field (string, number, boolean) is also bound on its own as `<output_name>_<field>` (`run.js::flattenAnswer`), because a `{{placeholder}}` cannot reach inside an object. Later steps use `{{verdict_choice}}`, and `run_if` (`not_empty` / `equals` / `not_equals`) reads it, so an `ai_review` followed by `run_if` steps is the if/else. A named `ai_review` output is reported in the run's `outputs` like an `extract`. Presets in Human Edit: a single text value (compute or read a value), one choice from a list, yes/no.
+
+**Showing the model data.** `{{inputs}}` named in the prompt are filled in before the question is sent. `attach` (authored as `ai_review_attach`, up to 5 input names) names inputs holding a local file path; `review_pause.js::readAttachments` inlines text files (csv, tsv, txt, json, md, log) up to 64 KB, only from this run's download folder (`inputs.downloaded_files_dir`), framed as untrusted data between markers and mirrored in `_meta["conxa/ai_review"].attachments`. A PDF or any binary is not shown (a note says so).
+
+**Limit on gating.** `patch_gate.validate_editor_patch(earlier_steps=...)` refuses a `run_if` on a destructive step that reads a free-form `ai_review` answer (`destructive_step_cannot_be_gated_by_ai_review_answer`). Only a confirm-only review may gate a destructive step. The model may choose between safe steps; it never picks which irreversible action runs.
+
+**Not built** (TODO.md): writing a reference screenshot for an inserted `ai_review` (the field, gate, and loader exist; `_write_saved_visual_assets` only walks recorded steps), PDF attachments, numeric comparison in `run_if`, and `if_present` / `outcome_fork` branching on an answer (they still probe the DOM, not `inputs`).
 
 ### 11.4 Hand-Over Step
 
-`handover` yields the live page to a **person** (2FA, CAPTCHA, e-signature, one-off login), then takes it back. Outside the recovery cascade, like `ai_review`. Only the hand-over shape of EXEC-21 is built; approve/reject and supply-a-judgement are open.
+`handover` yields the live page to a **person** (2FA, CAPTCHA, e-signature, one-off login), then takes it back. Outside the recovery cascade, like `ai_review`. Only the hand-over shape of EXEC-21 is built. **Approve / reject is answered by `handover`** (2026-10-30 decision): a person who approves clicks Continue; a person who does not approve cancels the run, and `handover` has no separate reject outcome. A confirm-only `ai_review` is the model's yes/no, not a person's, and must not guard anything consequential on its own. Supply-a-judgement is answered by `ai_review`.
 
 **Resume signals** (`runtime/app/handover.js::arm()` → `{signal, disarm}`; the first to fire wins; `disarm()` is idempotent):
 1. an in-page "Done — resume workflow" banner: `context.exposeBinding` + `addInitScript`, plus an immediate `evalOn` on every live page, so it survives navigation and new tabs;
@@ -1744,6 +1750,48 @@ An unrecognised dialog follows `unknown_policy` (`ask_human` default). After run
 **Tests:** cloud `test_app_graph.py`, `test_app_graph_routes.py`, `test_app_graph_sync.py`, `test_app_graph_hints.py`, `test_app_graph_knowledge.py`, `test_app_graph_field.py`; runtime `test_app_knowledge.js`, `test_scrub.js`, `test_durable_context.js`; Studio `test/appMapLayout.test.mjs` (`npm run test:app-map`).
 
 ---
+
+### 11.6 Wait, Clipboard and Call-Workflow Steps (2026-10-30)
+
+Three step kinds added from `docs/Block-Runtime-Vision.md`. All are authored like `handover` (§11.4: no selector,
+no recovery block, config in `value` plus top-level fields; see `docs/Backend-Schema.md` §3) and each is gated by
+an app-layer capability so an older engine refuses the pack.
+
+**`wait_until`** (`handlers.js`). Waits for something that happens on its own: an element shows or goes
+(`page.waitForSelector`), text shows, the address contains a fragment, or the page reaches `load` /
+`domcontentloaded` / `networkidle`. Events only, never a clock time: one wait is clamped to 120 s because a whole
+MCP call is cut off at about 210 s (`EXECUTION_DEADLINE_MS`). A timeout is a plain, non-retryable failure naming
+what was waited for, unless `on_timeout` is `continue`. Waiting for a download stays with `download_observed`.
+A wait of minutes or hours (or until a time of day) is not built; that belongs to the scheduler.
+
+**`clipboard_write` / `clipboard_read`** (`handlers.js`). Use the browser's `navigator.clipboard` on a secure
+(https) page in front; permission is granted per origin just in time. Every call goes through the page-eval
+deadline seam (`page_eval.js`). **The browser clipboard is the computer's clipboard:** text written stays there
+until something replaces it, and a read can see anything the person copied. So a read binds into the run's
+inputs only (`declaredOutputNames(steps, true)` lets it survive a pause, but `collectOutputs` never reports it),
+no error message contains clipboard text, and an empty clipboard fails the step. See `docs/Security.md` SG-22.
+The OS-wide clipboard outside the browser is deliberately not covered.
+
+**`call_workflow`** (`call_workflow.js`, `run.js::runCallWorkflowStep`). Runs another installed workflow's steps
+in the middle of this one, through the same `executeOneStep` (tabs, Tier A recovery, GATE/VERIFY, dry-run).
+- *Before the run starts* (`server.js`, per requested skill): every callee is loaded and checked, so a bad call
+  is a refusal and not a surprise. Installed and intact; installed version equals the pinned `call.version`;
+  no circle and at most `MAX_CALL_DEPTH` (3) levels; no `ai_review` / `handover` / `outcome_fork` inside it;
+  inputs and results match what it declares. The callee's host joins the platform lock and its slug the policy
+  gate (`_withCallees`).
+- *Scope.* The callee sees only the inputs handed to it, its declared defaults and this run's download
+  bindings; the caller gets back only the results the call asks for, under the names it chose. `state.inputs`
+  is emptied and refilled in place and restored in `finally`.
+- *Failure.* A failure inside a called workflow is final: its message is prefixed with the workflow's name and
+  it carries no `failedAt`, so there is no resume point (a resume would repeat work already done) and no
+  agent-recovery round trip (those address top-level steps). Tier A recovery of each callee step still runs. A
+  mid-run sign-in expiry inside a callee is reported as a plain failure, not auto-retried.
+- *Guards.* `state.loopDepth` is raised for the call, so the Studio destructive-step guard fails closed inside a
+  call exactly as it does inside a loop.
+- *Version pin.* At build (`call_workflow_pin.py`, from `_write_skill_packs_format`) each call is stamped with
+  the version of the workflow it calls (built in the same call, or read from an earlier build). Rebuilding the
+  callee alone changes its version and makes the caller refuse until it is rebuilt: deliberate.
+- *Telemetry.* `call_start`, `call_done`; the callee's steps are counted under the caller.
 
 ## 12. Telemetry
 

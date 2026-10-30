@@ -1116,7 +1116,18 @@ ai_review_output_schema: dict | None
 ai_review_on_failure: "abort" | "use_default" | "continue"
 ai_review_default_value: Any
 ai_review_reference_screenshot_ref: str | None
+ai_review_attach: list[str] | None      # up to 5 input names holding a local file path (see below)
 ```
+
+**Using the answer, and showing the model data (2026-10-30).** The runtime step gains an optional
+`attach: [input_name, ...]`. At pause time `{{inputs}}` in the prompt are filled in, and each attached input
+that holds a path inside this run's download folder (`inputs.downloaded_files_dir`) and ends in `.csv`,
+`.tsv`, `.txt`, `.json`, `.md` or `.log` is inlined (first 64 KB) between untrusted-data markers; the same text
+is mirrored in `_meta["conxa/ai_review"].attachments` (`[{name, file, text, note}]`). On resume the answer is
+bound whole under `output_name` AND each plain field (string, number, boolean) as `<output_name>_<field>`, so
+later steps use `{{x_field}}` and `run_if` can test it. A named `ai_review` output is reported in `outputs`
+like an `extract`. `patch_gate` refuses a `run_if` on a destructive step that reads a free-form `ai_review`
+answer (`destructive_step_cannot_be_gated_by_ai_review_answer`); only a confirm-only review may gate one.
 
 **`execute_skill` gains `review_results: { "<step_index>": <answer> }`** — the resume payload for
 a paused `ai_review` step, parallel to `execute_skill`'s `step_overrides` param but never run
@@ -1188,6 +1199,25 @@ authored inside a `for_each` loop body — unwinding the loop on the pause throw
 cursor, so the runtime propagates the pause rather than treating it as a row failure, but nothing
 yet stops one from being authored there in the first place; approve/reject and supply-a-judgement,
 EXEC-21's other two shapes.
+
+#### wait_until, clipboard_write, clipboard_read, call_workflow (2026-10-30)
+
+Four more value-bearing step kinds, authored like `handover` (no selector, no `recovery` block; the generic
+`value` carries the main setting, the rest are top-level fields validated by `patch_gate.py`). Each needs an
+app layer that lists its capability in `version.json` (`wait_until`, `clipboard`, `call_workflow`); the built
+manifest's `required_capabilities` names it, so an older engine refuses the pack instead of misreading the step.
+
+| Kind | Editor fields | Runtime step |
+|---|---|---|
+| `wait_until` | `value` (selector / text / address fragment / load state), `wait_until_kind` (`element_visible`, `element_hidden`, `text_visible`, `url_contains`, `load_state`), `wait_until_timeout_ms` (1000-120000, default 30000), `wait_until_on_timeout` (`fail` \| `continue`) | `{type, until: {kind, selector\|text\|url\|state}, timeout_ms, on_timeout}` |
+| `clipboard_write` | `value` (the text, `{{inputs}}` allowed) | `{type, value}` |
+| `clipboard_read` | `value` (the name to keep it under) | `{type, output_name}` — never reported in `outputs` |
+| `call_workflow` | `value` (the called workflow's id), `call_workflow_inputs` (`{callee_input: text}`), `call_workflow_outputs` (`{callee_result: caller_name}`) | `{type, call: {skill, version, inputs, outputs}}` — `version` is pinned at build |
+
+A timeout in `wait_until` and every clipboard failure are non-retryable (`badInput`), so they never reach the
+recovery cascade. `call_workflow` is checked at build (`conxa_compile/call_workflow_pin.py`: the called
+workflow exists, no circle, at most 3 levels deep, no pause inside it, inputs and results match) and again at
+run start (`runtime/app/call_workflow.js`).
 
 ### 3.5 RecoveryBlock
 
@@ -1494,6 +1524,8 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
 | `park_resumed` | A parked run resumed execution on the same live page it paused on | `si` |
 | `handover_resumed` | (EXEC-21) A parked hand-over's self-driven resume completed | `si` |
+| `call_start` | A `call_workflow` step began running the called workflow's steps | `si`, `n` (steps in the called workflow) |
+| `call_done` | The called workflow's steps all finished | `si` |
 | `wf_ok` | Workflow completed successfully | `dur` (ms), `tot`, `rec` (recovered steps) |
 | `wf_fail` | Workflow failed | `dur`, `fsi` (failed step index), `fc` (failure code) |
 
