@@ -1043,13 +1043,14 @@ async function runForkStep(ctx, state, step, page, i) {
   const deadline = Date.now() + timeoutMs;
 
   // Watch for up to timeout_ms: a dialog can open a beat after the triggering action returns.
-  // A known state ends the wait at once; an unknown dialog ends it too (it's already blocking).
+  // A known state ends the wait at once. Anything else keeps being watched: a toast or progress
+  // panel goes away on its own (the last look is then clean), and a real popup may arrive behind it.
   let probe = null;
   let seen = { kind: "clean" };
   for (;;) {
     probe = await observeDialog(page, ctx);
     seen = fork.matchState(probe, states);
-    if (seen.kind !== "clean" || Date.now() >= deadline) break;
+    if (seen.kind === "state" || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, Math.min(200, Math.max(0, deadline - Date.now()))));
   }
 
@@ -1086,10 +1087,20 @@ async function runForkStep(ctx, state, step, page, i) {
   }
   ctx.tracker.emit("fork_observed", { si: i, st: stateId });
 
+  if (decision.do === "continue") {
+    // Nothing here is evidence of a choice, or the author said to leave it. Click nothing and go
+    // on as recorded; the warning travels with the run, so if this surface is what blocks the
+    // next step, that step's failure names it.
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "continue", src: "policy" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "continue", source: "policy", title });
+    state.warnings.push(`"${title}" was on screen and was left alone; the run went on as recorded.`);
+    return;
+  }
+
   if (decision.do === "pause") {
-    // A decision only a person can make (an unreviewed consequential option, "ask me", an
-    // unrecognised popup). Park the page and hand server.js the question; it resumes through
-    // __fork_choice_<i>. Never answered by a model on the person's behalf.
+    // A decision a person asked to be asked about (policy.reviewed). Park the page and hand
+    // server.js the question; it resumes through __fork_choice_<i>. Never answered by a model on
+    // the person's behalf.
     ctx.tracker.emit("fork_paused", { si: i, st: stateId });
     appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "pause", reason: decision.reason, title });
     throw Object.assign(new Error("fork_pause"), {

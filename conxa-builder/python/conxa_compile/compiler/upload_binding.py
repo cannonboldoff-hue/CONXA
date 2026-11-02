@@ -237,6 +237,9 @@ class _BindingState:
         return None
 
 
+_DOWNLOAD_SLOT_RE = re.compile(r"\{\{\s*(downloaded_file[a-z_0-9]*)\s*\}\}")
+
+
 def bind_upload_step_value(
     step: dict[str, Any],
     *,
@@ -310,10 +313,14 @@ def apply_bindings_to_compiled_steps(steps: list[Any], events: list[dict[str, An
 
     state = _BindingState()
     event_idx = 0
+    producers: list[tuple[Any, int]] = []
     for step in steps:
         action = _step_action_str(step)
         if action == "download_observed":
+            before = state.total_downloads
             state.add_download(str(step.value or ""))
+            if state.total_downloads > before:           # a failed/cancelled download wrote nothing
+                producers.append((step, state.total_downloads))
         elif action in {"upload", "upload_intent"}:
             ev = upload_events[event_idx] if event_idx < len(upload_events) else {}
             event_idx += 1
@@ -335,6 +342,11 @@ def apply_bindings_to_compiled_steps(steps: list[Any], events: list[dict[str, An
             ):
                 step.value = patch["value"]
                 step.input_binding = patch["input_binding"]
+                step.consumes = sorted(set(_DOWNLOAD_SLOT_RE.findall(str(patch["value"]))))
+    # The runtime writes downloaded_file_<n> for every download, and the bare downloaded_file as well
+    # when the run has exactly one.
+    for producer, order in producers:
+        producer.produces = [f"downloaded_file_{order}"] + (["downloaded_file"] if len(producers) == 1 else [])
 
 
 def for_each_loop_variable_names(payload: Any) -> set[str]:

@@ -255,6 +255,11 @@ class SkillStep(BaseModel):
     state: dict[str, Any] = Field(default_factory=dict)                       # [executor] page state at recording
     value: Any = None                                                         # [contract]
     input_binding: str | None = None                                         # [contract]
+    # [contract] Value flow between steps, explicit instead of a naming convention: the run slots this
+    # step writes (a download writes ``downloaded_file_<n>``) and the ``{{slot}}`` names it reads from
+    # an earlier step (an upload of a file that step downloaded). Filled by compiler/upload_binding.py.
+    produces: list[str] = Field(default_factory=list)
+    consumes: list[str] = Field(default_factory=list)
     # [contract] `extract` steps only: what to read off the matched element -- {source: text | value |
     # attribute, attribute?, pattern?}. The step's `value` is the output name the run reports back.
     extract: dict[str, Any] = Field(default_factory=dict)

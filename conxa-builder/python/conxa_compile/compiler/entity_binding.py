@@ -120,6 +120,70 @@ def _pick_identifier(row: dict[str, Any]) -> str:
     return max(pool, key=len)
 
 
+# --- is the target one item picked from a list? ----------------------------------------------
+# Controls act on the page; the other things a person clicks (a link, an option, a cell) name an
+# item. A control inside a row (a per-row "Edit") is still a control.
+_CONTROL_ROLES = frozenset({
+    "button", "menuitem", "menuitemcheckbox", "menuitemradio", "tab", "switch", "combobox",
+    "textbox", "input", "select", "textarea", "checkbox", "radio",
+})
+# Data rows. Real row elements count outright. A <div>/<section>/<article> grid proves nothing on its
+# own (layout repeats), so it counts only when it says it is a row: an ARIA row-like role, or a class
+# or id that names one (react-directory-row, result-card, item-3). Bootstrap's bare ".row" is layout.
+_DATA_ROW_TAGS = frozenset({"tr", "li"})
+_GRID_ROW_TAGS = frozenset({"div", "section", "article"})
+_ROW_ROLES = frozenset({"row", "listitem", "option", "treeitem"})
+_ROW_NAME_RE = re.compile(r"(?:^|[-_ ])(?:row|item|entry|card|record|result)s?(?:$|[-_ 0-9])", re.IGNORECASE)
+_ROLE_ATTR_RE = re.compile(r"""^\s*<[^>]*?\brole\s*=\s*["']([a-z]+)["']""", re.IGNORECASE)
+
+
+def _names_a_data_row(ancestor: dict[str, Any], tag: str) -> bool:
+    if tag in _DATA_ROW_TAGS:
+        return True
+    if tag not in _GRID_ROW_TAGS:
+        return False
+    role = _ROLE_ATTR_RE.match(str(ancestor.get("outer_html") or ""))
+    if role and role.group(1).lower() in _ROW_ROLES:
+        return True
+    names = [str(c) for c in (ancestor.get("classes") or []) if str(c) != "row"] + [str(ancestor.get("id") or "")]
+    return any(_ROW_NAME_RE.search(n) for n in names)
+# A header row is chrome, not a record.
+_HEADER_PARENTS = frozenset({"thead"})
+_PEER_SEARCH_DEPTH = 10
+# bridge.js::captureAncestors cuts every ancestor's outer_html at this many characters. A parent that
+# long has more children than were kept, so counting the rows left in it undercounts.
+_ANCESTOR_HTML_CAP = 2000
+
+
+def repeating_peers(ev: Step) -> int:
+    """How many like items the clicked target was one of: >0 when it is an item named in a list or
+    table, 0 for a control or for anything not in a row.
+
+    That is the structural difference between *choosing one of many* (a file in a list, a record in
+    a table: a value that very likely changes each run) and *pressing a control* (a toolbar or dialog
+    button: the app's own chrome). Deterministic, from the ancestor chain the recorder already
+    captures, no text and no model. Looks further up than ``detect_entity_binding`` because it only
+    needs to know that a row exists, not to build a selector for it."""
+    role = str((ev.get("semantic") or {}).get("role") or (ev.get("target") or {}).get("role") or "").strip().lower()
+    if role in _CONTROL_ROLES:
+        return 0
+    ancestors = ev.get("ancestors") or []
+    for i in range(min(len(ancestors) - 1, _PEER_SEARCH_DEPTH)):
+        row = ancestors[i] or {}
+        parent = ancestors[i + 1] or {}
+        tag = str(row.get("tag") or "").strip().lower()
+        if not _names_a_data_row(row, tag) or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
+            continue
+        parent_html = str(parent.get("outer_html") or "")
+        classes = set(strip_dynamic_classes([str(c) for c in (row.get("classes") or [])]))
+        siblings = _direct_child_count(parent_html, tag, classes)
+        if len(parent_html) >= _ANCESTOR_HTML_CAP:
+            return max(siblings, _MIN_SIBLINGS + 1)
+        if siblings >= _MIN_SIBLINGS:
+            return siblings
+    return 0
+
+
 def detect_entity_binding(ev: Step) -> EntityBinding | None:
     """Walk the recorded ancestor chain outward; the first ancestor with >=2 structurally
     matching siblings is treated as the row. Returns None when nothing repeats — there is no

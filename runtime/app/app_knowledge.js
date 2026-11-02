@@ -89,10 +89,13 @@ function suggestedLabel(popup, probe) {
 
 /** What to do about a popup the map knows. Returns
  *   { do: "click", label, source: "app_policy" }   press this visible button
- *   { do: "pause", reason, suggested }             a person decides (the default)
+ *   { do: "continue" }                             leave it alone and carry on (no policy)
+ *   { do: "pause", reason, suggested }             only when the author's policy says ask_human
  *   { do: "stop", message }
- * The same fail-closed rules as fork.decide: a consequential button without the author's approval
- * is a pause, a button that is not on screen is a pause, and inside a loop a pause is a stop. */
+ * Nothing pauses unless the author's own policy says so. No policy, or a policy naming a button
+ * that is not on screen, means the popup is left alone. A consequential button without the
+ * author's approval stops the run: it is never pressed, and never asked about by default. Inside
+ * a loop a pause is a stop. */
 function decideKnown(popup, probe, { loopDepth = 0 } = {}) {
   const title = (popup && popup.signature && popup.signature.title) || (probe && probe.title) || "a popup";
   const stopMessage = `Needs a decision: ${title}`;
@@ -104,14 +107,16 @@ function decideKnown(popup, probe, { loopDepth = 0 } = {}) {
   );
 
   const policy = popup && popup.app_policy;
-  if (!policy || typeof policy !== "object") return pause("known_popup");
+  if (!policy || typeof policy !== "object") return { do: "continue" };
 
   if (policy.mode === "auto") {
     const label = fork.probeLabelsRaw(probe).find((l) => fork.norm(l) === fork.norm(policy.option));
-    if (!label) return pause("app_policy_option_missing");
+    if (!label) return { do: "continue" };
     const option = optionByLabel(popup, label);
     const risky = !option || option.role === "consequential";
-    if (risky && policy.author_approved !== true) return pause("consequential_unapproved");
+    if (risky && policy.author_approved !== true) {
+      return { do: "stop", message: `${stopMessage}. Tell Conxa in the chat how this popup should be handled. Nothing was changed.` };
+    }
     return { do: "click", label, source: "app_policy" };
   }
   if (policy.mode === "ask_human") return pause("app_policy_ask");

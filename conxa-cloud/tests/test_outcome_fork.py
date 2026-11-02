@@ -114,10 +114,28 @@ def test_a_decision_click_becomes_one_fork_with_every_button_as_an_option():
     assert fork["clean"] == {"observed": False, "observed_in": []}
 
 
-def test_a_consequential_recorded_choice_asks_a_person_by_default():
+def test_a_consequential_recorded_choice_is_unapproved_and_never_asks_a_person():
     _, forks = _fork_of([_click("Replace", _ctx("Replace"))])
     policy = forks[0].outcome_fork["states"][0]["policy"]
-    assert policy == {"mode": "ask_human", "suggested": "replace"}
+    assert policy == {"mode": "auto", "option_id": "replace", "author_approved": False}
+    assert forks[0].outcome_fork["unknown_policy"] == "continue"
+
+
+def test_classify_dialog_agrees_with_the_shared_decision_surface_cases():
+    # Same file runtime/test/unit/test_fork.js runs against fork.js::isDecisionDialog.
+    from pathlib import Path
+
+    from conxa_compile.compiler.outcome_fork import DECISION, classify_dialog
+
+    path = Path(__file__).resolve().parents[2] / "runtime" / "test" / "fixtures" / "decision_surface_cases.json"
+    for c in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+        ctx = {
+            "title": c["title"], "message": c["message"],
+            "buttons": [{"name": n, "text": n} for n in c["buttons"]],
+            "has_fields": bool(c.get("has_fields")),
+            **({"kind": "native"} if c.get("native") else {}),
+        }
+        assert (classify_dialog(ctx) == DECISION) is c["decision"], c["name"]
 
 
 def test_a_harmless_recorded_choice_runs_automatically_but_unapproved():
@@ -214,8 +232,8 @@ def test_exports_a_runnable_fork_with_option_bodies(tmp_path):
     execution, _ = _export(tmp_path, steps)
     fork = next(s for s in execution if s["type"] == "outcome_fork")
     state = fork["states"][0]
-    assert fork["unknown_policy"] == "ask_human" and fork["timeout_ms"] == 4000
-    assert state["policy"] == {"mode": "ask_human", "suggested": "replace"}
+    assert fork["unknown_policy"] == "continue" and fork["timeout_ms"] == 4000
+    assert state["policy"] == {"mode": "auto", "option_id": "replace", "author_approved": False}
     assert [o["id"] for o in state["options"]] == ["replace", "keep_both", "cancel"]
     assert all(o["steps"] and o["steps"][0]["type"] == "click" for o in state["options"])
     replace_step = state["options"][0]["steps"][0]
@@ -223,12 +241,20 @@ def test_exports_a_runnable_fork_with_option_bodies(tmp_path):
     assert "report.pdf" not in json.dumps(fork)
 
 
-def test_export_falls_back_to_ask_human_when_the_auto_option_cannot_run(tmp_path):
+def test_export_falls_back_to_stop_when_the_auto_option_cannot_run(tmp_path):
     steps, forks = _fork_of([_click("Keep both", _ctx("Keep both"))])
     forks[0].outcome_fork["states"][0]["policy"]["option_id"] = "does_not_exist"
     execution, _ = _export(tmp_path, steps)
     fork = next(s for s in execution if s["type"] == "outcome_fork")
-    assert fork["states"][0]["policy"]["mode"] == "ask_human"
+    assert fork["states"][0]["policy"]["mode"] == "stop"
+
+
+def test_export_keeps_the_authors_reviewed_flag_so_an_explicit_ask_me_can_pause(tmp_path):
+    steps, forks = _fork_of([_click("Keep both", _ctx("Keep both"))])
+    forks[0].outcome_fork["states"][0]["policy"] = {"mode": "ask_human", "reviewed": True}
+    execution, _ = _export(tmp_path, steps)
+    fork = next(s for s in execution if s["type"] == "outcome_fork")
+    assert fork["states"][0]["policy"] == {"mode": "ask_human", "reviewed": True}
 
 
 def test_a_fork_with_no_runnable_option_is_dropped_from_the_pack(tmp_path):

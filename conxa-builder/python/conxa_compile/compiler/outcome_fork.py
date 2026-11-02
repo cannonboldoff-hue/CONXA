@@ -266,11 +266,9 @@ def _build_fork(run: list[SkillStep], session_id: str = "") -> SkillStep | None:
     if not recorded_id or len(options) < 2:
         return None
 
-    recorded = next(o for o in options if o["id"] == recorded_id)
-    if recorded["role"] == "consequential":
-        policy: dict[str, Any] = {"mode": "ask_human", "suggested": recorded_id}
-    else:
-        policy = {"mode": "auto", "option_id": recorded_id, "author_approved": False}
+    # The recording's own answer is the default. A consequential one is never run until the author
+    # approves it (set_fork_policy); the runtime stops rather than pausing, so nothing here asks anyone.
+    policy: dict[str, Any] = {"mode": "auto", "option_id": recorded_id, "author_approved": False}
 
     sig = _fork_signature(ctx)
     title = sig["title"] or "popup"
@@ -285,7 +283,7 @@ def _build_fork(run: list[SkillStep], session_id: str = "") -> SkillStep | None:
         recovery=no_recovery_block(FORK_INTENT),
         outcome_fork={
             "timeout_ms": DEFAULT_TIMEOUT_MS,
-            "unknown_policy": "ask_human",
+            "unknown_policy": "continue",
             "clean": {"observed": False, "observed_in": []},
             "states": [{
                 "id": state_id,
@@ -359,11 +357,12 @@ def state_from_dialog(
         options.append({"id": oid, "label": name, "role": role, "recorded": is_recorded, "steps": [_dump(synth)]})
     if len(options) < 2:
         return None
-    recorded = next((o for o in options if o["id"] == recorded_id), None)
-    if recorded is None or recorded["role"] == "consequential":
-        policy: dict[str, Any] = {"mode": "ask_human", **({"suggested": recorded_id} if recorded_id else {})}
-    else:
-        policy = {"mode": "auto", "option_id": recorded_id, "author_approved": False}
+    # No recorded answer for this popup: leave it alone rather than ask. A recorded one is the default;
+    # a consequential one still waits for the author's approval and stops until it has it.
+    policy: dict[str, Any] = (
+        {"mode": "auto", "option_id": recorded_id, "author_approved": False}
+        if recorded_id else {"mode": "continue"}
+    )
     sig = _fork_signature(ctx)
     state_id = f"dialog_{_slug(sig['title'], '1')}"
     base, n = state_id, 2
@@ -413,8 +412,6 @@ def fork_from_known_popup(trigger: dict[str, Any], popup: dict[str, Any]) -> dic
     if len(options) < 2:
         return None
 
-    top = max(options, key=lambda o: o["_chosen"])
-    suggested = top["id"] if top["_chosen"] > 0 else ""
     for o in options:
         o.pop("_chosen")
 
@@ -435,14 +432,14 @@ def fork_from_known_popup(trigger: dict[str, Any], popup: dict[str, Any]) -> dic
         recovery=no_recovery_block(FORK_INTENT),
         outcome_fork={
             "timeout_ms": DEFAULT_TIMEOUT_MS,
-            "unknown_policy": "ask_human",
+            "unknown_policy": "continue",
             "clean": {"observed": True, "observed_in": []},
             "states": [{
                 "id": f"dialog_{_slug(title, '1')}",
                 "kind": "dialog",
                 "signature": sig,
                 "options": options,
-                "policy": {"mode": "ask_human", **({"suggested": suggested} if suggested else {})},
+                "policy": {"mode": "continue"},
                 "observed_in": [],
                 "from_map": True,
             }],

@@ -150,7 +150,7 @@ def popup_from_map(hooked_fixture=None):
     return app_graph_store.get_graph(LOCAL_WORKSPACE_ID, "drive.example.com").popups[0].model_dump(mode="json")
 
 
-def test_add_known_popup_fork_inserts_an_ask_a_person_fork(hooked):
+def test_add_known_popup_fork_inserts_a_leave_it_alone_fork(hooked):
     popup = popup_from_map()
     b = doc(*core_steps(), step("click", name="Done", stable="done_btn"))
     out = add_known_popup_fork(copy.deepcopy(b), 1, popup)
@@ -159,8 +159,7 @@ def test_add_known_popup_fork_inserts_an_ask_a_person_fork(hooked):
     state = steps[2]["outcome_fork"]["states"][0]
     assert steps[2]["outcome_fork"]["clean"]["observed"] is True
     assert state["from_map"] is True and state["observed_in"] == []
-    assert state["policy"]["mode"] == "ask_human" and "author_approved" not in state["policy"]
-    assert state["policy"]["suggested"] == "replace"        # the one recording that met it chose Replace
+    assert state["policy"] == {"mode": "continue"}          # nothing asks, nothing is pressed, until the author decides
     assert [o["label"] for o in state["options"]] == ["Replace", "Keep both", "Cancel"]
     assert all(o["recorded"] is False and len(o["steps"]) == 1 for o in state["options"])
     replace = state["options"][0]
@@ -217,7 +216,7 @@ def test_a_fork_added_from_the_map_exports_to_a_runnable_execution_step(hooked, 
     execution = json.loads((tmp_path / "skills" / "wf" / "execution.json").read_text())
     exported = next(s for s in execution if s["type"] == "outcome_fork")
     state = exported["states"][0]
-    assert state["policy"]["mode"] == "ask_human"
+    assert state["policy"]["mode"] == "continue"
     assert [o["id"] for o in state["options"]] == ["replace", "keep_both", "cancel"]
     assert all(o["steps"] and o["steps"][0]["type"] == "click" for o in state["options"])
     assert not [w for w in warnings if "fork" in w.lower()]

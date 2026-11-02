@@ -7,16 +7,24 @@
 // An outcome fork says: "after this action the app can legitimately land in one of several known
 // states (no dialog; a 'file already exists' dialog; ...); each known state has a policy". The
 // runtime's job is to recognise which state it is in WITHOUT a model, then apply that policy —
-// and to fail closed (pause or stop) rather than guess whenever the page is not one it knows.
+// and to never guess: it does not click a popup it does not know.
+//
+// Nothing pauses on its own. A run goes on as recorded; a person is asked only where a person put
+// that question in (`policy.reviewed`, written by the editor's set_fork_policy, or a handover step).
+// A surface the fork does not list (a toast, a progress panel, a popup nobody taught it) is
+// observed and passed over -- nothing here clicks it -- and if it really blocks the page, the next
+// step fails with the surface named in its warnings. What the runtime still never does is answer a
+// decision for anyone: a consequential option without the author's approval stops the run.
 //
 // Shape (execution.json), all fields optional unless stated:
-//   { type: "outcome_fork", timeout_ms, unknown_policy: "ask_human"|"stop",
+//   { type: "outcome_fork", timeout_ms, unknown_policy: "continue"|"stop",
 //     clean: { observed },
 //     states: [{ id, kind, signature: { title, button_labels, message_tokens, container_selector },
 //                options: [{ id, label, role: "dismiss"|"consequential"|"neutral", steps: [...] }],
 //                policy: { mode: "auto", option_id, author_approved }
-//                      | { mode: "by_input", input }
-//                      | { mode: "ask_human", suggested }
+//                      | { mode: "by_input", input, reviewed }
+//                      | { mode: "ask_human", suggested, reviewed }
+//                      | { mode: "continue" }
 //                      | { mode: "stop", message } }] }
 //
 // Safety rules — do not loosen:
@@ -111,27 +119,32 @@ function findOption(state, id) {
 
 /** Apply a state's policy. Returns
  *   { do: "run", option, source }   run this option's steps
- *   { do: "pause", reason, suggested? }   a person has to decide
+ *   { do: "pause", reason, suggested? }   a person asked to be asked (policy.reviewed)
+ *   { do: "continue" }              leave the popup alone and carry on
  *   { do: "stop", message }         fail the run with this message
  * `source` records who decided (audit): "policy" | "input". Throws a badInput error for an
- * unusable by_input value (so the caller learns the valid options). Inside a loop a pause cannot
- * keep its place, so it degrades to a stop. */
+ * unusable by_input value (so the caller learns the valid options). A pause happens only when the
+ * author chose it (`policy.reviewed`); a compiler-written policy that would have asked a person
+ * stops instead. Inside a loop a pause cannot keep its place, so it also degrades to a stop. */
 function decide(state, inputs, { loopDepth = 0 } = {}) {
   const policy = (state && state.policy) || {};
   const mode = String(policy.mode || "stop");
   const title = (state && state.signature && state.signature.title) || "a popup";
   const stopMessage = policy.message || `Needs a decision: ${title}`;
-  const pause = (reason, suggested) => (
-    loopDepth > 0
-      ? { do: "stop", message: `${stopMessage} (a person can't be asked inside a repeated step)` }
-      : { do: "pause", reason, suggested: suggested || null }
-  );
+  const needsAuthor = `${stopMessage}. Tell Conxa in the chat how this popup should be handled.`;
+  const pause = (reason, suggested) => {
+    if (loopDepth > 0) return { do: "stop", message: `${stopMessage} (a person can't be asked inside a repeated step)` };
+    if (policy.reviewed !== true) return { do: "stop", message: needsAuthor };
+    return { do: "pause", reason, suggested: suggested || null };
+  };
+
+  if (mode === "continue") return { do: "continue" };
 
   if (mode === "auto") {
     const option = findOption(state, policy.option_id);
     if (!option) return { do: "stop", message: stopMessage };
     if (option.role === "consequential" && !policy.author_approved) {
-      return pause("consequential_unapproved", option.id);
+      return { do: "stop", message: `${needsAuthor} Nothing was changed.` };
     }
     return { do: "run", option, source: "policy" };
   }
@@ -153,12 +166,13 @@ function decide(state, inputs, { loopDepth = 0 } = {}) {
   return { do: "stop", message: stopMessage };
 }
 
-/** The decision for a dialog no state recognises. */
+/** The decision for a surface no state recognises: carry on as recorded, unless the fork was told
+ * to stop. A recognised-nothing overlay is not evidence of a choice, so it never asks a person.
+ * A legacy `unknown_policy: "ask_human"` from an older compile is treated as `continue`. */
 function decideUnknown(fork, probe, { loopDepth = 0 } = {}) {
   const title = (probe && probe.title) || "an unexpected popup";
-  const message = `Needs a decision: ${title}`;
-  if ((fork && fork.unknown_policy) === "stop" || loopDepth > 0) return { do: "stop", message };
-  return { do: "pause", reason: "unknown_dialog", suggested: null };
+  if ((fork && fork.unknown_policy) === "stop") return { do: "stop", message: `Needs a decision: ${title}` };
+  return { do: "continue", reason: "unknown_surface" };
 }
 
 // A blocking popup that is asking the person to CHOOSE, as opposed to one that is only in the way.

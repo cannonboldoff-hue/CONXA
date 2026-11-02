@@ -43,7 +43,7 @@ function existsState(policy, extra = {}) {
 }
 
 function forkStep(states, extra = {}) {
-  return { type: "outcome_fork", timeout_ms: 1500, unknown_policy: "ask_human", states, ...extra };
+  return { type: "outcome_fork", timeout_ms: 1500, unknown_policy: "continue", states, ...extra };
 }
 
 // `probe` is what dialogProbe sees; any navigation (an option running) closes it unless
@@ -123,10 +123,10 @@ test("decide: auto runs a neutral option", () => {
   assert.strictEqual(d.option.id, "keep_both");
 });
 
-test("decide: auto on a consequential option without author approval pauses (fails closed)", () => {
+test("decide: auto on a consequential option without author approval stops (never runs, never asks)", () => {
   const d = fork.decide(existsState({ mode: "auto", option_id: "replace" }), {});
-  assert.strictEqual(d.do, "pause");
-  assert.strictEqual(d.reason, "consequential_unapproved");
+  assert.strictEqual(d.do, "stop");
+  assert.match(d.message, /chat/);
 });
 
 test("decide: auto on a consequential option runs once the author approved it", () => {
@@ -146,14 +146,23 @@ test("decide: by_input with an unknown value is a bad-input error listing the va
   assert.throws(() => fork.decide(state, { on_duplicate: "yolo" }), (e) => e.badInput && /Keep both/.test(e.message));
 });
 
-test("decide: by_input defaults to asking a person", () => {
-  const state = existsState({ mode: "by_input", input: "on_duplicate" });
+test("decide: by_input asks a person only when the author chose it (reviewed)", () => {
+  const state = existsState({ mode: "by_input", input: "on_duplicate", reviewed: true });
   assert.strictEqual(fork.decide(state, {}).do, "pause");
   assert.strictEqual(fork.decide(state, { on_duplicate: "ask" }).do, "pause");
 });
 
+test("decide: a compiler-written ask_human (not reviewed) stops instead of pausing", () => {
+  assert.strictEqual(fork.decide(existsState({ mode: "ask_human" }), {}).do, "stop");
+  assert.strictEqual(fork.decide(existsState({ mode: "by_input", input: "x" }), {}).do, "stop");
+});
+
+test("decide: continue mode leaves the popup alone", () => {
+  assert.deepStrictEqual(fork.decide(existsState({ mode: "continue" }), {}), { do: "continue" });
+});
+
 test("decide: a pause degrades to a stop inside a loop, where a person can't be asked", () => {
-  const d = fork.decide(existsState({ mode: "ask_human" }), {}, { loopDepth: 1 });
+  const d = fork.decide(existsState({ mode: "ask_human", reviewed: true }), {}, { loopDepth: 1 });
   assert.strictEqual(d.do, "stop");
 });
 
@@ -162,9 +171,27 @@ test("decide: stop mode carries its message", () => {
   assert.deepStrictEqual(d, { do: "stop", message: "Duplicate file" });
 });
 
-test("decideUnknown: pauses by default and stops when the fork says so", () => {
-  assert.strictEqual(fork.decideUnknown({ unknown_policy: "ask_human" }, EXISTS_PROBE).do, "pause");
+test("decideUnknown: carries on by default (also for an older compile's ask_human) and stops when told", () => {
+  assert.strictEqual(fork.decideUnknown({}, EXISTS_PROBE).do, "continue");
+  assert.strictEqual(fork.decideUnknown({ unknown_policy: "continue" }, EXISTS_PROBE).do, "continue");
+  assert.strictEqual(fork.decideUnknown({ unknown_policy: "ask_human" }, EXISTS_PROBE).do, "continue");
   assert.strictEqual(fork.decideUnknown({ unknown_policy: "stop" }, EXISTS_PROBE).do, "stop");
+});
+
+// The shared definition of a decision surface; conxa-cloud/tests/test_outcome_fork.py runs the same
+// file against the compiler's classify_dialog, so the two cannot drift apart.
+test("isDecisionDialog agrees with the shared decision-surface cases", () => {
+  const { cases } = require("../fixtures/decision_surface_cases.json");
+  for (const c of cases) {
+    const probe = {
+      title: c.title,
+      text: c.message,
+      controls: c.buttons.map((name) => ({ name, text: name })),
+      hasFields: !!c.has_fields,
+      native: !!c.native,
+    };
+    assert.strictEqual(fork.isDecisionDialog(probe), c.decision, c.name);
+  }
 });
 
 test("clampTimeout keeps the wait between 1.5s and 8s", () => {
@@ -212,16 +239,20 @@ const pausesWith = (check) => (err) => {
   return true;
 };
 
-test("consequential auto without approval pauses for a person and clicks nothing", async () => {
+test("consequential auto without approval stops the run and clicks nothing", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
   await assert.rejects(
     () => run(page, [forkStep([existsState({ mode: "auto", option_id: "replace" })])]),
-    pausesWith((err) => {
-      assert.strictEqual(err.stepIndex, 0);
-      assert.strictEqual(err.info.reason, "consequential_unapproved");
-      assert.strictEqual(err.info.suggested, "replace");
-      assert.deepStrictEqual(err.info.choices.map((c) => c.id), ["replace", "keep_both", "cancel", "__stop__"]);
-    }),
+    (err) => { assert.notStrictEqual(err.forkPause, true); assert.match(String(err.message), /chat/); return true; },
+  );
+  assert.deepStrictEqual(page.gotos, []);
+});
+
+test("a state that was never reviewed does not pause even if the compiler wrote ask_human", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE });
+  await assert.rejects(
+    () => run(page, [forkStep([existsState({ mode: "ask_human" })])]),
+    (err) => { assert.notStrictEqual(err.forkPause, true); return true; },
   );
   assert.deepStrictEqual(page.gotos, []);
 });
@@ -229,27 +260,51 @@ test("consequential auto without approval pauses for a person and clicks nothing
 test("ask_human pauses with the state's own options and never chooses for the person", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
   await assert.rejects(
-    () => run(page, [forkStep([existsState({ mode: "ask_human" })])]),
+    () => run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])]),
     pausesWith((err) => assert.strictEqual(err.info.unknown, false)),
   );
   assert.deepStrictEqual(page.gotos, []);
 });
 
-test("an unrecognised dialog pauses offering only the buttons actually on screen", async () => {
+test("an unrecognised dialog is left alone and the run carries on as recorded", async () => {
   const page = mockPage({ probe: { title: "Discard changes?", text: "Unsaved.", controls: [{ name: "Discard" }, { name: "Keep editing" }] } });
+  const { tracker } = await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })]), nav("https://x.test/next")]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/next"]);
+  assert.strictEqual(tracker.events.find((e) => e.e === "fork_decided").mode, "continue");
+});
+
+test("a progress toast with no buttons never pauses the run", async () => {
+  const page = mockPage({ probe: { title: "Uploading 1 item", text: "Uploading", controls: [], modal: false, live: true, progress: true } });
+  const { tracker } = await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })]), nav("https://x.test/next")]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/next"]);
+  assert.ok(!tracker.events.some((e) => e.e === "fork_paused"));
+});
+
+test("a surface that goes away on its own while being watched counts as clean", async () => {
+  const page = mockPage({ probe: { title: "Uploading 1 item", text: "", controls: [] } });
+  setTimeout(() => { page.probe = null; }, 300);
+  const { tracker } = await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })]), nav("https://x.test/next")]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/next"]);
+  assert.ok(tracker.events.some((e) => e.e === "fork_clean"));
+});
+
+test("unknown_policy stop still fails the run on a surface nobody taught it", async () => {
+  const page = mockPage({ probe: { title: "Discard changes?", text: "", controls: [{ name: "Discard" }, { name: "Keep editing" }] } });
   await assert.rejects(
-    () => run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })])]),
-    pausesWith((err) => {
-      assert.strictEqual(err.info.unknown, true);
-      assert.deepStrictEqual(err.info.choices.map((c) => c.id), ["Discard", "Keep editing", "__stop__"]);
-    }),
+    () => run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })], { unknown_policy: "stop" })]),
+    rejectsWith(/Needs a decision/),
   );
+});
+
+test("an unrecognised dialog is left alone even when another state was set to ask a person", async () => {
+  const page = mockPage({ probe: { title: "Discard changes?", text: "", controls: [{ name: "Discard" }, { name: "Keep editing" }] } });
+  await run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])]);
   assert.deepStrictEqual(page.gotos, []);
 });
 
 test("a person's answer runs that option on the re-observed dialog", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
-  const { tracker } = await run(page, [forkStep([existsState({ mode: "ask_human" })])], { __fork_choice_0: "keep_both" });
+  const { tracker } = await run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])], { __fork_choice_0: "keep_both" });
   assert.deepStrictEqual(page.gotos, ["https://x.test/keep"]);
   assert.strictEqual(tracker.events.find((e) => e.e === "fork_decided").src, "human");
 });
@@ -257,7 +312,7 @@ test("a person's answer runs that option on the re-observed dialog", async () =>
 test("a person's answer that is not one of the state's options fails closed", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
   await assert.rejects(
-    () => run(page, [forkStep([existsState({ mode: "ask_human" })])], { __fork_choice_0: "nuke_everything" }),
+    () => run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])], { __fork_choice_0: "nuke_everything" }),
     rejectsWith(/not one of the choices/),
   );
   assert.deepStrictEqual(page.gotos, []);
@@ -266,7 +321,7 @@ test("a person's answer that is not one of the state's options fails closed", as
 test("choosing stop ends the run without touching the page", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
   await assert.rejects(
-    () => run(page, [forkStep([existsState({ mode: "ask_human" })])], { __fork_choice_0: "__stop__" }),
+    () => run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])], { __fork_choice_0: "__stop__" }),
     rejectsWith(/Stopped at the popup/),
   );
   assert.deepStrictEqual(page.gotos, []);
@@ -274,7 +329,7 @@ test("choosing stop ends the run without touching the page", async () => {
 
 test("if the person already dealt with the popup in the page, the run just carries on", async () => {
   const page = mockPage({ probe: null });
-  const { tracker } = await run(page, [forkStep([existsState({ mode: "ask_human" })]), nav("https://x.test/next")], { __fork_choice_0: "keep_both" });
+  const { tracker } = await run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })]), nav("https://x.test/next")], { __fork_choice_0: "keep_both" });
   assert.deepStrictEqual(page.gotos, ["https://x.test/next"]);
   assert.strictEqual(tracker.events.find((e) => e.e === "fork_decided").mode, "handled_in_page");
 });
@@ -295,14 +350,14 @@ test("an unrecognised popup answered with a label that is not on screen fails cl
   const probe = { title: "Discard changes?", text: "", controls: [{ name: "Discard" }] };
   const page = mockPage({ probe });
   await assert.rejects(
-    () => run(page, [forkStep([existsState({ mode: "ask_human" })])], { __fork_choice_0: "Delete everything" }),
+    () => run(page, [forkStep([existsState({ mode: "ask_human", reviewed: true })])], { __fork_choice_0: "Delete everything" }),
     rejectsWith(/no longer one of its buttons/),
   );
 });
 
 test("inside a loop a pause degrades to a stop (a person cannot be asked mid-iteration)", async () => {
   const page = mockPage({ probe: EXISTS_PROBE });
-  const loop = { type: "for_each", items: "files", as: "f", max_iterations: 2, steps: [forkStep([existsState({ mode: "ask_human" })])] };
+  const loop = { type: "for_each", items: "files", as: "f", max_iterations: 2, steps: [forkStep([existsState({ mode: "ask_human", reviewed: true })])] };
   await assert.rejects(() => run(page, [loop], { files: "a,b" }), (err) => { assert.notStrictEqual(err.forkPause, true); return true; });
 });
 

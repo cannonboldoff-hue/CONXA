@@ -86,9 +86,8 @@ test("an ambiguous match is no match", () => {
 
 // ─── decideKnown ───────────────────────────────────────────────────────────────────────────
 
-test("no policy: a person decides, with the button other workflows chose suggested", () => {
-  const d = appKnowledge.decideKnown(popup(null), PROBE);
-  assert.deepStrictEqual(d, { do: "pause", reason: "known_popup", suggested: "Keep editing" });
+test("no policy: the popup is left alone and the run carries on", () => {
+  assert.deepStrictEqual(appKnowledge.decideKnown(popup(null), PROBE), { do: "continue" });
 });
 
 test("auto on a harmless button clicks it", () => {
@@ -100,13 +99,13 @@ test("auto on a consequential button needs the author's approval, and fails clos
   const approved = appKnowledge.decideKnown(popup({ mode: "auto", option: "Discard", author_approved: true }), PROBE);
   assert.strictEqual(approved.do, "click");
   for (const policy of [{ mode: "auto", option: "Discard" }, { mode: "auto", option: "Discard", author_approved: false }, { mode: "auto", option: "Discard", author_approved: "yes" }]) {
-    assert.strictEqual(appKnowledge.decideKnown(popup(policy), PROBE).reason, "consequential_unapproved", JSON.stringify(policy));
+    assert.strictEqual(appKnowledge.decideKnown(popup(policy), PROBE).do, "stop", JSON.stringify(policy));
   }
 });
 
-test("a policy naming a button that is not on screen pauses instead of guessing", () => {
+test("a policy naming a button that is not on screen leaves the popup alone instead of guessing", () => {
   const d = appKnowledge.decideKnown(popup({ mode: "auto", option: "Save", author_approved: true }), PROBE);
-  assert.strictEqual(d.reason, "app_policy_option_missing");
+  assert.deepStrictEqual(d, { do: "continue" });
 });
 
 test("ask_human pauses, stop stops, anything else stops", () => {
@@ -172,14 +171,11 @@ test("a known popup with an approved harmless policy is followed without asking"
   assert.ok(events.some((e) => e.e === "fork_unknown"));
 });
 
-test("a consequential policy without approval pauses for a person and clicks nothing", async () => {
+test("a consequential policy without approval stops the run and clicks nothing", async () => {
   const page = mockPage();
   await assert.rejects(
     () => run(page, knowledgeOf(popup({ mode: "auto", option: "Discard" }))),
-    pausesWith((err) => {
-      assert.strictEqual(err.info.reason, "consequential_unapproved");
-      assert.strictEqual(err.info.knownFromMap, true);
-    }),
+    (err) => { assert.notStrictEqual(err.forkPause, true); assert.match(String(err.message), /chat/); return true; },
   );
   assert.deepStrictEqual(page.clicks, []);
 });
@@ -190,13 +186,20 @@ test("an approved consequential policy runs it", async () => {
   assert.deepStrictEqual(page.clicks, ["Discard"]);
 });
 
-test("a known popup with no policy pauses with the real buttons, their risk and a suggestion", async () => {
+test("a known popup with no policy is left alone, named in the run's warnings, and nothing is clicked", async () => {
+  const page = mockPage();
+  const { result, events } = await run(page, knowledgeOf(popup(null)));
+  assert.deepStrictEqual(page.clicks, []);
+  assert.strictEqual(events.find((e) => e.e === "fork_decided").mode, "continue");
+  assert.ok(result.warnings.some((w) => /left alone/.test(w)));
+});
+
+test("an explicit ask_human policy from the author still pauses, with the real buttons and their risk", async () => {
   const page = mockPage();
   await assert.rejects(
-    () => run(page, knowledgeOf(popup(null))),
+    () => run(page, knowledgeOf(popup({ mode: "ask_human" }))),
     pausesWith((err) => {
       assert.strictEqual(err.info.knownFromMap, true);
-      assert.strictEqual(err.info.suggested, "Keep editing");
       assert.deepStrictEqual(err.info.choices, [
         { id: "Discard", label: "Discard", role: "consequential" },
         { id: "Keep editing", label: "Keep editing", role: "neutral" },
@@ -207,16 +210,11 @@ test("a known popup with no policy pauses with the real buttons, their risk and 
   assert.deepStrictEqual(page.clicks, []);
 });
 
-test("a popup nobody knows still pauses as before, with no map claim", async () => {
+test("a popup nobody knows is left alone too, with no map claim", async () => {
   const page = mockPage();
-  await assert.rejects(
-    () => run(page, knowledgeOf(popup(null), "other.test")),
-    pausesWith((err) => {
-      assert.strictEqual(err.info.knownFromMap, false);
-      assert.deepStrictEqual(err.info.choices.map((c) => c.role), ["unknown", "unknown", "stop"]);
-    }),
-  );
-  await assert.rejects(() => run(mockPage(), null), pausesWith((err) => assert.strictEqual(err.info.knownFromMap, false)));
+  await run(page, knowledgeOf(popup(null), "other.test"));
+  await run(mockPage(), null);
+  assert.deepStrictEqual(page.clicks, []);
 });
 
 test("a dry run does not click, and says so", async () => {
@@ -258,10 +256,7 @@ test("an unrecognised popup reports app_obs, scrubbed, and says whether the map 
   const page = mockPage();
   page.probe = { title: 'Discard changes to "budget.xlsx"?', text: "Unsaved edits in budget.xlsx", controls: [{ name: "Discard" }, { name: "Keep editing" }] };
   const events = [];
-  await assert.rejects(
-    () => runPlan(page, [FORK], {}, 0, "ak-test", { tracker: { emit: (e, f) => events.push({ e, ...f }) }, appKnowledge: null }),
-    (err) => err.forkPause === true,
-  );
+  await runPlan(page, [FORK], {}, 0, "ak-test", { tracker: { emit: (e, f) => events.push({ e, ...f }) }, appKnowledge: null });
   const obs = events.find((e) => e.e === "app_obs");
   assert.deepStrictEqual(obs, { e: "app_obs", si: 0, host: "x.test", rt: "/editor", tt: ["discard", "changes"], bt: ["Discard", "Keep editing"], cl: "decision", k: 0 });
   assert.ok(!JSON.stringify(events).includes("budget"), "no file name leaves the machine");
