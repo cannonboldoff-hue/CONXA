@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CardShell, Disclosure } from '@/components/conversation/parts'
 import { StatusGlyph } from '@/components/shell/StatusGlyph'
-import { useBrowserStore } from '@/store/browserStore'
 import { useOpenEdit } from '@/components/conversation/cards/CompileClarifyCards'
 import type { CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
 import type { StatusKind } from '@/lib/status'
@@ -55,9 +54,10 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   const specs = (Array.isArray(item.inputs) ? item.inputs : []) as InputSpec[]
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(specs.map((s) => [s.id, String(s.value ?? '')])))
   const [guard, setGuard] = useState(item.guard !== false)
-  const [showBrowser, setShowBrowser] = useState(item.show_browser !== false)
+  const showBrowser = item.show_browser !== false
+  const [useAi, setUseAi] = useState(item.use_ai === true)
+  const aiSteps = Number(item.ai_review_count ?? 0)
   const [tried, setTried] = useState(false)
-  const panelAvailable = useBrowserStore((b) => b.available)
   const state = String(item.state)
   const irreversible = (Array.isArray(item.irreversible) ? item.irreversible : []) as string[]
   const count = Number(item.irreversible_count ?? irreversible.length)
@@ -83,7 +83,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
             variant="brand"
             size="sm"
             disabled={busy}
-            onClick={() => (missing.length ? setTried(true) : run(() => flowTestRun(wf, String(item.card_id), values, guard, showBrowser)))}
+            onClick={() => (missing.length ? setTried(true) : run(() => flowTestRun(wf, String(item.card_id), values, guard, showBrowser, useAi)))}
           >
             Run test
           </Button>
@@ -125,8 +125,17 @@ export function TestInputsCard({ threadId, item }: CardProps) {
         })}
 
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-          <input type="checkbox" className="mt-1 accent-white" checked={showBrowser} onChange={(e) => setShowBrowser(e.target.checked)} />
-          <span><span className="text-[var(--text-primary)]">Show the browser while it runs</span><span className="block text-xs text-[var(--text-meta)]">{panelAvailable ? 'Opens beside the conversation' : 'Opens in its own window'}</span></span>
+          <input type="checkbox" role="switch" className="mt-1 accent-white" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
+          <span>
+            <span className="text-[var(--text-primary)]">Let AI answer review steps</span>
+            <span className="block text-xs text-[var(--text-meta)]">
+              {aiSteps === 0
+                ? 'This workflow has no AI review steps, so this changes nothing here.'
+                : useAi
+                  ? `Uses AI credits for ${plural(aiSteps, 'review step')}.`
+                  : 'Off: the test fails at the first AI review step, with no credits used.'}
+            </span>
+          </span>
         </label>
 
         {count > 0 && (
@@ -319,6 +328,19 @@ export function TestRunCard({ threadId, item }: CardProps) {
         footer={<Button variant="outline" size="sm" onClick={() => run(() => flowTestPrepare(wf))}>Run again</Button>}
       >
         You ended the test before the steps that can’t be undone{item.declined ? ' (you didn’t confirm)' : ''}. Nothing was sent. A workflow isn’t tested until it runs to the end.
+      </CardShell>
+    )
+  }
+
+  if (state === 'ended_at_popup') {
+    return (
+      <CardShell
+        glyph="none"
+        title={`Ended at the “${String(item.popup ?? 'popup')}” popup`}
+        meta="Not a full pass"
+        footer={<Button variant="outline" size="sm" onClick={() => run(() => flowTestPrepare(wf))}>Run again</Button>}
+      >
+        You ended the test at a popup you were asked about, after {plural(Number(item.steps_ran ?? rows.length), 'step')}. A workflow isn’t tested until it runs to the end.
       </CardShell>
     )
   }

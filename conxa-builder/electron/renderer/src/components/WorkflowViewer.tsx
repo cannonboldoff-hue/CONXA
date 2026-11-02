@@ -7,7 +7,7 @@ import { useRetargetStore } from '@/store/retargetStore'
 import { useCopilotStore } from '@/store/copilotStore'
 import { rejectCopilotProposal } from '@/api/workflowApi'
 import { ListPlus, Plus } from 'lucide-react'
-import type { AddActionKind } from '@/lib/workflowViewerHelpers'
+import { effectStepFlags, type AddActionKind } from '@/lib/workflowViewerHelpers'
 import { WorkflowHeader } from '@/components/workflowViewer/WorkflowHeader'
 import { WorkflowStepItem } from '@/components/workflowViewer/WorkflowStepItem'
 import { DeleteStepDialog } from '@/components/workflowViewer/DeleteStepDialog'
@@ -54,6 +54,7 @@ export function WorkflowViewer({
   stepsBelowThreshold,
 }: Props) {
   const belowThresholdSet = new Set(stepsBelowThreshold ?? [])
+  const effectFlags = effectStepFlags(steps)
   const selected = useEditorStore((s) => s.selectedStepIndex)
   const focusedBranchIndex = useEditorStore((s) => s.focusedBranchIndex)
   const dirty = useEditorStore((s) => s.dirtySteps)
@@ -152,6 +153,7 @@ export function WorkflowViewer({
                   isSelected={selected === step.step_index}
                   isDirty={dirty.has(step.step_index)}
                   belowThreshold={belowThresholdSet.has(step.step_index)}
+                  isEffect={effectFlags[index]}
                   isDragging={draggingIndex === step.step_index}
                   recordingShotDragActive={recordingShotDragActive}
                   draggingIndex={draggingIndex}

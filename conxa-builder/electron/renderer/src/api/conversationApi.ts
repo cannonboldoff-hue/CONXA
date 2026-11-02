@@ -40,6 +40,7 @@ export type CardActionResult = {
   code?: string
   message?: string
   needs?: string[]
+  to_chat?: boolean
   open_form?: { name?: string; group?: string; starting_page?: string; task?: string }
   workflow_id?: string
   start_recording?: boolean
@@ -117,8 +118,8 @@ export const flowCompile = (workflowId: string) => cmd<{ ok: boolean }>('flow_co
 export const flowRerecordFrom = (skillId: string, stepIndex: number, mode: 'replace' | 'branch' = 'replace') =>
   cmd<{ ok: boolean; step_key: string }>('flow_rerecord_from', { skill_id: skillId, step_index: stepIndex, mode })
 export const flowTestPrepare = (workflowId: string) => cmd<{ ok: boolean; card_id?: string }>('flow_test_prepare', { workflow_id: workflowId })
-export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<string, string>, guard: boolean, showBrowser: boolean) =>
-  cmd<{ ok: boolean }>('flow_test_run', { workflow_id: workflowId, card_id: cardId, inputs, guard, show_browser: showBrowser })
+export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<string, string>, guard: boolean, showBrowser: boolean, useAi: boolean) =>
+  cmd<{ ok: boolean }>('flow_test_run', { workflow_id: workflowId, card_id: cardId, inputs, guard, show_browser: showBrowser, use_ai: useAi })
 export const flowTestDecision = (workflowId: string, decision: 'run_rest' | 'yes' | 'end_here' | `fork:${string}`) =>
   cmd<{ ok: boolean }>('flow_test_decision', { workflow_id: workflowId, decision })
 export const flowTestStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_test_stop', { workflow_id: workflowId })

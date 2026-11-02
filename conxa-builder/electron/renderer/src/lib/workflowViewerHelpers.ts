@@ -70,6 +70,18 @@ export const ADD_ACTION_OPTIONS = [
 
 export type AddActionKind = (typeof ADD_ACTION_OPTIONS)[number]['value']
 
+/** Steps that something an earlier action CAUSED (the file a download produced, the tab or browser
+ *  dialog it raised). Shown indented under their cause; they stay separate steps everywhere else.
+ *  Mirrors conversation/clarify.py::effect_parents. */
+const EFFECT_ACTIONS = new Set(['download_observed', 'tab_open', 'dialog_appeared', 'dialog_accept', 'dialog_dismiss'])
+
+// Every recorded action is its own flat step now: no indent under a "cause".
+// EFFECT_ACTIONS is kept for the day nesting is wanted again.
+export function effectStepFlags(steps: { action_type?: string | null }[]): boolean[] {
+  void EFFECT_ACTIONS
+  return steps.map(() => false)
+}
+
 export function compactStepLabel(label: string): string {
   return label.replace(/^Step\s+\d+:\s*/i, '').trim()
 }

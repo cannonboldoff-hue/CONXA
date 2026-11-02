@@ -123,6 +123,7 @@ function useCompileEventBridge() {
       threads.onDelta(ev.thread_id, String(ev.turn_id), String(ev.text ?? ''))
     } else if (ev.phase === 'thread_turn' && typeof ev.thread_id === 'string') {
       threads.onTurn(ev.thread_id, String(ev.turn_id), String(ev.status))
+      if (ev.thread_id.startsWith('wf:')) qc.invalidateQueries({ queryKey: ['lifecycle', ev.thread_id.slice(3)] })
     }
   })
 }

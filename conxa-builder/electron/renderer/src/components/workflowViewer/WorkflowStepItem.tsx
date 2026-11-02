@@ -16,6 +16,8 @@ type WorkflowStepItemProps = {
   /** Set when this step's index is in compile_health.steps_below_threshold — shown as a quiet
    *  warn dot instead of the old banner's separate "jump to step" chip. */
   belowThreshold?: boolean
+  /** An effect of the step above it (a download, a new tab): indented, still its own step. */
+  isEffect?: boolean
   recordingShotDragActive?: boolean
   draggingIndex: number | null
   onSelect: (index: number) => void
@@ -33,6 +35,7 @@ export function WorkflowStepItem({
   isDirty,
   isDragging,
   belowThreshold,
+  isEffect,
   recordingShotDragActive,
   draggingIndex,
   onSelect,
@@ -72,7 +75,7 @@ export function WorkflowStepItem({
 
   return (
     <li
-      className="w-full space-y-1.5"
+      className={cn('w-full space-y-1.5', isEffect && 'pl-5')}
       draggable
       onDragStart={() => onDragStart(step.step_index)}
       onDragOver={onDragOver}
