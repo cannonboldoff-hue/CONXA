@@ -284,8 +284,9 @@ function inventoryEntryForElement(el) {
 // instead of hit-testing like overlayProbe: a fork asks "is a decision dialog showing?" and a
 // full-screen backdrop can sit on top of the dialog itself under elementFromPoint. Like every
 // function in this file it is re-parsed standalone in the page realm, so it closes over nothing.
-// Returns null when no visible dialog is open, else the TOPMOST (last in DOM order) one as
-// { title, text, controls: [{ tag, role, name, text, testid, id }] }.
+// Returns null when no visible dialog is open, else the topmost modal (or, with none, the last
+// dialog in DOM order) as { title, text, controls: [{ tag, role, name, text, testid, id }],
+// hasFields, modal, live, progress }.
 function dialogProbe() {
   const SEL = 'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]';
   const clean = (t) => String(t || "").replace(/\s+/g, " ").trim();
@@ -298,7 +299,14 @@ function dialogProbe() {
   }
   const dialogs = Array.from(document.querySelectorAll(SEL)).filter(visible);
   if (!dialogs.length) return null;
-  const dlg = dialogs[dialogs.length - 1];
+  // A modal blocks the page; a non-modal panel (an upload tray, a toast built as a dialog) does not.
+  // Prefer the topmost modal so a late-appended tray can't shadow the real question.
+  const isModal = (el) => {
+    if (el.getAttribute("aria-modal") === "true") return true;
+    try { return el.tagName === "DIALOG" && el.matches(":modal"); } catch (_) { return false; }
+  };
+  const modals = dialogs.filter(isModal);
+  const dlg = (modals.length ? modals : dialogs).slice(-1)[0];
   let title = "";
   const labelledBy = dlg.getAttribute("aria-labelledby");
   if (labelledBy) {
@@ -327,7 +335,12 @@ function dialogProbe() {
   const hasFields = !!dlg.querySelector(
     'input:not([type="button"]):not([type="submit"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"]'
   );
-  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields };
+  // Facts about what kind of surface this is. They never decide anything on their own; they let a
+  // failure say "a progress panel was on screen" instead of "a popup", and keep the picture honest.
+  const modal = isModal(dlg);
+  const live = !!dlg.closest('[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]');
+  const progress = !!dlg.querySelector('[role="progressbar"],progress,[aria-busy="true"]');
+  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, live, progress };
 }
 
 // EXEC-30 — live overlay probe. domInventory() truncates at 50 entries IN DOM ORDER, so a modal
@@ -534,8 +547,9 @@ function authDefinitionMarkersProbe() {
   var markers = [];
   var seen = {};
   var els = document.querySelectorAll('button, a, [role="button"], [role="menuitem"]');
-  for (var i = 0; i < els.length && markers.length < 25; i++) {
+  for (var i = 0; i < els.length && markers.length < 100; i++) {
     var el = els[i];
+    if (el.closest('footer, [role="contentinfo"]')) continue; // AUTH-22: keep in sync with PROBE_SCRIPT
     var name = (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 60);
     if (!name) continue;
     var role = el.getAttribute("role") || el.tagName.toLowerCase();

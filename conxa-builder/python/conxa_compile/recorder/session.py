@@ -46,6 +46,7 @@ from conxa_compile.recorder.frame_utils import (
     _viewport_string_from_page,
     format_startup_error,
     is_blank_url,
+    looks_like_login_page,
 )
 from conxa_compile.recorder.screencast_video import ScreencastVideo
 
@@ -1810,6 +1811,10 @@ class RecordingSession:
         # BUILD-38: a payload that arrived while paused is dropped, not recorded — and not
         # replayed on resume, which is why the flag is stamped at enqueue time.
         if payload.pop("_paused", False):
+            return
+        # Signing in is never part of a workflow (auth lives in the saved session): drop whatever
+        # happens on a login page, e.g. a session that expired mid-recording.
+        if not self.auth_mode and looks_like_login_page(str((payload.get("page") or {}).get("url") or "")):
             return
         # Frame-chain/geometry extraction needs Playwright sync-API calls (walking the
         # ancestor chain via frame.evaluate()); safe here since this runs from the plain

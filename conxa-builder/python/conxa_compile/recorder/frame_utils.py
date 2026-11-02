@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit
 
 from conxa_core.models.events import RecordedEvent
 from conxa_compile.policy.bundle import get_policy_bundle
@@ -211,6 +211,13 @@ def _viewport_string_from_page(page: Any) -> str:
 
 
 _LOGIN_URL_PATTERNS = ("login", "signin", "sign-in", "auth", "sso", "oauth", "session/new", "account/login")
+# A login-shaped path: the runtime's LOGIN_PATH_RE / AUTH_FAILURE_URL_RE plus the single-sign-on
+# hops a sign-in passes through. Being on one means the person is still signing in.
+_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|auth|oauth2?|sso|logout|session-expired)(/|$)", re.I)
+
+
+def looks_like_login_page(url: str) -> bool:
+    return bool(_LOGIN_PATH_RE.search(urlsplit(url).path or "/"))
 
 
 def is_blank_url(url: str) -> bool:

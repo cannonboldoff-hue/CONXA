@@ -6,6 +6,10 @@ Covers the recorder's cause classification (recorder/session.py), the compiler f
 """
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from conxa_core.config import settings
+
 import json
 import time
 from types import SimpleNamespace
@@ -182,6 +186,9 @@ def _replayable(pkg) -> str:
     return json.dumps([r for r in rows if r])
 
 
+@patch.object(settings, "compile_keep_every_action", False)
+
+
 def test_redirect_after_submit_compiles_to_click_click_with_no_hardcoded_url():
     pkg = _compile_steps(_recording(_nav_event("2026-01-01T00:00:01Z", cause="action")), "sess-redirect")
     steps = pkg.skills[0].steps
@@ -207,6 +214,9 @@ def test_state_diff_sees_the_url_an_action_landed_on():
     assert diff(click)["url_changed"] is False
     click["post_condition"] = {"url_delta": {"before": FORM, "after": ORDER}}
     assert diff(click)["url_changed"] is True
+
+
+@patch.object(settings, "compile_keep_every_action", False)
 
 
 def test_legacy_recording_without_cause_tag_compiles_the_same_way():

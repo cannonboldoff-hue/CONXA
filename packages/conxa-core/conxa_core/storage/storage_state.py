@@ -45,6 +45,15 @@ def merge_storage_states(states: list[dict[str, Any]]) -> dict[str, Any]:
     return {"cookies": cookies, "origins": list(origins_by_url.values())}
 
 
+def keeps_session(previous: dict[str, Any], refreshed: dict[str, Any], session_keys: list[str]) -> bool:
+    """False when ``refreshed`` dropped a session cookie ``previous`` had — the site signed the
+    browser out (or never honoured the saved session), so saving it would replace a working
+    session with an anonymous one. ``session_keys`` is the app's learned auth_definition list."""
+    had = {c.get("name") for c in previous.get("cookies") or []} & set(session_keys)
+    now = {c.get("name") for c in refreshed.get("cookies") or []}
+    return had <= now
+
+
 def refresh_app_state(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     """Re-derive one app's storageState from a post-recording merged state.
 

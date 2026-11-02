@@ -51,7 +51,7 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
 
     from conxa_core.config import settings as _settings
     from conxa_core.storage.group_store import get_group, mark_group_app_unverified
-    from conxa_core.storage.storage_state import refresh_app_state
+    from conxa_core.storage.storage_state import keeps_session, refresh_app_state
     from conxa_core.storage.workflow_store import get_workflow
 
     workflow = get_workflow(workflow_id)
@@ -72,6 +72,10 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
         refreshed = refresh_app_state(previous, current)
         if not refreshed["cookies"] and not refreshed["origins"]:
             continue  # never blank a working session
+        keys = (app.auth_definition or {}).get("session_keys") or []
+        if not keeps_session(previous, refreshed, keys):
+            continue  # the recording ended signed out of this app — keep the saved session
+        state_path.with_name(state_path.name + ".bak").write_text(json.dumps(previous), encoding="utf-8")
         state_path.write_text(json.dumps(refreshed), encoding="utf-8")
         # Not a login: the recording may have ended signed out of this app (an expired session
         # copied straight back). Stamping it verified here hid exactly that from the next gate.
@@ -79,6 +83,25 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
 
 
 _PROBE_TTL_S = 600
+# A recording that lands on sign-in again within this long of the last such landing is not retried.
+_LOGIN_RETRY_WINDOW_S = 600
+
+
+def _app_on_login_page(group: Any, url: str) -> Any | None:
+    """The group app whose host `url` is a sign-in page of, else None."""
+    from urllib.parse import urlsplit
+
+    from conxa_compile.recorder.frame_utils import looks_like_login_page
+
+    if group is None or not looks_like_login_page(url):
+        return None
+    host = urlsplit(url).hostname or ""
+    for app in group.apps:
+        for known in (app.login_url, app.success_url):
+            h = urlsplit(known or "").hostname
+            if h and (host == h or host.endswith("." + h) or h.endswith("." + host)):
+                return app
+    return None
 
 
 def group_apps_needing_sign_in(group: Any) -> list[Any]:
@@ -213,6 +236,28 @@ class SessionMixin:
             return {"online": False, "detail": type(exc).__name__}
         return {"online": True, "ms": int((time.monotonic() - started) * 1000)}
 
+    def _reject_signed_out_start(self, workflow_id: str, group: Any, app: Any) -> None:
+        """The recording browser landed on ``app``'s sign-in page: mark the app expired so the gate
+        and the Check-all badge agree, and send the person to sign in (auth_required — the flow
+        opens the sign-in card). A second landing right after a sign-in raises a plain error instead,
+        so a site that never honours the session cannot loop forever."""
+        from conxa_compile.conversation import runtime_state
+        from conxa_core.storage.group_store import set_group_app_checked
+
+        set_group_app_checked(group.id, app.id, "expired")
+        stamp = runtime_state.get_flags(workflow_id).get("recording_login_retry") or 0
+        if time.time() - stamp < _LOGIN_RETRY_WINDOW_S:
+            runtime_state.set_flags(workflow_id, recording_login_retry=0)
+            raise _CommandError(
+                "sign_in_not_accepted",
+                f"{app.name} keeps asking you to sign in, even right after signing in. Try again in a moment.",
+            )
+        runtime_state.set_flags(workflow_id, recording_login_retry=time.time())
+        raise _CommandError(
+            "auth_required",
+            f"Before recording, sign in again to {app.name} (the saved sign-in was not accepted).",
+        )
+
     def cmd_start_recording(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         import re
         from pathlib import Path
@@ -236,6 +281,7 @@ class SessionMixin:
 
             workflow_id_raw = payload.get("workflow_id")
             workflow_id = _safe_id(workflow_id_raw, "workflow_id") if workflow_id_raw else ""
+            group = None
 
             if workflow_id:
                 # Workflow recording (auth is captured once at the group level —
@@ -367,8 +413,22 @@ class SessionMixin:
             except RuntimeError as exc:
                 _recorder_registry.pop(sess.session_id)
                 raise _CommandError("recorder_launch_failed", str(exc)) from exc
+            # The probe ran in another browser; only this one shows whether the saved session is
+            # honoured. Landing on an app's sign-in page means it was not.
+            signed_out = _app_on_login_page(group, str(getattr(sess, "current_url", "") or ""))
+            if signed_out is not None:
+                self._loop.run(sess.stop())
+                _recorder_registry.pop(sess.session_id)
+                self._reject_signed_out_start(workflow_id, group, signed_out)
             # embedded = the recording is a view in Studio's browser panel (run id = session_id).
             result: dict[str, Any] = {"session_id": sess.session_id, "start_url": start_url, "embedded": bool(getattr(sess, "embedded", False))}
+            nav_errors = [e for e in getattr(sess, "binding_errors", None) or [] if str(e).startswith("navigation_error")]
+            if nav_errors:
+                result["warnings"] = nav_errors
+            if workflow_id:
+                from conxa_compile.conversation import runtime_state
+
+                runtime_state.set_flags(workflow_id, recording_login_retry=0)
             downloads_dir = getattr(sess, "_downloads_dir", None)
             if downloads_dir is not None:
                 # Files downloaded during this recording land here (mirrors the runtime's
@@ -459,7 +519,7 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import clear_recording, remove_variant
 
             workflow_id = _safe_id(workflow_id_raw, "workflow_id")
-            _refresh_group_app_sessions(workflow_id)
+            # A discarded recording never writes its browser's cookies back over the saved sessions.
             if is_variant:
                 # Cancelling a variant must leave the workflow's own recording exactly as it was.
                 remove_variant(workflow_id, session_id)
@@ -494,10 +554,10 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import remove_variant
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            _refresh_group_app_sessions(workflow_id)
             if len(events) == 0:
                 remove_variant(workflow_id, session_id)
                 raise _CommandError("empty_recording", "No workflow actions were recorded.")
+            _refresh_group_app_sessions(workflow_id)
             return {
                 "session_id": session_id,
                 "event_count": len(events),
@@ -510,10 +570,10 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import clear_recording, get_workflow, save_workflow
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            _refresh_group_app_sessions(workflow_id)
             if len(events) == 0:
                 clear_recording(workflow_id)
                 raise _CommandError("empty_recording", "No workflow actions were recorded.")
+            _refresh_group_app_sessions(workflow_id)
             # Persist every host this recording navigated to (same extraction the
             # compiler later stores in SkillMeta.visited_hosts) so the group page can
             # show all touched platform apps before the first compile.

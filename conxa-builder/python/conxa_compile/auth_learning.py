@@ -344,6 +344,9 @@ PROBE_SCRIPT = """
   const markers = [];
   const seen = new Set();
   for (const el of document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')) {
+    // AUTH-22: footer links ("Docs", "Contact Support") get cut off the signed-in page by the cap
+    // below, then read as signed-out-only markers. Same filter + cap in runtime page_scripts.js.
+    if (el.closest('footer, [role="contentinfo"]')) continue;
     const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 60);
     if (!name) continue;
     const role = el.getAttribute('role') || el.tagName.toLowerCase();
@@ -351,7 +354,7 @@ PROBE_SCRIPT = """
     if (seen.has(key)) continue;
     seen.add(key);
     markers.push({ role, name });
-    if (markers.length >= 25) break;
+    if (markers.length >= 100) break;
   }
   return { passwordBox: hasPassword, otpLike, markers };
 }
