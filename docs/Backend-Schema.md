@@ -918,7 +918,7 @@ pending dialog.
 `SkillStep.outcome_fork` (`dict`) holds the known states of an app after an action and a policy for each; empty for ordinary steps. Mechanism: `docs/TRD.md` §11.4.
 
 ```python
-outcome_fork: dict   # {timeout_ms, unknown_policy, clean, states}
+outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, states}
 # clean:  {observed: bool, observed_in: [session_id]}
 # states: [{ id, kind: "dialog", observed_in: [session_id],
 #            signature: {title, button_labels, message_tokens, container_selector},
@@ -926,11 +926,14 @@ outcome_fork: dict   # {timeout_ms, unknown_policy, clean, states}
 #            policy:    {mode:"auto", option_id, author_approved, reviewed?}
 #                     |  {mode:"by_input", input, suggested?, reviewed?}
 #                     |  {mode:"ask_human", suggested?, reviewed?}
+#                     |  {mode:"continue"}      # leave the popup alone, carry on (a popup the recording never saw)
 #                     |  {mode:"stop", message, reviewed?} }]
 ```
 
-- `policy.author_approved` is written **only** by `set_fork_policy`; the compiler always writes `false`. A consequential option under `auto` without it pauses at run time.
-- `policy.reviewed` marks a state the author has answered (so Clarify never asks again).
+- `policy.author_approved` is written **only** by `set_fork_policy`; the compiler always writes `false`. A consequential option under `auto` without it stops the run (never run, never asked about by default).
+- `SkillStep.produces` / `consumes` (both `list[str]`, default empty) are explicit value flow: a `download_observed` step lists the run slots it writes (`downloaded_file_<n>`, plus `downloaded_file` when it is the only download) and an upload bound to one lists the `{{slot}}` names it reads. Filled by `compiler/upload_binding.py::apply_bindings_to_compiled_steps`; no runtime code reads them.
+- `Workflow.last_test_outcome` (`dict | None`: `{outcome, title, step_index, step_key, reason, at}`) records a test that ended without a pass or failure (`ended_at_popup`, `ended_before_irreversible`, `stopped`, `previewed`). `last_test_status` is untouched; a pass, a failure or any edit clears it; the lifecycle shows substate `partial` while it is set.
+- `policy.reviewed` marks a state the author has answered (so Clarify never asks again). It is also the only thing that lets the runtime pause: `ask_human` / `by_input` without it stop instead, and `execution.json` carries it through (`_saved_fork_step`). Nothing pauses by default; `unknown_policy` `continue` (an older `ask_human` reads the same) leaves an unrecognised surface alone.
 - `by_input` declares a `select` input named `policy.input` (options = option labels + `ask`, default `ask`) and sets the fork step's `input_binding`/`value` to it.
 - `message_tokens` are value-free words (quoted text and digits stripped); the popup's message never ships.
 - The execution form (`execution.json`) is `{type:"outcome_fork", timeout_ms, unknown_policy, clean:{observed}, states:[{id, kind, signature, options:[{id,label,role,steps}], policy}]}` (`skill_package_builder_saved_skill.py::_saved_fork_step`); an option with no runnable steps, or a fork with none, is dropped with a warning. Older runtimes fail loudly on the unknown type — bump `required_runtime` for packs containing one.

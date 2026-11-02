@@ -15,7 +15,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 1 | TEST-6 |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 18 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21 |
+| AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
 | **Total** | **98** | |
@@ -1516,7 +1516,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (18 done)
+## AUTH — Authentication (19 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -1644,6 +1644,13 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Resolution:** After AUTH-20 the Github→Drive run worked, but the saved `arcame__google-drive`/`arcame__github` sessions held **0 cookies**, plus the `localStorage` of `http://localhost:5175` (Execute's own UI). Cause: `browser_panel.js` gives each run its own in-memory partition, while Playwright's one CDP context is Electron's default session. `context.cookies()` read the empty default session, `context.addCookies()` (host_browser.js seeding) wrote into it where no run view could see it, and capture read `localStorage` from every page in the context. So in Execute a sign-in never outlived its run and saved sessions were never restored. A real-Electron spike confirmed the page's own CDP `Network` domain reads and writes the partition. Fix: `host_browser.js::pageCookies`/`setPageCookies` (CDP session on a run page) replace `context.cookies()`/`addCookies()` for capture, seeding and the learned-definition cookie check; `_captureState` reads only the sign-in's own pages. Verified on real Electron: cookies captured from run 1's partition, seeded into a fresh run-2 partition, sent by the site on the next load, and none leaked into the default session. Test: `test_session_login_scope.js` models the empty default jar and fails with `context.cookies()`. Follow-up (same day): sessions saved by the broken code were cookieless yet stamped valid for 6 h, so the next live run skipped the check and landed on Google's signed-out page mid-flow. Pre-flight (`browser.js::getCachedBrowser`) now always live-checks a saved session with no cookies, so those files repair themselves with one sign-in. Test: `test_session_auth.js` "a cookieless saved session stamped valid is still live-checked".
 - **Category:** Authentication
 - **Description:** Found while confirming AUTH-20's live run: the saved Google session file held 156 bytes of ciphertext, which decrypts to no cookies.
+- **Complexity:** S
+
+### AUTH-22 — A learned sign-in definition can learn the page footer as "signed out" markers and flip a valid session to "expired"
+**Resolved:** 2026-11-02
+- **Resolution:** The marker probe (`auth_learning.py::PROBE_SCRIPT` and its runtime twin `page_scripts.js::authDefinitionMarkersProbe`) now skips anything inside `footer` / `[role=contentinfo]` and keeps up to 100 markers instead of 25, so footer links can no longer be cut from the signed-in observation and learned as signed-out-only markers. Definitions learned before this change still hold footer markers and need a re-learn plus the three-way self-test.
+- **Category:** Authentication (Build Studio)
+- **Description:** The probe kept only the first 25 unique buttons/links, so footer links ("Docs", "Contact GitHub Support") fell out of the signed-in observation and were learned as signed-out markers; one "no" overrides every other signal, so a thin signed-in page could read "expired".
 - **Complexity:** S
 
 ## DEAD — Tech debt (1 done)

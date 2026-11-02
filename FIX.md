@@ -2,6 +2,60 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Stopped saved sign-ins from wrongly showing as expired — 2026-11-02**
+Studio learns what "signed in" looks like by comparing a signed-in page with a signed-out one. It only looked at the first handful of links, so on busy pages the small links at the bottom (like "Docs" or "Contact Support") were missed and mistaken for signs of being signed out. That made a perfectly good sign-in flip to "expired". Now the bottom of the page is ignored and many more links are checked. Like judging whether a shop is open by its front door, not the notices in the back corridor.
+
+**Showed a download or new tab under the click that caused it — 2026-11-02**
+A click that starts a download used to look like two unrelated rows in the step list, which read like a mistake. Now the second row is tucked in just under the click with a small arrow, in both the chat summary and the editor. They are still two separate steps that run and edit on their own, so a small fix touches only the part you meant. Like a receipt that indents the tax line under the item it belongs to.
+
+**Fixed groups never reaching the cloud, and made a failed recording read-back explain itself — 2026-11-02**
+Every time the group list opened, Build Studio tried to save each group on the cloud and got "not found", because it was knocking on a door the cloud had renamed months ago. It now uses the right address, so groups show up on the cloud's Skill Packages page before the first publish. Separately, when the step that reads a recording back fails, Studio now keeps a short note of what came back, like a doctor writing down the symptom instead of just "unwell", and it gets more room to write its answer in case the reply was being cut off.
+
+**Stopped tests from pausing on pop-ups that are not questions — 2026-11-02**
+A test used to halt and ask for a decision whenever anything unfamiliar showed up, even a harmless "Uploading 1 item" message with nothing to choose. Now a workflow carries on as recorded and only stops to ask a person where someone asked for that in the chat, and a risky choice nobody approved ends the run with a clear note instead of a guess. The questions before building now also ask about an item picked from a list, a value you turn into an input is updated everywhere it was copied, and ending a test at a pop-up is reported as exactly that. Like a car that no longer slams the brakes for a shadow on the road.
+
+**Made test browsers reuse what they already downloaded — 2026-10-30**
+Every test used to open a brand-new browser that had never seen any website, so it re-downloaded every page and picture from scratch. On a shaky connection that made tests crawl. Now tests keep a shared stash of downloaded site files between runs, while still starting each test signed out. Like a library that keeps the books you borrowed, but forgets who you are.
+
+**Added a pencil to go back to any earlier question — 2026-10-30**
+In a long chat there was no way to change an answer you had already given. Now every answered question has a small pencil; press it, confirm, and the workflow returns to how it was just before that answer, and you choose again. Anything you did after that point is discarded, and questions asked before the build also rebuild the workflow from your new answer. It works like rewinding a video to a chapter marker and playing on from there.
+
+**Made "Test it" work after choosing "Test changes" in the editor — 2026-10-30**
+Choosing "Test changes" in the editor already put a test setup card in the chat, so pressing "Test it" there found one waiting and did nothing visible. Now pressing it folds the old card away and puts a fresh one at the bottom of the chat, with the latest values. It is like a waiter clearing the old menu and handing you a new one instead of pointing at the one behind you.
+
+**Added an on/off switch for AI in test runs — 2026-10-30**
+Before, a test always let the AI answer any "AI review" step on its own, using up credits without asking. Now the test setup screen has a "Let AI answer review steps" switch, off by default. While it is off, the test stops at the first such step instead of spending credits; switch it on when you want the AI to answer, like engaging the autopilot only when you choose to.
+
+**Questions now read as one clear heading — 2026-10-30**
+Each question used to open with the question itself and bury the explanation underneath, then a faint grey line and a "Question 2 of 2" label crowded the top. Now the short explanation and the question sit together as one bold heading, with the choices right below and the small back and forward arrows at the bottom. The question counter is gone.
+
+**The workflow summary now comes back after you apply a change from chat — 2026-10-30**
+After accepting a suggested change, the chat just showed "Applied" and the workflow overview card stayed far up the page, out of date. Now a fresh overview card appears right below, showing the new version number, step list and the Test it button. Like a receipt printed after every edit, so you always see where the workflow stands.
+
+**Removed the "Show the browser while it runs" tick box from the test screen — 2026-10-30**
+The test screen asked you to tick a box before you could watch the browser during a test. That choice is gone, so the screen is shorter and there is one less thing to think about. The test still runs the same way it did with the box left at its default.
+
+**The Test it button now disappears while the chat is still answering your change request — 2026-10-30**
+After you asked for a change, the Test it buttons stayed on screen while the reply was being written, so it was easy to test the old version by mistake. Now they hide the moment you send your message and come back once the reply, and any proposed change, has arrived. Like a "do not enter" sign on a room while the cleaners are still working inside.
+
+**Curly quotes in chat messages no longer turn into strange symbols — 2026-10-30**
+A message like Download “github file” file showed up in the chat as "â€œgithub fileâ€�". The app was reading what you typed with the wrong alphabet, like reading a French letter with a German dictionary. It now reads it correctly, so your words appear exactly as typed. Messages already saved with the symbols stay as they are; send them again.
+
+**Stopped a garbled-character error when sending typed text — 2026-10-30**
+Typing certain characters (like curly quotes or emoji) into the app could trigger a red "can't encode character" error and the text was lost. Now the app repairs or replaces any broken character before saving it, like a spell-checker catching a smudged letter before the page is filed. Typed answers and chat messages now save normally.
+
+**Added a "type your own answer" box to every question — 2026-10-30**
+Before, a question only offered its fixed choices, so you had no way to say "none of these, I want something else". Now each question has a small box under the choices where you can write your own answer and press Enter. Picking a choice moves straight to the next question, and small back and forward arrows replace the old buttons. Once the workflow is built, your own words go to the chat, which suggests a change you can accept or reject; before it is built, your words are saved as a note.
+
+**Stopped the "finish or close the login window" error from blocking you — 2026-10-30**
+Starting a sign-in for one app while another sign-in window was still open showed an error and made you close the old window by hand. Now the unfinished sign-in is closed for you and the new one opens, like swapping one phone call for another. A recording in progress is still protected and is never closed this way.
+
+**Stopped a failed recording from wiping a saved sign-in — 2026-10-30**
+When a recording opened and the app showed its login page instead, then was discarded, Conxa saved that signed-out browser over the good saved sign-in. The next check then said the sign-in had expired, even though it was fine a minute earlier. Now a discarded recording never touches saved sign-ins, a finished one only updates them if it is still signed in, and a backup of the old one is kept. If a recording opens on a login page, Conxa now stops it straight away and asks you to sign in, instead of leaving you on a blank recording.
+
+**Stopped signing-in from being recorded as part of a workflow — 2026-10-30**
+If a saved login ran out in the middle of a recording, typing the email and password and pressing "Sign in" ended up as steps in the workflow. Now anything done on a login page is simply ignored by the recorder, like a camera that pauses while someone types a password. Workflows no longer contain login steps that were never meant to be replayed.
+
 **Made the Studio ask fewer, smarter questions and stop repeating itself — 2026-10-28**
 Before building a workflow, the Studio used to ask three fixed questions every time and then ask the same things again after the build. It also showed a "what you'll probably do" list that nobody needed. Now the assistant reads the recording and writes its own questions, settles what it can by itself, and shows its summary as a normal chat message. A pop-up that needs a decision is always asked about as one, and an answer is never applied to the wrong pop-up.
 
@@ -96,3 +150,7 @@ The plan had grown by several add-ons and read like a patchwork. It is now one g
 **Added five new building blocks to workflows, and made the AI review step able to do more — 2026-10-30**
 Workflows can now wait for something to happen on a page, copy and read text through the browser clipboard, and run another saved workflow in the middle of the current one. The AI review step can now be used to work out a value, read a downloaded file, or pick between steps, and its answer can be used by later steps. Each new block has safety limits, such as never letting an AI answer decide an irreversible action, and each is covered by automatic tests.
 — 2026-10-30
+
+**Every recorded action now becomes its own step, with nothing folded or grouped — 2026-11-02**
+Before, the app quietly merged or threw away some of what you did while recording, and showed some steps tucked under others. A recording of 12 actions could come out as 11 steps, like a note-taker skipping lines they thought were repeats. Now each action you record is kept as its own step, shown in a flat list in the order you did it.
+— 2026-11-02

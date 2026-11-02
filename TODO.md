@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 43 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 45 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **112** |
+| **Total** | **114** |
 
 ---
 
@@ -1131,6 +1131,12 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Description:** `runtime/app/handover.js` arms its "Done" banner with `context.exposeBinding("__conxaHandoverDone")` + `context.addInitScript(_bannerScript(...))`. When the runtime borrows a view from Conxa Execute or Build Studio's test panel (`host_browser.js`), Playwright's one context is the host app's default CDP context, which holds the app's own window and other runs' views — so the banner script and binding reach every page in the host process, including the app UI, until the runtime disconnects. Found while building BUILD-46 (`Done.md`; the recorder's embedded mode installs its bridge per run page for exactly this reason, TRD §4.7a).
 - **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
 - **Complexity:** S–M.
+
+### BUILD-59 — What the "nothing pauses by default" pass (2026-11-02) left open
+- **Category:** Builder / Runtime
+- **Source:** the toast-pause investigation of 2026-11-02 (a Drive "Uploading 1 item" progress panel stopped a test as "a popup needs your decision"). Done (2026-11-02): unknown surfaces are left alone and a pause needs `policy.reviewed`; one decision-surface fixture for JS and Python; a structural "picked from a list" signal (`entity_binding.py::repeating_peers`: `tr`/`li` rows, and `div` rows that name themselves, minus controls) that asks instead of defaulting to fixed; unmatched pre-compile answers reported; derived copies scrubbed on parameterize; popup stops recorded as their own test ending **and kept on the workflow** (`Workflow.last_test_outcome`, lifecycle substate `partial`); explicit `SkillStep.produces` / `consumes` slots for download→upload (`upload_binding.py`); readable titles for synthetic navigate and marker steps; the fold report says what each folded action sat next to and names it in chat; the reason the understanding call falls back is recorded (`understanding.json` `fallback_reason`, stderr).
+- **Left:** (1) **Causal grouping is display-only, by decision (2026-11-02).** A click and its `download_observed` / `tab_open` / dialog marker stay separate steps everywhere they run and are edited (own failure message, own settings, smaller safer edits); the chat summary card and the Human Edit list indent the effect under its cause (`clarify.py::effect_parents`, `workflowViewerHelpers.ts::effectStepFlags`, which must stay in step). The runtime fold is rejected. Still open under this item: a hover is stored twice (the step and `handler_hints.hover_chain`, `build.py::_populate_hover_chains`). (2) **Nothing reads `produces` / `consumes` yet.** They are data; a first reader would be a refusal to delete or reorder a producing step while a consumer needs it (`patch_gate`), or the parameterize dry-run following a value across them. (3) **Titles are still not unique across a workflow**; two steps can legitimately share one. (4) **Why the understanding call fell back in session `e98e06c1`** is still unknown (no log was kept then); read `fallback_reason` the next time it happens. (5) The understanding check still sends the model no DOM; a list whose rows carry no row-like tag, role, class or id is not detected as picked-from-a-list.
+- **Complexity:** M.
 
 ### BUILD-58 — Understanding-first pipeline: finish the removals, the Q2 round, the cards and the docs
 - **Category:** Builder / Cloud / Runtime
