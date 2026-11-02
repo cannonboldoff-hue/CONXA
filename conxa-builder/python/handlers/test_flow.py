@@ -59,7 +59,9 @@ class TestFlowMixin:
         existing = next((c for c in reversed(ts.fold(ts.read_raw(_thread(workflow_id))))
                          if c.get("card_type") == "test_inputs" and c.get("state") == "open"), None)
         if existing is not None:
-            return {"ok": True, "card_id": existing["card_id"]}
+            # Test changes (Human Edit) already posted one, further up the thread. Pressing Test it again
+            # must visibly do something, so the old one is folded away and a fresh one lands at the bottom.
+            harness.update_card(_thread(workflow_id), existing["card_id"], sink=sink, state="replaced", actions=[])
 
         steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
         recorded = {}
@@ -90,7 +92,8 @@ class TestFlowMixin:
             text="Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start."))
         card = harness.post_card(
             _thread(workflow_id), "test_inputs", "open", sink=sink, inputs=inputs, irreversible=irreversible[-3:],
-            irreversible_count=len(irreversible), guard=True, show_browser=True,
+            irreversible_count=len(irreversible), guard=True, show_browser=True, use_ai=False,
+            ai_review_count=sum(1 for s in steps if isinstance(s, dict) and clarify._action_name(s) == "ai_review"),
             version=int((doc.get("meta") or {}).get("version") or 1), step_count=len(steps),
             actions=["run"],
         )
@@ -113,16 +116,19 @@ class TestFlowMixin:
             raise _CommandError("test_in_progress", "A test of this workflow is already running.")
         guard = bool(payload.get("guard", True))
         show_browser = bool(payload.get("show_browser", True))
+        use_ai = bool(payload.get("use_ai", False))
         harness.update_card(_thread(workflow.id), card["card_id"], sink=sink, state="submitted", actions=[],
-                            guard=guard, show_browser=show_browser)
+                            guard=guard, show_browser=show_browser, use_ai=use_ai)
         threading.Thread(
-            target=self._tf_background, args=(workflow.id, values, guard, show_browser), daemon=True,
+            target=self._tf_background, args=(workflow.id, values, guard, show_browser, use_ai), daemon=True,
         ).start()
         return {"ok": True}
 
-    def _tf_background(self, workflow_id: str, inputs: dict[str, Any], guard: bool, show_browser: bool) -> None:
+    def _tf_background(self, workflow_id: str, inputs: dict[str, Any], guard: bool, show_browser: bool,
+                       use_ai: bool = False) -> None:
         try:
-            outcome = self._tf_run_test(workflow_id, inputs, guard=guard, show_browser=show_browser, attempt=1, auto=False)
+            outcome = self._tf_run_test(workflow_id, inputs, guard=guard, show_browser=show_browser, attempt=1, auto=False,
+                                        use_ai=use_ai)
             if outcome == "failed":
                 from conxa_compile.conversation import studio_settings
 
@@ -131,7 +137,7 @@ class TestFlowMixin:
                 if self._tf_input_check(workflow_id, inputs):
                     return
                 if studio_settings.load().get("autofix_enabled"):
-                    self._tf_autofix(workflow_id, inputs, show_browser)
+                    self._tf_autofix(workflow_id, inputs, show_browser, use_ai)
         except Exception:  # noqa: BLE001 — never take the engine down from a background test
             import traceback
 
@@ -149,7 +155,7 @@ class TestFlowMixin:
         if stale:
             self.cmd_build_skill_package({"skill_slug": workflow.slug, "for_test": True}, rid)
 
-    def _tf_run_test(self, workflow_id: str, inputs: dict[str, Any], *, guard: bool, show_browser: bool,
+    def _tf_run_test(self, workflow_id: str, inputs: dict[str, Any], *, guard: bool, show_browser: bool, use_ai: bool = False,
                      attempt: int, auto: bool) -> str:
         """Run one test and mirror it onto a card. Returns passed | failed | stopped | ended | previewed."""
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
@@ -168,6 +174,20 @@ class TestFlowMixin:
                                 sign_in_expired=False)
         harness.log_event(thread, "Test started", glyph="run", sink=sink, subject=f"attempt {attempt}" if auto else None)
         released = {"v": False}
+        # What the run last stopped to ask. A test the person ends is reported by THAT cause, never by
+        # a guess: ending at a popup is not "ending before a step that can't be undone".
+        pause: dict[str, Any] = {}
+
+        def record_outcome(kind: str, title: str = "", **extra: Any) -> None:
+            """Keep how an unfinished test ended on the workflow, so the lifecycle can say "ended partway"."""
+            try:
+                from conxa_core.storage.workflow_store import set_workflow_test_outcome
+
+                idx = extra.get("step_index")
+                key = next((r.get("step_key") for r in rows if r.get("index") == idx), "") if idx is not None else ""
+                set_workflow_test_outcome(workflow_id, {"outcome": kind, "title": title, "step_key": key or "", **extra})
+            except Exception:  # noqa: BLE001 -- a record must never turn an ended test into an error
+                pass
 
         def push(**extra: Any) -> None:
             harness.update_card(thread, card_id, sink=sink, rows=[dict(r) for r in rows], **extra)
@@ -202,6 +222,8 @@ class TestFlowMixin:
 
         def guard_hook(info: dict[str, Any]) -> str:
             settle()
+            pause.clear()
+            pause.update(kind="guard")
             ran = sum(1 for r in rows if r["status"] == "done")
             push(state="waiting_guard", paused_before=_humanize(info.get("step_intent")), remaining=info.get("remaining"),
                  ran=ran, actions=["run_rest", "end_here"])
@@ -215,6 +237,8 @@ class TestFlowMixin:
 
         def review_hook(review: dict[str, Any]) -> bool:
             settle()
+            pause.clear()
+            pause.update(kind="confirm")
             push(state="waiting_confirm", prompt=str(review.get("prompt") or ""), actions=["yes", "end_here"])
             decision = wait_decision("confirm")
             if decision in ("yes", "run_rest"):
@@ -227,9 +251,13 @@ class TestFlowMixin:
             """A popup that needs a decision: show the choices and wait for the person. Never answered
             by a model. Returns a choice id, or "__stop__" when they end the test."""
             settle()
+            pause.clear()
+            pause.update(kind="popup", title=str(fork.get("title") or ""), step_index=fork.get("step_index"),
+                         reason=str(fork.get("reason") or ""))
             push(state="waiting_fork", fork={"title": fork.get("title"), "message": fork.get("message"),
                                              "choices": fork.get("choices"), "suggested": fork.get("suggested"),
-                                             "unknown": fork.get("unknown")},
+                                             "unknown": fork.get("unknown"), "step_index": fork.get("step_index"),
+                                             "reason": fork.get("reason")},
                  actions=["fork_choose", "end_here"])
             harness.log_event(thread, "Paused — a popup needs your decision", glyph="warn", sink=sink,
                               subject=str(fork.get("title") or "a popup"))
@@ -242,7 +270,7 @@ class TestFlowMixin:
         try:
             self._tf_ensure_built(workflow, rid)
             result = self.cmd_test_workflow(
-                {"workflow_id": workflow_id, "inputs": inputs, "headless": not show_browser, "guard": guard,
+                {"workflow_id": workflow_id, "inputs": inputs, "headless": not show_browser, "guard": guard, "use_ai": use_ai,
                  "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook,
                  "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
@@ -279,17 +307,31 @@ class TestFlowMixin:
             push(state="previewed", seconds=elapsed, actions=["test_again"])
             harness.log_event(thread, "Preview finished", glyph="warn", sink=sink,
                               subject="Steps that can’t be undone were checked, not run")
+            record_outcome("previewed")
             return "previewed"
+        if status == "stopped_at_guard" and pause.get("kind") == "popup":
+            # The person ended the test at a popup they were asked about. Recorded with the step, the
+            # popup's own words and why it asked, so the ending is data and not just a line in the chat.
+            push(state="ended_at_popup", popup=pause.get("title") or "a popup", step_index=pause.get("step_index"),
+                 reason=pause.get("reason") or "", steps_ran=len(rows), actions=["test_again"])
+            harness.log_event(thread, "Test ended at a popup", glyph="none", sink=sink,
+                              subject=str(pause.get("title") or "a popup"))
+            record_outcome("ended_at_popup", str(pause.get("title") or "a popup"), step_index=pause.get("step_index"),
+                           reason=pause.get("reason") or "")
+            return "ended"
         if status == "stopped_at_guard":
             ran = [r["name"] for r in rows if r["status"] == "done"]
-            push(state="ended_before_irreversible", stopped_before=_humanize(result.get("stopped_intent") or ""),
+            push(state="ended_before_irreversible", cause=pause.get("kind") or "guard", stopped_before=_humanize(result.get("stopped_intent") or ""),
                  declined=bool(result.get("declined")), steps_ran=len(rows), actions=["test_again"])
             harness.log_event(thread, "Test ended before a step that can’t be undone", glyph="none", sink=sink,
                               subject="Nothing was sent")
+            record_outcome("ended_before_irreversible", _humanize(result.get("stopped_intent") or ""),
+                           step_index=result.get("stopped_at"), reason=pause.get("kind") or "guard")
             return "ended"
         # cancelled by the person
         push(state="stopped", steps_ran=len(rows), actions=["test_again"], last_step=rows[-1]["name"] if rows else "")
         harness.log_event(thread, "Test stopped by you", glyph="none", sink=sink)
+        record_outcome("stopped", rows[-1]["name"] if rows else "")
         return "stopped"
 
     def _tf_failure_image(self, workflow_id: str) -> str | None:
@@ -508,7 +550,7 @@ class TestFlowMixin:
         ctx = self._thread_context("wf", workflow_id, None)
         return ctx["gate_proposals"]([p for p in result.get("proposals") or [] if isinstance(p, dict)])
 
-    def _tf_autofix(self, workflow_id: str, inputs: dict[str, Any], show_browser: bool) -> None:
+    def _tf_autofix(self, workflow_id: str, inputs: dict[str, Any], show_browser: bool, use_ai: bool = False) -> None:
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
 
         thread = _thread(workflow_id)
@@ -561,7 +603,7 @@ class TestFlowMixin:
                 harness.update_card(thread, card_id, sink=sink, phase="Re-testing", changes=changes)
                 if stop.is_set():
                     return stop_with("You pressed Stop.")
-                outcome = self._tf_run_test(workflow_id, inputs, guard=True, show_browser=show_browser,
+                outcome = self._tf_run_test(workflow_id, inputs, guard=True, show_browser=show_browser, use_ai=use_ai,
                                             attempt=attempt + 1, auto=True)
                 if outcome == "passed":
                     runtime_state.set_flags(workflow_id, autofix_attempt=0)

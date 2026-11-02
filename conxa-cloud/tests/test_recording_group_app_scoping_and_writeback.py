@@ -387,3 +387,80 @@ def test_stop_recording_computes_and_saves_recording_duration(isolated_data_dir,
 
     saved = get_workflow(workflow.id)
     assert saved.recording_duration_seconds == 150.0  # 2:30 between the two events
+
+
+def _saved(isolated_data_dir, app_id):
+    return json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+
+
+def _cookie(name, value):
+    return {"name": name, "domain": "render.test", "path": "/", "value": value}
+
+
+def _group_with_session(isolated_data_dir, session_keys):
+    from conxa_core.storage.group_store import set_group_app_auth_definition
+
+    group = create_group("Sales", workspace_id="wrk_local")
+    group, app_id = _captured_app(
+        isolated_data_dir, group.id, "Render", "https://render.test/login", "https://render.test/",
+        json.dumps({"cookies": [_cookie("session", "good"), _cookie("user", "me")], "origins": []}),
+    )
+    set_group_app_auth_definition(group.id, app_id, {"session_keys": session_keys})
+    workflow = create_workflow("Create a lead", "https://render.test/app", group_id=group.id)
+    merged_dir = isolated_data_dir / "workflows" / workflow.id
+    merged_dir.mkdir(parents=True)
+    return group, app_id, workflow, merged_dir / "merged_group_state.json"
+
+
+def test_write_back_keeps_saved_session_when_recording_ended_signed_out(isolated_data_dir):
+    group, app_id, workflow, merged = _group_with_session(isolated_data_dir, ["session", "user"])
+    merged.write_text(json.dumps({"cookies": [_cookie("session", "good"), _cookie("logged_in", "no")], "origins": []}), encoding="utf-8")
+
+    _refresh_group_app_sessions(workflow.id)
+
+    assert [c["name"] for c in _saved(isolated_data_dir, app_id)["cookies"]] == ["session", "user"]
+
+
+def test_write_back_backs_up_the_previous_session(isolated_data_dir):
+    group, app_id, workflow, merged = _group_with_session(isolated_data_dir, ["session", "user"])
+    merged.write_text(json.dumps({"cookies": [_cookie("session", "rotated"), _cookie("user", "me")], "origins": []}), encoding="utf-8")
+
+    _refresh_group_app_sessions(workflow.id)
+
+    assert _saved(isolated_data_dir, app_id)["cookies"][0]["value"] == "rotated"
+    bak = json.loads((isolated_data_dir / f"{app_id}.json.bak").read_text(encoding="utf-8"))
+    assert bak["cookies"][0]["value"] == "good"
+
+
+def test_cancel_recording_never_writes_sessions_back(isolated_data_dir, monkeypatch):
+    group, app_id, workflow, merged = _group_with_session(isolated_data_dir, [])
+    merged.write_text(json.dumps({"cookies": [_cookie("session", "anon")], "origins": []}), encoding="utf-8")
+    monkeypatch.setattr(session_module._recorder_registry, "get", lambda _sid: _FakeSess())
+    monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
+
+    _Harness().cmd_cancel_recording({"session_id": "sess1", "workflow_id": workflow.id}, "rid")
+
+    assert _saved(isolated_data_dir, app_id)["cookies"][0]["value"] == "good"
+
+
+class _LoginLandingSess(_FakeSess):
+    current_url = "https://render.test/login?return_to=https%3A%2F%2Frender.test%2Fapp"
+
+
+def test_recording_that_lands_on_sign_in_is_rejected_then_loops_stop(isolated_data_dir, monkeypatch):
+    group, app_id, workflow, _merged = _group_with_session(isolated_data_dir, [])
+    monkeypatch.setattr(session_module._recorder_registry, "create", lambda **_kw: _LoginLandingSess())
+    monkeypatch.setattr(session_module._recorder_registry, "pop", lambda _sid: None)
+    h = _Harness()
+
+    with pytest.raises(_CommandError) as first:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert first.value.code == "auth_required"
+    app = next(a for a in get_group(group.id).apps if a.id == app_id)
+    assert app.last_error  # the gate and the Check-all badge now agree it is expired
+    assert h._active_recording is None
+
+    set_group_app_auth(group.id, app_id, str(isolated_data_dir / f"{app_id}.json"))  # the person signs in again
+    with pytest.raises(_CommandError) as second:
+        h.cmd_start_recording({"workflow_id": workflow.id}, "rid")
+    assert second.value.code == "sign_in_not_accepted"

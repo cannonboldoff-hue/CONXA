@@ -46,6 +46,13 @@ function init(win, { onTabsChanged, onShortcut } = {}) {
 }
 
 const _partitionFor = (runId) => `conxa-run-${runId}`;
+// Test runs share one on-disk partition so its HTTP cache survives from test to test: a fresh in-memory
+// partition per run re-downloads every asset over cold connections, which is what made tests crawl on a
+// flaky network. Cookies and site storage are wiped before and after every run (prepareTestRun, closeRun);
+// only the cache is kept. Record and sign-in runs keep per-run partitions (their cookie capture must see
+// nothing else), as does a test run that overlaps another live one on the shared partition.
+const SHARED_PARTITION = "persist:conxa-test-cache";
+const _sharedInUse = () => [..._runs.values()].some((r) => r.partition === SHARED_PARTITION);
 const _markerUrl = (runId, tabId) => `about:blank?conxa_run=${encodeURIComponent(runId)}&conxa_tab=${encodeURIComponent(tabId)}`;
 // The marker is an internal handle, never an address — it must not reach the URL field or a label.
 const _isMarker = (url) => !url || url.startsWith("about:blank");
@@ -291,12 +298,14 @@ function _forgetTab(runId, tabId) {
 // saved silently here and the runtime claims the finished file by URL (save_download).
 const _downloadDir = (runId) => path.join(os.tmpdir(), "conxa-studio-downloads", runId.replace(/[^\w.-]/g, "_"));
 const _hooked = new Set();
-function _hookDownloads(runId, partition) {
+function _hookDownloads(partition) {
   if (_hooked.has(partition)) return;
   _hooked.add(partition);
   session.fromPartition(partition).on("will-download", (_e, item) => {
-    const run = _runs.get(runId);
-    if (!run) { item.cancel(); return; }
+    // A shared partition outlives runs, so the owner is looked up per download, not captured once.
+    const owner = [..._runs].find(([, r]) => r.partition === partition);
+    if (!owner) { item.cancel(); return; }
+    const [runId, run] = owner;
     const dir = _downloadDir(runId);
     fs.mkdirSync(dir, { recursive: true });
     // A counter, not downloads.length: "Clear list" shrinks the array and ids/files must stay unique.
@@ -418,16 +427,27 @@ function _viewport(v) {
   return { width, height };
 }
 
+// Control-channel op "new_view" for a test run calls this first (and awaits it): drop the finished test
+// still on screen and wipe whatever its cookies left in the shared partition (or a previous app
+// session left on disk), so the new run starts signed out with a warm cache.
+async function prepareTestRun() {
+  await _dropFinishedRuns(null);
+  if (_sharedInUse()) return;
+  try { await session.fromPartition(SHARED_PARTITION).clearStorageData(); } catch (err) {
+    console.error("browser_panel: failed to clear shared test partition", err);
+  }
+}
+
 function newView(runId, { label, kind = "test", viewport } = {}) {
   let run = _runs.get(runId);
   if (!run) {
     if (!KINDS.has(kind)) throw new Error(`browser_panel: unknown run kind ${kind}`);
     run = {
-      partition: _partitionFor(runId), kind, viewport: _viewport(viewport), scale: 1, rect: null,
+      partition: kind === "test" && !_sharedInUse() ? SHARED_PARTITION : _partitionFor(runId), kind, viewport: _viewport(viewport), scale: 1, rect: null,
       tabs: [], activeTabId: null, downloads: [], finished: false,
     };
     _runs.set(runId, run);
-    _hookDownloads(runId, run.partition);
+    _hookDownloads(run.partition);
     void _dropFinishedRuns(runId);
   }
   const tabId = _createTab(run, runId, label);
@@ -537,7 +557,8 @@ async function closeRun(runId) {
     try { if (_win) _win.contentView.removeChildView(t.view); } catch (_) { /* best effort */ }
     try { t.view.webContents.close(); } catch (_) { /* best effort */ }
   }
-  try { await session.fromPartition(run.partition).clearStorageData(); } catch (err) {
+  // The shared partition is wiped only when no other run is still on it.
+  try { if (run.partition !== SHARED_PARTITION || !_sharedInUse()) await session.fromPartition(run.partition).clearStorageData(); } catch (err) {
     console.error(`browser_panel: failed to clear storage for run ${runId}`, err);
   }
   try { fs.rmSync(_downloadDir(runId), { recursive: true, force: true }); } catch (_) { /* best effort */ }
@@ -598,4 +619,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { init, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };
+module.exports = { init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };

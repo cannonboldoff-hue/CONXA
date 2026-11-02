@@ -276,6 +276,31 @@ def test_ending_at_the_guard_is_not_a_pass_and_says_nothing_was_sent(env):
     assert get_workflow(wf.id).last_test_status == "never"  # "passed up to X" is not a pass
 
 
+def test_ending_at_a_popup_is_recorded_as_a_popup_stop_with_its_step_and_reason(env):
+    b, wf, _out = env
+
+    def fake(payload, rid):
+        payload["_phase_hook"]({"phase": "step_0_click_start", "step": 0, "step_total": 2, "intent": "open_new_invoice", "destructive": False})
+        choice = payload["_fork_hook"]({"title": "Upload options", "message": "", "choices": [], "suggested": None,
+                                        "unknown": False, "step_index": 1, "reason": "ask_human"})
+        assert choice == "__stop__"
+        return {"status": "stopped_at_guard", "stopped_intent": "Upload options", "stopped_at": 1, "declined": True}
+
+    b.cmd_test_workflow = fake
+    t = threading.Thread(target=lambda: b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False), daemon=True)
+    t.start()
+    deadline = time.time() + 5
+    while time.time() < deadline and not test_flow._waiters:
+        time.sleep(0.02)
+    b.cmd_flow_test_decision({"workflow_id": wf.id, "decision": "end_here"}, "r")
+    t.join(5)
+    card = _cards(wf.id, "test_run")[0]
+    assert card["state"] == "ended_at_popup" and card["popup"] == "Upload options"
+    assert card["step_index"] == 1 and card["reason"] == "ask_human"          # the ending is data, not just a chat line
+    assert "stopped_before" not in card                                       # never reported as an irreversible-step stop
+    assert get_workflow(wf.id).last_test_status == "never"
+
+
 def test_a_failure_says_what_ran_and_only_claims_nothing_was_sent_when_true(env):
     b, wf, _out = env
     _fake_test(b, steps=[("open_new_invoice", False), ("enter_po_number", False)], error="The customer list didn't appear within 5 seconds.")
@@ -596,3 +621,27 @@ def test_choosing_stop_or_an_unlisted_choice_ends_the_test_without_resuming():
         c = Calls([])
         _, stopped = c.drive(_fork_result(), fork_hook=lambda f, a=answer: a)
         assert stopped["declined"] is True and c.args == []
+
+
+def test_a_test_ended_at_a_popup_is_kept_on_the_workflow_and_shows_as_partial_in_the_lifecycle(env):
+    b, wf, _out = env
+
+    def fake(payload, rid):
+        payload["_fork_hook"]({"title": "Upload options", "choices": [], "step_index": 1, "reason": "ask_human"})
+        return {"status": "stopped_at_guard", "stopped_intent": "Upload options", "stopped_at": 1, "declined": True}
+
+    b.cmd_test_workflow = fake
+    t = threading.Thread(target=lambda: b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False), daemon=True)
+    t.start()
+    deadline = time.time() + 5
+    while time.time() < deadline and not test_flow._waiters:
+        time.sleep(0.02)
+    b.cmd_flow_test_decision({"workflow_id": wf.id, "decision": "end_here"}, "r")
+    t.join(5)
+    saved = get_workflow(wf.id)
+    assert saved.last_test_outcome["outcome"] == "ended_at_popup" and saved.last_test_outcome["step_index"] == 1
+    assert saved.last_test_status == "never"                                   # still not a result
+    life = lifecycle_for_workflow(saved)
+    assert life["substate"] == "partial" and "Upload options" in life["note"]
+    from conxa_core.storage.workflow_store import set_workflow_test_result
+    assert set_workflow_test_result(wf.id, status="passed", inputs={}).last_test_outcome is None   # a real result supersedes it

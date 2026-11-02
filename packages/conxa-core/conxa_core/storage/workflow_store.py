@@ -322,6 +322,7 @@ def invalidate_workflow_test_by_skill(skill_id: str) -> None:
         if workflow.skill_id == skill_id:
             workflow.last_test_status = "never"
             workflow.last_test_error = None
+            workflow.last_test_outcome = None
             workflow.last_test_at = None
             workflow.edited_at = now
             workflow.signed_off = False
@@ -343,10 +344,21 @@ def set_workflow_test_result(
     workflow.last_test_at = time.time()
     workflow.last_test_inputs = dict(inputs)
     workflow.last_test_error = None
+    workflow.last_test_outcome = None
     # BUILD-26 (a2): a pass doesn't clear the previous run's evidence pointer on its own — a
     # caller with no run_id (e.g. an older code path) leaves whatever was there.
     if run_id:
         workflow.last_test_run_id = run_id
+    return save_workflow(workflow)
+
+
+def set_workflow_test_outcome(workflow_id: str, outcome: dict) -> Workflow | None:
+    """Record a test that ended without a pass or a failure (stopped, ended at a popup or before a step
+    that can't be undone, previewed). ``last_test_status`` is left alone: this is not a result."""
+    workflow = get_workflow(workflow_id)
+    if workflow is None:
+        return None
+    workflow.last_test_outcome = {**outcome, "at": time.time()}
     return save_workflow(workflow)
 
 
@@ -362,6 +374,7 @@ def set_workflow_test_error(
     if inputs is not None:
         workflow.last_test_inputs = dict(inputs)
     workflow.last_test_error = error[:2000]
+    workflow.last_test_outcome = None
     # BUILD-26 (a2): the pointer the copilot's evidence bundle resolves
     # runs/{run_id}/_evidence/ under (handlers/workflows.py learns run_id from the run's own
     # test_phase log lines). Not cleared by invalidate_workflow_test_by_skill below — a reviewer

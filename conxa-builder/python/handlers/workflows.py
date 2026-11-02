@@ -890,6 +890,13 @@ class WorkflowsMixin:
         _hook = lambda name: payload.get(name) if callable(payload.get(name)) else None  # noqa: E731
         phase_hook, guard_hook, review_hook = _hook("_phase_hook"), _hook("_guard_hook"), _hook("_review_hook")
         fork_hook = _hook("_fork_hook")  # called with a popup-decision question; returns a choice id
+        use_ai = payload.get("use_ai", True) is not False  # off: an ai_review checkpoint fails the test instead of asking the model
+
+        def _no_ai_answer(review: dict[str, Any], content: list[Any]) -> dict[str, Any]:
+            raise RuntimeError(
+                f"Step {int(review.get('step_index') or 0) + 1} needs an AI review, but AI is turned off for this test. "
+                "Turn it on and test again."
+            )
 
         workflow = get_workflow(workflow_id)
         if workflow is None:
@@ -1088,7 +1095,7 @@ class WorkflowsMixin:
                 cancel_run=lambda run_id: call_runtime_tool(
                     runtime_dir, "cancel_execution", {"run_id": run_id}, conxa_dir=conxa_dir,
                     env={"CONXA_DATA_DIR": str(test_data_dir)}),
-                answer_review=self._answer_ai_review, guard_hook=guard_hook, review_hook=review_hook,
+                answer_review=self._answer_ai_review if use_ai else _no_ai_answer, guard_hook=guard_hook, review_hook=review_hook,
                 guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
             )
             _mark("Runtime call finished")

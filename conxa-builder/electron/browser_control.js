@@ -67,7 +67,9 @@ function start() {
 async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, dest, timeoutMs }) {
   if (!runId) throw new Error("missing runId");
   switch (op) {
-    case "new_view": return panel.newView(runId, { label, kind, viewport });
+    case "new_view":
+      if (!kind || kind === "test") await panel.prepareTestRun();
+      return panel.newView(runId, { label, kind, viewport });
     case "new_tab": return panel.newTab(runId, { label, focus });
     case "adopt_view": return panel.adoptRun(runId, { kind, viewport });
     case "close_view":

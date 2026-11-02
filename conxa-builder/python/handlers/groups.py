@@ -16,7 +16,7 @@ from typing import Any
 
 from conxa_compile.recorder.session import registry as _recorder_registry
 from conxa_core.storage.group_store import DEFAULT_GROUP_NAME
-from conxa_core.workspace import LOCAL_WORKSPACE_ID, workspace_dir_slug
+from conxa_core.workspace import LOCAL_WORKSPACE_ID
 from handlers.protocol import _CommandError, _safe_id
 
 # How many workflow names a group summary carries, so a group card can show
@@ -169,7 +169,6 @@ class GroupsMixin:
         from conxa_core.storage.skill_pack_store import get_skill_pack
 
         ws = workspace_id or getattr(group, "workspace_id", "") or LOCAL_WORKSPACE_ID
-        slug = workspace_dir_slug(ws)
         display_name = ""
 
         pack = get_skill_pack(ws)
@@ -182,7 +181,9 @@ class GroupsMixin:
         try:
             generation = self._installer_generation()
             self._cloud_json(
-                f"/api/v1/workflows/{generation}/{quote(slug)}/groups/{quote(group.id)}",
+                # No workspace segment: Cloud takes the workspace from the signed-in principal
+                # (release_routes.py::put_group). A slug here is a 404.
+                f"/api/v1/workflows/{generation}/groups/{quote(group.id)}",
                 method="PUT",
                 body={
                     "group_name": group.name,
@@ -400,10 +401,17 @@ class GroupsMixin:
             if self._active_recording is not None:
                 stale = _recorder_registry.get(self._active_recording)
                 if stale is not None and stale.browser_open:
-                    raise _CommandError(
-                        "recording_in_progress",
-                        "Finish or close the current login window before starting another.",
-                    )
+                    # A half-done sign-in saves into a pending file only, so it is safe to drop in
+                    # favour of the new one. A real recording is the person's work: never closed.
+                    if not stale.auth_mode:
+                        raise _CommandError(
+                            "recording_in_progress",
+                            "Finish or close the current recording before starting a login.",
+                        )
+                    self._loop.run(stale.stop())
+                    pending = str(getattr(stale, "storage_state_autosave_path", "") or "")
+                    if pending.endswith(_PENDING_SUFFIX):
+                        Path(pending).unlink(missing_ok=True)
                 if stale is not None:
                     _recorder_registry.pop(self._active_recording)
                 self._active_recording = None

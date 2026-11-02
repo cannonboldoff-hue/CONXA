@@ -133,7 +133,7 @@ test("a new run drops a finished test but never a finished record or sign-in run
   await panel.runEnd("rec");
   panel.newView("t2");
   await new Promise((r) => setImmediate(r));
-  assert.ok(cleared.includes("conxa-run-t1"));
+  assert.ok(cleared.includes("persist:conxa-test-cache")); // t1 held the shared test partition
   assert.ok(!cleared.includes("conxa-run-rec"));
   await panel.closeRun("rec");
   assert.ok(cleared.includes("conxa-run-rec"));
@@ -241,4 +241,35 @@ test("adopting a parked test run makes it a record run: kept views, target ids, 
   assert.ok((await panel.targetsOf("adopt1")).targets.length === 1);
   await assert.rejects(() => panel.adoptRun("nope"), /no run nope/);
   await assert.rejects(() => panel.adoptRun("adopt1", { kind: "test" }), /cannot adopt/);
+});
+
+test("test runs share one persistent partition (warm cache), wiped between runs; others never use it", async () => {
+  // earlier tests leave runs open, so use a fresh copy of the module
+  const modPath = require.resolve("../browser_panel");
+  delete require.cache[modPath];
+  Module._load = function (request, ...rest) {
+    if (request === "electron") return { session: { fromPartition: (p) => ({ clearStorageData: async () => { cleared.push(p); }, on: () => {} }) }, WebContentsView: FakeView };
+    return realLoad.call(this, request, ...rest);
+  };
+  const panel = require("../browser_panel");
+  Module._load = realLoad;
+  panel.init(win, {});
+  cleared.length = 0;
+  panel.newView("s1");
+  panel.newView("s2");                                   // overlaps live s1 -> own in-memory partition
+  panel.newView("rec-s", { kind: "record", viewport: { width: 1280, height: 720 } });
+  await panel.closeRun("s2");
+  await panel.closeRun("rec-s");
+  assert.deepStrictEqual(cleared, ["conxa-run-s2", "conxa-run-rec-s"]);
+  cleared.length = 0;
+  await panel.closeRun("s1");
+  assert.deepStrictEqual(cleared, ["persist:conxa-test-cache"]);
+  // a finished test is dropped and the shared jar wiped before the next test starts
+  panel.newView("s3");
+  await panel.runEnd("s3");
+  cleared.length = 0;
+  await panel.prepareTestRun();
+  assert.deepStrictEqual(cleared, ["persist:conxa-test-cache", "persist:conxa-test-cache"]);
+  panel.newView("s4");
+  await panel.closeRun("s4");
 });

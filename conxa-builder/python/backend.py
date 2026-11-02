@@ -142,6 +142,26 @@ class _Loop:
 
 # --- the backend -------------------------------------------------------------
 
+def _clean_text(v: Any) -> Any:
+    """Lone surrogates in typed text ('utf-8' codec can't encode '\udc9d') would crash the first file write
+    that stores them. Bytes stdin couldn't decode are repaired; anything still lone becomes U+FFFD."""
+    if isinstance(v, str):
+        try:
+            v.encode("utf-8")
+            return v
+        except UnicodeEncodeError:
+            pass
+        try:
+            return v.encode("utf-8", "surrogateescape").decode("utf-8")
+        except UnicodeError:
+            return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    if isinstance(v, dict):
+        return {_clean_text(k): _clean_text(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_clean_text(x) for x in v]
+    return v
+
+
 class Backend(
     SessionMixin,
     CompileMixin,
@@ -766,6 +786,8 @@ class Backend(
             })
 
     def serve(self) -> None:
+        # Windows decodes a pipe with the locale code page by default, which turns curly quotes into "â€œ".
+        sys.stdin.reconfigure(encoding="utf-8")
         for line in sys.stdin:
             line = line.strip()
             if not line:
@@ -777,7 +799,7 @@ class Backend(
                 continue
             # Each request is handled on its own thread so a long build does not
             # block recording stop/cancel commands.
-            threading.Thread(target=self.dispatch, args=(msg,), daemon=True).start()
+            threading.Thread(target=self.dispatch, args=(_clean_text(msg),), daemon=True).start()
 
 
 def _shutdown_open_sessions(be) -> None:
