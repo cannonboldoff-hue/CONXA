@@ -13,12 +13,10 @@ Cards: ``sign_in`` (waiting → saved | cancelled) and ``recording``
 
 from __future__ import annotations
 
-import re
 import threading
 import time
 import uuid
 from typing import Any
-from urllib.parse import urlsplit
 
 from handlers.protocol import _CommandError, _emit_event, _event_sink, _safe_id
 from handlers.session import _recorder_registry
@@ -26,14 +24,6 @@ from handlers.session import _recorder_registry
 _WATCH_INTERVAL_S = 1.0
 _SIGN_IN_WATCH_INTERVAL_S = 1.5
 _sign_in_finish_lock = threading.Lock()
-# A login-shaped path: the runtime's LOGIN_PATH_RE / AUTH_FAILURE_URL_RE plus the single-sign-on
-# hops a sign-in passes through. Being on one means the person is still signing in.
-_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|auth|oauth2?|sso|logout|session-expired)(/|$)", re.I)
-
-
-def _looks_like_login_page(url: str) -> bool:
-    return bool(_LOGIN_PATH_RE.search(urlsplit(url).path or "/"))
-
 
 def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
@@ -212,7 +202,7 @@ class WorkflowFlowMixin:
         one, so a page that only looks done is not taken as signed in); a check that comes too early
         is silent and the next page change tries again. The button stays as the fallback."""
         from conxa_compile.conversation import thread_store as ts
-        from conxa_compile.recorder.frame_utils import is_blank_url
+        from conxa_compile.recorder.frame_utils import is_blank_url, looks_like_login_page
 
         seen_login = False
         tried: set[str] = set()
@@ -227,7 +217,7 @@ class WorkflowFlowMixin:
             url = str(getattr(sess, "current_url", "") or "")
             if not url.startswith(("http://", "https://")) or is_blank_url(url):
                 continue
-            if _looks_like_login_page(url):
+            if looks_like_login_page(url):
                 seen_login = True
                 continue
             page = url.split("#")[0].split("?")[0]

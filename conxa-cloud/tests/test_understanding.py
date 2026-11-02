@@ -287,3 +287,30 @@ def test_a_ticked_clicked_item_becomes_a_click_parameterize_op():
     ops, _ = plan_answer(q, {"selected": [q["choices"][0]["id"]]}, doc)
     assert ops == [{"op": "parameterize", "literal": "Android.gitignore", "name": "file_name",
                     "default": "Android.gitignore", "kind": "click"}]
+
+
+def test_copies_of_the_recorded_item_stop_describing_every_run_once_it_becomes_an_input():
+    doc = _clicked_file_doc()
+    doc["meta"] = {"structural_fingerprint": {"landmarks": [
+        {"intent": "open", "aria_label": "Android.gitignore, (File)", "inner_text": "Android.gitignore", "tag": "a"},
+        {"intent": "", "data_testid": "download-raw-button", "tag": "button"}], "landmark_count": 2}}
+    doc["skills"][0]["steps"][1]["target"] = {"primary_selector": "#row-3 a", "fallback_selectors": ['text="Android.gitignore"', "#row-3 a"]}
+    doc["skills"][0]["steps"][1]["video_context"] = {"purpose": "opens Android.gitignore from the list"}
+    doc["intent_graph"] = {"goal": "Save Android.gitignore to Drive", "expected_end_state": "Android.gitignore is uploaded"}
+
+    out, _ = parameterize_click_text(doc, "Android.gitignore", "file_name", default="Android.gitignore")
+
+    fp = out["meta"]["structural_fingerprint"]
+    assert [lm["tag"] for lm in fp["landmarks"]] == ["button"] and fp["landmark_count"] == 1     # a landmark naming the item is no landmark
+    assert out["skills"][0]["steps"][1]["target"]["fallback_selectors"] == ["#row-3 a"]
+    assert out["skills"][0]["steps"][1]["video_context"]["purpose"] == "opens {{file_name}} from the list"
+    assert out["intent_graph"] == {"goal": "Save {{file_name}} to Drive", "expected_end_state": "{{file_name}} is uploaded"}
+    assert out["inputs"][0]["default"] == "Android.gitignore"                                   # the default still holds the recorded value
+
+
+def test_a_value_too_short_to_tell_apart_from_ordinary_words_is_left_in_the_copies():
+    from conxa_compile.editor.workflow_mutations import _scrub_recorded_echoes
+
+    doc = {"intent_graph": {"goal": "Open 12 items"}, "meta": {}}
+    _scrub_recorded_echoes(doc, "12", "{{n}}")
+    assert doc["intent_graph"]["goal"] == "Open 12 items"

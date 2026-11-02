@@ -254,10 +254,14 @@ class CompileFlowMixin:
         lines =[f"Compiled into {len(steps)} steps."]
         dropped = report.get("dropped") or []
         if dropped:
-            kinds = sorted({str(d.get("action") or "action").replace("_", " ") for d in dropped})[:3]
+            named = []
+            for d in dropped[:3]:
+                kind = str(d.get("action") or "action").replace("_", " ")
+                named.append(f"{kind} “{d['target']}”" if d.get("target") else kind)
+            more = f" and {len(dropped) - 3} more" if len(dropped) > 3 else ""
             lines.append(
                 f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
-                f"({', '.join(kinds)}) — repeats, or page loads a click caused. They’re listed in the compile report.")
+                f"({', '.join(named)}{more}) — repeats, or page loads a click caused. They’re listed in the compile report.")
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
             lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")
@@ -357,7 +361,7 @@ class CompileFlowMixin:
         )
         clarify_store.update_question(workflow_id, q["id"], card_id=card["card_id"])
 
-    def _flow_post_summary(self, workflow_id: str, sink: Any) -> None:
+    def _flow_post_summary(self, workflow_id: str, sink: Any, *, updated: bool = False) -> None:
         from conxa_compile.conversation import clarify, clarify_store, harness, thread_store as ts
         from conxa_core.storage.json_store import read_skill
         from conxa_core.storage.workflow_store import get_workflow
@@ -378,7 +382,10 @@ class CompileFlowMixin:
         summary["queued"] = sum(1 for q in data.get("questions") or [] if q.get("status") == "queued")
         questions = data.get("questions") or []
         answered = [q for q in questions if q.get("status") == "answered"]
-        if questions:
+        if updated:
+            # After a chat change was applied: the card again, with the new version, and nothing re-offered.
+            text = f"Updated — here’s the workflow as it stands, saved as version {summary['version']}."
+        elif questions:
             text = "That’s everything."
             if added:
                 text += f" Your answers added {added} step{'s' if added != 1 else ''}."
@@ -388,7 +395,8 @@ class CompileFlowMixin:
         else:
             text = f"Here’s the workflow, saved as version {summary['version']}."
         harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=text))
-        self._flow_offer_variants(workflow_id, doc, sink)
+        if not updated:
+            self._flow_offer_variants(workflow_id, doc, sink)
         harness.post_card(
             _thread(workflow_id), "workflow_summary", "open", sink=sink, summary=summary,
             answered=len(answered), actions=["test", "review"] if summary["uncertain"] else ["test"],
@@ -449,9 +457,19 @@ class CompileFlowMixin:
         workflow_id = thread_id.replace("wf:", "", 1)
         card_id = card["card_id"]
         qid = str((card.get("refs") or {}).get("question_id") or card.get("question_id") or "")
+        if action == "reopen":
+            return self._reopen_question(thread_id, card, workflow_id, qid, sink)
         question = clarify_store.get_question(workflow_id, qid)
         if question is None:
             raise _CommandError("question_not_found", "That question isn’t available any more.")
+        if action == "resume":
+            # The chat turn that followed an "own answer" is done: only now does the next question appear,
+            # since an open question would otherwise catch the person's typed message.
+            if not question.get("own_pending"):
+                return {"ok": True}
+            clarify_store.update_question(workflow_id, qid, own_pending=False)
+            self._flow_post_next_question(workflow_id, sink)
+            return {"ok": True}
         if question.get("phase") == "pre_compile":
             return self._pre_compile_answer(thread_id, card, question, action, body, sink)
         if card.get("state") not in ("open", "failed"):
@@ -463,10 +481,24 @@ class CompileFlowMixin:
                 return {"ok": False, "code": "not_open", "message": "This question was already answered."}
 
         if action == "skip":
+            wf_skip = get_workflow(workflow_id)
+            can = bool(wf_skip and wf_skip.skill_id and self._save_snapshot(workflow_id, qid, wf_skip.skill_id, question))
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt="Kept as the compiler had it")
-            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Kept as the compiler had it", actions=[])
+            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Kept as the compiler had it", actions=[],
+                                can_reopen=can)
             self._flow_post_next_question(workflow_id, sink)
             return {"ok": True}
+        if action == "own":
+            # The person's own words, none of the offered options. Nothing is applied here: the card
+            # sends the text to chat, whose change cards (Apply / Confirm) are the only way it reaches a step.
+            if not str(body.get("custom_text") or "").strip():
+                raise _CommandError("invalid_input", "Type your answer first.")
+            receipt = "Answered in your own words — see the chat"
+            wf_own = get_workflow(workflow_id)
+            can = bool(wf_own and wf_own.skill_id and self._save_snapshot(workflow_id, qid, wf_own.skill_id, question))
+            clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_pending=True)
+            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=can)
+            return {"ok": True, "to_chat": True}
         if action not in ("choose", "retry"):
             raise _CommandError("card_action_unsupported", f"A question can’t “{action}”.")
 
@@ -478,6 +510,7 @@ class CompileFlowMixin:
         if doc is None:
             raise _CommandError("skill_not_found", "Compile this workflow first.")
         ops, receipt = clarify.plan_answer(question, answer, doc)
+        can_reopen = question["kind"] != "input_check" and self._save_snapshot(workflow_id, qid, workflow.skill_id, question)
         base_version = (doc.get("meta") or {}).get("version")
         if question.get("status") == "applying" and question.get("base_version") != base_version:
             # An earlier try stopped part-way after it had already changed the workflow. Running the
@@ -500,11 +533,157 @@ class CompileFlowMixin:
             return {"ok": False, "code": exc.code, "message": exc.message}
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=added)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, actions=[],
-                            step_keys=question.get("step_keys") or [])
+                            step_keys=question.get("step_keys") or [], can_reopen=can_reopen)
         self._flow_post_next_question(workflow_id, sink)
         if question["kind"] == "input_check":
             self._after_input_check(workflow_id, question, answer.get("choice"), rid)
         return {"ok": True, "receipt": receipt}
+
+    # ── the pencil: go back to an earlier question ──────────────────────────────────────────
+
+    def _save_snapshot(self, workflow_id: str, qid: str, skill_id: str, question: dict[str, Any]) -> bool:
+        """The workflow as it stood just before this question was answered: what the pencil rewinds to.
+        Never blocks an answer; False means the pencil is not offered for it."""
+        import json
+
+        from conxa_compile.conversation import clarify_store
+        from conxa_core.config import settings
+        from conxa_core.storage.json_store import read_skill
+
+        path = settings.data_dir / "workflows" / workflow_id / "clarify_snapshots" / f"{qid}.json"
+        if question.get("status") == "applying" and path.is_file():
+            return True  # a retry of an interrupted answer: the doc may be half changed, keep the first snapshot
+        try:
+            doc = read_skill(skill_id)
+            if doc is None:
+                return False
+            path.parent.mkdir(parents=True, exist_ok=True)
+            added = int((clarify_store.load(workflow_id) or {}).get("added_steps") or 0)
+            path.write_text(json.dumps({"doc": doc, "added_steps": added}), encoding="utf-8")
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _reopen_question(self, thread_id: str, card: dict[str, Any], workflow_id: str, qid: str, sink: Any) -> dict[str, Any]:
+        """Rewind to just before this question was answered and ask it again. Everything done after it
+        (later answers, chat changes) is discarded. A question asked before the build also rebuilds it."""
+        from conxa_compile.conversation import clarify_store, runtime_state
+        from conxa_core.storage.workflow_store import get_workflow
+
+        flags = runtime_state.get_flags(workflow_id)
+        if any(flags.get(k) for k in ("compiling", "testing", "understanding", "watching", "queued")):
+            return {"ok": False, "code": "busy", "message": "Wait for what is running to finish, then go back."}
+        if card.get("state") not in ("answered", "skipped"):
+            return {"ok": False, "code": "not_answered", "message": "This question isn’t answered yet."}
+        workflow = get_workflow(workflow_id)
+        if workflow is None:
+            raise _CommandError("workflow_not_found", "That workflow isn’t available any more.")
+        question = clarify_store.get_question(workflow_id, qid)
+        if question is not None and question.get("phase") != "pre_compile":
+            return self._rewind_after_compile(thread_id, card, workflow, qid, sink)
+        return self._rewind_before_compile(thread_id, card, workflow, qid, sink)
+
+    @staticmethod
+    def _revert_cards_after(thread_id: str, card_id: str, extra_ids: set[str], sink: Any) -> None:
+        from conxa_compile.conversation import harness, thread_store as ts
+
+        items = ts.fold(ts.read_raw(thread_id))
+        pos = next((k for k, it in enumerate(items) if it.get("card_id") == card_id), -1)
+        for it in items[pos + 1:]:
+            if it.get("kind") == "card" and (it["card_id"] in extra_ids or it.get("state") == "applied"):
+                harness.update_card(thread_id, it["card_id"], sink=sink, state="reverted", actions=[])
+
+    def _rewind_after_compile(self, thread_id: str, card: dict[str, Any], workflow: Any, qid: str, sink: Any) -> dict[str, Any]:
+        import json
+
+        from conxa_compile.conversation import clarify, clarify_store, harness
+        from conxa_core.config import settings
+        from conxa_core.storage.json_store import write_skill
+
+        path = settings.data_dir / "workflows" / workflow.id / "clarify_snapshots" / f"{qid}.json"
+        try:
+            snap = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"ok": False, "code": "cannot_rewind", "message": "This answer was given before going back was possible."}
+        write_skill(workflow.skill_id, snap["doc"])
+        self._undo_stacks.pop(workflow.skill_id, None)
+        later_cards: set[str] = set()
+
+        def edit(data: dict[str, Any]) -> None:
+            qs = [q for q in data.get("questions") or [] if isinstance(q, dict)]
+            i = next(k for k, q in enumerate(qs) if q.get("id") == qid)
+            for q in qs[i:]:
+                if q.get("status") in ("answered", "skipped", "applying") or q.get("id") == qid:
+                    q.update(status="open", answer=None, receipt="", own_pending=False, base_version=None, applying_since=None)
+                if q.get("id") != qid and q.get("card_id"):
+                    later_cards.add(q["card_id"])
+                    q["card_id"] = None
+            data["added_steps"] = int(snap.get("added_steps") or 0)
+
+        clarify_store.mutate(workflow.id, edit)
+        fields: dict[str, Any] = {}
+        q = clarify_store.get_question(workflow.id, qid) or {}
+        if q.get("kind") == "done_when":
+            fresh = clarify.refresh_question(q, snap["doc"])
+            fields = {"choices": fresh["choices"], "step_keys": fresh["step_keys"]}
+            clarify_store.update_question(workflow.id, qid, **fields)
+        self._revert_cards_after(thread_id, card["card_id"], later_cards, sink)
+        harness.update_card(thread_id, card["card_id"], sink=sink, state="open", receipt=None, answer=None, error=None,
+                            can_reopen=False, actions=["choose", "skip"], **fields)
+        return {"ok": True}
+
+    def _rewind_before_compile(self, thread_id: str, card: dict[str, Any], workflow: Any, qid: str, sink: Any) -> dict[str, Any]:
+        import json
+
+        from conxa_compile.conversation import clarify_store, decisions, harness, thread_store as ts
+        from conxa_core.config import settings
+
+        arch = settings.data_dir / "workflows" / workflow.id / "pre_questions.json"
+        try:
+            data = json.loads(arch.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"ok": False, "code": "cannot_rewind", "message": "This answer was given before going back was possible."}
+        qs = [q for q in data.get("questions") or [] if isinstance(q, dict)]
+        ids = [q.get("id") for q in qs]
+        if qid not in ids or not workflow.session_id:
+            return {"ok": False, "code": "cannot_rewind", "message": "This question can’t be asked again."}
+        i = ids.index(qid)
+        card_of: dict[str, dict[str, Any]] = {}
+        for it in ts.fold(ts.read_raw(thread_id)):
+            if it.get("kind") == "card" and it.get("card_type") == "clarify_question":
+                card_of[str((it.get("refs") or {}).get("question_id") or it.get("question_id") or "")] = it
+        later_cards: set[str] = set()
+        for k, q in enumerate(qs):
+            shown = card_of.get(q["id"])
+            q["card_id"] = shown["card_id"] if shown else None
+            if k < i:
+                if shown:
+                    q["status"] = "skipped" if shown.get("state") == "skipped" else "answered"
+            elif shown:
+                q.update(status="open", answer=None, receipt="")
+                if k > i:
+                    later_cards.add(shown["card_id"])
+                    q["card_id"] = None
+        # Every after-the-build question card is history now: the rebuild writes new ones.
+        for other_id, it in card_of.items():
+            if other_id in ids:
+                continue
+            if it.get("state") in ("open", "failed"):
+                later_cards.add(it["card_id"])
+            else:
+                harness.update_card(thread_id, it["card_id"], sink=sink, can_reopen=False)
+        session_dir = settings.data_dir / "sessions" / workflow.session_id
+        drop = {q["id"] for q in qs[i:]}
+        kept = [d for d in decisions.load(session_dir) if d.get("qid") not in drop]
+        (session_dir / decisions.FILE).write_text(json.dumps(kept), encoding="utf-8")
+        clarify_store.save(workflow.id, {**data, "stage": "understand", "skill_id": None, "questions": qs})
+        later_cards.discard(card["card_id"])
+        for cid in later_cards:
+            harness.update_card(thread_id, cid, sink=sink, state="reverted", actions=[])
+        harness.update_card(thread_id, card["card_id"], sink=sink, state="open", receipt=None, answer=None, error=None,
+                            can_reopen=False, actions=["choose", "skip"])
+        self._flow_say(workflow.id, "Going back here. Answer again and I’ll rebuild it from your new answer.", sink)
+        return {"ok": True}
 
     def _after_input_check(self, workflow_id: str, question: dict[str, Any], choice: Any, rid: str) -> None:
         """What the person's answer to "is this value right?" sets going: a corrected re-test, or the

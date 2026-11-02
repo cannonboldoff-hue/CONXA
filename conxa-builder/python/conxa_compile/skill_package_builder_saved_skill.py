@@ -454,7 +454,7 @@ def _saved_for_each_step(step: dict[str, Any]) -> dict[str, Any] | None:
     return _copy_saved_common(step, out)
 
 
-_FORK_POLICY_MODES = frozenset({"auto", "by_input", "ask_human", "stop"})
+_FORK_POLICY_MODES = frozenset({"auto", "by_input", "ask_human", "continue", "stop"})
 
 
 def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
@@ -463,7 +463,7 @@ def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
 
     Safety lives here as well as in the runtime: an option with no runnable steps is dropped (a
     fork must never offer a choice it cannot carry out), a policy naming a dropped option falls
-    back to ask_human rather than silently doing something else, and a fork with no runnable
+    back to stop rather than silently doing something else, and a fork with no runnable
     option at all vanishes from execution.json (same "None => step is dropped" contract as every
     other action). The popup's message text is never copied -- only its title, button labels and
     value-free message tokens."""
@@ -489,11 +489,11 @@ def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
             continue
         option_ids = {o["id"] for o in options_out}
         policy = dict(raw_state.get("policy") or {})
-        mode = str(policy.get("mode") or "ask_human")
+        mode = str(policy.get("mode") or "stop")
         if mode not in _FORK_POLICY_MODES:
-            mode = "ask_human"
+            mode = "stop"
         if mode == "auto" and policy.get("option_id") not in option_ids:
-            mode = "ask_human"
+            mode = "stop"
         out_policy: dict[str, Any] = {"mode": mode}
         if mode == "auto":
             out_policy["option_id"] = policy["option_id"]
@@ -505,8 +505,12 @@ def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
         elif mode == "ask_human":
             if policy.get("suggested") in option_ids:
                 out_policy["suggested"] = policy["suggested"]
-        else:
+        elif mode == "stop":
             out_policy["message"] = str(policy.get("message") or "")
+        # `reviewed` is what lets the runtime pause at all (fork.js::decide): it is written only by
+        # set_fork_policy, and dropping it here would turn a person's "ask me" into a stop.
+        if policy.get("reviewed") is True:
+            out_policy["reviewed"] = True
         sig = raw_state.get("signature") if isinstance(raw_state.get("signature"), dict) else {}
         states_out.append({
             "id": str(raw_state["id"]),
@@ -526,7 +530,7 @@ def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
     out: dict[str, Any] = {
         "type": "outcome_fork",
         "timeout_ms": int(fork.get("timeout_ms") or 4000),
-        "unknown_policy": "stop" if fork.get("unknown_policy") == "stop" else "ask_human",
+        "unknown_policy": "stop" if fork.get("unknown_policy") == "stop" else "continue",
         "clean": {"observed": bool(clean.get("observed"))},
         "states": states_out,
     }

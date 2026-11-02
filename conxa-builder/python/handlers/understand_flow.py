@@ -125,6 +125,13 @@ class UnderstandFlowMixin:
             extra.append(f"Worth a look: {und['gaps'][0]['note']}")
         closing = ("A few quick questions first — most already have my best guess filled in." if has_questions
                    else "That's all I need — building it now.")
+        if und.get("source") == "fallback":
+            # The model's read of the recording failed or came back empty: say so, so nobody trusts a
+            # thin summary or waits for guesses that are not there.
+            closing = ("I couldn’t work out the details of this recording this time, so these questions come straight "
+                       "from what was clicked and nothing is filled in for you." if has_questions
+                       else "I couldn’t work out the details of this recording this time, so I’m building it as recorded. "
+                            "Check the steps carefully once it’s done.")
         head = und.get("short_summary") or und.get("goal") or "I watched the recording."
         return "\n\n".join([head, *(["\n".join(extra)] if extra else []), closing])
 
@@ -215,6 +222,10 @@ class UnderstandFlowMixin:
             names = ", ".join(f"“{v['literal']}”" for v in failed_values[:3])
             self._flow_say(workflow.id, f"I couldn’t make {names} change each run, so it stays as you recorded. "
                            "You can change it in Human Edit.", sink)
+        for u in plan.get("unapplied") or []:
+            # An answer that matched nothing is never dropped quietly.
+            self._flow_say(workflow.id, f"Your answer about {replay.SUBJECT.get(u['kind'], 'that step')} didn’t match anything "
+                           "in the workflow I built, so it stays as recorded. Tell me here what you want changed.", sink)
         return added
 
     # ── answers: stored, then the compile starts ────────────────────────────────────────────
@@ -234,10 +245,23 @@ class UnderstandFlowMixin:
         session_dir = settings.data_dir / "sessions" / workflow.session_id
         if card.get("state") not in ("open", "failed"):
             return {"ok": False, "code": "not_open", "message": "This question was already answered."}
+        self._archive_pre_questions(workflow_id, qid)
         if action == "skip":
             decisions.record(session_dir, question, None)
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt="Left as recorded")
-            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Left as recorded", actions=[])
+            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Left as recorded", actions=[],
+                                can_reopen=True)
+            self._flow_post_next_question(workflow_id, sink)
+            return {"ok": True}
+        if action == "own":
+            # Nothing is compiled yet, so chat has nothing to change: keep the words and carry on as recorded.
+            text = str(body.get("custom_text") or "").strip()[:500]
+            if not text:
+                raise _CommandError("invalid_input", "Type your answer first.")
+            decisions.record(session_dir, question, None)
+            receipt = f"Noted: “{text}” — left as recorded. Tell the chat after it’s built if a step should change."
+            clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_text=text)
+            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=True)
             self._flow_post_next_question(workflow_id, sink)
             return {"ok": True}
         if action not in ("choose", "retry"):
@@ -246,9 +270,30 @@ class UnderstandFlowMixin:
         decisions.record(session_dir, question, answer)
         receipt = "Noted"
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
-        harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[])
+        harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
+                            can_reopen=True)
         self._flow_post_next_question(workflow_id, sink)
         return {"ok": True, "receipt": receipt}
+
+    @staticmethod
+    def _archive_pre_questions(workflow_id: str, qid: str) -> None:
+        # The questions asked before the build, kept beside the workflow: the build replaces the question
+        # list, and going back to one of them (the pencil) needs it again. Written once per recording.
+        import json
+
+        from conxa_compile.conversation import clarify_store
+        from conxa_core.config import settings
+
+        path = settings.data_dir / "workflows" / workflow_id / "pre_questions.json"
+        try:
+            if path.is_file() and qid in {q.get("id") for q in json.loads(path.read_text(encoding="utf-8")).get("questions") or []}:
+                return
+            data = clarify_store.load(workflow_id)
+            if data:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(data), encoding="utf-8")
+        except (OSError, ValueError):
+            pass  # only the pencil depends on it
 
     def _flow_after_understand(self, workflow_id: str, sink: Any) -> None:
         """Every shown question is answered: build it. Runs once per recording."""

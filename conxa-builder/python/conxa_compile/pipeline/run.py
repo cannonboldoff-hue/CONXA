@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from typing import Any
 
+from conxa_core.config import settings
 from conxa_core.models.events import RecordedEvent
 from conxa_compile.pipeline.dedupe import (
     collapse_select_interaction_noise,
@@ -187,11 +188,12 @@ def run_pipeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     validated: list[dict[str, Any]] = []
     for row in _reorder_by_timestamp(events):
         validated.append(RecordedEvent.model_validate(row).model_dump(mode="json"))
-    cleaned = [_clean_one(e, policy) for e in _drop_non_actionable_hover_events(validated)]
+    keep_all = settings.compile_keep_every_action
+    cleaned = [_clean_one(e, policy) for e in (validated if keep_all else _drop_non_actionable_hover_events(validated))]
     typed = [_infer_missing_input_type(e, policy) for e in cleaned]
     # collapse_select_interaction_noise runs first: fewer noise events left for
     # drop_superseded_focus_events' own lookahead to have to skip past.
-    deduped = dedupe_scroll_events(
+    deduped = typed if keep_all else dedupe_scroll_events(
         drop_superseded_focus_events(collapse_select_interaction_noise(typed))
     )
     scroll_annotated = _annotate_scroll_amounts(deduped)

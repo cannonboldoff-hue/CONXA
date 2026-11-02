@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+import threading
 from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
@@ -32,6 +34,9 @@ MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
 MAX_URL_CANDIDATES = 8
 MAX_DECIDED = 8
+# A clicked target that was one of at least this many like items (a file in a list, a record in a
+# table) is a value picked from a set, not a control. Two like buttons in a dialog footer are not.
+IN_SET_MIN_PEERS = 3
 _NAME_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _VERDICTS = ("fixed", "varies", "unsure")
 _FALLBACK_NAME = {"url": "page_address", "click": "item", "typed": "value"}
@@ -116,8 +121,9 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
     """Recorded values that may be specific to this recording: page addresses, clicked items known
     only by their label, and text typed into a field. ``{ref, kind, event_ids, row_refs, recorded, literal}``."""
     groups: dict[tuple[str, str], dict[str, Any]] = {}
-    counts = {"url": 0, "click": 0, "typed": 0}
-    caps = {"url": MAX_URL_CANDIDATES, "click": MAX_CLICK_CANDIDATES, "typed": MAX_TYPED_CANDIDATES}
+    counts = {"url": 0, "click": 0, "typed": 0, "click_set": 0}
+    caps = {"url": MAX_URL_CANDIDATES, "click": MAX_CLICK_CANDIDATES, "typed": MAX_TYPED_CANDIDATES,
+            "click_set": MAX_CLICK_CANDIDATES}
     for row in _events(merged):
         action = row.get("action")
         if action in ("navigate", "manual_navigate"):
@@ -131,14 +137,20 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
             kind = None
         if kind is None:
             continue
+        in_set = kind == "click" and int(row.get("peers") or 0) >= IN_SET_MIN_PEERS
         key = (kind, literal.lower())
         if key not in groups:
-            if counts[kind] >= caps[kind]:
+            # Picked-from-a-list clicks have their own allowance: a handful of earlier control clicks
+            # must not crowd out the one click that chose the item.
+            bucket = "click_set" if in_set else kind
+            if counts[bucket] >= caps[bucket]:
                 continue
-            counts[kind] += 1
+            counts[bucket] += 1
             groups[key] = {"ref": f"{kind}:{row.get('event_id')}", "kind": kind, "event_ids": [], "row_refs": [],
                            "recorded": recorded[:200], "literal": literal[:200],
-                           "label": str(row.get("target") or "")[:60]}
+                           "label": str(row.get("target") or "")[:60], "in_set": False}
+        if in_set:
+            groups[key]["in_set"] = True
         groups[key]["event_ids"].append(row.get("event_id"))
         groups[key]["row_refs"].append(row["row_ref"])
     return list(groups.values())
@@ -153,14 +165,35 @@ def _seen(segment: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Moments that always need a person, found in the browser's own signals: a popup asking for a
-    decision, and a file going in. The model words these; it cannot drop them (validate puts them back)."""
+    decision, and a file going in. The model words these; it cannot drop them (validate puts them back).
+
+    A file going in that the workflow downloaded itself earlier is not asked about: it is whatever
+    that download produced, so there is nothing for the person to pick here. The question that
+    matters (was the item that got downloaded a fixed one?) belongs to the click that chose it."""
     out = []
+    downloaded: set[str] = set()
     for r in _events(merged):
-        if r.get("dialog") == "decision":
+        if r.get("action") == "download_observed":
+            data = _json_value(r.get("value"))
+            name = str(data.get("suggested_filename") or "").strip() if isinstance(data, dict) else ""
+            if name:
+                downloaded.add(name)
+        elif r.get("dialog") == "decision":
             out.append({"row": r["row_ref"], "effect": "fork"})
         elif r.get("action") in _UPLOAD_ACTIONS:
+            data = _json_value(r.get("value"))
+            names = [str(i.get("name") or "").strip() for i in data if isinstance(i, dict)] if isinstance(data, list) else []
+            if names and all(n in downloaded for n in names):
+                continue
             out.append({"row": r["row_ref"], "effect": "upload"})
     return out
+
+
+def _json_value(value: Any) -> Any:
+    try:
+        return json.loads(value) if isinstance(value, str) else value
+    except ValueError:
+        return None
 
 
 def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
@@ -170,16 +203,19 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
             value = r.get("value")
             rows.append({
                 "ref": r["row_ref"], "kind": "event", "action": r.get("action"), "target": r.get("target"),
+                "role": r.get("role") or None,
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:80] if value else None),
                 "url": r.get("url"), "seen": _seen(r.get("segment")),
                 **({"dialog": r["dialog"]} if r.get("dialog") else {}),
+                **({"peers": r["peers"]} if r.get("peers") else {}),
             })
         else:
             rows.append({"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
                          "seconds": r.get("seconds"), "seen": _seen(r.get("segment"))})
     return {
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
-        "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"]}
+        "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"],
+                        **({"in_set": True} if c.get("in_set") else {})}
                        for c in candidates],
         "must_ask": must_ask(merged),
     }
@@ -217,7 +253,8 @@ def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> di
 
 
 def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
-                       values: dict[str, dict[str, Any]], taken: set[str]) -> list[dict[str, Any]]:
+                       values: dict[str, dict[str, Any]], taken: set[str],
+                       no_upload_question: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for q in raw_questions or []:
         if not isinstance(q, dict):
@@ -226,6 +263,8 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
         row = rows.get(q.get("row"))
         prompt = _text(q.get("prompt"), 240)
         if effect not in EFFECTS or row is None or not prompt:
+            continue
+        if effect == "upload" and row["row_ref"] in no_upload_question:
             continue
         ref = ""
         if effect == "value":
@@ -316,8 +355,12 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
                for d in raw.get("decided") or []
                if isinstance(d, dict) and d.get("row") in rows and _text(d.get("text"), 160)][:MAX_DECIDED]
 
-    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken)
-    for m in must_ask(merged):
+    must = must_ask(merged)
+    # An upload of a file the workflow downloaded itself has no question (see must_ask), whoever asks.
+    no_upload = frozenset(r["row_ref"] for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS) \
+        - {m["row"] for m in must if m["effect"] == "upload"}
+    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload)
+    for m in must:
         if not any(q["row"] == m["row"] and q["kind"] == m["effect"] for q in questions):
             questions.append(_fallback_question(m["effect"], m["row"], rows[m["row"]]))
     have = {q.get("ref") for q in questions}
@@ -347,10 +390,66 @@ def _fallback_detailed(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+# What the router said about the last default call, per thread (two workflows can be understood at once).
+# The `call` seam stays (task, payload, timeout_ms) -> dict | None, so the detail rides here, not in its signature.
+_router = threading.local()
+
+
 def _default_call(task_name: str, payload: dict[str, Any], timeout_ms: int) -> dict[str, Any] | None:
     from conxa_compile.llm.client import call_llm  # noqa: PLC0415 -- Studio-only, imported lazily
 
-    return call_llm(task_name, {"input": payload}, timeout_ms)
+    _router.detail = []
+    return call_llm(task_name, {"input": payload}, timeout_ms, error_detail=_router.detail)
+
+
+_ANSWER_KEYS = ("goal", "short_summary", "values", "questions", "phases")
+
+
+def _unwrapped(raw: Any) -> Any:
+    """An answer nested one level down (``{"understanding": {...}}``) is the same answer. Only when the
+    top level holds none of the expected keys and exactly one value does; nothing else is guessed."""
+    if not isinstance(raw, dict) or any(k in raw for k in _ANSWER_KEYS):
+        return raw
+    inner = [v for v in raw.values() if isinstance(v, dict) and any(k in v for k in _ANSWER_KEYS)]
+    return inner[0] if len(inner) == 1 else raw
+
+
+def _describe_unusable(raw: Any, detail: list[str]) -> str:
+    """Why an answer that arrived could not be used, for ``fallback_reason``: its top-level keys and the
+    start of any text it carried (a reply that was cut off or not JSON comes back as ``text``), plus what
+    the router said. Never the prompt, and never more than a few hundred characters."""
+    if not isinstance(raw, dict):
+        return "the answer had no goal, summary or values after checking"
+    text = raw.get("text") or raw.get("output")
+    parts = [f"answer keys: {sorted(str(k) for k in raw)[:8]}"]
+    if isinstance(text, str) and text.strip():
+        parts.append(f"text ({len(text)} chars) starts: {' '.join(text.split())[:300]!r}")
+    if detail:
+        parts.append(f"router: {'; '.join(str(d) for d in detail)[:200]}")
+    return "the answer had no goal, summary or values after checking; " + "; ".join(parts)
+
+
+def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[dict[str, Any]],
+                                      merged: list[dict[str, Any]], existing_inputs: set[str] | None) -> None:
+    """An item picked out of a list that the model said nothing about is asked, not assumed fixed.
+
+    "Fixed" must be a decision somebody made: the model (it may well say the task names this exact
+    item) or the person. A silent default is wrong in the common case, because choosing from a list
+    is nearly always choosing *this time's* item. Holds whether the model answered or the call
+    failed, since the structural signal needs neither."""
+    taken = {n.lower() for n in existing_inputs or set()} | {v["name"].lower() for v in result["values"].values() if v.get("name")}
+    rows = {r["row_ref"]: r for r in merged}
+    order = {ref: i for i, ref in enumerate(rows)}
+    added = False
+    for c in candidates:
+        if not c.get("in_set") or c["ref"] in result["values"]:
+            continue
+        result["values"][c["ref"]] = {"verdict": "unsure", "literal": c["literal"],
+                                      "name": _unique_name("", taken, _FALLBACK_NAME[c["kind"]])}
+        result["questions"].append(_value_question(c, rows[c["row_refs"][0]], ""))      # asked, nothing pre-ticked
+        added = True
+    if added:
+        result["questions"].sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
 
 def understand_timeline(
@@ -370,15 +469,25 @@ def understand_timeline(
                               "success_check": "", "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
         return result
+    reason = ""
+    _router.detail = []
     try:
         raw = (call or _default_call)(TASK, build_input(merged, task, chat, candidates), timeout_ms)
-    except Exception:  # noqa: BLE001 -- advisory: a failed model call must never block the flow
-        raw = None
+        detail = list(getattr(_router, "detail", None) or [])
+        raw = _unwrapped(raw)
+        if raw is None:
+            reason = "the model returned no answer" + (f" ({'; '.join(map(str, detail))[:200]})" if detail else "")
+    except Exception as exc:  # noqa: BLE001 -- advisory: a failed model call must never block the flow
+        raw, detail = None, []
+        reason = f"{type(exc).__name__}: {exc}"[:300]
     checked = validate(raw, merged, candidates, existing_inputs)
     usable = bool(checked["goal"] or checked["short_summary"] or checked["values"])
     result.update(checked)
     result["source"] = "model" if usable else "fallback"
     if not usable:
+        # Kept in understanding.json: a silent fallback cannot be diagnosed afterwards.
+        result["fallback_reason"] = reason or _describe_unusable(raw, detail)
+        print(f"[timeline_understanding] fell back: {result['fallback_reason']}", file=sys.stderr)
         taken = {n.lower() for n in existing_inputs or set()}
         if task.strip():
             for c in candidates:
@@ -388,6 +497,7 @@ def understand_timeline(
                     row = next(r for r in merged if r["row_ref"] == c["row_refs"][0])
                     result["questions"].append(_value_question(c, row, ""))      # asked, nothing pre-ticked
         result["short_summary"] = f"{len(_events(merged))} recorded actions."
+    _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs)
     if not result["detailed_summary"]:
         result["detailed_summary"] = _fallback_detailed(merged)
     for c in candidates:

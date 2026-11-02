@@ -104,6 +104,11 @@ class Workflow(BaseModel):
     last_test_at: float | None = None
     last_test_status: Literal["passed", "failed", "never"] = "never"
     last_test_error: str | None = None
+    # How the latest test ENDED when it was neither a pass nor a failure: the person stopped it, ended
+    # it at a popup or before a step that can't be undone, or only previewed it. {outcome, title,
+    # step_index, step_key, reason, at}. None after a pass/failure (they supersede it) and after any edit
+    # of the workflow. Lets the lifecycle tell "tested and ended partway" from "never tested".
+    last_test_outcome: dict[str, Any] | None = None
     last_test_inputs: dict[str, Any] = Field(default_factory=dict)
     # BUILD-26 stage (a2): the run id parsed from the test run's own test_phase log lines
     # (handlers/workflows.py::cmd_test_workflow). Not read from in-memory `_active_test_runs` —

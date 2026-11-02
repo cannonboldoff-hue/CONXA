@@ -180,6 +180,7 @@ def test_lifecycle_is_derived_from_existing_data(wf, kw, stage, substate, glyph)
     dict(runtime={"compiling": True}),
     dict(clarify={"open": 1}),  # a small question is still a question: answer it first
     dict(clarify={"open": 2}),
+    dict(runtime={"replying": True}),  # a typed message may still come back as a change card
     dict(pending_changes=1),
 ])
 def test_nothing_offers_a_test_while_something_is_still_to_settle(kw):

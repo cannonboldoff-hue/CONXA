@@ -515,7 +515,7 @@ def _fork_info(step: dict[str, Any]) -> dict[str, Any] | None:
         })
     return {
         "timeout_ms": fork.get("timeout_ms"),
-        "unknown_policy": fork.get("unknown_policy") or "ask_human",
+        "unknown_policy": "stop" if fork.get("unknown_policy") == "stop" else "continue",
         "clean_observed": bool(clean.get("observed")),
         "states": states,
     }

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from conxa_core.config import settings
+
 import copy
 import threading
 import time
@@ -457,3 +461,14 @@ def test_reworded_questions_are_validated_field_by_field():
     apply_reworded(qs, {"questions": [{"id": "c", "title": "Dropped the quoted name"}]})  # a quoted item missing: rejected
     assert qs[0]["title"].startswith("Heads up")
     apply_reworded(qs, None)  # a failed call changes nothing
+
+
+@patch.object(settings, "compile_keep_every_action", False)
+
+
+def test_a_download_or_new_tab_is_shown_under_the_action_that_caused_it_but_stays_its_own_step():
+    from conxa_compile.conversation.clarify import effect_parents
+
+    steps = [{"action": a} for a in ("navigate", "click", "download_observed", "navigate", "click", "tab_open", "dialog_accept", "click")]
+    assert effect_parents(steps) == [None, None, 1, None, None, 4, 4, None]
+    assert effect_parents([{"action": "download_observed"}]) == [None]          # nothing before it to belong to

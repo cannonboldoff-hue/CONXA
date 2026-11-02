@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from conxa_compile.compiler.entity_binding import repeating_peers
 from conxa_compile.compiler.outcome_fork import classify_dialog
 from conxa_compile.video import splice as splice_mod
 from conxa_compile.video.prepare import IDLE_KEEP_MS
@@ -165,6 +166,9 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             "t_ms": e["wall"],
             "segment": row,
             "flags": flags,
+            # How many like items the target was one of (a file in a list, a record in a table); absent
+            # for a control. Structural, from the recorded ancestors, so it needs no model.
+            **({"peers": peers} if (peers := repeating_peers(ev)) else {}),
             # decision | dismissable | consent | form: the recorder saw this action inside a popup.
             **({"dialog": classify_dialog(ev["dialog_context"])} if isinstance(ev.get("dialog_context"), dict) else {}),
         }))

@@ -10,7 +10,7 @@ said something.
 Flags: ``recording``, ``recording_paused``, ``signing_in``, ``compiling``, ``queued`` (an int
 position, 0 = none), ``testing``, ``autofix_attempt`` (0 = not running), ``out_of_credits``,
 ``compile_error`` (a short reason), ``understanding`` (the post-compile check that writes the
-questions is still running — nothing may offer a test until it ends), ``sign_in_expired`` (a saved sign-in stopped working — before
+questions is still running — nothing may offer a test until it ends), ``replying`` (a typed chat message is still being answered, so a change card may be coming — no test offered until it lands), ``sign_in_expired`` (a saved sign-in stopped working — before
 recording, or a test paused on it).
 """
 

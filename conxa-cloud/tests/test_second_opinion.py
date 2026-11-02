@@ -22,6 +22,10 @@ that must hold for that to be safe:
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from conxa_core.config import settings
+
 import json
 import shutil
 import tempfile
@@ -198,6 +202,8 @@ class SecondOpinionCompileTests(unittest.TestCase):
         baseline_step = baseline.skills[0].steps[0].model_dump()
         for field in ("target", "identity_bundle", "compiled_selectors", "validation", "frame", "tab"):
             self.assertEqual(applied_step[field], baseline_step[field], field)
+
+    @patch.object(settings, "compile_keep_every_action", False)
 
     def test_flag_noise_finding_removes_step_and_archives_it(self) -> None:
         """flag_noise (stage d) is the pass's one destructive kind: applied,

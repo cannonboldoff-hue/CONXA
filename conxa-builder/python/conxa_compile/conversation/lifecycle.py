@@ -136,12 +136,22 @@ def derive_lifecycle(
                 substate, note, actions = "autofix_stopped", "Auto-fix stopped", ["resume_autofix", "edit", "test"]
             else:
                 substate, note, actions = "failed", "Latest test failed", ["autofix", "edit", "test"]
+        elif isinstance(_g(wf, "last_test_outcome"), dict) and _g(wf, "last_test_outcome").get("outcome"):
+            # A test that ended partway is not "never tested", and not a pass either.
+            where = str(_g(wf, "last_test_outcome").get("title") or "").strip()
+            stage, substate, glyph, actions = "test", "partial", WARN, ["test", "edit"]
+            note = f"Last test ended{f' at “{where}”' if where else ' early'} — not a full pass"
         elif warnings > 0 or _g(wf, "compile_status") == "review_needed":
             stage, substate, glyph = "edit", "recommended", WARN
             note = f"{warnings} step{'s' if warnings != 1 else ''} less certain" if warnings else "Review recommended"
             actions = ["test", "edit"]
         else:
             stage, substate, glyph, note, actions = "test", "ready", WARN, "Ready to test", ["test", "edit"]
+
+    # A typed message is still being answered: it may come back as a change card, so nothing may offer
+    # a test (or an approval of the version it would change) until the reply and its card are in.
+    if rt.get("replying"):
+        actions = [a for a in actions if a not in ("test", "approve")]
 
     # Questions held back past the first few are still waiting for the person.
     if int(cl.get("queued") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not (

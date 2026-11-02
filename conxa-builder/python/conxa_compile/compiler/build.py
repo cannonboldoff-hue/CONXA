@@ -250,13 +250,36 @@ def _insert_tab_markers(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _site_of(url: str) -> str:
+    """The host of an http(s) address, for a title. Host only: the path is often the very value a
+    person turns into an input, and a title must not keep describing the recorded one."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(str(url or ""))
+    return (parts.hostname or "").removeprefix("www.") if parts.scheme in ("http", "https") else ""
+
+
+# What a marker step is called on screen. Markers carry no LLM intent, so without these every one reads
+# as its action name ("Tab open").
+_MARKER_TITLES = {
+    "tab_open": "A new tab opens",
+    "tab_switch": "Switch to another tab",
+    "download_observed": "A file downloads",
+    "dialog_appeared": "A browser dialog appears",
+    "dialog_accept": "Accept the browser dialog",
+    "dialog_dismiss": "Dismiss the browser dialog",
+}
+
+
 def _navigate_step(url: str, tab: dict[str, Any]) -> SkillStep:
     """A synthetic `navigate` step to `url` — used everywhere the compiler has to insert a page
     load the recording itself never performed as a user action (a tab open, the recording's own
     starting page)."""
+    site = _site_of(url)
     return SkillStep(
         action="navigate",
         intent="navigate_to_page",
+        semantic_description=f"Open {site}" if site else "",
         url=url,
         tab=dict(tab),
         recovery=RecoveryBlock(**no_recovery_block("navigate_to_page")),
@@ -1165,6 +1188,7 @@ def _build_step(
         step = SkillStep(
             action=action_payload,
             intent=str(action_payload),
+            semantic_description=_MARKER_TITLES.get(str(action_payload), ""),
             frame=_build_frame_context(ev),
             tab=_build_tab_context(ev),
             value=marker_value,
@@ -1566,6 +1590,9 @@ def prepare_compile_events(
     with the understanding-first merge so both see the same event list. ``drop_ledger`` collects
     what was removed when the compiler wants the record."""
     ledger = drop_ledger if drop_ledger is not None else []
+    if settings.compile_keep_every_action:
+        # One recorded action = one step: no repeat cleanup, no navigation fold.
+        return _insert_tab_markers(list(events))
     cleaned_events = fix_step_order(clean_steps(events, pol), pol)
     _record_drops(ledger, events, cleaned_events, "cleanup")
     # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
@@ -1648,8 +1675,11 @@ def compile_skill_package(
     # also assumes 1:1 alignment with whatever `steps` it's given, which this pass may have
     # already shrunk.
     absorbed: dict[str, list[dict[str, Any]]] = {"choice_collapsed": [], "date_collapsed": []}
-    steps, date_pass_events = collapse_choice_group_runs(
-        steps, cleaned_events, pol, absorbed=absorbed["choice_collapsed"])
+    if settings.compile_keep_every_action:
+        date_pass_events = cleaned_events
+    else:
+        steps, date_pass_events = collapse_choice_group_runs(
+            steps, cleaned_events, pol, absorbed=absorbed["choice_collapsed"])
     # Custom date-picker collapse: same alignment requirement, against date_pass_events (see
     # above) rather than cleaned_events. Collapses (never regresses) an open->nav->day-cell click
     # run into one parameterized date_pick step per bridge.js's date_context tagging; see
@@ -1659,7 +1689,8 @@ def compile_skill_package(
     # an ambiguous day/month order falls back to the recording browser's own locale sample.
     environment = _read_environment_sidecar(session_root)
     convert_typed_date_steps(steps, date_pass_events, pol, str(environment.get("date_format_sample") or ""))
-    steps = collapse_date_picker_runs(steps, date_pass_events, pol, absorbed=absorbed["date_collapsed"])
+    if not settings.compile_keep_every_action:
+        steps = collapse_date_picker_runs(steps, date_pass_events, pol, absorbed=absorbed["date_collapsed"])
     for label, evs in absorbed.items():
         _record_drops(drop_ledger, evs, [], label)
     # A segment picks up on a page that is already open, so there is no start page to navigate to.
@@ -1681,7 +1712,8 @@ def compile_skill_package(
     # bindings (the fork copies finished steps) and before the report, the second opinion and the
     # step keys, so everything downstream sees the final shape. Steps with no dialog_context
     # (every older recording) pass through untouched.
-    steps = build_outcome_forks(steps, sid)
+    if not settings.compile_keep_every_action:
+        steps = build_outcome_forks(steps, sid)
 
     _compile_log(
         "compile_phase",
@@ -1995,13 +2027,29 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
     """Append one entry per recorded event (by its recorder sequence number) that is in ``before``
     and no longer in ``after``. Events without a sequence number can't be tracked and are skipped."""
     kept = {(e.get("extras") or {}).get("sequence") for e in after if isinstance(e, dict)}
-    for e in before:
+    last_kept: Any = None
+    for i, e in enumerate(before):
         seq = (e.get("extras") or {}).get("sequence") if isinstance(e, dict) else None
+        if seq is not None and seq in kept:
+            last_kept = seq
         if seq is None or seq in kept:
             continue
         act = e.get("action")
         entry = {"sequence": seq, "pass": label,
                  "action": str(act.get("action") if isinstance(act, dict) else act or "")}
+        # What it was folded next to, so "2 actions were folded away" can say which ones and where:
+        # the kept action just before it, and the one just after.
+        next_kept = next(
+            ((x.get("extras") or {}).get("sequence") for x in before[i + 1:]
+             if isinstance(x, dict) and (x.get("extras") or {}).get("sequence") in kept), None)
+        if last_kept is not None:
+            entry["after_sequence"] = last_kept
+        if next_kept is not None:
+            entry["before_sequence"] = next_kept
+        tgt = e.get("target") if isinstance(e.get("target"), dict) else {}
+        label_text = next((str(tgt[k]).strip() for k in ("aria_label", "label_text", "inner_text", "name", "title") if tgt.get(k)), "")
+        if label_text:
+            entry["target"] = label_text[:60]
         # A dropped step that carried a typed/selected value is something the person may have
         # meant; Clarify asks about it (clarify.py, "dropped_value").
         val = act.get("value") if isinstance(act, dict) else None
@@ -2090,7 +2138,7 @@ def _apply_second_opinion(
     backfilled = _apply_workflow_review_to_steps(steps, graph)
 
     try:
-        noise_findings = [f for f in findings if f.get("kind") == "flag_noise"]
+        noise_findings = [] if settings.compile_keep_every_action else [f for f in findings if f.get("kind") == "flag_noise"]
         rewrite_findings = [f for f in findings if f.get("kind") != "flag_noise"]
         applied = apply_second_opinion(steps, rewrite_findings)
         steps, archived = archive_flagged_steps(steps, noise_findings)

@@ -1159,6 +1159,57 @@ def _template_assertion_targets(steps: list[Any], literal: str, token: str) -> N
             a["target"] = target
 
 
+def _scrub_recorded_echoes(doc: dict[str, Any], literal: str, token: str) -> None:
+    """Once a recorded value becomes a run input, the places that only COPIED it stop being true.
+
+    Parameterizing rewrites the steps that act on the value. A skill also carries copies of it that
+    nothing acts on directly, and each would keep describing the recorded run:
+    - ``meta.structural_fingerprint.landmarks``: the pre-run drift check looks for them on the live
+      page, so a landmark named after the recorded item would read as "the page changed" on every
+      run that picks another one. A landmark that names the value is dropped (fewer is safe; none
+      skips the check).
+    - ``target.fallback_selectors``: a selector that names the recorded item. Dropped.
+    - ``video_context`` and ``intent_graph``: words for the Tier B agent and for a reader. The value
+      becomes ``{{name}}`` so they describe any run, the same way the step descriptions do.
+    Whole-word, case-insensitive; selectors and identity are never rewritten here."""
+    if len(literal) < 3:
+        return                      # too short to tell the value apart from ordinary words
+    pattern = re.compile(r"(?<![\w])" + re.escape(literal) + r"(?![\w])", re.IGNORECASE)
+
+    def mentions(node: Any) -> bool:
+        if isinstance(node, str):
+            return bool(pattern.search(node))
+        if isinstance(node, dict):
+            return any(mentions(v) for v in node.values())
+        if isinstance(node, list):
+            return any(mentions(v) for v in node)
+        return False
+
+    def reword(node: Any) -> Any:
+        if isinstance(node, str):
+            return pattern.sub(lambda _m: token, node)
+        if isinstance(node, dict):
+            return {k: reword(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [reword(v) for v in node]
+        return node
+
+    fingerprint = (doc.get("meta") or {}).get("structural_fingerprint")
+    if isinstance(fingerprint, dict) and isinstance(fingerprint.get("landmarks"), list):
+        kept = [lm for lm in fingerprint["landmarks"] if not mentions(lm)]
+        fingerprint["landmarks"], fingerprint["landmark_count"] = kept, len(kept)
+    for step in ((doc.get("skills") or [{}])[0] or {}).get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        target = step.get("target")
+        if isinstance(target, dict) and isinstance(target.get("fallback_selectors"), list):
+            target["fallback_selectors"] = [s for s in target["fallback_selectors"] if not mentions(s)]
+        if isinstance(step.get("video_context"), dict):
+            step["video_context"] = reword(step["video_context"])
+    if isinstance(doc.get("intent_graph"), dict):
+        doc["intent_graph"] = reword(doc["intent_graph"])
+
+
 _CLICK_TEXT_ENGINES = frozenset({"role", "text_based", "text", "aria"})
 _FINGERPRINT_TEXT_FIELDS = ("inner_text", "aria_label", "name", "title", "alt", "label_text", "placeholder")
 _CLICK_LABEL_FIELDS = ("inner_text", "aria_label", "label_text", "title", "alt")
@@ -1269,6 +1320,7 @@ def parameterize_click_text(
     if not changed:
         raise ValueError("literal_not_found")
     _template_assertion_targets(steps, literal, token)
+    _scrub_recorded_echoes(doc, literal, token)
     doc, _ = reconcile_inputs_with_step_values(doc)
     if default:
         for row in doc.get("inputs") or []:
@@ -1396,6 +1448,7 @@ def parameterize_literal(
     if not changed:
         raise ValueError("literal_not_found")
     _template_assertion_targets(steps, literal, token)
+    _scrub_recorded_echoes(doc, literal, token)
     doc, _ = reconcile_inputs_with_step_values(doc)
     if default:
         for row in doc.get("inputs") or []:

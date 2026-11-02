@@ -28,6 +28,7 @@ import re
 from typing import Any, Callable
 
 from conxa_compile.compiler.step_key import step_keys
+from conxa_core.config import settings
 from conxa_core.models.prose_binding import readable as _readable
 
 MAX_QUESTIONS = 5
@@ -826,6 +827,30 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
 # ── summary ─────────────────────────────────────────────────────────────────────────────────
 
 
+# Steps that are something an earlier action CAUSED, not something the person did: the file that
+# download produced, the tab or browser dialog it raised.
+_EFFECT_ACTIONS = frozenset({"download_observed", "tab_open", "dialog_appeared", "dialog_accept", "dialog_dismiss"})
+
+
+def effect_parents(steps: list[dict[str, Any]]) -> list[int | None]:
+    """For each step, the index of the action that caused it, or None. Display only: the steps stay
+    separate everywhere they run and are edited; a screen may indent an effect under its cause.
+    An effect belongs to the nearest earlier step that is not itself an effect, and only when it
+    follows that step directly (or through other effects of it). With compile_keep_every_action
+    on, nothing is nested: every step shows flat."""
+    if settings.compile_keep_every_action:
+        return [None] * len(steps)
+    out: list[int | None] = []
+    cause: int | None = None
+    for i, s in enumerate(steps):
+        if _action_name(s) in _EFFECT_ACTIONS and cause is not None:
+            out.append(cause)
+        else:
+            out.append(None)
+            cause = i
+    return out
+
+
 def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: int, name: str, uncertain: int) -> dict[str, Any]:
     """The workflow summary card's data. The counts add up across screens: actions recorded →
     steps compiled → steps now (after answers added some)."""
@@ -849,5 +874,6 @@ def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: in
         "inputs": len(inputs),
         "uncertain": uncertain,
         "step_names": names,
+        "step_parents": effect_parents(steps),
         "done_when": required_checks[:3],
     }

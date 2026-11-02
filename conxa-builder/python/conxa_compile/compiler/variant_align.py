@@ -134,6 +134,7 @@ def compare_variant(
 def normalize_events(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The same rule-based clean-up a compile applies before building steps (no model call, no
     credit, nothing written), so a primary and a variant are compared like for like."""
+    from conxa_core.config import settings
     from conxa_compile.compiler.navigation_effects import fold_action_caused_navigations
     from conxa_compile.compiler.step_anchors import clean_steps, fix_step_order
     from conxa_compile.pipeline.run import run_pipeline
@@ -141,4 +142,6 @@ def normalize_events(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     policy = get_policy_bundle().data
     events = run_pipeline(raw)
+    if settings.compile_keep_every_action:
+        return events
     return fold_action_caused_navigations(fix_step_order(clean_steps(events, policy), policy))

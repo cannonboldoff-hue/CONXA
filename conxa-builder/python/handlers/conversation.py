@@ -128,7 +128,7 @@ class ConversationMixin:
     def cmd_thread_turn(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """One conversation turn: a free-text message, or an answer to a card (``card_id`` plus
         ``choice``/``action``). Streams ``thread_delta`` events and appends ``thread_item``s."""
-        from conxa_compile.conversation import harness
+        from conxa_compile.conversation import harness, runtime_state
         from conxa_compile.conversation import thread_store as ts
         from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, ProxyUnavailable, QuotaExceeded
 
@@ -154,6 +154,10 @@ class ConversationMixin:
                 return {"ok": False, "message": "Open a workflow first."}
             return self._run_flow_action(ident, action_id, slots, rid, sink)
 
+        # While a typed message is being answered, a change card may still be coming: no Test it yet.
+        replying = kind == "wf" and bool(str(payload.get("message") or "").strip()) and not payload.get("card_id")
+        if replying:
+            runtime_state.set_flags(ident, replying=True)
         try:
             return harness.run_turn(
                 thread_id=thread_id,
@@ -175,6 +179,10 @@ class ConversationMixin:
             harness.post_card(thread_id, "error", "failed", sink=sink, code=code, title="Couldn’t get a reply",
                               body=message, actions=["retry"])
             raise _CommandError(code, message) from exc
+        finally:
+            if replying:
+                runtime_state.set_flags(ident, replying=False)
+                sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": str(payload.get("turn_id") or ""), "status": "finished"})
 
     def cmd_card_action(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """A button on a card (Apply, Undo, Create, …) — no model involved."""
@@ -558,6 +566,8 @@ class ConversationMixin:
                 applied_version=(after.get("meta") or {}).get("version"),
                 actions=["undo"],
             )
+            if source != "auto_fix" and thread_id.startswith("wf:"):
+                self._flow_post_summary(thread_id[len("wf:"):], sink, updated=True)
             return {"ok": True}
 
         if action == "undo":

@@ -169,3 +169,145 @@ def test_a_note_answer_is_stored_as_text_and_changes_nothing_else(tmp_path):
          "choices": [{"id": "c1", "label": "Stop and tell me"}, {"id": "c2", "label": "Skip it"}]}
     d = decisions.record(tmp_path, q, {"choice": "c2"})[0]
     assert d["note"] == "If nothing matches? Skip it" and "values" not in d
+
+
+# ─── choosing one item out of a list is not a silent "fixed" ────────────────────────────────
+
+def _row(tag, parent_tag, n_rows, cap=False):
+    rows = "".join(f"<{tag} class='r'>x</{tag}>" for _ in range(n_rows))
+    html = f"<{parent_tag}>{rows}</{parent_tag}>"
+    return {"tag": tag, "id": "", "classes": ["r"], "outer_html": "<tr class='r'>x</tr>"}, \
+           {"tag": parent_tag, "id": "", "classes": [], "outer_html": html + ("x" * 2000 if cap else "")}
+
+
+def _ev(role, *anc):
+    chain = []
+    for a in anc:
+        chain.extend(a)
+    return {"semantic": {"role": role}, "ancestors": chain}
+
+
+def test_repeating_peers_tells_an_item_in_a_list_from_a_control():
+    from conxa_compile.compiler.entity_binding import repeating_peers
+
+    div = {"tag": "div", "id": "", "classes": ["cell"], "outer_html": "<div/>"}
+    row, body = _row("tr", "tbody", 4)
+    assert repeating_peers(_ev("a", [div], [row, body])) == 4                    # a link in a table row
+    assert repeating_peers(_ev("button", [div], [row, body])) == 0               # a per-row button is a control
+    assert repeating_peers(_ev("a", [div, {**div, "classes": ["g"]}, div])) == 0  # no row anywhere
+    head_row, head = _row("tr", "thead", 4)
+    assert repeating_peers(_ev("a", [head_row, head])) == 0                      # a header row is not a record
+    one_row, only = _row("tr", "tbody", 1)
+    assert repeating_peers(_ev("a", [one_row, only])) == 0                       # a lone row repeats nothing
+    big_row, big = _row("tr", "tbody", 1, cap=True)                              # parent cut off by the recorder
+    assert repeating_peers(_ev("a", [big_row, big])) >= 3
+
+
+LISTED = [
+    event(1, "navigate", url="https://app.test/", value="https://app.test/"),
+    {**event(2, "click", "Ada.gitignore"), "peers": 5},
+    event(3, "click", "Download raw file"),
+    event(4, "download_observed", value=json.dumps({"suggested_filename": "Ada.gitignore"})),
+    event(5, "upload_intent", "Upload", value=json.dumps([{"name": "Ada.gitignore", "size": 51}])),
+]
+
+
+def test_an_item_picked_from_a_list_is_a_candidate_even_after_many_control_clicks():
+    controls = [event(10 + i, "click", f"Menu {i}") for i in range(8)]
+    cands = {c["ref"]: c for c in TU.candidates_from_timeline(controls + [{**event(30, "click", "Pick me"), "peers": 4}])}
+    assert cands["click:30"]["in_set"] is True and cands["click:10"]["in_set"] is False
+    assert "click:30" in cands                                                    # not crowded out by the control cap
+
+
+def test_an_unmentioned_list_item_is_asked_not_assumed_fixed_whether_or_not_the_model_answered():
+    for call in (lambda t, p, ms: raw_answer(values=[], questions=[]), lambda t, p, ms: None):
+        out = TU.understand_timeline(LISTED, "", call=call)
+        assert out["values"]["click:2"]["verdict"] == "unsure" and out["values"]["click:2"]["name"]
+        value_qs = [q for q in out["questions"] if q["kind"] == "value"]
+        assert [q["ref"] for q in value_qs] == ["click:2"] and value_qs[0]["best_guess"] == ""   # asked, nothing pre-ticked
+
+
+def test_a_model_that_explicitly_says_fixed_for_a_list_item_is_respected():
+    out = TU.understand_timeline(LISTED, "download Ada.gitignore", call=lambda t, p, ms: raw_answer(
+        values=[{"ref": "click:2", "verdict": "fixed"}], questions=[]))
+    assert out["values"]["click:2"]["verdict"] == "fixed"
+    assert not [q for q in out["questions"] if q["kind"] == "value"]
+
+
+def test_the_model_is_told_which_clicks_were_list_items():
+    payload = TU.build_input(LISTED, "", "", TU.candidates_from_timeline(LISTED))
+    assert {r["ref"]: r.get("peers") for r in payload["rows"]}["r2"] == 5
+    assert [c["ref"] for c in payload["candidates"] if c.get("in_set")] == ["click:2"]
+
+
+def test_a_file_the_workflow_downloaded_itself_is_not_asked_about_again():
+    assert TU.must_ask(LISTED) == []                                              # the upload follows the download
+    other = LISTED[:3] + [event(5, "upload_intent", "Upload", value=json.dumps([{"name": "report.pdf"}]))]
+    assert TU.must_ask(other) == [{"row": "r5", "effect": "upload"}]              # a file from elsewhere still is
+
+
+def test_a_model_upload_question_on_a_self_downloaded_file_is_dropped():
+    out = TU.validate({"questions": [{"effect": "upload", "row": "r5", "prompt": "Same file?", "best_guess": "each_run"}]},
+                      LISTED, TU.candidates_from_timeline(LISTED))
+    assert not [q for q in out["questions"] if q["kind"] == "upload"]
+
+
+def test_an_answer_that_asks_for_a_change_but_matches_nothing_is_reported_not_dropped():
+    from conxa_compile.conversation import replay
+
+    stored = [{"qid": "upload:r5", "kind": "upload", "choice": "each_run", "skipped": False, "event_ids": [5]},
+              {"qid": "upload:r6", "kind": "upload", "choice": "fixed_path", "skipped": False, "event_ids": [6]}]
+    out = replay.plan(stored, {"skills": [{"steps": []}]}, [], lambda key: None)
+    assert out["groups"] == [] and out["unapplied"] == [{"kind": "upload", "choice": "each_run"}]    # "leave it" owes no report
+
+
+def test_a_div_grid_row_counts_only_when_it_says_it_is_a_row():
+    from conxa_compile.compiler.entity_binding import repeating_peers
+
+    def grid(cls, role="", n=4, rid=""):
+        attrs = (f' role="{role}"' if role else "")
+        row = {"tag": "div", "id": rid, "classes": cls, "outer_html": f"<div{attrs}>x</div>"}
+        kids = "".join(f"<div class='{' '.join(cls)}'>x</div>" for _ in range(n))
+        return _ev("a", [row, {"tag": "div", "id": "", "classes": [], "outer_html": f"<div>{kids}</div>"}])
+
+    assert repeating_peers(grid(["file-card"])) == 4                 # a class that names a record
+    assert repeating_peers(grid(["x"], role="listitem")) == 4        # an ARIA row-like role
+    assert repeating_peers(grid(["x"], rid="item-3")) == 4           # an id that names one
+    assert repeating_peers(grid(["row"])) == 0                       # bare layout .row is not a record
+    assert repeating_peers(grid(["wrapper"])) == 0                   # repeated layout proves nothing
+
+
+def test_a_download_and_the_upload_that_uses_it_are_linked_by_explicit_slots():
+    from conxa_compile.compiler.upload_binding import apply_bindings_to_compiled_steps
+    from conxa_core.models.skill_spec import SkillStep
+
+    dl = SkillStep(action="download_observed", value=json.dumps({"url": "blob:x", "suggested_filename": "Ada.gitignore"}))
+    up = SkillStep(action="upload_intent", value=json.dumps([{"name": "Ada.gitignore", "size": 51}]))
+    event = {"action": {"action": "upload_intent", "value": up.value}, "extras": {}}
+    apply_bindings_to_compiled_steps([dl, up], [event])
+    assert up.value == "{{downloaded_file}}" and up.consumes == ["downloaded_file"]
+    assert dl.produces == ["downloaded_file_1", "downloaded_file"]          # the only download also answers to the bare name
+
+
+def test_a_reply_that_was_cut_off_is_recorded_with_its_shape_in_the_fallback_reason():
+    cut = {"text": '{"goal": "Download a file", "short_summary": "Downloads', "output": "x"}
+    out = TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: cut)
+    assert out["source"] == "fallback"
+    assert "answer keys: ['output', 'text']" in out["fallback_reason"] and '"goal": "Download a file"' in out["fallback_reason"]
+
+
+def test_an_answer_nested_one_level_down_is_the_same_answer():
+    nested = {"understanding": raw_answer()}
+    out = TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: nested)
+    assert out["source"] == "model" and out["goal"].startswith("Download")
+    assert "fallback_reason" not in out
+    ambiguous = {"a": raw_answer(), "b": raw_answer()}                      # two candidates: nothing is guessed
+    assert TU.understand_timeline(MERGED, "x", call=lambda t, p, ms: ambiguous)["source"] == "fallback"
+
+
+def test_no_answer_at_all_names_the_router_detail_when_there_is_some():
+    def silent(task, payload, ms):
+        return None
+
+    out = TU.understand_timeline(MERGED, "download invoices", call=silent)
+    assert out["fallback_reason"] == "the model returned no answer"

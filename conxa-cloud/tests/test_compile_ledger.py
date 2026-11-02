@@ -5,6 +5,9 @@ from __future__ import annotations
 import copy
 import shutil
 from contextlib import ExitStack
+from unittest.mock import patch
+
+from conxa_core.config import settings
 
 from conxa_compile.compiler.build import _record_drops, compile_skill_package
 from conxa_compile.pipeline.run import run_pipeline
@@ -17,11 +20,33 @@ def test_record_drops_lists_exactly_the_sequences_that_disappeared():
     after = [before[0]]
     ledger: list = []
     _record_drops(ledger, before, after, "cleanup")
-    assert ledger == [{"sequence": 2, "pass": "cleanup", "action": "click"}, {"sequence": 3, "pass": "cleanup", "action": "manual_navigate"}]
+    # each dropped action also says which kept action it sat right after
+    assert ledger == [{"sequence": 2, "pass": "cleanup", "action": "click", "after_sequence": 1},
+                      {"sequence": 3, "pass": "cleanup", "action": "manual_navigate", "after_sequence": 1}]
     _record_drops(ledger, [{"extras": {}, "action": {"action": "click"}}], [], "cleanup")  # no sequence: can't be tracked
     assert len(ledger) == 2
 
 
+def test_keep_every_action_turns_two_identical_clicks_into_two_steps():
+    first = _minimal_click_event()
+    first["extras"] = {"sequence": 1}
+    second = copy.deepcopy(first)
+    second["extras"] = {"sequence": 2}
+    evs = run_pipeline([first, second])
+    assert len(evs) == 2
+    data_dir, patchers = _compile_fixture("sess", evs)
+    try:
+        with ExitStack() as stack:
+            for p in patchers:
+                stack.enter_context(p)
+            pkg = compile_skill_package(evs, skill_id="skill_test", source_session_id="sess", title="t", version=1)
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+    assert not pkg.compile_report.get("dropped")
+    assert [s.action for s in pkg.skills[0].steps].count("click") == 2
+
+
+@patch.object(settings, "compile_keep_every_action", False)
 def test_a_repeated_click_is_accounted_for_in_the_compile_report():
     first = _minimal_click_event()
     first["extras"] = {"sequence": 1}

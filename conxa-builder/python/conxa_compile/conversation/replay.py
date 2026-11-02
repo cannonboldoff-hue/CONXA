@@ -24,6 +24,10 @@ _MAP: dict[str, tuple[str, dict[str, str]]] = {
     "popup_dismiss": ("popup", {"dismiss": "dismiss", "keep": "once"}),
 }
 _FORK_CHOICES = {"by_input", "ask_human", "stop"}     # never an "option:*": a person picks a popup button
+# Pre-compile choices that ask the workflow to change (the others say "leave it as recorded").
+_CHANGES = {"each_run", "confirm", "dismiss"}
+# What an unapplied answer was about, in words a person recognises.
+SUBJECT = {"upload": "the file", "confirm_before": "checking before a step", "popup_dismiss": "the popup"}
 
 
 def plan(
@@ -32,9 +36,13 @@ def plan(
     questions: list[dict[str, Any]],
     event_id_of_step_key: Callable[[str], Any],
 ) -> dict[str, Any]:
-    """``{"groups": [...]}``. A group is ``{"label", "ops", "receipt",
-    "qid" (the compile-time question it answers, or None), "answer", "value" (a chosen value)}``."""
+    """``{"groups": [...], "unapplied": [...]}``. A group is ``{"label", "ops", "receipt",
+    "qid" (the compile-time question it answers, or None), "answer", "value" (a chosen value)}``.
+    ``unapplied`` lists every upload / confirm / popup answer that asked for a change but matched nothing
+    in the built workflow (``{"kind", "choice"}``): such an answer is never dropped without the person
+    being told. (A popup decision that matches nothing is asked again after the compile, so it isn't listed.)"""
     groups: list[dict[str, Any]] = []
+    unapplied: list[dict[str, Any]] = []
     steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
     keyed = list(zip(step_keys(steps), steps))
 
@@ -72,9 +80,13 @@ def plan(
         elif kind in _MAP and d.get("choice") in _MAP[kind][1]:
             ck, cmap = _MAP[kind]
             answer = {"choice": cmap[d["choice"]]}
-            for q in questions_for(ck, events):
+            matched = questions_for(ck, events)
+            for q in matched:
                 ops, receipt = clarify.plan_answer(q, answer, doc)
                 groups.append({"label": q["title"], "ops": ops, "receipt": receipt, "qid": q["id"], "answer": answer, "value": None})
+            # "Leave it as recorded" changes nothing by design; only an answer that asked for a change is owed a report.
+            if not matched and d["choice"] in _CHANGES:
+                unapplied.append({"kind": kind, "choice": d["choice"]})
         elif kind == "fork" and d.get("choice") in _FORK_CHOICES:
             # Matched by the popup's own recorded event only. A popup that doesn't trace back to this event
             # is asked about after the compile: never guess which popup an answer was meant for.
@@ -82,4 +94,4 @@ def plan(
             for q in questions_for("fork", events):
                 ops, receipt = clarify.plan_answer(q, answer, doc)
                 groups.append({"label": q["title"], "ops": ops, "receipt": receipt, "qid": q["id"], "answer": answer, "value": None})
-    return {"groups": groups}
+    return {"groups": groups, "unapplied": unapplied}

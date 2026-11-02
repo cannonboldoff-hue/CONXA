@@ -180,6 +180,12 @@ class Settings(BaseSettings):
     # so existing .env files keep working.
     llm_semantic_suggestions_enabled: bool = True
 
+    # One recorded action = one compiled step. When true, every pass that folds, merges, dedupes
+    # or drops recorded actions is skipped (repeat cleanup, click-caused navigation fold, focus/
+    # select/scroll dedupe, checkbox/date/decision-dialog collapses, AI "noise" removal).
+    # Env: SKILL_COMPILE_KEEP_EVERY_ACTION.
+    compile_keep_every_action: bool = True
+
     # Selector compilation tuning (calls Text endpoint above)
     llm_selector_timeout_ms: int = 60000
     llm_selector_candidates: int = 8          # candidates to request per element

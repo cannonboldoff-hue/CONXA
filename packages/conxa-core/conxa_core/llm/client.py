@@ -878,7 +878,8 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                 "content": (
                     "A person recorded a task in a browser. You get `rows`: the recording in time "
                     "order. Each row has a `ref` (r1, r2...) and is either an `event` (what they "
-                    "did: action, target, value, url, `dialog` when it happened inside a popup, and "
+                    "did: action, target, role, value, url, `dialog` when it happened inside a popup, "
+                    "`peers` when the target was one of that many like items in a list or table, and "
                     "`seen`: what a video model saw at that moment, or null if it missed it) or an "
                     "`observation` (something with no browser event: a wait, a native dialog, a "
                     "download bar). You also get `task` (what the person said it is for, may be "
@@ -906,7 +907,9 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "\"varies\": the task describes a kind of thing, or does not name this one, so "
                     "a future run would use a different one. \"fixed\": the task names this exact "
                     "thing, or it is the same page every time. \"unsure\": you cannot tell; do not "
-                    "guess. Decide every open point you can from the rows, the task and the chat, "
+                    "guess. A candidate with `in_set` true is one item picked out of a list of like "
+                    "items: unless the task names that exact item it is \"varies\" or \"unsure\", "
+                    "never \"fixed\". Decide every open point you can from the rows, the task and the chat, "
                     "and list it in `decided` with the reason. Ask only what only the person "
                     "knows or must approve, and only once: never two questions about the same "
                     "thing. Most recordings need 0 to 3 questions. Each effect changes the run in "
@@ -996,8 +999,12 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
     if task == "workflow_understanding":
         body["max_tokens"] = 2048
     if task == "timeline_understanding":
-        # Summaries are written per row, so this scales with the recording.
-        body["max_tokens"] = 6144
+        # Summaries are written per row, so this scales with the recording. Same headroom as the
+        # copilot tasks above: a reasoning-capable pooled model can spend a small budget before the
+        # JSON ends, and a cut-off reply is not an empty one, so the router's reasoning guard never
+        # sees it. HYPOTHESIS (2026-11-02): two recordings in a row came back 200 with an unusable
+        # answer at 6144; the fallback_reason now records the shape, which confirms or refutes this.
+        body["max_tokens"] = 16384
     if task == "thread_summarize":
         body["max_tokens"] = 2048
     if json_mode:
