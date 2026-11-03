@@ -123,7 +123,7 @@ def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(
     card = _cards(wf.id, "compile")[0]
     assert card["state"] == "done" and card["credits_left"] == 37 and card["step_count"] == 4
     assert [(r["key"], r["status"]) for r in card["rows"]] == [("clean", "done"), ("find", "done"), ("meaning", "done"), ("save", "done")]
-    assert card["rows"][0]["detail"] == "14 actions kept" and card["rows"][1]["detail"] == "4 of 4"
+    assert card["rows"][0]["detail"] == "14 recorded actions" and card["rows"][1]["detail"] == "4 of 4"
     assert "Compiled" not in _texts(wf.id, "event")  # the card carries it
     assert "Compiled into 4 steps." in _texts(wf.id, "assistant_message")[0]
     assert "send invoice" in _texts(wf.id, "assistant_message")[0].lower()  # the uncertain step is named, not numbered

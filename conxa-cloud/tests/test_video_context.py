@@ -28,7 +28,7 @@ def test_matched_steps_get_words_and_unmatched_stay_untouched(tmp_path):
     ])
     steps = [step(1, semantic_description="old words"), step(2, semantic_description="kept"), step(None), step(9)]
     assert apply_video_context(steps, tmp_path) == 1
-    assert steps[0].semantic_description == "download the invoice PDF"
+    assert steps[0].semantic_description == "old words"     # a segment's intent spans several steps: never a name
     assert steps[0].video_context.visible_target == "Download PDF button" and steps[0].video_context.screen_before == ""
     assert steps[0].intent == "click_button"        # the intent token and every address field are untouched
     assert all(s.video_context is None for s in steps[1:]) and steps[1].semantic_description == "kept"

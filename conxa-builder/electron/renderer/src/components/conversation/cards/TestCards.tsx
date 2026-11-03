@@ -66,7 +66,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   if (state !== 'open') {
     return (
       <div className="flex items-center gap-2.5 text-sm">
-        <StatusGlyph kind="none" />
+        <StatusGlyph kind={state === 'submitted' ? 'ok' : 'none'} />
         <span className="text-[var(--text-primary)]">Test inputs</span>
         <span className="text-[var(--text-meta)]">· {specs.map((s) => `${s.label}: ${values[s.id] || '—'}`).join(' · ')}</span>
       </div>
@@ -163,7 +163,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   )
 }
 
-type Row = { index: number; name: string; status: 'running' | 'done' | 'failed'; destructive?: boolean }
+type Row = { index: number; name: string; status: 'running' | 'done' | 'failed'; destructive?: boolean; nested?: boolean }
 const ROW_GLYPH: Record<Row['status'], StatusKind> = { running: 'run', done: 'ok', failed: 'fail' }
 
 /** One test attempt, from start to result. Pauses, failures and passes are all states of this one card. */
@@ -182,9 +182,11 @@ export function TestRunCard({ threadId, item }: CardProps) {
   const rowList = (
     <ol className="space-y-1">
       {rows.map((r) => (
-        <li key={r.index} className="flex items-start gap-2.5">
+        <li key={r.index} className={cn('flex items-start gap-2.5', r.nested && 'pl-5')}>
           <span className="mt-[3px]"><StatusGlyph kind={ROW_GLYPH[r.status]} /></span>
-          <span className={cn('min-w-0', r.status === 'failed' ? 'text-status-error' : 'text-[var(--text-primary)]')}>{r.name}</span>
+          <span className={cn('min-w-0', r.status === 'failed' ? 'text-status-error' : r.nested ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]')}>
+            {r.nested && <span aria-hidden className="mr-1 text-[var(--text-meta)]">↳</span>}{r.name}
+          </span>
         </li>
       ))}
     </ol>

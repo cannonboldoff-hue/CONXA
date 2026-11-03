@@ -8,6 +8,7 @@ import {
   ErrorCard,
   PendingChangeCard,
   UnknownCard,
+  WatchingVideoCard,
   type CardProps,
 } from '@/components/conversation/cards/ChangeAndDraftCards'
 
@@ -29,6 +30,7 @@ export const CARD_REGISTRY: Record<string, ComponentType<CardProps>> = {
   autofix: AutofixCard,
   confirm_action: ConfirmActionCard,
   action_link: ActionLinkCard,
+  watching_video: WatchingVideoCard,
 }
 
 export function cardComponent(cardType: string | undefined): ComponentType<CardProps> {

@@ -97,6 +97,9 @@ def summary(workflow_id: str) -> dict[str, Any] | None:
     }
     if data.get("stage"):
         out["stage"] = data["stage"]   # "understand" while the pre-compile questions are being answered
+        # The model's read of the recording failed, so these questions are plain: offer a re-watch.
+        if data["stage"] == "understand" and (data.get("understanding") or {}).get("source") == "fallback":
+            out["fallback"] = True
     return out
 
 

@@ -184,7 +184,7 @@ class Settings(BaseSettings):
     # or drops recorded actions is skipped (repeat cleanup, click-caused navigation fold, focus/
     # select/scroll dedupe, checkbox/date/decision-dialog collapses, AI "noise" removal).
     # Env: SKILL_COMPILE_KEEP_EVERY_ACTION.
-    compile_keep_every_action: bool = True
+    compile_keep_every_action: bool = False
 
     # Selector compilation tuning (calls Text endpoint above)
     llm_selector_timeout_ms: int = 60000

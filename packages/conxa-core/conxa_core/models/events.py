@@ -347,6 +347,12 @@ class RecordedEvent(BaseModel):
     frame: FrameContext = Field(default_factory=FrameContext)
     tab: TabContext = Field(default_factory=TabContext)
 
+    # Who caused this event. "script" = the page's own code fired it (el.click(), a dispatched
+    # event, a widget clicking its own button; the browser reports ev.isTrusted === false) — not
+    # something the person did, so it never becomes a step (pipeline/run.py). None = a person, or
+    # a recording made before this existed (read-new-fallback-old).
+    origin: Literal["script"] | None = None
+
     # Optional — absent on recordings made before these existed (read-new-fallback-old).
     post_condition: PostCondition | None = None
 

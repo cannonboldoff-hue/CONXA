@@ -105,13 +105,15 @@ def test_understand_timeline_uses_the_model_and_never_raises():
 def test_questions_are_the_models_own_ranked_prefilled_and_capped_at_five_open():
     und = TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: raw_answer())
     qs = TU.questions_from_understanding(und, MERGED)
-    assert [q["kind"] for q in qs] == ["confirm_before", "upload", "value"]       # nothing code wrote on its own
+    # the model's own questions, plus its gap (r6) asked rather than only mentioned
+    assert [q["kind"] for q in qs] == ["confirm_before", "upload", "value", "note"]
     assert all(q["phase"] == "pre_compile" for q in qs)
     by_id = {q["id"]: q for q in qs}
     assert by_id["upload:r3"]["best_guess"] == "each_run" and by_id["confirm_before:r5"]["best_guess"] == ""
     assert by_id["upload:r3"]["title"] == "Same file each time?"                  # the model's sentence
     assert by_id["value:url:2"]["items"][0]["event_ids"] == [2]
-    assert [q["status"] for q in qs] == ["open"] * 3
+    assert by_id["note:r6"]["title"].startswith("A download bar appeared") and by_id["note:r6"]["best_guess"] == ""
+    assert [q["status"] for q in qs] == ["open"] * 4
     many = {**und, "questions": [dict(und["questions"][0], row=f"r{i}") for i in range(1, 7)]}
     assert [q["status"] for q in TU.questions_from_understanding(many, MERGED)] == ["open"] * 5 + ["queued"]
 
@@ -123,13 +125,13 @@ def test_a_decision_popup_is_always_a_fork_and_a_plain_click_never_is():
             {"effect": "popup_dismiss", "row": "r7", "prompt": "Close the popup?", "best_guess": "dismiss", "cost_rank": 1},
             {"effect": "fork", "row": "r8", "prompt": "Decide?", "cost_rank": 2}]),
         merged, TU.candidates_from_timeline(merged))
-    assert [(q["kind"], q["row"], q["best_guess"]) for q in out["questions"]] == [("fork", "r7", "")]
+    assert [(q["kind"], q["row"], q["best_guess"]) for q in out["questions"] if q["kind"] != "note"] == [("fork", "r7", "")]
 
 
 def test_a_decision_popup_the_model_left_out_is_put_back_and_so_is_an_upload():
     merged = MERGED + [event(7, "click", "Replace", dialog="decision"), event(8, "upload_intent", "file")]
     out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))
-    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("fork", "r7"), ("upload", "r8")]
+    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("fork", "r7"), ("note", "r6"), ("upload", "r8")]
     assert {m["effect"] for m in TU.build_input(merged, "", "", [])["must_ask"]} == {"fork", "upload"}
 
 
@@ -140,9 +142,23 @@ def test_one_question_per_value_and_per_row_and_a_note_needs_choices():
     out = TU.validate(raw_answer(questions=[ask, dict(ask, prompt="Again?"), note,
                                             dict(note, row="r3", choices=[{"label": "only one"}])]),
                       MERGED, TU.candidates_from_timeline(MERGED))
-    assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2")]
+    assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2"), ("note", "r6")]
     assert [c["id"] for c in out["questions"][0]["choices"]] == ["c1", "c2"]
     assert out["questions"][1]["prompt"] == "Same repo every time?"
+
+
+def test_a_value_question_names_an_address_by_its_last_part_and_hides_emails():
+    long = {"kind": "url", "label": "", "recorded": "https://github.com/github/gitignore/blob/main/FuelPHP.gitignore",
+            "literal": "github/gitignore/blob/main/FuelPHP.gitignore"}
+    assert TU._short_label(long) == "FuelPHP.gitignore"
+    words = {"kind": "click", "label": "word " * 20, "recorded": "x"}
+    assert TU._short_label(words).endswith("word…") and len(TU._short_label(words)) <= 61
+    assert TU._text("Google Account Ada ada@example.com", 200) == "Google Account Ada"
+
+
+def test_a_page_load_a_click_caused_is_not_a_value_to_ask_about():
+    nav = event(9, "manual_navigate", "", value=json.dumps({"from_url": "https://a.com/", "to_url": "https://a.com/x/1", "cause": "action"}))
+    assert not [c for c in TU.candidates_from_timeline([nav]) if c["kind"] == "url"]
 
 
 def test_no_summary_or_coverage_question_is_ever_asked():

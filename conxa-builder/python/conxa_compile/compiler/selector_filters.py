@@ -224,6 +224,12 @@ def prefilter_selector_candidate(selector: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+
+
+def scrub_email(text: str) -> str:
+    """Text a person reads in chat, with any email address cut out (an account button's label
+    carries the signed-in address)."""
+    return " ".join(_EMAIL_RE.sub(" ", str(text or "")).split())
 _METACHAR_RE = re.compile(r"[>+~|^$]")  # CSS combinators / unsanitisable metacharacters
 
 

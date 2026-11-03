@@ -25,6 +25,7 @@ import threading
 from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
+from conxa_compile.compiler.selector_filters import scrub_email
 from conxa_compile.conversation.clarify import _question
 
 TASK = "timeline_understanding"
@@ -73,6 +74,10 @@ EFFECTS = (*FALLBACK_CHOICES, "note")
 # A guess that would approve a step that cannot be undone, or choose a popup option, is never pre-filled.
 UNSAFE_GUESSES = {("confirm_before", "no_confirm")}
 _UPLOAD_ACTIONS = ("upload", "upload_intent")
+_GAP_CHOICES = (
+    {"id": "c1", "label": "Yes, it’s fine as recorded", "detail": ""},
+    {"id": "c2", "label": "No — use your own answer below to say what’s missing", "detail": ""},
+)
 
 Caller = Callable[[str, dict[str, Any], int], "dict[str, Any] | None"]
 
@@ -113,6 +118,28 @@ def _nav_url(row: dict[str, Any]) -> str:
     return str(raw or row.get("url") or "")
 
 
+def _caused_by_action(row: dict[str, Any]) -> bool:
+    """A page load the recorder saw a click cause; the compile folds it away (unless every action is kept)."""
+    from conxa_core.config import settings
+
+    if settings.compile_keep_every_action:
+        return False
+    raw = row.get("value")
+    data = _json_value(raw) if isinstance(raw, str) and raw.strip().startswith("{") else None
+    return isinstance(data, dict) and data.get("cause") == "action"
+
+
+def _short_label(cand: dict[str, Any]) -> str:
+    """What a question names the value by: a page address by its last part (the file or record),
+    anything else cut at a word, never mid-word."""
+    text = str(cand.get("label") or cand["recorded"])
+    if cand.get("kind") == "url":
+        text = cand["literal"].split("?")[0].rstrip("/").rsplit("/", 1)[-1] or text
+    if len(text) <= 60:
+        return text
+    return text[:60].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def _events(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in merged if r.get("kind") == "event"]
 
@@ -127,6 +154,8 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
     for row in _events(merged):
         action = row.get("action")
         if action in ("navigate", "manual_navigate"):
+            if _caused_by_action(row):
+                continue      # a click's page load is folded into that click: nothing to ask, the click is asked
             found = _url_literal(_nav_url(row))
             kind, recorded, literal = ("url", found[0], found[1]) if found else (None, "", "")
         elif action in ("click", "dblclick") and len(row.get("target") or "") >= 2:
@@ -148,7 +177,7 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
             counts[bucket] += 1
             groups[key] = {"ref": f"{kind}:{row.get('event_id')}", "kind": kind, "event_ids": [], "row_refs": [],
                            "recorded": recorded[:200], "literal": literal[:200],
-                           "label": str(row.get("target") or "")[:60], "in_set": False}
+                           "label": str(row.get("target") or "")[:200], "in_set": False}
         if in_set:
             groups[key]["in_set"] = True
         groups[key]["event_ids"].append(row.get("event_id"))
@@ -202,7 +231,8 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
         if r.get("kind") == "event":
             value = r.get("value")
             rows.append({
-                "ref": r["row_ref"], "kind": "event", "action": r.get("action"), "target": r.get("target"),
+                "ref": r["row_ref"], "kind": "event", "action": r.get("action"),
+                "target": scrub_email(r["target"]) if r.get("target") else r.get("target"),
                 "role": r.get("role") or None,
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:80] if value else None),
                 "url": r.get("url"), "seen": _seen(r.get("segment")),
@@ -222,7 +252,8 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
 
 
 def _text(value: Any, limit: int) -> str:
-    return " ".join(str(value or "").split())[:limit]
+    """Model text a person will read: one line, no email address (an account label carries one)."""
+    return scrub_email(str(value or ""))[:limit]
 
 
 def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
@@ -246,7 +277,7 @@ def _fallback_question(effect: str, row_ref: str, row: dict[str, Any]) -> dict[s
 
 
 def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> dict[str, Any]:
-    label = (cand.get("label") or cand["recorded"])[:60]
+    label = _short_label(cand)
     return {"kind": "value", "row": row["row_ref"], "event_id": row.get("event_id"), "ref": cand["ref"],
             "prompt": f"Is “{label}” the same every time, or different each run?", "why": "",
             "choices": _choices_for("value", None), "best_guess": guess, "cost_rank": 3}
@@ -363,6 +394,13 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     for m in must:
         if not any(q["row"] == m["row"] and q["kind"] == m["effect"] for q in questions):
             questions.append(_fallback_question(m["effect"], m["row"], rows[m["row"]]))
+    # Something the video showed that the browser did not record is asked, never only mentioned.
+    asked_rows = {q["row"] for q in questions}
+    for g in gaps:
+        if g["row"] not in asked_rows:
+            questions.append({"kind": "note", "row": g["row"], "event_id": rows[g["row"]].get("event_id"),
+                              "prompt": f"{g['note']} Is it fine as recorded?", "why": "", "choices": list(_GAP_CHOICES),
+                              "best_guess": "", "cost_rank": 4})
     have = {q.get("ref") for q in questions}
     for ref, v in values.items():
         cand = by_ref[ref]
@@ -459,7 +497,7 @@ def understand_timeline(
     *,
     existing_inputs: set[str] | None = None,
     call: Caller | None = None,
-    timeout_ms: int = 60_000,
+    timeout_ms: int = 120_000,
 ) -> dict[str, Any]:
     """The checked understanding plus ``candidates`` (each with verdict/name/literal) and
     ``source``: ``model`` (usable answer), ``fallback`` (call failed or empty), ``none`` (nothing to

@@ -70,7 +70,7 @@ class CompileProgress:
             return self._start("clean")
         if phase == "pipeline_done":
             self.total = int(ev.get("event_count") or 0)
-            return self._finish("clean", f"{self.total} action{'s' if self.total != 1 else ''} kept")
+            return self._finish("clean", f"{self.total} recorded action{'s' if self.total != 1 else ''}")
         if phase == "compiler_start":
             return self._start("find")
         if phase == "compile_log":
@@ -95,6 +95,7 @@ class CompileProgress:
             return self._start("save") | changed
         if phase == "compile_done":
             self.step_count = int(ev.get("step_count") or self.step_count)
+            self._start("save")      # settles any earlier row whose own end event never arrived
             self._finish("save")
             self.done = True
             return True

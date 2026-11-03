@@ -26,6 +26,7 @@ from conxa_compile.editor.action_registry import action_spec, action_spec_dict, 
 from conxa_compile.compiler.selector_grammar import compute_merged_display_target, signals_to_display_list
 from conxa_compile.compiler.selector_score import confidence_from_signal_rows
 from conxa_compile.editor.assets import asset_url
+from conxa_compile.conversation.clarify import step_name
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.dto import FrameDTO, StepEditorDTO, StepFlags, StepScreenshotDTO, SuggestionItem, WorkflowResponse, _FRAME_OFFSETS
 from conxa_compile.editor.step_view import skill_step_for_destructive_check
@@ -111,6 +112,14 @@ def _editable_fields(step: dict[str, Any], policy: dict[str, Any]) -> dict[str, 
         "parameterization": not is_scroll and not is_marker,
         "destructive_requires_validation": dest,
     }
+
+
+def _step_title(step: dict[str, Any], step_index: int) -> str:
+    """The step's title in Human Edit: the same per-action name the chat shows (never a selector),
+    except a multiple-choice step, whose question and options ``describe_step`` lists in full."""
+    if ((step.get("handler_hints") or {}) if isinstance(step.get("handler_hints"), dict) else {}).get("control_kind") == "choice":
+        return describe_step(step, step_index)
+    return f"Step {step_index + 1}: {step_name(step)}"
 
 
 def _step_url(step: dict[str, Any]) -> str:
@@ -639,7 +648,7 @@ def step_to_dto(
     return StepEditorDTO(
         id=dto_id or f"{skill_id}:{step_index}",
         step_index=step_index,
-        human_readable_description=describe_step(step, step_index),
+        human_readable_description=_step_title(step, step_index),
         action_type=str(action_name(step)),
         action_payload=dict(step.get("action") or {}) if isinstance(step.get("action"), dict) else {"action": action_name(step)},
         action_spec=action_spec_dict(action_name(step)),

@@ -145,7 +145,6 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   const qKind = String(item.question_kind ?? '')
   const title = String(item.title ?? '')
   const receipt = typeof item.receipt === 'string' ? item.receipt : ''
-  const body = item.body ? String(item.body) : ''
 
   const send = async (action: string, payload?: Record<string, unknown>) => {
     setBusy(true)
@@ -234,7 +233,7 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   return (
     <CardShell
       glyph="warn"
-      title={body ? <><span className="block">{body}</span><span className="mt-1 block">{title}</span></> : title}
+      title={title}
       footer={
         <>
           <Button variant="ghost" size="icon-sm" disabled={busy || !prevId} onClick={goPrev} aria-label="Previous question"><ChevronLeft /></Button>

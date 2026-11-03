@@ -27,6 +27,7 @@ def test_record_drops_lists_exactly_the_sequences_that_disappeared():
     assert len(ledger) == 2
 
 
+@patch.object(settings, "compile_keep_every_action", True)
 def test_keep_every_action_turns_two_identical_clicks_into_two_steps():
     first = _minimal_click_event()
     first["extras"] = {"sequence": 1}

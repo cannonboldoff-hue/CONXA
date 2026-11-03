@@ -79,6 +79,8 @@ def derive_lifecycle(
             substate, glyph, note, actions = "video_failed", FAIL, str(rt["video_error"])[:120], ["retry_video", "re_record"]
         elif open_q > 0:
             substate, glyph, actions = "open", WARN, ["answer_clarify", "re_record"]
+            if cl.get("fallback"):
+                actions = ["answer_clarify", "retry_video", "re_record"]
             note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
         else:
             substate, glyph, note, actions = "ready", RUN, "Getting ready to build", []

@@ -11,6 +11,7 @@ The ``watching_video`` card says so and offers Retry (or Record again).
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 import uuid
@@ -70,6 +71,11 @@ class UnderstandFlowMixin:
         thread = _thread(workflow_id)
         session_dir = settings.data_dir / "sessions" / workflow.session_id
         runtime_state.set_flags(workflow_id, watching=True, video_error="")
+        # A re-watch replaces the questions of the last round: close their cards so none is answered twice.
+        for old in (clarify_store.load(workflow_id) or {}).get("questions") or []:
+            if isinstance(old, dict) and old.get("status") == "open" and old.get("card_id"):
+                harness.update_card(thread, old["card_id"], sink=sink, state="skipped", actions=[],
+                                    receipt="Replaced by a fresh look at the recording")
         card = harness.post_card(thread, "watching_video", "watching", sink=sink, elapsed_s=0, reason="", actions=[])
         card_id = card["card_id"]
         last = {"t": 0.0}
@@ -120,9 +126,11 @@ class UnderstandFlowMixin:
     def _understood_message(und: dict[str, Any], has_questions: bool) -> str:
         """What the model understood, as one chat message: the summary, the few points it settled by
         itself (with the reason, so a wrong call is easy to spot), and a gap if there is one."""
-        extra = [f"• {d['text']}" + (f" — {d['reason']}" if d.get("reason") else "") for d in (und.get("decided") or [])[:3]]
-        if und.get("gaps"):
-            extra.append(f"Worth a look: {und['gaps'][0]['note']}")
+        # A point a question below asks about is the person's to settle, not stated as decided; a gap
+        # is one of those questions.
+        asked = {q.get("row") for q in und.get("questions") or []}
+        extra = [f"• {d['text']}" + (f" — {d['reason']}" if d.get("reason") else "")
+                 for d in (und.get("decided") or []) if d.get("row") not in asked][:3]
         closing = ("A few quick questions first — most already have my best guess filled in." if has_questions
                    else "That's all I need — building it now.")
         if und.get("source") == "fallback":
@@ -182,9 +190,9 @@ class UnderstandFlowMixin:
             und = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        notes = " ".join(g.get("note", "") for g in und.get("gaps") or [])[:200]
+        # Every gap was asked before the build (timeline_understanding.validate), so none is left open.
         return {"candidates": [], "goal_summary": und.get("goal") or "", "source": und.get("source") or "model",
-                "coverage": {"ok": not notes, "note": notes}}
+                "coverage": {"ok": True, "note": ""}}
 
     def _flow_replay_decisions(self, workflow: Any, result: dict[str, Any], doc: dict[str, Any],
                                questions: list[dict[str, Any]], look: Any, sink: Any) -> int:
@@ -258,7 +266,8 @@ class UnderstandFlowMixin:
             text = str(body.get("custom_text") or "").strip()[:500]
             if not text:
                 raise _CommandError("invalid_input", "Type your answer first.")
-            decisions.record(session_dir, question, None)
+            # A note's own words are what the build should know (they reach the compile as context).
+            decisions.record(session_dir, question, None, own_text=text if question["kind"] == "note" else "")
             receipt = f"Noted: “{text}” — left as recorded. Tell the chat after it’s built if a step should change."
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_text=text)
             harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=True)
@@ -268,7 +277,8 @@ class UnderstandFlowMixin:
             raise _CommandError("card_action_unsupported", f"A question can’t “{action}”.")
         answer = {"choice": body.get("choice")} if body.get("choice") else {"selected": list(body.get("selected") or [])}
         decisions.record(session_dir, question, answer)
-        receipt = "Noted"
+        picked = set(answer.get("selected") or []) | {answer.get("choice")}
+        receipt = ", ".join(c["label"] for c in question.get("choices") or [] if c.get("id") in picked) or "Noted"
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
                             can_reopen=True)
@@ -328,9 +338,26 @@ def _fill_description(workflow_id: str) -> None:
         und = json.loads((settings.data_dir / "sessions" / workflow.session_id / "understanding.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return
-    if str(und.get("short_summary") or "").strip():
-        workflow.task_description = str(und["short_summary"]).strip()
+    text = str(und.get("short_summary") or "").strip()
+    if text:
+        # A value the person said changes each run is not this workflow's fixed subject: name it by its input.
+        from conxa_compile.conversation import decisions
+
+        for d in decisions.load(settings.data_dir / "sessions" / workflow.session_id):
+            for v in d.get("values") or []:
+                for lit in {str(v.get("literal") or "").strip(), _short_value(v)}:
+                    if len(lit) >= 3:
+                        text = re.sub(r"(?:\bthe\s+)?" + re.escape(lit), f"the chosen {str(v.get('name') or 'value').replace('_', ' ')}", text, flags=re.I)
+        workflow.task_description = text
         save_workflow(workflow)
+
+
+def _short_value(v: dict[str, Any]) -> str:
+    """A clicked label without the kind the page appended ("FuelPHP.gitignore, (File)"); a URL's last part."""
+    lit = str(v.get("literal") or "")
+    if v.get("kind") == "url":
+        return lit.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+    return re.sub(r",?\s*\([^)]*\)\s*$", "", lit).strip()
 
 
 def _dumps(value: Any) -> str:

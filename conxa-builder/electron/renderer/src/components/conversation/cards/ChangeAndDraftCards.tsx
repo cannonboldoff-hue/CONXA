@@ -13,6 +13,32 @@ export type CardProps = { threadId: string; item: ThreadItem }
 const asText = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v))
 const asPretty = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v, null, 2))
 
+/** The recording being watched back before any question is asked: running, done, or failed with Retry. */
+export function WatchingVideoCard({ threadId, item }: CardProps) {
+  const act = useThreadStore((s) => s.act)
+  const state = String(item.state)
+  const seconds = Number(item.elapsed_s ?? 0)
+  const reason = asText(item.reason)
+  const glyph: StatusKind = state === 'done' ? 'ok' : state === 'failed' ? 'fail' : 'run'
+  const title = state === 'done' ? 'Watched the recording' : state === 'failed' ? 'Couldn’t watch the recording' : 'Watching the recording back'
+  const actions = (Array.isArray(item.actions) ? item.actions : []).map(String)
+  return (
+    <CardShell
+      glyph={glyph}
+      title={title}
+      meta={state === 'watching' ? (reason || (seconds > 0 ? `${seconds} s so far` : 'Lining it up with what the browser saw')) : undefined}
+      footer={state === 'failed' && actions.length > 0 ? (
+        <>
+          {actions.includes('retry_video') && <Button variant="brand" size="sm" onClick={() => act(threadId, String(item.card_id), 'retry_video')}>Retry</Button>}
+          {actions.includes('re_record') && <Button variant="ghost" size="sm" onClick={() => act(threadId, String(item.card_id), 're_record')}>Record again</Button>}
+        </>
+      ) : undefined}
+    >
+      {state === 'failed' && reason ? <p className="leading-[1.6]">{reason}</p> : null}
+    </CardShell>
+  )
+}
+
 /** A proposed change to the workflow: the exact change, Apply / Undo. Nothing is applied until Apply. */
 export function PendingChangeCard({ threadId, item }: CardProps) {
   const act = useThreadStore((s) => s.act)

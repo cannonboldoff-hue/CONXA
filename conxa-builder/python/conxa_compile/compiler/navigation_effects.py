@@ -81,15 +81,36 @@ def _is_action_caused(ev: dict[str, Any], nav: dict[str, Any], cause: dict[str, 
     return t_nav is not None and t_cause is not None and 0 <= t_nav - t_cause <= _LEGACY_WINDOW_S
 
 
+def _host(url: str) -> str:
+    return (urlsplit(str(url or "")).hostname or "").removeprefix("www.")
+
+
+def _is_site_redirect(ev: dict[str, Any], nav: dict[str, Any], out: list[dict[str, Any]]) -> bool:
+    """The site moving on by itself right after a page load (drive.google.com -> ?pli=1 ->
+    /drive/home): starts where the previous navigation on this tab landed, same site, within the
+    window, nothing done in between. Replaying the first address lets the site redirect again."""
+    prev = next((p for p in reversed(out) if _tab_id(p) == _tab_id(ev)), None)
+    if prev is None or _action(prev) != "manual_navigate":
+        return False
+    landed = str(_navigation_value(prev).get("to_url") or "")
+    if not landed or landed != str(nav.get("from_url") or "") or _host(landed) != _host(str(nav.get("to_url") or "")):
+        return False
+    t_nav, t_prev = _timestamp(ev), _timestamp(prev)
+    return t_nav is not None and t_prev is not None and 0 <= t_nav - t_prev <= _LEGACY_WINDOW_S
+
+
 def fold_action_caused_navigations(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drop every `manual_navigate` that an action on the same tab caused, recording its
-    destination on that action's `post_condition.url_delta`. Everything else passes through."""
+    destination on that action's `post_condition.url_delta`, and every same-site redirect right
+    after a navigation. Everything else passes through."""
     out: list[dict[str, Any]] = []
     for ev in events:
         if _action(ev) != "manual_navigate":
             out.append(ev)
             continue
         nav = _navigation_value(ev)
+        if _is_site_redirect(ev, nav, out):
+            continue
         cause = _last_interaction(out, _tab_id(ev))
         if not _is_action_caused(ev, nav, cause):
             out.append(ev)
@@ -138,6 +159,13 @@ def route_template(url: str) -> str:
 
 
 if __name__ == "__main__":
+    def _nav(ts: int, frm: str, to: str) -> dict[str, Any]:
+        return {"action": {"action": "manual_navigate", "timestamp": f"2026-01-01T00:00:0{ts}Z",
+                           "value": json.dumps({"from_url": frm, "to_url": to})}, "tab": {"id": "t"}}
+    _chain = [_nav(1, "about:blank", "https://drive.google.com/?pli=1"),
+              _nav(2, "https://drive.google.com/?pli=1", "https://drive.google.com/drive/home")]
+    assert len(fold_action_caused_navigations(_chain)) == 1
+    assert len(fold_action_caused_navigations([_chain[0], _nav(2, "https://x.com/", "https://drive.google.com/a")])) == 2
     assert route_template("https://app.com/orders/847291?token=abc123") == "/orders/:id"
     assert route_template("https://app.com") == "/"
     assert route_template("about:blank") == ""

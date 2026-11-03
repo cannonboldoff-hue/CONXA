@@ -138,6 +138,16 @@ def test_a_failed_model_call_still_asks_about_the_value_it_could_not_judge(flow,
     assert [c["question_kind"] for c in _open_cards(wf)] == ["value"]
     assert _open_cards(wf)[0]["choices"] and not any(c.get("selected") for c in _open_cards(wf)[0]["choices"])
     assert clarify_store.load(wf.id)["understanding"]["source"] == "fallback"
+    # plain questions after a failed read: "watch the video again" is on offer, and typing it works
+    lc = lifecycle_for_workflow(get_workflow(wf.id))
+    assert lc["substate"] == "open" and "retry_video" in lc["allowed_actions"]
+    from conxa_compile.conversation.actions import ACTIONS
+    assert "watch the video again" in ACTIONS["retry_video"].phrases
+    # a re-watch closes the old round of question cards
+    old_ids = [c["card_id"] for c in _open_cards(wf)]
+    monkeypatch.setattr(tu, "_default_call", lambda t, p, ms: None)
+    b._flow_understand(wf.id, "rid2")
+    assert not set(old_ids) & {c["card_id"] for c in _open_cards(wf)}
 
 
 def test_a_watch_cut_short_by_a_restart_is_marked_failed_with_retry(flow, monkeypatch):
@@ -228,6 +238,36 @@ def test_a_clicked_value_replays_with_the_label_the_compiled_step_is_known_by():
                            "literal": "Report.gitignore, (File)"}]}]    # what the timeline called it
     groups = replay.plan(stored, doc, [], lambda k: 1 if k == key else None)["groups"]
     assert groups[0]["ops"][0]["literal"] == "Report.gitignore"
+
+
+def test_the_same_text_chosen_as_a_click_and_in_an_address_becomes_one_input():
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.conversation import replay
+
+    doc = _doc_with_click()
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    stored = [
+        {"qid": "value:click:1", "kind": "value", "event_ids": [1], "skipped": False, "choice": "varies",
+         "values": [{"ref": "click:1", "name": "target_file", "kind": "click", "event_ids": [1],
+                     "literal": "Report.gitignore, (File)"}]},
+        {"qid": "value:url:2", "kind": "value", "event_ids": [2], "skipped": False, "choice": "varies",
+         "values": [{"ref": "url:2", "name": "target_file_url", "kind": "url", "event_ids": [2],
+                     "literal": "Report.gitignore"}]},
+    ]
+    groups = replay.plan(stored, doc, [], lambda k: 1 if k == key else None)["groups"]
+    assert [g["ops"][0]["name"] for g in groups] == ["target_file", "target_file"]
+
+
+def test_a_step_finds_its_own_event_when_a_snapshot_is_shared(monkeypatch):
+    from conxa_compile.editor.retarget import find_source_event
+
+    events = [{"extras": {"sequence": 1}, "action": {"action": "scroll"}, "snapshot": {"ref": "snap"}},
+              {"extras": {"sequence": 2}, "action": {"action": "click"}, "snapshot": {"ref": "snap"}}]
+    monkeypatch.setattr("conxa_core.storage.session_events.read_session_events", lambda _sid: events)
+    doc = {"meta": {"source_session_id": "s"}}
+    assert find_source_event({"snapshot_ref": "snap", "source_event": 2}, doc) is events[1]
+    assert find_source_event({"source_event": 1}, doc) is events[0]       # no snapshot recorded
+    assert find_source_event({"snapshot_ref": "snap"}, doc) is events[0]  # older steps: by ref
 
 
 def test_a_fork_answer_is_never_applied_to_a_popup_it_does_not_trace_back_to():

@@ -65,6 +65,7 @@ def plan(
                 out.append(q)
         return out
 
+    name_of_literal: dict[str, str] = {}
     for d in decisions:
         if d.get("skipped"):
             continue
@@ -74,7 +75,9 @@ def plan(
             for v in d.get("values") or []:
                 literal = (clicked_label({e for e in v.get("event_ids") or [] if e is not None})
                            if v.get("kind") == "click" else "") or v["literal"]
-                item = {"ref": v["ref"], "name": v["name"], "literal": literal, "kind": v.get("kind", "")}
+                # The same recorded text chosen twice (a file's name clicked, then in the address) is one input.
+                name = name_of_literal.setdefault(literal.lower(), v["name"])
+                item = {"ref": v["ref"], "name": name, "literal": literal, "kind": v.get("kind", "")}
                 ops, receipt = clarify.plan_answer({"kind": "chosen_values", "items": [item]}, {"selected": [v["ref"]]}, doc)
                 groups.append({"label": v["name"], "ops": ops, "receipt": receipt, "qid": None, "answer": None, "value": v})
         elif kind in _MAP and d.get("choice") in _MAP[kind][1]:

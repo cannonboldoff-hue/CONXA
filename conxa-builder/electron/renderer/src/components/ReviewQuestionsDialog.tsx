@@ -8,6 +8,7 @@ import {
   errorMessage,
   rejectForEachSuggestion,
 } from '@/api/workflowApi'
+import { CmdError } from '@/lib/ipc'
 import type { ForEachSuggestion, StepEditorDTO, WorkflowResponse } from '@/types/workflow'
 
 // ── Generic review-question chain ──────────────────────────────────────────────────────────
@@ -117,7 +118,23 @@ function buildLoopSuggestionReviewItem(skillId: string, suggestion: ForEachSugge
         }
       }
       const removeRedundantClick = suggestion.redundant_click_key ? Boolean(answers[1]) : true
-      const result = await acceptForEachSuggestion(skillId, suggestion, removeRedundantClick)
+      let result
+      try {
+        result = await acceptForEachSuggestion(skillId, suggestion, removeRedundantClick)
+      } catch (err) {
+        if (!(err instanceof CmdError) || err.code !== 'suggestion_stale') throw err
+        // The steps changed since this was suggested, so it can never apply. This dialog is
+        // unskippable: leaving it pending would lock the editor, so drop it and move on.
+        await rejectForEachSuggestion(skillId, suggestion).catch(() => undefined)
+        toast.info('This loop suggestion is out of date (the steps changed), so it was dismissed')
+        return {
+          ...wf,
+          compile_health: {
+            ...wf.compile_health,
+            for_each_suggestions: (wf.compile_health.for_each_suggestions ?? []).filter((s) => s.id !== suggestion.id),
+          },
+        }
+      }
       toast.success(
         suggestion.redundant_click_key
           ? removeRedundantClick

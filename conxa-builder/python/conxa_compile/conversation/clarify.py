@@ -39,8 +39,9 @@ _PRIORITY = {
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
-# value on one of them is not "lost" and is never asked about.
-_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed"})
+# value on one of them is not "lost" and is never asked about. "not_from_user" is the page's own
+# script (recorder `origin`), which the person never typed or chose, so it is never asked about either.
+_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed", "not_from_user"})
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
 
@@ -52,10 +53,43 @@ def _action_name(step: dict[str, Any]) -> str:
     return str(a if isinstance(a, str) else (a or {}).get("action") or "").lower()
 
 
+_LABEL_FIELDS = ("inner_text", "aria_label", "title", "alt", "placeholder", "label_text")
+_LABELLED_VERBS = {
+    "click": "Click", "dblclick": "Double-click", "right_click": "Right-click", "hover": "Hover over",
+    "fill": "Type into", "type": "Type into", "select": "Choose in", "select_option": "Choose in",
+    "set_checkbox": "Tick", "set_radio": "Choose", "extract": "Read",
+}
+_PLAIN_ACTIONS = {"scroll": "Scroll the page", "upload_intent": "Choose the file to upload", "upload": "Upload a file"}
+
+
+def _action_title(step: dict[str, Any]) -> str:
+    """This one action in words, built in code from what was recorded: the verb plus the label the
+    item showed (``Click “New”``), or the page opened. Never a selector. "" when nothing fits."""
+    act = _action_name(step)
+    if act in _PLAIN_ACTIONS:
+        return _PLAIN_ACTIONS[act]
+    if act in ("navigate", "goto"):
+        url = re.sub(r"^\w+://(www\.)?", "", str(step.get("url") or "")).split("?")[0].rstrip("/")
+        return f"Go to {url[:60]}" if url else ""
+    if act in _LABELLED_VERBS:
+        fp = (step.get("identity_bundle") or {}).get("fingerprint") or {}
+        label = next((" ".join(str(fp.get(f)).split()) for f in _LABEL_FIELDS if str(fp.get(f) or "").strip()), "")
+        label = _SHORTCUT_HINT.sub("", label).strip() or label
+        return f"{_LABELLED_VERBS[act]} {_quoted(label)}" if label else ""
+    return ""
+
+
+# A menu item's keyboard-shortcut hint the page shows beside its name ("File upload Alt+C then U").
+_SHORTCUT_HINT = re.compile(r"\s+(?:(?:Ctrl|Alt|Shift|Cmd|Meta|⌘|⌥|⇧)\s*\+.*|⌘.*)$", re.IGNORECASE)
+
+
 def step_name(step: dict[str, Any]) -> str:
-    """What a person would call this step: never a number, never a selector."""
-    for key in ("semantic_description", "intent"):
-        text = str(step.get(key) or "").strip()
+    """What a person would call this step: never a number, never a selector. One action, one name:
+    a step nothing described is named from its own action, not from the steps around it."""
+    own = str(step.get("semantic_description") or "").strip()
+    if not own or own == str(step.get("intent") or "").strip():     # the bare intent token is not a description
+        own = _action_title(step)
+    for text in (own, str(step.get("intent") or "").strip()):
         if text:
             text = _readable(re.sub(r"^Step \d+:\s*", "", text))
             if "_" in text and " " not in text:
@@ -856,14 +890,18 @@ def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: in
     steps compiled → steps now (after answers added some)."""
     steps = _steps(doc)
     names = [step_name(s) for s in steps]
+    # The workflow is done when its LAST action did what it should; a check on an earlier step
+    # (every page load checks its address changed) says nothing about the goal.
+    last = next((s for s in reversed(steps) if _action_name(s) not in _EFFECT_ACTIONS), None)
     required_checks: list[str] = []
-    for s in steps:
-        for a in (s.get("validation") or {}).get("assertions") or []:
-            if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
-                if a.get("type") == "text_present":
-                    required_checks.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
-                elif a.get("type") == "url_changed":
-                    required_checks.append("the page address changes")
+    for a in ((last or {}).get("validation") or {}).get("assertions") or []:
+        if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
+            if a.get("type") == "text_present":
+                required_checks.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
+            elif a.get("type") == "url_changed":
+                required_checks.append("the page address changes")
+            elif a.get("type") == "state_changed":
+                required_checks.append("the file is uploaded" if _action_name(last) in ("upload", "upload_intent") else "the page changes")
     inputs = [i for i in doc.get("inputs") or [] if isinstance(i, dict)]
     return {
         "name": name,

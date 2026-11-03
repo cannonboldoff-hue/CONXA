@@ -1,10 +1,10 @@
 """Stamp what the video model saw onto the steps it matched (understanding-first pipeline).
 
 Reads ``merged_timeline.json`` beside the recording (written when the recording was watched) and,
-for each step whose source event has a Pegasus segment, sets ``video_context`` and uses Pegasus's
-intent as the step's plain-words description. A step Pegasus missed, or a recording that was
-never watched, is left exactly as the compiler built it. Words only: nothing here touches a
-target, selector or signal.
+for each step whose source event has a Pegasus segment, sets ``video_context``. A step Pegasus
+missed, or a recording that was never watched, is left exactly as the compiler built it. Words
+only: nothing here touches a target, selector or signal. Pegasus's ``intent`` never names a step:
+one segment spans several recorded actions, so it would give all of them the same title.
 """
 
 from __future__ import annotations
@@ -39,7 +39,4 @@ def apply_video_context(steps: list[SkillStep], session_root: Path) -> int:
         if any(ctx.model_dump().values()):
             step.video_context = ctx
             stamped += 1
-        intent = str(seg.get("intent") or "").strip()
-        if intent:
-            step.semantic_description = intent
     return stamped

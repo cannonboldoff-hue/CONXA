@@ -259,9 +259,11 @@ class CompileFlowMixin:
                 kind = str(d.get("action") or "action").replace("_", " ")
                 named.append(f"{kind} “{d['target']}”" if d.get("target") else kind)
             more = f" and {len(dropped) - 3} more" if len(dropped) > 3 else ""
+            why = ("the page did them by itself, not you" if all(d.get("pass") == "not_from_user" for d in dropped)
+                   else "repeats, page loads a click caused, or things the page did by itself")
             lines.append(
                 f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
-                f"({', '.join(named)}{more}) — repeats, or page loads a click caused. They’re listed in the compile report.")
+                f"({', '.join(named)}{more}) — {why}. They’re listed in the compile report.")
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
             lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")

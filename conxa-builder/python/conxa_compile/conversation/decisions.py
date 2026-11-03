@@ -51,9 +51,14 @@ def decision_from_answer(question: dict[str, Any], answer: dict[str, Any] | None
     return decision
 
 
-def record(session_dir: Path, question: dict[str, Any], answer: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Store (or replace) the decision for ``question``. Returns every stored decision."""
+def record(session_dir: Path, question: dict[str, Any], answer: dict[str, Any] | None,
+           own_text: str = "") -> list[dict[str, Any]]:
+    """Store (or replace) the decision for ``question``. Returns every stored decision. ``own_text``
+    (a note answered in the person's own words) is kept as the note."""
     decisions = [d for d in load(session_dir) if d.get("qid") != question["id"]]
-    decisions.append(decision_from_answer(question, answer))
+    decision = decision_from_answer(question, answer)
+    if own_text:
+        decision["note"] = f"{question.get('title') or ''} {own_text}".strip()
+    decisions.append(decision)
     (Path(session_dir) / FILE).write_text(json.dumps(decisions), encoding="utf-8")
     return decisions

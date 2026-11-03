@@ -31,7 +31,7 @@ def test_stages_only_move_when_the_compiler_says_so():
     p, _ = _run([{"phase": "pipeline_start"}])
     assert [r["status"] for r in p.rows()] == ["running", "pending", "pending", "pending"]
     p.observe({"phase": "pipeline_done", "event_count": 14})
-    assert p.rows()[0] == {"key": "clean", "label": "Cleaned up the recording", "status": "done", "detail": "14 actions kept"}
+    assert p.rows()[0] == {"key": "clean", "label": "Cleaned up the recording", "status": "done", "detail": "14 recorded actions"}
     p.observe({"phase": "compiler_start"})
     p.observe({"phase": "compile_log", "message": "Compiled step 9.", "step_index": 8})
     find = p.rows()[1]
@@ -201,7 +201,35 @@ def test_an_already_guarded_destructive_step_is_not_asked_about():
 def test_steps_are_named_not_numbered():
     assert step_name(_step("click", "send_invoice")) == "Send invoice"
     assert step_name(_step("click", "x", semantic_description="Step 4: Send invoice button")) == "Send invoice button"
-    assert step_name({"action": "scroll"}) == "Scroll"
+    assert step_name({"action": "scroll"}) == "Scroll the page"
+
+
+def test_a_menu_items_shortcut_hint_is_not_part_of_its_name():
+    item = {"action": "click", "identity_bundle": {"fingerprint": {"inner_text": "File upload Alt+C then U"}}}
+    assert step_name(item) == "Click “File upload”"
+
+
+def test_done_when_is_the_last_actions_check_not_every_page_load():
+    nav = {"action": "navigate", "url": "https://a.com", "validation": {"assertions": [{"type": "url_changed", "required": True}]}}
+    up = {"action": "upload", "validation": {"assertions": [{"type": "state_changed", "required": True}]}}
+    doc = {"skills": [{"steps": [nav, up]}]}
+    assert build_summary(doc, recorded_actions=2, added_steps=0, name="x", uncertain=0)["done_when"] == ["the file is uploaded"]
+
+
+def test_compile_done_settles_rows_whose_end_event_never_came():
+    p = CompileProgress()
+    p.observe({"phase": "pipeline_start"})
+    p.observe({"phase": "compile_done", "step_count": 3})
+    assert {r["status"] for r in p.rows()} == {"done"}
+
+
+def test_a_step_nothing_described_is_named_from_its_own_action():
+    click = {"action": "click", "intent": "activate_control_new",
+             "identity_bundle": {"fingerprint": {"inner_text": "", "aria_label": "New"}}}
+    assert step_name(click) == "Click “New”"
+    assert step_name({**click, "semantic_description": "activate_control_new"}) == "Click “New”"   # bare token
+    assert step_name({"action": "navigate", "url": "https://www.github.com/a/{{file}}?x=1"}) == "Go to github.com/a/“file”"
+    assert step_name({**click, "identity_bundle": {}}) == "Activate control new"                   # nothing recorded
 
 
 def _q(doc, kind):

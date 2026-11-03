@@ -357,3 +357,11 @@ def test_build_workflow_response_filters_a_previously_rejected_suggestion(tmp_pa
     ])
     wf = build_workflow_response(skill_id, doc, asset_base_url="file:///tmp")
     assert wf.compile_health["for_each_suggestions"] == [kept]
+
+
+def test_human_edit_title_names_the_action_and_never_a_selector():
+    step = {"action": {"action": "click"}, "intent": "activate_control_new",
+            "target": {"primary_selector": "button.x-9n", "fallback_selectors": []},
+            "identity_bundle": {"fingerprint": {"inner_text": "New"}},
+            "signals": {"selectors": {}, "semantic": {}}, "validation": {}}
+    assert step_to_dto("skill_1", step, 2, {}, "").human_readable_description == "Step 3: Click “New”"

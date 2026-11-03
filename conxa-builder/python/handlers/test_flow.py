@@ -117,8 +117,10 @@ class TestFlowMixin:
         guard = bool(payload.get("guard", True))
         show_browser = bool(payload.get("show_browser", True))
         use_ai = bool(payload.get("use_ai", False))
+        # Keep what was actually run on the card, so a reload shows those values, not the pre-filled ones.
+        ran = [{**i, "value": values.get(i["id"], i.get("value"))} for i in card.get("inputs") or []]
         harness.update_card(_thread(workflow.id), card["card_id"], sink=sink, state="submitted", actions=[],
-                            guard=guard, show_browser=show_browser, use_ai=use_ai)
+                            guard=guard, show_browser=show_browser, use_ai=use_ai, inputs=ran)
         threading.Thread(
             target=self._tf_background, args=(workflow.id, values, guard, show_browser, use_ai), daemon=True,
         ).start()
@@ -167,12 +169,23 @@ class TestFlowMixin:
         sink = _event_sink(rid)
         rows: list[dict[str, Any]] = []
         started = time.time()
+        # Name each row the way the workflow's own step list does ("Open github.com", "Click “Drive”"),
+        # not by the bare action kind the runtime reports. A step with no recorded key keeps the old name.
+        names: dict[str, tuple[str, bool]] = {}
+        try:
+            from conxa_compile.conversation import clarify
+            from conxa_core.storage.json_store import read_skill
+
+            steps = clarify._steps(read_skill(workflow.skill_id) or {}) if workflow and workflow.skill_id else []
+            for key, step, parent in zip(clarify.step_keys(steps), steps, clarify.effect_parents(steps)):
+                names[key] = (clarify.step_name(step), parent is not None)
+        except Exception:  # noqa: BLE001 -- names are cosmetic; a test must still run without them
+            pass
         card = harness.post_card(thread, "test_run", "running", sink=sink, rows=rows, attempt=attempt, auto=auto,
                                  guard=guard, started_at=started, actions=["stop"])
         card_id = card["card_id"]
         runtime_state.set_flags(workflow_id, testing=True, autofix_attempt=attempt if auto else 0, recording_discarded=False,
                                 sign_in_expired=False)
-        harness.log_event(thread, "Test started", glyph="run", sink=sink, subject=f"attempt {attempt}" if auto else None)
         released = {"v": False}
         # What the run last stopped to ask. A test the person ends is reported by THAT cause, never by
         # a guess: ending at a popup is not "ending before a step that can't be undone".
@@ -200,9 +213,11 @@ class TestFlowMixin:
                     r["status"] = "done"
             parts = str(entry.get("phase", "")).split("_")  # step_<i>_<type>_start
             kind = parts[2] if len(parts) >= 4 else "step"
-            rows.append({"index": int(entry["step"]), "name": _humanize(entry.get("intent") or kind),
+            key = entry.get("source_step_key") or ""
+            name, nested = names.get(key) or (_humanize(entry.get("intent") or kind), False)
+            rows.append({"index": int(entry["step"]), "name": name, "nested": nested,
                          "status": "running", "destructive": bool(entry.get("destructive")),
-                         "step_key": entry.get("source_step_key") or ""})
+                         "step_key": key})
             push(step_total=entry.get("step_total"))
 
         def wait_decision(kind: str) -> str:
@@ -289,8 +304,6 @@ class TestFlowMixin:
             ran_destructive = any(r.get("destructive") and r["status"] == "done" for r in rows)
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
                  outputs=result.get("outputs") or {}, actions=["approve", "test_again"])
-            harness.log_event(thread, "Test passed", glyph="ok", sink=sink,
-                              subject=f"{len(rows)} steps · {elapsed // 60} min {elapsed % 60:02d} s")
             harness.emit_item(sink, thread, ts.append(
                 thread, "assistant_message",
                 text="It works. Approve it when you’re happy — that adds it to the next skill package release. "

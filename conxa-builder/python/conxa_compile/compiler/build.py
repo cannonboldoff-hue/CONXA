@@ -34,6 +34,7 @@ from conxa_compile.compiler.recovery_policy import (
     merge_recovery_strategies_for_wait_shape,
 )
 from conxa_compile.compiler.selector_filters import (
+    scrub_email,
     filter_selectors_dict,
     is_dynamic_id,
     is_low_quality_anchor,
@@ -242,7 +243,9 @@ def _insert_tab_markers(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             marker_action = "tab_switch" if tab_id in seen_tabs else "tab_open"
             url = str((ev.get("page") or {}).get("url") or "")
             out.append(_make_tab_marker_event(marker_action, tab, url))
-            if marker_action == "tab_open" and str(tab.get("opened_by") or "") == "user" and url:
+            # A tab whose first recorded event is already a navigation needs no second one.
+            if (marker_action == "tab_open" and str(tab.get("opened_by") or "") == "user" and url
+                    and str((ev.get("action") or {}).get("action") or "") != "manual_navigate"):
                 out.append(_make_tab_navigate_event(tab, url))
             seen_tabs.add(tab_id)
         out.append(ev)
@@ -1581,6 +1584,13 @@ def _deduplicate_input_bindings(steps: list[SkillStep]) -> None:
         step.value = rewrite_placeholder(step.value, binding, new_binding)
 
 
+def _studio_file_pick(e: dict[str, Any]) -> bool:
+    """Studio's own picker fills the file input (Playwright set_files), so the browser reports the
+    change as untrusted — but the person chose the file. ``file_pick`` is attached only then."""
+    extras = e.get("extras") if isinstance(e.get("extras"), dict) else {}
+    return isinstance(extras.get("file_pick"), dict)
+
+
 def prepare_compile_events(
     events: list[dict[str, Any]],
     pol: dict[str, Any],
@@ -1590,6 +1600,13 @@ def prepare_compile_events(
     with the understanding-first merge so both see the same event list. ``drop_ledger`` collects
     what was removed when the compiler wants the record."""
     ledger = drop_ledger if drop_ledger is not None else []
+    # Provenance gate, independent of keep-every-action: that setting keeps every action the
+    # PERSON took; an event the page's own script fired (recorder `origin == "script"`, e.g. a
+    # widget clicking its own account button) is not one, and replay re-runs the page's script by
+    # itself. Ledgered, never silently lost.
+    human = [e for e in events if e.get("origin") != "script" or _studio_file_pick(e)]
+    _record_drops(ledger, events, human, "not_from_user")
+    events = human
     if settings.compile_keep_every_action:
         # One recorded action = one step: no repeat cleanup, no navigation fold.
         return _insert_tab_markers(list(events))
@@ -2048,6 +2065,7 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
             entry["before_sequence"] = next_kept
         tgt = e.get("target") if isinstance(e.get("target"), dict) else {}
         label_text = next((str(tgt[k]).strip() for k in ("aria_label", "label_text", "inner_text", "name", "title") if tgt.get(k)), "")
+        label_text = scrub_email(label_text)
         if label_text:
             entry["target"] = label_text[:60]
         # A dropped step that carried a typed/selected value is something the person may have

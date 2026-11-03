@@ -2059,7 +2059,7 @@ class RecordingSession:
         # this line. Copy through only when present, so an older bridge that does not send them
         # still validates.
         for observation in ("branch_hint", "date_context", "choice_context",
-                            "optionality", "post_condition", "dialog_context"):
+                            "optionality", "post_condition", "dialog_context", "origin"):
             value = payload.get(observation)
             if value is not None:
                 body[observation] = value

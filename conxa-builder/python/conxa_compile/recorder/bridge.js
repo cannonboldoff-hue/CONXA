@@ -63,8 +63,24 @@
   // set on demand — once at initial bridge init, and again from the open/write/writeln patch
   // below every time the document's content is swapped.
   const _docListeners = [];
+  // Provenance: a DOM event is only evidence that the PERSON acted when the browser itself made
+  // it (ev.isTrusted). Page script (el.click(), dispatchEvent, a widget auto-clicking its own
+  // button) fires untrusted events through the same listeners. The one wrapper every listener
+  // goes through records the trust of the event being handled, so serializeTarget can stamp
+  // `origin` on the payload it builds synchronously inside that handler. Outside any handler
+  // (timers, deferred flushes) it is null and no origin is stamped (= treated as human).
+  let _evTrusted = null;
   function onDoc(type, handler, options) {
-    _docListeners.push([type, handler, options]);
+    const wrapped = function (ev) {
+      _evTrusted = ev && typeof ev.isTrusted === "boolean" ? ev.isTrusted : null;
+      trace("event_trust", { type, isTrusted: _evTrusted, detail: ev && ev.detail });
+      try {
+        return handler.apply(this, arguments);
+      } finally {
+        _evTrusted = null;
+      }
+    };
+    _docListeners.push([type, wrapped, options]);
   }
   function installDocumentListeners() {
     for (const [type, handler, options] of _docListeners) {
@@ -1481,6 +1497,8 @@
     try { surroundingText = captureSurroundingText(el, 200); } catch (_e) {}
     try { domSigShort = _domSignatureHash(interactiveSignature() + "|" + _dedupSigExtra()); } catch (_e) {}
     return {
+      // "script" = fired by page code, not the person; absent = human (or not in an event).
+      ...(_evTrusted === false ? { origin: "script" } : {}),
       action: {
         action: actionKind,
         timestamp: new Date().toISOString(),
