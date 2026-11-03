@@ -1,0 +1,14 @@
+[
+  {"name": "plain login page", "url": "https://app.example.com/login", "recorder_drop": true, "session_login": true},
+  {"name": "google service login", "url": "https://accounts.google.com/ServiceLogin?x=1", "recorder_drop": true, "session_login": true},
+  {"name": "session expired page", "url": "https://app.example.com/session-expired", "recorder_drop": true, "session_login": true},
+  {"name": "nested signin segment", "url": "https://accounts.example.com/v3/signin/identifier", "recorder_drop": true, "session_login": true},
+  {"name": "home page", "url": "https://app.example.com/", "recorder_drop": false, "session_login": false},
+  {"name": "dashboard", "url": "https://app.example.com/dashboard", "recorder_drop": false, "session_login": false},
+  {"name": "blank page", "url": "about:blank", "recorder_drop": false, "session_login": false},
+  {"name": "login history is a real app page", "url": "https://app.example.com/settings/login-history", "recorder_drop": false, "session_login": false},
+  {"name": "authors is not auth", "url": "https://app.example.com/authors", "recorder_drop": false, "session_login": false},
+  {"name": "auth settings inside the app keeps its steps", "url": "https://app.example.com/settings/auth", "recorder_drop": false, "session_login": true},
+  {"name": "sso admin inside the app keeps its steps", "url": "https://app.example.com/admin/sso", "recorder_drop": false, "session_login": true},
+  {"name": "oauth hop alone is not a sign-in page for the recorder", "url": "https://provider.example.com/oauth2/authorize", "recorder_drop": false, "session_login": true}
+]

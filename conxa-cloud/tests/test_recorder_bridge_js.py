@@ -74,12 +74,31 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
     page.evaluate(
         """args => {
             window.__events = [];
+            window.__ready = [];
             window.__SKILL_CAPTURE_PROFILE__ = args.profile;
-            window.__skillReport = (payload) => window.__events.push(payload);
+            // Like the recorder's sink: a "bridge ready" announcement is bookkeeping, not an event.
+            window.__skillReport = (payload) => (payload && payload._bridge_ready ? window.__ready : window.__events).push(payload);
         }""",
         {"profile": capture_profile},
     )
     page.evaluate(BRIDGE_JS)
+
+
+def test_bridge_announces_itself_over_the_binding_and_again_after_a_document_swap(page: Page) -> None:
+    """The recorder skips probing a frame whose page said it is installed (session.py)."""
+    _install_bridge(page, "<p>hello</p>")
+    assert page.evaluate("() => window.__ready.length") >= 1
+    assert _events(page) == []                      # an announcement is never a recorded event
+
+    before = page.evaluate("() => window.__ready.length")
+    page.evaluate("() => { document.open(); document.write('<input id=\"x\">'); document.close(); }")
+    assert page.evaluate("() => window.__ready.length") > before
+
+
+def test_bridge_without_a_binding_installs_quietly(page: Page) -> None:
+    page.set_content("<p>no binding here</p>")
+    page.evaluate(BRIDGE_JS)
+    assert page.evaluate("() => window.__SKILL_BRIDGE_V1__ === true")
 
 
 def _events(page: Page) -> list[dict]:
@@ -323,6 +342,7 @@ def test_iframe_sidebar_form_records_when_bridge_runs_as_init_script(browser: Br
     init_script = (
         "window.__SKILL_CAPTURE_PROFILE__ = { input_debounce_ms: 20, hover_dwell_ms: 35 };"
         "window.__skillReport = payload => {"
+        "  if (payload && payload._bridge_ready) return;"
         "  window.top.__events = window.top.__events || [];"
         "  window.top.__events.push(payload);"
         "};\n"

@@ -142,6 +142,8 @@ def normalize_events(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     policy = get_policy_bundle().data
     events = run_pipeline(raw)
-    if settings.compile_keep_every_action:
-        return events
-    return fold_action_caused_navigations(fix_step_order(clean_steps(events, policy), policy))
+    if settings.compile_pass("cleanup"):
+        events = fix_step_order(clean_steps(events, policy), policy)
+    if settings.compile_pass("fold_navigations"):
+        events = fold_action_caused_navigations(events)
+    return events

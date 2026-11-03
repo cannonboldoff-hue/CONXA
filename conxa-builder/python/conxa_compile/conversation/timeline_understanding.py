@@ -74,9 +74,16 @@ EFFECTS = (*FALLBACK_CHOICES, "note")
 # A guess that would approve a step that cannot be undone, or choose a popup option, is never pre-filled.
 UNSAFE_GUESSES = {("confirm_before", "no_confirm")}
 _UPLOAD_ACTIONS = ("upload", "upload_intent")
-_GAP_CHOICES = (
-    {"id": "c1", "label": "Yes, it’s fine as recorded", "detail": ""},
-    {"id": "c2", "label": "No — use your own answer below to say what’s missing", "detail": ""},
+# What the video model says when a file is picked or dragged in from outside the browser.
+_FILE_PICK_RE = re.compile(
+    r"\b(file (explorer|picker|dialog|chooser|browser|manager)|windows explorer|finder window|"
+    r"open(ing)? (a |the )?(file )?dialog|(choos|select|pick|brows)(e|es|ed|ing|s)? (for )?(a |the )?files?|"
+    r"(drag|drop)(s|ped|ging|ged)? (a |the )?files?)\b")
+# An upload the browser did record this close to the picker means the pick was captured.
+FILE_PICK_WINDOW_MS = 20_000
+_FILE_PICK_CHOICES = (
+    {"id": "c1", "label": "I’ll record this part again", "detail": ""},
+    {"id": "c2", "label": "No file was needed here", "detail": ""},
 )
 
 Caller = Callable[[str, dict[str, Any], int], "dict[str, Any] | None"]
@@ -122,7 +129,7 @@ def _caused_by_action(row: dict[str, Any]) -> bool:
     """A page load the recorder saw a click cause; the compile folds it away (unless every action is kept)."""
     from conxa_core.config import settings
 
-    if settings.compile_keep_every_action:
+    if not settings.compile_pass("fold_navigations"):
         return False
     raw = row.get("value")
     data = _json_value(raw) if isinstance(raw, str) and raw.strip().startswith("{") else None
@@ -215,6 +222,29 @@ def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
             if names and all(n in downloaded for n in names):
                 continue
             out.append({"row": r["row_ref"], "effect": "upload"})
+    return out
+
+
+def missed_file_picks(merged: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """``(row_ref, prompt)`` for each moment the video shows a file picked or dragged in from outside
+    the browser with no upload the browser recorded near it. The replay cannot repeat such a pick.
+    Only video-only rows count: a row matched to a browser event was captured."""
+    uploads = [r.get("t_ms") or 0 for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS]
+    out = []
+    for r in merged:
+        seg = r.get("segment") or {}
+        if r.get("kind") != "observation" or not seg:
+            continue
+        said = " ".join(str(seg.get(k) or "") for k in ("visible_target", "intent", "purpose", "screen_before", "screen_after"))
+        if not _FILE_PICK_RE.search(said.lower()):
+            continue
+        t = r.get("t_ms") or 0
+        if any(abs(u - t) <= FILE_PICK_WINDOW_MS for u in uploads):
+            continue
+        what = _text(seg.get("intent") or seg.get("visible_target"), 90).strip().rstrip(".")
+        out.append((r["row_ref"], "Here a file was picked in a window outside the browser"
+                    + (f" ({what})" if what else "")
+                    + ", and the recording couldn’t see which file. The workflow can’t repeat this step."))
     return out
 
 
@@ -391,16 +421,20 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     no_upload = frozenset(r["row_ref"] for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS) \
         - {m["row"] for m in must if m["effect"] == "upload"}
     questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload)
+    # The prompt tells the model never to ask about a gap; code enforces it. A free-form note on a
+    # row the model itself called a gap is that same question. Only notes: a value, fork or upload
+    # question on such a row is about the action, not about the gap.
+    gap_rows = {g["row"] for g in gaps}
+    questions = [q for q in questions if not (q["kind"] == "note" and q["row"] in gap_rows)]
     for m in must:
         if not any(q["row"] == m["row"] and q["kind"] == m["effect"] for q in questions):
             questions.append(_fallback_question(m["effect"], m["row"], rows[m["row"]]))
-    # Something the video showed that the browser did not record is asked, never only mentioned.
-    asked_rows = {q["row"] for q in questions}
-    for g in gaps:
-        if g["row"] not in asked_rows:
-            questions.append({"kind": "note", "row": g["row"], "event_id": rows[g["row"]].get("event_id"),
-                              "prompt": f"{g['note']} Is it fine as recorded?", "why": "", "choices": list(_GAP_CHOICES),
-                              "best_guess": "", "cost_rank": 4})
+    # Gaps (idle time, video and browser log out of step) are kept for the log only, never asked:
+    # the recording is replayed as captured, and a person cannot answer a timing note.
+    # The one gap that does break a replay is a file picked outside the browser: that is asked.
+    for row_ref, prompt in missed_file_picks(merged):
+        questions.append({"kind": "note", "row": row_ref, "event_id": None, "prompt": prompt, "why": "",
+                          "choices": list(_FILE_PICK_CHOICES), "best_guess": "", "cost_rank": 1})
     have = {q.get("ref") for q in questions}
     for ref, v in values.items():
         cand = by_ref[ref]

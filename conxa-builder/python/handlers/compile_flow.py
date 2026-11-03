@@ -259,8 +259,11 @@ class CompileFlowMixin:
                 kind = str(d.get("action") or "action").replace("_", " ")
                 named.append(f"{kind} “{d['target']}”" if d.get("target") else kind)
             more = f" and {len(dropped) - 3} more" if len(dropped) > 3 else ""
-            why = ("the page did them by itself, not you" if all(d.get("pass") == "not_from_user" for d in dropped)
-                   else "repeats, page loads a click caused, or things the page did by itself")
+            passes = {d.get("pass") for d in dropped}
+            why = {"not_from_user": "the page did them by itself, not you",
+                   "login_page": "they happened on a sign-in page, and signing in is saved separately"}.get(
+                next(iter(passes)) if len(passes) == 1 else None,
+                "repeats, page loads a click caused, or things the page did by itself")
             lines.append(
                 f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
                 f"({', '.join(named)}{more}) — {why}. They’re listed in the compile report.")

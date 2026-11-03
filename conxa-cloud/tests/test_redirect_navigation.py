@@ -151,6 +151,48 @@ def test_fold_leaves_back_forward_alone():
     assert fold_action_caused_navigations(events) == events
 
 
+# A site moving on by itself right after a page load (the first address redirects on): the second
+# navigation starts where the first landed, same host, nothing done in between.
+D1 = "https://drive.example.com/?pli=1"
+D2 = "https://drive.example.com/drive/home"
+
+
+def _goto(ts: str, frm: str, to: str, tab: str = "tab_0") -> dict:
+    return {
+        "action": {"action": "manual_navigate", "timestamp": ts, "value": json.dumps({"from_url": frm, "to_url": to})},
+        "page": {"url": to},
+        "tab": {"id": tab},
+    }
+
+
+def test_fold_drops_a_same_site_redirect_right_after_a_page_load():
+    first, hop = _goto("2026-01-01T00:00:00Z", "about:blank", D1), _goto("2026-01-01T00:00:01Z", D1, D2)
+    assert fold_action_caused_navigations([first, hop]) == [first]
+
+
+def test_fold_keeps_a_second_navigation_to_another_site():
+    events = [_goto("2026-01-01T00:00:00Z", "about:blank", D1),
+              _goto("2026-01-01T00:00:01Z", D1, "https://other.example.org/")]
+    assert fold_action_caused_navigations(events) == events
+
+
+def test_fold_keeps_a_second_navigation_that_starts_somewhere_else():
+    events = [_goto("2026-01-01T00:00:00Z", "about:blank", D1),
+              _goto("2026-01-01T00:00:01Z", "https://elsewhere.example.com/", D2)]
+    assert fold_action_caused_navigations(events) == events
+
+
+def test_fold_keeps_a_same_site_navigation_after_the_window():
+    events = [_goto("2026-01-01T00:00:00Z", "about:blank", D1), _goto("2026-01-01T00:00:30Z", D1, D2)]
+    assert fold_action_caused_navigations(events) == events
+
+
+def test_fold_site_redirect_never_crosses_tabs():
+    events = [_goto("2026-01-01T00:00:00Z", "about:blank", D1, tab="tab_0"),
+              _goto("2026-01-01T00:00:01Z", D1, D2, tab="tab_1")]
+    assert fold_action_caused_navigations(events) == events
+
+
 # ---------------------------------------------------------------- record -> compile
 
 def _event(action: str, ts: str, url: str, text: str, css: str) -> dict:

@@ -175,8 +175,9 @@ function a11yRecoveryName(fingerprint) {
   ).trim());
 }
 
-// Mirrors identity_bundle.py::_strip_keyboard_shortcut_tail. Drive (and similar) append
-// "Alt+C then U" to the visible label; Playwright's accessible name does not.
+// Mirrors identity_bundle.py::strip_keyboard_shortcut_tail, kept honest by one shared fixture
+// (test/fixtures/accessible_name_cases.json). Drive (and similar) append "Alt+C then U" to the
+// visible label; Playwright's accessible name does not.
 const SHORTCUT_TAIL_RE = /\s+(?:(?:Ctrl|Control|Alt|Shift|Cmd|Command|Meta|Win|Windows|Option)\s*\+\s*)+[A-Za-z0-9](?:\s+then\s+(?:(?:(?:Ctrl|Control|Alt|Shift|Cmd|Command|Meta|Win|Windows|Option)\s*\+\s*)+[A-Za-z0-9]|[A-Za-z0-9]))*\s*$/i;
 
 function stripKeyboardShortcutTail(text) {
@@ -468,6 +469,7 @@ module.exports = {
   guardDecision,
   recoverWithSelector,
   a11yRecoveryName,
+  stripKeyboardShortcutTail,
   recoverWithA11y,
   recoverWithDialogScope,
   layer1Ladder,

@@ -46,7 +46,7 @@ from conxa_compile.recorder.frame_utils import (
     _viewport_string_from_page,
     format_startup_error,
     is_blank_url,
-    looks_like_login_page,
+    LoginFlowTracker,
 )
 from conxa_compile.recorder.screencast_video import ScreencastVideo
 
@@ -450,8 +450,19 @@ class RecordingSession:
     # transition). Used to defer bridge-install checks away from the exact instant a frame is
     # least stable — see _BRIDGE_INSTALL_SETTLE_S.
     _frame_last_transition_ts: dict[int, float] = field(default_factory=dict)
+    # Per frame (by object identity): when the page itself last said "bridge installed" (bridge.js
+    # announces over the binding), and the install check's (failures so far, do-not-retry-before).
+    _bridge_ready_at: dict[int, float] = field(default_factory=dict)
+    _bridge_probe_state: dict[int, tuple[int, float]] = field(default_factory=dict)
+    # The slowest install checks seen (ms, frame url), kept for recorder_diag.json: the sync API has
+    # no timeout, so a check that takes long is the early sign of one that will never return.
+    _slow_frame_probes: list[dict[str, Any]] = field(default_factory=list)
     _pump_tick: int = 0
     _no_pages_streak: int = 0
+    # Sign-in state for the recording drop (see frame_utils.LoginFlowTracker) and what it dropped,
+    # written to login_drops.json so the compile report can say so. Never holds a typed value.
+    _login_flow: LoginFlowTracker = field(default_factory=LoginFlowTracker)
+    _login_drops: list[dict[str, Any]] = field(default_factory=list)
     binding_errors: list[str] = field(default_factory=list)
     browser_open: bool = False
     ended_by_user: bool = False
@@ -1488,12 +1499,57 @@ class RecordingSession:
     # exactly once at a fixed offset from its first attach.
     _BRIDGE_INSTALL_SETTLE_S = 2.5
 
+    # How the pump decides whether a frame needs an install check at all. The sync Playwright API
+    # cannot bound a call that lands on a churning frame, so the policy is to make fewer of them:
+    #  * a frame whose page announced "bridge installed" (bridge.js, over the binding) since its last
+    #    transition is not touched, and is re-checked only every _BRIDGE_RECHECK_S as a backstop;
+    #  * a check that finds the bridge healthy counts as an announcement;
+    #  * a check that fails backs off (0.5s, 1s, 2s, then every 4s) instead of retrying every tick.
+    _BRIDGE_RECHECK_S = 15.0
+    _BRIDGE_BACKOFF_BASE_S = 0.5
+    _BRIDGE_BACKOFF_CAP_S = 4.0
+
     def _ensure_bridge_installed_in_frame_sync(self, frame: Any) -> None:
         if self.auth_mode or not self._bridge_script or frame is None:
             return
-        last_transition = self._frame_last_transition_ts.get(id(frame))
-        if last_transition is not None and (time.monotonic() - last_transition) < self._BRIDGE_INSTALL_SETTLE_S:
+        key = id(frame)
+        now = time.monotonic()
+        last_transition = self._frame_last_transition_ts.get(key)
+        if last_transition is not None and (now - last_transition) < self._BRIDGE_INSTALL_SETTLE_S:
             return
+        ready_at = self._bridge_ready_at.get(key)
+        if (ready_at is not None and (last_transition is None or ready_at >= last_transition)
+                and (now - ready_at) < self._BRIDGE_RECHECK_S):
+            return
+        failures, retry_at = self._bridge_probe_state.get(key, (0, 0.0))
+        if now < retry_at:
+            return
+        started = time.monotonic()
+        healthy = self._probe_frame_bridge_sync(frame)
+        elapsed = time.monotonic() - started
+        if healthy:
+            self._bridge_ready_at[key] = time.monotonic()
+            self._bridge_probe_state.pop(key, None)
+        else:
+            delay = min(self._BRIDGE_BACKOFF_BASE_S * (2 ** failures), self._BRIDGE_BACKOFF_CAP_S)
+            self._bridge_probe_state[key] = (failures + 1, time.monotonic() + delay)
+        self._note_slow_probe(frame, elapsed)
+
+    def _note_slow_probe(self, frame: Any, elapsed_s: float) -> None:
+        ms = int(elapsed_s * 1000)
+        if ms < 250:
+            return
+        try:
+            url = _frame_url(frame)
+        except Exception:  # noqa: BLE001
+            url = ""
+        self._slow_frame_probes.append({"ms": ms, "url": url})
+        self._slow_frame_probes.sort(key=lambda e: -e["ms"])
+        del self._slow_frame_probes[5:]
+
+    def _probe_frame_bridge_sync(self, frame: Any) -> bool:
+        """Check one frame's bridge and install or reinstall it if needed. True when the frame ends
+        healthy, False when every attempt failed."""
         try:
             frame_url_for_log = _frame_url(frame)
         except Exception:  # noqa: BLE001
@@ -1551,7 +1607,7 @@ class RecordingSession:
                                 self.binding_errors.append(f"frame_binding_missing:{frame_url}")
                         except Exception:  # noqa: BLE001
                             self.binding_errors.append(f"frame_diag_error:{frame_url}")
-                return
+                return True
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 self._log_bridge_attempt(
@@ -1565,6 +1621,7 @@ class RecordingSession:
                 time.sleep(self._BRIDGE_INSTALL_RETRY_DELAY_S)
         if last_exc is not None:
             self._remember_bridge_install_error(str(last_exc))
+        return False
 
     def _log_frame_lifecycle(self, kind: str, frame: Any) -> None:
         # A frame mid-detach can raise on nearly any access (this is the exact "Frame was
@@ -1608,6 +1665,11 @@ class RecordingSession:
 
     def _on_frame_detached(self, frame: Any) -> None:
         self._log_frame_lifecycle("detached", frame)
+        # Keyed by id(frame): drop the entries so a recycled id can never inherit a dead frame's state.
+        key = id(frame)
+        self._frame_last_transition_ts.pop(key, None)
+        self._bridge_ready_at.pop(key, None)
+        self._bridge_probe_state.pop(key, None)
 
     POPUP_TAB_WAIT_S = 0.5
 
@@ -1671,6 +1733,13 @@ class RecordingSession:
 
     def _binding_sink_sync(self, source: Any, payload: dict[str, Any]) -> None:
         try:
+            if isinstance(payload, dict) and payload.get("_bridge_ready"):
+                # The page says its bridge is installed in THIS frame. Bookkeeping only: no
+                # Playwright call here, same rule as below.
+                announcing = source.get("frame") if isinstance(source, dict) else None
+                if announcing is not None:
+                    self._bridge_ready_at[id(announcing)] = time.monotonic()
+                return
             payload_copy = copy.deepcopy(payload)
             # Trace payloads go to the diagnostics list, not the event queue.
             if payload_copy.get("_trace"):
@@ -1748,6 +1817,7 @@ class RecordingSession:
             "frame_tree": frame_tree,
             "frame_snapshots": self._frame_snapshots,
             "frame_lifecycle": self._frame_lifecycle,
+            "slowest_frame_probes": self._slow_frame_probes,
             "tabs": self._tab_meta,
         }
         try:
@@ -1796,6 +1866,11 @@ class RecordingSession:
         with out.open("w", encoding="utf-8") as f:
             for ev in self._materialized:
                 f.write(json.dumps(ev.model_dump(mode="json"), ensure_ascii=False) + "\n")
+        if self._login_drops:
+            try:
+                (session_dir / "login_drops.json").write_text(json.dumps(self._login_drops), encoding="utf-8")
+            except OSError:
+                pass
         self._write_diagnostics_sync(session_dir)
 
     def _should_merge_typing(self, prev: RecordedEvent, curr: RecordedEvent) -> bool:
@@ -1814,8 +1889,16 @@ class RecordingSession:
             return
         # Signing in is never part of a workflow (auth lives in the saved session): drop whatever
         # happens on a login page, e.g. a session that expired mid-recording.
-        if not self.auth_mode and looks_like_login_page(str((payload.get("page") or {}).get("url") or "")):
-            return
+        if not self.auth_mode:
+            if str((payload.get("semantic") or {}).get("input_type") or "").lower() == "password":
+                self._login_flow.arm()
+            if self._login_flow.is_login_step(str((payload.get("page") or {}).get("url") or "")):
+                if len(self._login_drops) < 200:
+                    self._login_drops.append({
+                        "pass": "login_page",
+                        "action": str((payload.get("action") or {}).get("action") or ""),
+                    })
+                return
         # Frame-chain/geometry extraction needs Playwright sync-API calls (walking the
         # ancestor chain via frame.evaluate()); safe here since this runs from the plain
         # pump-loop drain, never from inside the expose_binding callback that first received

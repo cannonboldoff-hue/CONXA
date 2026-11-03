@@ -16,6 +16,8 @@ Covers:
 """
 from __future__ import annotations
 
+import pytest
+
 from conxa_compile.compiler.identity_bundle import _accessible_name, generate_deterministic_signals
 from conxa_compile.compiler.selector_filters import resolves_to_nothing
 
@@ -213,12 +215,28 @@ def test_nameless_select_gets_no_role_or_relational_signal():
     assert any(s.engine.startswith("css") for s in signals), "must still fall through to structural identity"
 
 
-def test_keyboard_shortcut_tail_stripped_from_accessible_name():
-    from conxa_compile.compiler.identity_bundle import _strip_keyboard_shortcut_tail
+def _accessible_name_cases():
+    import json
+    from pathlib import Path
 
-    assert _strip_keyboard_shortcut_tail("File upload Alt+C then U") == "File upload"
-    assert _strip_keyboard_shortcut_tail("Save") == "Save"
-    assert _strip_keyboard_shortcut_tail("Cut Ctrl+X") == "Cut"
+    # One fixture, two languages: runtime/test/unit/test_shortcut_tail.js runs the same file.
+    path = Path(__file__).resolve().parents[2] / "runtime" / "test" / "fixtures" / "accessible_name_cases.json"
+    return json.loads(path.read_text("utf-8"))
+
+
+@pytest.mark.parametrize("case", _accessible_name_cases(), ids=lambda c: c["name"])
+def test_shortcut_tail_matches_shared_fixture(case):
+    from conxa_compile.compiler.identity_bundle import strip_keyboard_shortcut_tail
+
+    assert strip_keyboard_shortcut_tail(case["input"]) == case["expect"]
+
+
+def test_keyboard_shortcut_tail_stripped_from_accessible_name():
+    from conxa_compile.compiler.identity_bundle import strip_keyboard_shortcut_tail
+
+    assert strip_keyboard_shortcut_tail("File upload Alt+C then U") == "File upload"
+    assert strip_keyboard_shortcut_tail("Save") == "Save"
+    assert strip_keyboard_shortcut_tail("Cut Ctrl+X") == "Cut"
     target = {"tag": "li", "role": "menuitem", "inner_text": "File upload Alt+C then U"}
     assert _accessible_name(target) == "File upload"
 

@@ -105,15 +105,15 @@ def test_understand_timeline_uses_the_model_and_never_raises():
 def test_questions_are_the_models_own_ranked_prefilled_and_capped_at_five_open():
     und = TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: raw_answer())
     qs = TU.questions_from_understanding(und, MERGED)
-    # the model's own questions, plus its gap (r6) asked rather than only mentioned
-    assert [q["kind"] for q in qs] == ["confirm_before", "upload", "value", "note"]
+    # the model's own questions only: its gap (r6) is never asked
+    assert [q["kind"] for q in qs] == ["confirm_before", "upload", "value"]
     assert all(q["phase"] == "pre_compile" for q in qs)
     by_id = {q["id"]: q for q in qs}
     assert by_id["upload:r3"]["best_guess"] == "each_run" and by_id["confirm_before:r5"]["best_guess"] == ""
     assert by_id["upload:r3"]["title"] == "Same file each time?"                  # the model's sentence
     assert by_id["value:url:2"]["items"][0]["event_ids"] == [2]
-    assert by_id["note:r6"]["title"].startswith("A download bar appeared") and by_id["note:r6"]["best_guess"] == ""
-    assert [q["status"] for q in qs] == ["open"] * 4
+    assert "note:r6" not in by_id
+    assert [q["status"] for q in qs] == ["open"] * 3
     many = {**und, "questions": [dict(und["questions"][0], row=f"r{i}") for i in range(1, 7)]}
     assert [q["status"] for q in TU.questions_from_understanding(many, MERGED)] == ["open"] * 5 + ["queued"]
 
@@ -131,7 +131,7 @@ def test_a_decision_popup_is_always_a_fork_and_a_plain_click_never_is():
 def test_a_decision_popup_the_model_left_out_is_put_back_and_so_is_an_upload():
     merged = MERGED + [event(7, "click", "Replace", dialog="decision"), event(8, "upload_intent", "file")]
     out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))
-    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("fork", "r7"), ("note", "r6"), ("upload", "r8")]
+    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("fork", "r7"), ("upload", "r8")]
     assert {m["effect"] for m in TU.build_input(merged, "", "", [])["must_ask"]} == {"fork", "upload"}
 
 
@@ -142,7 +142,7 @@ def test_one_question_per_value_and_per_row_and_a_note_needs_choices():
     out = TU.validate(raw_answer(questions=[ask, dict(ask, prompt="Again?"), note,
                                             dict(note, row="r3", choices=[{"label": "only one"}])]),
                       MERGED, TU.candidates_from_timeline(MERGED))
-    assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2"), ("note", "r6")]
+    assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2")]
     assert [c["id"] for c in out["questions"][0]["choices"]] == ["c1", "c2"]
     assert out["questions"][1]["prompt"] == "Same repo every time?"
 
@@ -164,7 +164,42 @@ def test_a_page_load_a_click_caused_is_not_a_value_to_ask_about():
 def test_no_summary_or_coverage_question_is_ever_asked():
     und = TU.understand_timeline(MERGED, "download invoices",
                                  call=lambda t, p, ms: raw_answer(questions=[], gaps=[{"row": "r6", "note": "gap"}]))
-    assert not {q["kind"] for q in TU.questions_from_understanding(und, MERGED)} & {"confirm_summary", "coverage", "chosen_values"}
+    qs = TU.questions_from_understanding(und, MERGED)
+    assert not {q["kind"] for q in qs} & {"confirm_summary", "coverage", "chosen_values"}
+    assert not [q for q in qs if q["id"].endswith(":r6")]   # a gap is never asked
+
+
+def test_a_note_on_a_row_the_model_called_a_gap_is_dropped_in_code():
+    cands = TU.candidates_from_timeline(MERGED)
+    note = {"effect": "note", "row": "r6", "prompt": "Was the download bar fine?", "cost_rank": 1,
+            "choices": [{"label": "Yes"}, {"label": "No"}]}
+    out = TU.validate(raw_answer(questions=[note]), MERGED, cands)           # r6 is the gap row
+    assert not [q for q in out["questions"] if q["row"] == "r6"]
+    out = TU.validate(raw_answer(questions=[dict(note, row="r5")]), MERGED, cands)   # r5 is not a gap
+    assert [(q["kind"], q["row"]) for q in out["questions"] if q["kind"] == "note"] == [("note", "r5")]
+
+
+def test_the_one_gap_that_is_asked_survives_the_gap_rule():
+    pick = {"kind": "observation", "type": "off_page", "row_ref": "r7", "t_ms": 7000,
+            "segment": {"intent": "selects a file in File Explorer", "visible_target": "Open dialog"}}
+    merged = MERGED + [pick]
+    out = TU.validate(raw_answer(questions=[], gaps=[{"row": "r7", "note": "File Explorer picked a file."}]),
+                      merged, TU.candidates_from_timeline(merged))
+    assert [(q["kind"], q["row"]) for q in out["questions"] if q["row"] == "r7"] == [("note", "r7")]
+
+
+def test_a_file_picked_outside_the_browser_is_asked_unless_the_browser_recorded_an_upload():
+    pick = {"kind": "observation", "type": "off_page", "row_ref": "r7", "t_ms": 7000,
+            "segment": {"intent": "selects a file in File Explorer", "visible_target": "Open dialog"}}
+    merged = MERGED + [pick]
+    qs = TU.questions_from_understanding(TU.understand_timeline(merged, "x", call=lambda t, p, ms: raw_answer(questions=[])), merged)
+    asked = [q for q in qs if q["id"].endswith(":r7")]
+    assert len(asked) == 1 and "outside the browser" in asked[0]["title"]
+    assert [c["id"] for c in asked[0]["choices"]] == ["c1", "c2"]
+    # an upload the browser did record close by means the pick was captured
+    assert TU.missed_file_picks(merged + [event(8, "upload_intent", "file", value="[]")]) == []
+    # an idle wait or a download bar is never asked
+    assert TU.missed_file_picks(MERGED) == []
 
 
 def test_decisions_are_keyed_by_event_and_survive_a_replaced_answer(tmp_path):

@@ -94,7 +94,16 @@
     // actually (re)attached, not just that this function ran without throwing — a frame whose
     // own onDoc(...) registrations never ran (e.g. the script errored before reaching them)
     // would otherwise report success while attaching zero listeners.
+    announceReady();
     return _docListeners.length;
+  }
+  // Tell the recorder this frame's bridge is installed, so it does not have to ask. Only the
+  // binding identifies WHICH frame is speaking (a postMessage relay would arrive as the top
+  // frame), so with no binding here nothing is sent and the recorder falls back to checking.
+  function announceReady() {
+    const fn = window["__skillReport"];
+    if (typeof fn !== "function") return;
+    try { fn({ _bridge_ready: true }); } catch (_e) {}
   }
   // Exposed so session.py's pump-loop backstop can trigger a reinstall directly instead of
   // re-running (and silently no-oping on) the whole bridge script.
@@ -491,11 +500,14 @@
   // text engine never matches a <select> by its options, so a text selector built from one is a
   // guaranteed miss that still occupies the bundle's highest-durability slot. Same reasoning as
   // identity_bundle.py's _NAME_FROM_CONTENT_ROLES gate, applied to the text channel.
-  const OPTION_CONTENT_TAGS = { select: 1, datalist: 1, optgroup: 1 };
+  // Same set, and the same tag-or-role gate, as identity_bundle.py and resolver.js (a parity test
+  // reads all three).
+  const OPTION_CONTENT_TAGS = { select: 1, datalist: 1, optgroup: 1, combobox: 1, listbox: 1 };
 
   function buildTextSelector(el) {
     if (!el || !el.tagName) return "";
     if (OPTION_CONTENT_TAGS[el.tagName.toLowerCase()]) return "";
+    if (OPTION_CONTENT_TAGS[String(el.getAttribute("role") || "").toLowerCase()]) return "";
     // Read one char past the cap so an over-long text is detectable rather than silently cut.
     const raw = safeText(el, 81);
     if (!raw) return "";

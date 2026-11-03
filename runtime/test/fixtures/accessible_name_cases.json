@@ -1,0 +1,10 @@
+[
+  {"name": "drive upload hint with then-chain", "input": "File upload Alt+C then U", "expect": "File upload"},
+  {"name": "plain name untouched", "input": "Save", "expect": "Save"},
+  {"name": "single chord", "input": "Cut Ctrl+X", "expect": "Cut"},
+  {"name": "spaced chord", "input": "Undo Ctrl + Z", "expect": "Undo"},
+  {"name": "stacked modifiers", "input": "Paste Ctrl+Shift+V", "expect": "Paste"},
+  {"name": "prose that mentions a key is kept whole", "input": "Use Ctrl+Click to select", "expect": "Use Ctrl+Click to select"},
+  {"name": "name that is only a chord word is kept", "input": "Alt", "expect": "Alt"},
+  {"name": "empty", "input": "", "expect": ""}
+]

@@ -52,7 +52,7 @@ _SHORTCUT_TAIL_RE = re.compile(
 )
 
 
-def _strip_keyboard_shortcut_tail(text: str) -> str:
+def strip_keyboard_shortcut_tail(text: str) -> str:
     """Drop a trailing accelerator hint; leave ordinary names untouched."""
     return _SHORTCUT_TAIL_RE.sub("", text).strip()
 
@@ -105,7 +105,7 @@ def generate_deterministic_signals(
     # real identity below it. bridge.js's buildTextSelector now refuses to record these at all;
     # this gate is what heals sessions recorded before that fix, without a re-record.
     raw_text = str(selectors.get("text_based") or "").strip()
-    text_val = _strip_keyboard_shortcut_tail(re.sub(r'^text=["\']?|["\']?$', "", raw_text).strip())
+    text_val = strip_keyboard_shortcut_tail(re.sub(r'^text=["\']?|["\']?$', "", raw_text).strip())
     tag_or_role = {str(target.get("tag") or "").lower(), str(semantic.get("role") or target.get("role") or "").lower()}
     if text_val and not (tag_or_role & _OPTION_CONTENT_TAGS):
         candidates.append(("text_based", to_playwright_grammar("text", text_val)))
@@ -237,7 +237,7 @@ def _accessible_name(target: dict[str, Any]) -> str:
     ):
         candidates.append(target.get("label_text"))
     for value in candidates:
-        name = _strip_keyboard_shortcut_tail(str(value or "").strip())
+        name = strip_keyboard_shortcut_tail(str(value or "").strip())
         if name:
             return name
     return ""

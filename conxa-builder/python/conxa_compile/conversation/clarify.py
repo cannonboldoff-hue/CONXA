@@ -27,6 +27,7 @@ import os
 import re
 from typing import Any, Callable
 
+from conxa_compile.compiler.identity_bundle import strip_keyboard_shortcut_tail
 from conxa_compile.compiler.step_key import step_keys
 from conxa_core.config import settings
 from conxa_core.models.prose_binding import readable as _readable
@@ -41,7 +42,7 @@ _PRIORITY = {
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
 # value on one of them is not "lost" and is never asked about. "not_from_user" is the page's own
 # script (recorder `origin`), which the person never typed or chose, so it is never asked about either.
-_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed", "not_from_user"})
+_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed", "not_from_user", "login_page"})
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
 
@@ -74,13 +75,14 @@ def _action_title(step: dict[str, Any]) -> str:
     if act in _LABELLED_VERBS:
         fp = (step.get("identity_bundle") or {}).get("fingerprint") or {}
         label = next((" ".join(str(fp.get(f)).split()) for f in _LABEL_FIELDS if str(fp.get(f) or "").strip()), "")
-        label = _SHORTCUT_HINT.sub("", label).strip() or label
+        label = _MAC_SHORTCUT_TAIL.sub("", strip_keyboard_shortcut_tail(label)).strip() or label
         return f"{_LABELLED_VERBS[act]} {_quoted(label)}" if label else ""
     return ""
 
 
-# A menu item's keyboard-shortcut hint the page shows beside its name ("File upload Alt+C then U").
-_SHORTCUT_HINT = re.compile(r"\s+(?:(?:Ctrl|Alt|Shift|Cmd|Meta|⌘|⌥|⇧)\s*\+.*|⌘.*)$", re.IGNORECASE)
+# A menu item's keyboard-shortcut hint the page shows beside its name ("File upload Alt+C then U")
+# is removed by the shared strip_keyboard_shortcut_tail; this only adds macOS symbol hints ("Save ⌘S").
+_MAC_SHORTCUT_TAIL = re.compile(r"\s+[⌘⌥⇧⌃]\S*$")
 
 
 def step_name(step: dict[str, Any]) -> str:
@@ -870,14 +872,15 @@ def effect_parents(steps: list[dict[str, Any]]) -> list[int | None]:
     """For each step, the index of the action that caused it, or None. Display only: the steps stay
     separate everywhere they run and are edited; a screen may indent an effect under its cause.
     An effect belongs to the nearest earlier step that is not itself an effect, and only when it
-    follows that step directly (or through other effects of it). With compile_keep_every_action
-    on, nothing is nested: every step shows flat."""
-    if settings.compile_keep_every_action:
+    follows that step directly (or through other effects of it). With navigation folding off,
+    nothing is nested: every step shows flat."""
+    if not settings.compile_pass("fold_navigations"):
         return [None] * len(steps)
     out: list[int | None] = []
     cause: int | None = None
     for i, s in enumerate(steps):
-        if _action_name(s) in _EFFECT_ACTIONS and cause is not None:
+        user_opened_tab = _action_name(s) == "tab_open" and (s.get("tab") or {}).get("opened_by") == "user"
+        if _action_name(s) in _EFFECT_ACTIONS and cause is not None and not user_opened_tab:
             out.append(cause)
         else:
             out.append(None)

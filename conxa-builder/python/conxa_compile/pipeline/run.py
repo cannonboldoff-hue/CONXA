@@ -188,7 +188,7 @@ def run_pipeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     validated: list[dict[str, Any]] = []
     for row in _reorder_by_timestamp(events):
         validated.append(RecordedEvent.model_validate(row).model_dump(mode="json"))
-    keep_all = settings.compile_keep_every_action
+    keep_all = not settings.compile_pass("upstream_dedupe")
     cleaned = [_clean_one(e, policy) for e in (validated if keep_all else _drop_non_actionable_hover_events(validated))]
     typed = [_infer_missing_input_type(e, policy) for e in cleaned]
     # collapse_select_interaction_noise runs first: fewer noise events left for

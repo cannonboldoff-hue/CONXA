@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 45 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 46 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **114** |
+| **Total** | **115** |
 
 ---
 
@@ -375,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (36 remaining)
+## P2 — High Value, Do Soon (37 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1132,10 +1132,16 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
 - **Complexity:** S–M.
 
+### BUILD-61 — What the architecture audit (2026-11-03) left open
+- **Category:** Builder / Recorder / Compiler
+- **Source:** `docs/Architecture-Audit-Patches-vs-Structural-Fixes.md`. Done 2026-11-04: login drop (stateful, ledgered, shared fixture), per-pass compile switches (`settings.compile_pass`, outcome forks always on), shortcut-tail fixture + `OPTION_CONTENT_TAGS` parity test, gap-note rule in code, whole-word ephemeral anchors, recorder bridge-ready announcement with probe back-off.
+- **Left:** (1) **Navigation provenance.** The recorder still does not say *why* a navigation happened; `navigation_effects._is_site_redirect` guesses from a 5 s window and drops a deliberate same-host navigation made within it. Page-requested navigations are already skipped in `session.py::_drain_nav_history_checks_sync`, so a redirect that reaches the compiler was not requested through CDP; telling it from a typed address needs a real recording (CDP `reason` values are in Playwright's `protocol.d.ts`: `anchorClick`, `httpHeaderRefresh`, `metaTagRefresh`, `scriptInitiated`, …). Also unconfirmed: what produces the duplicate goto after a new tab (`_insert_tab_markers` already skips its synthetic navigate when the tab's first event is one). (2) **Id-keyed passes.** `build.py` passes still rely on `steps[i]` ↔ `cleaned_events[i]`; the unledgered upstream drops in `pipeline/run.py` never reach `compile_report["dropped"]`. (3) **Date pickers by outcome.** A day-cell click records as a plain `click` with no `value_set` and no before-value; `bridge.js` `CALENDAR_ROOT_SELECTORS` still matches by class substring (`[class*='calendar']`). (4) **Ephemeral anchors by structure.** Anchors carry only `{element, relation}`, so overlay role / fixed position cannot be checked; the keyword list is English-only. (5) **Name matching.** Exact-name stripping stays (prefix or containment matching would interact with the resolver's `uniqueMargin` gate); Python caps `inner_text` at 80 chars for an accessible name, `cascade.js::a11yRecoveryName` does not. (6) The god files (`session.py`, `bridge.js`, `server.js`, `build.py`, `browser.js`). (7) **Manual checks nobody has run:** a recording against a page that re-creates an iframe (HubSpot-style) to confirm the pump no longer stalls — read `slowest_frame_probes` in `recorder_diag.json`; and a recording that signs in mid-way to see the "sign-in page" line in the compile report.
+- **Complexity:** M–L.
+
 ### BUILD-60 — Event provenance: restore UI, derived clicks, and the login-URL filter
 - **Category:** Builder / Recorder
 - **Source:** 2026-11-03: a recorded "Click Google Account <name>" step the person never made — Google's own script clicked its account button, and `bridge.js` recorded every click with no `isTrusted` check. Done: `origin: "script"` is stamped at capture and such events are dropped (ledgered as `not_from_user`) before any step is built.
-- **Left:** (1) No Human Edit "Not from you" list with Restore — the dropped event is only in `compile_report["dropped"]` (label + sequence), not stored in full, so a wrong drop needs a re-record. (2) A click the browser itself makes (a `<label>` forwarding to its input, `detail === 0`, no preceding trusted pointer/key) is `isTrusted: true` and still recorded; needs a "last trusted input" correlation in `bridge.js` if it shows up. (3) `session.py::looks_like_login_page` is a second, weaker "not part of the workflow" filter (URL path only, host ignored); revisit now that provenance exists. (4) Confirm on a real re-recorded Google flow that the account click arrives with `isTrusted:false` (the original session's events were not available to check).
+- **Left:** (1) No Human Edit "Not from you" list with Restore — the dropped event is only in `compile_report["dropped"]` (label + sequence), not stored in full, so a wrong drop needs a re-record. (2) A click the browser itself makes (a `<label>` forwarding to its input, `detail === 0`, no preceding trusted pointer/key) is `isTrusted: true` and still recorded; needs a "last trusted input" correlation in `bridge.js` if it shows up. (3) ~~`session.py::looks_like_login_page` is a second, weaker "not part of the workflow" filter~~ — done 2026-11-04 (BUILD-61): the recording drop now uses `frame_utils.LoginFlowTracker` (strict sign-in paths; SSO hops only mid sign-in) and ledgers what it drops. (4) Confirm on a real re-recorded Google flow that the account click arrives with `isTrusted:false` (the original session's events were not available to check).
 - **Complexity:** M.
 
 ### BUILD-59 — What the "nothing pauses by default" pass (2026-11-02) left open

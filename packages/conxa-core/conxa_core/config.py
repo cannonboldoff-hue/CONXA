@@ -185,6 +185,19 @@ class Settings(BaseSettings):
     # select/scroll dedupe, checkbox/date/decision-dialog collapses, AI "noise" removal).
     # Env: SKILL_COMPILE_KEEP_EVERY_ACTION.
     compile_keep_every_action: bool = False
+    # Per-pass switches, so one pass can be turned on or off without touching the others. None =
+    # follow compile_keep_every_action above; a value wins over it. Read through compile_pass().
+    # Env: SKILL_COMPILE_<NAME>, e.g. SKILL_COMPILE_FOLD_NAVIGATIONS=false.
+    compile_cleanup: bool | None = None           # repeat cleanup + step reordering
+    compile_fold_navigations: bool | None = None  # click-caused / redirect navigations -> post-conditions
+    compile_collapse_choice: bool | None = None   # checkbox-group runs -> one step
+    compile_collapse_dates: bool | None = None    # custom date-picker click runs -> one date_pick step
+    compile_flag_noise: bool | None = None        # AI "noise" removal (archived, never deleted)
+    compile_upstream_dedupe: bool | None = None   # hover drop + focus/select/scroll dedupe before compile
+    # Decision popups ("Replace / Keep both / Cancel") compile to an outcome_fork step. This does
+    # NOT follow compile_keep_every_action: without it a recorded click on "Replace" would replay
+    # as a plain click, answering the popup on the person's behalf (see CLAUDE.md invariants).
+    compile_outcome_forks: bool = True
 
     # Selector compilation tuning (calls Text endpoint above)
     llm_selector_timeout_ms: int = 60000
@@ -481,6 +494,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [item.strip() for item in self.cors_allowed_origins.split(",") if item.strip()]
+
+    def compile_pass(self, name: str) -> bool:
+        """Is the compile pass ``name`` (cleanup, fold_navigations, collapse_choice,
+        collapse_dates, flag_noise, upstream_dedupe) on? Its own switch if set, else the umbrella."""
+        explicit = getattr(self, f"compile_{name}")
+        return (not self.compile_keep_every_action) if explicit is None else explicit
 
     # Legacy single-endpoint accessors — derived from the multi-provider pool so out-of-scope
     # callers (e.g. services/skill_pack/llm.py which does its own HTTP) keep working without

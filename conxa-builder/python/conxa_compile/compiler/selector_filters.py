@@ -452,6 +452,10 @@ def css_shadow_unverifiable(engine: str, shadow_path: list[Any] | None) -> bool:
 # Ephemeral-anchor filter (used by spatial-anchor / relational signal builders)
 # ---------------------------------------------------------------------------
 
+# Matched as whole words or phrases (a trailing "s" allowed), never as substrings, and only words
+# that name an overlay itself. Bare "notification" and "subscribe" are left out: they are also
+# ordinary labels ("Notification settings", "Subscribe to updates") and made real anchors vanish.
+# English only; a structural test (overlay role, fixed position) needs the recorder to tag anchors.
 _EPHEMERAL_ANCHOR_KEYWORDS = frozenset({
     "cookie",
     "consent",
@@ -462,12 +466,17 @@ _EPHEMERAL_ANCHOR_KEYWORDS = frozenset({
     "pop-up",
     "pop up",
     "newsletter",
-    "subscribe",
-    "notification",
+    "toast",
+    "snackbar",
+    "notification bar",
+    "notification banner",
     "we use cookies",
     "accept all",
     "manage preferences",
 })
+_EPHEMERAL_ANCHOR_RE = re.compile(
+    r"(?<![a-z0-9])(?:" + "|".join(re.escape(k) for k in sorted(_EPHEMERAL_ANCHOR_KEYWORDS, key=len, reverse=True)) + r")s?(?![a-z0-9])"
+)
 
 
 def is_ephemeral_anchor(phrase: str) -> bool:
@@ -478,7 +487,7 @@ def is_ephemeral_anchor(phrase: str) -> bool:
     them the worst-possible reference points for relational selectors.
     """
     lowered = phrase.strip().lower()
-    return any(kw in lowered for kw in _EPHEMERAL_ANCHOR_KEYWORDS)
+    return bool(_EPHEMERAL_ANCHOR_RE.search(lowered))
 
 
 # Bare HTML tag names that leak into anchor_phrases when the recorder captures a container

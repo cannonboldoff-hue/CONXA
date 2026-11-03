@@ -265,7 +265,6 @@ def _site_of(url: str) -> str:
 # What a marker step is called on screen. Markers carry no LLM intent, so without these every one reads
 # as its action name ("Tab open").
 _MARKER_TITLES = {
-    "tab_open": "A new tab opens",
     "tab_switch": "Switch to another tab",
     "download_observed": "A file downloads",
     "dialog_appeared": "A browser dialog appears",
@@ -845,6 +844,19 @@ def _read_environment_sidecar(session_root: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _read_login_drops_sidecar(session_root: Path) -> list[dict[str, Any]]:
+    """Events the recorder dropped because they happened while signing in (recorder/session.py
+    writes login_drops.json). Entries carry only the pass and the action name, never a value, so a
+    typed password cannot reach the compile report. Missing or malformed: nothing to report."""
+    try:
+        data = json.loads((session_root / "login_drops.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(data, list):
+        return []
+    return [{"pass": "login_page", "action": str(d.get("action") or "")} for d in data if isinstance(d, dict)]
+
+
 def _confidence_from_identity_bundle(bundle: Any) -> float:
     """Derive selector confidence from IdentityBundle signal quality (the runtime's resolver oracle).
 
@@ -1188,12 +1200,17 @@ def _build_step(
                     marker_value = json.dumps(dialog_payload)
                 else:
                     marker_value = str(raw_value)
+        tab_ctx = _build_tab_context(ev)
+        title = _MARKER_TITLES.get(str(action_payload), "")
+        if action_payload == "tab_open":
+            # Ctrl+T (the person) vs a link / window.open (the page): same marker, different story.
+            title = "Open a new tab" if tab_ctx.get("opened_by") == "user" else "The click opens a new tab"
         step = SkillStep(
             action=action_payload,
             intent=str(action_payload),
-            semantic_description=_MARKER_TITLES.get(str(action_payload), ""),
+            semantic_description=title,
             frame=_build_frame_context(ev),
-            tab=_build_tab_context(ev),
+            tab=tab_ctx,
             value=marker_value,
             input_binding=marker_input_binding,
             recovery=RecoveryBlock(**no_recovery_block(str(action_payload))),
@@ -1607,18 +1624,18 @@ def prepare_compile_events(
     human = [e for e in events if e.get("origin") != "script" or _studio_file_pick(e)]
     _record_drops(ledger, events, human, "not_from_user")
     events = human
-    if settings.compile_keep_every_action:
-        # One recorded action = one step: no repeat cleanup, no navigation fold.
-        return _insert_tab_markers(list(events))
-    cleaned_events = fix_step_order(clean_steps(events, pol), pol)
-    _record_drops(ledger, events, cleaned_events, "cleanup")
+    cleaned_events = list(events)
+    if settings.compile_pass("cleanup"):
+        cleaned_events = fix_step_order(clean_steps(events, pol), pol)
+        _record_drops(ledger, events, cleaned_events, "cleanup")
     # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
     # effect, not a step: drop it and keep only a generalized post-condition on the action.
     # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
     # _insert_start_navigate_step's start URL) are never candidates.
-    before_fold = cleaned_events
-    cleaned_events = fold_action_caused_navigations(cleaned_events)
-    _record_drops(ledger, before_fold, cleaned_events, "navigation_folded")
+    if settings.compile_pass("fold_navigations"):
+        before_fold = cleaned_events
+        cleaned_events = fold_action_caused_navigations(cleaned_events)
+        _record_drops(ledger, before_fold, cleaned_events, "navigation_folded")
     # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
     # fix_step_order so the synthetic marker events never have to satisfy those functions'
     # assumptions about real recorded event shape.
@@ -1654,7 +1671,7 @@ def compile_skill_package(
         "Preparing compiler inputs.",
         {"phase": "compiler_prepare", "event_count": len(events), "session_id": sid},
     )
-    drop_ledger: list[dict[str, Any]] = []
+    drop_ledger: list[dict[str, Any]] = _read_login_drops_sidecar(session_root)
     cleaned_events = prepare_compile_events(events, pol, drop_ledger)
     _compile_log(
         "compile_phase",
@@ -1692,7 +1709,7 @@ def compile_skill_package(
     # also assumes 1:1 alignment with whatever `steps` it's given, which this pass may have
     # already shrunk.
     absorbed: dict[str, list[dict[str, Any]]] = {"choice_collapsed": [], "date_collapsed": []}
-    if settings.compile_keep_every_action:
+    if not settings.compile_pass("collapse_choice"):
         date_pass_events = cleaned_events
     else:
         steps, date_pass_events = collapse_choice_group_runs(
@@ -1706,7 +1723,7 @@ def compile_skill_package(
     # an ambiguous day/month order falls back to the recording browser's own locale sample.
     environment = _read_environment_sidecar(session_root)
     convert_typed_date_steps(steps, date_pass_events, pol, str(environment.get("date_format_sample") or ""))
-    if not settings.compile_keep_every_action:
+    if settings.compile_pass("collapse_dates"):
         steps = collapse_date_picker_runs(steps, date_pass_events, pol, absorbed=absorbed["date_collapsed"])
     for label, evs in absorbed.items():
         _record_drops(drop_ledger, evs, [], label)
@@ -1729,7 +1746,7 @@ def compile_skill_package(
     # bindings (the fork copies finished steps) and before the report, the second opinion and the
     # step keys, so everything downstream sees the final shape. Steps with no dialog_context
     # (every older recording) pass through untouched.
-    if not settings.compile_keep_every_action:
+    if settings.compile_outcome_forks:
         steps = build_outcome_forks(steps, sid)
 
     _compile_log(
@@ -2156,7 +2173,7 @@ def _apply_second_opinion(
     backfilled = _apply_workflow_review_to_steps(steps, graph)
 
     try:
-        noise_findings = [] if settings.compile_keep_every_action else [f for f in findings if f.get("kind") == "flag_noise"]
+        noise_findings = [f for f in findings if f.get("kind") == "flag_noise"] if settings.compile_pass("flag_noise") else []
         rewrite_findings = [f for f in findings if f.get("kind") != "flag_noise"]
         applied = apply_second_opinion(steps, rewrite_findings)
         steps, archived = archive_flagged_steps(steps, noise_findings)

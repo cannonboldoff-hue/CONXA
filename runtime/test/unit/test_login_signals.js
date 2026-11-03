@@ -25,6 +25,7 @@ const {
   statusMatchesSpec,
   evaluateAuthDefinition,
   classifySession,
+  looksLikeSessionLogin,
   matchesSuccessUrl,
 } = require("../../app/login_signals");
 
@@ -331,6 +332,19 @@ for (const c of SESSION_CASES) {
   test(`classifySession fixture: ${c.name}`, () => {
     const state = classifySession(c.observation, c.baseline, c.app, { noBaselineOk: Boolean(c.noBaselineOk) });
     assert.strictEqual(state, c.expect.state);
+  });
+}
+
+// ── login path fixture — shared with the recorder's drop in recorder/frame_utils.py ─────────────
+// conxa-cloud/tests/test_recorder_drops_login_events.py runs the same file through the Python
+// twins (LoginFlowTracker for the recording drop, auth_learning.looks_like_session_login here).
+const LOGIN_PATH_CASES = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "fixtures", "login_path_cases.json"), "utf-8"),
+);
+
+for (const c of LOGIN_PATH_CASES) {
+  test(`looksLikeSessionLogin fixture: ${c.name}`, () => {
+    assert.strictEqual(looksLikeSessionLogin({ final_url: c.url }), c.session_login);
   });
 }
 

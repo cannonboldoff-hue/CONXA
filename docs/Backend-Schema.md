@@ -834,6 +834,7 @@ synthetic event, same `{from_url, to_url}` value shape as `browser_back`/`browse
 - **Recorded by:** `session.py::_drain_nav_history_checks_sync`, gated on
   `_nav_pending_renderer_initiated` (set by the CDP event, consumed per classification).
 - `RecordedEvent.origin: "script" | None` — who caused the event. `"script"` = the browser reported `isTrusted === false` (page code, not the person); `None` = a person, or a recording made before the field existed. `script` events are dropped before any step is built and listed in `compile_report["dropped"]` with `pass: "not_from_user"`. See `docs/TRD.md` event provenance.
+- **`compile_report["dropped"]` pass names:** `not_from_user`, `cleanup`, `navigation_folded`, `choice_collapsed`, `date_collapsed`, and `login_page` (events the recorder dropped on a sign-in page, read from `login_drops.json` beside `events.jsonl`: `{pass, action}` only, no `sequence`, no `value`).
 - **`ActionKind` member.** `manual_navigate` must be listed in the `ActionKind` Literal
   (`packages/conxa-core/conxa_core/models/events.py`). `RecordedEvent` is validated **twice** on
   the way to a compiled step — `session.py::_finalize_payload_sync` and

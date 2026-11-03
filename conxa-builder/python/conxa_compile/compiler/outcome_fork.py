@@ -280,6 +280,7 @@ def _build_fork(run: list[SkillStep], session_id: str = "") -> SkillStep | None:
         semantic_description=f'Handle the "{title}" popup',
         tab=dict(run[0].tab),
         frame=dict(run[0].frame),
+        source_event=run[0].source_event,
         recovery=no_recovery_block(FORK_INTENT),
         outcome_fork={
             "timeout_ms": DEFAULT_TIMEOUT_MS,

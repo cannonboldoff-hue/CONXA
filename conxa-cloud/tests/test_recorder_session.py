@@ -258,6 +258,121 @@ def test_frame_ready_installs_bridge_immediately() -> None:
     assert frame.installed is True
 
 
+class _ProbeFrame:
+    """A frame that counts the install checks (the bridge state read) the recorder makes into it."""
+
+    def __init__(self, healthy: bool = True, error: str = "") -> None:
+        self.url = "https://app.example.com/embed"
+        self.parent_frame = None
+        self.checks = 0
+        self.healthy = healthy
+        self.error = error
+
+    def evaluate(self, script: str) -> dict | None:
+        if "hasWin: !!window.__SKILL_BRIDGE_V1__" in script:
+            self.checks += 1
+        if self.error:
+            raise Exception(self.error)
+        if "hasWin: !!window.__SKILL_BRIDGE_V1__" in script:
+            return {"hasWin": self.healthy, "hasDoc": self.healthy}
+        self.healthy = True
+        return None
+
+
+def _probing_session() -> RecordingSession:
+    sess = RecordingSession(session_id="frame-probe-policy")
+    sess._bridge_script = "window.__SKILL_BRIDGE_V1__ = true;"
+    return sess
+
+
+def test_an_attach_event_does_not_probe_the_frame_but_the_pump_does_once_it_is_quiet() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._on_frame_attached(frame)
+    assert frame.checks == 0                      # the frame is least stable right now: leave it alone
+
+    sess._frame_last_transition_ts[id(frame)] -= sess._BRIDGE_INSTALL_SETTLE_S + 1
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 1                      # quiet for long enough: one check
+
+
+def test_a_frame_whose_page_announced_its_bridge_is_not_probed() -> None:
+    sess, frame = _probing_session(), _ProbeFrame(healthy=False)
+    sess._on_frame_attached(frame)
+    sess._frame_last_transition_ts[id(frame)] -= sess._BRIDGE_INSTALL_SETTLE_S + 1
+    sess._binding_sink_sync({"frame": frame}, {"_bridge_ready": True})   # arrives after the transition
+
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 0
+    assert sess._pending_payloads.empty()        # an announcement is bookkeeping, never an event
+
+
+def test_an_announced_frame_is_still_rechecked_now_and_then_as_a_backstop() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._bridge_ready_at[id(frame)] = time.monotonic() - sess._BRIDGE_RECHECK_S - 1
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 1
+
+
+def test_an_announcement_older_than_the_last_transition_does_not_count() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._bridge_ready_at[id(frame)] = time.monotonic() - 20
+    sess._frame_last_transition_ts[id(frame)] = time.monotonic() - 10     # navigated since: new document
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 1
+
+
+def test_a_healthy_check_counts_as_an_announcement() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 1
+
+
+def test_a_failing_check_backs_off_instead_of_retrying_every_tick() -> None:
+    sess, frame = _probing_session(), _ProbeFrame(error="SyntaxError: unexpected token")
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 1                      # the second tick is inside the back-off window
+
+    failures, _ = sess._bridge_probe_state[id(frame)]
+    sess._bridge_probe_state[id(frame)] = (failures, time.monotonic() - 1)    # window over
+    sess._ensure_bridge_installed_in_frame_sync(frame)
+    assert frame.checks == 2
+
+
+def test_the_back_off_grows_then_stops_at_its_cap() -> None:
+    sess, frame = _probing_session(), _ProbeFrame(error="SyntaxError: unexpected token")
+    waits = []
+    for _ in range(6):
+        before = time.monotonic()
+        sess._ensure_bridge_installed_in_frame_sync(frame)
+        failures, retry_at = sess._bridge_probe_state[id(frame)]
+        waits.append(round(retry_at - before))
+        sess._bridge_probe_state[id(frame)] = (failures, 0.0)                 # skip the wait, keep the count
+    assert waits[:3] == [0, 1, 2] or waits[:3] == [1, 1, 2]                   # 0.5s rounds either way
+    assert max(waits) == round(sess._BRIDGE_BACKOFF_CAP_S)
+
+
+def test_a_detached_frame_leaves_no_state_behind() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._on_frame_attached(frame)
+    sess._bridge_ready_at[id(frame)] = time.monotonic()
+    sess._bridge_probe_state[id(frame)] = (1, time.monotonic())
+    sess._on_frame_detached(frame)
+    assert id(frame) not in sess._frame_last_transition_ts
+    assert id(frame) not in sess._bridge_ready_at and id(frame) not in sess._bridge_probe_state
+
+
+def test_only_slow_checks_are_kept_for_the_diagnostics_and_only_the_five_slowest() -> None:
+    sess, frame = _probing_session(), _ProbeFrame()
+    sess._note_slow_probe(frame, 0.1)
+    assert sess._slow_frame_probes == []
+    for secs in (0.3, 0.9, 0.5, 2.0, 0.4, 0.6, 1.2):
+        sess._note_slow_probe(frame, secs)
+    assert [e["ms"] for e in sess._slow_frame_probes] == [2000, 1200, 900, 600, 500]
+
+
 def test_frame_lifecycle_logs_attach_navigate_detach_even_when_frame_is_gone() -> None:
     """Diagnostic-only log (recorder_diag.json's frame_lifecycle) — event-driven, not sampled
     like frame_snapshots, so it catches a frame that attaches and detaches faster than any

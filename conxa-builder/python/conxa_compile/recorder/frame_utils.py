@@ -220,6 +220,36 @@ def looks_like_login_page(url: str) -> bool:
     return bool(_LOGIN_PATH_RE.search(urlsplit(url).path or "/"))
 
 
+# The recording drop is stricter than looks_like_login_page above: a wrong "yes" there loses real
+# steps from the workflow, while for a session check a wrong "yes" only costs one extra sign-in.
+# Only a path that is a sign-in page by name counts on its own; the single-sign-on hops a sign-in
+# passes through (/auth, /oauth2, /sso, /logout) count only while a sign-in is already under way,
+# so an in-app page such as /settings/auth keeps its steps.
+_STRICT_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|session-expired)(/|$)", re.I)
+_SSO_HOP_PATH_RE = re.compile(r"/(auth|oauth2?|sso|logout)(/|$)", re.I)
+
+
+class LoginFlowTracker:
+    """Decides, event by event, whether the page is part of signing in. One per recording."""
+
+    def __init__(self) -> None:
+        self.active = False
+
+    def arm(self) -> None:
+        """A password box was used: the person is signing in, wherever the address says so."""
+        self.active = True
+
+    def is_login_step(self, url: str) -> bool:
+        path = urlsplit(url).path or "/"
+        if _STRICT_LOGIN_PATH_RE.search(path):
+            self.active = True
+            return True
+        if self.active and _SSO_HOP_PATH_RE.search(path):
+            return True
+        self.active = False
+        return False
+
+
 def is_blank_url(url: str) -> bool:
     value = str(url or "").strip().lower()
     # about:blank?... is still a blank page — the browser panel's marker URL is one (host_view.py).
