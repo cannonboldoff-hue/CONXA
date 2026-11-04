@@ -37,6 +37,28 @@ logger = logging.getLogger(__name__)
 _VISION_TASK_NAMES = VISION_TASKS
 
 
+# Request fields a particular model needs that the generic OpenAI-compatible body does not carry.
+# One row per (endpoint host, model name) pair: add a row here rather than a special case in routing.
+# ponytail: Kimi K3's reasoning_details isn't echoed back across execute_chat turns; add if multi-turn
+# tool chains lose their thread.
+_MODEL_REQUEST_EXTRAS: tuple[tuple[str, str, dict[str, Any]], ...] = (
+    # Kimi K3 on OpenRouter is pinned to one provider, with reasoning on and no fallbacks.
+    ("openrouter.ai", "kimi-k3", {
+        "reasoning": {"enabled": True},
+        "provider": {"only": ["sail-research/fp4"], "allow_fallbacks": False},
+    }),
+)
+
+
+def _model_request_extras(endpoint: str, model: str) -> dict[str, Any]:
+    endpoint, model = endpoint.lower(), model.lower()
+    out: dict[str, Any] = {}
+    for host, model_part, extras in _MODEL_REQUEST_EXTRAS:
+        if host in endpoint and model_part in model:
+            out.update(extras)
+    return out
+
+
 @dataclass
 class PoolEntry:
     """Single (provider, endpoint, key, model) tuple in the router pool."""
@@ -572,12 +594,7 @@ class LLMRouter:
             # Streaming never uses json_object mode — the model would produce raw JSON text one
             # token at a time, which reads as garbage mid-stream (see route_text's docstring).
             body_dict = _openai_body_dict(task, payload_with_model, json_mode=on_delta is None)
-            # Kimi K3 on OpenRouter is pinned to one provider, with reasoning on and no fallbacks.
-            # ponytail: reasoning_details isn't echoed back across execute_chat turns, add if
-            # multi-turn tool chains lose their thread.
-            if "openrouter.ai" in entry.endpoint and "kimi-k3" in str(body_dict.get("model", "")).lower():
-                body_dict["reasoning"] = {"enabled": True}
-                body_dict["provider"] = {"only": ["sail-research/fp4"], "allow_fallbacks": False}
+            body_dict.update(_model_request_extras(entry.endpoint, str(body_dict.get("model", ""))))
             # OpenRouter groups requests sharing a session_id (Execute sends one per chat).
             chat_session_id = str(payload_with_model.get("session_id") or "").strip()[:128]
             if chat_session_id and "openrouter.ai" in entry.endpoint:

@@ -937,6 +937,38 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
     return [{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
 
 
+# Output-token ceiling per task. A task not listed here gets the provider's own default.
+# Why each is the size it is:
+#  * anchor_vision: short JSON anchors; VLMs often expect an explicit ceiling.
+#  * anchor_vision_frameset: one label and one short sentence.
+#  * region_selector: a handful of selector candidates with rationale.
+#  * workflow_review: a whole-workflow intent graph AND a suggestions array in one reply, the largest
+#    structured JSON of any task (was 4096; the description check and loop wording ride on this call).
+#  * copilot_diagnose / copilot_reply / studio_chat_reply: 16384 leaves a reasoning-capable model room to
+#    finish its hidden chain-of-thought before the answer starts. OpenRouter's z-ai/glm-5.3-flash
+#    consumed 2048 entirely on it and returned finish_reason="length" with an empty answer.
+#  * timeline_understanding: summaries are written per row, so this scales with the recording. Raised
+#    from 6144 on 2026-11-02 after two recordings came back 200 with an unusable reply. Unconfirmed that
+#    the budget was the cause; the call site retries once and records `fallback_reason`.
+#  * ai_review, chat_*, thread_summarize, workflow_understanding: small structured or summary answers.
+TASK_OUTPUT_BUDGET: dict[str, int] = {
+    "anchor_vision": 1024,
+    "anchor_vision_frameset": 300,
+    "region_selector": 1536,
+    "workflow_review": 6144,
+    "copilot_diagnose": 16384,
+    "copilot_reply": 16384,
+    "studio_chat_reply": 16384,
+    "timeline_understanding": 16384,
+    "ai_review": 1024,
+    "chat_map_answer": 1024,
+    "studio_chat_actions": 1024,
+    "chat_route_intent": 1024,
+    "workflow_understanding": 2048,
+    "thread_summarize": 2048,
+}
+
+
 def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) -> dict[str, Any]:
     resolved_model = _resolved_model(task, payload)
     messages = _openai_messages_for_task(task, payload)
@@ -945,58 +977,8 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         "messages": messages,
         "temperature": 0.0,
     }
-    if task == "anchor_vision":
-        # Short JSON anchors; VLMs often expect an explicit ceiling (see NVIDIA Gemma chat examples).
-        body["max_tokens"] = 1024
-    if task == "anchor_vision_frameset":
-        # One label + one short sentence, not primary+secondary JSON — smaller than
-        # the 1024 budgeted for the old structured single-image task.
-        body["max_tokens"] = 300
-    if task == "region_selector":
-        # A handful of selector candidates with rationale — a bit more room than anchor_vision.
-        body["max_tokens"] = 1536
-    if task == "workflow_review":
-        # A whole-workflow intent graph AND a suggestions array in one response — the largest
-        # structured JSON any task here returns, well above region_selector's handful of
-        # candidates.
-        body["max_tokens"] = 6144  # was 4096; the description check and loop wording ride on this call now
-    if task == "copilot_diagnose":
-        # BUILD-33: the cloud router (conxa-cloud/backend/app/llm/router.py) sends
-        # reasoning={"enabled": False} to OpenRouter for every task, so a reasoning-capable
-        # routed model shouldn't spend completion tokens on hidden chain-of-thought at all. That
-        # flag is a request, not a guarantee some models keep reasoning anyway — 2048 was
-        # observed live to be entirely consumed by OpenRouter's z-ai/glm-5.3-flash doing exactly
-        # that, returning finish_reason="length" with an empty JSON answer. 16384 gives a full
-        # chain-of-thought room to finish on its own before the answer even starts, not just a
-        # bigger cap around an ignored flag.
-        body["max_tokens"] = 16384
-    if task == "copilot_reply":
-        # Prose only, no proposals JSON riding along — the answer itself needs a fraction of
-        # this. Same headroom as copilot_diagnose above and for the same reason: a stream that
-        # yields zero content deltas (because a model kept reasoning despite the router's
-        # reasoning={"enabled": False}) reaches the Studio as "the proxy produced no result"
-        # rather than as an empty answer, which is worse than copilot_diagnose's case.
-        body["max_tokens"] = 16384
-    if task == "ai_review":
-        # A small structured answer (yes/no + a short reason, or similar) — same order as
-        # region_selector's handful of candidates.
-        body["max_tokens"] = 1024
-    if task == "studio_chat_reply":
-        # Streamed prose: same headroom as copilot_reply, for the same hidden-reasoning reason.
-        body["max_tokens"] = 16384
-    if task in ("chat_map_answer", "studio_chat_actions", "chat_route_intent"):
-        body["max_tokens"] = 1024
-    if task == "workflow_understanding":
-        body["max_tokens"] = 2048
-    if task == "timeline_understanding":
-        # Summaries are written per row, so this scales with the recording. Same headroom as the
-        # copilot tasks above: a reasoning-capable pooled model can spend a small budget before the
-        # JSON ends, and a cut-off reply is not an empty one, so the router's reasoning guard never
-        # sees it. HYPOTHESIS (2026-11-02): two recordings in a row came back 200 with an unusable
-        # answer at 6144; the fallback_reason now records the shape, which confirms or refutes this.
-        body["max_tokens"] = 16384
-    if task == "thread_summarize":
-        body["max_tokens"] = 2048
+    if task in TASK_OUTPUT_BUDGET:
+        body["max_tokens"] = TASK_OUTPUT_BUDGET[task]
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     # Tool-calling passthrough — only execute_chat's caller-built payload ever
