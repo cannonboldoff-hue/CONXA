@@ -108,7 +108,14 @@ class UnderstandFlowMixin:
 
         merged = track_b.build_merged_timeline(session_dir, a, timed)
         self._install_proxy_router(sink, usage_class="compile")
-        und = tu.understand_timeline(merged, workflow.task_description)
+        # What the person already said while recording (hints.json) and the inputs an earlier compile of
+        # this workflow already declared: the model is told both, so it neither re-asks nor reuses a name.
+        from conxa_compile.recorder import hints
+        from conxa_core.storage.json_store import read_skill
+        prior = read_skill(workflow.skill_id) if workflow.skill_id else None
+        taken = {str(i.get("id")) for i in (prior or {}).get("inputs") or [] if isinstance(i, dict) and i.get("id")}
+        und = tu.understand_timeline(merged, workflow.task_description, existing_inputs=taken or None,
+                                     hints=hints.load(workflow.session_id).get("varies"))
         (session_dir / "understanding.json").write_text(_dumps(und), encoding="utf-8")
         questions = tu.questions_from_understanding(und, merged)
         clarify_store.save(workflow_id, {

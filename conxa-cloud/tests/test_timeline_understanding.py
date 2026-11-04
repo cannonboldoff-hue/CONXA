@@ -27,13 +27,11 @@ MERGED = [
 def raw_answer(**over):
     base = {
         "goal": "Download an invoice as a PDF", "short_summary": "Finds an invoice and downloads the PDF.",
-        "phases": [{"name": "Find it", "from_row": "r2", "to_row": "r3"}],
         "values": [{"ref": "url:2", "verdict": "varies", "name": "Repo Name!", "literal": "acme/repo-one"},
                    {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"},
                    {"ref": "click:5", "verdict": "fixed"}],
-        "success_check": "the download bar shows the file",
         "gaps": [{"row": "r6", "note": "A download bar appeared that the browser did not record."}],
-        "detailed_summary": [{"row": "r3", "text": "Types the invoice number."}],
+        "detailed_summary": [{"row": "r3", "text": "Types the invoice number."}, {"row": "r99", "text": "ghost row"}],
         "questions": [
             {"kind": "confirm_before", "row": "r5", "prompt": "Download without asking?", "best_guess": "no_confirm", "cost_rank": 1},
             {"kind": "upload", "row": "r3", "prompt": "Same file each time?", "best_guess": "each_run", "cost_rank": 2},
@@ -54,7 +52,7 @@ def test_model_input_hides_redacted_values_and_carries_what_video_saw():
     payload = TU.build_input(MERGED, "download invoices", "", TU.candidates_from_timeline(MERGED))
     rows = {r["ref"]: r for r in payload["rows"]}
     assert rows["r4"]["value"] == "(hidden)"
-    assert rows["r3"]["seen"]["intent"] == "find the invoice" and rows["r2"]["seen"] is None
+    assert rows["r3"]["seen"]["intent"] == "find the invoice" and "seen" not in rows["r2"]
     assert rows["r6"]["kind"] == "observation"
 
 
@@ -62,7 +60,6 @@ def test_validate_drops_unknown_refs_rows_and_unsafe_guesses():
     cands = TU.candidates_from_timeline(MERGED)
     raw = raw_answer(
         values=raw_answer()["values"] + [{"ref": "url:999", "verdict": "varies", "name": "x"}],
-        phases=[{"name": "bad", "from_row": "r9", "to_row": "r1"}, {"name": "back", "from_row": "r3", "to_row": "r1"}],
         gaps=[{"row": "r99", "note": "ghost"}],
         questions=raw_answer()["questions"] + [{"kind": "launch_missiles", "row": "r1", "prompt": "?"},
                                                {"kind": "upload", "row": "r42", "prompt": "?"}])
@@ -70,7 +67,7 @@ def test_validate_drops_unknown_refs_rows_and_unsafe_guesses():
     assert set(out["values"]) == {"url:2", "typed:3", "click:5"}
     assert out["values"]["url:2"] == {"verdict": "varies", "name": "repo_name", "literal": "acme/repo-one"}
     assert out["values"]["click:5"]["name"] == ""                # fixed values get no input name
-    assert out["phases"] == [] and out["gaps"] == []
+    assert out["gaps"] == []
     kinds = [q["kind"] for q in out["questions"]]
     assert kinds == ["confirm_before", "upload", "value"]       # the fork on a plain click is dropped
     by_kind = {q["kind"]: q for q in out["questions"]}
@@ -98,7 +95,8 @@ def test_understand_timeline_uses_the_model_and_never_raises():
 
     down = TU.understand_timeline(MERGED, "download invoices", call=boom)
     assert down["source"] == "fallback" and down["values"]["url:2"]["verdict"] == "unsure"
-    assert down["detailed_summary"] == []      # no model answer, nothing invented
+    assert out["detailed_summary"] == [{"row": "r3", "text": "Types the invoice number."}]     # the model's walkthrough, unknown rows dropped
+    assert down["detailed_summary"] == [] and "phases" not in down      # no model answer, nothing invented
     assert TU.understand_timeline([], "x", call=boom)["source"] == "none"
 
 
@@ -362,3 +360,67 @@ def test_no_answer_at_all_names_the_router_detail_when_there_is_some():
 
     out = TU.understand_timeline(MERGED, "download invoices", call=silent)
     assert out["fallback_reason"] == "the model returned no answer"
+
+
+def test_model_input_is_compact():
+    seg = lambda **k: k      # noqa: E731
+    merged = [
+        event(1, "click", "A", url="https://app.test/a", seg=seg(intent="open it", purpose="to read it", screen_before="home", screen_after="page A")),
+        event(2, "click", "B", url="https://app.test/a", seg=seg(intent="go on", screen_before="page A", screen_after="page B")),
+        event(3, "click", "C", url="https://app.test/c"),
+        event(4, "click", "D", url="https://app.test/c", seg=seg(intent="again", screen_before="page C")),
+    ]
+    rows = TU.build_input(merged, "", "", [])["rows"]
+    assert "kind" not in rows[0] and "role" not in rows[0] and "value" not in rows[0]
+    assert rows[0]["seen"]["intent"] == "open it — to read it" and "purpose" not in rows[0]["seen"]
+    assert rows[0]["seen"]["screen_before"] == "home"                 # nothing came before it
+    assert "screen_before" not in rows[1]["seen"]                     # r1 already said how its screen ended
+    assert rows[0]["url"] and "url" not in rows[1] and rows[2]["url"].endswith("/c") and "url" not in rows[3]
+    assert rows[3]["seen"]["screen_before"] == "page C"               # r3 had no video segment, so this one is kept
+    assert not any(v is None for r in rows for v in r.values())
+
+
+def test_rows_beyond_the_old_cap_are_still_sent():
+    merged = [event(n, "click", f"Item {n}") for n in range(1, 201)]
+    assert len(TU.build_input(merged, "", "", [])["rows"]) == 200
+
+
+def test_what_the_person_said_while_recording_is_passed_on_and_wins():
+    seen = {}
+
+    def call(task, payload, ms):
+        seen["payload"] = payload
+        return raw_answer(values=[{"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}],
+                          questions=[{"effect": "value", "row": "r3", "ref": "typed:3", "prompt": "Does it change?", "cost_rank": 1}])
+
+    out = TU.understand_timeline(MERGED, "download invoices", hints={"3": False}, existing_inputs={"tenant"}, call=call)
+    assert seen["payload"]["told"] == {"typed:3": "fixed"} and seen["payload"]["existing_inputs"] == ["tenant"]
+    assert out["values"]["typed:3"] == {"verdict": "fixed", "name": "", "literal": "INV-20931"}     # the person's word beats the model's
+    assert not [q for q in out["questions"] if q.get("ref") == "typed:3"]                         # and nothing is asked about it
+
+    said_varies = TU.understand_timeline(MERGED, "download invoices", hints={"3": True},
+                                         call=lambda t, p, ms: raw_answer(values=[]))
+    assert said_varies["values"]["typed:3"]["verdict"] == "varies" and said_varies["values"]["typed:3"]["name"]
+    assert "told" not in TU.build_input(MERGED, "", "", TU.candidates_from_timeline(MERGED))
+
+
+def test_an_unreadable_reply_is_asked_for_once_more_and_a_missing_one_is_not():
+    calls = []
+
+    def flaky(task, payload, ms):
+        calls.append(payload)
+        return {"text": "cut off mid-sent"} if len(calls) == 1 else raw_answer()
+
+    out = TU.understand_timeline(MERGED, "download invoices", call=flaky)
+    assert len(calls) == 2 and "retry" not in calls[0] and "retry" in calls[1]
+    assert out["source"] == "model" and out["retried"] is True
+
+    calls.clear()
+    hopeless = TU.understand_timeline(MERGED, "download invoices", hints={"3": True},
+                                      call=lambda t, p, ms: calls.append(p) or {"text": "nope"})
+    assert len(calls) == 2 and hopeless["source"] == "fallback"      # a recording-time answer never fakes a model answer
+
+    calls.clear()
+    assert TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: calls.append(p)) ["source"] == "fallback"
+    assert len(calls) == 1                                           # no reply at all (proxy down): do not wait twice
+

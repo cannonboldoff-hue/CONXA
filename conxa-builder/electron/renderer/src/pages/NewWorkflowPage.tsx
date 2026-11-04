@@ -8,7 +8,6 @@ import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { useShellData } from '@/hooks/useShellData'
 import { useShellStore } from '@/store/shellStore'
 import { useBrowserStore } from '@/store/browserStore'
@@ -44,7 +43,7 @@ function GroupRequired() {
 }
 
 /**
- * New workflow: name, group, starting page, a required sentence about the task. A workflow
+ * New workflow: name, group, starting page. A workflow
  * belongs to exactly one existing group from the moment it exists — with no groups yet this page
  * sends the user to create one first. "Create and start recording" creates the workflow and opens
  * its conversation, which signs in first if the app has no saved sign-in.
@@ -58,7 +57,6 @@ export function NewWorkflowPage() {
 
   const [name, setName] = useState(draft?.name ?? '')
   const [url, setUrl] = useState(draft?.starting_page ?? '')
-  const [task, setTask] = useState(draft?.task ?? '')
   const [groupId, setGroupId] = useState('')
   const [tried, setTried] = useState(false)
 
@@ -75,7 +73,6 @@ export function NewWorkflowPage() {
   const nameOk = name.trim().length > 0
   const urlOk = URL_RE.test(url.trim())
   const groupOk = Boolean(groupId)
-  const taskOk = task.trim().length > 0
 
   // Does an app in the chosen group already cover this site, and is it signed in?
   const match = useMemo(() => {
@@ -89,7 +86,7 @@ export function NewWorkflowPage() {
   const needsSignIn = Boolean(urlOk && groupQ.data && !match?.captured_at)
 
   const create = useMutation({
-    mutationFn: () => createWorkflow({ name: name.trim(), target_url: url.trim(), group_id: groupId, task_description: task.trim() }),
+    mutationFn: () => createWorkflow({ name: name.trim(), target_url: url.trim(), group_id: groupId }),
     onSuccess: ({ workflow }) => {
       qc.invalidateQueries({ queryKey: ['workflows'] })
       qc.invalidateQueries({ queryKey: ['groups'] })
@@ -98,7 +95,7 @@ export function NewWorkflowPage() {
     },
   })
 
-  const submit = () => (nameOk && urlOk && groupOk && taskOk ?create.mutate() : setTried(true))
+  const submit = () => (nameOk && urlOk && groupOk ? create.mutate() : setTried(true))
   const err = 'mt-1 text-xs text-status-error'
   const radio = (on: boolean) =>
     cn('flex cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2 text-sm', on ? 'border-white/25 bg-white/[0.07]' : 'border-[var(--border-default)] hover:bg-white/[0.04]')
@@ -146,13 +143,6 @@ export function NewWorkflowPage() {
                 )}
               </p>
             )}
-          </div>
-
-          <div>
-            <Label htmlFor="nw-task">What does the task do?</Label>
-            <p className="text-xs text-[var(--text-meta)]">Helps Conxa understand the workflow better and ask better questions afterwards.</p>
-            <Textarea id="nw-task" value={task} onChange={(e) => setTask(e.target.value)} rows={3} aria-invalid={tried && !taskOk} disabled={create.isPending} className="mt-1.5" />
-            {tried && !taskOk && <p className={err}>✕ Describe what the task does in a sentence.</p>}
           </div>
 
           {inPanel && (

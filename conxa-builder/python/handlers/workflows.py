@@ -412,10 +412,7 @@ class WorkflowsMixin:
         if get_group(group_id) is None:
             raise _CommandError("group_not_found", f"No group {group_id}")
 
-        workflow = _create(
-            name=name, target_url=target_url, group_id=group_id,
-            task_description=str(payload.get("task_description") or "").strip()[:300],
-        )
+        workflow = _create(name=name, target_url=target_url, group_id=group_id)
         # The workflow's conversation starts here, whoever created it (the form, a chat draft).
         from conxa_compile.conversation.harness import log_event
 

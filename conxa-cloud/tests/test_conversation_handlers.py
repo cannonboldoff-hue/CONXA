@@ -52,12 +52,12 @@ def test_chat_commands_round_trip(b):
 
 def test_creating_a_workflow_starts_its_thread_and_lifecycle(b):
     g, gid = _group_and_workflow()
-    wf = b.cmd_create_workflow({"name": "Create invoice", "group_id": gid, "target_url": "https://billing.example.test/new", "task_description": "send one"}, "r1")["workflow"]
+    wf = b.cmd_create_workflow({"name": "Create invoice", "group_id": gid, "target_url": "https://billing.example.test/new"}, "r1")["workflow"]
     page = b.cmd_thread_load({"thread_id": f"wf:{wf['id']}"}, "r2")
     assert [i["text"] for i in page["items"]] == ["Workflow created"]
     assert page["workflow"]["group_name"] == "Finance Ops"
     assert page["lifecycle"]["stage"] in ("record", "configure")
-    assert wf["task_description"] == "send one"
+    assert wf["task_description"] == ""
     lcs = b.cmd_list_lifecycles({}, "r3")["lifecycles"]
     assert wf["id"] in lcs and lcs[wf["id"]]["glyph"] in ("none", "warn")
 
@@ -77,7 +77,7 @@ def test_draft_card_creates_nothing_until_confirmed_and_needs_a_group_and_url(b)
     _g, gid = _group_and_workflow()
     chat = b.cmd_chat_create({}, "r")["chat"]
     tid = f"chat:{chat['id']}"
-    card = ts.append_card(tid, "draft_workflow", "open", draft={"name": "Issue a refund", "group": "Finance Ops", "starting_page": "", "task": "t"})
+    card = ts.append_card(tid, "draft_workflow", "open", draft={"name": "Issue a refund", "group": "Finance Ops", "starting_page": ""})
     from conxa_core.storage.workflow_store import list_workflows
 
     assert list_workflows() == []

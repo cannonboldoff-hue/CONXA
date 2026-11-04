@@ -41,7 +41,7 @@ export type CardActionResult = {
   message?: string
   needs?: string[]
   to_chat?: boolean
-  open_form?: { name?: string; group?: string; starting_page?: string; task?: string }
+  open_form?: { name?: string; group?: string; starting_page?: string }
   workflow_id?: string
   start_recording?: boolean
   retry?: boolean

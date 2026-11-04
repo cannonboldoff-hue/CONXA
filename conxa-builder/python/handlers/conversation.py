@@ -605,7 +605,7 @@ class ConversationMixin:
         if card.get("state") != "open":
             return {"ok": False, "code": "not_open", "message": "This draft was already used."}
 
-        draft = {**(card.get("draft") or {}), **{k: v for k, v in body.items() if k in ("name", "group", "starting_page", "task") and v}}
+        draft = {**(card.get("draft") or {}), **{k: v for k, v in body.items() if k in ("name", "group", "starting_page") and v}}
         group_id = str(body.get("group_id") or "")
         if not group_id:
             match = next((g for g in list_groups() if g.name == draft.get("group")), None)
@@ -614,7 +614,7 @@ class ConversationMixin:
         if missing:
             return {"ok": False, "code": "needs_details", "needs": missing, "open_form": draft}
         created = self.cmd_create_workflow(
-            {"name": draft["name"], "group_id": group_id, "target_url": draft["starting_page"], "task_description": draft.get("task") or ""},
+            {"name": draft["name"], "group_id": group_id, "target_url": draft["starting_page"]},
             rid,
         )
         wf = created["workflow"]

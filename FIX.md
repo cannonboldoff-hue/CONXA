@@ -2,26 +2,18 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**Added a house rule: when you say "answer me", the assistant explains everything in full — 2026-11-04**
-Before, the assistant often replied in very short, compressed answers, even when you wanted to really understand something. Now, whenever you say "answer me", it switches to a slow, step-by-step explanation in plain everyday words, like a patient teacher. This way you get the full picture instead of a shorthand note.
-— 2026-11-04
+**Brought back the step-by-step note the AI writes before it decides — 2026-11-05**
+The AI that reads your recording used to jot one short line per step before deciding what changes each run. We had cut it to save words, but it works like showing your working in maths: it makes the answer more careful. It is back, written first, so the AI looks at every step before it judges anything.
+— 2026-11-05
 
-**The recorder now notes why a page changed, which dates were really picked, and which labels are pop-ups — 2026-11-04**
-Before, the tool guessed from timing whether a page change was the site's own redirect or something the person did on purpose, and it could throw away the real one. Now the recording says which it was, so only genuine redirects are dropped. It also checks whether a calendar click actually changed the date box, ignores banners and toasts that float over a page as reference points, and lists every tidy-up it did in the report, like a receipt for each thing it removed.
-— 2026-11-04
+**The tool now listens to what you said while recording, and double-checks its own reading — 2026-11-05**
+When you marked a typed value as "changes each run" or "stays the same" during recording, the step that reads your recording ignored it and could ask you again. Now it is told up front, treats your word as final, and also knows which input names are already taken. If the AI's reply comes back garbled, it is asked once more before the tool gives up, and its instructions now include one worked example.
+— 2026-11-05
 
-**The recorder no longer throws away real steps from pages that only look like sign-in pages — 2026-11-04**
-The recorder skipped anything done on a page with words like "auth" or "sso" in its address, even when that page was a normal settings screen inside the app. Now it only skips pages that really are sign-in pages, and only follows the extra hops of a sign-in while one is actually happening. Anything it skips is listed in the compile report, so nothing disappears quietly.
-— 2026-11-04
+**Removed the "What does the task do?" box from the new workflow page — 2026-11-05**
+Creating a workflow used to stop you until you typed a sentence describing the task. That box is gone, so you only give a name, a group and a starting page. The tool works out what the task is from your recording instead.
+— 2026-11-05
 
-**One master tidy-up switch became a switch for each step, and popup decisions are always handled — 2026-11-04**
-A single setting turned off about a dozen tidy-up steps at once, including the one that handles popups that ask a question like "Replace or keep both?". Each step now has its own switch, and the popup step stays on no matter what, so a recorded "Replace" can never quietly replay on its own. Think of it as giving every light its own switch, with the smoke alarm wired separately.
-— 2026-11-04
-
-**The recorder checks embedded panels far less often, and a few labels and warnings got smarter — 2026-11-04**
-The recorder used to keep asking every embedded panel on a page whether it was ready, which could make it stall on busy pages. Now each panel announces itself when ready, and the recorder only double-checks occasionally. Menu items with shortcut hints like "Alt+C" are now named the same way everywhere, ordinary labels such as "Notification settings" are no longer mistaken for pop-ups, and the AI can no longer ask the person about idle gaps in the video.
-— 2026-11-04
-
-**The tool no longer invents a step-by-step summary when the AI is unavailable — 2026-11-04**
-When the AI could not describe a recording, the tool quietly filled in a summary of its own from the raw notes. That made it look like the AI had understood the recording when it had not. Now the summary is only ever the AI's own words, and stays empty if the AI could not provide one, like leaving a form field blank instead of guessing the answer.
-— 2026-11-04
+**The behind-the-scenes side no longer takes a typed task description either — 2026-11-05**
+Even after the box was removed from the new workflow page, the engine still had a spot to receive that sentence, and the chat assistant still offered one when it drafted a workflow. Both are gone. The tool still writes its own short description after it watches your recording.
+— 2026-11-05

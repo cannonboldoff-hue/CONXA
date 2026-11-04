@@ -99,7 +99,7 @@ export function DraftWorkflowCard({ threadId, item }: CardProps) {
   const setDraft = useShellStore((s) => s.setNewWorkflowDraft)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
-  const draft = (item.draft ?? {}) as { name?: string; group?: string; starting_page?: string; task?: string }
+  const draft = (item.draft ?? {}) as { name?: string; group?: string; starting_page?: string }
   const state = String(item.state)
 
   const finish = async (action: string) => {
@@ -127,7 +127,6 @@ export function DraftWorkflowCard({ threadId, item }: CardProps) {
     ['Name', draft.name ?? ''],
     ['Group', draft.group ?? ''],
     ['Starting page', draft.starting_page ?? ''],
-    ['Task', draft.task ?? ''],
   ]
   return (
     <CardShell

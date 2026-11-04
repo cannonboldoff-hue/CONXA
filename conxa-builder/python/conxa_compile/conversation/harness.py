@@ -558,7 +558,6 @@ def _maybe_draft(context_text: str, reply: str, group_names: list[str]) -> dict[
         "name": name[:80],
         "group": group if group in group_names else "",
         "starting_page": url if _URL.match(url) else "",
-        "task": str(draft.get("task") or "").strip()[:300],
     }
 
 

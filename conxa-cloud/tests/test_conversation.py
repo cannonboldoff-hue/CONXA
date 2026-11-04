@@ -366,7 +366,7 @@ def test_a_plain_question_does_not_pay_for_the_proposal_call(monkeypatch):
 def test_only_a_confident_draft_with_a_valid_url_and_known_group_survives(monkeypatch):
     _fake_stream(monkeypatch)
     monkeypatch.setattr("conxa_compile.llm.client.call_llm", lambda *a, **k: {"draft_workflow": {
-        "name": "Issue a partial refund", "group": "Nonexistent", "starting_page": "not a url", "task": "refund part"}})
+        "name": "Issue a partial refund", "group": "Nonexistent", "starting_page": "not a url"}})
     harness.run_turn(thread_id="chat:c9", message="let's do refunds", sink=None, group_names=["Finance Ops"])
     draft = next(i for i in ts.load("chat:c9")["items"] if i.get("card_type") == "draft_workflow")["draft"]
     assert draft["group"] == "" and draft["starting_page"] == "" and draft["name"] == "Issue a partial refund"

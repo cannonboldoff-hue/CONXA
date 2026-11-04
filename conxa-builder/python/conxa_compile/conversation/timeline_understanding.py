@@ -1,8 +1,8 @@
 """Understand a recording before it is compiled (Q1 of the understanding-first pipeline).
 
 One text call reads the merged timeline (browser events lined up with what Pegasus saw) and
-writes the understanding: goal, phases, which recorded values change each run, how success
-shows, gaps, a short and a detailed summary, and the questions worth asking. Code does the rest:
+writes the understanding: a goal, a line per step, which recorded values change each run, the points it
+settled itself, the questions worth asking, gaps and a short summary. Code does the rest:
 
 - **Meaning only.** The model never sees or writes a selector. Every field of its answer is
   held to what code can act on (unknown refs, rows and kinds are dropped, a name is snake-cased
@@ -29,7 +29,7 @@ from conxa_compile.compiler.selector_filters import scrub_email
 from conxa_compile.conversation.clarify import _question
 
 TASK = "timeline_understanding"
-MAX_ROWS = 150
+MAX_ROWS = 250
 MAX_QUESTIONS = 5                 # shown at once; the rest are queued under "More questions"
 MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
@@ -192,11 +192,20 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
     return list(groups.values())
 
 
-def _seen(segment: dict[str, Any] | None) -> dict[str, Any] | None:
+def _seen(segment: dict[str, Any] | None, prev_after: str = "") -> dict[str, Any] | None:
+    """What the video model saw, in fewer words: ``purpose`` is folded into ``intent``, and
+    ``screen_before`` is left out while the row before already said how its screen ended."""
     if not segment:
         return None
-    keep = ("visible_target", "intent", "purpose", "screen_before", "screen_after")
-    return {k: segment[k] for k in keep if segment.get(k)}
+    out = {k: segment[k] for k in ("visible_target", "screen_after") if segment.get(k)}
+    intent, purpose = str(segment.get("intent") or "").strip(), str(segment.get("purpose") or "").strip()
+    if purpose and purpose.lower() not in intent.lower():
+        intent = f"{intent} — {purpose}" if intent else purpose
+    if intent:
+        out["intent"] = intent
+    if segment.get("screen_before") and not prev_after:
+        out["screen_before"] = segment["screen_before"]
+    return out or None
 
 
 def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -255,29 +264,53 @@ def _json_value(value: Any) -> Any:
         return None
 
 
-def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+def told_from_hints(candidates: list[dict[str, Any]], varies: dict[str, Any] | None) -> dict[str, bool]:
+    """``{candidate ref: True (changes each run) | False (stays as recorded)}`` for typed values the
+    person already answered while recording (``hints.json``, keyed by the event's sequence = ``event_id``)."""
+    told: dict[str, bool] = {}
+    for c in candidates:
+        if c["kind"] != "typed":
+            continue
+        for eid in c["event_ids"]:
+            answer = (varies or {}).get(str(eid))
+            if isinstance(answer, bool):
+                told[c["ref"]] = answer
+                break
+    return told
+
+
+def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: list[dict[str, Any]], *,
+                told: dict[str, bool] | None = None, existing_inputs: set[str] | None = None) -> dict[str, Any]:
+    # Compact on purpose (the prompt in conxa_core/llm/client.py says how to read it): no empty keys,
+    # no `kind` on an event, `url` only when it changes, and `seen` without what the row before said.
     rows: list[dict[str, Any]] = []
+    prev_url, prev_after = None, ""
     for r in merged[:MAX_ROWS]:
+        seen = _seen(r.get("segment"), prev_after)
         if r.get("kind") == "event":
             value = r.get("value")
-            rows.append({
-                "ref": r["row_ref"], "kind": "event", "action": r.get("action"),
-                "target": scrub_email(r["target"]) if r.get("target") else r.get("target"),
+            row = {
+                "ref": r["row_ref"], "action": r.get("action"),
+                "target": scrub_email(r["target"]) if r.get("target") else None,
                 "role": r.get("role") or None,
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:80] if value else None),
-                "url": r.get("url"), "seen": _seen(r.get("segment")),
-                **({"dialog": r["dialog"]} if r.get("dialog") else {}),
-                **({"peers": r["peers"]} if r.get("peers") else {}),
-            })
+                "url": r.get("url") if r.get("url") != prev_url else None,
+                "seen": seen, "dialog": r.get("dialog") or None, "peers": r.get("peers") or None,
+            }
+            prev_url = r.get("url") or prev_url
         else:
-            rows.append({"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
-                         "seconds": r.get("seconds"), "seen": _seen(r.get("segment"))})
+            row = {"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
+                   "seconds": r.get("seconds"), "seen": seen}
+        rows.append({k: v for k, v in row.items() if v not in (None, "")})
+        prev_after = (r.get("segment") or {}).get("screen_after") or ""
     return {
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
         "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"],
                         **({"in_set": True} if c.get("in_set") else {})}
                        for c in candidates],
         "must_ask": must_ask(merged),
+        **({"told": {ref: "varies" if v else "fixed" for ref, v in told.items()}} if told else {}),
+        **({"existing_inputs": sorted(existing_inputs)} if existing_inputs else {}),
     }
 
 
@@ -401,12 +434,6 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
             name = _unique_name(_snake(str(item.get("name") or "")), taken, _FALLBACK_NAME[cand["kind"]])
         values[item["ref"]] = {"verdict": verdict, "name": name, "literal": literal}
 
-    phases = []
-    for p in raw.get("phases") or []:
-        if isinstance(p, dict) and p.get("from_row") in rows and p.get("to_row") in rows \
-                and order[p["from_row"]] <= order[p["to_row"]] and _text(p.get("name"), 60):
-            phases.append({"name": _text(p["name"], 60), "from_row": p["from_row"], "to_row": p["to_row"]})
-
     gaps = [{"row": g["row"], "note": _text(g.get("note"), 200)} for g in raw.get("gaps") or []
             if isinstance(g, dict) and g.get("row") in rows and _text(g.get("note"), 200)]
     detailed = [{"row": d["row"], "text": _text(d.get("text"), 240)} for d in raw.get("detailed_summary") or []
@@ -445,8 +472,7 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
     return {
-        "goal": _text(raw.get("goal"), 200), "phases": phases, "values": values,
-        "success_check": _text(raw.get("success_check"), 200), "gaps": gaps,
+        "goal": _text(raw.get("goal"), 200), "values": values, "gaps": gaps,
         "short_summary": _text(raw.get("short_summary"), 300), "detailed_summary": detailed,
         "decided": decided, "questions": questions,
     }
@@ -464,7 +490,7 @@ def _default_call(task_name: str, payload: dict[str, Any], timeout_ms: int) -> d
     return call_llm(task_name, {"input": payload}, timeout_ms, error_detail=_router.detail)
 
 
-_ANSWER_KEYS = ("goal", "short_summary", "values", "questions", "phases")
+_ANSWER_KEYS = ("goal", "short_summary", "values", "questions")
 
 
 def _unwrapped(raw: Any) -> Any:
@@ -514,36 +540,73 @@ def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[d
         result["questions"].sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
 
+_RETRY_NOTE = ("Your last reply could not be read. Return ONLY the JSON object described, nothing before "
+               "or after it, and keep `decided` and `questions` short.")
+
+
+def _attempt(caller: Caller, payload: dict[str, Any], timeout_ms: int) -> tuple[Any, list[Any], str]:
+    """One model call: ``(answer or None, what the router said, why there is no answer)``. Never raises."""
+    _router.detail = []
+    try:
+        raw = _unwrapped(caller(TASK, payload, timeout_ms))
+        detail = list(getattr(_router, "detail", None) or [])
+        reason = ("the model returned no answer" + (f" ({'; '.join(map(str, detail))[:200]})" if detail else ""))             if raw is None else ""
+        return raw, detail, reason
+    except Exception as exc:  # noqa: BLE001 -- advisory: a failed model call must never block the flow
+        return None, [], f"{type(exc).__name__}: {exc}"[:300]
+
+
+def _checked(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, Any]],
+             existing_inputs: set[str] | None, told: dict[str, bool]) -> tuple[dict[str, Any], bool]:
+    """``(checked answer, whether the model's own answer was usable)``. The person's recording-time answers
+    win over the model's verdict and nothing is asked about a value they settled; they never make an
+    empty reply look usable."""
+    out = validate(raw, merged, candidates, existing_inputs)
+    usable = bool(out["goal"] or out["short_summary"] or out["values"])
+    by_ref = {c["ref"]: c for c in candidates}
+    taken = {n.lower() for n in existing_inputs or set()} | {v["name"].lower() for v in out["values"].values() if v.get("name")}
+    for ref, varies in told.items():
+        cand, v = by_ref[ref], out["values"].get(ref)
+        if varies:
+            name = (v or {}).get("name") or _unique_name("", taken, _FALLBACK_NAME[cand["kind"]])
+            taken.add(name.lower())
+            out["values"][ref] = {"verdict": "varies", "name": name, "literal": cand["literal"]}
+        else:
+            out["values"][ref] = {"verdict": "fixed", "name": "", "literal": cand["literal"]}
+        out["questions"] = [q for q in out["questions"] if q.get("ref") != ref]
+    return out, usable
+
+
 def understand_timeline(
     merged: list[dict[str, Any]],
     task: str = "",
     chat: str = "",
     *,
     existing_inputs: set[str] | None = None,
+    hints: dict[str, Any] | None = None,
     call: Caller | None = None,
     timeout_ms: int = 120_000,
 ) -> dict[str, Any]:
     """The checked understanding plus ``candidates`` (each with verdict/name/literal) and
     ``source``: ``model`` (usable answer), ``fallback`` (call failed or empty), ``none`` (nothing to
-    look at). Never raises."""
+    look at). ``hints`` is the recorder's ``varies`` map (what the person said while recording). A reply
+    that arrives but holds nothing usable is asked for once more. Never raises."""
     candidates = candidates_from_timeline(merged)
-    result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "phases": [], "values": {},
-                              "success_check": "", "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
+    result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "values": {},
+                              "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
         return result
-    reason = ""
-    _router.detail = []
-    try:
-        raw = (call or _default_call)(TASK, build_input(merged, task, chat, candidates), timeout_ms)
-        detail = list(getattr(_router, "detail", None) or [])
-        raw = _unwrapped(raw)
-        if raw is None:
-            reason = "the model returned no answer" + (f" ({'; '.join(map(str, detail))[:200]})" if detail else "")
-    except Exception as exc:  # noqa: BLE001 -- advisory: a failed model call must never block the flow
-        raw, detail = None, []
-        reason = f"{type(exc).__name__}: {exc}"[:300]
-    checked = validate(raw, merged, candidates, existing_inputs)
-    usable = bool(checked["goal"] or checked["short_summary"] or checked["values"])
+    told = told_from_hints(candidates, hints)
+    payload = build_input(merged, task, chat, candidates, told=told, existing_inputs=existing_inputs)
+    caller = call or _default_call
+    raw, detail, reason = _attempt(caller, payload, timeout_ms)
+    checked, usable = _checked(raw, merged, candidates, existing_inputs, told)
+    if raw is not None and not usable:
+        raw2, detail2, reason2 = _attempt(caller, {**payload, "retry": _RETRY_NOTE}, timeout_ms)
+        checked2, usable2 = _checked(raw2, merged, candidates, existing_inputs, told)
+        if usable2:
+            raw, detail, reason, checked, usable = raw2, detail2, reason2, checked2, True
+            result["retried"] = True
     result.update(checked)
     result["source"] = "model" if usable else "fallback"
     if not usable:

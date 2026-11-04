@@ -30,7 +30,7 @@ function save(p: PersistedPanels) {
 
 export type SettingsTab = 'account' | 'usage' | 'testing' | 'about'
 
-export type WorkflowDraft = { name?: string; group?: string; starting_page?: string; task?: string }
+export type WorkflowDraft = { name?: string; group?: string; starting_page?: string }
 
 type ShellState = PersistedPanels & {
   windowWidth: number
