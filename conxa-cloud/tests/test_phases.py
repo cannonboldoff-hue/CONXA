@@ -1563,3 +1563,14 @@ class CompileWithoutFramesTests(unittest.TestCase):
             self.assertNotIn("vision_anchor_fallback", (step.confidence_protocol.get("compile_warnings") or {}))
         finally:
             shutil.rmtree(data_dir, ignore_errors=True)
+
+
+def test_an_anchor_the_recorder_flagged_ephemeral_never_reaches_the_compiled_step():
+    from conxa_compile.compiler.step_anchors import clean_anchors
+
+    out = clean_anchors(
+        [{"element": "region", "relation": "above", "ephemeral": True},
+         {"element": "heading", "relation": "above"}],
+        {}, None,
+    )
+    assert [a["element"] for a in out] == ["heading"]

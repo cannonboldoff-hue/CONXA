@@ -29,7 +29,8 @@ _INTERACTION_ACTIONS = frozenset({
     "set_checkbox", "set_radio", "date_pick", "keyboard_shortcut", "submit", "drag_drop",
     "upload", "upload_intent",
 })
-# Sessions recorded before the recorder tagged navigations with a cause: a navigation this soon
+# Sessions recorded before the recorder tagged navigations with a cause ("action" / "redirect" /
+# "user"): a navigation this soon
 # after an interaction, on the same tab and starting from that interaction's page, is its effect.
 _LEGACY_WINDOW_S = 5.0
 # An effect the compiler already turns into its own enforced assertion; never overwrite it.
@@ -71,8 +72,10 @@ def _last_interaction(out: list[dict[str, Any]], tab: str) -> dict[str, Any] | N
 
 
 def _is_action_caused(ev: dict[str, Any], nav: dict[str, Any], cause: dict[str, Any] | None) -> bool:
-    if nav.get("cause") == "action":
-        return True
+    if nav.get("cause"):
+        # Tagged by the recorder: the tag is the answer, no clock involved ("redirect" and "user"
+        # are never an action's effect).
+        return nav["cause"] == "action"
     if cause is None:
         return False
     if str((cause.get("page") or {}).get("url") or "") != str(nav.get("from_url") or ""):
@@ -88,7 +91,11 @@ def _host(url: str) -> str:
 def _is_site_redirect(ev: dict[str, Any], nav: dict[str, Any], out: list[dict[str, Any]]) -> bool:
     """The site moving on by itself right after a page load (drive.google.com -> ?pli=1 ->
     /drive/home): starts where the previous navigation on this tab landed, same site, within the
-    window, nothing done in between. Replaying the first address lets the site redirect again."""
+    window, nothing done in between. Replaying the first address lets the site redirect again.
+    A recording tagged by the recorder (`cause`) is decided by the tag alone; the timing rule below
+    is only for sessions recorded before that."""
+    if nav.get("cause"):
+        return nav["cause"] == "redirect"
     prev = next((p for p in reversed(out) if _tab_id(p) == _tab_id(ev)), None)
     if prev is None or _action(prev) != "manual_navigate":
         return False

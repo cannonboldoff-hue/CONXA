@@ -666,6 +666,8 @@ def clean_anchors(
         out.append({"element": el, "relation": rel})
 
     for raw in anchors or []:
+        if (raw or {}).get("ephemeral"):
+            continue
         _push((raw or {}).get("element") or "", (raw or {}).get("relation") or "inside")
 
     tgt = target if isinstance(target, dict) else {}

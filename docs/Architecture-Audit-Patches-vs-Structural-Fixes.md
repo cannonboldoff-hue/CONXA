@@ -23,7 +23,7 @@ Date: 2026-11-03. Read-only audit; no code was changed.
 
 ### 2. Same-site redirect fold (`drive.google.com` → `?pli=1` → `/drive/home`)
 
-- **Status (2026-11-04):** Partly done. Tests added for the existing fold. The recorder tag was not added: no recorded session was available, and page-requested navigations are already skipped before a `manual_navigate` is emitted, so the CDP reason cannot separate a redirect from a typed address without one. See BUILD-61.
+- **Status (2026-11-04):** Done in code, unverified on a real recording. The recorder tags every `manual_navigate` `action` / `redirect` / `user`; the compiler decides by the tag and keeps the 5 s rule only for untagged old sessions. `_LEGACY_WINDOW_S` and the `flag_noise` duplicate-goto branch stay until a real Drive recording confirms the tag (BUILD-61).
 
 - **Where:** `compiler/navigation_effects.py:88-99`. Commit `c0234b5` (2026-11-03). Sibling patches: `6199e05` (fold action-caused navigations) and `36bd0a5` (collapse a duplicated goto after a new tab).
 - **What it does:** It drops a navigation if the previous navigation on that tab landed on its `from_url`, the host is the same, and it happened within 5 seconds (`_LEGACY_WINDOW_S`).
@@ -57,7 +57,7 @@ Date: 2026-11-03. Read-only audit; no code was changed.
 
 ### 5. Date-picker detection by library class names
 
-- **Status (2026-11-04):** Deferred (BUILD-61). Outcome-based collapse needs recorder data that does not exist yet.
+- **Status (2026-11-04):** Done. The recorder now reads the date field after a day click; a day click that leaves the field unchanged is not a pick. Class selectors stay as the hint and as the fallback for old recordings.
 
 - **Where:** `recorder/bridge.js:926-932` (`CALENDAR_ROOT_SELECTORS`), plus `selector_filters.py:116-127` and `identity_bundle.py:192` (react-datepicker special cases). Commit `e66d0be` (2026-08-30) and the later `74c362a`.
 - **What it does:** It tags clicks as a "date pick" by matching `.flatpickr-calendar`, `.react-datepicker`, `[class*='MuiDateCalendar']`, `[class*='calendar']`, and similar.
@@ -66,7 +66,7 @@ Date: 2026-11-03. Read-only audit; no code was changed.
 
 ### 6. Ephemeral-anchor keyword list
 
-- **Status (2026-11-04):** Partly done. Whole-word matching; bare `notification` and `subscribe` removed; `toast` and `snackbar` added. Structural detection is deferred (BUILD-61).
+- **Status (2026-11-04):** Done. Whole-word matching, plus the recorder flags anchors in an alert/status region or a fixed non-landmark overlay (`ephemeral`) and the compiler skips them. The word list remains the fallback for old recordings.
 
 - **Where:** `compiler/selector_filters.py:455-480`. Commit `6edb387` (2026-06-27).
 - **What it does:** It rejects any anchor phrase containing "cookie", "banner", "popup", "notification", "subscribe", and similar.
@@ -75,7 +75,7 @@ Date: 2026-11-03. Read-only audit; no code was changed.
 
 ### 7. One global switch, `compile_keep_every_action`
 
-- **Status (2026-11-04):** Done. `settings.compile_pass(name)` with per-pass overrides; outcome forks always on. Id-keyed passes are deferred (BUILD-61).
+- **Status (2026-11-04):** Done. `settings.compile_pass(name)` with per-pass overrides; outcome forks always on. Upstream drops are now in the compile ledger (`upstream_dedupe`). The positional passes still match `steps[i]` to `cleaned_events[i]` and are safe only because they run before steps are added or removed (BUILD-61).
 
 - **Where:** `packages/conxa-core/conxa_core/config.py:187`, with 12 branch points. Examples: `build.py:1614, 1699, 1713, 1736`; `variant_align.py:145`; `pipeline/run.py:191`; `clarify.py:875`; `timeline_understanding.py:132`.
 - **History:** Added as default true in `6053184` (2026-11-02). Flipped to false in `c0234b5` (2026-11-03), one day later. The tests patch it both ways.

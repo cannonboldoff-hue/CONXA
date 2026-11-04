@@ -53,7 +53,7 @@ def _page():
 def test_address_bar_navigation_is_still_a_plain_manual_navigate():
     rs, page = RecordingSession(session_id="t"), _page()
     assert _drain(rs, page, [FORM], [FORM, "https://other.test/"]) == [
-        {"kind": "manual_navigate", "from_url": FORM, "to_url": "https://other.test/"}
+        {"kind": "manual_navigate", "from_url": FORM, "to_url": "https://other.test/", "cause": "user"}
     ]
 
 
@@ -74,13 +74,41 @@ def test_navigation_right_after_a_click_is_tagged_as_caused_by_the_action():
     assert nav["cause"] == "action"
 
 
-def test_navigation_long_after_the_last_click_is_not_tagged():
+def test_navigation_long_after_the_last_click_is_tagged_as_the_users_own():
     rs, page = RecordingSession(session_id="t"), _page()
     now = time.monotonic()
     rs._last_interaction_at[id(page)] = now - 60
     rs._nav_committed_at[id(page)] = now
     [nav] = _drain(rs, page, [FORM], [FORM, ORDER])
-    assert "cause" not in nav
+    assert nav["cause"] == "user"
+
+
+def test_site_hop_right_after_a_page_load_is_tagged_as_a_redirect():
+    rs, page = RecordingSession(session_id="t"), _page()
+    first = "https://drive.example.com/"
+    hop = "https://drive.example.com/drive/home"
+    [a] = _drain(rs, page, [FORM], [FORM, first])
+    assert a["cause"] == "user"
+    [b] = _drain(rs, page, [FORM, first], [FORM, first, hop])
+    assert b["cause"] == "redirect"
+
+
+def test_same_site_navigation_after_a_click_since_the_page_load_is_not_a_redirect():
+    rs, page = RecordingSession(session_id="t"), _page()
+    first, second = "https://drive.example.com/", "https://drive.example.com/other"
+    _drain(rs, page, [FORM], [FORM, first])
+    rs._last_interaction_at[id(page)] = time.monotonic() + 0.01  # a click happened after the load
+    rs._nav_committed_at[id(page)] = time.monotonic() + 30  # ...and the hop is well after it
+    [nav] = _drain(rs, page, [FORM, first], [FORM, first, second])
+    assert nav["cause"] != "redirect"
+
+
+def test_hop_to_another_site_is_not_a_redirect():
+    rs, page = RecordingSession(session_id="t"), _page()
+    first = "https://drive.example.com/"
+    _drain(rs, page, [FORM], [FORM, first])
+    [nav] = _drain(rs, page, [FORM, first], [FORM, first, "https://other.example.org/"])
+    assert nav["cause"] == "user"
 
 
 def test_slow_redirect_still_counts_as_requested_by_the_page():
@@ -168,6 +196,24 @@ def _goto(ts: str, frm: str, to: str, tab: str = "tab_0") -> dict:
 def test_fold_drops_a_same_site_redirect_right_after_a_page_load():
     first, hop = _goto("2026-01-01T00:00:00Z", "about:blank", D1), _goto("2026-01-01T00:00:01Z", D1, D2)
     assert fold_action_caused_navigations([first, hop]) == [first]
+
+
+def test_fold_trusts_the_tag_over_the_clock():
+    """A tagged recording is decided by its tag: a deliberate same-site navigation 1 s after a
+    load is kept; a tagged redirect is dropped even with the page-load 60 s earlier."""
+    first = _goto("2026-01-01T00:00:00Z", "about:blank", D1)
+    typed = _goto("2026-01-01T00:00:01Z", D1, D2)
+    typed["action"]["value"] = json.dumps({"from_url": D1, "to_url": D2, "cause": "user"})
+    assert fold_action_caused_navigations([first, typed]) == [first, typed]
+    hop = _goto("2026-01-01T00:01:00Z", D1, D2)
+    hop["action"]["value"] = json.dumps({"from_url": D1, "to_url": D2, "cause": "redirect"})
+    assert fold_action_caused_navigations([first, hop]) == [first]
+
+
+def test_fold_does_not_fold_a_user_tagged_navigation_into_a_recent_click():
+    click = _click("2026-01-01T00:00:00Z")
+    nav = _nav("2026-01-01T00:00:02Z", cause="user")
+    assert fold_action_caused_navigations([click, nav]) == [click, nav]
 
 
 def test_fold_keeps_a_second_navigation_to_another_site():

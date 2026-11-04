@@ -113,7 +113,7 @@ class UnderstandFlowMixin:
         questions = tu.questions_from_understanding(und, merged)
         clarify_store.save(workflow_id, {
             "stage": "understand", "skill_id": None, "questions": questions,
-            "understanding": {"goal_summary": und["goal"], "coverage": {"ok": not und["gaps"], "note": ""}, "source": und["source"]},
+            "understanding": {"goal_summary": und["goal"], "coverage": {"ok": True, "note": ""}, "source": und["source"]},
         })
         # Questions exist, so the lifecycle can see them; clear before the posts below because the
         # renderer re-reads the lifecycle on each one.

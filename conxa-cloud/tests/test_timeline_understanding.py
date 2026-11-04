@@ -98,7 +98,7 @@ def test_understand_timeline_uses_the_model_and_never_raises():
 
     down = TU.understand_timeline(MERGED, "download invoices", call=boom)
     assert down["source"] == "fallback" and down["values"]["url:2"]["verdict"] == "unsure"
-    assert down["detailed_summary"][0]["text"] == "find the invoice"      # built from the timeline
+    assert down["detailed_summary"] == []      # no model answer, nothing invented
     assert TU.understand_timeline([], "x", call=boom)["source"] == "none"
 
 

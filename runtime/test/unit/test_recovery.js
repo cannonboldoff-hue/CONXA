@@ -74,6 +74,11 @@ test("a11y recovery name still fabricates from inner_text for a name-from-conten
   );
 });
 
+test("a11y recovery name uses inner_text up to 80 chars and none beyond (mirrors identity_bundle.py)", () => {
+  assert.strictEqual(a11yRecoveryName({ tag: "button", role: "button", inner_text: "x".repeat(80) }), "x".repeat(80));
+  assert.strictEqual(a11yRecoveryName({ tag: "button", role: "button", inner_text: "x".repeat(81) }), "");
+});
+
 test("a11y recovery name strips a trailing keyboard-shortcut hint", () => {
   assert.strictEqual(
     a11yRecoveryName({

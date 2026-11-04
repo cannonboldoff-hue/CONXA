@@ -61,6 +61,7 @@ Two UI surfaces each carry their own `PRODUCT.md` (strategic: register, users, p
 3. **Surgical changes.** Touch only what the task requires. Don't refactor unrelated code; mention issues rather than fixing them. Match existing style. Every changed line must trace to the task. If your changes leave unused code, remove only what *you* introduced.
 4. **Goal-driven.** Define success → implement → verify. Bug → reproduce → fix → verify. Refactor → ensure no behavior change.
 5. **Subagent model is one tier below the main agent.** When spawning any subagent (Agent tool), always pass `model` explicitly: main agent on Opus → `model: "sonnet"`; main agent on Sonnet → `model: "haiku"`. Never let a subagent inherit the main agent's model.
+6. **"Answer me" means explain everything in detail, in easy language.** When the user says "answer me", drop any terse or compressed style (caveman, ponytail brevity, etc.) for that reply. Explain the full picture step by step: what it is, why it works that way, and what it means for them. Use simple everyday words, short sentences, and an analogy where it helps. Define any technical term the first time you use it. Do not skip steps or assume background knowledge.
 
 ### Token and file constraints
 

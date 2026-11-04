@@ -136,3 +136,28 @@ def test_typed_date_pass_skips_scroll_steps_with_dict_actions():
     scroll_event = {"action": {"action": "scroll"}, "target": {}}
     convert_typed_date_steps([scroll], [scroll_event], {})
     assert scroll.action == {"action": "scroll", "delta": 651}
+
+
+def test_a_day_click_that_left_the_field_unchanged_is_not_a_pick():
+    """Outcome, not widget shape: a cell in something that only looks like a calendar (a calendar
+    app, a disabled day) changes nothing in the date field, so no date_pick step is made."""
+    open_step, day_step = _step("focus", "opener"), _step("click", "day")
+    day = _day_event()
+    day["date_context"]["field_display_value"] = "03/15/2007"
+    day["date_context"]["field_display_value_after"] = "03/15/2007"
+    out = collapse_date_picker_runs([open_step, day_step], [_open_event(), day], {})
+    assert [s.action for s in out] == ["focus", "click"]
+
+
+def test_a_day_click_that_changed_the_field_is_a_pick():
+    open_step, day_step = _step("focus", "opener"), _step("click", "day")
+    day = _day_event()
+    day["date_context"]["field_display_value_after"] = "09/15/2026"
+    out = collapse_date_picker_runs([open_step, day_step], [_open_event(), day], {})
+    assert [s.action for s in out] == ["date_pick"]
+
+
+def test_a_recording_without_the_after_value_is_still_judged_by_shape():
+    day_step = _step("click", "day")
+    out = collapse_date_picker_runs([day_step], [_day_event()], {})
+    assert [s.action for s in out] == ["date_pick"]

@@ -261,7 +261,8 @@ class CompileFlowMixin:
             more = f" and {len(dropped) - 3} more" if len(dropped) > 3 else ""
             passes = {d.get("pass") for d in dropped}
             why = {"not_from_user": "the page did them by itself, not you",
-                   "login_page": "they happened on a sign-in page, and signing in is saved separately"}.get(
+                   "login_page": "they happened on a sign-in page, and signing in is saved separately",
+                   "upstream_dedupe": "they were repeats or noise around another action"}.get(
                 next(iter(passes)) if len(passes) == 1 else None,
                 "repeats, page loads a click caused, or things the page did by itself")
             lines.append(

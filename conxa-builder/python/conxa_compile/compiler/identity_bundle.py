@@ -114,7 +114,7 @@ def generate_deterministic_signals(
     anchor_phrases = [
         str(a.get("element") or "").strip()
         for a in (ev.get("anchors") or [])
-        if a.get("element")
+        if a.get("element") and not a.get("ephemeral")
     ]
     stable_anchors = [p for p in anchor_phrases if p and not is_low_quality_anchor(p)]
     if stable_anchors and role and ax_name and role.lower() not in _EXCLUDED_ROLES:

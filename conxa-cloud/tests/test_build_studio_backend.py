@@ -1046,6 +1046,7 @@ def test_compile_derives_title_from_workflow_and_marks_compiled(
         source_session_id: str,
         title: str,
         version: int,
+        **_kw,
     ):
         captured.update(
             {
@@ -1253,7 +1254,7 @@ def test_recompile_reserves_compile_credit_not_human_edit(backend, monkeypatch, 
     monkeypatch.setattr(
         compiler_build,
         "compile_skill_package",
-        lambda events, *, skill_id, source_session_id, title, version: SimpleNamespace(
+        lambda events, *, skill_id, source_session_id, title, version, **_kw: SimpleNamespace(
             skills=[SimpleNamespace(steps=[{"kind": "click"}])],
             compile_report={"status": "ok", "min_confidence": 1.0, "steps_with_warnings": 0},
             model_dump=lambda mode="json": {

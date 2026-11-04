@@ -32,7 +32,7 @@ class CompileMixin:
     def cmd_compile(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         import time as _time
         from conxa_compile.compiler.build import compile_skill_package
-        from conxa_compile.pipeline.run import run_pipeline
+        from conxa_compile.pipeline.run import pipeline_drops, run_pipeline
         from conxa_core.storage.json_store import read_skill, write_skill
         from conxa_core.storage.workflow_store import get_workflow, save_workflow
         from conxa_core.storage.session_events import read_session_events
@@ -165,6 +165,7 @@ class CompileMixin:
                     **({"task_description": task_text} if task_text else {}),
                     # Picks up on a page that is already open: no start-page navigation is added.
                     **({"segment": True} if payload.get("segment") else {}),
+                    pipeline_drops=pipeline_drops(raw, normalized),
                 )
         except (CloudUnreachable, EntitlementBlocked, QuotaExceeded) as exc:
             _log(str(exc), level="error")

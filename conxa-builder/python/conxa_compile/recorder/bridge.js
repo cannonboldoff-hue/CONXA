@@ -746,6 +746,20 @@
     return null;
   }
 
+  // An anchor that sits in an alert/status region, or is itself a fixed-position element that is
+  // not a landmark or a dialog (a cookie bar, a toast), will be gone or elsewhere at replay. Judged
+  // here by structure so the compiler does not have to guess from the label's words. Fixed
+  // landmarks (a pinned header/nav) and dialogs stay usable anchors.
+  function _isTransientOverlay(c) {
+    try {
+      if (c.closest("[role=alert],[role=status],[role=alertdialog]")) return true;
+      const landmark = "main,nav,header,footer,[role=main],[role=navigation],[role=dialog],[aria-modal=true]";
+      return getComputedStyle(c).position === "fixed" && !c.matches(landmark);
+    } catch (_e) {
+      return false;
+    }
+  }
+
   function pickAnchors(el) {
     const anchors = [];
     const rect = el.getBoundingClientRect();
@@ -772,7 +786,9 @@
         safeText(c, 60) ||
         c.tagName.toLowerCase()
       ).slice(0, 120);
-      anchors.push({ element: label, relation });
+      const anchor = { element: label, relation };
+      if (_isTransientOverlay(c)) anchor.ephemeral = true;
+      anchors.push(anchor);
       if (anchors.length >= 4) break;
     }
     if (!anchors.length && el.parentElement) {
@@ -1250,7 +1266,7 @@
     }
     if (cellDate) {
       const field = _findAnchoredField(gridRoot);
-      return {
+      const ctx = {
         role: "day",
         iso_date: cellDate.iso,
         cell_attr: cellDate.attr,
@@ -1263,6 +1279,11 @@
         field: field ? _selectorForElement(field) : "",
         field_display_value: field ? readEditableValue(field) : "",
       };
+      // The field element itself, kept (non-enumerable, so never serialized) to read what the
+      // pick left in it once the click settles: pickers close their grid on pick, so the field
+      // cannot be found again from the grid later. See finalizeStateWithAfter.
+      if (field) Object.defineProperty(ctx, "__fieldEl", { value: field, enumerable: false });
+      return ctx;
     }
 
     const timeText = _timeOptionText(el, gridRoot);
@@ -1667,6 +1688,13 @@
       payload.post_condition = null;
     }
     delete payload.state_probe;
+    // What the field holds after the pick: lets the compiler tell a day click that set a date
+    // (value changed) from a click in a calendar app (nothing changed), by outcome and not by
+    // the widget's class names.
+    const dc = payload.date_context;
+    if (dc && dc.__fieldEl) {
+      try { dc.field_display_value_after = readEditableValue(dc.__fieldEl); } catch (_e) {}
+    }
     return report(payload);
   }
 

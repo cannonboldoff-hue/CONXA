@@ -356,6 +356,16 @@ def convert_typed_date_steps(
         })
 
 
+def _left_field_unchanged(event: dict[str, Any]) -> bool:
+    """A day click after which the date field holds exactly what it held before did not pick a date
+    (a calendar app's cell, a disabled day). The recorder reads the field before and after the click
+    (bridge.js, `field_display_value` / `field_display_value_after`); a recording without the
+    after-value, or a calendar with no field, keeps judging by the widget shape alone. Re-picking
+    the date already in the field also reads as unchanged and stays a plain click: it fails closed."""
+    dc = _date_context(event)
+    return "field_display_value_after" in dc and dc["field_display_value_after"] == dc.get("field_display_value")
+
+
 def collapse_date_picker_runs(
     steps: list[SkillStep],
     events: list[dict[str, Any]],
@@ -396,7 +406,10 @@ def collapse_date_picker_runs(
             run_end = j
             j += 1
         run_range = range(i, run_end + 1)
-        day_idxs = [k for k in run_range if _date_context(events[k]).get("role") == "day"]
+        day_idxs = [
+            k for k in run_range
+            if _date_context(events[k]).get("role") == "day" and not _left_field_unchanged(events[k])
+        ]
 
         if not day_idxs:
             # Nav/select activity with no day ever picked (grid opened, month/year set, browsed,

@@ -167,7 +167,9 @@ function a11yRecoveryName(fingerprint) {
   const labelName = isLabelled ? fp.label_text : "";
   const isNamedFromContent = NAME_FROM_CONTENT_ROLES.has(String(fp.tag || "").toLowerCase())
     || NAME_FROM_CONTENT_ROLES.has(String(fp.role || "").toLowerCase());
-  const innerTextName = isNamedFromContent ? fp.inner_text : "";
+  // Same 80-char ceiling as identity_bundle.py::_accessible_name: longer visible text is a
+  // paragraph, not a name, and the compiler refuses it too.
+  const innerTextName = isNamedFromContent && String(fp.inner_text || "").trim().length <= 80 ? fp.inner_text : "";
   // `name` is deliberately excluded — the HTML form-field attribute, never an ARIA
   // accessible-name source (identity_bundle.py's _accessible_name never includes it either).
   return stripKeyboardShortcutTail(String(
@@ -199,7 +201,7 @@ async function recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, bas
   // the recorded fingerprint + frame_chain so scoring and boundary context are unchanged.
   const signals = [];
   if (role) signals.push({ engine: "role", selector: `internal:role=${role}[name="${name}"]`, durability: 0.9 });
-  signals.push({ engine: "text_based", selector: `internal:text="${name.slice(0, 80)}"`, durability: 0.8 });
+  signals.push({ engine: "text_based", selector: `internal:text="${name}"`, durability: 0.8 });
 
   const method = role ? "a11y:role" : "a11y:text";
   const a11yStep = { ...step, identity_bundle: { ...bundle, signals } };

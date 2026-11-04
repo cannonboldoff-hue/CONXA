@@ -199,6 +199,13 @@ def test_overlong_inner_text_is_dropped_not_truncated_even_for_a_name_from_conte
     assert _accessible_name(target) == ""
 
 
+def test_inner_text_of_exactly_80_chars_is_still_a_name():
+    """Boundary twin of runtime/test/unit/test_recovery.js: 80 is kept, 81 is dropped."""
+    target = {"tag": "button", "role": "button", "inner_text": "x" * 80, "aria_label": None,
+              "alt": None, "title": None, "placeholder": None, "label_text": None}
+    assert _accessible_name(target) == "x" * 80
+
+
 def test_nameless_select_gets_no_role_or_relational_signal():
     """The fabricated name is never even a candidate — no role/relational signal exists to
     verify or drop, unlike the <img> case above which needed the resolves_to_nothing gate."""

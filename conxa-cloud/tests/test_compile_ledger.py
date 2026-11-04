@@ -149,3 +149,45 @@ def test_capture_mode_rearms_a_frame_that_appears_after_it_was_switched_on(monke
     sess._capture_pending = None
     sess._on_frame_ready(object())
     assert sess._capture_pending is None
+
+
+def test_pipeline_drops_names_what_the_pipeline_removed_and_never_a_value():
+    from conxa_compile.pipeline.run import pipeline_drops
+
+    def ev(seq, action, value=None):
+        e = _minimal_click_event()
+        e["extras"] = {"sequence": seq}
+        e["action"] = {"action": action, **({"value": value} if value else {})}
+        return e
+
+    raw = [ev(1, "scroll"), ev(2, "scroll"), ev(3, "click"), ev(4, "type", "hunter2")]
+    normalized = [raw[0], raw[2], raw[3]]
+    rows = pipeline_drops(raw, normalized)
+    assert rows == [{"sequence": 2, "pass": "upstream_dedupe", "action": "scroll"}]
+    # an event with no sequence cannot be tracked, so it is not listed
+    raw.append({"extras": {}, "action": {"action": "hover"}})
+    assert len(pipeline_drops(raw, normalized)) == 1
+
+
+def test_pipeline_drops_reach_the_compile_report():
+    first = _minimal_click_event()
+    first["extras"] = {"sequence": 1}
+    evs = run_pipeline([first])
+    drop = {"sequence": 9, "pass": "upstream_dedupe", "action": "scroll"}
+    data_dir, patchers = _compile_fixture("sess", evs)
+    try:
+        with ExitStack() as stack:
+            for p in patchers:
+                stack.enter_context(p)
+            pkg = compile_skill_package(evs, skill_id="skill_test", source_session_id="sess",
+                                        title="t", version=1, pipeline_drops=[drop])
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+    assert drop in pkg.compile_report["dropped"]
+
+
+def test_a_review_step_without_an_index_is_skipped_not_put_on_step_zero():
+    from conxa_compile.llm.workflow_intent import _graph_from_raw
+
+    graph = _graph_from_raw({"steps": [{"intent": "no index"}, {"index": 0, "intent": "real"}, {"index": "x", "intent": "bad"}]})
+    assert [(s.index, s.intent) for s in graph.steps] == [(0, "real")]

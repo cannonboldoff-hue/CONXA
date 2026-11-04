@@ -1203,3 +1203,57 @@ def test_capture_mode_can_be_cancelled_and_reads_an_inputs_value(page: Page) -> 
     page.click("#ref")
     page.wait_for_timeout(60)
     assert _action_events(page, "extract")[0]["extract"] == {"source": "value"}
+
+
+def test_calendar_day_click_reports_what_the_field_held_before_and_after(page: Page) -> None:
+    # The outcome the compiler judges a pick by: the date field after the click vs before it.
+    _install_bridge(page, _calendar_html())
+    page.evaluate(
+        "document.querySelector('#target').addEventListener('click', () => { document.querySelector('#dob').value = '03/15/2007'; })"
+    )
+    page.click("#dob")
+    page.click("#target")
+    page.wait_for_timeout(400)
+
+    dc = _action_events(page, "click")[-1]["date_context"]
+    assert dc["field_display_value"] == ""
+    assert dc["field_display_value_after"] == "03/15/2007"
+    assert "__fieldEl" not in dc
+
+
+def test_calendar_day_click_that_leaves_the_field_alone_reports_the_same_value(page: Page) -> None:
+    _install_bridge(page, _calendar_html())
+    page.click("#dob")
+    page.click("#target")
+    page.wait_for_timeout(400)
+
+    dc = _action_events(page, "click")[-1]["date_context"]
+    assert dc["field_display_value_after"] == dc["field_display_value"]
+
+
+def _anchors_for(page: Page, html: str) -> list[dict]:
+    _install_bridge(page, html)
+    page.click("#go")
+    page.wait_for_timeout(150)
+    return _action_events(page, "click")[-1]["anchors"]
+
+
+def test_anchor_in_an_alert_region_or_a_fixed_overlay_is_flagged_ephemeral(page: Page) -> None:
+    anchors = _anchors_for(
+        page,
+        '<div data-testid="promo" style="position:fixed;top:0">Join our list</div>'
+        '<div role="status" data-testid="live">Saved</div>'
+        '<main>Orders<button id="go">Go</button></main>',
+    )
+    flagged = {a["element"] for a in anchors if a.get("ephemeral")}
+    assert {"Join our list", "Saved"} <= flagged
+    assert all(not a.get("ephemeral") for a in anchors if a["element"].startswith("Orders"))
+
+
+def test_fixed_landmark_and_dialog_anchors_are_not_flagged(page: Page) -> None:
+    anchors = _anchors_for(
+        page,
+        '<header style="position:fixed;top:0">Acme</header>'
+        '<div role="dialog" style="position:fixed" aria-label="Edit order"><button id="go">Go</button></div>',
+    )
+    assert anchors and not any(a.get("ephemeral") for a in anchors)

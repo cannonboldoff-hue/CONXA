@@ -452,16 +452,6 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     }
 
 
-def _fallback_detailed(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    for r in merged:
-        seg = r.get("segment") or {}
-        text = _text(seg.get("intent") or seg.get("screen_after") or "", 240)
-        if text:
-            out.append({"row": r["row_ref"], "text": text})
-    return out
-
-
 # What the router said about the last default call, per thread (two workflows can be understood at once).
 # The `call` seam stays (task, payload, timeout_ms) -> dict | None, so the detail rides here, not in its signature.
 _router = threading.local()
@@ -570,8 +560,6 @@ def understand_timeline(
                     result["questions"].append(_value_question(c, row, ""))      # asked, nothing pre-ticked
         result["short_summary"] = f"{len(_events(merged))} recorded actions."
     _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs)
-    if not result["detailed_summary"]:
-        result["detailed_summary"] = _fallback_detailed(merged)
     for c in candidates:
         c.update(result["values"].get(c["ref"]) or {"verdict": "fixed", "name": "", "literal": c["literal"]})
     return result

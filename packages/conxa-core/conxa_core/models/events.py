@@ -105,6 +105,9 @@ class SemanticFeatures(BaseModel):
 class AnchorRelation(BaseModel):
     element: str
     relation: Literal["below", "above", "inside", "near"]
+    # Set by the recorder when the anchor sits in an alert/status region or is a fixed overlay
+    # (bridge.js::_isTransientOverlay); the compiler never uses such an anchor.
+    ephemeral: bool = False
 
 
 _REQUIRED_FRAME_KEYS = {"before_far", "before_near", "at", "after_near", "after_far"}

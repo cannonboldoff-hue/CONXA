@@ -175,6 +175,20 @@ def _reorder_by_timestamp(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [ev for _, ev in sorted(enumerate(events), key=_key)]
 
 
+def pipeline_drops(raw: list[dict[str, Any]], normalized: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ledger rows for recorded events `run_pipeline` removed (tiny hovers, select noise, superseded
+    focus, repeated scrolls). Keyed by the recorder's `extras.sequence`; an event without one can't
+    be tracked. Carries the action name only, never a value: select noise includes `type` events."""
+    kept = {(e.get("extras") or {}).get("sequence") for e in normalized}
+    rows: list[dict[str, Any]] = []
+    for e in raw:
+        seq = (e.get("extras") or {}).get("sequence")
+        if seq is None or seq in kept:
+            continue
+        rows.append({"sequence": seq, "pass": "upstream_dedupe", "action": _action_name(e)})
+    return rows
+
+
 def run_pipeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     bundle = get_policy_bundle()
     policy = bundle.data

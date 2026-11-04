@@ -391,6 +391,13 @@ def check_group_sessions_sync(
     return results
 
 
+def _same_site(a: str, b: str) -> bool:
+    """Same host, ignoring a leading www. (matches compiler/navigation_effects._host)."""
+    def host(u: str) -> str:
+        return (urlsplit(str(u or "")).hostname or "").removeprefix("www.")
+    return host(a) == host(b) != ""
+
+
 @dataclass
 class RecordingSession:
     """
@@ -635,6 +642,10 @@ class RecordingSession:
     # bridge — a navigation committing shortly after one is the interaction's effect.
     _last_interaction_at: dict[int, float] = field(default_factory=dict)
     _NAV_INTERACTION_WINDOW_S = 5.0
+    # Where each page's last emitted manual_navigate landed and when it committed. A browser-made
+    # navigation that starts there, on the same site, with nothing done since, is the site moving
+    # on by itself (cause="redirect"), not an address the person typed.
+    _nav_last_manual: dict[int, tuple[str, float]] = field(default_factory=dict)
     _INTERACTION_ACTIONS = frozenset({
         "click", "dblclick", "right_click", "type", "fill", "select", "select_option",
         "set_checkbox", "set_radio", "date_pick", "keyboard_shortcut", "submit", "drag_drop",
@@ -699,6 +710,7 @@ class RecordingSession:
             self._nav_committed_at.clear()
             self._nav_same_document.clear()
             self._last_interaction_at.clear()
+            self._nav_last_manual.clear()
             return
         if self._context is not None:
             self._context.close()
@@ -716,6 +728,7 @@ class RecordingSession:
         self._nav_committed_at.clear()
         self._nav_same_document.clear()
         self._last_interaction_at.clear()
+        self._nav_last_manual.clear()
         try:
             self._finalize_video_file_sync()
         except Exception as exc:  # noqa: BLE001
@@ -1344,6 +1357,7 @@ class RecordingSession:
                 self._nav_committed_at.pop(key, None)
                 self._nav_same_document.discard(key)
                 self._last_interaction_at.pop(key, None)
+                self._nav_last_manual.pop(key, None)
                 continue
             if session is None:
                 continue
@@ -1401,8 +1415,20 @@ class RecordingSession:
                 # user did on their own. Kept as evidence (cause="action") so the compiler can
                 # fold it into the action's post-condition instead of replaying the URL.
                 payload = {"from_url": from_url, "to_url": to_url}
+                last_manual = self._nav_last_manual.get(key)
                 if same_document or after_interaction:
                     payload["cause"] = "action"
+                elif (
+                    last_manual is not None
+                    and last_manual[0] == from_url
+                    and 0 <= (committed_at - last_manual[1]) <= self._NAV_INTERACTION_WINDOW_S
+                    and (interacted_at is None or interacted_at < last_manual[1])
+                    and _same_site(from_url, to_url)
+                ):
+                    payload["cause"] = "redirect"
+                else:
+                    payload["cause"] = "user"
+                self._nav_last_manual[key] = (to_url, committed_at)
                 self._enqueue_synthetic("manual_navigate", json.dumps(payload), src_page=page)
                 continue
             self._nav_pending_renderer_initiated.pop(key, None)

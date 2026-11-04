@@ -23,10 +23,13 @@ def _graph_from_raw(raw: dict[str, Any]) -> WorkflowIntentGraph:
     for item in raw.get("steps") or []:
         if not isinstance(item, dict):
             continue
+        # A missing index must skip the item: defaulting it to 0 would put its prose on step 0.
+        if item.get("index") is None:
+            continue
         try:
             intent_steps.append(
                 WorkflowIntentStep(
-                    index=int(item.get("index") or 0),
+                    index=int(item["index"]),
                     intent=str(item.get("intent") or ""),
                     verification_anchor=str(item.get("verification_anchor") or ""),
                     intent_token=str(item.get("intent_token") or ""),

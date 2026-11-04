@@ -458,6 +458,7 @@ def _build_element_fingerprint(ev: dict[str, Any]) -> ElementFingerprint:
         str(a.get("element") or "").strip()
         for a in anchors
         if a.get("element") and str(a.get("element")).strip()
+        and not a.get("ephemeral")
         and not is_low_quality_anchor(str(a.get("element") or ""))
     ][:6]
 
@@ -1652,8 +1653,12 @@ def compile_skill_package(
     policy_bundle: PolicyBundle | None = None,
     task_description: str = "",
     segment: bool = False,
+    pipeline_drops: list[dict[str, Any]] | None = None,
 ) -> SkillPackage:
     """Build a package from already pipeline-normalized event dicts.
+
+    ``pipeline_drops`` are ledger rows for events ``run_pipeline`` removed before this call
+    (``pipeline.run.pipeline_drops``); they join the compile report's ``dropped`` list.
 
     ``task_description`` is what the person said the workflow is for. It rides to the second
     opinion as meaning-only context (never a selector input), so a name or phase can be chosen
@@ -1671,7 +1676,7 @@ def compile_skill_package(
         "Preparing compiler inputs.",
         {"phase": "compiler_prepare", "event_count": len(events), "session_id": sid},
     )
-    drop_ledger: list[dict[str, Any]] = _read_login_drops_sidecar(session_root)
+    drop_ledger: list[dict[str, Any]] = _read_login_drops_sidecar(session_root) + list(pipeline_drops or [])
     cleaned_events = prepare_compile_events(events, pol, drop_ledger)
     _compile_log(
         "compile_phase",
@@ -1817,8 +1822,9 @@ def compile_skill_package(
         # compile so a stale file beside the recording can never be mistaken for it.
         compile_report["understanding"] = review_extras["understanding"]
     # Which recorded actions did not become a step of their own, and why: 10 actions in and 9
-    # steps out should never be a mystery. Merges the compiler does on purpose (a date picker's
-    # clicks becoming one step) are not listed; these are the cleanup passes only.
+    # steps out should never be a mystery. Choice and date-picker merges are listed too
+    # (`choice_collapsed` / `date_collapsed`); outcome forks and second-opinion removals are not
+    # (those live in the fork step itself and `archived_steps`).
     compile_report["events_total"] = len(events)
     if drop_ledger:
         compile_report["dropped"] = drop_ledger[:200]

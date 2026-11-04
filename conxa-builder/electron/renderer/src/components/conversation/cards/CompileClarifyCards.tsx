@@ -368,11 +368,9 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
       {s.goal && <p className="mb-2 text-[var(--text-primary)]">{s.goal}</p>}
       <ol className="space-y-1">
         {shown.map((n, i) => (
-          <li key={i} className={`flex gap-2 ${s.step_parents?.[i] != null ? 'pl-5' : ''}`}>
+          <li key={i} className="flex gap-2">
             <span className="w-5 shrink-0 text-right tabular-nums text-[var(--text-meta)]">{i + 1}</span>
-            <span className={s.step_parents?.[i] != null ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}>
-              {s.step_parents?.[i] != null && <span aria-hidden className="mr-1 text-[var(--text-meta)]">↳</span>}{n}
-            </span>
+            <span className="text-[var(--text-primary)]">{n}</span>
           </li>
         ))}
         {s.step_names.length > 6 && (
