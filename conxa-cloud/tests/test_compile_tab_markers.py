@@ -17,7 +17,6 @@ from conxa_compile.compiler.date_picker import collapse_date_picker_runs
 from conxa_compile.compiler.step_anchors import _tab_signature, _target_key
 from conxa_core.models.skill_spec import SkillStep
 
-import pytest
 
 
 def _ev(tab_id: str, action: str = "click", url: str = "") -> dict:
@@ -345,11 +344,13 @@ def test_user_tab_open_no_longer_desyncs_a_later_date_picker_collapse() -> None:
     assert date_pick.handler_hints.date_picker["strategy"] == "typed_first"
 
 
-def test_collapse_choice_group_runs_raises_on_desynced_lengths() -> None:
-    with pytest.raises(ValueError):
-        collapse_choice_group_runs([_step("click", {}), _step("click", {})], [_ev("tab_0")], {})
+def test_collapse_choice_group_runs_passes_unmatched_steps_through() -> None:
+    """Steps and events of different lengths used to be a crash. A step with no findable event now just
+    passes through unchanged, because nothing says it belongs to a group."""
+    steps = [_step("click", {}), _step("click", {})]
+    assert collapse_choice_group_runs(steps, [_ev("tab_0")], {}) == steps
 
 
-def test_collapse_date_picker_runs_raises_on_desynced_lengths() -> None:
-    with pytest.raises(ValueError):
-        collapse_date_picker_runs([_step("click", {}), _step("click", {})], [_ev("tab_0")], {})
+def test_collapse_date_picker_runs_passes_unmatched_steps_through() -> None:
+    steps = [_step("click", {}), _step("click", {})]
+    assert collapse_date_picker_runs(steps, [_ev("tab_0")], {}) == steps

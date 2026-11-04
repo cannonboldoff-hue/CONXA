@@ -307,6 +307,9 @@ def apply_bindings_to_compiled_steps(steps: list[Any], events: list[dict[str, An
         if str((e.get("action") or {}).get("action") or "") in {"upload", "upload_intent"}
     ]
     upload_steps = [s for s in steps if _step_action_str(s) in {"upload", "upload_intent"}]
+    upload_by_sequence = {
+        seq: e for e in upload_events if (seq := (e.get("extras") or {}).get("sequence")) is not None
+    }
 
     if not upload_steps:
         return
@@ -322,7 +325,11 @@ def apply_bindings_to_compiled_steps(steps: list[Any], events: list[dict[str, An
             if state.total_downloads > before:           # a failed/cancelled download wrote nothing
                 producers.append((step, state.total_downloads))
         elif action in {"upload", "upload_intent"}:
-            ev = upload_events[event_idx] if event_idx < len(upload_events) else {}
+            # The step's own event, by source_event; the Nth upload event only for a step without one
+            # (so dropping or adding an upload step cannot shift the others onto the wrong file).
+            ev = upload_by_sequence.get(getattr(step, "source_event", None))
+            if ev is None:
+                ev = upload_events[event_idx] if event_idx < len(upload_events) else {}
             event_idx += 1
             raw_action = (ev.get("action") or {}).get("value")
             metadata = str(raw_action or "")

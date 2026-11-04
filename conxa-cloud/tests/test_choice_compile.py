@@ -135,9 +135,8 @@ def test_collapse_choice_group_runs_collapses_a_pick_all_that_apply_run():
         _checkbox_event("tennis", {"soccer": True, "tennis": True}),
     ]
     steps = [SkillStep(action="set_checkbox", handler_hints=HandlerHints()) for _ in events]
-    out_steps, synced_events = collapse_choice_group_runs(steps, events, {})
+    out_steps = collapse_choice_group_runs(steps, events, {})
     assert len(out_steps) == 1
-    assert len(synced_events) == 1
     step = out_steps[0]
     assert step.input_binding == "sports"
     assert step.value == "{{sports}}"
@@ -149,28 +148,28 @@ def test_collapse_choice_group_runs_collapses_a_pick_all_that_apply_run():
 def test_collapse_choice_group_runs_leaves_unrelated_steps_untouched():
     events = [{"action": {"action": "click"}, "target": {}}]
     steps = [SkillStep(action="click")]
-    out_steps, synced_events = collapse_choice_group_runs(steps, events, {})
+    out_steps = collapse_choice_group_runs(steps, events, {})
     assert out_steps == steps
-    assert synced_events == events
 
 
-def test_collapse_choice_group_runs_synced_events_stay_aligned_for_a_later_pass():
-    """A pass-through step's synced event must be its OWN original event (not the checkbox
-    run's), or a later length-changing pass over the same event stream (collapse_date_picker_runs)
-    would misread it."""
+def test_collapse_choice_group_runs_leaves_a_later_date_pass_able_to_find_every_event():
+    """After a checkbox run collapses, the steps no longer line up with the events by position. Each step
+    still finds its own event through source_event, so a later pass (collapse_date_picker_runs) reads the
+    right one."""
+    from conxa_compile.compiler.step_events import events_for_steps
     events = [
-        _checkbox_event("soccer", {"soccer": True}),
-        _checkbox_event("tennis", {"soccer": True, "tennis": True}),
-        {"action": {"action": "click"}, "target": {}, "marker": "unrelated"},
+        {**_checkbox_event("soccer", {"soccer": True}), "extras": {"sequence": 1}},
+        {**_checkbox_event("tennis", {"soccer": True, "tennis": True}), "extras": {"sequence": 2}},
+        {"action": {"action": "click"}, "target": {}, "marker": "unrelated", "extras": {"sequence": 3}},
     ]
     steps = [
-        SkillStep(action="set_checkbox", handler_hints=HandlerHints()),
-        SkillStep(action="set_checkbox", handler_hints=HandlerHints()),
-        SkillStep(action="click"),
+        SkillStep(action="set_checkbox", handler_hints=HandlerHints(), source_event=1),
+        SkillStep(action="set_checkbox", handler_hints=HandlerHints(), source_event=2),
+        SkillStep(action="click", source_event=3),
     ]
-    out_steps, synced_events = collapse_choice_group_runs(steps, events, {})
-    assert len(out_steps) == len(synced_events) == 2
-    assert synced_events[1] is events[2]
+    out_steps = collapse_choice_group_runs(steps, events, {})
+    assert len(out_steps) == 2
+    assert events_for_steps(out_steps, events)[1] is events[2]
 
 
 # ---------------------------------------------------------------------------

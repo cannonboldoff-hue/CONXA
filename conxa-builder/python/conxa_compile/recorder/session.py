@@ -26,6 +26,7 @@ from conxa_core.config import settings
 from conxa_core.metrics.store import metrics
 from conxa_core.models.events import RecordedEvent
 from conxa_core.models.workflow import GroupApp
+from conxa_core.site import same_host
 from conxa_compile import auth_learning
 from conxa_compile.policy.bundle import get_policy_bundle
 from conxa_compile.policy.timing import resolve_event_timing
@@ -391,13 +392,6 @@ def check_group_sessions_sync(
     return results
 
 
-def _same_site(a: str, b: str) -> bool:
-    """Same host, ignoring a leading www. (matches compiler/navigation_effects._host)."""
-    def host(u: str) -> str:
-        return (urlsplit(str(u or "")).hostname or "").removeprefix("www.")
-    return host(a) == host(b) != ""
-
-
 @dataclass
 class RecordingSession:
     """
@@ -638,6 +632,9 @@ class RecordingSession:
     # redirect after a click was indistinguishable from the user retyping the address bar.
     # ponytail: a user typing a hash-only URL by hand also lands here; rare, accepted.
     _nav_same_document: set[int] = field(default_factory=set)
+    # CDP's navigationType for that same-document change: "historyApi" (pushState/replaceState, the
+    # page's own doing), "fragment" (a #hash, which a person can also type) or "other".
+    _nav_same_document_type: dict[int, str] = field(default_factory=dict)
     # When the page last reported a user interaction (click, submit, typing, ...) through the
     # bridge — a navigation committing shortly after one is the interaction's effect.
     _last_interaction_at: dict[int, float] = field(default_factory=dict)
@@ -1278,7 +1275,8 @@ class RecordingSession:
             )
             session.on(
                 "Page.navigatedWithinDocument",
-                lambda _evt, k=key: self._nav_same_document.add(k),
+                lambda evt, k=key: (self._nav_same_document.add(k),
+                                    self._nav_same_document_type.__setitem__(k, str((evt or {}).get("navigationType") or ""))),
             )
         except Exception as exc:  # noqa: BLE001
             # Non-fatal: worst case, every navigation on this page is treated as
@@ -1402,6 +1400,7 @@ class RecordingSession:
                     and 0 <= (committed_at - requested_at) <= self._NAV_RENDERER_INITIATED_TTL_S
                 )
                 same_document = key in self._nav_same_document
+                same_document_type = self._nav_same_document_type.pop(key, "")
                 self._nav_same_document.discard(key)
                 interacted_at = self._last_interaction_at.get(key)
                 after_interaction = (
@@ -1416,14 +1415,22 @@ class RecordingSession:
                 # fold it into the action's post-condition instead of replaying the URL.
                 payload = {"from_url": from_url, "to_url": to_url}
                 last_manual = self._nav_last_manual.get(key)
-                if same_document or after_interaction:
+                # cause_source says how the tag was decided: "browser" = the browser reported it (a
+                # history-API route change is by definition the page's doing); "clock" = a time window
+                # (_NAV_INTERACTION_WINDOW_S), the fallback until the browser can tell us. The compile
+                # ledger repeats it so a clock-decided drop is visible and countable.
+                payload["cause_source"] = "clock"
+                if same_document and same_document_type == "historyApi":
+                    payload["cause"] = "action"
+                    payload["cause_source"] = "browser"
+                elif same_document or after_interaction:
                     payload["cause"] = "action"
                 elif (
                     last_manual is not None
                     and last_manual[0] == from_url
                     and 0 <= (committed_at - last_manual[1]) <= self._NAV_INTERACTION_WINDOW_S
                     and (interacted_at is None or interacted_at < last_manual[1])
-                    and _same_site(from_url, to_url)
+                    and same_host(from_url, to_url)
                 ):
                     payload["cause"] = "redirect"
                 else:

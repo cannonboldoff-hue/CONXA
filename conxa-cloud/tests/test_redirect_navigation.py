@@ -53,7 +53,7 @@ def _page():
 def test_address_bar_navigation_is_still_a_plain_manual_navigate():
     rs, page = RecordingSession(session_id="t"), _page()
     assert _drain(rs, page, [FORM], [FORM, "https://other.test/"]) == [
-        {"kind": "manual_navigate", "from_url": FORM, "to_url": "https://other.test/", "cause": "user"}
+        {"kind": "manual_navigate", "from_url": FORM, "to_url": "https://other.test/", "cause": "user", "cause_source": "clock"}
     ]
 
 
@@ -63,6 +63,25 @@ def test_spa_route_change_is_tagged_as_caused_by_the_action():
     rs._nav_same_document.add(id(page))
     [nav] = _drain(rs, page, [FORM], [FORM, ORDER])
     assert nav["cause"] == "action"
+
+
+def test_a_history_api_route_change_is_tagged_by_the_browser_not_the_clock():
+    """CDP says navigationType "historyApi": the page changed its own address, no timing involved.
+    (Measured on real Chromium 2026-11-05: pushState fires navigatedWithinDocument/historyApi, a link
+    click fires frameRequestedNavigation/anchorClick, an address-bar load fires neither.)"""
+    rs, page = RecordingSession(session_id="t"), _page()
+    rs._nav_same_document.add(id(page))
+    rs._nav_same_document_type[id(page)] = "historyApi"
+    [nav] = _drain(rs, page, [FORM], [FORM, ORDER])
+    assert (nav["cause"], nav["cause_source"]) == ("action", "browser")
+
+
+def test_a_fragment_change_still_falls_back_to_the_clock():
+    rs, page = RecordingSession(session_id="t"), _page()
+    rs._nav_same_document.add(id(page))
+    rs._nav_same_document_type[id(page)] = "fragment"
+    [nav] = _drain(rs, page, [FORM], [FORM, ORDER])
+    assert (nav["cause"], nav["cause_source"]) == ("action", "clock")
 
 
 def test_navigation_right_after_a_click_is_tagged_as_caused_by_the_action():
@@ -203,7 +222,7 @@ def test_fold_trusts_the_tag_over_the_clock():
     load is kept; a tagged redirect is dropped even with the page-load 60 s earlier."""
     first = _goto("2026-01-01T00:00:00Z", "about:blank", D1)
     typed = _goto("2026-01-01T00:00:01Z", D1, D2)
-    typed["action"]["value"] = json.dumps({"from_url": D1, "to_url": D2, "cause": "user"})
+    typed["action"]["value"] = json.dumps({"from_url": D1, "to_url": D2, "cause": "user", "cause_source": "clock"})
     assert fold_action_caused_navigations([first, typed]) == [first, typed]
     hop = _goto("2026-01-01T00:01:00Z", D1, D2)
     hop["action"]["value"] = json.dumps({"from_url": D1, "to_url": D2, "cause": "redirect"})
@@ -318,3 +337,16 @@ def test_user_typed_navigation_still_compiles_to_a_navigate_step():
     steps = pkg.skills[0].steps
     assert [s.action for s in steps] == ["navigate", "click", "navigate", "click"]
     assert steps[2].url == ORDER
+
+
+def test_ledger_says_how_each_folded_navigation_was_decided() -> None:
+    """A folded navigation records whether the browser or a clock decided it, so the clock fallback can be
+    deleted once only "browser" shows up."""
+    from conxa_compile.compiler.navigation_effects import decided_by
+
+    def nav(**extra):
+        return {"action": {"action": "manual_navigate", "value": json.dumps({"from_url": "a", "to_url": "b", **extra})}}
+
+    assert decided_by(nav(cause="action", cause_source="browser")) == "browser"
+    assert decided_by(nav(cause="redirect")) == "clock"            # tagged by an older recorder build
+    assert decided_by(nav()) == "legacy_clock"                      # a session recorded before tagging

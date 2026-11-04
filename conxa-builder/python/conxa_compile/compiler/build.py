@@ -14,6 +14,7 @@ from conxa_compile.editor.action_registry import MARKER_ACTIONS
 from conxa_compile.compiler.decision_layer import rank_merged_anchors
 from conxa_compile.compiler.action_semantics import commit_intent_hit, is_editable_field_click
 from conxa_compile.compiler.destructive_semantics import classify_consequence, destructive_compiler_step
+from conxa_compile.compiler.step_events import events_for_steps
 from conxa_compile.compiler.video_context import apply_video_context
 from conxa_compile.compiler.commit_ordering import lint_commit_ordering
 from conxa_compile.compiler.entity_binding import (
@@ -24,6 +25,7 @@ from conxa_compile.compiler.entity_binding import (
 from conxa_compile.compiler.input_binding import derive_input_binding
 from conxa_compile.compiler.choice import collapse_choice_group_runs, derive_choice
 from conxa_compile.compiler.date_picker import collapse_date_picker_runs, convert_typed_date_steps
+from conxa_compile.compiler.navigation_effects import decided_by as nav_decided_by
 from conxa_compile.compiler.navigation_effects import fold_action_caused_navigations, generalize_url_pattern
 from conxa_compile.compiler.upload_binding import apply_bindings_to_compiled_steps
 from conxa_compile.compiler.loop_suggestion import detect_download_upload_loop_candidates
@@ -621,24 +623,21 @@ def _build_identity_bundle(
 def _populate_hover_chains(steps: list[SkillStep], events: list[dict[str, Any]], session_id: str = "") -> None:
     """Set handler_hints.hover_chain on steps whose recorded predecessor was a hover (Phase 7).
 
-    Requires steps[i] to map 1:1 onto events[i] — same invariant collapse_choice_group_runs and
-    collapse_date_picker_runs depend on. A caller that violates it (an earlier pass inserted a
-    step with no matching event, or vice versa) gets a loud failure here instead of hints
-    silently landing on the wrong steps."""
-    if len(steps) != len(events):
-        raise ValueError(
-            f"_populate_hover_chains: steps ({len(steps)}) and events ({len(events)}) "
-            "must be the same length — an earlier pass desynced them"
-        )
+    Each step's own event is found by its `source_event`; the predecessor is the event recorded just
+    before it, whatever the steps list looks like now."""
     from conxa_compile.compiler.action_semantics import detect_hover_precondition
-    for i, ev in enumerate(events):
+    position = {id(ev): i for i, ev in enumerate(events)}
+    for step, ev in zip(steps, events_for_steps(steps, events)):
+        i = position.get(id(ev))
+        if i is None:
+            continue
         prev_ev = events[i - 1] if i > 0 else None
         if not detect_hover_precondition(ev, prev_ev):
             continue
         dom_html, a11y_tree = _load_step_snapshot(prev_ev, session_id)
         hover_signals = generate_deterministic_signals(prev_ev, dom_html=dom_html, a11y_tree=a11y_tree)
         if hover_signals:
-            steps[i].handler_hints.hover_chain = hover_signals
+            step.handler_hints.hover_chain = hover_signals
 
 
 def _build_assertions(
@@ -1636,7 +1635,12 @@ def prepare_compile_events(
     if settings.compile_pass("fold_navigations"):
         before_fold = cleaned_events
         cleaned_events = fold_action_caused_navigations(cleaned_events)
+        first_new = len(ledger)
         _record_drops(ledger, before_fold, cleaned_events, "navigation_folded")
+        by_sequence = {(e.get("extras") or {}).get("sequence"): e for e in before_fold}
+        for entry in ledger[first_new:]:
+            if (ev := by_sequence.get(entry.get("sequence"))) is not None:
+                entry["decided_by"] = nav_decided_by(ev)
     # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
     # fix_step_order so the synthetic marker events never have to satisfy those functions'
     # assumptions about real recorded event shape.
@@ -1702,34 +1706,23 @@ def compile_skill_package(
     _finish_extract_steps(steps, cleaned_events)
     for step, ev in zip(steps, cleaned_events):
         step.source_event = (ev.get("extras") or {}).get("sequence")
-    # Phase 7: populate hover_chain handler hints from hover-then-act sequences. Must run before
-    # _insert_start_navigate_step below: it indexes steps[i] against cleaned_events[i], and the
-    # leading navigate that function prepends has no matching cleaned_event.
+    # Phase 7: populate hover_chain handler hints from hover-then-act sequences. Each pass below finds a
+    # step's event by its source_event (compiler/step_events.py), so none of them depends on the
+    # others having run first or on the step count still matching the event count.
     _populate_hover_chains(steps, cleaned_events, session_id=sid)
-    # Checkbox-group collapse: must run here too, while steps[i] still maps 1:1 onto
-    # cleaned_events[i] — same alignment requirement as _populate_hover_chains above. Collapses a
-    # "pick all that apply" run of individual set_checkbox toggles into one multi-valued step;
-    # see conxa_compile/compiler/choice.py. Runs BEFORE the date-picker collapse below and hands
-    # it a synced events view rather than cleaned_events directly — collapse_date_picker_runs
-    # also assumes 1:1 alignment with whatever `steps` it's given, which this pass may have
-    # already shrunk.
+    # Checkbox-group collapse: a "pick all that apply" run of individual set_checkbox toggles becomes
+    # one multi-valued step (conxa_compile/compiler/choice.py).
     absorbed: dict[str, list[dict[str, Any]]] = {"choice_collapsed": [], "date_collapsed": []}
-    if not settings.compile_pass("collapse_choice"):
-        date_pass_events = cleaned_events
-    else:
-        steps, date_pass_events = collapse_choice_group_runs(
-            steps, cleaned_events, pol, absorbed=absorbed["choice_collapsed"])
-    # Custom date-picker collapse: same alignment requirement, against date_pass_events (see
-    # above) rather than cleaned_events. Collapses (never regresses) an open->nav->day-cell click
-    # run into one parameterized date_pick step per bridge.js's date_context tagging; see
-    # conxa_compile/compiler/date_picker.py.
+    if settings.compile_pass("collapse_choice"):
+        steps = collapse_choice_group_runs(steps, cleaned_events, pol, absorbed=absorbed["choice_collapsed"])
     # Typed-text dates ("25/09/2026" into a plain field) become date_pick steps that remember the
-    # field's format. Before the collapse (same 1:1 alignment, and it never changes the count);
-    # an ambiguous day/month order falls back to the recording browser's own locale sample.
+    # field's format; an ambiguous day/month order falls back to the recording browser's locale sample.
+    # Custom date-picker click runs (open -> nav -> day cell) collapse into one parameterized date_pick
+    # step per bridge.js's date_context tagging (conxa_compile/compiler/date_picker.py).
     environment = _read_environment_sidecar(session_root)
-    convert_typed_date_steps(steps, date_pass_events, pol, str(environment.get("date_format_sample") or ""))
+    convert_typed_date_steps(steps, cleaned_events, pol, str(environment.get("date_format_sample") or ""))
     if settings.compile_pass("collapse_dates"):
-        steps = collapse_date_picker_runs(steps, date_pass_events, pol, absorbed=absorbed["date_collapsed"])
+        steps = collapse_date_picker_runs(steps, cleaned_events, pol, absorbed=absorbed["date_collapsed"])
     for label, evs in absorbed.items():
         _record_drops(drop_ledger, evs, [], label)
     # A segment picks up on a page that is already open, so there is no start page to navigate to.

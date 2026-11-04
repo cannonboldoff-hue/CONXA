@@ -11,10 +11,9 @@ to whatever the recording needed that day, and the day-cell text ("15") is ambig
 greyed overflow days from the adjacent month. See CLAUDE.md's date-picker plan for the full
 design.
 
-Runs as a post-pass over the already-built SkillStep list, modelled on
-upload_binding.apply_bindings_to_compiled_steps: it needs steps[i] aligned 1:1 with events[i],
-which only holds up to the point build.py calls this (right after _populate_hover_chains, before
-_insert_start_navigate_step prepends a synthetic step with no matching event).
+Runs as a post-pass over the already-built SkillStep list. Each step's recorded event is found by
+its `source_event` (compiler/step_events.py), so the pass does not depend on running before another
+pass adds or removes a step.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ from typing import Any
 
 from conxa_compile.compiler.date_format import detect_date_format
 from conxa_compile.compiler.input_binding import derive_input_binding
+from conxa_compile.compiler.step_events import events_for_steps
 from conxa_core.models.skill_spec import Assertion, HandlerHints, SkillStep, ValidationBlock
 
 _TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$")
@@ -317,15 +317,13 @@ def convert_typed_date_steps(
 ) -> None:
     """Turn a `type`/`fill` step whose recorded literal is a date ("25/09/2026") into a
     `date_pick` step that remembers the field's format, so the runtime can convert whatever date
-    the caller supplies into the format THIS application accepted. In place, 1:1 with `events`
-    (must run before collapse_date_picker_runs, which changes the step count).
+    the caller supplies into the format THIS application accepted. In place; each step's
+    event is found by its `source_event` (compiler/step_events.py).
 
     kind="text_field" (not control_kind="date_picker") tells the runtime there is no calendar
     widget to fall back to: fill the formatted text, read it back, fail if the field disagrees.
     An ambiguous or non-date literal is left exactly as compiled before."""
-    if len(steps) != len(events):
-        raise ValueError("convert_typed_date_steps: steps and events must be the same length")
-    for step, ev in zip(steps, events):
+    for step, ev in zip(steps, events_for_steps(steps, events)):
         # A scroll step's action is a dict payload ({"action": "scroll", "delta": ...}), not a str.
         if not isinstance(step.action, str) or step.action not in _TYPED_ACTIONS:
             continue
@@ -378,11 +376,7 @@ def collapse_date_picker_runs(
     two `date_pick` steps. Any run without at least one day-cell pick (e.g. the grid was opened
     and navigated — including via a year/month select — but never actually picked from) is left
     untouched; this pass can only improve a compile, never regress one."""
-    if len(steps) != len(events):
-        raise ValueError(
-            f"collapse_date_picker_runs: steps ({len(steps)}) and events ({len(events)}) "
-            "must be the same length — an earlier pass desynced them"
-        )
+    events = events_for_steps(steps, events)
     n = len(steps)
     out: list[SkillStep] = []
     i = 0

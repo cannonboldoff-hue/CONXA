@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from conxa_core.site import site_of
+
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_delete, db_list
 from conxa_core.models.workflow import GroupApp, WorkflowGroup
@@ -83,26 +85,13 @@ def apps_for_workflow(apps: list[GroupApp], *urls: str) -> list[GroupApp]:
     touch" can't disagree between them. It no longer decides runtime gating:
     the runtime signs in to EVERY app in a workflow's group.
     """
-    wf_sites = {_site(h) for h in (_url_hostname(u) for u in urls) if h}
+    wf_sites = {site_of(h) for h in (_url_hostname(u) for u in urls) if h}
     if not wf_sites:
         return []
     return [
         a for a in apps
-        if _site(_url_hostname(a.login_url)) in wf_sites or _site(_url_hostname(a.success_url)) in wf_sites
+        if site_of(_url_hostname(a.login_url)) in wf_sites or site_of(_url_hostname(a.success_url)) in wf_sites
     ]
-
-
-def _site(host: str) -> str:
-    """Registrable-ish domain of a hostname: its last two labels ("mail.google.com" -> "google.com").
-    An IP address or single-label host is its own site.
-
-    ponytail: last-two-labels, so a multi-part suffix ("a.co.uk" vs "b.co.uk") reads as the same
-    site — a missed warning, never a false one. Swap in the public-suffix list if that ever bites.
-    """
-    labels = host.split(".")
-    if len(labels) < 2 or all(part.isdigit() for part in labels):
-        return host
-    return ".".join(labels[-2:])
 
 
 def unclaimed_hosts(apps: list[GroupApp], *urls: str) -> list[str]:
@@ -115,10 +104,10 @@ def unclaimed_hosts(apps: list[GroupApp], *urls: str) -> list[str]:
     mail.google.com app) is treated as covered: it is that app's own sign-in hop, not a new one.
     """
     claimed = {
-        _site(h) for a in apps for h in (_url_hostname(a.login_url), _url_hostname(a.success_url)) if h
+        site_of(h) for a in apps for h in (_url_hostname(a.login_url), _url_hostname(a.success_url)) if h
     }
     visited = {_url_hostname(u) for u in urls} - {""}
-    return sorted(h for h in visited if _site(h) not in claimed)
+    return sorted(h for h in visited if site_of(h) not in claimed)
 
 
 def _read_raw(group_id: str) -> dict[str, Any] | None:

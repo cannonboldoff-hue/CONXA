@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from conxa_compile.compiler.input_binding import _snake_case
+from conxa_compile.compiler.step_events import events_for_steps
 
 # Kinds that carry their whole answer in a single event — no run to collapse.
 _SINGLE_SHOT_KINDS = frozenset({"radio", "select", "aria_radio", "aria_listbox"})
@@ -102,7 +103,7 @@ def collapse_choice_group_runs(
     events: list[dict[str, Any]],
     _policy: dict[str, Any],
     absorbed: list[dict[str, Any]] | None = None,
-) -> tuple[list[Any], list[dict[str, Any]]]:
+) -> list[Any]:
     """Collapse consecutive set_checkbox steps sharing a checkbox-group `group_key` into one
     set_checkbox step carrying every group member and which ones ended up checked. Absolute, not
     relative: the runtime sets each member's checked state to match this snapshot rather than
@@ -113,33 +114,20 @@ def collapse_choice_group_runs(
     moment each event fires, so the last event in a run already carries the group's final state
     across all members -- no need to reconstruct it toggle-by-toggle from individual events.
 
-    Must run while steps[i] still maps 1:1 onto events[i] -- same alignment requirement as
-    _populate_hover_chains in build.py. Returns (collapsed_steps, synced_events): a same-length
-    "representative event" per output step (the run's first event for a collapsed group, the
-    original event for a pass-through step) so a LATER length-changing pass over the SAME event
-    stream -- collapse_date_picker_runs, called right after this one -- can still assume 1:1
-    alignment against synced_events instead of the original cleaned_events, whose length this
-    function may have already shrunk. Safe specifically because date_context and choice_context
-    are mutually exclusive per event (see bridge.js::serializeTarget), so a checkbox event picked
-    as a run's representative never hides a date-picker run underneath it.
+    Each step's event is found by its `source_event` (compiler/step_events.py), so this pass and
+    collapse_date_picker_runs can run in either order.
 
     `_policy` kept for call-site symmetry with collapse_date_picker_runs; unused here since the
     binding name comes from the group's own label/key, not a target-anchored
     derive_input_binding lookup."""
-    if len(steps) != len(events):
-        raise ValueError(
-            f"collapse_choice_group_runs: steps ({len(steps)}) and events ({len(events)}) "
-            "must be the same length — an earlier pass desynced them"
-        )
+    events = events_for_steps(steps, events)
     n = len(steps)
     out: list[Any] = []
-    synced_events: list[dict[str, Any]] = []
     i = 0
     while i < n:
         cc = _choice_context(events[i])
         if cc.get("kind") != "checkbox" or not cc.get("group_key"):
             out.append(steps[i])
-            synced_events.append(events[i])
             i += 1
             continue
 
@@ -174,9 +162,8 @@ def collapse_choice_group_runs(
             "recorded_values": checked_values,
         }
         out.append(base)
-        synced_events.append(events[i])
         if absorbed is not None:
             absorbed.extend(events[i + 1:run_end + 1])
         i = run_end + 1
 
-    return out, synced_events
+    return out

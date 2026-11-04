@@ -23,6 +23,8 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
+from conxa_core.site import host_of
+
 # Same set the recorder stamps as "the user did something" (recorder/session.py).
 _INTERACTION_ACTIONS = frozenset({
     "click", "dblclick", "right_click", "type", "fill", "select", "select_option",
@@ -84,10 +86,6 @@ def _is_action_caused(ev: dict[str, Any], nav: dict[str, Any], cause: dict[str, 
     return t_nav is not None and t_cause is not None and 0 <= t_nav - t_cause <= _LEGACY_WINDOW_S
 
 
-def _host(url: str) -> str:
-    return (urlsplit(str(url or "")).hostname or "").removeprefix("www.")
-
-
 def _is_site_redirect(ev: dict[str, Any], nav: dict[str, Any], out: list[dict[str, Any]]) -> bool:
     """The site moving on by itself right after a page load (drive.google.com -> ?pli=1 ->
     /drive/home): starts where the previous navigation on this tab landed, same site, within the
@@ -100,10 +98,19 @@ def _is_site_redirect(ev: dict[str, Any], nav: dict[str, Any], out: list[dict[st
     if prev is None or _action(prev) != "manual_navigate":
         return False
     landed = str(_navigation_value(prev).get("to_url") or "")
-    if not landed or landed != str(nav.get("from_url") or "") or _host(landed) != _host(str(nav.get("to_url") or "")):
+    if not landed or landed != str(nav.get("from_url") or "") or host_of(landed) != host_of(str(nav.get("to_url") or "")):
         return False
     t_nav, t_prev = _timestamp(ev), _timestamp(prev)
     return t_nav is not None and t_prev is not None and 0 <= t_nav - t_prev <= _LEGACY_WINDOW_S
+
+
+def decided_by(ev: dict[str, Any]) -> str:
+    """How a navigation event's fold was decided: "browser" (the recorder was told by the browser),
+    "clock" (the recorder used a time window) or "legacy_clock" (a session recorded before navigations
+    were tagged, decided here by _LEGACY_WINDOW_S). Once "legacy_clock" stops appearing in compile
+    ledgers, _LEGACY_WINDOW_S can be deleted."""
+    nav = _navigation_value(ev)
+    return str(nav.get("cause_source") or "clock") if nav.get("cause") else "legacy_clock"
 
 
 def fold_action_caused_navigations(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
