@@ -968,7 +968,28 @@
   const _NAV_NEXT_RE = /next|»|›/i;
   const _TIME_OPTION_RE = /^\d{1,2}:\d{2}(\s?[AaPp][Mm])?$/;
 
-  function _isCalendarGridNode(node) {
+  // A month grid recognised by what it IS, not by what the library called it: a small subtree whose
+  // leaves include every day number 1..28+ and which carries a "March 2007"-style header. Only asked
+  // when the click started on a day-number-looking element (see findCalendarRoot), so ordinary clicks
+  // never pay for the scan. A grid that fails this and the checks below stays "record it like any
+  // other click", so an unrecognised widget is never worse off than before.
+  const _MONTH_GRID_DAY_RE = /^\d{1,2}$/;
+  function _looksLikeMonthGrid(node) {
+    let all = [];
+    try { all = node.querySelectorAll("*"); } catch (_e) { return false; }
+    if (all.length < 28 || all.length > 800) return false; // a month grid is small; a page is not
+    const days = new Set();
+    for (const n of all) {
+      if (n.children && n.children.length > 0) continue;
+      const t = safeText(n, 4).trim();
+      if (!_MONTH_GRID_DAY_RE.test(t)) continue;
+      const d = parseInt(t, 10);
+      if (d >= 1 && d <= 31) days.add(d);
+    }
+    return days.size >= 28 && !!_findCalendarHeader(node);
+  }
+
+  function _isCalendarGridNode(node, dayLike) {
     if (!node || node.nodeType !== 1 || !node.getAttribute) return false;
     const role = node.getAttribute("role") || "";
     if (role === "grid" || role === "application") {
@@ -979,7 +1000,7 @@
     for (const sel of CALENDAR_ROOT_SELECTORS) {
       try { if (node.matches(sel)) return true; } catch (_e) {}
     }
-    return false;
+    return !!dayLike && _looksLikeMonthGrid(node);
   }
 
   function _findNavButton(root, dir) {
@@ -997,9 +1018,10 @@
    * nav buttons of its own to the nearest ancestor that does — jQuery UI-style widgets nest the
    * day-cell table one level below the real prev/next chrome. */
   function findCalendarRoot(el) {
+    const dayLike = _MONTH_GRID_DAY_RE.test(safeText(el, 4).trim());
     let cur = el;
     for (let depth = 0; depth < 6 && cur && cur.nodeType === 1; depth++) {
-      if (_isCalendarGridNode(cur)) {
+      if (_isCalendarGridNode(cur, dayLike)) {
         // Take the OUTERMOST calendar node, not the first one matched. CALENDAR_ROOT_SELECTORS
         // matches on class substrings ("[class*='datepicker']"), and every descendant of a
         // widget repeats the library prefix in its own class — react-datepicker's day cell is
@@ -1012,7 +1034,9 @@
         let root = cur;
         let up = cur.parentElement;
         for (let w = 0; w < 6 && up && up.nodeType === 1; w++) {
-          if (_isCalendarGridNode(up)) root = up;
+          // Structure alone never widens a root: the smallest subtree that looks like a month grid is the
+          // widget, and any bigger one would swallow the date field the widget belongs to.
+          if (_isCalendarGridNode(up, false)) root = up;
           up = up.parentElement;
         }
         // A wrapper holding the nav chrome may sit just outside the matched widget.

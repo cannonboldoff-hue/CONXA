@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The recorder can now spot a date picker it has never seen before — 2026-11-05**
+Until now the recorder only knew a date picker if it was one of a list of well-known ones, so a custom calendar was recorded as a pile of unrelated clicks. It now also recognises a calendar by its shape: a small block of day numbers 1 to 28 or more under a "March 2007"-style heading. A page number strip or a one-week row is not mistaken for one. The existing check that the date box really changed still applies, so a click that changes nothing is not counted as a date pick.
+— 2026-11-05
+
 **The recorder now notes who decided a page change was caused by a click: the browser, or a stopwatch — 2026-11-05**
 When you click a button and the page changes address, the tool has to decide whether you typed that address or the click caused it. For one kind of change the browser can say so directly, and the tool now uses that. For the rest it still uses a five-second stopwatch, but it now writes down which one it used. That way, once real recordings show the stopwatch is no longer needed, it can be safely deleted. I tested the browser's signals on a small test site, but not yet on a real Google Drive recording.
 — 2026-11-05

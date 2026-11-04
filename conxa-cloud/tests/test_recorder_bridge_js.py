@@ -1257,3 +1257,54 @@ def test_fixed_landmark_and_dialog_anchors_are_not_flagged(page: Page) -> None:
         '<div role="dialog" style="position:fixed" aria-label="Edit order"><button id="go">Go</button></div>',
     )
     assert anchors and not any(a.get("ephemeral") for a in anchors)
+
+
+# ── Month grids found by structure, not by library class name ────────────────
+#
+# A date picker nobody wrote a selector for: plain divs, no role, no "calendar"/"datepicker" class.
+# What it is - 28+ day numbers under a "March 2007" header - is enough to tag the click.
+
+
+def _unknown_picker_html(days: int = 31, header: str = "March 2007") -> str:
+    cells = "".join(f'<div class="c" tabindex="0">{i}</div>' for i in range(1, days + 1))
+    head = f'<div class="t">{header}</div>' if header else ""
+    return f'<input id="dob"><div class="pop">{head}<div class="body">{cells}</div></div>'
+
+
+def test_a_month_grid_with_no_known_class_or_role_is_recognised_by_its_structure(page: Page) -> None:
+    _install_bridge(page, _unknown_picker_html())
+    page.click("text=15")
+    page.wait_for_timeout(150)
+    dc = _action_events(page, "click")[0]["date_context"]
+    assert dc is not None and dc["role"] == "day"
+    assert dc["iso_date"] == "2007-03-15"
+
+
+def test_a_short_run_of_numbers_is_not_a_month_grid(page: Page) -> None:
+    _install_bridge(page, _unknown_picker_html(days=7))        # a week strip
+    page.click("text=5")
+    page.wait_for_timeout(150)
+    assert _action_events(page, "click")[0].get("date_context") is None
+
+
+def test_numbers_without_a_month_header_are_not_a_month_grid(page: Page) -> None:
+    _install_bridge(page, _unknown_picker_html(header=""))     # e.g. a page-number strip
+    page.click("text=15")
+    page.wait_for_timeout(150)
+    assert _action_events(page, "click")[0].get("date_context") is None
+
+
+def test_an_unknown_picker_reports_its_field_and_what_the_pick_left_in_it(page: Page) -> None:
+    """The structural route feeds the same outcome check as a known picker: the field is found (the root
+    is the widget, not something bigger) and its value after the click is recorded."""
+    _install_bridge(page, _unknown_picker_html())
+    page.evaluate(
+        "() => document.querySelectorAll('.c').forEach(c => c.addEventListener('click', () =>"
+        " { document.getElementById('dob').value = '03/' + c.textContent.padStart(2, '0') + '/2007'; }))"
+    )
+    page.click("#dob")
+    page.click("text=15")
+    page.wait_for_timeout(250)
+    dc = [e for e in _action_events(page, "click") if e.get("date_context")][0]["date_context"]
+    assert dc["field"].endswith("dob") or "dob" in dc["field"]
+    assert dc["field_display_value_after"] == "03/15/2007"
