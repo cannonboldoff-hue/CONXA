@@ -25,6 +25,7 @@ import threading
 from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
+from conxa_compile.compiler.destructive_semantics import label_has_destructive_word
 from conxa_compile.compiler.selector_filters import scrub_email
 from conxa_compile.conversation.clarify import _question
 
@@ -208,6 +209,12 @@ def _seen(segment: dict[str, Any] | None, prev_after: str = "") -> dict[str, Any
     return out or None
 
 
+def _opened_it(row: dict[str, Any] | None) -> bool:
+    """A click outside any popup whose own label names no destructive word. One that does is already
+    asked about at compile time (clarify.py, "can't be undone")."""
+    return bool(row) and row.get("action") in ("click", "dblclick", "right_click") and not row.get("dialog")         and not label_has_destructive_word(str(row.get("target") or ""))
+
+
 def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Moments that always need a person, found in the browser's own signals: a popup asking for a
     decision, and a file going in. The model words these; it cannot drop them (validate puts them back).
@@ -217,7 +224,12 @@ def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
     matters (was the item that got downloaded a fixed one?) belongs to the click that chose it."""
     out = []
     downloaded: set[str] = set()
+    prev: dict[str, Any] | None = None
     for r in _events(merged):
+        if r.get("dialog") == "decision" and _opened_it(prev):
+            # The page asked "are you sure?" right after this click. No word list: the dialog is the evidence.
+            out.append({"row": prev["row_ref"], "effect": "confirm_before"})
+        prev = r
         if r.get("action") == "download_observed":
             data = _json_value(r.get("value"))
             name = str(data.get("suggested_filename") or "").strip() if isinstance(data, dict) else ""

@@ -123,14 +123,16 @@ def test_a_decision_popup_is_always_a_fork_and_a_plain_click_never_is():
             {"effect": "popup_dismiss", "row": "r7", "prompt": "Close the popup?", "best_guess": "dismiss", "cost_rank": 1},
             {"effect": "fork", "row": "r8", "prompt": "Decide?", "cost_rank": 2}]),
         merged, TU.candidates_from_timeline(merged))
-    assert [(q["kind"], q["row"], q["best_guess"]) for q in out["questions"] if q["kind"] != "note"] == [("fork", "r7", "")]
+    # r5, the click right before the popup, is also asked about: the page itself asked "are you sure?".
+    assert sorted((q["kind"], q["row"], q["best_guess"]) for q in out["questions"] if q["kind"] != "note") == [
+        ("confirm_before", "r5", ""), ("fork", "r7", "")]
 
 
 def test_a_decision_popup_the_model_left_out_is_put_back_and_so_is_an_upload():
     merged = MERGED + [event(7, "click", "Replace", dialog="decision"), event(8, "upload_intent", "file")]
     out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))
-    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("fork", "r7"), ("upload", "r8")]
-    assert {m["effect"] for m in TU.build_input(merged, "", "", [])["must_ask"]} == {"fork", "upload"}
+    assert sorted((q["kind"], q["row"]) for q in out["questions"]) == [("confirm_before", "r5"), ("fork", "r7"), ("upload", "r8")]
+    assert {m["effect"] for m in TU.build_input(merged, "", "", [])["must_ask"]} == {"confirm_before", "fork", "upload"}
 
 
 def test_one_question_per_value_and_per_row_and_a_note_needs_choices():

@@ -6,7 +6,7 @@ from typing import Any
 
 from conxa_compile.compiler.action_semantics import action_name, commit_intent_hit
 from conxa_compile.compiler.intent_access import get_effective_intent
-from conxa_compile.confidence.uncertainty import DESTRUCTIVE_TOKENS
+from conxa_compile.confidence.uncertainty import default_destructive_tokens
 
 Step = dict[str, Any]
 
@@ -20,12 +20,19 @@ _READ_ONLY_ACTIONS = frozenset({
 
 
 def destructive_intent_tokens(policy: dict[str, Any]) -> tuple[str, ...]:
+    """The default words (policy data) plus any a custom policy adds."""
     val = policy.get("validation") if isinstance(policy.get("validation"), dict) else {}
     extra = val.get("destructive_intent_substrings")
     if isinstance(extra, list):
-        merged = list(DESTRUCTIVE_TOKENS) + [str(x).lower() for x in extra if x]
+        merged = list(default_destructive_tokens()) + [str(x).lower() for x in extra if x]
         return tuple(dict.fromkeys(merged))
-    return DESTRUCTIVE_TOKENS
+    return default_destructive_tokens()
+
+
+def label_has_destructive_word(label: str, policy: dict[str, Any] | None = None) -> bool:
+    """True when a control's visible label names a destructive action (same words, same match as an intent)."""
+    lowered = str(label or "").lower()
+    return bool(lowered) and any(tok and tok in lowered for tok in destructive_intent_tokens(policy or {}))
 
 
 def step_has_destructive_intent(step: Step, policy: dict[str, Any]) -> bool:

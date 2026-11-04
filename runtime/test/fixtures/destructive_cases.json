@@ -1,0 +1,17 @@
+[
+  {"intent": "Delete the project", "destructive": true},
+  {"intent": "Remove a member from the team", "destructive": true},
+  {"intent": "Revoke the API token", "destructive": true},
+  {"intent": "Cancel subscription", "destructive": true},
+  {"intent": "Terminate the instance", "destructive": true},
+  {"intent": "Unsubscribe from the mailing list", "destructive": true},
+  {"intent": "Disconnect the integration", "destructive": true},
+  {"intent": "Deactivate the account", "destructive": true},
+  {"intent": "Erase all data", "destructive": true},
+  {"intent": "Remove the filter", "destructive": true, "note": "Known over-flag. It fails safe: one extra approval question, never a missed one."},
+  {"intent": "Open settings", "destructive": false},
+  {"intent": "Save changes", "destructive": false},
+  {"intent": "Add a team member", "destructive": false},
+  {"intent": "Archive the email", "destructive": false, "note": "Archive is reversible in almost every app, so it is left out of the word list on purpose."},
+  {"intent": "Eliminar la cuenta", "destructive": false, "note": "No word list covers every language. The page's own 'are you sure?' dialog is the language-free signal (test_destructive_cases.py, must_ask)."}
+]

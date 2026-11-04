@@ -155,7 +155,10 @@
     "destructive_require_confirmation_wait": true,
     "destructive_wait_for_type": "element_appear",
     "destructive_min_timeout_ms": 0,
-    "destructive_intent_substrings": ["erase", "trash", "wipe"],
+    "destructive_intent_substrings": [
+      "delete", "remove", "revoke", "destroy", "purge", "cancel subscription",
+      "erase", "trash", "wipe", "terminate", "unsubscribe", "disconnect", "deactivate"
+    ],
     "destructive_confirm_expected_tokens": ["delete", "remove", "permanently", "confirm", "cannot be undone"],
     "wait_for_recovery_strategy_hints": {
       "element_appear": ["overlay_anchor", "role_match"],

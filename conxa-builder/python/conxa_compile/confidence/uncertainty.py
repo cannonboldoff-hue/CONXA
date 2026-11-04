@@ -5,8 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from conxa_compile.compiler.intent_access import get_effective_intent
+from conxa_compile.policy.bundle import get_policy_bundle
 
-DESTRUCTIVE_TOKENS = ("delete", "remove", "revoke", "destroy", "purge", "cancel_subscription")
+def default_destructive_tokens() -> tuple[str, ...]:
+    """The words that mark a step destructive. Data, not code: policy/default_policy.json
+    (validation.destructive_intent_substrings), pinned by runtime/test/fixtures/destructive_cases.json."""
+    raw = get_policy_bundle().section("validation").get("destructive_intent_substrings")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(dict.fromkeys(str(x).strip().lower() for x in raw if str(x).strip()))
 
 
 def is_score_below(value: float, threshold: float) -> bool:
@@ -98,7 +105,7 @@ def _intent_has_destructive_token(reference: dict[str, Any]) -> bool:
     intent = get_effective_intent(semantic)
     if not intent:
         return False
-    return any(_token_matches(intent, token) for token in DESTRUCTIVE_TOKENS)
+    return any(_token_matches(intent, token) for token in default_destructive_tokens())
 
 
 def _ui_supports_destructive(reference: dict[str, Any]) -> bool:
@@ -111,7 +118,7 @@ def _ui_supports_destructive(reference: dict[str, Any]) -> bool:
         str(target.get("aria_label") or ""),
         str(target.get("name") or ""),
     ]
-    text_signal = any(any(_token_matches(txt, token) for token in DESTRUCTIVE_TOKENS) for txt in text_fields if txt)
+    text_signal = any(any(_token_matches(txt, token) for token in default_destructive_tokens()) for txt in text_fields if txt)
     action = str(reference.get("action_kind") or "").strip().lower()
     is_actionable = action in {"click", "select", "submit", "delete", "remove", "revoke"}
     role_supports = role in {"button", "menuitem", "option", "link"}
