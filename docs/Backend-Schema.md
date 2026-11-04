@@ -833,6 +833,17 @@ synthetic event, same `{from_url, to_url}` value shape as `browser_back`/`browse
   recordings have no `cause` and fall back to the 5 s timing rule. The compiler
   (`navigation_effects.py`) drops such an event and keeps only its destination as the causing action's
   `post_condition.url_delta` -> an advisory `url_pattern` assertion; it never becomes a `navigate` step.
+  **`cause_source` (2026-11-05)** says how the tag was decided: `"browser"` (CDP `Page.navigatedWithinDocument`
+  reported `navigationType: "historyApi"`, the page changed its own address) or `"clock"` (a 5 s window:
+  fragment changes, navigations right after an interaction, the redirect rule, the residual `user`). Measured on
+  real Chromium (2026-11-05 spike): a link click fires `frameRequestedNavigation` with `reason: "anchorClick"`, a
+  `pushState` fires `navigatedWithinDocument/historyApi` (and the page's Navigation API reports `userInitiated: false`),
+  a server redirect shows as `request.redirected_from` on the final request within ONE navigation, an address-bar
+  load fires none of these. The compile ledger entry for a folded navigation (`pass: "navigation_folded"`) carries
+  `decided_by`: `"browser"`, `"clock"` or `"legacy_clock"` (no tag at all). When `legacy_clock` no longer appears in
+  real compiles, `_LEGACY_WINDOW_S` and the `flag_noise` duplicate-goto branch can go. The spike did not explain Drive's
+  *second* committed navigation (`?pli=1` -> `/drive/home`) because a single server redirect is one commit; that needs
+  a real Drive recording.
 - **Recorded by:** `session.py::_drain_nav_history_checks_sync`, gated on
   `_nav_pending_renderer_initiated` (set by the CDP event, consumed per classification).
 - `RecordedEvent.origin: "script" | None` — who caused the event. `"script"` = the browser reported `isTrusted === false` (page code, not the person); `None` = a person, or a recording made before the field existed. `script` events are dropped before any step is built and listed in `compile_report["dropped"]` with `pass: "not_from_user"`. See `docs/TRD.md` event provenance.
