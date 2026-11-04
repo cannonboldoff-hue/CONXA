@@ -21,7 +21,8 @@ const { classifyException, remedyFor, buildRepairEvent } = require("./recovery")
 const { detectPreExecDrift } = require("./drift");
 const { compareEnvironment } = require("./env_match");
 const pageScripts = require("./page_scripts");
-const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { SIGN_IN_PAGE_RE, SSO_HOP_RE, pathOf } = require("./login_paths");
 const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs");
 
 const { appendRecoveryEvent } = require("./recovery_log");
@@ -1405,10 +1406,11 @@ function collectOutputs(steps, inputs) {
   return out;
 }
 
-// Auth-failure detection — login redirect or session-expired page heuristics. Deliberately
-// broader/unanchored than browser.js's LOGIN_PATH_RE (which answers a different question —
-// "has login-completion happened yet" — see its comment); don't merge them.
-const AUTH_FAILURE_URL_RE = /\/(login|signin|sign-in|auth|logout|session-expired)(\/|$|\?)/i;
+// Auth-failure detection — login redirect or session-expired page heuristics. A page that is a
+// sign-in page by name (/login, /signin, /session-expired) is a failure on its own. A sign-in hop
+// (/auth, /oauth2, /sso, /logout) is also an ordinary in-app page (/settings/auth), so it counts
+// only with a second piece of evidence: a password box, or a sign-in title. The words are shared
+// with the recorder and the sign-in ladder (login_paths.js).
 const AUTH_FAILURE_TITLE_RE = /sign\s*in|log\s*in|session\s*expired|authentication\s*required/i;
 
 // A skill can legitimately record a login page as an ordinary step — a demo app's /login form
@@ -1427,12 +1429,19 @@ function _isRecordedUrl(steps, url) {
 async function isAuthFailure(page, steps) {
   const url = page.url();
   if (_isRecordedUrl(steps, url)) return false;
-  if (AUTH_FAILURE_URL_RE.test(url)) return true;
+  const pathname = pathOf(url);
+  if (SIGN_IN_PAGE_RE.test(pathname)) return true;
+  let titled = false;
   try {
-    const title = await page.title();
-    if (AUTH_FAILURE_TITLE_RE.test(title)) return true;
+    titled = AUTH_FAILURE_TITLE_RE.test(await page.title());
   } catch (_) {}
-  return false;
+  if (titled) return true;
+  if (!SSO_HOP_RE.test(pathname)) return false;
+  try {
+    return (await countOn(page.locator("input[type=password]"))) > 0;
+  } catch (_) {
+    return false; // can't tell: a hop-looking address alone is not proof the session died
+  }
 }
 
 module.exports = {

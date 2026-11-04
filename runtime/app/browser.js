@@ -7,6 +7,7 @@ const sessions = require("./browser_session");
 const pageScripts = require("./page_scripts");
 const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
 const loginSignals = require("./login_signals");
+const { ANY_RE, SIGN_IN_PAGE, SSO_HOP } = require("./login_paths");
 const loginDecisionLog = require("./login_decision_log");
 
 // How often a pending sign-in is checked, how long after success we wait for post-login JS to write
@@ -45,10 +46,17 @@ const SESSIONS_DIR = path.join(CONXA_DATA_DIR, "cache", "sessions");
 // Used only by _rejectReasonForProtectedUrl (an interactive-login *capture* sanity check — did the
 // window get closed on an obvious login/auth page instead of a real app page?), never by sign-in
 // DETECTION — that's the signed-out baseline compare (_signedOutBaseline / isSignedInAgainstBaseline).
-const LOGIN_URL_PATTERNS = [
-  "login", "signin", "sign-in", "auth", "oauth", "sso",
-  "session/new", "account/login", "accountchooser", "account-chooser",
-];
+// The sign-in words are shared with the live sign-in ladder and the recorder (login_paths.js).
+function _looksLikeSignInAddress(url) {
+  try {
+    const u = new URL(url);
+    // A sign-in host with a bare path ("https://login.example.com/") is a sign-in page too.
+    const firstLabel = u.hostname.split(".")[0].toLowerCase();
+    return ANY_RE.test(u.pathname) || [...SIGN_IN_PAGE, ...SSO_HOP].includes(firstLabel);
+  } catch (_) {
+    return false;
+  }
+}
 
 // AUTH-6: "I'm done signing in" — a plain file-drop signal, same shape as handover.js's own resume
 // mechanism (existence-only, unauthenticated — same OS user, same machine, no new exposure that
@@ -661,8 +669,7 @@ function _rejectReasonForProtectedUrl(url) {
   if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
     return "The captured protected URL must be an http or https page.";
   }
-  const lowered = value.toLowerCase();
-  if (LOGIN_URL_PATTERNS.some(marker => lowered.includes(marker))) {
+  if (_looksLikeSignInAddress(value)) {
     return "The final page still looks like a login/auth page. Navigate to the authenticated app page, then close Chromium.";
   }
   return "";

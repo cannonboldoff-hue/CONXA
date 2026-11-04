@@ -1,4 +1,5 @@
 "use strict";
+const { fingerprintName } = require("./accessible_name");
 
 // Pure, browser-independent element resolver (Phase 8 — Final Selector Architecture).
 //
@@ -37,17 +38,6 @@ const ROLE_ALIASES = {
   button:   ["button"],
   img:      ["img"],
 };
-
-// ARIA "name from content" roles — mirrors identity_bundle.py's _NAME_FROM_CONTENT_ROLES and
-// cascade.js's NAME_FROM_CONTENT_ROLES. A combobox/listbox/textbox/searchbox/spinbutton/bare
-// <select> never gets its accessible name from its own inner text, so fpName below must not
-// treat inner_text as a name candidate for those — scoring against a fabricated name would
-// disagree with what the compiler itself refused to emit as a role signal.
-const NAME_FROM_CONTENT_ROLES = new Set([
-  "button", "link", "heading", "cell", "gridcell", "columnheader", "rowheader",
-  "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio",
-  "option", "tab", "treeitem", "switch", "tooltip",
-]);
 
 // Elements whose text is their concatenated <option> children. The compiler records this via
 // innerText (whitespace BETWEEN options: "1900 1901 1902"); page_scripts.js's extractDescriptor
@@ -104,17 +94,9 @@ function scoreCandidate(node, fingerprint) {
   const fpRole = norm(fp.role);
   if (fpRole) add(0.20, roleAgrees(fp.role, node.role));
 
-  // aria_label, name, alt and title are the element's own accessible-name attributes.
-  // placeholder is included to mirror the compiler's canonical derivation
-  // (identity_bundle.py's _accessible_name) — label-less inputs
-  // (e.g. a search box) are named from their placeholder at compile time, so this must be
-  // able to reproduce that name too. label_text is the nearest <label>'s text — for nav
-  // buttons this is surrounding context (e.g. "Projects Search CTRL + K K"), not the
-  // element's identity. Exclude it from fpName so it doesn't shadow inner_text ("New") and
-  // drop the score below threshold.
-  const isNamedFromContent = NAME_FROM_CONTENT_ROLES.has(norm(fp.tag)) || NAME_FROM_CONTENT_ROLES.has(norm(fp.role));
-  const innerTextName = isNamedFromContent ? fp.inner_text : "";
-  const fpName = norm(fp.aria_label || fp.name || fp.alt || fp.title || innerTextName || fp.placeholder);
+  // The recorded element's accessible name, by the one function the compiler's rule is mirrored in
+  // (accessible_name.js; Python twin identity_bundle.py::_accessible_name).
+  const fpName = norm(fingerprintName(fp));
   if (fpName) {
     const nodeName = norm(node.name || node.text);
     add(0.25, nodeName === fpName || (!!nodeName && (nodeName.includes(fpName) || fpName.includes(nodeName))));

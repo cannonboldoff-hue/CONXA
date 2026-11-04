@@ -328,3 +328,19 @@ def test_extract_a11y_node_no_match_against_aria_snapshot_yaml():
 
     node = _extract_a11y_node(YEAR_SELECT_ARIA_SNAPSHOT, {"role": "checkbox", "aria_label": "Nothing here"})
     assert node is None
+
+
+def _fingerprint_name_cases():
+    import json
+    from pathlib import Path
+
+    # One fixture, two languages: runtime/test/unit/test_shortcut_tail.js runs the same file.
+    path = Path(__file__).resolve().parents[2] / "runtime" / "test" / "fixtures" / "fingerprint_name_cases.json"
+    return json.loads(path.read_text("utf-8"))
+
+
+@pytest.mark.parametrize("case", _fingerprint_name_cases(), ids=lambda c: c["name"])
+def test_accessible_name_matches_shared_fixture(case):
+    from conxa_compile.compiler.identity_bundle import _accessible_name
+
+    assert _accessible_name(case["fingerprint"]) == case["expect"]

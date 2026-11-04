@@ -348,6 +348,20 @@ for (const c of LOGIN_PATH_CASES) {
   });
 }
 
+// The same file also pins two uses that only exist in the runtime: run.js::isAuthFailure (a page with no
+// password box and an ordinary title) and browser.js::_rejectReasonForProtectedUrl (sign-in capture).
+for (const c of LOGIN_PATH_CASES) {
+  test(`isAuthFailure fixture: ${c.name}`, async () => {
+    const { isAuthFailure } = require("../../app/run");
+    const page = { url: () => c.url, title: async () => "My App", locator: () => ({ count: async () => 0 }) };
+    assert.strictEqual(await isAuthFailure(page), c.auth_failure);
+  });
+  test(`_rejectReasonForProtectedUrl fixture: ${c.name}`, () => {
+    const { _rejectReasonForProtectedUrl } = require("../../app/browser");
+    assert.strictEqual(Boolean(_rejectReasonForProtectedUrl(c.url)), c.capture_reject);
+  });
+}
+
 test("matchesSuccessUrl: a literal {} is a wildcard, anything else is a prefix", () => {
   assert.ok(matchesSuccessUrl("https://drive.google.com/drive/my-drive", "https://drive.google.com/{}"));
   assert.ok(!matchesSuccessUrl("https://accounts.google.com/", "https://drive.google.com/{}"));

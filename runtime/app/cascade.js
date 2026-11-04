@@ -17,6 +17,7 @@ const { appendRecoveryEvent } = require("./recovery_log");
 const { SECONDARY_ACTION_TIMEOUT_MS, CAPTURE_PRESTEP } = require("./run_config");
 const { asObject, asArray, isNonIdempotent } = require("./step_utils");
 const { rootCandidates } = require("./resolution");
+const { fingerprintName, stripKeyboardShortcutTail } = require("./accessible_name");
 const {
   stepWithSelector,
   walkHoverChain,
@@ -129,61 +130,10 @@ async function recoverWithSelector(page, step, inputs, selector, onSuccess, base
   }
 }
 
-// Derive an element's accessible name from its recorded fingerprint for a11y recovery.
-// Precedence must mirror the compiler's canonical derivation (identity_bundle.py's
-// _accessible_name) and resolver.js's fpName.
-// placeholder covers label-less inputs (e.g. a search box) that the compiler names from
-// their placeholder text — without it here, recovery for exactly those elements sees an
-// empty name and bails before ever trying. alt/title cover elements whose only name is an
-// attribute (a bare <img>). `label_text` is the nearest <label>/sibling context — for
-// content elements (links, buttons, images) it is NOT the element's accessible name and can
-// point at a neighbour (e.g. the blueprint link's label_text was mis-captured as "Project"),
-// which would make `role=link[name="Project"]` recover the WRONG element. It is therefore
-// gated on the form-control tags whose accessible name legitimately comes from their label —
-// the same gate identity_bundle.py applies, so compile and recovery cannot disagree.
-// Tag OR role: a fingerprint may carry either (the compiler records both, recovery callers
-// and older packs sometimes only one), and a control named by its label is a form control
-// under either name.
-const LABELLED_TAGS = new Set([
-  "input", "select", "textarea",
-  "textbox", "searchbox", "combobox", "listbox", "spinbutton", "checkbox", "radio",
-]);
-
-// ARIA "name from content" roles — mirrors identity_bundle.py's _NAME_FROM_CONTENT_ROLES.
-// A combobox/listbox/textbox/searchbox/spinbutton/bare <select> never gets its accessible
-// name from its own inner text (concatenated <option> text isn't a name any browser
-// computes), so recovery must not treat inner_text as a name candidate for those either —
-// it would recover on a name the compiler itself refuses to fabricate.
-const NAME_FROM_CONTENT_ROLES = new Set([
-  "button", "link", "heading", "cell", "gridcell", "columnheader", "rowheader",
-  "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio",
-  "option", "tab", "treeitem", "switch", "tooltip",
-]);
-
+// The accessible name recovery searches for: derived from the recorded fingerprint by the one shared
+// function (accessible_name.js), so recovery, scoring and the compiler cannot disagree about it.
 function a11yRecoveryName(fingerprint) {
-  const fp = asObject(fingerprint);
-  const isLabelled = LABELLED_TAGS.has(String(fp.tag || "").toLowerCase())
-    || LABELLED_TAGS.has(String(fp.role || "").toLowerCase());
-  const labelName = isLabelled ? fp.label_text : "";
-  const isNamedFromContent = NAME_FROM_CONTENT_ROLES.has(String(fp.tag || "").toLowerCase())
-    || NAME_FROM_CONTENT_ROLES.has(String(fp.role || "").toLowerCase());
-  // Same 80-char ceiling as identity_bundle.py::_accessible_name: longer visible text is a
-  // paragraph, not a name, and the compiler refuses it too.
-  const innerTextName = isNamedFromContent && String(fp.inner_text || "").trim().length <= 80 ? fp.inner_text : "";
-  // `name` is deliberately excluded — the HTML form-field attribute, never an ARIA
-  // accessible-name source (identity_bundle.py's _accessible_name never includes it either).
-  return stripKeyboardShortcutTail(String(
-    fp.aria_label || fp.alt || fp.title || innerTextName || fp.placeholder || labelName || "",
-  ).trim());
-}
-
-// Mirrors identity_bundle.py::strip_keyboard_shortcut_tail, kept honest by one shared fixture
-// (test/fixtures/accessible_name_cases.json). Drive (and similar) append "Alt+C then U" to the
-// visible label; Playwright's accessible name does not.
-const SHORTCUT_TAIL_RE = /\s+(?:(?:Ctrl|Control|Alt|Shift|Cmd|Command|Meta|Win|Windows|Option)\s*\+\s*)+[A-Za-z0-9](?:\s+then\s+(?:(?:(?:Ctrl|Control|Alt|Shift|Cmd|Command|Meta|Win|Windows|Option)\s*\+\s*)+[A-Za-z0-9]|[A-Za-z0-9]))*\s*$/i;
-
-function stripKeyboardShortcutTail(text) {
-  return String(text || "").replace(SHORTCUT_TAIL_RE, "").trim();
+  return fingerprintName(asObject(fingerprint));
 }
 
 async function recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, baseline = null, guard = null) {

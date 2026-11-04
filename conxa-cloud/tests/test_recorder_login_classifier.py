@@ -1,4 +1,4 @@
-"""Tests for recorder login flow classification — Phase 2."""
+"""RecordedEvent shape check. (classify_login_flow was removed 2026-11-05: nothing called it.)"""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from conxa_core.models.events import (
     ActionMeta, DomContext, PageContext, RecordedEvent, SnapshotRef,
     SemanticFeatures, Selectors, StateChange, TargetDom, Timing, VisualFeatures,
 )
-from conxa_compile.recorder.frame_utils import classify_login_flow
 
 
 # ─────────────────────────────────────────────────
@@ -33,70 +32,6 @@ def _make_event(
         surrounding_text="",
         snapshot=SnapshotRef(ref="", dom_hash=""),
     )
-
-
-# ─────────────────────────────────────────────────
-# classify_login_flow
-# ─────────────────────────────────────────────────
-
-class TestClassifyLoginFlow:
-    def test_password_field_is_login(self):
-        events = [
-            _make_event(url="https://app.example.com/login", input_type="text"),
-            _make_event(url="https://app.example.com/login", input_type="password"),
-            _make_event(url="https://app.example.com/login"),
-        ]
-        assert classify_login_flow(events) == "login"
-
-    def test_password_in_target_name_is_login(self):
-        events = [
-            _make_event(url="https://app.example.com/login", target_name="password"),
-        ]
-        assert classify_login_flow(events) == "login"
-
-    def test_login_url_without_password_is_login(self):
-        events = [
-            _make_event(url="https://app.example.com/signin"),
-            _make_event(url="https://app.example.com/signin"),
-        ]
-        assert classify_login_flow(events) == "login"
-
-    def test_normal_workflow_is_workflow(self):
-        events = [
-            _make_event(url="https://dashboard.example.com/services"),
-            _make_event(url="https://dashboard.example.com/services"),
-        ]
-        assert classify_login_flow(events) == "workflow"
-
-    def test_empty_events_is_workflow(self):
-        assert classify_login_flow([]) == "workflow"
-
-    def test_oauth_url_is_login(self):
-        events = [_make_event(url="https://accounts.example.com/oauth/authorize")]
-        assert classify_login_flow(events) == "login"
-
-    def test_auth_url_path_is_login(self):
-        events = [_make_event(url="https://app.example.com/auth/login")]
-        assert classify_login_flow(events) == "login"
-
-    def test_sso_url_is_login(self):
-        events = [_make_event(url="https://app.example.com/sso/callback")]
-        assert classify_login_flow(events) == "login"
-
-    def test_dashboard_with_form_is_workflow(self):
-        events = [
-            _make_event(url="https://dashboard.example.com/create", input_type="text"),
-            _make_event(url="https://dashboard.example.com/create", input_type="text"),
-        ]
-        assert classify_login_flow(events) == "workflow"
-
-    def test_mixed_events_login_detected(self):
-        events = [
-            _make_event(url="https://dashboard.example.com/services"),
-            _make_event(url="https://app.example.com/login", input_type="password"),
-            _make_event(url="https://dashboard.example.com/services"),
-        ]
-        assert classify_login_flow(events) == "login"
 
 
 def test_recorded_event_omits_url_state_field():

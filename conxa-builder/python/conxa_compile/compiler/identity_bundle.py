@@ -200,6 +200,11 @@ _NAME_FROM_CONTENT_ROLES = frozenset({
 })
 
 
+# Visible text longer than this is a paragraph, not a name. Pinned by the "text over 80 characters" row of
+# runtime/test/fixtures/fingerprint_name_cases.json; runtime/app/accessible_name.js uses the same number.
+_MAX_NAME_CHARS = 80
+
+
 def _accessible_name(target: dict[str, Any]) -> str:
     """Element's accessible name, or "" when it genuinely has none.
 
@@ -229,7 +234,7 @@ def _accessible_name(target: dict[str, Any]) -> str:
         # as fabricated content, not a real accessible name, so it's dropped rather than
         # shipped half-cut. aria_label/alt/title/placeholder/label_text below are author-set,
         # not concatenated content, and stay uncapped.
-        if inner_text and len(inner_text) <= 80:
+        if inner_text and len(inner_text) <= _MAX_NAME_CHARS:
             candidates.append(inner_text)
     if (
         str(target.get("tag") or "").lower() in _LABELLED_TAGS

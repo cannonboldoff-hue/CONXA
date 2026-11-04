@@ -29,6 +29,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
+from conxa_core.login_paths import ANY_RE
+
 # ── Path templating (mirrors login_signals.js::templatePath) ───────────────────────────────────
 _ID_SEGMENT_RE = re.compile(r"^[0-9]+$|^[0-9a-f-]{8,}$", re.IGNORECASE)
 
@@ -140,10 +142,6 @@ def evaluate(definition: dict | None, observation: dict | None) -> dict:
 # ── Session check (Check now / Check all, the recording gate, and the runtime's pre-flight) ────
 # Twin of runtime/app/login_signals.js::classifySession; kept honest by one shared fixture,
 # runtime/test/fixtures/session_check_cases.json, run by both languages' unit tests.
-_SESSION_LOGIN_PATH_RE = re.compile(
-    r"/(login|log-in|signin|sign-in|logon|signon|sso|oauth2?|auth|authorize|authenticate|servicelogin|session-expired)(/|$)",
-    re.IGNORECASE,
-)
 # Visible control names that only appear when nobody is signed in.
 _SIGNED_OUT_MARKER_RE = re.compile(
     r"^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$",
@@ -173,7 +171,7 @@ def looks_like_session_login(observation: dict) -> bool:
     if observation.get("password_box"):
         return True
     try:
-        return bool(_SESSION_LOGIN_PATH_RE.search(urlsplit(str(observation.get("final_url") or "")).path))
+        return bool(ANY_RE.search(urlsplit(str(observation.get("final_url") or "")).path))
     except ValueError:
         return False
 

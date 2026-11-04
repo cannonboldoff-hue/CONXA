@@ -1,0 +1,12 @@
+[
+  {"name": "aria-label wins over visible text", "fingerprint": {"tag": "button", "aria_label": "Close dialog", "inner_text": "X"}, "expect": "Close dialog"},
+  {"name": "the HTML name attribute is never a name", "fingerprint": {"tag": "input", "name": "gender"}, "expect": ""},
+  {"name": "a button is named by its text", "fingerprint": {"tag": "button", "inner_text": "Save"}, "expect": "Save"},
+  {"name": "a select is not named by its option list", "fingerprint": {"tag": "select", "role": "combobox", "inner_text": "1900 1901 1902"}, "expect": ""},
+  {"name": "text over 80 characters is a paragraph, not a name", "fingerprint": {"tag": "button", "inner_text": "A very long run of visible words that goes on and on well past what any accessible name would be"}, "expect": ""},
+  {"name": "a form control is named by its label", "fingerprint": {"tag": "input", "label_text": "Email"}, "expect": "Email"},
+  {"name": "a link is not named by a neighbouring label", "fingerprint": {"tag": "a", "role": "link", "label_text": "Project"}, "expect": ""},
+  {"name": "a keyboard-shortcut hint is not part of the name", "fingerprint": {"tag": "button", "inner_text": "File upload Alt+C then U"}, "expect": "File upload"},
+  {"name": "a label-less input is named by its placeholder", "fingerprint": {"tag": "input", "placeholder": "Search services"}, "expect": "Search services"},
+  {"name": "alt names a bare image", "fingerprint": {"tag": "img", "alt": "Company logo"}, "expect": "Company logo"}
+]

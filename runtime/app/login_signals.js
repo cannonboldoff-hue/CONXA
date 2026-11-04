@@ -1,4 +1,5 @@
 "use strict";
+const { SIGN_IN_PAGE_RE, ANY_RE } = require("./login_paths");
 // login_signals.js — pure decision logic for interactive sign-in completion detection.
 //
 // Shared by both wait implementations in browser.js (_waitForSessionLogin, the normal
@@ -85,7 +86,7 @@ function looksPaused(domProbe) {
 // /v3/signin/ (identifier, accountchooser), and a dead session with a remembered account lands on
 // the chooser — no password box, an address different from the cookie-less page — which the
 // first-segment-only form read as "signed in".
-const LOGIN_PATH_RE = /\/(login|signin|sign-in|session-expired)(\/|$)/i;
+const LOGIN_PATH_RE = SIGN_IN_PAGE_RE; // the shared sign-in words (login_paths.js)
 function looksLikeLoginAnswer({ url, hasPasswordBox } = {}) {
   if (hasPasswordBox) return true;
   try {
@@ -338,7 +339,7 @@ function evaluateAuthDefinition(definition, observation) {
 // Wider than LOGIN_PATH_RE above on purpose: that one also drives the live sign-in ladder, where a
 // false "still on a login page" would hold a finished sign-in open. A saved-session check can lean
 // the other way, since the cost of a wrong "expired" is one extra sign-in.
-const SESSION_LOGIN_PATH_RE = /\/(login|log-in|signin|sign-in|logon|signon|sso|oauth2?|auth|authorize|authenticate|servicelogin|session-expired)(\/|$)/i;
+const SESSION_LOGIN_PATH_RE = ANY_RE; // sign-in words plus the SSO hops (login_paths.js)
 // Visible control names that only appear when nobody is signed in.
 const SIGNED_OUT_MARKER_RE = /^(sign[-_ ]?in|log[-_ ]?in|sign[-_ ]?up|get started|continue with .+|sign in with .+|log in with .+)$/i;
 

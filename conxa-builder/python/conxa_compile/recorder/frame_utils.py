@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit
 
+from conxa_core.login_paths import ANY_RE, SIGN_IN_PAGE_RE, SSO_HOP_RE
 from conxa_core.models.events import RecordedEvent
 from conxa_compile.policy.bundle import get_policy_bundle
 
@@ -210,14 +211,11 @@ def _viewport_string_from_page(page: Any) -> str:
         return ""
 
 
-_LOGIN_URL_PATTERNS = ("login", "signin", "sign-in", "auth", "sso", "oauth", "session/new", "account/login")
-# A login-shaped path: the runtime's LOGIN_PATH_RE / AUTH_FAILURE_URL_RE plus the single-sign-on
-# hops a sign-in passes through. Being on one means the person is still signing in.
-_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|auth|oauth2?|sso|logout|session-expired)(/|$)", re.I)
+# Sign-in words live in conxa_core.login_paths (one list, shared with the runtime's login_paths.js).
 
 
 def looks_like_login_page(url: str) -> bool:
-    return bool(_LOGIN_PATH_RE.search(urlsplit(url).path or "/"))
+    return bool(ANY_RE.search(urlsplit(url).path or "/"))
 
 
 # The recording drop is stricter than looks_like_login_page above: a wrong "yes" there loses real
@@ -225,8 +223,6 @@ def looks_like_login_page(url: str) -> bool:
 # Only a path that is a sign-in page by name counts on its own; the single-sign-on hops a sign-in
 # passes through (/auth, /oauth2, /sso, /logout) count only while a sign-in is already under way,
 # so an in-app page such as /settings/auth keeps its steps.
-_STRICT_LOGIN_PATH_RE = re.compile(r"/(login|log-in|signin|sign-in|sign_in|servicelogin|session-expired)(/|$)", re.I)
-_SSO_HOP_PATH_RE = re.compile(r"/(auth|oauth2?|sso|logout)(/|$)", re.I)
 
 
 class LoginFlowTracker:
@@ -241,10 +237,10 @@ class LoginFlowTracker:
 
     def is_login_step(self, url: str) -> bool:
         path = urlsplit(url).path or "/"
-        if _STRICT_LOGIN_PATH_RE.search(path):
+        if SIGN_IN_PAGE_RE.search(path):
             self.active = True
             return True
-        if self.active and _SSO_HOP_PATH_RE.search(path):
+        if self.active and SSO_HOP_RE.search(path):
             return True
         self.active = False
         return False
@@ -254,37 +250,6 @@ def is_blank_url(url: str) -> bool:
     value = str(url or "").strip().lower()
     # about:blank?... is still a blank page — the browser panel's marker URL is one (host_view.py).
     return not value or value in {"about:blank", "chrome://newtab/"} or value.startswith(("about:blank?", "about:blank#"))
-
-
-def classify_login_flow(events: list[RecordedEvent]) -> str:
-    """Return 'login' if the event list looks like an auth recording, else 'workflow'.
-
-    Heuristic: a login flow contains at least one password-type input interaction.
-    URL patterns (e.g. /login) are a supporting signal but not required.
-    """
-    has_password_input = False
-    has_login_url = False
-
-    for event in events:
-        # Check for password-type input
-        input_type = str(event.semantic.input_type or "").lower()
-        target_name = str(event.target.name or "").lower()
-        if input_type == "password" or "password" in target_name:
-            has_password_input = True
-
-        # Check URL for login patterns
-        url = str(event.page.url or "").lower()
-        if any(marker in url for marker in _LOGIN_URL_PATTERNS):
-            has_login_url = True
-
-        if has_password_input:
-            break
-
-    if has_password_input:
-        return "login"
-    if has_login_url:
-        return "login"
-    return "workflow"
 
 
 def format_startup_error(exc: Exception) -> str:

@@ -20,10 +20,11 @@ async function test(label, fn) {
   }
 }
 
-function makePage(url, title = "My App") {
+function makePage(url, title = "My App", passwordBoxes = 0) {
   return {
     url: () => url,
     title: async () => title,
+    locator: () => ({ count: async () => passwordBoxes }),
   };
 }
 
@@ -42,8 +43,23 @@ function makePage(url, title = "My App") {
     assert.equal(await isAuthFailure(makePage("https://app.example.com/session-expired")), true);
   });
 
-  await test("auth path → auth failure", async () => {
-    assert.equal(await isAuthFailure(makePage("https://app.example.com/auth/challenge")), true);
+  // A sign-in hop (/auth, /sso, /oauth2, /logout) is also an ordinary in-app page (/settings/auth),
+  // so it counts only with a second piece of evidence.
+  await test("auth hop with a password box → auth failure", async () => {
+    assert.equal(await isAuthFailure(makePage("https://app.example.com/auth/challenge", "My App", 1)), true);
+  });
+
+  await test("auth hop with a sign-in title → auth failure", async () => {
+    assert.equal(await isAuthFailure(makePage("https://app.example.com/oauth2/authorize", "Sign in to continue")), true);
+  });
+
+  await test("auth hop with no sign-in evidence (an in-app settings page) → NOT auth failure", async () => {
+    assert.equal(await isAuthFailure(makePage("https://app.example.com/settings/auth")), false);
+  });
+
+  await test("a page whose address can't be probed for a password box → NOT auth failure", async () => {
+    const page = { url: () => "https://app.example.com/sso", title: async () => "Home", locator: () => { throw new Error("gone"); } };
+    assert.equal(await isAuthFailure(page), false);
   });
 
   await test("normal dashboard path → not auth failure", async () => {
