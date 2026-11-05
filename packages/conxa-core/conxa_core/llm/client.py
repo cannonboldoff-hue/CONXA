@@ -26,7 +26,7 @@ _REQUEST_COUNTER = itertools.count(1)
 
 # Bump on ANY change to the `timeline_understanding` prompt below. conversation/timeline_understanding.py saves
 # it in understanding.json, so the drop/weak/fallback rates (scripts/eval_understanding.py rates) are per prompt.
-TIMELINE_UNDERSTANDING_PROMPT_VERSION = 2
+TIMELINE_UNDERSTANDING_PROMPT_VERSION = 3
 
 
 def _debug_log(message: str) -> None:
@@ -312,6 +312,34 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                 ),
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False)},
+        ]
+    if task == "clarify_audit":
+        # Before the build, after the understanding: a second, adversarial read of the same recording. Meaning only
+        # (never a selector); conversation/timeline_understanding.py::audit_timeline validates every field.
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "A person recorded a task in a browser and one reader already summarised it and asked its questions. "
+                    "You are the second reader. Find what would make the finished, repeatable workflow WRONG on another day, "
+                    "another account or other data, that no question so far covers.\n"
+                    "INPUT (JSON): `goal`, `rows` (the recording, each with a `ref`), `asked` (questions already asked, with their row), "
+                    "`decided` (points already settled).\n"
+                    "OUTPUT: ONLY a JSON object {\"questions\": [{\"row\": \"r5\", \"facet\": \"<one of below>\", "
+                    "\"prompt\": \"one plain sentence to the person\", \"why\": \"one line\", "
+                    "\"choices\": [{\"label\": \"short answer\"}]}]}\n"
+                    "facet is one of: input_domain (what a typed or picked value may be), provenance (where a value comes from), "
+                    "precondition (what must be true before it starts), postcondition (what done means or what to hand back), "
+                    "alternatives (another state the page can be in), failure_policy (what to do when a step fails), "
+                    "environment (account, locale, plan), scope (a recorded action that may not belong), timing (what to wait for).\n"
+                    "RULES\n"
+                    "- At most 2 questions. Zero is the right answer when the recording is plain.\n"
+                    "- Only a question a person must answer: never one the rows, the goal or `decided` already answer, "
+                    "never one about a row in `asked`, never about idle time or the video.\n"
+                    "- 2 or 3 short `choices`. Never invent a row. Never write a selector or a page address."
+                ),
+            },
+            {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False, separators=(",", ":"))},
         ]
     if task == "clarify_question_copy":
         # Compile-time: rewrite the follow-up questions asked after a compile into warm, plain
@@ -922,6 +950,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "- fixed: the task names this exact thing, or it is the same page every time.\n"
                     "- unsure: you cannot tell. Do not guess.\n"
                     "- A candidate with `in_set` true is one item picked from a list of like items: unless the task names that exact item it is varies or unsure, never fixed.\n"
+                    "- A candidate of kind `control` is a dropdown, radio or date the person set; its `recorded` is what they chose. It already becomes a run input, so most are varies and need no question. Say fixed only when the task names that exact option, and ask a `value` question for it (best_guess fixed).\n"
                     "- Write `detailed_summary` first, one line per event row, before you judge any value: it is your working, so look at every step.\n"
                     "- Then settle every open point you can from the rows, task and chat: put it in `decided` with the reason.\n"
                     "- Then ask only what only the person knows or must approve. Once per thing, never two questions about the same thing. Most recordings need 0 to 3.\n"
@@ -990,6 +1019,7 @@ TASK_OUTPUT_BUDGET: dict[str, int] = {
     "copilot_reply": 16384,
     "studio_chat_reply": 16384,
     "timeline_understanding": 16384,
+    "clarify_audit": 2048,
     "ai_review": 1024,
     "chat_map_answer": 1024,
     "studio_chat_actions": 1024,

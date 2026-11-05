@@ -42,7 +42,7 @@ This audit has been worked through on branch `feat/conversation-led-studio`. Wha
 | G4 returning values | **Built**: capture gesture, `extract` step, `outputs` in the result and on the test card. Not built: values across a pause, `outputSchema`, Human Edit form | BUILD-51 |
 | G5 branching | **Built**: `run_if`, `on_missing: "skip"`. Not built: general variant branch learner, "ask a person" mode | BUILD-51, BUILD-53 |
 | G6 re-record one part | **Built**: `_stop_before_step`, segment compile, `replace_step_range`, `cmd_splice_segment`, stale answers. **Not built**: handing the parked page to the recorder (needs a live Electron pass) | BUILD-52 |
-| G7 Clarify coverage | **Built**: choice/date controls, no dropped questions (queued). Not built: relative dates | BUILD-50 |
+| G7 Clarify coverage | **Built**: choice/date controls, no dropped questions (queued), relative dates; BUILD-65 re-opened the eight kinds the understanding-first path had switched off and added a scored question ledger | BUILD-50, BUILD-65 |
 | G8 determinism | **Built**: drop ledger, unused-input pruning, second-opinion pin, download-order fix. Not built: popup-tab race, cache key | BUILD-50 |
 | G9 General Chat context | **Built** (workflows, groups' apps, app maps; open-workflow routing) | — |
 | G10 vision | **Built** for the failure screenshot (diagnosis + card). Point-to-anchor in the panel not built | — |

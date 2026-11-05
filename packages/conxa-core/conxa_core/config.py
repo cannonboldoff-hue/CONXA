@@ -199,6 +199,22 @@ class Settings(BaseSettings):
     # as a plain click, answering the popup on the person's behalf (see CLAUDE.md invariants).
     compile_outcome_forks: bool = True
 
+    # Clarifying questions (docs/reports/Clarifying-Questions-Architecture-Investigation.md).
+    # clarify_ledger: every question gets a facet + slot; "report" only writes what the slot dedupe and
+    # the vacuity check WOULD drop (clarify.json "ledger_report"), "enforce" drops it, "off" skips both.
+    # Env: SKILL_CLARIFY_LEDGER.
+    clarify_ledger: str = "report"
+    # clarify_scoring: decide ask / confirm / assume / defer by value. "shadow" computes the action,
+    # logs it and still asks everything; "on" acts on it; "off" is today's behaviour. Env: SKILL_CLARIFY_SCORING.
+    clarify_scoring: str = "off"
+    # Words the author typed to a question before the build ("own words") are handed to the workflow chat once the
+    # build is done and nothing is left to answer, so they can become a proposed change. Env: SKILL_CLARIFY_NOTES_TO_CHAT.
+    clarify_notes_to_chat: bool = True
+    # A second, adversarial read of the recording asks "what would make this wrong on another day?". "shadow" runs it,
+    # saves what it would ask in understanding.json and asks nothing extra; "on" asks up to two more questions.
+    # One extra metered call per recording. Env: SKILL_CLARIFY_AUDIT.
+    clarify_audit: str = "off"
+
     # Selector compilation tuning (calls Text endpoint above)
     llm_selector_timeout_ms: int = 60000
     llm_selector_candidates: int = 8          # candidates to request per element

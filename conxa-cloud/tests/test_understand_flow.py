@@ -196,9 +196,12 @@ def test_decisions_are_replayed_onto_the_compiled_steps_and_not_asked_again(env,
     assert by_kind["confirm"]["status"] == "answered" and by_kind["confirm"]["receipt"] == "Someone approves it first"
     assert data["added_steps"] == 1                                               # the confirm step the answer inserted
     # a value that could not be applied is said once in the chat, never asked a second time
-    assert "chosen_values" not in by_kind and "values" not in by_kind
+    assert "chosen_values" not in by_kind and "upload" not in by_kind and "coverage" not in by_kind
     assert any("couldn’t make “no-such-text” change each run" in t for t in _texts(wf.id, "assistant_message"))
-    assert {q["kind"] for q in data["questions"]} <= {"fork", "known_popup", "popup", "confirm"}
+    # what Q1 cannot ask (typed text, here) is asked after the build; the three kinds Q1 did ask are not repeated
+    assert "values" in by_kind
+    assert {q["kind"] for q in data["questions"]} <= {"fork", "fork_then", "known_popup", "popup", "confirm", "values", "relative_date",
+                                                      "skip_when_empty", "missing_item", "output", "done_when", "dropped_value"}
 
 
 def test_a_recording_without_decisions_compiles_as_before(env, monkeypatch):
@@ -311,3 +314,121 @@ def test_a_fork_answer_is_never_applied_to_a_popup_it_does_not_trace_back_to():
     forks = [{"id": "fork:s1", "kind": "fork", "status": "open", "title": "Upload options", "step_keys": ["s1"], "choices": []}]
     stored = [{"qid": "fork:r2", "kind": "fork", "event_ids": [1], "skipped": False, "choice": "ask_human"}]
     assert replay.plan(stored, {"skills": [{"steps": []}]}, forks, lambda k: 10)["groups"] == []
+
+
+# ── Phase 0: the model is told what the person typed in chat ────────────────────────────────
+
+
+def test_the_chat_the_person_typed_reaches_the_understanding_call(flow, monkeypatch):
+    from conxa_compile.conversation import thread_store as ts
+
+    b, wf, _compiled = flow
+    ts.append(f"wf:{wf.id}", "user_message", text="the invoice number changes every month")
+    ts.append(f"wf:{wf.id}", "assistant_message", text="Got it.")
+    seen: list[dict] = []
+    monkeypatch.setattr(tu, "_default_call", lambda task, payload, ms: seen.append(payload) or RAW)
+    b._flow_understand(wf.id, "rid")
+    assert seen and seen[0]["chat"] == "the invoice number changes every month"      # the assistant's own words are not "chat"
+
+
+# ── Phase 0: the pencil (nothing guarded it before) ─────────────────────────────────────────
+
+
+def test_the_pencil_before_the_build_reopens_a_question_and_forgets_its_answer(flow):
+    b, wf, compiled = flow
+    b._flow_understand(wf.id, "rid")
+    first = _open_cards(wf)[0]                                  # confirm_before: the most costly, asked first
+    _answer(b, wf, first, choice="confirm")
+    session = settings.data_dir / "sessions" / "sess1"
+    assert any(d["qid"] == "confirm_before:r2" for d in decisions.load(session))
+    assert _answer(b, wf, first, action="reopen")["ok"]
+    assert not any(d["qid"] == "confirm_before:r2" for d in decisions.load(session))
+    again = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == first["card_id"])
+    assert again["state"] == "open" and compiled == []          # asked again; nothing was built meanwhile
+
+
+# ── Phase 1: the slot ledger ────────────────────────────────────────────────────────────────
+
+
+def test_each_answer_is_remembered_by_slot_and_the_pencil_forgets_it(flow):
+    b, wf, _compiled = flow
+    b._flow_understand(wf.id, "rid")
+    assert clarify_store.load(wf.id)["questions"][0]["unknown"]["facet"] == "consequence"
+    first = _open_cards(wf)[0]
+    _answer(b, wf, first, choice="confirm")
+    ledger = clarify_store.load(wf.id)["ledger"]
+    assert ledger["consequence/confirm:2"] == {"qid": "confirm_before:r2", "kind": "confirm_before", "facet": "consequence",
+                                               "phase": "pre_compile", "status": "answered", "choice": "confirm"}
+    assert _answer(b, wf, first, action="reopen")["ok"]
+    assert "consequence/confirm:2" not in (clarify_store.load(wf.id).get("ledger") or {})
+
+
+def test_what_the_questions_before_the_build_settled_is_still_known_after_it(env, monkeypatch):
+    b, wf, _ = env
+    _write_session([])
+    clarify_store.save(wf.id, {"stage": "building", "questions": [], "ledger": {"consequence/confirm:7": {"qid": "q", "status": "answered"}}})
+    data = _compile(b, wf, monkeypatch)
+    assert data["ledger"] == {"consequence/confirm:7": {"qid": "q", "status": "answered"}}
+    assert all(q["unknown"]["slot"] for q in data["questions"])             # every compiled question names its slot
+
+
+# ── Phase 3: words typed to a question reach the chat once the build is done ────────────────
+
+
+def test_a_note_typed_before_the_build_is_handed_to_the_chat_once_nothing_is_left_to_answer(env, monkeypatch):
+    import threading
+
+    b, wf, _ = env
+    _write_session([{"qid": "note:r1", "kind": "note", "event_ids": [1], "skipped": True, "note": "If nothing matches, stop"}])
+    sent: list[dict] = []
+    done = threading.Event()
+    monkeypatch.setattr(b, "cmd_thread_turn", lambda payload, rid: (sent.append(payload), done.set()))
+    _compile(b, wf, monkeypatch)
+    for _ in range(10):                                                                  # answer what the build asked, one at a time
+        pending = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"]
+        if not pending:
+            break
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "skip"}, "r")
+    assert done.wait(5) and len(sent) == 1
+    assert sent[0]["thread_id"] == f"wf:{wf.id}" and "If nothing matches, stop" in sent[0]["message"]
+    b._flow_route_notes(wf.id)                                                           # said once, never repeated
+    assert len(sent) == 1
+
+
+# ── Phase 3: "does this cover what you said?" is asked again ────────────────────────────────
+
+
+def test_the_coverage_question_comes_back_when_the_compiles_own_review_says_a_part_is_missing(env, monkeypatch):
+    from conxa_core.config import settings as cfg
+
+    b, wf, _ = env
+    _write_session([])
+    (cfg.data_dir / "sessions" / "sess1" / "understanding.json").write_text(json.dumps({"goal": "g", "short_summary": "s", "source": "model"}), encoding="utf-8")
+    fresh = get_workflow(wf.id)
+    fresh.task_description = "create the invoice and send it"
+    save_workflow(fresh)
+    monkeypatch.setattr("conxa_compile.conversation.understanding.understand",
+                        lambda doc, task, **kw: {"candidates": [], "goal_summary": "", "source": "model",
+                                                 "coverage": {"ok": False, "note": "You said send it, but the recording stops at Save."}})
+    data = _compile(b, wf, monkeypatch)
+    cov = next(q for q in data["questions"] if q["kind"] == "coverage")
+    assert "stops at Save" in cov["body"] and data["questions"][0]["kind"] == "coverage"        # asked first, before the rest
+
+
+# ── Phase 4: what happened to each question is logged, value-free ───────────────────────────
+
+
+def test_each_question_leaves_a_value_free_trail_of_shown_answered_and_reopened(flow):
+    from conxa_compile.conversation import clarify_events
+
+    b, wf, _compiled = flow
+    b._flow_understand(wf.id, "rid")
+    first = _open_cards(wf)[0]
+    _answer(b, wf, first, choice="confirm")
+    _answer(b, wf, first, action="reopen")
+    events = clarify_events.read(wf.id)
+    assert [e["event"] for e in events][:4] == ["shown", "answered", "shown", "reopened"]
+    answered = events[1]
+    assert answered["qid"] == "confirm_before:r2" and answered["facet"] == "consequence" and answered["choice"] == "confirm"
+    assert answered["guess"] == "confirm" and answered["kept_guess"] is True          # the pre-selected guess was the answer kept
+    assert not any("text" in e or "value" in e or "literal" in e for e in events)

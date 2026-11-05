@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from conxa_compile.compiler.choice import derive_choice
 from conxa_compile.compiler.entity_binding import repeating_peers
 from conxa_compile.compiler.outcome_fork import classify_dialog, classify_surface
 from conxa_compile.video import splice as splice_mod
@@ -179,6 +180,10 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             # How many like items the target was one of (a file in a list, a record in a table); absent
             # for a control. Structural, from the recorded ancestors, so it needs no model.
             **({"peers": peers} if (peers := repeating_peers(ev)) else {}),
+            # What a dropdown / radio was set to, as the person reads it (the option's label), from the recorded
+            # choice context. The compiler makes each of these an input, so the question is only whether it is fixed.
+            **({"control": {"kind": "choice", "recorded": picked["choice"]["recorded_label"]}}
+               if action in ("select", "select_option", "set_radio") and (picked := derive_choice(ev)) and picked["choice"].get("recorded_label") else {}),
             # decision | dismissable | consent | form: the recorder saw this action inside a popup.
             **({"dialog": classify_dialog(ev["dialog_context"])} if isinstance(ev.get("dialog_context"), dict) else {}),
             # notice | obstruction | decision_benign | info_request | decision_consequential | native

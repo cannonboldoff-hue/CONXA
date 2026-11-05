@@ -1,0 +1,501 @@
+<title>Clarifying Questions Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one reading column. Claim first, then the figure that proves it, then the fix.
+   Colour: blue = a model decides, violet = a person decides, ink = code, red = the defect.
+   Status (applied / partly / text only / not asked) always carries an icon and a word. */
+:root{
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10);
+  --blue:#2a78d6; --violet:#6250d6; --good:#0ca30c; --good-text:#006300; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --z1:rgba(42,120,214,.05); --z2:rgba(42,120,214,.13); --z3:rgba(42,120,214,.24); --z4:rgba(42,120,214,.38);
+  --crit-wash:rgba(208,59,59,.08); --good-wash:rgba(12,163,12,.08); --warn-wash:rgba(250,178,25,.16); --ser-wash:rgba(236,131,90,.14);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+  --blue:#3987e5; --violet:#9085e9; --good-text:#0ca30c; --crit:#e66767;
+  --z1:rgba(57,135,229,.06); --z2:rgba(57,135,229,.16); --z3:rgba(57,135,229,.28); --z4:rgba(57,135,229,.42);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+  --blue:#3987e5; --violet:#9085e9; --good-text:#0ca30c; --crit:#e66767;
+  --z1:rgba(57,135,229,.06); --z2:rgba(57,135,229,.16); --z3:rgba(57,135,229,.28); --z4:rgba(57,135,229,.42);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:clamp(1.9rem,4vw,2.7rem);font-weight:700;letter-spacing:-.02em}
+h2{font-size:1.45rem;font-weight:650;letter-spacing:-.01em}
+h3{font-size:1rem;font-weight:650}
+p{margin:0}
+code{font:12.5px ui-monospace,"Cascadia Mono",Consolas,monospace;background:var(--grid);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+.eyebrow{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.lede{max-width:68ch;color:var(--ink2);font-size:16px}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+.claim{max-width:70ch;color:var(--ink2)}
+.claim b{color:var(--ink)}
+
+/* hero numbers */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.stat .n{font-size:2.3rem;font-weight:700;letter-spacing:-.02em;line-height:1}
+.stat .n.bad{color:var(--crit)}
+.stat span{color:var(--ink2);font-size:13.5px}
+
+/* figures */
+figure{margin:0;background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+figcaption{color:var(--ink2);font-size:13.5px;max-width:78ch}
+figcaption b{color:var(--ink)}
+.scroll{overflow-x:auto;min-width:0}
+.scroll>svg{display:block;width:100%;min-width:860px;height:auto}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink)}
+.t{font-size:13px;font-weight:650}
+.s{font-size:11px;fill:var(--ink2)}
+.lane{font-size:11px;letter-spacing:.1em;font-weight:650;fill:var(--ink2)}
+.lb{font-size:11px;fill:var(--ink2)}
+.n{fill:var(--surface);stroke:var(--ink2);stroke-width:1.5}
+.n.model{stroke:var(--blue);stroke-width:2}
+.n.person{stroke:var(--violet);stroke-width:2}
+.n.bad{stroke:var(--crit);stroke-width:2.5;fill:var(--crit-wash)}
+.n.new{stroke-dasharray:5 3}
+.ev{fill:var(--page);stroke:var(--axis);stroke-width:1.5}
+.arr{fill:none;stroke:var(--ink2);stroke-width:1.5}
+.arr.bad{stroke:var(--crit);stroke-width:2}
+.arr.loop{stroke:var(--blue);stroke-width:2;stroke-dasharray:6 4}
+#ah path{fill:var(--ink2)} #ahb path{fill:var(--crit)} #ahl path{fill:var(--blue)}
+.pin circle{fill:var(--crit)} .pin text{fill:#fff;font-size:11px;font-weight:700}
+.tag-new{font-size:10px;font-weight:700;fill:var(--blue)}
+.key{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink2)}
+.key i{display:inline-block;width:14px;height:10px;border-radius:2px;border:2px solid;margin-right:6px;vertical-align:-1px}
+.k-model{border-color:var(--blue)} .k-person{border-color:var(--violet)} .k-code{border-color:var(--ink2)} .k-bad{border-color:var(--crit);background:var(--crit-wash)} .k-new{border-color:var(--blue);border-style:dashed}
+ol.pins{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--ink2)}
+ol.pins li{display:flex;gap:10px}
+ol.pins .p{flex:none;width:20px;height:20px;border-radius:50%;background:var(--crit);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;margin-top:1px}
+
+/* status chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:1;padding:4px 9px 4px 7px;border-radius:999px;border:1px solid var(--ring);white-space:nowrap;color:var(--ink)}
+.chip b{font-size:13px;line-height:1}
+.c-good b{color:var(--good-text)} .c-good{background:var(--good-wash)}
+.c-warn b{color:#b07d00} .c-warn{background:var(--warn-wash)}
+.c-ser b{color:#c4562a} .c-ser{background:var(--ser-wash)}
+.c-bad b{color:var(--crit)} .c-bad{background:var(--crit-wash)}
+.c-none b{color:var(--ink2)} .c-none{background:transparent;border-style:dashed;border-color:var(--axis)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .c-warn b{color:var(--warn)} :root:not([data-theme="light"]) .c-ser b{color:var(--serious)}}
+:root[data-theme="dark"] .c-warn b{color:var(--warn)} :root[data-theme="dark"] .c-ser b{color:var(--serious)}
+
+/* fate bar */
+.bar{display:flex;gap:2px;height:34px}
+.bar div{display:flex;align-items:center;padding-left:12px;font-weight:700;font-size:14px;border-radius:0}
+.bar div:first-child{border-radius:6px 0 0 6px} .bar div:last-child{border-radius:0 6px 6px 0}
+.bar .a{background:var(--good);color:#fff} .bar .l{background:var(--crit);color:#fff}
+.barkey{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--ink2)}
+.barkey i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--grid)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:650}
+td.k{white-space:nowrap}
+tr.lost td{background:var(--crit-wash)}
+tr.lost td:first-child{box-shadow:inset 3px 0 0 var(--crit)}
+.tw{overflow-x:auto;min-width:0}
+.tw table{min-width:560px}
+
+/* slot tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tile{border:1px solid var(--ring);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--page);min-width:0}
+.tile.none{border-style:dashed;border-color:var(--axis);background:transparent}
+.tile h3{font-size:.95rem}
+.tile p{font-size:12.5px;color:var(--ink2)}
+.tile .slot{font-size:11.5px;color:var(--ink2)}
+
+/* two cards, roadmap */
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card ul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--ink2)}
+.card li b{color:var(--ink)}
+.phases{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px}
+.ph{background:var(--surface);border:1px solid var(--ring);padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ph:first-child{border-radius:8px 0 0 8px} .ph:last-child{border-radius:0 8px 8px 0}
+.ph .no{font-size:11px;letter-spacing:.08em;font-weight:700;color:var(--blue)}
+.ph p{font-size:13px;color:var(--ink2)}
+.ph.zero{border-top:3px solid var(--crit)}
+
+/* decision map */
+.plotbox{position:relative}
+.plotbox svg{display:block;width:100%;height:auto}
+.axis{stroke:var(--axis);stroke-width:1;fill:none}
+.tick{font-size:11px;fill:var(--ink2)}
+.ptlabel{font-size:12px;fill:var(--ink)}
+.zl{font-size:12px;font-weight:700;fill:var(--ink2);letter-spacing:.04em}
+.pt{cursor:pointer;outline:none}
+.pt .hit{fill:transparent}
+.pt .dot{fill:var(--blue);stroke:var(--surface);stroke-width:2}
+.pt .dia{fill:var(--ink);stroke:var(--surface);stroke-width:2}
+.pt:hover .dot,.pt:focus .dot,.pt:hover .dia,.pt:focus .dia{stroke:var(--ink);stroke-width:2}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--page);font-size:12.5px;padding:7px 10px;border-radius:6px;max-width:240px;opacity:0;transition:opacity .1s;z-index:3;line-height:1.4}
+.tip.on{opacity:1}
+details{font-size:13.5px}
+summary{cursor:pointer;color:var(--blue);font-weight:600;width:max-content}
+summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.src{font-size:12.5px;color:var(--ink2);max-width:80ch}
+
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .phases{grid-template-columns:minmax(0,1fr);gap:2px} .ph:first-child{border-radius:8px 8px 0 0} .ph:last-child{border-radius:0 0 8px 8px}}
+@media (max-width:640px){.stats,.cards{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:420px){.tiles{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Build Studio · investigation · 2026-11-05</span>
+  <h1>Clarifying Questions Audit</h1>
+  <p class="lede">Before Build Studio makes a workflow it asks the person a few questions. This page shows what it asks today, where it goes silent, and a way to decide what to ask that does not depend on someone having thought of the situation first.</p>
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><span class="n bad">8 of 15</span><span>question kinds are never asked for a recording that went through the new flow.</span></div>
+    <div class="stat" role="listitem"><span class="n">1</span><span>model call per recording. Nothing is re-checked after an answer.</span></div>
+    <div class="stat" role="listitem"><span class="n bad">7 of 12</span><span>things a finished workflow needs are not asked about at all (my reading of the code).</span></div>
+  </div>
+</header>
+
+<!-- ───── 1 ───── -->
+<section>
+  <h2>How a question gets made today</h2>
+  <p class="claim">There are two question generators, one before the compile and one after. Both are <b>catalogues</b>: a fixed list of question types, each fired by a pattern someone wrote. A situation nobody listed produces no question.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1000 330" role="img" aria-label="Flow of the two question generators. Q1 runs before the compile: recording, one understanding call, validation, question cards, person answers. Answers are stored and wait for the compile. Q2 runs after: compile, replay answers, fifteen question kinds, a filter that keeps five of them, cards. Three defects are marked.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <text class="lane" x="10" y="22">BEFORE THE COMPILE · Q1</text>
+      <text class="lane" x="10" y="212">AFTER THE COMPILE · Q2</text>
+
+      <!-- row 1 -->
+      <rect class="n" x="10" y="36" width="140" height="64" rx="8"/>
+      <text class="t" x="22" y="62">Recording</text><text class="s" x="22" y="80">events + video rows</text>
+      <rect class="n model" x="205" y="36" width="140" height="64" rx="8"/>
+      <text class="t" x="217" y="62">Understanding call</text><text class="s" x="217" y="80">1 model call · 6 effects</text>
+      <rect class="n" x="400" y="36" width="140" height="64" rx="8"/>
+      <text class="t" x="412" y="62">Validate</text><text class="s" x="412" y="80">5 checks, in code</text>
+      <rect class="n" x="595" y="36" width="140" height="64" rx="8"/>
+      <text class="t" x="607" y="62">Question cards</text><text class="s" x="607" y="80">5 open, rest queued</text>
+      <rect class="n person" x="790" y="36" width="140" height="64" rx="8"/>
+      <text class="t" x="802" y="62">Person answers</text><text class="s" x="802" y="80">choose, skip, or type</text>
+      <path class="arr" d="M150 68 H203" marker-end="url(#ah)"/><text class="lb" x="177" y="61" text-anchor="middle">rows</text>
+      <path class="arr" d="M345 68 H398" marker-end="url(#ah)"/><text class="lb" x="372" y="61" text-anchor="middle">answer</text>
+      <path class="arr" d="M540 68 H593" marker-end="url(#ah)"/><text class="lb" x="567" y="61" text-anchor="middle">kept</text>
+      <path class="arr" d="M735 68 H788" marker-end="url(#ah)"/><text class="lb" x="762" y="61" text-anchor="middle">asks</text>
+
+      <!-- down -->
+      <path class="arr" d="M860 100 V224" marker-end="url(#ah)"/>
+      <text class="lb" x="852" y="158" text-anchor="end">decisions.json</text>
+      <text class="lb" x="852" y="173" text-anchor="end">stored, nothing applied yet</text>
+
+      <!-- row 2 (right to left) -->
+      <rect class="n" x="790" y="226" width="140" height="64" rx="8"/>
+      <text class="t" x="802" y="252">Compile</text><text class="s" x="802" y="270">builds the steps</text>
+      <rect class="n" x="595" y="226" width="140" height="64" rx="8"/>
+      <text class="t" x="607" y="252">Replay answers</text><text class="s" x="607" y="270">same edits as a button</text>
+      <rect class="n" x="400" y="226" width="140" height="64" rx="8"/>
+      <text class="t" x="412" y="252">15 question kinds</text><text class="s" x="412" y="270">patterns on the document</text>
+      <rect class="n bad" x="205" y="226" width="140" height="64" rx="8"/>
+      <text class="t" x="217" y="252">Filter</text><text class="s" x="217" y="270">keeps 5 of the 15 kinds</text>
+      <rect class="n" x="10" y="226" width="140" height="64" rx="8"/>
+      <text class="t" x="22" y="252">Cards</text><text class="s" x="22" y="270">popup and confirm only</text>
+      <path class="arr" d="M790 258 H737" marker-end="url(#ah)"/><text class="lb" x="763" y="251" text-anchor="middle">steps</text>
+      <path class="arr" d="M595 258 H542" marker-end="url(#ah)"/><text class="lb" x="568" y="251" text-anchor="middle">steps</text>
+      <path class="arr bad" d="M400 258 H347" marker-end="url(#ahb)"/><text class="lb" x="373" y="251" text-anchor="middle">15 kinds</text>
+      <path class="arr bad" d="M205 258 H152" marker-end="url(#ahb)"/><text class="lb" x="178" y="251" text-anchor="middle">5 kinds</text>
+
+      <!-- pins -->
+      <g class="pin"><circle cx="345" cy="36" r="10"/><text x="345" y="40" text-anchor="middle">1</text></g>
+      <g class="pin"><circle cx="930" cy="36" r="10"/><text x="930" y="40" text-anchor="middle">2</text></g>
+      <g class="pin"><circle cx="345" cy="226" r="10"/><text x="345" y="230" text-anchor="middle">3</text></g>
+    </svg>
+    </div>
+    <div class="key">
+      <span><i class="k-model"></i>a model decides</span><span><i class="k-person"></i>a person decides</span>
+      <span><i class="k-code"></i>code</span><span><i class="k-bad"></i>defect</span>
+    </div>
+    <ol class="pins">
+      <li><span class="p">1</span><span>The model never receives what the person said in chat (the <code>chat</code> field is never passed). It sees at most 250 rows and a capped set of candidate values (8 addresses, 6 clicks, 6 typed). Anything past that is cut without a message.</span></li>
+      <li><span class="p">2</span><span>A free-text answer is kept as text and handed to the compile as context. It changes no step.</span></li>
+      <li><span class="p">3</span><span>When <code>understanding.json</code> exists, the filter drops 10 of the 15 kinds on the belief that Q1 already asked them. Q1 asked two of them.</span></li>
+    </ol>
+    <figcaption><b>Reading it:</b> answers are stored on the way down and applied by the compile step on the second row. No arrow goes back to the model, so no answer can change what else gets asked.</figcaption>
+  </figure>
+</section>
+
+<!-- ───── 2 ───── -->
+<section>
+  <h2>Eight kinds of question are switched off</h2>
+  <p class="claim">The filter in <code>compile_flow.py</code> keeps five kinds and its comment says "every gap was asked before the build". Only two of the other ten were. <b>Dropdowns, dates, optional fields, missing records, outputs and "how do we know it worked" are never asked.</b></p>
+  <figure>
+    <div>
+      <div class="bar" role="img" aria-label="Of 15 question kinds, 7 are asked somewhere and 8 are never asked."><div class="a" style="flex:7">7</div><div class="l" style="flex:8">8</div></div>
+      <div class="barkey" style="margin-top:8px"><span><i style="background:var(--good)"></i>7 asked (5 after the compile, 2 before it by Q1)</span><span><i style="background:var(--crit)"></i>8 never asked</span></div>
+    </div>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Kind</th><th>What it asks, in plain words</th><th>For a new recording</th></tr></thead>
+      <tbody>
+        <tr><td class="k"><code>fork</code></td><td>A popup wants a decision. What should happen?</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
+        <tr><td class="k"><code>fork_then</code></td><td>The popup's other choices, which the recording never took.</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
+        <tr><td class="k"><code>known_popup</code></td><td>A popup other workflows on this app met at the same step.</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
+        <tr><td class="k"><code>popup</code></td><td>A small window appeared. Close it whenever it shows?</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
+        <tr><td class="k"><code>confirm</code></td><td>This step cannot be undone. Should someone approve it first?</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
+        <tr><td class="k"><code>upload</code></td><td>Same file every time, or does the user pick one?</td><td><span class="chip c-good"><b>✓</b>Asked before, by Q1</span></td></tr>
+        <tr><td class="k"><code>chosen_values</code></td><td>Is this address or clicked item different each run?</td><td><span class="chip c-good"><b>✓</b>Asked before, by Q1</span></td></tr>
+        <tr class="lost"><td class="k"><code>values</code></td><td>Is this typed text, dropdown, radio or date different each run?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>relative_date</code></td><td>Is this date always a fixed number of days from today?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>skip_when_empty</code></td><td>If this box is left blank, skip the step?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>missing_item</code></td><td>The record may be gone. Skip, ask a person, or fail?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>output</code></td><td>Hand this value back to whoever ran the workflow?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>done_when</code></td><td>How can we tell it worked?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>dropped_value</code></td><td>You typed things that are not in the workflow. Okay?</td><td><span class="chip c-bad"><b>✕</b>Never asked</span></td></tr>
+        <tr class="lost"><td class="k"><code>coverage</code></td><td>Does the recording cover everything you said?</td><td><span class="chip c-bad"><b>✕</b>Never asked (hard-coded "ok")</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figcaption>Counted from <code>generate_questions</code> and the filter at <code>compile_flow.py:31</code> and <code>:218-233</code>. <code>test_followup</code> is built elsewhere and not counted. A recording with a date picker, a dropdown, an extracted value and an optional field can get zero questions about any of them, then be told "nothing needs deciding".</figcaption>
+  </figure>
+</section>
+
+<!-- ───── 3 ───── -->
+<section>
+  <h2>What a finished workflow needs, and what gets asked</h2>
+  <p class="claim">Fixing the filter restores old questions. It does not make the system general. A reusable, deterministic workflow has a fixed anatomy of <b>twelve slots</b>, and today's six question effects touch only some of them.</p>
+  <figure>
+    <div class="tiles">
+      <div class="tile"><h3>Consequence</h3><span class="chip c-good"><b>✓</b>Asked and applied</span><p>Confirm before an irreversible step; decision popups.</p><span class="slot">decides: approval gates</span></div>
+      <div class="tile"><h3>Variability</h3><span class="chip c-warn"><b>◐</b>Partly</span><p>Addresses, clicked labels, list picks. Not typed text or dropdowns.</p><span class="slot">decides: inputs, step values</span></div>
+      <div class="tile"><h3>Cardinality</h3><span class="chip c-warn"><b>◐</b>Partly</span><p>One of N list items is noticed. "Each of N" is not asked.</p><span class="slot">decides: loops, record binding</span></div>
+      <div class="tile"><h3>Alternatives</h3><span class="chip c-warn"><b>◐</b>Partly</span><p>Decision popups only. Other page states are not.</p><span class="slot">decides: branches</span></div>
+      <div class="tile"><h3>Failure policy</h3><span class="chip c-ser"><b>!</b>Text only</span><p>The free-text answer is stored. No step changes.</p><span class="slot">decides: stop, skip, retry, ask</span></div>
+      <div class="tile none"><h3>Input domain</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Type, format, allowed values, required or optional.</p><span class="slot">decides: input schema</span></div>
+      <div class="tile none"><h3>Provenance</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Where a value comes from: the user, a prior step, the clock.</p><span class="slot">decides: bindings, date offsets</span></div>
+      <div class="tile none"><h3>Precondition</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Which account, what must exist before the run starts.</p><span class="slot">decides: entry checks</span></div>
+      <div class="tile none"><h3>Postcondition</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>What "done" means and what is returned.</p><span class="slot">decides: assertions, outputs</span></div>
+      <div class="tile none"><h3>Environment</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Tenant, locale, timezone, plan tier.</p><span class="slot">decides: environment binding</span></div>
+      <div class="tile none"><h3>Scope</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Which recorded actions belong in this workflow.</p><span class="slot">decides: step inclusion</span></div>
+      <div class="tile none"><h3>Timing</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>What to wait for before the next step.</p><span class="slot">decides: waits, success conditions</span></div>
+    </div>
+    <figcaption>1 asked and applied, 3 partly, 1 text only, 7 not asked. The twelve slots are the proposed taxonomy, and the status of each is my judgement from reading the code for the new flow. It is not measured on real recordings.</figcaption>
+  </figure>
+</section>
+
+<!-- ───── 4 ───── -->
+<section>
+  <h2>A loop built on unknowns, not patterns</h2>
+  <p class="claim">Derive questions from the slots the finished workflow needs. Each open slot becomes an <b>unknown</b> with hypotheses, evidence and impact. A model proposes unknowns. Code decides whether each one is worth a person's attention, and every answer feeds back before the next decision.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1000 380" role="img" aria-label="Proposed loop. Evidence feeds a proposer and an auditor, both models. Their unknowns go to a scorer in code. The scorer routes each unknown to ask or confirm, assume, or defer. Ask goes to the person, assume goes to an assumptions list, defer waits for a test. A person's answer is applied and the scorer runs again. When nothing is worth asking, a readiness report is produced.">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink2)"/></marker>
+        <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <!-- evidence -->
+      <rect class="ev" x="10" y="30" width="180" height="250" rx="8"/>
+      <text class="t" x="24" y="54">Evidence</text>
+      <text class="s" x="24" y="82">task description</text>
+      <text class="s" x="24" y="104">recording rows</text>
+      <text class="s" x="24" y="126">video model's account</text>
+      <text class="s" x="24" y="148">chat</text><text class="tag-new" x="166" y="148" text-anchor="end">NEW</text>
+      <text class="s" x="24" y="170">page facts (field types)</text><text class="tag-new" x="166" y="170" text-anchor="end">NEW</text>
+      <text class="s" x="24" y="192">network facts</text><text class="tag-new" x="166" y="192" text-anchor="end">NEW</text>
+      <text class="s" x="24" y="214">past answers, app map</text><text class="tag-new" x="166" y="214" text-anchor="end">NEW</text>
+      <text class="s" x="24" y="236">sandbox replay of draft</text><text class="tag-new" x="166" y="236" text-anchor="end">NEW</text>
+      <text class="s" x="24" y="258">test and run failures</text><text class="tag-new" x="166" y="258" text-anchor="end">NEW</text>
+
+      <rect class="n model" x="235" y="85" width="150" height="86" rx="8"/>
+      <text class="t" x="249" y="110">Propose unknowns</text><text class="s" x="249" y="130">model: each with</text><text class="s" x="249" y="145">hypotheses + evidence</text>
+      <rect class="n model new" x="235" y="200" width="150" height="76" rx="8"/>
+      <text class="t" x="249" y="225">Audit</text><text class="s" x="249" y="245">premortem: how does</text><text class="s" x="249" y="260">this fail another day?</text>
+
+      <rect class="n" x="430" y="120" width="140" height="110" rx="8"/>
+      <text class="t" x="444" y="146">Score</text><text class="s" x="444" y="166">code: chance wrong</text><text class="s" x="444" y="181">× cost × runs hit,</text><text class="s" x="444" y="196">against cost of</text><text class="s" x="444" y="211">interrupting</text>
+
+      <rect class="n" x="615" y="40" width="130" height="56" rx="8"/>
+      <text class="t" x="627" y="65">Ask or confirm</text><text class="s" x="627" y="83">guess pre-selected</text>
+      <rect class="n" x="615" y="130" width="130" height="44" rx="8"/>
+      <text class="t" x="627" y="149">Assume</text><text class="s" x="627" y="165">and show it</text>
+      <rect class="n" x="615" y="200" width="130" height="44" rx="8"/>
+      <text class="t" x="627" y="219">Defer</text><text class="s" x="627" y="235">test decides</text>
+
+      <rect class="n person" x="790" y="40" width="140" height="56" rx="8"/>
+      <text class="t" x="802" y="65">Person answers</text><text class="s" x="802" y="83">one tap or a choice</text>
+      <rect class="n new" x="790" y="130" width="140" height="44" rx="8"/>
+      <text class="t" x="802" y="149">Assumptions list</text><text class="s" x="802" y="165">one click to change</text>
+      <rect class="n" x="790" y="200" width="140" height="44" rx="8"/>
+      <text class="t" x="802" y="219">Asked from the test</text><text class="s" x="802" y="235">only if it points here</text>
+
+      <rect class="n" x="790" y="310" width="140" height="50" rx="8"/>
+      <text class="t" x="802" y="333">Apply the answer</text><text class="s" x="802" y="349">existing safe edits</text>
+      <rect class="n new" x="235" y="310" width="170" height="50" rx="8"/>
+      <text class="t" x="249" y="333">Readiness report</text><text class="s" x="249" y="349">told, assumed, deferred</text>
+
+      <!-- arrows -->
+      <path class="arr" d="M190 128 H233" marker-end="url(#ah2)"/>
+      <path class="arr" d="M190 238 H233" marker-end="url(#ah2)"/>
+      <path class="arr" d="M385 128 L428 150" marker-end="url(#ah2)"/>
+      <path class="arr" d="M385 238 L428 200" marker-end="url(#ah2)"/>
+      <path class="arr" d="M570 140 L613 68" marker-end="url(#ah2)"/>
+      <path class="arr" d="M570 175 L613 152" marker-end="url(#ah2)"/>
+      <path class="arr" d="M570 210 L613 222" marker-end="url(#ah2)"/>
+      <path class="arr" d="M745 68 H788" marker-end="url(#ah2)"/>
+      <path class="arr" d="M745 152 H788" marker-end="url(#ah2)"/>
+      <path class="arr" d="M745 222 H788" marker-end="url(#ah2)"/>
+      <path class="arr" d="M930 68 H960 V335 H932" marker-end="url(#ah2)"/>
+      <path class="arr loop" d="M788 335 H540 V232" marker-end="url(#ahl)"/>
+      <text class="lb" x="664" y="326" text-anchor="middle" style="fill:var(--blue)">re-evaluate after every answer</text>
+      <path class="arr" d="M450 232 V335 H407" marker-end="url(#ah2)"/>
+      <text class="lb" x="444" y="300" text-anchor="end">stop</text>
+
+      <text class="s" x="560" y="268">Safety floor: irreversible steps and</text>
+      <text class="s" x="560" y="283">decision popups always go to Ask,</text>
+      <text class="s" x="560" y="298">with no guess filled in.</text>
+    </svg>
+    </div>
+    <div class="key">
+      <span><i class="k-model"></i>a model proposes</span><span><i class="k-person"></i>a person answers</span>
+      <span><i class="k-code"></i>code decides</span><span><i class="k-new"></i>new, not built today</span>
+    </div>
+    <figcaption><b>Why the loop matters:</b> an answer can unlock new unknowns ("this value varies" opens its format and its empty case), retire others, or contradict earlier evidence. Today none of that happens. The loop stops when every required slot is told, inferred above its threshold, or deferred to a named test, and the best remaining question is worth less than the interruption.</figcaption>
+  </figure>
+</section>
+
+<!-- ───── 5 ───── -->
+<section>
+  <h2>Deciding whether to ask</h2>
+  <p class="claim">Ask when a wrong guess is likely and expensive. Otherwise assume and show it, confirm with a default, or leave it for the test. <b>Safety cases skip the formula</b> and always ask.</p>
+  <figure>
+    <div class="plotbox" id="plotbox">
+      <svg id="map" viewBox="0 0 660 440" role="img" aria-label="Decision map. Horizontal axis is the chance the best guess is wrong, from 0 to 100 percent. Vertical axis is the cost of a wrong guess times the runs it touches, from low to high. Four zones from bottom left to top right: assume, assume and show, confirm, ask. Six example unknowns are placed; two are safety cases that always ask."></svg>
+      <div class="tip" id="tip" role="status"></div>
+    </div>
+    <div class="key">
+      <span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" style="fill:var(--blue)"/></svg> unknown, action from the formula</span>
+      <span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><polygon points="7,1 13,7 7,13 1,7" style="fill:var(--ink)"/></svg> safety case, always asks</span>
+    </div>
+    <figcaption>Zone edges are curves where chance wrong × cost = 0.08, 0.2 and 0.4. These are starting values to tune against real answers. Placement of the six examples is illustrative judgement, not measured. The two diamonds sit in cheap zones on purpose: the formula alone would not ask, and the safety floor overrides it.</figcaption>
+    <details>
+      <summary>Table view</summary>
+      <div class="tw" style="margin-top:8px"><table id="maptable"></table></div>
+    </details>
+  </figure>
+</section>
+
+<!-- ───── 6 ───── -->
+<section>
+  <h2>How to know it is working</h2>
+  <p class="claim">Today the eval script counts how often the validator dropped something and says it "judges nothing". These measure whether the questions were useful and whether needed ones were missing.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Too many questions?</h3>
+      <ul>
+        <li><b>Vacuity rate.</b> Share of questions where every choice produces the same edits.</li>
+        <li><b>Guess accuracy.</b> Pre-selected choice against the final answer, grouped by stated confidence.</li>
+        <li><b>Skip and abandon rate</b> per question kind.</li>
+        <li><b>Questions per workflow</b> against steps and inputs.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Anything missed?</h3>
+      <ul>
+        <li><b>Slot recall</b> against recordings labelled with the slots a correct workflow needs.</li>
+        <li><b>Miss rate.</b> Edits and failed tests that a question could have prevented.</li>
+        <li><b>Escape rate.</b> Customer-run failures traced to a slot nobody settled.</li>
+        <li><b>Silent cuts.</b> Rows and candidates dropped by a cap, counted and shown.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ───── 7 ───── -->
+<section>
+  <h2>Order of work</h2>
+  <div class="phases">
+    <div class="ph zero"><span class="no">PHASE 0</span><h3>Fix defects</h3><p>Pass chat in. Keep notes without a task description. Re-open the eight dropped kinds. Count silent cuts.</p></div>
+    <div class="ph"><span class="no">PHASE 1</span><h3>One ledger</h3><p>Express today's kinds as unknowns. Add the vacuity check and slot-keyed dedupe.</p></div>
+    <div class="ph"><span class="no">PHASE 2</span><h3>Decide by value</h3><p>Scoring, assume and defer, the assumptions list, the readiness report.</p></div>
+    <div class="ph"><span class="no">PHASE 3</span><h3>Close the loop</h3><p>Re-evaluate after answers, auditor pass, answer memory, sandbox replay as evidence.</p></div>
+    <div class="ph"><span class="no">PHASE 4</span><h3>Measure</h3><p>Gold-slot corpus, selection fixtures, miss log wired to test and run failures.</p></div>
+  </div>
+  <p class="claim"><b>Decisions needed:</b> whether the filter was intended or drift. How many interruptions are acceptable. Whether a sandbox replay before asking is allowed, since it touches the rule that testing waits for answers. Who labels the gold recordings.</p>
+</section>
+
+<p class="src">Source: full report in <code>docs/reports/Clarifying-Questions-Architecture-Investigation.md</code>. Read from code on branch <code>fix/audit-2026-11-05</code>; nothing here was run on real recordings. Not read: the old coverage check, <code>plan_answer</code>, the question-rewording code, the renderer cards.</p>
+</div>
+
+<script>
+(function(){
+var NS='http://www.w3.org/2000/svg';
+function el(n,a,t){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;return e}
+
+/* decision map: p = chance the best guess is wrong, c = cost of a wrong guess x runs it touches (0..1) */
+var X0=70,X1=630,Y0=380,Y1=20,W=X1-X0,H=Y0-Y1;
+var CUTS=[0.08,0.2,0.4], ZONES=['Assume','Assume and show','Confirm','Ask'];
+function zone(p,c){var v=p*c;return v<CUTS[0]?0:v<CUTS[1]?1:v<CUTS[2]?2:3}
+var PTS=[
+ {n:'Typed invoice number',  p:.15,c:.35,side:'r',note:'The task names no number, so it varies.'},
+ {n:'Date: always +7 days?', p:.50,c:.30,side:'r',note:'Probably relative, cheap to change later.'},
+ {n:'Which row to open',     p:.45,c:.65,side:'r',note:'Picks one record out of a list.'},
+ {n:'Empty search result',   p:.70,c:.75,side:'r',note:'The recording never saw this state.'},
+ {n:'Delete this record',    p:.20,c:.95,side:'r',floor:true,note:'Cannot be undone.'},
+ {n:'Replace / Keep popup',  p:.30,c:.60,side:'l',floor:true,note:'A popup asking for a decision.'}
+];
+var svg=document.getElementById('map');
+function px(p){return X0+p*W} function py(c){return Y0-c*H}
+function region(cut){ // area where p*c < cut
+  var d='M'+px(0)+' '+py(0)+' L'+px(1)+' '+py(0)+' L'+px(1)+' '+py(cut), i, x;
+  for(i=1;i<=48;i++){x=1-(1-cut)*i/48;d+=' L'+px(x)+' '+py(cut/x)}
+  return d+' L'+px(0)+' '+py(1)+' Z';
+}
+svg.appendChild(el('rect',{x:X0,y:Y1,width:W,height:H,style:'fill:var(--z4)'}));
+['--z3','--z2','--z1'].forEach(function(v,i){svg.appendChild(el('path',{d:region(CUTS[2-i]),style:'fill:var('+v+')'}))});
+svg.appendChild(el('path',{d:'M'+X0+' '+Y1+' V'+Y0+' H'+X1,'class':'axis'}));
+[0,.25,.5,.75,1].forEach(function(t){
+  svg.appendChild(el('line',{x1:px(t),y1:Y0,x2:px(t),y2:Y0+5,'class':'axis'}));
+  svg.appendChild(el('text',{x:px(t),y:Y0+20,'text-anchor':'middle','class':'tick'},Math.round(t*100)+'%'));
+});
+svg.appendChild(el('text',{x:X0+W/2,y:Y0+42,'text-anchor':'middle','class':'tick'},'Chance our best guess is wrong'));
+svg.appendChild(el('text',{x:X0-10,y:Y1+8,'text-anchor':'end','class':'tick'},'high'));
+svg.appendChild(el('text',{x:X0-10,y:Y0,'text-anchor':'end','class':'tick'},'low'));
+var yl=el('text',{x:0,y:0,'text-anchor':'middle','class':'tick',transform:'translate(18 '+(Y1+H/2)+') rotate(-90)'},'Cost of a wrong guess × runs it touches');
+svg.appendChild(yl);
+[[.14,.14,'start',0],[.60,.17,'middle',1],[.90,.33,'end',2],[.52,.95,'middle',3]].forEach(function(z){
+  svg.appendChild(el('text',{x:px(z[0]),y:py(z[1]),'text-anchor':z[2],'class':'zl'},ZONES[z[3]].toUpperCase()));
+});
+var tip=document.getElementById('tip'),box=document.getElementById('plotbox');
+function action(pt){return pt.floor?'Ask (safety floor)':ZONES[zone(pt.p,pt.c)]}
+function show(pt,g){
+  var r=g.getBoundingClientRect(),b=box.getBoundingClientRect();
+  tip.innerHTML='<b>'+pt.n+'</b><br>'+pt.note+'<br>Wrong: '+Math.round(pt.p*100)+'% · Action: '+action(pt);
+  tip.style.left=Math.min(Math.max(8,r.left-b.left+r.width/2-110),b.width-250)+'px';
+  tip.style.top=(r.top-b.top-tip.offsetHeight-10<0?r.bottom-b.top+8:r.top-b.top-tip.offsetHeight-10)+'px';
+  tip.classList.add('on');
+}
+PTS.forEach(function(pt){
+  var x=px(pt.p),y=py(pt.c);
+  var g=el('g',{'class':'pt',tabindex:'0',role:'img','aria-label':pt.n+'. Chance wrong '+Math.round(pt.p*100)+' percent. Action: '+action(pt)});
+  g.appendChild(el('circle',{cx:x,cy:y,r:16,'class':'hit'}));
+  if(pt.floor)g.appendChild(el('polygon',{points:[x,y-8,x+8,y,x,y+8,x-8,y].join(' '),'class':'dia'}));
+  else g.appendChild(el('circle',{cx:x,cy:y,r:6,'class':'dot'}));
+  g.appendChild(el('text',{x:x+(pt.side==='l'?-13:13),y:y+4,'text-anchor':pt.side==='l'?'end':'start','class':'ptlabel'},pt.n));
+  g.addEventListener('mouseenter',function(){show(pt,g)});g.addEventListener('focus',function(){show(pt,g)});
+  g.addEventListener('mouseleave',function(){tip.classList.remove('on')});g.addEventListener('blur',function(){tip.classList.remove('on')});
+  svg.appendChild(g);
+});
+var t=document.getElementById('maptable');
+t.innerHTML='<thead><tr><th>Unknown</th><th>Chance wrong</th><th>Cost × runs</th><th>Action</th></tr></thead><tbody>'+
+ PTS.map(function(p){return '<tr><td>'+p.n+'</td><td>'+Math.round(p.p*100)+'%</td><td>'+(p.c>=.7?'high':p.c>=.4?'medium':'low')+'</td><td>'+action(p)+'</td></tr>'}).join('')+'</tbody>';
+})();
+</script>

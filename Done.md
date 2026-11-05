@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 37 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57 |
+| BUILD — Build Studio | 38 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **98** | |
+| **Total** | **99** | |
 
 ---
 
@@ -738,6 +738,10 @@ inferred from `outer_html`, not read directly.
 **Resolved:** 2026-10-25
 - **Resolution:** the packager now ships `pattern` in `inputs.json`; `server.js` refuses a non-matching value by input name before any step (`interpolate.js::inputsFailingPattern`) and forwards `pattern` in the tool schema.
 
+### BUILD-65 — Clarifying questions: one ledger of unknowns, decided by value, re-evaluated, measured (phases 0-4)
+**Resolved:** 2026-11-06 (behind settings; see `TODO.md` BUILD-65 for what is left)
+- **Category:** Builder
+- **Resolution:** Phase 0: eight question kinds the understanding-first path had silently switched off are asked again (two passes so replay still matches), chat reaches the understanding call, typed "stays as recorded" verdicts untick `values` by event id, cuts are counted and said. Phase 1: `unknowns.py` / `question_plan.py` give every question a facet and an event-id slot; vacuity and slot dedupe (`SKILL_CLARIFY_LEDGER`, report first); `clarify.json["ledger"]`. Phase 2: `scoring.py` (ask / confirm / assume / assume-and-show / defer, safety floor, shadow mode), assumptions in the summary card, deferred questions woken by a failing test. Phase 3: re-evaluation after an answer, notes handed to the chat, dropdown / radio / date asked before the build, second-read audit (`clarify_audit`), per-app answer memory, coverage question back. Phase 4: `clarify_events.jsonl`, `scripts/eval_clarify.py`, gold and selection fixtures.
 
 ## EXEC — Execution & Recovery (28 done)
 

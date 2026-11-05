@@ -1147,6 +1147,12 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Suggested fix:** (1) capture script that copies a finished Studio recording (`merged_timeline.json`, `understanding.json`, `decisions.json`) into a fixtures folder plus a hand-written expected file; scorer for verdicts, question set and goal. (2) per-task pool override in `compile_pool_for` / the proxy, off by default. (3) per-provider capability flag before sending `json_schema`.
 - **Complexity:** M (1), S (2), M (3).
 
+### BUILD-65 — Clarifying questions: what is left after phases 0-4 (2026-11-06)
+- **Category:** Builder
+- **Description:** Phases 0-4 of `docs/reports/Clarifying-Questions-Architecture-Investigation.md` shipped (see `Done.md`, BUILD-65). Everything new is behind a setting and defaults to "report" or "off", so nothing changes for a person until the numbers say so.
+- **Open:** (1) Review real `clarify_events.jsonl` / `ledger_report` with `scripts/eval_clarify.py rates`, then flip `SKILL_CLARIFY_LEDGER=enforce`, `SKILL_CLARIFY_SCORING=shadow` -> `on`, `SKILL_CLARIFY_AUDIT=shadow` -> `on`; none has run on a real recording yet. (2) Replace the synthetic `tests/fixtures/clarify_gold/` cases with real recordings labelled with the slots a correct workflow needs. (3) Contradiction check: an answer ("fixed") against what the task text says varies. (4) `mark_stale` does not clear `ledger` entries when steps are re-recorded (nothing reads them yet). (5) Sandbox replay of the draft as evidence (spike; interacts with "testing waits for answers", needs a decision). (6) The renderer "Left as the compiler had it" block (`CompileClarifyCards.tsx`) type-checks but was not looked at in the running app. (7) `docs/artifacts/conxa-workflow-engine/` still shows the old two-generator picture.
+- **Complexity:** M.
+
 ### BUILD-64 — Count what the other model guards drop (follow-up to the understanding-check ledger, 2026-11-05)
 - **Category:** Builder
 - **Description:** `conversation/timeline_understanding.py::validate()` now counts every drop under a stage and rule (`validation_report` in `understanding.json`), grades the answer and retries a weak one once. The other model guards still drop silently: `llm/workflow_semantics.py::_validate_findings`, `conversation/clarify.py::apply_reworded`, `llm/workflow_intent.py::_graph_from_raw`, `conversation/harness.py::map_free_text_to_choice` and the post-compile `conversation/understanding.py::validate`. The workflow graph artifact marks each as "Not counted".

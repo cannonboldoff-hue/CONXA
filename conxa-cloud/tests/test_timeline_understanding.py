@@ -591,3 +591,87 @@ def test_review_context_reads_the_understanding_and_the_persons_answer_wins(tmp_
     assert ctx["summary_by_event"] == {"3": "Types the invoice number."}      # a row the timeline does not have is dropped
     assert ctx["settled"] == [{"literal": "INV-20931", "verdict": "varies"}]  # the person's answer beat the model; "unsure" is not settled
     assert ctx["decided"] == ["Same page each run."]
+
+
+# ── Phase 0: what the caps hid is counted ───────────────────────────────────────────────────
+
+
+def test_candidates_past_a_bucket_cap_are_counted_and_reach_the_saved_understanding():
+    rows = [{"kind": "event", "row_ref": f"r{i}", "event_id": i, "action": "click", "target": f"Item number {i}"} for i in range(1, 10)]
+    cuts: dict[str, int] = {}
+    assert len(TU.candidates_from_timeline(rows, cuts)) == TU.MAX_CLICK_CANDIDATES and cuts == {"click": 3}
+    out = TU.understand_timeline(rows, "x", call=lambda t, p, ms: None)
+    assert out["limits"] == {"candidates": {"click": 3}}
+    assert "limits" not in TU.understand_timeline(rows[:2], "x", call=lambda t, p, ms: None)
+
+
+# ── Phase 3: a dropdown / radio / date is asked before the build ────────────────────────────
+
+
+def _control_timeline():
+    return [{"kind": "event", "row_ref": "r1", "event_id": 5, "action": "select", "target": "Country", "value": "de",
+             "control": {"kind": "choice", "recorded": "Germany"}}]
+
+
+def test_a_dropdown_becomes_a_control_candidate_named_by_its_label_not_its_value():
+    cands = TU.candidates_from_timeline(_control_timeline())
+    assert [(c["kind"], c["recorded"], c["event_ids"]) for c in cands] == [("control", "Germany", [5])]
+
+
+def test_a_control_the_model_calls_varies_needs_no_question_and_one_it_calls_fixed_is_asked_unticked_by_code():
+    merged = _control_timeline()
+    varies = TU.understand_timeline(merged, "x", call=lambda t, p, ms: {"goal": "g", "short_summary": "s",
+                                    "values": [{"ref": "control:5", "verdict": "varies", "name": "country"}], "questions": []})
+    assert TU.questions_from_understanding(varies, merged) == []                  # the compiler already made it an input
+    fixed = TU.understand_timeline(merged, "x", call=lambda t, p, ms: {"goal": "g", "short_summary": "s",
+                                   "values": [{"ref": "control:5", "verdict": "fixed"}], "questions": []})
+    qs = TU.questions_from_understanding(fixed, merged)
+    assert [(q["kind"], q["best_guess"]) for q in qs] == [("value", "fixed")]       # pinning it is the person's call
+    assert qs[0]["items"][0]["kind"] == "control"
+
+
+# ── Phase 3: the second read ────────────────────────────────────────────────────────────────
+
+
+def _audit_call(items):
+    def call(task, payload, ms):
+        return {"questions": items} if task == "clarify_audit" else raw_answer(questions=[])
+    return call
+
+
+def test_the_second_read_is_off_by_default_shadow_saves_and_on_asks_at_most_two(monkeypatch):
+    from conxa_core.config import settings
+
+    good = [{"row": "r4", "facet": "alternatives", "prompt": "What should happen if no invoice matches?", "why": "The recording only shows a match.",
+             "choices": [{"label": "Stop and report it"}, {"label": "Skip it and finish"}]}]
+    calls = []
+
+    def call(task, payload, ms):
+        calls.append(task)
+        return {"questions": good} if task == "clarify_audit" else raw_answer(questions=[])
+
+    monkeypatch.setattr(settings, "clarify_audit", "off")
+    off = TU.understand_timeline(MERGED, "download invoices", call=call)
+    assert "audit" not in off and calls == ["timeline_understanding"]
+    monkeypatch.setattr(settings, "clarify_audit", "shadow")
+    shadow = TU.understand_timeline(MERGED, "download invoices", call=call)
+    assert [q["facet"] for q in shadow["audit"]["questions"]] == ["alternatives"] and shadow["questions"] == off["questions"]
+    monkeypatch.setattr(settings, "clarify_audit", "on")
+    on = TU.understand_timeline(MERGED, "download invoices", call=call)
+    note = next(q for q in on["questions"] if q["kind"] == "note")
+    assert note["facet"] == "alternatives" and note["best_guess"] == "" and [c["label"] for c in note["choices"]] == ["Stop and report it", "Skip it and finish"]
+
+
+def test_the_second_read_drops_what_cannot_be_acted_on_and_counts_it(monkeypatch):
+    from conxa_core.config import settings
+
+    monkeypatch.setattr(settings, "clarify_audit", "shadow")
+    items = [{"row": "r4", "facet": "made_up", "prompt": "p", "choices": [{"label": "a"}, {"label": "b"}]},
+             {"row": "r999", "facet": "scope", "prompt": "p", "choices": [{"label": "a"}, {"label": "b"}]},
+             {"row": "r4", "facet": "scope", "prompt": "Open https://x.test/a?", "choices": [{"label": "a"}, {"label": "b"}]},
+             {"row": "r4", "facet": "scope", "prompt": "Only one choice?", "choices": [{"label": "a"}]},
+             "not a dict"]
+    out = TU.understand_timeline(MERGED, "download invoices", call=_audit_call(items))
+    report = out["audit"]["validation_report"]
+    assert out["audit"]["questions"] == []
+    assert {"unknown_facet", "audit_selector_like", "malformed_item"} <= {r for stage in report.values() for r in stage}

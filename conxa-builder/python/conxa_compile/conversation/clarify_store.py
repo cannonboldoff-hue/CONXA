@@ -152,6 +152,34 @@ def mark_stale(workflow_id: str, live_keys: set[str]) -> int:
     return count[0]
 
 
+def ledger_set(workflow_id: str, question: dict[str, Any], status: str, choice: Any = None) -> None:
+    """Remember which slot an answered/skipped question settled (``clarify.json["ledger"]``, keyed by slot).
+    Kept apart from ``questions`` on purpose: the pencil reopens questions and the compile replaces that list,
+    but what was settled before the build must still be known after it. Nothing reads it yet but the report."""
+    slot = (question.get("unknown") or {}).get("slot")
+    if not slot:
+        return
+
+    def edit(data: dict[str, Any]) -> None:
+        data.setdefault("ledger", {})[slot] = {
+            "qid": question.get("id"), "kind": question.get("kind"), "facet": question["unknown"].get("facet"),
+            "phase": question.get("phase") or "post_compile", "status": status,
+            **({"choice": choice} if choice is not None else {}),
+        }
+
+    mutate(workflow_id, edit)
+
+
+def ledger_drop(workflow_id: str, qids: set[str]) -> None:
+    """Forget the slots these questions settled (the pencil reopened them)."""
+    def edit(data: dict[str, Any]) -> None:
+        ledger = data.get("ledger") or {}
+        for slot in [s for s, v in ledger.items() if v.get("qid") in qids]:
+            del ledger[slot]
+
+    mutate(workflow_id, edit)
+
+
 def next_open(workflow_id: str) -> dict[str, Any] | None:
     for q in (load(workflow_id) or {}).get("questions") or []:
         if isinstance(q, dict) and q.get("status") == "open":

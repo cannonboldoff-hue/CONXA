@@ -376,6 +376,19 @@ class TestFlowMixin:
             from conxa_core.storage.json_store import read_skill
             from conxa_core.storage.workflow_store import get_workflow
 
+            # A question left for the test (scoring said a failing test would point at it) is asked now.
+            woke: list[str] = []
+
+            def wake(data: dict[str, Any]) -> None:
+                for dq in data.get("questions") or []:
+                    if isinstance(dq, dict) and dq.get("status") == "deferred" and step_key in (dq.get("step_keys") or []):
+                        dq["status"] = "open"
+                        woke.append(dq["id"])
+
+            clarify_store.mutate(workflow_id, wake)
+            if woke:
+                self._flow_post_next_question(workflow_id, sink)
+                return
             workflow = get_workflow(workflow_id)
             doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
             q = clarify.test_followup_question(doc, step_key, inputs) if doc else None
@@ -443,6 +456,9 @@ class TestFlowMixin:
             failure_image=self._tf_failure_image(workflow_id), actions=[],
         )
         if failing is not None and failing.get("step_key"):
+            from conxa_compile.conversation import clarify_events
+
+            clarify_events.log(workflow_id, "test_failed", step_key=failing["step_key"])
             self._tf_followup(workflow_id, failing["step_key"], inputs or {}, sink)
         return "failed"
 

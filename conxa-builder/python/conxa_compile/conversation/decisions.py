@@ -42,12 +42,14 @@ def decision_from_answer(question: dict[str, Any], answer: dict[str, Any] | None
     if answer.get("choice"):
         decision["choice"] = str(answer["choice"])
     if question["kind"] == "value":
-        # Only "different every time" changes anything; "always this one" leaves the recording as it is.
-        picked = answer.get("choice") == "varies"
+        # For an address or a clicked item only "different every time" changes anything; "always this one"
+        # leaves the recording as it is. A dropdown / radio / date is already an input, so for it only
+        # "always this one" changes anything.
+        choice = answer.get("choice")
         decision["values"] = [
             {"ref": i["ref"], "name": i["name"], "literal": i["literal"], "kind": i.get("kind", ""),
              "event_ids": i.get("event_ids") or []}
-            for i in question.get("items") or [] if picked
+            for i in question.get("items") or [] if choice == ("fixed" if i.get("kind") == "control" else "varies")
         ]
     if question["kind"] == "note" and decision.get("choice"):
         label = next((c["label"] for c in question.get("choices") or [] if c.get("id") == decision["choice"]), "")

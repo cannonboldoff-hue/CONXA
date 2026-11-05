@@ -81,3 +81,35 @@ Before, a popup nobody had recorded was either ignored until the next click brok
 **You can now answer a popup question by naming the button, and say a popup always shows up — 2026-11-05**
 When a recording showed a popup with several buttons, the question used to offer only vague choices such as "stop" or "let someone decide". Now it lists the popup's own buttons, so you can say "always click Keep both" before the workflow is even built. After building, you can also say the popup shows up every time, and the workflow then treats that click as a normal step and stops if the popup is missing.
 — 2026-11-05
+
+**Wrote a report on why the tool's questions can miss things, and what a sturdier design would look like — 2026-11-05**
+Before it builds a workflow, the tool asks the person a few questions, but it only asks about things someone already thought of, like a checklist that cannot grow. The report shows where that leaves gaps, including one spot where a whole group of questions is switched off by mistake for new recordings. It then lays out a plan so the tool works out what it still needs to know, asks only what is worth interrupting someone for, and knows when to stop. No product behaviour changed; this is a written investigation only.
+— 2026-11-05
+
+**Turned the questions report into a visual page with diagrams — 2026-11-05**
+The written report on why the tool's questions miss things is now also a picture-led page. It shows the flow of today's questions, a table of the eight question types that never get asked, a map of what a finished workflow needs, and a diagram of the proposed way to decide what to ask. The report's counts were also corrected to match: 15 question types, 8 of them never asked.
+— 2026-11-05
+
+**Drew a side-by-side of today's engine and a sturdier one — 2026-11-05**
+The tool's workflow engine is careful while a workflow is being built, but nothing the customer's runs learn ever flows back, and most of its checks on the AI's answers leave no record. The new page draws today's engine next to a proposed one with six changes: a single checker for every AI answer, a video step that waits and retries, one place to define each kind of action, a way to hand a fuzzy step to an agent, a loop that turns trouble spots into fixes, and a staged release. Nothing in the product changed; this is a proposal.
+— 2026-11-05
+
+**The tool now asks the questions it used to skip after building a workflow — 2026-11-05**
+After a recording was watched by the AI first, eight kinds of question were quietly switched off, for example whether a date or a dropdown changes each time, or what to do when a record is missing. They are asked again now, and a typed value you already said stays as recorded is no longer pre-ticked as changing. The AI is also told what you typed in the chat, and when a long recording is cut short the tool now says so instead of staying silent.
+— 2026-11-05
+
+**The tool now works out which questions are worth asking, and measures whether it asked the right ones — 2026-11-06**
+Every question the tool asks now says what it is really about, so the same thing is never asked twice and a question whose answers change nothing is dropped. Cheap questions that the tool's default already handles can be left as they are and listed in the summary, while a popup or a step that cannot be undone always asks. After an answer changes the workflow, any new question that change makes possible is asked right away, and dropdowns and dates are asked before building. The tool also keeps a private log of how questions went, so we can see which are skipped, which guesses are wrong, and what it failed to ask. All of this starts switched off or in "report only" mode, so nothing changes for anyone until the numbers look good.
+— 2026-11-06
+
+**Added a visual guide to how the Studio chat assistant works — 2026-11-06**
+There was no single place that showed what happens after you type a message in the chat next to a workflow. A new page now walks through it with diagrams: which messages are handled without any AI, when the AI is asked, how suggested edits are checked before you see them, and how many AI calls each kind of message costs. It is like a subway map for the chat, so a new teammate can see every stop and who decides at each one.
+— 2026-11-06
+
+**Made the engine redesign proposal deeper and corrected it against the code — 2026-11-06**
+The page proposing six improvements to the engine was a high-level sketch. It now has a detailed section for each improvement: what happens today, what new information it would store, the order things would run in, what could go wrong, and how to build and test it. Checking it line by line against the real product showed four claims were wrong, such as saying the video step never retries when it actually retries for ten minutes. Those are now marked as corrections, and three of the six improvements turned out smaller than first estimated.
+— 2026-11-06
+
+**Opened up the "how the engine works today" map one level deeper — 2026-11-06**
+The redesign page had a map of the engine with one box per stage, which hid what really happens inside each stage. A second, larger map now opens every stage into the steps it runs, colours each step by who does it (the product, an AI model, a person, the video service), and shows what each stage hands to the next. The six known weak spots now sit on the exact step where each one lives, with a table pointing to the proof.
+— 2026-11-06

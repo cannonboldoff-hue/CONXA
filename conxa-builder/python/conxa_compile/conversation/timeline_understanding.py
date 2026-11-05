@@ -39,6 +39,10 @@ VALUE_CHARS = 160                 # how much of a typed value a row carries
 MAX_QUESTIONS = 5                 # shown at once; the rest are queued under "More questions"
 MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
+MAX_CONTROL_CANDIDATES = 6
+# A dropdown, radio or date the person set. The compiler already makes each an input, so "different every time" is
+# its default; the question is whether the exact option is the point of the task.
+CONTROL_ACTIONS = ("select", "select_option", "set_radio", "date_pick")
 MAX_URL_CANDIDATES = 8
 MAX_DECIDED = 8
 # An answer is graded ``ok`` / ``weak`` / ``unusable`` by code. ``weak`` is asked for once more (the one retry).
@@ -50,7 +54,7 @@ WEAK_MIN_CANDIDATES = 2           # fewer candidates than this: coverage says no
 IN_SET_MIN_PEERS = 3
 _NAME_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _VERDICTS = ("fixed", "varies", "unsure")
-_FALLBACK_NAME = {"url": "page_address", "click": "item", "typed": "value"}
+_FALLBACK_NAME = {"url": "page_address", "click": "item", "typed": "value", "control": "choice"}
 
 # One row per question effect: what a question's answer can do. The ids are code's (an answer maps to an
 # edit by id); the model writes the sentence and the labels. ``note`` changes nothing: its answer rides
@@ -152,6 +156,12 @@ def _caused_by_action(row: dict[str, Any]) -> bool:
     return isinstance(data, dict) and data.get("cause") == "action"
 
 
+def _control_label(row: dict[str, Any]) -> str:
+    """What the person set a dropdown / radio / date to, as they would read it (the option's label, not its value)."""
+    shown = str((row.get("control") or {}).get("recorded") or row.get("value") or "").strip()
+    return "" if shown in ("", "{{REDACTED}}") or shown.startswith("[") else shown[:200]
+
+
 def _short_label(cand: dict[str, Any]) -> str:
     """What a question names the value by: a page address by its last part (the file or record),
     anything else cut at a word, never mid-word."""
@@ -167,13 +177,14 @@ def _events(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in merged if r.get("kind") == "event"]
 
 
-def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] | None = None) -> list[dict[str, Any]]:
     """Recorded values that may be specific to this recording: page addresses, clicked items known
-    only by their label, and text typed into a field. ``{ref, kind, event_ids, row_refs, recorded, literal}``."""
+    only by their label, and text typed into a field. ``{ref, kind, event_ids, row_refs, recorded, literal}``.
+    ``cuts`` (out-param) counts, per bucket, the distinct values left out because the bucket was full."""
     groups: dict[tuple[str, str], dict[str, Any]] = {}
-    counts = {"url": 0, "click": 0, "typed": 0, "click_set": 0}
+    counts = {"url": 0, "click": 0, "typed": 0, "click_set": 0, "control": 0}
     caps = {"url": MAX_URL_CANDIDATES, "click": MAX_CLICK_CANDIDATES, "typed": MAX_TYPED_CANDIDATES,
-            "click_set": MAX_CLICK_CANDIDATES}
+            "click_set": MAX_CLICK_CANDIDATES, "control": MAX_CONTROL_CANDIDATES}
     for row in _events(merged):
         action = row.get("action")
         if action in ("navigate", "manual_navigate"):
@@ -185,6 +196,8 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
             kind, recorded, literal = "click", row["target"], row["target"]
         elif action in ("type", "fill") and str(row.get("value") or "").strip() not in ("", "{{REDACTED}}"):
             kind, recorded, literal = "typed", str(row["value"]), str(row["value"]).strip()
+        elif action in CONTROL_ACTIONS and (shown := _control_label(row)):
+            kind, recorded, literal = "control", shown, shown
         else:
             kind = None
         if kind is None:
@@ -196,6 +209,8 @@ def candidates_from_timeline(merged: list[dict[str, Any]]) -> list[dict[str, Any
             # must not crowd out the one click that chose the item.
             bucket = "click_set" if in_set else kind
             if counts[bucket] >= caps[bucket]:
+                if cuts is not None:
+                    cuts[bucket] = cuts.get(bucket, 0) + 1
                 continue
             counts[bucket] += 1
             groups[key] = {"ref": f"{kind}:{row.get('event_id')}", "kind": kind, "event_ids": [], "row_refs": [],
@@ -358,6 +373,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
                 "url": r.get("url") if r.get("url") != prev_url else None,
                 "title": scrub_email(r["title"]) if r.get("title") and r.get("title") != prev_title else None,
                 "seen": seen, "dialog": r.get("dialog") or None, "peers": r.get("peers") or None,
+                "control": (r.get("control") or {}).get("kind") or None,
                 "buttons": r.get("dialog_buttons") or None,
                 "said": [f"{i.get('kind')}: {_words(i.get('words'))}" for i in (r.get("said") or [])[:3]
                          if isinstance(i, dict) and i.get("words")] or None,
@@ -487,7 +503,7 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             if cand["kind"] == "typed":      # typed text is already an input once compiled
                 _log(report, "override", "typed_value_question", ref)
                 continue
-            if ref not in values or values[ref]["verdict"] == "fixed":
+            if ref not in values or (values[ref]["verdict"] == "fixed" and cand["kind"] != "control"):
                 if ref in values:
                     _log(report, "override", "fixed_but_asked", ref)      # the model asked about what it called fixed
                 values[ref] = {"verdict": "unsure", "literal": cand["literal"],
@@ -651,10 +667,15 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     have = {q.get("ref") for q in questions}
     for ref, v in values.items():
         cand = by_ref[ref]
-        if v["verdict"] == "fixed" or cand["kind"] == "typed" or ref in have:
+        if cand["kind"] == "typed" or ref in have:
+            continue
+        # A control is already an input, so "varies" needs no question; "fixed" would pin it, which only the person decides.
+        if (v["verdict"] == "varies") if cand["kind"] == "control" else (v["verdict"] == "fixed"):
             continue
         _log(report, "backfill", "value_question_added", ref)
-        questions.append(_value_question(cand, rows[cand["row_refs"][0]], "varies" if v["verdict"] == "varies" else ""))
+        if not v.get("name"):                  # a "fixed" control is asked, and a question is keyed by the input's name
+            v["name"] = _unique_name("", taken, _FALLBACK_NAME[cand["kind"]])
+        questions.append(_value_question(cand, rows[cand["row_refs"][0]], v["verdict"] if v["verdict"] in ("varies", "fixed") else ""))
     questions = _dedupe(questions, rows, report)
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
@@ -818,7 +839,8 @@ def understand_timeline(
     or added, by stage) and ``prompt_version``. Never raises."""
     from conxa_core.llm.client import TIMELINE_UNDERSTANDING_PROMPT_VERSION  # noqa: PLC0415 -- pulls in settings
 
-    candidates = candidates_from_timeline(merged)
+    cuts: dict[str, int] = {}
+    candidates = candidates_from_timeline(merged, cuts)
     result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "values": {},
                               "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
@@ -829,6 +851,11 @@ def understand_timeline(
     if payload.get("rows_omitted"):
         result["rows_omitted"] = payload["rows_omitted"]
         print(f"[timeline_understanding] {payload['rows_omitted']} of {len(merged)} rows not sent", file=sys.stderr)
+    # What the caps hid, counted so it can be said out loud instead of silently under-asking.
+    limits = {**({"rows": {"total": len(merged), "omitted": payload["rows_omitted"]}} if payload.get("rows_omitted") else {}),
+              **({"candidates": cuts} if cuts else {})}
+    if limits:
+        result["limits"] = limits
     caller = call or _default_call
     raw, detail, reason = _attempt(caller, payload, timeout_ms)
     checked, grade, why = _checked(raw, merged, candidates, existing_inputs, told)
@@ -861,7 +888,84 @@ def understand_timeline(
     _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs, ask_urls=bool(task.strip()))
     for c in candidates:
         c.update(result["values"].get(c["ref"]) or {"verdict": "fixed", "name": "", "literal": c["literal"]})
+    _run_audit(result, merged, task, call)
     return result
+
+
+# --- the second read ------------------------------------------------------------------------
+
+AUDIT_TASK = "clarify_audit"
+MAX_AUDIT_QUESTIONS = 2
+AUDIT_COST_RANK = 4                  # after the questions only the first read could see; before nothing it asks is urgent
+# What the second read may name (the slots the first read's six effects do not reach). Anything else is dropped.
+AUDIT_FACETS = frozenset({"input_domain", "provenance", "precondition", "postcondition", "alternatives",
+                          "failure_policy", "environment", "scope", "timing"})
+_SELECTOR_LIKE = re.compile(r"https?://|xpath|//\*|\[@|:nth-", re.I)
+
+
+def audit_mode() -> str:
+    from conxa_core.config import settings  # noqa: PLC0415 -- pulls in settings
+
+    value = str(getattr(settings, "clarify_audit", "off") or "off").lower()
+    return value if value in ("off", "shadow", "on") else "off"
+
+
+def audit_timeline(merged: list[dict[str, Any]], und: dict[str, Any], *, task: str = "", call: Caller | None = None,
+                   timeout_ms: int = 60_000) -> dict[str, Any]:
+    """The second, adversarial read: "what would make this wrong on another day?". Returns
+    ``{"questions": [...], "validation_report": {...}}``; the questions are ``note`` questions that name their
+    ``facet``, checked by the same ``_checked_questions`` as the first read's (a row that exists, a prompt, two or
+    three labelled choices, no guess) plus: the facet must be one of ``AUDIT_FACETS``, a row the first read already
+    asked about is skipped, and anything that looks like a page address or selector is dropped. At most
+    ``MAX_AUDIT_QUESTIONS``. Never raises."""
+    report: dict[str, Any] = {}
+    rows = {r["row_ref"]: r for r in merged}
+    asked = {q["row"] for q in und.get("questions") or []}
+    payload = {"goal": und.get("goal") or "", "rows": build_input(merged, task, "", [])["rows"],
+               "asked": [{"row": q["row"], "kind": q["kind"]} for q in und.get("questions") or []],
+               "decided": [{"row": d["row"], "text": d["text"]} for d in und.get("decided") or []]}
+    try:
+        raw = (call or _default_call)(AUDIT_TASK, payload, timeout_ms)
+    except Exception as exc:  # noqa: BLE001 -- a second opinion is optional: a failed call changes nothing
+        _log(report, "shape", "audit_call_failed", type(exc).__name__)
+        return {"questions": [], "validation_report": report}
+    items = raw.get("questions") if isinstance(raw, dict) else None
+    facet_of_row: dict[str, str] = {}
+    keep: list[dict[str, Any]] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            _log(report, "shape", "malformed_item", "audit")
+            continue
+        facet, row = str(item.get("facet") or ""), item.get("row")
+        if facet not in AUDIT_FACETS:
+            _log(report, "shape", "unknown_facet", facet)
+        elif row in asked:
+            _log(report, "override", "audit_row_already_asked", row)
+        elif _SELECTOR_LIKE.search(str(item.get("prompt") or "") + " " + json.dumps(item.get("choices") or [])):
+            _log(report, "override", "audit_selector_like", row)
+        else:
+            facet_of_row[str(row)] = facet
+            keep.append({"effect": "note", "row": row, "prompt": item.get("prompt"), "why": item.get("why"),
+                         "choices": item.get("choices"), "best_guess": "", "cost_rank": AUDIT_COST_RANK})
+    questions = _checked_questions(keep, rows, {}, {}, set(), report=report)[:MAX_AUDIT_QUESTIONS]
+    for q in questions:
+        q["facet"] = facet_of_row.get(q["row"], "")
+    return {"questions": questions, "validation_report": report}
+
+
+def _run_audit(result: dict[str, Any], merged: list[dict[str, Any]], task: str, call: Caller | None) -> None:
+    """``shadow``: save what the second read would ask in ``result["audit"]`` and ask nothing extra. ``on``: ask it
+    too. Only after a usable first read; ``off`` (the default) makes no call."""
+    mode = audit_mode()
+    if mode == "off" or result.get("source") != "model":
+        return
+    audit = audit_timeline(merged, result, task=task, call=call)
+    result["audit"] = {"mode": mode, **audit}
+    if mode == "on" and audit["questions"]:
+        rows = {r["row_ref"]: r for r in merged}
+        order = {ref: i for i, ref in enumerate(rows)}
+        result["questions"] = sorted(_dedupe([*result["questions"], *audit["questions"]], rows, result["validation_report"]),
+                                     key=lambda q: (q["cost_rank"], order[q["row"]]))
 
 
 def review_context(session_dir: Path) -> dict[str, Any] | None:
@@ -916,7 +1020,7 @@ def questions_from_understanding(und: dict[str, Any], merged: list[dict[str, Any
     cands = {c["ref"]: c for c in und.get("candidates") or []}
     out: list[dict[str, Any]] = []
     for q in und.get("questions") or []:
-        extra: dict[str, Any] = {}
+        extra: dict[str, Any] = {**({"facet": q["facet"]} if q.get("facet") else {})}      # the second read names its slot
         qid = f"{q['kind']}:{q['row']}"
         if q["kind"] == "value":
             c = cands.get(q["ref"])

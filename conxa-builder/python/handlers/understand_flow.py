@@ -27,6 +27,32 @@ def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
 
 
+def recording_chat(workflow_id: str, limit: int = 600) -> str:
+    """What the person typed in this workflow's chat, oldest first, cut to the last ``limit`` characters
+    (the latest words are the ones that settle a point). The understanding call is told it as ``chat``."""
+    from conxa_compile.conversation import thread_store as ts
+
+    try:
+        said = [str(it.get("text") or "").strip() for it in ts.read_raw(_thread(workflow_id)) if it.get("kind") == "user_message"]
+    except Exception:  # noqa: BLE001 -- context only: a missing thread must never stop the understanding
+        return ""
+    return " | ".join(s for s in said if s)[-limit:]
+
+
+def limits_sentence(limits: Any) -> str:
+    """One plain sentence for what the understanding call was not shown, or "" when it saw everything."""
+    if not isinstance(limits, dict):
+        return ""
+    parts = []
+    rows = limits.get("rows") or {}
+    if rows.get("omitted"):
+        parts.append(f"I could only read the first {int(rows['total']) - int(rows['omitted'])} of {rows['total']} steps")
+    left_out = sum(int(n) for n in (limits.get("candidates") or {}).values())
+    if left_out:
+        parts.append(f"{left_out} more value{'s' if left_out != 1 else ''} to check {'were' if left_out != 1 else 'was'} left out")
+    return (" and ".join(parts) + ". Check the end of the workflow carefully.") if parts else ""
+
+
 class UnderstandFlowMixin:
     # ── watch + understand ──────────────────────────────────────────────────────────────────
 
@@ -114,12 +140,18 @@ class UnderstandFlowMixin:
         from conxa_core.storage.json_store import read_skill
         prior = read_skill(workflow.skill_id) if workflow.skill_id else None
         taken = {str(i.get("id")) for i in (prior or {}).get("inputs") or [] if isinstance(i, dict) and i.get("id")}
-        und = tu.understand_timeline(merged, workflow.task_description, existing_inputs=taken or None,
-                                     hints=hints.load(workflow.session_id).get("varies"))
+        und = tu.understand_timeline(merged, workflow.task_description, recording_chat(workflow_id),
+                                     existing_inputs=taken or None, hints=hints.load(workflow.session_id).get("varies"))
         (session_dir / "understanding.json").write_text(_dumps(und), encoding="utf-8")
-        questions = tu.questions_from_understanding(und, merged)
+        from conxa_compile.conversation import question_plan
+
+        questions, ledger_report = question_plan.review(tu.questions_from_understanding(und, merged), doc=None,
+                                                        event_id_of_step_key=None, found_at="pre_compile")
+        questions, _ = question_plan.apply_scoring(questions, None, "pre_compile")      # shadow: records, never acts
         clarify_store.save(workflow_id, {
             "stage": "understand", "skill_id": None, "questions": questions,
+            **({"ledger_report": ledger_report} if ledger_report else {}),
+            **({"limits": und["limits"]} if und.get("limits") else {}),
             "understanding": {"goal_summary": und["goal"], "coverage": {"ok": True, "note": ""}, "source": und["source"]},
         })
         # Questions exist, so the lifecycle can see them; clear before the posts below because the
@@ -148,7 +180,8 @@ class UnderstandFlowMixin:
                        else "I couldn’t work out the details of this recording this time, so I’m building it as recorded. "
                             "Check the steps carefully once it’s done.")
         head = und.get("short_summary") or und.get("goal") or "I watched the recording."
-        return "\n\n".join([head, *(["\n".join(extra)] if extra else []), closing])
+        cut = limits_sentence(und.get("limits"))
+        return "\n\n".join([head, *(["\n".join(extra)] if extra else []), *([cut] if cut else []), closing])
 
     @staticmethod
     def _video_blocked_message(code: str) -> str:
@@ -197,9 +230,45 @@ class UnderstandFlowMixin:
             und = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        # Every gap was asked before the build (timeline_understanding.validate), so none is left open.
+        # What Q1 can ask (a value, a file, a confirm, a popup) was asked before the build; the rest is
+        # asked after it (compile_flow._REOPENED_KINDS). No candidates here: the page addresses and
+        # clicked items were already asked, so a chosen_values question would only repeat them.
         return {"candidates": [], "goal_summary": und.get("goal") or "", "source": und.get("source") or "model",
                 "coverage": {"ok": True, "note": ""}}
+
+    @staticmethod
+    def _flow_typed_fixed_events(workflow: Any) -> set[Any]:
+        """Recorded event ids of typed text the understanding judged "stays as recorded". The person's own
+        recording-time answer is already laid over the model's verdict in ``understanding.json``
+        (``timeline_understanding._checked``), so this is the verdict as the person left it."""
+        import json
+
+        from conxa_core.config import settings
+
+        path = settings.data_dir / "sessions" / str(workflow.session_id) / "understanding.json"
+        try:
+            und = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return set()
+        return {e for c in und.get("candidates") or [] if isinstance(c, dict) and c.get("kind") in ("typed", "control")
+                and c.get("verdict") == "fixed" for e in c.get("event_ids") or [] if e is not None}
+
+    @staticmethod
+    def _flow_asked_before_events(workflow: Any) -> set[Any]:
+        """Recorded event ids of the dropdowns / radios / dates the understanding put to the person as a question
+        (their answer is replayed after the build), so the build does not ask the same thing again."""
+        import json
+
+        from conxa_core.config import settings
+
+        path = settings.data_dir / "sessions" / str(workflow.session_id) / "understanding.json"
+        try:
+            und = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return set()
+        asked = {q.get("ref") for q in und.get("questions") or [] if isinstance(q, dict) and q.get("kind") == "value"}
+        return {e for c in und.get("candidates") or [] if isinstance(c, dict) and c.get("kind") == "control"
+                and c.get("ref") in asked for e in c.get("event_ids") or [] if e is not None}
 
     def _flow_replay_decisions(self, workflow: Any, result: dict[str, Any], doc: dict[str, Any],
                                questions: list[dict[str, Any]], look: Any, sink: Any) -> int:
@@ -248,7 +317,7 @@ class UnderstandFlowMixin:
     def _pre_compile_answer(self, thread_id: str, card: dict[str, Any], question: dict[str, Any],
                             action: str, body: dict[str, Any], sink: Any) -> dict[str, Any]:
         """Store the answer as a decision (nothing is applied), then ask the next question or compile."""
-        from conxa_compile.conversation import clarify_store, decisions, harness
+        from conxa_compile.conversation import clarify_events, clarify_store, decisions, harness
         from conxa_core.config import settings
         from conxa_core.storage.workflow_store import get_workflow
 
@@ -264,6 +333,8 @@ class UnderstandFlowMixin:
         if action == "skip":
             decisions.record(session_dir, question, None)
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt="Left as recorded")
+            clarify_store.ledger_set(workflow_id, question, "skipped")
+            clarify_events.log(workflow_id, "skipped", question)
             harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Left as recorded", actions=[],
                                 can_reopen=True)
             self._flow_post_next_question(workflow_id, sink)
@@ -277,6 +348,8 @@ class UnderstandFlowMixin:
             decisions.record(session_dir, question, None, own_text=text if question["kind"] == "note" else "")
             receipt = f"Noted: “{text}” — left as recorded. Tell the chat after it’s built if a step should change."
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_text=text)
+            clarify_store.ledger_set(workflow_id, question, "skipped")
+            clarify_events.log(workflow_id, "skipped", question, own_words=True)
             harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=True)
             self._flow_post_next_question(workflow_id, sink)
             return {"ok": True}
@@ -287,6 +360,8 @@ class UnderstandFlowMixin:
         picked = set(answer.get("selected") or []) | {answer.get("choice")}
         receipt = ", ".join(c["label"] for c in question.get("choices") or [] if c.get("id") in picked) or "Noted"
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
+        clarify_store.ledger_set(workflow_id, question, "answered", answer.get("choice") or answer.get("selected"))
+        clarify_events.answered(workflow_id, question, answer)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
                             can_reopen=True)
         self._flow_post_next_question(workflow_id, sink)

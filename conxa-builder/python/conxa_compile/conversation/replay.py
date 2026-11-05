@@ -27,7 +27,7 @@ _FORK_CHOICES = {"by_input", "ask_human", "stop"}     # a pre-compile "btn:<labe
 # Pre-compile choices that ask the workflow to change (the others say "leave it as recorded").
 _CHANGES = {"each_run", "confirm", "dismiss"}
 # What an unapplied answer was about, in words a person recognises.
-SUBJECT = {"upload": "the file", "confirm_before": "checking before a step", "popup_dismiss": "the popup"}
+SUBJECT = {"upload": "the file", "confirm_before": "checking before a step", "popup_dismiss": "the popup", "value": "the fixed choice"}
 
 
 def clarify_norm(text: Any) -> str:
@@ -70,6 +70,7 @@ def plan(
         return out
 
     name_of_literal: dict[str, str] = {}
+    control_fixed: set[Any] = set()      # dropdown / radio / date events the person said are always this option
     for d in decisions:
         if d.get("skipped"):
             continue
@@ -77,6 +78,9 @@ def plan(
         events = {e for e in d.get("event_ids") or [] if e is not None}
         if kind in ("value", "chosen_values"):
             for v in d.get("values") or []:
+                if v.get("kind") == "control":
+                    control_fixed |= {e for e in v.get("event_ids") or [] if e is not None}
+                    continue
                 literal = (clicked_label({e for e in v.get("event_ids") or [] if e is not None})
                            if v.get("kind") == "click" else "") or v["literal"]
                 # The same recorded text chosen twice (a file's name clicked, then in the address) is one input.
@@ -113,4 +117,17 @@ def plan(
             for q in questions_for("fork", events):
                 ops, receipt = clarify.plan_answer(q, answer, doc)
                 groups.append({"label": q["title"], "ops": ops, "receipt": receipt, "qid": q["id"], "answer": answer, "value": None})
+    if control_fixed:
+        # The compiler already made each of these an input, so "always this one" is the edit: pin it back to the
+        # recorded option through the same `values` answer Q2 would have used (nothing else is un-ticked).
+        asked = clarify.generate_questions(doc, kinds={"values"}, limit=None)
+        values_q = next((q for q in asked if q["kind"] == "values"), None)
+        pinned = [c["id"] for c, key in zip((values_q or {}).get("choices") or [], (values_q or {}).get("step_keys") or [])
+                  if event_id_of_step_key(key) in control_fixed]
+        if values_q is None or not pinned:
+            unapplied.append({"kind": "value", "choice": "fixed"})
+        else:
+            answer = {"selected": [c["id"] for c in values_q["choices"] if c["id"] not in pinned]}
+            ops, receipt = clarify.plan_answer(values_q, answer, doc)
+            groups.append({"label": "Always the recorded choice", "ops": ops, "receipt": receipt, "qid": None, "answer": None, "value": None})
     return {"groups": groups, "unapplied": unapplied}

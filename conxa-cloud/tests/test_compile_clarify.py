@@ -500,3 +500,46 @@ def test_a_download_or_new_tab_is_shown_under_the_action_that_caused_it_but_stay
     steps = [{"action": a} for a in ("navigate", "click", "download_observed", "navigate", "click", "tab_open", "dialog_accept", "click")]
     assert effect_parents(steps) == [None, None, 1, None, None, 4, 4, None]
     assert effect_parents([{"action": "download_observed"}]) == [None]          # nothing before it to belong to
+
+
+# ── Phase 0: kinds, fixed typed events, counted cuts ────────────────────────────────────────
+
+
+def test_kinds_restrict_what_is_built_and_a_fixed_typed_event_is_left_unticked():
+    doc = _invoice_doc()
+    only = generate_questions(doc, source_lookup=_lookup(_SOURCES), limit=None, kinds={"values"})
+    assert [q["kind"] for q in only] == ["values"]
+    assert {c["id"]: c["selected"] for c in only[0]["choices"]} == {"po_number": True, "description": True}
+    # event 5 (the description) was judged "stays as recorded": offered, but not pre-ticked
+    fixed = generate_questions(doc, source_lookup=_lookup(_SOURCES), limit=None, kinds={"values"}, typed_fixed_events={5})
+    assert {c["id"]: c["selected"] for c in fixed[0]["choices"]} == {"po_number": True, "description": False}
+
+
+def test_places_past_a_per_kind_cap_are_counted_and_not_just_dropped():
+    steps = [_step("extract", f"read_{i}", value=f"total_{i}") for i in range(5)]
+    limits: dict[str, int] = {}
+    qs = generate_questions(_doc(steps), limit=None, limits=limits)
+    assert [q["kind"] for q in qs].count("output") == 2 and limits == {"output": 3}
+
+
+# ── Phase 3: a dropdown fixed before the build ──
+
+
+def test_an_always_this_option_answer_for_a_dropdown_pins_it_through_the_values_answer():
+    from conxa_compile.conversation import decisions as dec, replay
+
+    step = _step("select", "pick_country", value="{{country}}", input_binding="country",
+                 handler_hints={"control_kind": "choice", "choice": {"multi": False, "recorded_label": "Germany",
+                                                                     "options": [{"label": "Germany", "value": "de"}]}})
+    doc = _doc([step], [{"id": "country", "type": "text"}])
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    q = {"id": "value:control:5", "kind": "value", "event_ids": [5], "choices": [{"id": "varies"}, {"id": "fixed"}],
+         "items": [{"ref": "control:5", "name": "country", "literal": "Germany", "kind": "control", "event_ids": [5]}]}
+    d = dec.decision_from_answer(q, {"choice": "fixed"})
+    assert d["values"][0]["kind"] == "control" and dec.decision_from_answer(q, {"choice": "varies"})["values"] == []
+    plan = replay.plan([d], doc, [], {key: 5}.get)
+    assert [g["ops"] for g in plan["groups"]] == [[{"op": "patch", "step_key": key, "patch": {"value": "Germany"}},
+                                                    {"op": "drop_inputs", "ids": ["country"]}]]
+    assert plan["unapplied"] == []
+    missing = replay.plan([d], doc, [], {key: 99}.get)                                  # the step is gone: said, not dropped
+    assert missing["groups"] == [] and missing["unapplied"] == [{"kind": "value", "choice": "fixed"}]

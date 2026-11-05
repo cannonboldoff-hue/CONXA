@@ -447,6 +447,10 @@ def generate_questions(
     dropped: list[dict[str, Any]] | None = None,
     today: datetime.date | None = None,
     limit: int | None = MAX_QUESTIONS,
+    kinds: frozenset[str] | set[str] | None = None,
+    typed_fixed_events: frozenset[Any] | set[Any] | None = None,
+    limits: dict[str, int] | None = None,
+    skip_events: frozenset[Any] | set[Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Find the places worth asking about in a compiled skill document.
 
@@ -454,12 +458,26 @@ def generate_questions(
     the recorded literal a "keep it fixed" answer would restore, and the recording's own sequence
     number so a value the person already marked "Changes each run?" while recording is not asked
     about again. ``answered_by_recording`` is that hint map (``{"<sequence>": bool}``).
+
+    ``kinds`` keeps only those question kinds (the flow builds the ones an earlier answer must be
+    replayed onto first, then the rest from the document replay left). ``typed_fixed_events`` are
+    recorded event ids (sequence numbers) of typed text already judged "stays as recorded": their
+    ``values`` choice is left unticked. ``limits`` (out-param) counts, per kind, the places found
+    after that kind's cap was reached, so a cut is said out loud instead of silently under-asking.
+    ``skip_events`` are recorded event ids already asked about before the build (a dropdown / radio / date
+    the understanding put to the person): their ``values`` choice is not offered a second time.
     """
     steps = _steps(doc)
     keys = step_keys(steps)
     look = source_lookup or (lambda _s: None)
     hinted = answered_by_recording or {}
+    fixed_events = {str(e) for e in typed_fixed_events or ()}
+    skipped_events = {str(e) for e in skip_events or ()}
     out: list[dict[str, Any]] = []
+
+    def cut(kind: str) -> None:
+        if limits is not None:
+            limits[kind] = limits.get(kind, 0) + 1
 
     # 0 ─ understanding (conversation/understanding.py): the recording against what the person
     # said, and recorded values that aren't typed text. A fallback answer carries no coverage verdict.
@@ -536,6 +554,8 @@ def generate_questions(
         seq = (ev.get("extras") or {}).get("sequence")
         if seq is not None and str(seq) in hinted:
             continue  # the person already said, while recording
+        if seq is not None and str(seq) in skipped_events:
+            continue  # asked before the build
         if control == "choice":
             # A single choice can be pinned to its recorded option (the runtime matches step.value
             # against the option labels). A multi-select has no single literal to restore.
@@ -554,7 +574,8 @@ def generate_questions(
             recorded = str((ev.get("action") or {}).get("value") or "")
             if recorded == "{{REDACTED}}":
                 continue
-        candidates.append({"binding": str(binding), "step_key": keys[i], "recorded": recorded})
+        candidates.append({"binding": str(binding), "step_key": keys[i], "recorded": recorded,
+                           "fixed_by_event": seq is not None and str(seq) in fixed_events})
     # The person's own description said this exact value is the point of the task: leave it unticked.
     fixed_typed = {str(c.get("name")) for c in (understanding or {}).get("candidates") or []
                    if isinstance(c, dict) and c.get("kind") == "typed" and c.get("verdict") == "fixed"}
@@ -565,7 +586,7 @@ def generate_questions(
             "values", "values", "Which of these are different every time?",
             "Tick the ones that are different every time. Whoever uses this will type them in. Anything you leave unticked stays exactly as you recorded it.",
             [{"id": c["binding"], "label": _humanize(c["binding"]), "detail": c["recorded"][:60] or "Text",
-              "selected": c["binding"] not in fixed_typed} for c in uniq],
+              "selected": c["binding"] not in fixed_typed and not c["fixed_by_event"]} for c in uniq],
             multi=True, step_keys_=[c["step_key"] for c in uniq], recorded={c["binding"]: c["recorded"] for c in uniq},
         ))
 
@@ -577,7 +598,8 @@ def generate_questions(
             continue
         extract_seen += 1
         if extract_seen > 2:
-            break
+            cut("output")
+            continue
         label = step_name(s)
         out.append(_question(
             "output", f"output:{keys[i]}", f"Show \u201c{s['value']}\u201d to the user when it finishes?",
@@ -605,7 +627,8 @@ def generate_questions(
                 continue
             rel_seen += 1
             if rel_seen > 2:
-                break
+                cut("relative_date")
+                continue
             when = ("today" if days == 0 else f"{abs(days)} day{'s' if abs(days) != 1 else ''} "
                     f"{'after' if days > 0 else 'before'} today")
             name = step_name(s)
@@ -635,7 +658,8 @@ def generate_questions(
                 and str(s.get("value") or "") == "{{" + binding + "}}" and not s.get("run_if")):
             skip_seen += 1
             if skip_seen > 2:
-                break
+                cut("skip_when_empty")
+                continue
             name = step_name(s)
             out.append(_question(
                 "skip_when_empty", f"skip_when_empty:{keys[i]}", f"If the “{_humanize(binding).lower()}” is left blank, should we skip “{name}”?",
@@ -655,7 +679,8 @@ def generate_questions(
                 and not s.get("on_missing")):
             missing_seen += 1
             if missing_seen > 2:
-                break
+                cut("missing_item")
+                continue
             name = step_name(s)
             out.append(_question(
                 "missing_item", f"missing_item:{keys[i]}", f"What should “{name}” do if the item can\u2019t be found on the page?",
@@ -719,6 +744,8 @@ def generate_questions(
             done_choices, multi=True, step_keys_=done_keys,
         ))
 
+    if kinds is not None:
+        out = [q for q in out if q["kind"] in kinds]
     out.sort(key=lambda q: _PRIORITY[q["kind"]])
     # ``limit=None`` returns everything: the compile flow asks the first MAX_QUESTIONS and keeps the
     # rest as ``queued`` rather than dropping them (see compile_flow._flow_after_compile).

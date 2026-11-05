@@ -1,0 +1,300 @@
+[
+ {
+  "name": "optional_field",
+  "steps": [
+   {
+    "action": {
+     "action": "type"
+    },
+    "intent": "Type note",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": "{{note}}",
+    "input_binding": "note"
+   }
+  ],
+  "inputs": [
+   {
+    "id": "note",
+    "default": "",
+    "optional": true
+   }
+  ],
+  "expect": [
+   [
+    "skip_when_empty",
+    "input_domain"
+   ]
+  ]
+ },
+ {
+  "name": "record_lookup",
+  "steps": [
+   {
+    "action": {
+     "action": "click"
+    },
+    "intent": "Open row",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null,
+    "entity_binding": {
+     "container_selector": "tr",
+     "identifier": "{{row}}"
+    }
+   }
+  ],
+  "inputs": [],
+  "expect": [
+   [
+    "missing_item",
+    "alternatives"
+   ]
+  ]
+ },
+ {
+  "name": "extract_output",
+  "steps": [
+   {
+    "action": {
+     "action": "extract"
+    },
+    "intent": "Read total",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": "invoice_total",
+    "input_binding": null
+   }
+  ],
+  "inputs": [],
+  "expect": [
+   [
+    "output",
+    "postcondition"
+   ]
+  ]
+ },
+ {
+  "name": "date_picker",
+  "today": "2026-10-30",
+  "steps": [
+   {
+    "action": {
+     "action": "date_pick"
+    },
+    "intent": "Pick due",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": "{{due}}",
+    "input_binding": "due",
+    "handler_hints": {
+     "control_kind": "date_picker",
+     "date_picker": {
+      "recorded_value": "2026-10-31"
+     }
+    }
+   }
+  ],
+  "inputs": [
+   {
+    "id": "due",
+    "type": "date",
+    "default": "2026-10-31"
+   }
+  ],
+  "expect": [
+   [
+    "values",
+    "variability"
+   ],
+   [
+    "relative_date",
+    "provenance"
+   ]
+  ]
+ },
+ {
+  "name": "dropdown",
+  "steps": [
+   {
+    "action": {
+     "action": "select"
+    },
+    "intent": "Pick country",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": "{{country}}",
+    "input_binding": "country",
+    "handler_hints": {
+     "control_kind": "choice",
+     "choice": {
+      "multi": false,
+      "recorded_label": "Germany",
+      "options": [
+       {
+        "label": "Germany",
+        "value": "de"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "inputs": [
+   {
+    "id": "country"
+   }
+  ],
+  "expect": [
+   [
+    "values",
+    "variability"
+   ]
+  ]
+ },
+ {
+  "name": "irreversible_submit",
+  "steps": [
+   {
+    "action": {
+     "action": "navigate"
+    },
+    "intent": "Open form",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null
+   },
+   {
+    "action": {
+     "action": "click"
+    },
+    "intent": "Send invoice",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null,
+    "consequence": "irreversible"
+   }
+  ],
+  "inputs": [],
+  "expect": [
+   [
+    "confirm",
+    "consequence"
+   ]
+  ]
+ },
+ {
+  "name": "upload",
+  "steps": [
+   {
+    "action": {
+     "action": "upload"
+    },
+    "intent": "Attach",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": "{{file_path}}",
+    "input_binding": "file_path"
+   }
+  ],
+  "inputs": [
+   {
+    "id": "file_path",
+    "type": "file"
+   }
+  ],
+  "expect": [
+   [
+    "upload",
+    "variability"
+   ]
+  ],
+  "sources": {
+   "Attach": {
+    "action": {
+     "value": "C:/Users/me/Desktop/invoice.pdf"
+    },
+    "extras": {
+     "sequence": 3
+    }
+   }
+  }
+ },
+ {
+  "name": "popup_hint",
+  "steps": [
+   {
+    "action": {
+     "action": "click"
+    },
+    "intent": "Close banner",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null,
+    "optional_hint": {
+     "container_signal": "#cookie"
+    }
+   }
+  ],
+  "inputs": [],
+  "expect": [
+   [
+    "popup",
+    "alternatives"
+   ]
+  ]
+ },
+ {
+  "name": "plain_click",
+  "steps": [
+   {
+    "action": {
+     "action": "navigate"
+    },
+    "intent": "Open page",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null
+   },
+   {
+    "action": {
+     "action": "click"
+    },
+    "intent": "Open details",
+    "semantic_description": "",
+    "validation": {
+     "assertions": []
+    },
+    "value": null,
+    "input_binding": null
+   }
+  ],
+  "inputs": [],
+  "expect": []
+ }
+]

@@ -26,13 +26,25 @@ _THROTTLE_S = 0.5
 _APPLY_STALE_S = 60.0
 
 
-# A recording that was understood before the build is asked again only about popups and the
-# irreversible steps the compiler found: values, files and coverage were settled earlier.
-_ASKED_AFTER_UNDERSTANDING = {"fork", "fork_then", "known_popup", "popup", "confirm"}
+# A recording that was understood before the build was already asked about a clicked or addressed value,
+# a file. Those two kinds are not asked again after it. Everything else the compiled document can raise is
+# still asked, in two passes (see _flow_after_compile). "Does this cover what you said?" can only be judged
+# once the workflow exists (the compile's own review call), so it is asked here, not before.
+_ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
+# Kinds an earlier answer is replayed onto: built from the document as compiled, before replay changes it.
+_REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
+# Kinds built afterwards from the document replay left, so their bindings and step keys are current.
+_REOPENED_KINDS = frozenset({"values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
 
 
 def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
+
+
+def _clarify_events():
+    from conxa_compile.conversation import clarify_events
+
+    return clarify_events
 
 
 class CompileFlowMixin:
@@ -110,8 +122,10 @@ class CompileFlowMixin:
             # The flag above lives in memory and dies with the app. This marker survives a restart, so
             # a workflow whose questions were never written can be told apart from an old one that
             # simply has none (see ConversationMixin._reconcile_interrupted).
+            # `ledger`: what the questions asked before the build settled; this marker must not erase it.
+            carried = (clarify_store.load(workflow_id) or {}).get("ledger")
             clarify_store.save(workflow_id, {"skill_id": result.get("skill_id"), "version": result.get("version"),
-                                             "building": True, "questions": []})
+                                             "building": True, "questions": [], **({"ledger": carried} if carried else {})})
         except _CommandError as exc:
             return self._flow_compile_failed(workflow_id, card_id, progress, exc, sink)
         except Exception as exc:  # noqa: BLE001
@@ -217,20 +231,51 @@ class CompileFlowMixin:
         # and coverage (understanding.json); its answers are replayed below instead of asked again.
         prior = self._flow_prior_understanding(workflow)
         understood = prior or understanding_mod.understand(doc, workflow.task_description, review=report.get("understanding"))
-        questions = clarify.generate_questions(
-            doc,
-            source_lookup=lambda s: find_source_event(s, doc),
-            answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
-            known_popups=known,
-            understanding=None if prior else understood,
-            dropped=report.get("dropped") or [],
-            today=datetime.date.today(),
-            limit=None,
-        )
+        if prior:
+            # The compile's own review call already judged whether the workflow covers what was said (stored with
+            # the compile, no model call here); that verdict only exists now, so it is asked now.
+            prior["coverage"] = understanding_mod.understand(doc, workflow.task_description, review=report.get("understanding"))["coverage"]
+        limits: dict[str, int] = {}
+
+        def ask(from_doc: dict[str, Any], count: bool = True, **only: Any) -> list[dict[str, Any]]:
+            return clarify.generate_questions(
+                from_doc,
+                source_lookup=lambda s: find_source_event(s, from_doc),
+                answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
+                known_popups=known,
+                understanding={"coverage": prior["coverage"], "candidates": []} if prior else understood,
+                dropped=report.get("dropped") or [],
+                today=datetime.date.today(),
+                limit=None,
+                limits=limits if count else None,
+                **only,
+            )
+
+        # With an earlier understanding, the kinds an answer is replayed onto come first (they match
+        # the document as compiled); the rest are built after replay, from the document it left.
+        questions = ask(doc, count=False, kinds=_REPLAY_KINDS) if prior else ask(doc)
         replayed_steps = self._flow_replay_decisions(workflow, result, doc, questions, lambda s: find_source_event(s, doc), sink)
         if prior:
-            # Everything that could be asked before the build already was; what is left can only exist now.
-            questions = [q for q in questions if q["kind"] in _ASKED_AFTER_UNDERSTANDING]
+            questions = [q for q in questions if q["kind"] not in _ASKED_BEFORE_COMPILE]
+            questions += ask(read_skill(result["skill_id"]) or doc, kinds=_REOPENED_KINDS,
+                             typed_fixed_events=self._flow_typed_fixed_events(workflow),
+                             skip_events=self._flow_asked_before_events(workflow))
+            questions.sort(key=lambda q: clarify._PRIORITY[q["kind"]])
+        # Name the slot each question settles, and find (report) or drop (enforce) the vacuous and the
+        # duplicated ones. After replay, from the document replay left.
+        from conxa_compile.compiler.step_key import step_keys as _step_keys
+        from conxa_compile.conversation import question_plan
+
+        doc_now = read_skill(result["skill_id"]) or doc
+        steps_now = ((doc_now.get("skills") or [{}])[0] or {}).get("steps") or []
+        seq_by_key = {k: ((find_source_event(s, doc_now) or {}).get("extras") or {}).get("sequence")
+                      for k, s in zip(_step_keys(steps_now), steps_now)}
+        questions, ledger_report = question_plan.review(questions, doc=doc_now, event_id_of_step_key=seq_by_key.get,
+                                                        found_at="post_compile")
+        # Worth a person's attention? Shadow mode only records the decision; "on" lets the compiler's default
+        # stand for cheap ones (listed in the summary) and leaves test-revealable ones for a failing test.
+        questions, assumptions = question_plan.apply_scoring(questions, doc_now, "post_compile")
+        kept_ledger = (clarify_store.load(workflow_id) or {}).get("ledger") or {}
         # Ask the most important few now; keep the rest instead of silently dropping them.
         shown = 0
         for q in questions:
@@ -245,6 +290,11 @@ class CompileFlowMixin:
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
             "added_steps": replayed_steps, "step_count_at_compile": len(steps), "questions": questions,
             "understanding": {k: understood[k] for k in ("goal_summary", "coverage", "source")},
+            **({"limits": limits} if limits else {}),
+            **({"ledger_report": ledger_report} if ledger_report else {}),
+            **({"assumptions": assumptions} if assumptions else {}),
+            # what the questions asked before the build settled (the questions above replace theirs)
+            **({"ledger": kept_ledger} if kept_ledger else {}),
         })
         # Questions now exist, so the lifecycle can see them; clear before the posts below, because
         # the renderer re-reads the lifecycle on each one (the caller's `finally` is only the net).
@@ -271,6 +321,10 @@ class CompileFlowMixin:
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
             lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")
+        if limits:
+            left = sum(limits.values())
+            lines.append(f"{left} similar step{'s' if left != 1 else ''} {'were' if left != 1 else 'was'} not asked about, "
+                         "to keep the questions short. Check them in Human Edit.")
         if questions:
             lines.append("A few questions first, so the test reflects how you’ll really use it.")
         elif understood["source"] == "model":
@@ -286,6 +340,70 @@ class CompileFlowMixin:
             threading.Thread(target=self._flow_reword_safe, args=(workflow_id, sink), daemon=True).start()
         else:
             self._flow_post_summary(workflow_id, sink)
+
+    def _flow_reevaluate_safe(self, workflow_id: str) -> None:
+        try:
+            self._flow_reevaluate(workflow_id)
+        except Exception:  # noqa: BLE001 -- an answer is already applied; a missing follow-up must not undo it
+            import traceback
+
+            traceback.print_exc()
+
+    def _flow_reevaluate(self, workflow_id: str) -> None:
+        """After an answer edited the workflow, run the compile-time detectors again on the document as it is
+        now and add the questions it newly raises (for example a record the run names, once a clicked item
+        became an input). A situation already asked about or settled (same question id, or same slot in the
+        ledger) is never asked twice. Deterministic: no model call."""
+        import datetime
+
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.conversation import clarify, clarify_store, question_plan
+        from conxa_compile.editor.retarget import find_source_event
+        from conxa_compile.recorder import hints
+        from conxa_core.storage.json_store import read_skill
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow = get_workflow(workflow_id)
+        doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
+        data = clarify_store.load(workflow_id) or {}
+        if doc is None or data.get("stage") or data.get("building"):
+            return
+        prior = self._flow_prior_understanding(workflow)
+        fresh = clarify.generate_questions(
+            doc,
+            source_lookup=lambda s: find_source_event(s, doc),
+            answered_by_recording=hints.load(workflow.session_id).get("varies") or {},
+            known_popups=[],                   # the app map's popups were offered at compile time
+            dropped=(doc.get("compile_report") or {}).get("dropped") or [],
+            today=datetime.date.today(),
+            limit=None,
+            typed_fixed_events=self._flow_typed_fixed_events(workflow) if prior else None,
+            skip_events=self._flow_asked_before_events(workflow) if prior else None,
+            kinds=None if not prior else frozenset(clarify._PRIORITY) - _ASKED_BEFORE_COMPILE,
+        )
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        seq_by_key = {k: ((find_source_event(s, doc) or {}).get("extras") or {}).get("sequence") for k, s in zip(step_keys(steps), steps)}
+        fresh, _ = question_plan.review(fresh, doc=doc, event_id_of_step_key=seq_by_key.get, found_at="post_compile")
+        known = data.get("questions") or []
+        taken_ids = {q.get("id") for q in known if isinstance(q, dict)}
+        taken_slots = {(q.get("unknown") or {}).get("slot") for q in known if isinstance(q, dict)} | set(data.get("ledger") or {})
+        new = [q for q in fresh if q["id"] not in taken_ids and (q.get("unknown") or {}).get("slot") not in taken_slots]
+        if not new:
+            return
+        new, assumptions = question_plan.apply_scoring(new, doc, "post_compile")
+
+        def add(d: dict[str, Any]) -> None:
+            room = clarify.MAX_QUESTIONS - sum(1 for q in d.get("questions") or [] if q.get("status") in ("open", "applying"))
+            for q in new:
+                if q.get("status") == "open":
+                    if room <= 0:
+                        q["status"] = "queued"
+                    room -= 1
+            d["questions"] = [*(d.get("questions") or []), *new]
+            if assumptions:
+                d["assumptions"] = [*(d.get("assumptions") or []), *assumptions]
+
+        clarify_store.mutate(workflow_id, add)
 
     def _flow_reword_safe(self, workflow_id: str, sink: Any) -> None:
         try:
@@ -357,7 +475,7 @@ class CompileFlowMixin:
                 fresh = clarify.refresh_question(q, doc)
                 q.update(choices=fresh["choices"], step_keys=fresh["step_keys"])
                 clarify_store.update_question(workflow_id, q["id"], choices=q["choices"], step_keys=q["step_keys"])
-        asked = [x for x in questions if x.get("status") != "queued"]
+        asked = [x for x in questions if x.get("status") not in ("queued", "deferred")]
         number = asked.index(q) + 1
         card = harness.post_card(
             _thread(workflow_id), "clarify_question", "open", sink=sink, refs={"question_id": q["id"]},
@@ -366,6 +484,38 @@ class CompileFlowMixin:
             actions=["choose", "skip"],
         )
         clarify_store.update_question(workflow_id, q["id"], card_id=card["card_id"])
+        _clarify_events().log(workflow_id, "shown", q)
+
+    def _flow_route_notes(self, workflow_id: str) -> None:
+        """The words the person typed to a question before the build only rode along as compile context, so no
+        step changed. Once the build is done and no question is open, hand them to the workflow chat once, where
+        the three proposal gates and an Apply / Undo card are the only way they reach a step. Never raises."""
+        import threading
+        import uuid
+
+        from conxa_compile.conversation import clarify_store, decisions
+        from conxa_core.config import settings
+        from conxa_core.storage.workflow_store import get_workflow
+
+        try:
+            workflow = get_workflow(workflow_id)
+            data = clarify_store.load(workflow_id) or {}
+            if (not settings.clarify_notes_to_chat or workflow is None or not workflow.session_id or data.get("notes_routed")
+                    or any(q.get("status") in ("open", "applying") for q in data.get("questions") or [])):
+                return
+            notes = [str(d["note"])[:300] for d in decisions.load(settings.data_dir / "sessions" / workflow.session_id)
+                     if d.get("note")][:5]
+            if not notes:
+                return
+            clarify_store.mutate(workflow_id, lambda d: d.__setitem__("notes_routed", True))
+            message = ("Before the build you asked me to keep in mind: " + " | ".join(f"“{n}”" for n in notes) +
+                       ". Propose the change to the workflow if one applies, or tell me it needs none.")
+            threading.Thread(target=lambda: self.cmd_thread_turn({"thread_id": _thread(workflow_id), "message": message},
+                                                                 f"notes_{uuid.uuid4().hex[:10]}"), daemon=True).start()
+        except Exception:  # noqa: BLE001 -- a missing follow-up must never break the summary
+            import traceback
+
+            traceback.print_exc()
 
     def _flow_post_summary(self, workflow_id: str, sink: Any, *, updated: bool = False) -> None:
         from conxa_compile.conversation import clarify, clarify_store, harness, thread_store as ts
@@ -386,6 +536,8 @@ class CompileFlowMixin:
         summary["goal"] = str((data.get("understanding") or {}).get("goal_summary") or "")
         summary["input_names"] = [str(i.get("id")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")]
         summary["queued"] = sum(1 for q in data.get("questions") or [] if q.get("status") == "queued")
+        summary["assumptions"] = [a for a in data.get("assumptions") or [] if isinstance(a, dict)
+                                  and any(q.get("id") == a.get("qid") and q.get("status") == "queued" for q in data.get("questions") or [])]
         questions = data.get("questions") or []
         answered = [q for q in questions if q.get("status") == "answered"]
         if updated:
@@ -407,6 +559,8 @@ class CompileFlowMixin:
             _thread(workflow_id), "workflow_summary", "open", sink=sink, summary=summary,
             answered=len(answered), actions=["test", "review"] if summary["uncertain"] else ["test"],
         )
+        if not updated:
+            self._flow_route_notes(workflow_id)
 
     def _flow_offer_variants(self, workflow_id: str, doc: dict[str, Any], sink: Any) -> None:
         """For each popup decision whose "no popup" case was never seen, offer to record that case.
@@ -464,6 +618,7 @@ class CompileFlowMixin:
         card_id = card["card_id"]
         qid = str((card.get("refs") or {}).get("question_id") or card.get("question_id") or "")
         if action == "reopen":
+            _clarify_events().log(workflow_id, "reopened", clarify_store.get_question(workflow_id, qid) or {"id": qid})
             return self._reopen_question(thread_id, card, workflow_id, qid, sink)
         question = clarify_store.get_question(workflow_id, qid)
         if question is None:
@@ -490,6 +645,8 @@ class CompileFlowMixin:
             wf_skip = get_workflow(workflow_id)
             can = bool(wf_skip and wf_skip.skill_id and self._save_snapshot(workflow_id, qid, wf_skip.skill_id, question))
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt="Kept as the compiler had it")
+            clarify_store.ledger_set(workflow_id, question, "skipped")
+            _clarify_events().log(workflow_id, "skipped", question)
             harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Kept as the compiler had it", actions=[],
                                 can_reopen=can)
             self._flow_post_next_question(workflow_id, sink)
@@ -503,6 +660,8 @@ class CompileFlowMixin:
             wf_own = get_workflow(workflow_id)
             can = bool(wf_own and wf_own.skill_id and self._save_snapshot(workflow_id, qid, wf_own.skill_id, question))
             clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_pending=True)
+            clarify_store.ledger_set(workflow_id, question, "skipped")
+            _clarify_events().log(workflow_id, "skipped", question, own_words=True)
             harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=can)
             return {"ok": True, "to_chat": True}
         if action not in ("choose", "retry"):
@@ -538,8 +697,15 @@ class CompileFlowMixin:
                                 error="The workflow changed in Human Edit, so this answer no longer fits." if stale else exc.message)
             return {"ok": False, "code": exc.code, "message": exc.message}
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=added)
+        clarify_store.ledger_set(workflow_id, question, "answered", answer.get("choice") or answer.get("selected"))
+        from conxa_compile.conversation import answer_memory
+
+        answer_memory.remember(answer_memory.host_of(doc), question, answer)       # next workflow on this app asks less
+        _clarify_events().answered(workflow_id, question, answer)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, actions=[],
                             step_keys=question.get("step_keys") or [], can_reopen=can_reopen)
+        if ops:
+            self._flow_reevaluate_safe(workflow_id)       # the answer changed the workflow: it may raise a question it could not before
         self._flow_post_next_question(workflow_id, sink)
         if question["kind"] == "input_check":
             self._after_input_check(workflow_id, question, answer.get("choice"), rid)
@@ -614,12 +780,14 @@ class CompileFlowMixin:
         write_skill(workflow.skill_id, snap["doc"])
         self._undo_stacks.pop(workflow.skill_id, None)
         later_cards: set[str] = set()
+        reopened: set[str] = set()
 
         def edit(data: dict[str, Any]) -> None:
             qs = [q for q in data.get("questions") or [] if isinstance(q, dict)]
             i = next(k for k, q in enumerate(qs) if q.get("id") == qid)
             for q in qs[i:]:
                 if q.get("status") in ("answered", "skipped", "applying") or q.get("id") == qid:
+                    reopened.add(q["id"])
                     q.update(status="open", answer=None, receipt="", own_pending=False, base_version=None, applying_since=None)
                 if q.get("id") != qid and q.get("card_id"):
                     later_cards.add(q["card_id"])
@@ -627,6 +795,7 @@ class CompileFlowMixin:
             data["added_steps"] = int(snap.get("added_steps") or 0)
 
         clarify_store.mutate(workflow.id, edit)
+        clarify_store.ledger_drop(workflow.id, reopened)
         fields: dict[str, Any] = {}
         q = clarify_store.get_question(workflow.id, qid) or {}
         if q.get("kind") == "done_when":
@@ -682,7 +851,9 @@ class CompileFlowMixin:
         drop = {q["id"] for q in qs[i:]}
         kept = [d for d in decisions.load(session_dir) if d.get("qid") not in drop]
         (session_dir / decisions.FILE).write_text(json.dumps(kept), encoding="utf-8")
-        clarify_store.save(workflow.id, {**data, "stage": "understand", "skill_id": None, "questions": qs})
+        ledger = {slot: v for slot, v in ((clarify_store.load(workflow.id) or {}).get("ledger") or {}).items() if v.get("qid") not in drop}
+        clarify_store.save(workflow.id, {**data, "stage": "understand", "skill_id": None, "questions": qs,
+                                         **({"ledger": ledger} if ledger else {})})
         later_cards.discard(card["card_id"])
         for cid in later_cards:
             harness.update_card(thread_id, cid, sink=sink, state="reverted", actions=[])

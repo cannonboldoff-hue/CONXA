@@ -322,6 +322,8 @@ type Summary = {
   goal?: string
   input_names?: string[]
   queued?: number
+  /** Questions the compiler's own default answered; say "ask me" to be asked them. */
+  assumptions?: { qid: string; title: string; default: string }[]
 }
 
 /** The workflow as it stands. The counts add up across screens: compiled + added = steps now. */
@@ -388,6 +390,16 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         {s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
         {s.queued ? ` · ${s.queued} more question${s.queued === 1 ? '' : 's'} when you want them` : ''}
       </p>
+      {s.assumptions && s.assumptions.length > 0 && (
+        <div className="mt-2 text-xs text-[var(--text-meta)]">
+          <p className="font-medium text-[var(--text-secondary)]">Left as the compiler had it</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {s.assumptions.map((a) => (
+              <li key={a.qid}>{a.title}{a.default ? ` — ${a.default}` : ''}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </CardShell>
   )
 }

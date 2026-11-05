@@ -746,3 +746,80 @@ def test_a_rebuild_that_fails_clears_the_marker_so_opening_it_again_does_not_rep
     assert _wait_for(lambda: clarify_store.load(wf.id) is None and runtime_state.get_flags(wf.id) == {})
     assert "Couldn’t prepare the questions" in _texts(wf.id, "event")
     assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+
+
+# ── Phase 0: the pencil after the build ──
+
+
+def test_the_pencil_after_the_build_restores_the_workflow_and_asks_the_question_again(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    skill_id = get_workflow(wf.id).skill_id
+    before = read_skill(skill_id)
+    q1 = _cards(wf.id, "clarify_question")[0]
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")["ok"]
+    assert len(read_skill(skill_id)["skills"][0]["steps"]) == len(before["skills"][0]["steps"]) + 1       # the confirm step was added
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "reopen"}, "r")["ok"]
+    assert read_skill(skill_id)["skills"][0]["steps"] == before["skills"][0]["steps"]                      # the answer is undone
+    first = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == q1["card_id"])
+    assert first["state"] == "open"
+
+
+# ── Phase 2: scoring on ──
+
+
+def test_scoring_on_keeps_asking_what_it_must_lists_assumptions_and_a_failing_test_wakes_deferred_ones(env, monkeypatch):
+    from conxa_compile.conversation import clarify_store
+    from conxa_core.config import settings
+
+    monkeypatch.setattr(settings, "clarify_scoring", "on")
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    data = clarify_store.load(wf.id)
+    by_kind = {q["kind"]: q for q in data["questions"]}
+    assert by_kind["confirm"]["status"] == "open" and by_kind["confirm"]["decision"]["action"] == "ask"       # the safety floor still asks
+    assert by_kind["values"]["status"] == "open" and by_kind["values"]["decision"]["action"] == "confirm"
+    assert "assumptions" not in data                                                # nothing here was cheap enough to assume
+    # an assumed question is listed in the summary and comes back on "ask me"
+    clarify_store.mutate(wf.id, lambda d: (d["questions"].append({"id": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?",
+                                                                 "status": "queued", "assumed": True, "choices": []}),
+                                           d.__setitem__("assumptions", [{"qid": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?",
+                                                                          "default": "No checks needed"}])))
+    b._flow_post_summary(wf.id, lambda e: None)
+    summary = _cards(wf.id, "workflow_summary")[-1]["summary"]
+    assert summary["assumptions"] == [{"qid": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?", "default": "No checks needed"}]
+    # a question left for the test is asked when a test fails at its step
+    key = by_kind["confirm"]["step_keys"][0]
+    clarify_store.update_question(wf.id, by_kind["values"]["id"], status="deferred", step_keys=[key])
+    b._tf_followup(wf.id, key, {}, lambda e: None)
+    assert clarify_store.get_question(wf.id, by_kind["values"]["id"])["status"] == "open"
+
+
+# ── Phase 3: re-evaluation after an answer ──
+
+
+def test_an_answer_that_changes_the_workflow_raises_the_question_it_newly_makes_possible_once(env):
+    from conxa_compile.conversation import clarify_store
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    before = {q["id"] for q in clarify_store.load(wf.id)["questions"]}
+    assert not any(k.startswith("missing_item") for k in before)
+    doc = read_skill(skill_id)                       # as if an earlier answer turned a clicked item into a run input
+    doc["skills"][0]["steps"].append({"action": {"action": "click"}, "intent": "Delete row",
+                                      "entity_binding": {"container_selector": "tr", "identifier": "{{row}}"}})
+    write_skill(skill_id, doc)
+    b._flow_reevaluate(wf.id)
+    added = [q for q in clarify_store.load(wf.id)["questions"] if q["id"] not in before]
+    assert [q["kind"] for q in added] == ["missing_item"] and added[0]["status"] in ("open", "queued")
+    b._flow_reevaluate(wf.id)                        # asked now: never asked twice
+    assert len([q for q in clarify_store.load(wf.id)["questions"] if q["kind"] == "missing_item"]) == 1

@@ -1,0 +1,64 @@
+[
+ {
+  "name": "decision popup always asks",
+  "kind": "fork",
+  "expect": "ask"
+ },
+ {
+  "name": "irreversible step always asks",
+  "kind": "confirm",
+  "expect": "ask"
+ },
+ {
+  "name": "asked before the build with a ticked guess is one tap",
+  "kind": "value",
+  "phase": "pre_compile",
+  "best_guess": "varies",
+  "expect": "confirm"
+ },
+ {
+  "name": "asked before the build with no guess asks",
+  "kind": "value",
+  "phase": "pre_compile",
+  "expect": "ask"
+ },
+ {
+  "name": "cheap with a no-op default is assumed",
+  "kind": "dropped_value",
+  "default": true,
+  "expect": "assume"
+ },
+ {
+  "name": "cheap-ish with a no-op default is assumed and shown",
+  "kind": "skip_when_empty",
+  "default": true,
+  "expect": "assume_show"
+ },
+ {
+  "name": "test-revealable question waits for a test",
+  "kind": "relative_date",
+  "default": true,
+  "expect": "defer"
+ },
+ {
+  "name": "no no-op default means it cannot be assumed",
+  "kind": "skip_when_empty",
+  "default": false,
+  "expect": "confirm"
+ },
+ {
+  "name": "likely wrong and costly asks",
+  "kind": "upload",
+  "default": true,
+  "expect": "ask"
+ },
+ {
+  "name": "usually-kept default makes it surer",
+  "kind": "relative_date",
+  "default": true,
+  "memory": {
+   "relative": 3
+  },
+  "expect": "assume_show"
+ }
+]
