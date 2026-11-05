@@ -159,3 +159,17 @@ def test_field_is_gated_like_the_drift_queue(client, monkeypatch):
 def test_field_rejects_a_bad_app_key(field):
     client, _seed = field
     assert client.get("/api/v1/app-graphs/Not A Host/field").status_code == 422
+
+
+def test_field_reports_the_finer_class_keeping_the_more_cautious_and_ignoring_unknown_values(field):
+    client, seed = field
+    seed(
+        [_obs() | {"sc": "decision_benign"}],
+        [_obs() | {"sc": "decision_consequential"}],
+        [_obs(bt=("Open app", "Stay"), tt=("open", "app")) | {"sc": "<script>"}],
+        [_obs(bt=("Yes", "No"), tt=("sure",))],
+    )
+    popups = {p["buttons"][0]: p for p in client.get("/api/v1/app-graphs/drive.example.com/field").json()["popups"]}
+    assert popups["Discard"]["surface_class"] == "decision_consequential" and popups["Discard"]["class"] == "decision"
+    assert "surface_class" not in popups["Open app"]
+    assert "surface_class" not in popups["Yes"]

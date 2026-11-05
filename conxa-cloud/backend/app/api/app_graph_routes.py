@@ -134,6 +134,11 @@ def field_observations(
                 "title_tokens": tokens, "buttons": buttons, "class": "decision",
                 "runs": set(), "known": False, "last_seen": 0,
             })
+            # The finer class the runtime reported (``sc``). Untrusted input: only the two known values are
+            # kept, and the more cautious one wins if runs disagree.
+            surface = evt.get("sc")
+            if surface == "decision_consequential" or (surface == "decision_benign" and "surface_class" not in row):
+                row["surface_class"] = surface
             row["runs"].add(run_id)
             row["known"] = row["known"] or evt.get("k") == 1
             ts = evt.get("ts")
