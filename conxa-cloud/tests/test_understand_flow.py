@@ -258,6 +258,41 @@ def test_the_same_text_chosen_as_a_click_and_in_an_address_becomes_one_input():
     assert [g["ops"][0]["name"] for g in groups] == ["target_file", "target_file"]
 
 
+def _fork_question(event_step_key):
+    return {"id": "fork:k:dialog_upload_options", "kind": "fork", "title": "A popup", "status": "open",
+            "step_keys": [event_step_key], "fork_state_id": "dialog_upload_options",
+            "choices": [{"id": "option:replace", "label": "Replace"}, {"id": "option:keep_both", "label": "Keep both"},
+                        {"id": "by_input", "label": "Let whoever uses it decide each time"}]}
+
+
+def test_always_click_a_button_becomes_that_option_as_an_approved_automatic_choice():
+    from conxa_compile.conversation import replay
+
+    q = _fork_question("k")
+    stored = [{"qid": "fork:r7", "kind": "fork", "event_ids": [7], "skipped": False, "choice": "btn:Keep both"}]
+    groups = replay.plan(stored, {"skills": [{"steps": []}]}, [q], lambda k: 7 if k == "k" else None)["groups"]
+    assert [g["ops"] for g in groups] == [[{"op": "set_fork_policy", "step_key": "k", "state_id": "dialog_upload_options",
+                                            "policy": {"mode": "auto", "option_id": "keep_both"}}]]
+
+
+def test_a_button_the_compiled_popup_does_not_have_is_left_to_be_asked_after_the_compile():
+    from conxa_compile.conversation import replay
+
+    q = _fork_question("k")
+    stored = [{"qid": "fork:r7", "kind": "fork", "event_ids": [7], "skipped": False, "choice": "btn:Cancel"}]
+    out = replay.plan(stored, {"skills": [{"steps": []}]}, [q], lambda k: 7 if k == "k" else None)
+    assert out["groups"] == [] and out["unapplied"] == []
+
+
+def test_a_generic_popup_answer_still_replays_as_before():
+    from conxa_compile.conversation import replay
+
+    q = _fork_question("k")
+    stored = [{"qid": "fork:r7", "kind": "fork", "event_ids": [7], "skipped": False, "choice": "by_input"}]
+    groups = replay.plan(stored, {"skills": [{"steps": []}]}, [q], lambda k: 7 if k == "k" else None)["groups"]
+    assert groups[0]["ops"][0]["policy"]["mode"] == "by_input"
+
+
 def test_a_step_finds_its_own_event_when_a_snapshot_is_shared(monkeypatch):
     from conxa_compile.editor.retarget import find_source_event
 

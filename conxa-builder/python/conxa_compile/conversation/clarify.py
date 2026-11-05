@@ -130,7 +130,7 @@ def _question(kind: str, qid: str, title: str, body: str, choices: list[dict[str
 ForkCopy = Callable[[dict[str, Any]], "str | None"]
 
 
-def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) -> dict[str, Any]:
+def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None, fork_states: list[Any] | None = None) -> dict[str, Any]:
     """The question about one popup state of an outcome fork. Every choice is a fixed fact from the
     compiled fork; ``fork_copy`` (a model, optional) may only reword the title line."""
     sig = state.get("signature") or {}
@@ -144,6 +144,14 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) 
         if o.get("role") == "consequential":
             detail.append("Careful: this can change or delete things. If you pick it, it will happen on its own, without asking anyone.")
         choices.append({"id": f"option:{o['id']}", "label": str(o.get("label") or o["id"]), "detail": " ".join(detail)})
+    recorded = next((o for o in options if o.get("recorded") and o.get("steps")), None)
+    if recorded is not None and len([s for s in (fork_states or []) if isinstance(s, dict)]) == 1:
+        label = str(recorded.get("label") or recorded["id"])
+        choices.append({
+            "id": "always", "label": f"It shows up every time: always click \u201c{label}\u201d",
+            "detail": ("Careful: this can change or delete things. " if recorded.get("role") == "consequential" else "")
+            + "It becomes an ordinary step. If the popup does not show up, the run stops there.",
+        })
     choices += [
         {"id": "by_input", "label": "Let whoever uses it decide each time",
          "detail": "They get a question to answer before it starts, so it can go a different way each time."},
@@ -666,7 +674,7 @@ def generate_questions(
             continue
         for state in ((s.get("outcome_fork") or {}).get("states") or []):
             if isinstance(state, dict) and state.get("id") and not (state.get("policy") or {}).get("reviewed"):
-                out.append(_fork_question(keys[i], state, fork_copy))
+                out.append(_fork_question(keys[i], state, fork_copy, (s.get("outcome_fork") or {}).get("states")))
 
     # 1b' ─ a popup left to a person: the recorded choice rejoins the steps, the others may not.
     for i, s in enumerate(steps):
@@ -824,6 +832,9 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         if choice not in {c["id"] for c in question.get("choices") or []}:
             return ops, "Nothing changed \u2014 that is not one of the choices"
         label = next((c["label"] for c in question.get("choices") or [] if c["id"] == choice), "")
+        if choice == "always":
+            ops.append({"op": "flatten_fork", "step_key": keys[0], "state_id": question.get("fork_state_id")})
+            return ops, "A normal step: " + label.split(": ", 1)[-1]
         if choice.startswith("option:"):
             policy = {"mode": "auto", "option_id": choice[len("option:"):]}
             receipt = f"Always: {label}"

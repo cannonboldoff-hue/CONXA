@@ -23,11 +23,15 @@ _MAP: dict[str, tuple[str, dict[str, str]]] = {
     "confirm_before": ("confirm", {"confirm": "yes", "no_confirm": "no"}),
     "popup_dismiss": ("popup", {"dismiss": "dismiss", "keep": "once"}),
 }
-_FORK_CHOICES = {"by_input", "ask_human", "stop"}     # never an "option:*": a person picks a popup button
+_FORK_CHOICES = {"by_input", "ask_human", "stop"}     # a pre-compile "btn:<label>" is mapped to the compiled option below
 # Pre-compile choices that ask the workflow to change (the others say "leave it as recorded").
 _CHANGES = {"each_run", "confirm", "dismiss"}
 # What an unapplied answer was about, in words a person recognises.
 SUBJECT = {"upload": "the file", "confirm_before": "checking before a step", "popup_dismiss": "the popup"}
+
+
+def clarify_norm(text: Any) -> str:
+    return " ".join(str(text or "").lower().split())
 
 
 def plan(
@@ -90,6 +94,18 @@ def plan(
             # "Leave it as recorded" changes nothing by design; only an answer that asked for a change is owed a report.
             if not matched and d["choice"] in _CHANGES:
                 unapplied.append({"kind": kind, "choice": d["choice"]})
+        elif kind == "fork" and str(d.get("choice") or "").startswith("btn:"):
+            # "Always click <button>": matched to the compiled popup by its recorded event, then to that
+            # popup's own option by the button label. No match is asked again after the compile.
+            wanted = clarify_norm(str(d["choice"])[len("btn:"):])
+            for q in questions_for("fork", events):
+                option = next((c for c in q.get("choices") or [] if str(c.get("id", "")).startswith("option:")
+                               and clarify_norm(c.get("label")) == wanted), None)
+                if option is None:
+                    continue
+                answer = {"choice": option["id"]}
+                ops, receipt = clarify.plan_answer(q, answer, doc)
+                groups.append({"label": q["title"], "ops": ops, "receipt": receipt, "qid": q["id"], "answer": answer, "value": None})
         elif kind == "fork" and d.get("choice") in _FORK_CHOICES:
             # Matched by the popup's own recorded event only. A popup that doesn't trace back to this event
             # is asked about after the compile: never guess which popup an answer was meant for.

@@ -128,6 +128,36 @@ def test_a_decision_popup_is_always_a_fork_and_a_plain_click_never_is():
         ("confirm_before", "r5", ""), ("fork", "r7", "")]
 
 
+def _popup_event(n, buttons):
+    return {**event(n, "click", "Replace", dialog="decision"), "dialog_buttons": buttons}
+
+
+def test_a_popup_question_offers_one_choice_per_button_then_the_generic_ones_and_never_a_guess():
+    merged = MERGED + [_popup_event(7, ["Replace", "Keep both", "Cancel"])]
+    out = TU.validate(raw_answer(values=[], questions=[
+        {"effect": "fork", "row": "r7", "prompt": "Decide?", "best_guess": "btn:Replace", "choices": [{"id": "stop", "label": "Halt"}]}]),
+        merged, TU.candidates_from_timeline(merged))
+    q = next(q for q in out["questions"] if q["kind"] == "fork")
+    assert [c["id"] for c in q["choices"]] == ["btn:Replace", "btn:Keep both", "btn:Cancel", "by_input", "ask_human", "stop"]
+    assert "Careful" in q["choices"][0]["detail"] and "Careful" not in q["choices"][1]["detail"]
+    assert q["best_guess"] == "", "a popup choice is never pre-filled"
+    assert next(c for c in q["choices"] if c["id"] == "stop")["label"] == "Halt", "the model may still reword the generic labels"
+
+
+def test_a_popup_the_model_left_out_comes_back_with_its_buttons():
+    merged = MERGED + [_popup_event(7, ["Keep editing", "Discard"])]
+    out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))
+    q = next(q for q in out["questions"] if q["kind"] == "fork")
+    assert [c["id"] for c in q["choices"]][:2] == ["btn:Keep editing", "btn:Discard"]
+
+
+def test_a_popup_with_no_recorded_buttons_keeps_only_the_generic_choices():
+    merged = MERGED + [event(7, "click", "Replace", dialog="decision")]
+    out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))
+    q = next(q for q in out["questions"] if q["kind"] == "fork")
+    assert [c["id"] for c in q["choices"]] == ["by_input", "ask_human", "stop"]
+
+
 def test_a_decision_popup_the_model_left_out_is_put_back_and_so_is_an_upload():
     merged = MERGED + [event(7, "click", "Replace", dialog="decision"), event(8, "upload_intent", "file")]
     out = TU.validate(raw_answer(values=[], questions=[]), merged, TU.candidates_from_timeline(merged))

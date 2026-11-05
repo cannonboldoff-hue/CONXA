@@ -760,6 +760,10 @@ class CompileFlowMixin:
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "state_id": op["state_id"],
                      "policy": op["policy"]}, rid)
                 self._log_edit("set_fork_policy", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "flatten_fork":
+                self.cmd_flatten_fork(
+                    {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "state_id": op["state_id"]}, rid)
+                self._log_edit("flatten_fork", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "add_known_popup_fork":
                 self.cmd_add_known_popup_fork(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "popup": op["popup"]}, rid)

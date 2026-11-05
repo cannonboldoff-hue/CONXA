@@ -99,7 +99,7 @@ def test_a_fork_is_asked_about_with_every_option_plus_the_three_policies():
     qs = clarify.generate_questions(_doc())
     q = next(q for q in qs if q["kind"] == "fork")
     ids = [c["id"] for c in q["choices"]]
-    assert ids == ["option:replace", "option:keep_both", "option:cancel", "by_input", "ask_human", "stop"]
+    assert ids == ["option:replace", "option:keep_both", "option:cancel", "always", "by_input", "ask_human", "stop"]
     assert "recording" in q["choices"][0]["detail"]
     assert "change or delete things" in q["choices"][0]["detail"]
     assert q["fork_state_id"] == "dialog_upload_options"
@@ -221,3 +221,73 @@ def test_an_answer_that_is_not_one_of_the_choices_changes_nothing():
     assert ops == [] and "not one of the choices" in receipt
     t = next(q for q in clarify.generate_questions(_human_doc()) if q["kind"] == "fork_then")
     assert clarify.plan_answer(t, {"choice": "maybe"}, _human_doc())[0] == []
+
+
+# ── "it shows up every time": the fork becomes the recorded steps (EXEC-49 G3) ───────────────
+
+from conxa_compile.editor.workflow_mutations import flatten_fork_to_recorded_option  # noqa: E402
+
+
+def _doc_with_opener_assertion():
+    doc = _doc()
+    steps = doc["skills"][0]["steps"]
+    steps[0]["validation"] = {"assertions": [
+        {"type": "selector_present", "target": '[role="dialog"]', "required": False},
+        {"type": "url_changed", "target": "", "required": True},
+    ]}
+    return doc
+
+
+def test_flattening_replaces_the_fork_with_the_recorded_steps_and_restores_the_opener_check():
+    doc = _doc_with_opener_assertion()
+    out = flatten_fork_to_recorded_option(doc, 1, "dialog_upload_options")
+    steps = out["skills"][0]["steps"]
+    assert [s.get("intent") for s in steps] == ["up", "click_replace"], "the fork is gone, the recorded click took its place"
+    assert not any((s.get("action") if isinstance(s.get("action"), str) else s["action"].get("action")) == "outcome_fork" for s in steps)
+    by_type = {a["type"]: a["required"] for a in steps[0]["validation"]["assertions"]}
+    assert by_type == {"selector_present": True, "url_changed": True}
+    assert out["meta"]["version"] == 2
+    assert _state(doc)["id"] == "dialog_upload_options", "the caller's document was changed"
+
+
+def test_a_consequential_recorded_click_stays_a_destructive_step_after_flattening():
+    out = flatten_fork_to_recorded_option(_doc_with_opener_assertion(), 1, "dialog_upload_options")
+    assert out["skills"][0]["steps"][1].get("consequence") == "irreversible"
+
+
+def test_only_a_single_state_fork_with_a_recorded_option_can_be_flattened():
+    doc = _doc()
+    with pytest.raises(ValueError, match="fork_state_not_found"):
+        flatten_fork_to_recorded_option(doc, 1, "nope")
+    with pytest.raises(ValueError, match="step_is_not_an_outcome_fork"):
+        flatten_fork_to_recorded_option(doc, 0, "dialog_upload_options")
+    two = _doc()
+    fork = two["skills"][0]["steps"][1]["outcome_fork"]
+    fork["states"].append({**fork["states"][0], "id": "other"})
+    with pytest.raises(ValueError, match="fork_has_other_states"):
+        flatten_fork_to_recorded_option(two, 1, "dialog_upload_options")
+    none = _doc()
+    for o in _state(none)["options"]:
+        o["recorded"] = False
+    with pytest.raises(ValueError, match="fork_option_not_found"):
+        flatten_fork_to_recorded_option(none, 1, "dialog_upload_options")
+
+
+def test_a_by_input_popup_loses_its_declared_input_when_flattened():
+    doc = set_fork_policy(_doc(), 1, "dialog_upload_options", {"mode": "by_input", "input": "on_popup"})
+    assert any(i["id"] == "on_popup" for i in doc["inputs"])
+    out = flatten_fork_to_recorded_option(doc, 1, "dialog_upload_options")
+    assert not any(i["id"] == "on_popup" for i in out["inputs"])
+
+
+def test_the_always_answer_becomes_a_flatten_op_and_is_offered_only_for_a_single_state_fork_with_a_recorded_click():
+    q = next(q for q in clarify.generate_questions(_doc()) if q["kind"] == "fork")
+    always = next(c for c in q["choices"] if c["id"] == "always")
+    assert "Replace" in always["label"] and "Careful" in always["detail"] and "stop" in always["detail"]
+    ops, receipt = clarify.plan_answer(q, {"choice": "always"}, _doc())
+    assert ops == [{"op": "flatten_fork", "step_key": q["step_keys"][0], "state_id": "dialog_upload_options"}]
+    assert receipt.startswith("A normal step")
+    two = _doc()
+    fork = two["skills"][0]["steps"][1]["outcome_fork"]
+    fork["states"].append({**fork["states"][0], "id": "other"})
+    assert all(c["id"] != "always" for q in clarify.generate_questions(two) if q["kind"] == "fork" for c in q["choices"])

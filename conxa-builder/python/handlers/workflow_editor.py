@@ -273,6 +273,28 @@ class WorkflowEditorMixin:
         result.update(self._history_flags(skill_id))
         return result
 
+    def cmd_flatten_fork(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """The popup shows up every time and the recorded choice is the answer: replace the fork with the
+        ordinary recorded steps (see workflow_mutations.flatten_fork_to_recorded_option)."""
+        import copy
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_compile.editor.workflow_mutations import flatten_fork_to_recorded_option
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        step_index = int(payload.get("step_index") or 0)
+        doc = read_skill(skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        self._push_undo(skill_id, copy.deepcopy(doc))
+        try:
+            doc = flatten_fork_to_recorded_option(doc, step_index, str(payload.get("state_id") or ""))
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Could not make the popup a normal step: {exc}") from exc
+        write_skill(skill_id, doc)
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        return result
+
     def cmd_add_known_popup_fork(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """Add a fork for a popup the app map knows from other workflows (asks a person by default)."""
         import copy

@@ -73,3 +73,7 @@ The research report on where Conxa wins and where it does not was written for sp
 **Unexpected popups and app errors are now handled instead of derailing a run — 2026-11-05**
 Before, a popup nobody had recorded was either ignored until the next click broke, or an app error such as "no access" was treated like a button that had moved and sent to the AI for nothing. Now the run stops at once with a plain reason when the app itself refuses, a popup that keeps coming back stops the run, and a popup that opens a moment late is still recognised. An unexpected question popup is put to the AI assistant to answer, but never when one of its buttons could not be undone, such as delete or pay.
 — 2026-11-05
+
+**You can now answer a popup question by naming the button, and say a popup always shows up — 2026-11-05**
+When a recording showed a popup with several buttons, the question used to offer only vague choices such as "stop" or "let someone decide". Now it lists the popup's own buttons, so you can say "always click Keep both" before the workflow is even built. After building, you can also say the popup shows up every time, and the workflow then treats that click as a normal step and stops if the popup is missing.
+— 2026-11-05

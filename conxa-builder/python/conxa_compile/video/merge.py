@@ -136,6 +136,15 @@ def _value_seen_in_both(ev: dict[str, Any], row: dict[str, Any] | None) -> bool:
     return len(value) >= 3 and value.lower() in _segment_text(row)
 
 
+def _dialog_button_names(ctx: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for b in ctx.get("buttons") or []:
+        name = str((b.get("name") or b.get("text") or "") if isinstance(b, dict) else "").strip()[:60]
+        if name and name not in names:
+            names.append(name)
+    return names[:8]
+
+
 def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], splice: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merged timeline rows in time order: events (matched or Pegasus-missed) and off-page observations."""
     timed = sorted(timed, key=lambda e: e["wall"])
@@ -174,6 +183,9 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             # notice | obstruction | decision_benign | info_request | decision_consequential | native
             # (docs/Popup-and-State-Handling.md §3): the same popup, in the one shared vocabulary.
             **({"surface": classify_surface(ev["dialog_context"])} if isinstance(ev.get("dialog_context"), dict) else {}),
+            # The popup's own button labels (UI text, never page data), so the pre-compile question can
+            # offer one choice per button. Absent for an action outside a popup.
+            **({"dialog_buttons": btns} if isinstance(ev.get("dialog_context"), dict) and (btns := _dialog_button_names(ev["dialog_context"])) else {}),
             # What the page said after this action (a new alert / status / invalid-field message), words only.
             **({"said": ev["surface_context"]["items"]} if isinstance(ev.get("surface_context"), dict) and ev["surface_context"].get("items") else {}),
         }))

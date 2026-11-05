@@ -317,6 +317,69 @@ def set_fork_policy(
     return doc
 
 
+def flatten_fork_to_recorded_option(
+    document: dict[str, Any], step_index: int, state_id: str
+) -> dict[str, Any]:
+    """The author says the popup shows up EVERY time and the recorded choice is the answer: the fork
+    becomes the ordinary steps that were recorded (EXEC-49 G3). Picking it is the approval, as picking an
+    option is; a consequential recorded click stays a destructive step and goes through the usual gates.
+    The step that opened the popup gets its "popup is present" check back as required, so a run where the
+    popup does NOT show up fails there instead of carrying on blind.
+
+    Only a fork with a single popup state can be flattened (another state would have no place to go)."""
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+    step = dict(steps[step_index])
+    action = step.get("action")
+    if (action.get("action") if isinstance(action, dict) else action) != "outcome_fork":
+        raise ValueError("step_is_not_an_outcome_fork")
+    states = [s for s in (step.get("outcome_fork") or {}).get("states") or [] if isinstance(s, dict)]
+    if len(states) != 1:
+        raise ValueError("fork_has_other_states")
+    state = states[0]
+    if state.get("id") != state_id:
+        raise ValueError("fork_state_not_found")
+    recorded = next((o for o in state.get("options") or [] if isinstance(o, dict) and o.get("recorded") and o.get("steps")), None)
+    if recorded is None:
+        raise ValueError("fork_option_not_found")
+    body = [dict(s) for s in recorded["steps"] if isinstance(s, dict)]
+
+    container = str((state.get("signature") or {}).get("container_selector") or "")
+    if container:
+        for j in range(step_index - 1, -1, -1):
+            validation = dict(steps[j].get("validation") or {})
+            assertions = [dict(a) for a in validation.get("assertions") or [] if isinstance(a, dict)]
+            hit = False
+            for a in assertions:
+                if a.get("type") == "selector_present" and str(a.get("target")) == container and not a.get("required"):
+                    a["required"] = True
+                    hit = True
+            if hit:
+                validation["assertions"] = assertions
+                steps[j] = {**steps[j], "validation": validation}
+                break
+
+    if step.get("input_binding") and (state.get("policy") or {}).get("mode") == "by_input":
+        gone = str(step["input_binding"]).lower()
+        doc["inputs"] = [i for i in doc.get("inputs") or [] if str(i.get("id") or "").lower() != gone]
+
+    steps[step_index:step_index + 1] = body
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    _invalidate_compile_report(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
 def apply_variant_observation(
     document: dict[str, Any], step_index: int, session_id: str, observation: dict[str, Any]
 ) -> dict[str, Any]:

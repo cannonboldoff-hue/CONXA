@@ -83,7 +83,8 @@ def test_a_popup_click_carries_its_class_in_the_shared_vocabulary():
     ev_rows = events_of(merge([with_popup, plain], [row(5, 6, "click"), row(9, 10, "click")]))
     assert ev_rows[0]["dialog"] == "decision"
     assert ev_rows[0]["surface"] == "decision_consequential"
-    assert "surface" not in ev_rows[1] and "dialog" not in ev_rows[1]
+    assert ev_rows[0]["dialog_buttons"] == ["Replace", "Keep both", "Cancel"]
+    assert "surface" not in ev_rows[1] and "dialog" not in ev_rows[1] and "dialog_buttons" not in ev_rows[1]
 
 
 def test_what_the_page_said_after_an_action_rides_on_its_row_as_words():

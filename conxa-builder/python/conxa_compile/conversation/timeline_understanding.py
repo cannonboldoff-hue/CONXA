@@ -357,6 +357,25 @@ def _count(report: dict[str, Any], stage: str, *rules: str) -> int:
     return sum(got[r]["count"] for r in (rules or tuple(got)) if r in got)
 
 
+def _fork_choices(row: dict[str, Any], offered: Any) -> list[dict[str, Any]]:
+    """The choices for a popup that asks for a decision: one per button the popup showed (``btn:<label>``,
+    fixed by code from the recording; the model never writes them), then the three generic ones. Picking a
+    button is the author's approval to press it every time, exactly as it is after the compile; a button
+    that changes or deletes things says so. Never pre-filled (``GUESSES`` has no fork entry)."""
+    from conxa_compile.compiler.outcome_fork import option_role
+
+    buttons = [str(b)[:60] for b in row.get("dialog_buttons") or [] if str(b).strip()]
+    per_button = []
+    for label in buttons:
+        careful = option_role(label) == "consequential"
+        per_button.append({
+            "id": f"btn:{label}", "label": f"Always click \u201c{label}\u201d",
+            "detail": ("Careful: this can change or delete things. If you pick it, it will happen on its own, without asking anyone."
+                       if careful else "It presses this button on its own whenever the popup shows up."),
+        })
+    return per_button + _choices_for("fork", offered)
+
+
 def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
     """Code's ids, the model's labels. A label that is missing or unusable falls back to the stock one."""
     if effect == "note":
@@ -374,7 +393,7 @@ def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
 
 def _fallback_question(effect: str, row_ref: str, row: dict[str, Any]) -> dict[str, Any]:
     return {"kind": effect, "row": row_ref, "event_id": row.get("event_id"), "prompt": _FALLBACK_PROMPT[effect], "why": "",
-            "choices": _choices_for(effect, None), "best_guess": "", "cost_rank": 1}
+            "choices": _fork_choices(row, None) if effect == "fork" else _choices_for(effect, None), "best_guess": "", "cost_rank": 1}
 
 
 def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> dict[str, Any]:
@@ -434,7 +453,7 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             elif effect == "fork":
                 _log(report, "override", "fork_without_decision_popup", row_ref)
                 continue
-        choices = _choices_for(effect, q.get("choices"))
+        choices = _fork_choices(row, q.get("choices")) if effect == "fork" else _choices_for(effect, q.get("choices"))
         if not choices:
             _log(report, "shape", "no_choices", row_ref)
             continue
