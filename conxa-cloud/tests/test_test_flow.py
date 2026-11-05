@@ -623,6 +623,52 @@ def test_choosing_stop_or_an_unlisted_choice_ends_the_test_without_resuming():
         assert stopped["declined"] is True and c.args == []
 
 
+def _agent_fork_result(step=2):
+    r = _fork_result(step=step, unknown=True)
+    meta = r["_meta"]["conxa/fork"]
+    meta.update({"requires_human": False, "agent": True, "reason": "agent_decides"})
+    meta["choices"] = [{"id": "Open app", "label": "Open app", "role": "unknown"},
+                       {"id": "Stay in browser", "label": "Stay in browser", "role": "unknown"},
+                       {"id": "__stop__", "label": "Stop the run", "role": "stop"}]
+    return r
+
+
+def test_only_a_pause_the_runtime_marked_for_an_agent_is_read_as_one():
+    assert _extract_fork_pause(_agent_fork_result())["agent"] is True
+    assert _extract_fork_pause(_fork_result())["agent"] is False  # human-only (requires_human true)
+    legacy = _fork_result()
+    legacy["_meta"]["conxa/fork"].pop("requires_human")
+    assert _extract_fork_pause(legacy)["agent"] is False  # an older engine: never handed to the model
+
+
+def test_an_agent_popup_is_answered_by_the_standin_and_resumes_that_step():
+    c = Calls([DONE])
+    asked = []
+    result, stopped = c.drive(_agent_fork_result(step=2), fork_hook=lambda f: 1 / 0,
+                              answer_popup=lambda f, content: asked.append(f["title"]) or "Stay in browser")
+    assert result is DONE and stopped is None and asked == ["Upload options"]
+    assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 2, "review_results": {"2": {"choice": "Stay in browser"}}}]
+
+
+def test_an_agent_popup_never_goes_to_the_person_hook_and_a_human_popup_never_to_the_standin():
+    c = Calls([DONE, DONE])
+    c.drive(_agent_fork_result(), fork_hook=lambda f: pytest.fail("person asked"), answer_popup=lambda f, content: "Open app")
+    c.drive(_fork_result(), fork_hook=lambda f: "keep_both", answer_popup=lambda f, content: pytest.fail("model asked"))
+
+
+def test_with_let_ai_answer_off_the_test_ends_at_an_agent_popup():
+    c = Calls([])
+    result, stopped = c.drive(_agent_fork_result(), fork_hook=lambda f: "Open app", answer_popup=None)
+    assert stopped["declined"] is True and c.args == []
+
+
+def test_the_standin_choosing_stop_or_an_unlisted_button_ends_the_test():
+    for answer in ("__stop__", "Delete everything"):
+        c = Calls([])
+        _, stopped = c.drive(_agent_fork_result(), answer_popup=lambda f, content, a=answer: a)
+        assert stopped["declined"] is True and c.args == []
+
+
 def test_a_test_ended_at_a_popup_is_kept_on_the_workflow_and_shows_as_partial_in_the_lifecycle(env):
     b, wf, _out = env
 

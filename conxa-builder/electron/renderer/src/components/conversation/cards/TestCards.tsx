@@ -127,13 +127,15 @@ export function TestInputsCard({ threadId, item }: CardProps) {
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <input type="checkbox" role="switch" className="mt-1 accent-white" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
           <span>
-            <span className="text-[var(--text-primary)]">Let AI answer review steps</span>
+            <span className="text-[var(--text-primary)]">Let AI answer review steps and unexpected popups</span>
             <span className="block text-xs text-[var(--text-meta)]">
-              {aiSteps === 0
-                ? 'This workflow has no AI review steps, so this changes nothing here.'
-                : useAi
-                  ? `Uses AI credits for ${plural(aiSteps, 'review step')}.`
-                  : 'Off: the test fails at the first AI review step, with no credits used.'}
+              {useAi
+                ? aiSteps === 0
+                  ? 'Uses AI credits only if an unexpected popup appears and has to be answered.'
+                  : `Uses AI credits for ${plural(aiSteps, 'review step')}, and for any unexpected popup.`
+                : aiSteps === 0
+                  ? 'Off: the test stops at an unexpected popup, with no credits used.'
+                  : 'Off: the test stops at the first AI review step or unexpected popup, with no credits used.'}
             </span>
           </span>
         </label>

@@ -28,7 +28,7 @@ _APPLY_STALE_S = 60.0
 
 # A recording that was understood before the build is asked again only about popups and the
 # irreversible steps the compiler found: values, files and coverage were settled earlier.
-_ASKED_AFTER_UNDERSTANDING = {"fork", "known_popup", "popup", "confirm"}
+_ASKED_AFTER_UNDERSTANDING = {"fork", "fork_then", "known_popup", "popup", "confirm"}
 
 
 def _thread(workflow_id: str) -> str:

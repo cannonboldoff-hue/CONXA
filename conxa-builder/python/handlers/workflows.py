@@ -124,6 +124,9 @@ def _extract_fork_pause(result: dict[str, Any]) -> dict[str, Any] | None:
             "reason": str(fork.get("reason") or ""),
             "unknown": bool(fork.get("unknown")),
             "suggested": fork.get("suggested"),
+            # EXEC-49 P5: a popup the workflow was never taught, put to whoever stands in for the MCP client
+            # (here: Studio's own model, with "let AI answer" on). Absent on older engines = human-only.
+            "agent": bool(fork.get("agent")) and fork.get("requires_human") is False,
             "choices": [{"id": str(c["id"]), "label": str(c.get("label") or c["id"]), "role": str(c.get("role") or "")} for c in choices],
         }
     return None
@@ -213,6 +216,13 @@ def capabilities_needed(steps: list[Any]) -> set[str]:
                 need.add("templated_click")
             walk((s.get("branch") or {}).get("steps") if isinstance(s.get("branch"), dict) else None)
             walk((s.get("for_each") or {}).get("steps") if isinstance(s.get("for_each"), dict) else None)
+            fork = s.get("outcome_fork") if isinstance(s.get("outcome_fork"), dict) else {}
+            for st in fork.get("states") or []:
+                for o in (st.get("options") if isinstance(st, dict) else None) or []:
+                    if isinstance(o, dict):
+                        if o.get("then") in ("end", "stop"):
+                            need.add("fork_then")  # an engine that ignores it would carry on past a stop
+                        walk(o.get("steps"))
 
     walk(steps)
     return need
@@ -237,6 +247,7 @@ def _drive_runtime_pauses(
     previewed: bool,
     mark: Any,
     fork_hook: Any = None,
+    answer_popup: Any = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Keep calling the runtime until it stops pausing. Returns ``(final result, stopped_at)``.
 
@@ -270,8 +281,17 @@ def _drive_runtime_pauses(
                 raise RuntimeError(
                     f"A popup decision paused {pauses_seen} times in one test run — stopping instead of looping."
                 )
-            mark(f"Waiting for your decision on “{fork['title'] or 'a popup'}”…")
-            choice = fork_hook(fork) if fork_hook is not None else _FORK_STOP
+            if fork.get("agent"):
+                # An unrecorded popup the runtime put to its caller. With "let AI answer" off there is
+                # no one to ask, so the test ends at the popup and the chat offers to teach it.
+                if answer_popup is None:
+                    return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
+                                    "remaining": 0, "run_id": "", "declined": True}
+                mark(f"Answering the “{fork['title'] or 'a popup'}” popup…")
+                choice = answer_popup(fork, result.get("content") or [])
+            else:
+                mark(f"Waiting for your decision on “{fork['title'] or 'a popup'}”…")
+                choice = fork_hook(fork) if fork_hook is not None else _FORK_STOP
             valid = {c["id"] for c in fork["choices"]}
             if choice not in valid or choice == _FORK_STOP:
                 return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
@@ -849,6 +869,44 @@ class WorkflowsMixin:
             raise RuntimeError(f"AI review answer did not match the required output: {'; '.join(errors)}")
         return data
 
+    def _answer_popup_choice(self, fork: dict[str, Any], content: list[Any]) -> str:
+        """EXEC-49 P5: Studio's stand-in for the MCP client when the runtime puts a popup the workflow was
+        never taught to its caller. Same metering and route as `_answer_ai_review`. It can only name one of
+        the buttons the runtime offered (or stop); when it cannot tell, it stops. Anything else raises, and
+        the test fails loudly rather than guessing."""
+        from conxa_compile.llm.client import call_llm
+        from conxa_core import llm as core_llm
+        from conxa_core.config import settings as _settings
+        from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, QuotaExceeded
+
+        self._install_proxy_router(usage_class="ai_credits")
+
+        ids = [c["id"] for c in fork.get("choices") or []]
+        schema = {"type": "object", "properties": {"choice": {"type": "string", "enum": ids}}, "required": ["choice"]}
+        context_text, image = _review_context_from_content(content)
+        payload: dict[str, Any] = {"user_text": (
+            "A popup this workflow was never taught about appeared during a test run. Choose the one button that "
+            "best serves what the user is trying to get done. If you cannot tell which is right, choose "
+            f"\"__stop__\".\n\nYour answer must be a JSON object matching this schema:\n{json.dumps(schema)}\n\n{context_text}"
+        )}
+        if image:
+            payload["image_base64"], payload["image_mime"] = image
+
+        timeout_ms = _settings.llm_vision_timeout_ms
+        try:
+            data = call_llm("ai_review", payload, timeout_ms)
+        except (QuotaExceeded, EntitlementBlocked):
+            raise
+        except CloudUnreachable:
+            data = core_llm.get_router().route_vision("ai_review", payload, timeout_ms)
+
+        if not isinstance(data, dict):
+            raise RuntimeError("The popup answerer returned no usable response.")
+        errors = _validate_ai_review_answer(data, schema)
+        if errors:
+            raise RuntimeError(f"The popup answer did not match the offered buttons: {'; '.join(errors)}")
+        return str(data["choice"])
+
     def cmd_test_workflow(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """Run a workflow end-to-end against the local Conxa runtime.
 
@@ -1073,6 +1131,12 @@ class WorkflowsMixin:
                     run_args["dry_run"] = True
                     previewed = True
                     _mark("This engine predates the test guard — previewing instead: steps that can't be undone are checked but not run.")
+            # EXEC-49 P5: "let AI answer" also lets Studio's model stand in for the MCP client on a popup the
+            # workflow was never taught. An engine that doesn't know the argument would ignore it, so ask first.
+            popup_answerer = None
+            if use_ai and _app_layer_supports(conxa_dir, "answer_popups"):
+                run_args["answer_popups"] = True
+                popup_answerer = self._answer_popup_choice
             result = call_runtime_tool(
                 runtime_dir, "execute_skill", run_args,
                 conxa_dir=conxa_dir,
@@ -1094,6 +1158,7 @@ class WorkflowsMixin:
                     env={"CONXA_DATA_DIR": str(test_data_dir)}),
                 answer_review=self._answer_ai_review if use_ai else _no_ai_answer, guard_hook=guard_hook, review_hook=review_hook,
                 guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
+                answer_popup=popup_answerer,
             )
             _mark("Runtime call finished")
         except (RuntimeToolError, RuntimeError) as exc:
