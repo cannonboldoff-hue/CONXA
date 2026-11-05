@@ -426,3 +426,50 @@ def test_an_unreadable_reply_is_asked_for_once_more_and_a_missing_one_is_not():
     assert TU.understand_timeline(MERGED, "download invoices", call=lambda t, p, ms: calls.append(p)) ["source"] == "fallback"
     assert len(calls) == 1                                           # no reply at all (proxy down): do not wait twice
 
+
+
+# --- grading and the rules table --------------------------------------------------------------
+
+def _graded(raw, hints=None):
+    cands = TU.candidates_from_timeline(MERGED)
+    told = TU.told_from_hints(cands, hints)
+    return TU._grade(TU.validate(raw, MERGED, cands, told=told), cands, told)
+
+
+def test_grade_thresholds():
+    assert _graded(raw_answer()) == ("ok", [])
+    assert _graded({})[0] == "unusable"
+    assert _graded(raw_answer(goal=""))[1] == ["no goal"]
+    # 2 of the 3 candidates unjudged is more than half; the person's own answer takes one candidate off what the model owes
+    assert _graded(raw_answer(values=raw_answer()["values"][:1]))[0] == "weak"
+    assert _graded(raw_answer(values=raw_answer()["values"][:1]), hints={"3": True, "5": False})[0] == "ok"
+    ghosts = [{"ref": f"url:9{i}", "verdict": "varies"} for i in range(TU.WEAK_REF_DROPS)]
+    assert _graded(raw_answer(values=raw_answer()["values"] + ghosts, detailed_summary=[]))[0] == "weak"
+    assert _graded(raw_answer(values=raw_answer()["values"] + ghosts[:-1], detailed_summary=[]))[0] == "ok"
+
+
+def test_validation_report_counts_each_drop_with_its_first_example():
+    out = TU.validate(raw_answer(values=[{"ref": "url:9", "verdict": "varies"}, {"ref": "url:8", "verdict": "varies"}]),
+                      MERGED, TU.candidates_from_timeline(MERGED))
+    assert out["validation_report"]["reference"]["unknown_ref"] == {"count": 2, "example": "url:9"}
+    assert set(out["validation_report"]) <= set(TU.STAGES)
+
+
+def test_unhashable_junk_in_a_model_answer_is_dropped_not_raised():
+    out = TU.validate({"values": [{"ref": ["x"]}], "gaps": [{"row": ["r1"], "note": "n"}], "questions": [{"effect": ["fork"], "row": ["r1"]}]},
+                      MERGED, TU.candidates_from_timeline(MERGED))
+    assert out["gaps"] == [] and out["validation_report"]["reference"]["unknown_ref"]["count"] == 1
+
+
+def test_the_rules_table_matches_the_effect_table_in_the_workflow_graph():
+    import re
+    from pathlib import Path
+
+    html = (Path(__file__).resolve().parents[2] / "docs" / "artifacts" / "conxa-workflow-engine" / "conxa-workflow-engine.html").read_text("utf-8")
+    rows = re.findall(r'<tr><td class="k">(\w+)</td><td>(.*?)</td><td>(.*?)</td></tr>', html.split("Question effects", 1)[1].split("</table>", 1)[0])
+    assert {r[0] for r in rows} == set(TU.RULES)
+    for effect, ids, guess in rows:
+        rule = TU.RULES[effect]
+        if rule["choices"]:
+            assert re.findall(r"<code>(\w+)</code>", ids) == [c[0] for c in rule["choices"]], effect
+        assert guess == ("never" if not rule["guesses"] else "confirm only" if rule["unsafe"] else "yes"), effect

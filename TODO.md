@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 46 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 47 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **115** |
+| **Total** | **116** |
 
 ---
 
@@ -375,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (37 remaining)
+## P2 — High Value, Do Soon (38 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1131,6 +1131,12 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Description:** `runtime/app/handover.js` arms its "Done" banner with `context.exposeBinding("__conxaHandoverDone")` + `context.addInitScript(_bannerScript(...))`. When the runtime borrows a view from Conxa Execute or Build Studio's test panel (`host_browser.js`), Playwright's one context is the host app's default CDP context, which holds the app's own window and other runs' views — so the banner script and binding reach every page in the host process, including the app UI, until the runtime disconnects. Found while building BUILD-46 (`Done.md`; the recorder's embedded mode installs its bridge per run page for exactly this reason, TRD §4.7a).
 - **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
 - **Complexity:** S–M.
+
+### BUILD-64 — Count what the other model guards drop (follow-up to the understanding-check ledger, 2026-11-05)
+- **Category:** Builder
+- **Description:** `conversation/timeline_understanding.py::validate()` now counts every drop under a stage and rule (`validation_report` in `understanding.json`), grades the answer and retries a weak one once. The other model guards still drop silently: `llm/workflow_semantics.py::_validate_findings`, `conversation/clarify.py::apply_reworded`, `llm/workflow_intent.py::_graph_from_raw`, `conversation/harness.py::map_free_text_to_choice` and the post-compile `conversation/understanding.py::validate`. The workflow graph artifact marks each as "Not counted".
+- **Suggested fix:** move `_log`/`_count` out of `timeline_understanding.py` into a shared module, give each guard an optional `report` argument and save it beside what it checks (`second_opinion.json`, the compile report). Do this once the first `eval_understanding.py rates` run on real recordings (none on disk yet) shows whether the `WEAK_*` thresholds need tuning and whether the ledger earns its keep.
+- **Complexity:** M.
 
 ### BUILD-63 — Split the god files (audit B9, deferred 2026-11-05)
 - **Category:** Builder / Runtime

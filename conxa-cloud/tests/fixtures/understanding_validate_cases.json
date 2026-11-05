@@ -1,0 +1,130 @@
+{
+  "_about": "Golden cases for timeline_understanding.validate: a model answer (and optionally its retry) in, the checked answer and the validation_report out. report keys are 'stage.rule' -> count and the match is exact, so a drop that stops being logged (or starts silently) fails here. questions are 'kind@row:ref'. A case without raw_retry gets the same answer on the retry.",
+  "timelines": {
+    "base": [
+      {"kind": "event", "event_id": 1, "row_ref": "r1", "action": "navigate", "target": "", "value": "https://app.test/", "url": "https://app.test/", "tab": "tab_0", "t_ms": 1000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 2, "row_ref": "r2", "action": "manual_navigate", "target": "", "value": "{\"to_url\": \"https://app.test/acme/repo-one/settings\"}", "url": "https://app.test/", "tab": "tab_0", "t_ms": 2000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 3, "row_ref": "r3", "action": "type", "target": "Search", "value": "INV-20931", "url": "https://app.test/", "tab": "tab_0", "t_ms": 3000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 4, "row_ref": "r4", "action": "click", "target": "Download PDF", "value": null, "url": "https://app.test/", "tab": "tab_0", "t_ms": 4000, "segment": null, "flags": []}
+    ],
+    "popup": [
+      {"kind": "event", "event_id": 1, "row_ref": "r1", "action": "navigate", "target": "", "value": "https://app.test/", "url": "https://app.test/", "tab": "tab_0", "t_ms": 1000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 2, "row_ref": "r2", "action": "manual_navigate", "target": "", "value": "{\"to_url\": \"https://app.test/acme/repo-one/settings\"}", "url": "https://app.test/", "tab": "tab_0", "t_ms": 2000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 3, "row_ref": "r3", "action": "type", "target": "Search", "value": "INV-20931", "url": "https://app.test/", "tab": "tab_0", "t_ms": 3000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 4, "row_ref": "r4", "action": "click", "target": "Download PDF", "value": null, "url": "https://app.test/", "tab": "tab_0", "t_ms": 4000, "segment": null, "flags": []},
+      {"kind": "event", "event_id": 5, "row_ref": "r5", "action": "click", "target": "Replace", "value": null, "url": "https://app.test/", "tab": "tab_0", "t_ms": 5000, "segment": null, "flags": [], "dialog": "decision"}
+    ]
+  },
+  "cases": [
+    {
+      "name": "clean answer changes nothing",
+      "raw": {"goal": "Download an invoice as a PDF.", "short_summary": "Finds an invoice and downloads the PDF.",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "detailed_summary": [{"row": "r3", "text": "Types the invoice number."}],
+              "decided": [{"row": "r1", "text": "Opens the app.", "reason": "The task never names another page."}],
+              "questions": [], "gaps": []},
+      "expect": {"grade": "ok", "calls": 1, "questions": [], "report": {}}
+    },
+    {
+      "name": "an invented ref and an invented row are dropped and counted",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}, {"ref": "url:999", "verdict": "varies", "name": "ghost"}],
+              "detailed_summary": [{"row": "r3", "text": "Types the invoice number."}, {"row": "r99", "text": "ghost row"}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": [], "report": {"reference.unknown_ref": 1, "reference.unknown_row": 1}}
+    },
+    {
+      "name": "three invented refs make the answer weak and the retry fixes it",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}, {"ref": "url:998", "verdict": "varies"}, {"ref": "url:999", "verdict": "varies"}],
+              "detailed_summary": [{"row": "r99", "text": "ghost row"}]},
+      "raw_retry": {"goal": "Download an invoice.", "short_summary": "x",
+                    "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}]},
+      "expect": {"grade": "ok", "retried": true, "calls": 2, "questions": [], "report": {}}
+    },
+    {
+      "name": "a weak answer the retry does not improve is kept, not thrown away",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}, {"ref": "url:998", "verdict": "varies"}, {"ref": "url:999", "verdict": "varies"}, {"ref": "url:997", "verdict": "varies"}]},
+      "expect": {"grade": "weak", "retried": false, "calls": 2, "source": "model", "questions": [], "report": {"reference.unknown_ref": 3}}
+    },
+    {
+      "name": "a decided point with no reason is dropped and the answer is weak",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "decided": [{"row": "r1", "text": "Opens the app.", "reason": ""}]},
+      "raw_retry": {"goal": "Download an invoice.", "short_summary": "x",
+                    "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+                    "decided": [{"row": "r1", "text": "Opens the app.", "reason": "The task never names another page."}]},
+      "expect": {"grade": "ok", "retried": true, "calls": 2, "questions": [], "report": {}}
+    },
+    {
+      "name": "no verdict for most candidates is weak",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x", "values": [{"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}]},
+      "expect": {"grade": "weak", "retried": false, "calls": 2, "questions": [], "report": {"shape.no_verdict": 2}}
+    },
+    {
+      "name": "a guess on a fork is stripped, and the confirm before it is put back",
+      "timeline": "popup",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}, {"ref": "click:5", "verdict": "fixed"}],
+              "questions": [{"effect": "fork", "row": "r5", "prompt": "A popup asked what to do.", "best_guess": "by_input", "cost_rank": 1}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": ["confirm_before@r4:", "fork@r5:"], "guesses": {"fork@r5": ""},
+                 "report": {"safety.invalid_guess": 1, "backfill.must_ask": 1}}
+    },
+    {
+      "name": "a model popup_dismiss on a decision popup becomes a fork",
+      "timeline": "popup",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}, {"ref": "click:5", "verdict": "fixed"}],
+              "questions": [{"effect": "popup_dismiss", "row": "r5", "prompt": "Close it?", "best_guess": "dismiss", "cost_rank": 1},
+                            {"effect": "confirm_before", "row": "r4", "prompt": "Check first?", "best_guess": "confirm", "cost_rank": 2}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": ["confirm_before@r4:", "fork@r5:"], "guesses": {"fork@r5": "", "confirm_before@r4": "confirm"},
+                 "report": {"override.popup_became_fork": 1, "safety.invalid_guess": 1}}
+    },
+    {
+      "name": "a just-do-it guess on a confirm is stripped",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "questions": [{"effect": "confirm_before", "row": "r4", "prompt": "Download without asking?", "best_guess": "no_confirm", "cost_rank": 1}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": ["confirm_before@r4:"], "guesses": {"confirm_before@r4": ""}, "report": {"safety.unsafe_guess": 1}}
+    },
+    {
+      "name": "two values with the same name get distinct input names",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "varies", "name": "item"}, {"ref": "typed:3", "verdict": "varies", "name": "item"}, {"ref": "click:4", "verdict": "fixed"}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": ["value@r2:url:2"], "names": {"url:2": "item", "typed:3": "item_2"}, "report": {"backfill.value_question_added": 1}}
+    },
+    {
+      "name": "an answer nested one level down is the same answer",
+      "raw": {"understanding": {"goal": "Download an invoice as a PDF.", "short_summary": "x",
+                               "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}]}},
+      "expect": {"grade": "ok", "calls": 1, "questions": [], "report": {}}
+    },
+    {
+      "name": "a fork on a row with no decision popup is dropped",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "questions": [{"effect": "fork", "row": "r4", "prompt": "Decide?", "cost_rank": 1}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": [], "report": {"override.fork_without_decision_popup": 1}}
+    },
+    {
+      "name": "a question about a value the model called fixed makes it unsure",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "questions": [{"effect": "value", "row": "r2", "ref": "url:2", "prompt": "Same address every time?", "best_guess": "fixed", "cost_rank": 1}]},
+      "expect": {"grade": "ok", "calls": 1, "questions": ["value@r2:url:2"], "verdicts": {"url:2": "unsure"}, "report": {"override.fixed_but_asked": 1}}
+    },
+    {
+      "name": "an unknown effect and a malformed question are dropped and counted",
+      "raw": {"goal": "Download an invoice.", "short_summary": "x",
+              "values": [{"ref": "url:2", "verdict": "fixed"}, {"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}, {"ref": "click:4", "verdict": "fixed"}],
+              "questions": [{"effect": "launch_missiles", "row": "r1", "prompt": "?"}, "not a question"]},
+      "expect": {"grade": "ok", "calls": 1, "questions": [], "report": {"shape.unknown_effect": 1, "shape.malformed_item": 1}}
+    },
+    {
+      "name": "an unreadable reply twice falls back and asks about the address",
+      "raw": {"text": "cut off mid-sent"},
+      "expect": {"grade": "unusable", "retried": false, "calls": 2, "source": "fallback", "questions": ["value@r2:url:2"], "report": {"backfill.fallback_url_question": 1}}
+    }
+  ]
+}

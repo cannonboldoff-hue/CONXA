@@ -120,6 +120,11 @@ button.f i{width:10px;height:10px;border-radius:2px;display:block}
 .links button{font:500 12.5px var(--f-mono);padding:4px 8px}
 .callout{border-left:3px solid var(--code);background:var(--sunk);padding:9px 12px;border-radius:0 5px 5px 0;font-size:13.5px}
 .callout.m{border-left-color:var(--model)} .callout.h{border-left-color:var(--human)} .callout.x{border-left-color:var(--crit)}
+.insp details{border:1px solid var(--line);border-radius:5px;padding:6px 10px;background:var(--sunk)}
+.insp details+details{margin-top:6px}
+.insp summary{cursor:pointer;font-weight:600;font-size:13.5px}
+.insp summary:focus-visible{outline:2px solid var(--code);outline-offset:2px}
+.insp details ul{margin-top:6px}
 pre{margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:5px;padding:10px 12px;font:12px/1.5 var(--f-mono);overflow-x:auto;white-space:pre}
 table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--panel)}
 th,td{text-align:left;vertical-align:top;padding:7px 9px;border-bottom:1px solid var(--line)}
@@ -240,7 +245,7 @@ td.k{font-weight:600}
   <div class="card"><h3>Model touchpoints</h3><div class="scroll"><table>
     <thead><tr><th>Call</th><th>When</th><th>Writes</th><th>Held in check by</th></tr></thead><tbody>
     <tr><td class="k">Pegasus 1.6</td><td>Once per new recording or blur change</td><td>Video segments</td><td>Browser wins in the merge; never creates steps; SHA-256 cache</td></tr>
-    <tr><td class="k"><code>timeline_understanding</code></td><td>Before compile, 1 call</td><td>Meaning, questions</td><td><code>validate()</code>, must-ask backfill, unsafe-guess strip</td></tr>
+    <tr><td class="k"><code>timeline_understanding</code></td><td>Before compile, 1 call</td><td>Meaning, questions</td><td><code>validate()</code>: five stages, graded, every drop counted in <code>validation_report</code>; one retry on a weak answer</td></tr>
     <tr><td class="k"><code>workflow_review</code></td><td>End of compile, 1 call</td><td>Intent graph, second-opinion findings</td><td><code>_validate_findings</code>, keyed on <code>step_key</code></td></tr>
     <tr><td class="k"><code>clarify_question_copy</code></td><td>Background after Q2 posts</td><td>Wording only</td><td>Field-by-field check; template kept on failure</td></tr>
     <tr><td class="k">Chat harness</td><td>Per message</td><td>Reply, routed action, proposals</td><td>Deterministic routing first; allowed set only; Confirm cards; three gates</td></tr>
@@ -264,7 +269,8 @@ td.k{font-weight:600}
       <li><b>BUILD-58:</b> Human Edit's screenshot pane and re-target anchors still read stored frames that new recordings lack; renderer cards for the <code>understand</code> stage; blur toggle; runtime app-layer rebuild for <code>video_context</code>; live 5-recording trial.</li>
       <li>Typed-text verdicts do not pre-tick the compile-time <code>values</code> question; <code>phase</code> comes from the second opinion.</li>
       <li><b>BUILD-60:</b> no restore for dropped script events. <b>BUILD-59:</b> nothing reads <code>produces</code>/<code>consumes</code> yet.</li>
-      <li>Pegasus is a hard dependency: an outage stops every new workflow before compile.</li></ul></div>
+      <li>Pegasus is a hard dependency: an outage stops every new workflow before compile.</li>
+      <li>Only the understanding check counts what it drops. The other five model guards (second opinion, question wording, chat, auto-fix, Tier B) drop or refuse silently.</li></ul></div>
     <div class="card"><h3>Docs that disagree with the code</h3><ul class="small">
       <li><code>Understanding-First-Harness.md</code>: says nothing is built, video is opt-in, and there is a fallback to the old path.</li>
       <li><code>TRD.md</code> §6.2: says keep-every-action defaults on; <code>config.py</code> has <code>False</code>.</li>
@@ -350,6 +356,7 @@ function Graph(host,insp,spec){
     grp.appendChild(mk('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:7,'class':'b'}));
     grp.appendChild(mk('text',{x:p.x+11,y:p.y+19,'class':'tag'},n.tag||TAG[n.k]));
     if(n.st==='inf'||n.st==='prop')grp.appendChild(mk('text',{x:p.x+p.w-10,y:p.y+19,'text-anchor':'end','class':'tag'},n.st==='inf'?'INFERRED':'PROPOSED'));
+    else if(n.v)grp.appendChild(mk('text',{x:p.x+p.w-10,y:p.y+19,'text-anchor':'end','class':'tag'},'VALIDATED'));
     var yy=p.y+28+16;p.tl.forEach(function(t){grp.appendChild(mk('text',{x:p.x+11,y:yy,'class':'t'},t));yy+=22});
     yy+=p.sl.length?5:0;p.sl.forEach(function(t){grp.appendChild(mk('text',{x:p.x+11,y:yy-2,'class':'s'},t));yy+=17});
     grp.addEventListener('click',function(){g.select(n.id,true)});
@@ -380,6 +387,9 @@ Graph.prototype.select=function(id,scroll){
   if(scroll){g.insp.classList.add('open');g.nodeEls[id].scrollIntoView({behavior:'smooth',block:'center',inline:'center'})}
 };
 
+/* The validate contract: every model answer is held to these five stages, in this order. */
+var VSTAGES=[['shape','Shape'],['reference','Reference'],['override','Override'],['backfill','Backfill'],['safety','Safety']];
+function vList(v){return '<ul>'+VSTAGES.map(function(s){return '<li><b>'+s[1]+'</b> · '+(v[s[0]]||'—')+'</li>'}).join('')+'</ul><p class="small muted">'+v.lg+'</p>'}
 /* panel builder shared by CONXA + Claude graphs */
 function panel(n,g){
   var d=n.d||{},h='<div class="hd"><div class="chips"><span class="chip '+KCH[n.k]+'">'+KNAME[n.k]+'</span>';
@@ -390,6 +400,7 @@ function panel(n,g){
   if(d.extra)h+=d.extra;
   if(d.guard)h+='<section><h4>Guards &amp; invariants</h4><ul>'+d.guard.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul></section>';
   if(d.fail)h+='<div class="callout x"><b>When it fails.</b> '+d.fail+'</div>';
+  if(n.v)h+='<section><h4>Validate contract</h4>'+vList(n.v)+'<div class="links"><button type="button" data-go="val">Shared contract</button></div></section>';
   if(d.files)h+='<section><h4>Code</h4><div class="paths">'+d.files.map(function(x){return '<span>'+x+'</span>'}).join('')+'</div></section>';
   var ins=[],outs=[];g.spec.edges.forEach(function(e){if(e.t===n.id&&e.f!==n.id)ins.push(e.f);if(e.f===n.id&&e.t!==n.id)outs.push(e.t)});
   var btn=function(id){return '<button type="button" data-go="'+id+'">'+esc(g.byId[id].t)+'</button>'};
@@ -444,20 +455,27 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    sum:'Every Studio model call goes through the cloud’s metered proxy to a provider pool (Groq, Google AI Studio, NVIDIA NIM). Studio never holds provider keys.',
    does:['Scoped router per request thread, so a compile and a chat turn never share a usage class.','Understanding and compile calls are metered under <code>usage_class="compile"</code>; conversation calls under AI credits.'],
    files:['conxa-cloud/backend/app/llm/router.py','services/llm_proxy_client.py']}},
- {id:'und',c:3,l:3,k:'model',st:'built',t:'Understanding call',sub:'timeline_understanding · 1 call',d:{
+ {id:'und',c:3,l:3,k:'model',st:'built',t:'Understanding call',sub:'timeline_understanding · 1 call',v:{
+   shape:'types, lengths and enums; input names snake-cased and unique',reference:'an unknown candidate ref, row or effect is dropped',
+   override:'a decision popup is always a fork; typed text is never asked about; the person’s recording-time answer wins',
+   backfill:'must-ask moments and skipped list picks are put back, unticked',safety:'<code>no_confirm</code> is never pre-filled; a fork never carries a guess',
+   lg:'Counted: <code>validation_report</code> in understanding.json, with a grade and one retry.'},d:{
    sum:'One text call reads the merged timeline and writes the meaning of the task, which values vary, and the questions worth asking. It never sees or writes a selector.',
-   does:['Input: up to 150 rows (values cut to 80 chars, passwords <code>(hidden)</code>, emails scrubbed), <code>task</code>, <code>chat</code>, <code>candidates</code>, <code>must_ask</code>.','Candidates: page addresses (≤ 8), clicked labels (≤ 6), typed text (≤ 6), plus a separate allowance for items picked from a list (<code>peers ≥ 3</code>).','The prompt tells it to settle what it can and list each point in <code>decided</code> with a reason. Most recordings need 0–3 questions. It must never answer a fork or confirm itself, and never ask about gaps.'],
-   extra:'<section><h4>Output schema</h4><pre>{ goal, short_summary,\n  phases:[{name, from_row, to_row}],\n  values:[{ref, verdict: fixed|varies|unsure,\n           name, literal}],\n  success_check, gaps:[{row, note}],\n  detailed_summary:[{row, text}],\n  decided:[{row, text, reason}],\n  questions:[{effect, row, ref, prompt, why,\n              choices, best_guess, cost_rank}] }</pre></section>',
+   does:['Input: up to 250 rows (values cut to 80 chars, passwords <code>(hidden)</code>, emails scrubbed), <code>task</code>, <code>chat</code>, <code>candidates</code>, <code>must_ask</code>.','Candidates: page addresses (≤ 8), clicked labels (≤ 6), typed text (≤ 6), plus a separate allowance for items picked from a list (<code>peers ≥ 3</code>).','The prompt tells it to settle what it can and list each point in <code>decided</code> with a reason. Most recordings need 0–3 questions. It must never answer a fork or confirm itself, and never ask about gaps.','A reply that arrives but grades <code>weak</code> or <code>unusable</code> is asked for once more, with the reasons; the better answer is kept.'],
+   extra:'<section><h4>Output schema</h4><pre>{ goal, short_summary,\n  values:[{ref, verdict: fixed|varies|unsure,\n           name, literal}],\n  gaps:[{row, note}],\n  detailed_summary:[{row, text}],\n  decided:[{row, text, reason}],\n  questions:[{effect, row, ref, prompt, why,\n              choices, best_guess, cost_rank}] }</pre></section>',
    inp:'Merged rows, task, chat, candidates',out:'Raw understanding (untrusted)',
    fail:'Never blocks. A failed or empty answer becomes <code>source:"fallback"</code> with <code>fallback_reason</code> saved; the chat says nothing was pre-filled, and only structural questions are asked.',
    files:['conversation/timeline_understanding.py · understand_timeline','conxa_core/llm/client.py (prompt)']}},
- {id:'val',c:3,l:1,s:0,k:'code',st:'built',t:'Validate',sub:'validate() · code checks',d:{
-   sum:'Holds every field of the model’s answer to what code can act on. The model writes; code decides what survives.',
-   does:['Drop unknown refs, rows and effects; phases must point forward.','Snake-case and de-duplicate input names; a URL <code>literal</code> must sit inside the recorded address.','Put back every must-ask moment the model left out, with stock wording.','A decision popup (recorder’s <code>dialog_context</code>) is always a <code>fork</code>; a fork on a row with no decision popup is dropped.','Strip unsafe guesses: <code>no_confirm</code> is never pre-filled; forks and notes never carry a guess.','An item picked from a list that the model skipped is asked, unticked (never silently “fixed”).'],
-   inp:'Raw answer',out:'Checked understanding',
-   files:['timeline_understanding.py · validate, _checked_questions, _ask_about_unmentioned_selections']}},
+ {id:'val',c:3,l:1,s:0,k:'code',st:'built',t:'Validate',sub:'five stages · counted · graded',d:{
+   sum:'Holds every field of the model’s answer to what code can act on, in five stages, and counts everything it drops, changes or adds. The model writes; code decides what survives. The same five stages guard every model call, listed below.',
+   does:['<b>Shape</b>: types, lengths and enums. <code>malformed_item</code>, <code>bad_verdict</code>, <code>unknown_effect</code>, <code>empty_text</code>, <code>no_choices</code>, <code>no_reason</code> (a point settled with no reason is dropped), <code>decided_over_cap</code>, <code>no_verdict</code> (a candidate the model skipped). Input names are snake-cased and made unique.','<b>Reference</b>: it must point at something in the recording. <code>unknown_ref</code>, <code>unknown_row</code>, <code>duplicate_ref</code>, <code>literal_outside_recorded</code> (a URL literal must sit inside the recorded address).','<b>Override</b>: what the recording knows beats what the model says. <code>popup_became_fork</code>, <code>fork_without_decision_popup</code>, <code>typed_value_question</code>, <code>fixed_but_asked</code>, <code>guess_contradicts_verdict</code>, <code>upload_on_own_download</code>, <code>note_on_gap</code>, <code>duplicate_question</code>, <code>person_hint</code>.','<b>Backfill</b>: what always needs a person is put back, in stock wording. <code>must_ask</code>, <code>missed_file_pick</code>, <code>value_question_added</code>, <code>unmentioned_selection</code> (a list pick the model skipped is asked, unticked, never silently “fixed”), <code>fallback_url_question</code>.','<b>Safety</b>: <code>invalid_guess</code> and <code>unsafe_guess</code>. <code>no_confirm</code> is never pre-filled; a fork and a note never carry a guess.','<b>Grade</b>, from code alone: <code>unusable</code> (nothing to build on) falls back. <code>weak</code> (no goal, most candidates left without a verdict, three or more invented refs or rows, or a settled point with no reason) is asked once more with the reasons. The better of the two answers is kept.'],
+   inp:'Raw answer',out:'Checked understanding, <code>validation_report</code>, grade',
+   extra:'<section><h4>The ledger</h4><pre>"validation_report": {\n  "reference": {"unknown_ref":\n    {"count": 2, "example": "url:999"}},\n  "backfill": {"must_ask":\n    {"count": 1, "example": "fork@r5"}} }\n"grade": "ok" | "weak" | "unusable"\n"grade_reasons": [...]\n"prompt_version": 1</pre><p class="small muted">Totals per prompt version: <code>scripts/eval_understanding.py rates</code>. Bump <code>TIMELINE_UNDERSTANDING_PROMPT_VERSION</code> with any prompt change.</p></section><section><h4>The same contract at every model call</h4><div id="vtbl"></div></section>',
+   guard:['A weak answer costs at most one extra metered call: two model calls per recording, never more.','Nothing here blocks the flow: an unusable answer degrades to asking, not to stopping.','Pinned by golden cases: <code>tests/fixtures/understanding_validate_cases.json</code>.'],
+   files:['timeline_understanding.py · validate, _row_items, _checked_questions, _dedupe, _grade, _log, RULES','conxa_core/llm/client.py · TIMELINE_UNDERSTANDING_PROMPT_VERSION','scripts/eval_understanding.py · rates']}},
  {id:'undj',c:3,l:1,s:1,k:'data',st:'built',t:'understanding.json',sub:'goal · values · source',d:{
    sum:'The checked understanding, saved beside the recording. The post-compile round reads it instead of asking again; an empty description is filled from its summary.',
+   does:['Also saved: <code>grade</code>, <code>grade_reasons</code>, <code>validation_report</code>, <code>prompt_version</code>, <code>retried_because</code> when a second answer was asked for, and <code>retried</code> when that answer was the better one.'],
    files:['handlers/understand_flow.py · _flow_understand, _fill_description']}},
  {id:'qb',c:4,l:1,s:0,k:'code',st:'built',t:'Clarifying questions',sub:'build · dedupe · rank',d:{
    sum:'Turns the checked understanding into at most five open questions about things only the person knows or must approve. The rest are queued, never dropped.',
@@ -483,7 +501,11 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    inp:'Cleaned events, task description',out:'SkillPackage',
    guard:['No model writes selector strings here.','Every dropped action is ledgered in <code>compile_report["dropped"]</code>.'],
    files:['compiler/build.py · compile_skill_package, _build_step','compiler/identity_bundle.py · selector_grammar.py · stable_hash.py','compiler/validation_planner.py · outcome_fork.py','conversation/compile_queue.py · compile_progress.py']}},
- {id:'rev',c:5,l:3,k:'model',st:'built',t:'Second opinion',sub:'workflow_review · 1 call',d:{
+ {id:'rev',c:5,l:3,k:'model',st:'built',t:'Second opinion',sub:'workflow_review · 1 call',v:{
+   shape:'finding kind, placeholder name, phase and assertion type are checked',reference:'an unknown <code>step_key</code> is dropped',
+   override:'<code>suggest_optional</code> only on a step the recorder flagged; <code>flag_noise</code> only with the recorder’s own evidence',
+   backfill:'—',safety:'about one finding per two steps at most; never touches the selector fields; assertions are <code>required=False</code>',
+   lg:'Not counted: it drops silently (see Still open).'},d:{
    sum:'One text call over the whole compiled workflow. It writes meaning into the program and never touches element addresses.',
    does:['Intent graph: goal, per-step intent token and prose (backfills <code>semantic_description</code>).','Findings: <code>rename_binding</code>, <code>parameterize_literal</code>, <code>label_phase</code>, <code>suggest_optional</code> (only on recorder-flagged steps), <code>suggest_assertion</code> (text/URL/state types, <code>required=False</code>), <code>flag_noise</code> (archived, not deleted).','The answer is pinned in <code>second_opinion.json</code> by input hash, so a recompile replays it without a call.'],
    guard:['Never touches <code>target</code>, <code>identity_bundle</code>, <code>compiled_selectors</code>, waits, frames or tabs.','Validated by <code>_validate_findings</code>; keyed on <code>step_key</code>; at most about 1 finding per 2 steps.','Human Review is the gate.'],
@@ -505,7 +527,10 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    sum:'The person answers the questions that only exist after compile, and can change anything by chat or in Human Edit.',
    does:['Chat routes free text only to actions in <code>lifecycle.allowed_actions</code>; side effects wait for a Confirm card.','Copilot proposals pass three gates before becoming a pending-change card with Apply and Undo.','<code>patch_gate</code> refuses edits such as removing a consequential step’s only required assertion.'],
    files:['conversation/harness.py · intent_router.py · actions.py','editor/patch_gate.py','editor/edit_log.py']}},
- {id:'cop',c:6,l:3,k:'model',st:'built',t:'Chat copilot',sub:'proposes, never applies',d:{
+ {id:'cop',c:6,l:3,k:'model',st:'built',t:'Chat copilot',sub:'proposes, never applies',v:{
+   shape:'—',reference:'a chosen answer must be on the card, else “unclear”; an action must be in <code>allowed_actions</code>',
+   override:'routing is deterministic first; the model only sees what is left',backfill:'—',
+   safety:'three gates, <code>patch_gate</code>, a Confirm card for side effects, Undo on every applied change',lg:'Not counted.'},d:{
    sum:'<code>copilot_diagnose</code> reads a 12k-token context pack and proposes edits. The reviewer disposes.',
    files:['conversation/context_pack.py','llm/copilot.py']}},
  {id:'test',c:7,l:1,s:0,k:'code',st:'built',t:'Sandbox test',sub:'real runtime, ceiling 2',d:{
@@ -514,7 +539,9 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    files:['handlers/test_flow.py','conxa_compile/conxa_runtime.py','runtime/app/run.js · executeOneStep']}},
  {id:'guard',c:7,l:0,k:'human',st:'built',t:'Guard decision',sub:'run for real or stop here',d:{
    sum:'Before anything irreversible the test stops and asks: <b>Run the last N for real</b>, or <b>End the test here</b> (“passed up to X”, which is not a pass). A confirm-only <code>ai_review</code> is answered by the person, never the sandbox model.'}},
- {id:'fix',c:7,l:3,k:'model',st:'built',t:'Auto-fix',sub:'≤ 3 rounds, gated',d:{
+ {id:'fix',c:7,l:3,k:'model',st:'built',t:'Auto-fix',sub:'≤ 3 rounds, gated',v:{
+   shape:'same gates as the copilot',reference:'same gates as the copilot',override:'—',backfill:'—',
+   safety:'at most one change per round, three rounds, Undo, the guard stays on for every re-test',lg:'Not counted.'},d:{
    sum:'After a failed test (Settings switch, default on): diagnose → at most one proposal → same gates → apply with Undo → rebuild → re-test with the guard on. It stops after three failures, on Stop, or when no proposal passes the gates.',
    guard:['Outside the recovery cascade; Tier A stays zero-token.','Every change listed with Undo; edit-logged as <code>auto_fix</code>.'],
    files:['handlers/test_flow.py · _tf_autofix, _tf_propose_fix']}},
@@ -539,7 +566,9 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
  {id:'tierA',c:10,l:4,k:'code',st:'built',t:'Tier A reflex',sub:'0 tokens',d:{
    sum:'Fixes <i>when</i>, never <i>which</i>: exception ladder (re-resolve, scroll, dismiss known overlays, wait stable/enabled/navigation), a11y re-probe (skipped on destructive steps), re-hover, dialog scope.',
    files:['runtime/app/cascade.js','runtime/recovery.js']}},
- {id:'tierB',c:10,l:3,k:'model',st:'built',t:'Tier B nomination',sub:'via the caller’s agent',d:{
+ {id:'tierB',c:10,l:3,k:'model',st:'built',t:'Tier B nomination',sub:'via the caller’s agent',v:{
+   shape:'—',reference:'the nominated <code>candidate_index</code> is re-validated against the recorded fingerprint',override:'—',backfill:'—',
+   safety:'margin gate, parked-page check; two rounds, stagnation cap 2, retry budget 3',lg:'Not counted.'},d:{
    sum:'An armed payload goes back to the agent: ranked candidate digest, intent, expected post-condition, screenshots, recorded context, <code>video_context</code>. The agent nominates a <code>candidate_index</code>; the runtime re-validates it against the fingerprint.',
    guard:['Two rounds; page parked 180 s; stagnation cap 2; retry budget 3.','The runtime never calls a model itself.'],
    files:['runtime/app/failure_response.js','runtime/app/recovery_park.js','runtime/server.js · _buildFailureResponse']}}
@@ -652,7 +681,14 @@ function mountSim(host){
   Q.forEach(function(q,i){var b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.textContent=q.kind;b.addEventListener('click',function(){show(i)});tabs.appendChild(b)});
   show(0);
 }
-CONXA.after=function(n,insp){var h=insp.querySelector('#qsim');if(h)mountSim(h)};
+/* the sixth model call has no node of its own: it runs in the background after Q2 posts */
+var QCOPY={t:'Question wording',sub:'clarify_question_copy',v:{
+  shape:'title, body, label and detail must be non-empty and within 200 / 500 / 90 / 220 characters',reference:'an unknown card or choice id is skipped',
+  override:'—',backfill:'—',safety:'no <code>{{</code>; every “quoted” item of the original is kept; the template wording stands on any failure',lg:'Not counted.'}};
+function touchTable(){
+  return CONXA.nodes.filter(function(n){return n.v}).concat([QCOPY]).map(function(n){
+    return '<details'+(n.id==='und'?' open':'')+'><summary>'+esc(n.t)+' <span class="muted small">'+esc(n.sub)+'</span></summary>'+vList(n.v)+'</details>'}).join('')}
+CONXA.after=function(n,insp){var h=insp.querySelector('#qsim');if(h)mountSim(h);var t=insp.querySelector('#vtbl');if(t)t.innerHTML=touchTable()};
 
 /* ═════════ wire up ═════════ */
 var G={};

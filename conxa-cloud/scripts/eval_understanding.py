@@ -6,12 +6,15 @@
     EVAL_BASE_URL=https://api.groq.com/openai/v1 EVAL_API_KEY=... EVAL_MODEL=... \
         python eval_understanding.py run --out new.json
     python eval_understanding.py diff old.json new.json
+    # how often the check dropped / retried / fell back, per prompt version (reads understanding.json, no model call)
+    python eval_understanding.py rates -n 50
 
 Run from the repo root with PYTHONPATH=conxa-builder/python:packages/conxa-core and LLM_FREE_API_KEYS=x
 (importing conxa_core.config needs one provider key set; it is never used here). Sessions come from
 ``<data_dir>/sessions/*/merged_timeline.json`` (``--sessions-dir`` to point elsewhere, ``-n`` for how many).
 What is compared per recording: goal, each candidate's verdict, the questions (kind, row, ref), how many
-points the model settled itself, and an input-size estimate. It judges nothing: read the diff.
+points the model settled itself, its grade (ok / weak / unusable) and an input-size estimate. It judges
+nothing: read the diff. ``rates`` totals the validation_report that understanding.json now carries.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import json
 import os
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -32,9 +36,16 @@ def sessions(root: Path, n: int) -> list[Path]:
     return [p.parent for p in found[:n]]
 
 
+def flat_report(und: dict[str, Any]) -> dict[str, int]:
+    """``{"stage.rule": count}`` from an understanding's validation_report (empty for files written before it existed)."""
+    return {f"{stage}.{rule}": slot["count"] for stage, rules in (und.get("validation_report") or {}).items()
+            for rule, slot in rules.items()}
+
+
 def summarize(und: dict[str, Any], payload_chars: int = 0) -> dict[str, Any]:
     return {
         "source": und.get("source"), "goal": und.get("goal"), "retried": bool(und.get("retried")),
+        "grade": und.get("grade"), "prompt_version": und.get("prompt_version"), "drops": flat_report(und),
         "verdicts": {c["ref"]: c.get("verdict") for c in und.get("candidates") or []},
         "questions": sorted(f"{q.get('kind')}@{q.get('row')}:{q.get('ref') or ''}" for q in und.get("questions") or []),
         "decided": len(und.get("decided") or []), "in_tokens": payload_chars // 4,
@@ -93,6 +104,8 @@ def diff(a: dict[str, Any], b: dict[str, Any]) -> int:
         lines += [f"  question dropped: {q}" for q in gone] + [f"  question added:   {q}" for q in new]
         if x["source"] != y["source"]:
             lines.append(f"  source: {x['source']} -> {y['source']}")
+        if x.get("grade") != y.get("grade"):
+            lines.append(f"  grade: {x.get('grade')} -> {y.get('grade')}")
         if x["decided"] != y["decided"]:
             lines.append(f"  settled by model: {x['decided']} -> {y['decided']}")
         print(f"{sid[:8]}  {'same' if not lines else 'changed'}  questions {len(x['questions'])} -> {len(y['questions'])}")
@@ -102,9 +115,34 @@ def diff(a: dict[str, Any], b: dict[str, Any]) -> int:
     return 0
 
 
+def rates(root: Path, n: int) -> None:
+    """Per prompt version over the last ``n`` understanding.json files: how often the model's answer needed
+    help. Files written before the validation_report existed group under ``unknown`` and count no drops."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for p in sorted(root.glob("*/understanding.json"), key=lambda f: f.stat().st_mtime, reverse=True)[:n]:
+        try:
+            und = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if und.get("source") != "none":
+            groups.setdefault(str(und.get("prompt_version", "unknown")), []).append(und)
+    for version, items in sorted(groups.items()):
+        k = len(items)
+        share = lambda pred: f"{100 * sum(1 for u in items if pred(u)) // k}%"      # noqa: E731
+        print(f"prompt v{version}: {k} recordings   fell back {share(lambda u: u.get('source') == 'fallback')}   "
+              f"asked twice {share(lambda u: 'retried_because' in u)}   ended weak {share(lambda u: u.get('grade') == 'weak')}")
+        total = Counter()
+        for u in items:
+            total.update(flat_report(u))
+        for stage in ("shape", "reference", "override", "backfill", "safety"):
+            n_stage = sum(c for rule, c in total.items() if rule.startswith(stage + "."))
+            print(f"   {stage:<10}{n_stage / k:5.2f} per recording")
+        print("   top rules: " + (", ".join(f"{r} x{c}" for r, c in total.most_common(5)) or "none"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["baseline", "run", "diff"])
+    ap.add_argument("cmd", choices=["baseline", "run", "diff", "rates"])
     ap.add_argument("files", nargs="*", help="diff: old.json new.json")
     ap.add_argument("--out", help="write the summary here")
     ap.add_argument("-n", type=int, default=8, help="how many recent recordings")
@@ -119,6 +157,9 @@ def main() -> int:
     from conxa_core.config import settings
 
     root = args.sessions_dir or settings.data_dir / "sessions"
+    if args.cmd == "rates":
+        rates(root, args.n)
+        return 0
     out: dict[str, Any] = {}
     for s in sessions(root, args.n):
         row = baseline(s) if args.cmd == "baseline" else run(s)

@@ -36,6 +36,10 @@ MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
 MAX_URL_CANDIDATES = 8
 MAX_DECIDED = 8
+# An answer is graded ``ok`` / ``weak`` / ``unusable`` by code. ``weak`` is asked for once more (the one retry).
+WEAK_REF_DROPS = 3                # this many invented refs or rows in one answer: the model was not looking at the rows
+WEAK_UNJUDGED_SHARE = 0.5         # more than this share of the candidates left without a verdict
+WEAK_MIN_CANDIDATES = 2           # fewer candidates than this: coverage says nothing
 # A clicked target that was one of at least this many like items (a file in a list, a record in a
 # table) is a value picked from a set, not a control. Two like buttons in a dialog footer are not.
 IN_SET_MIN_PEERS = 3
@@ -43,20 +47,36 @@ _NAME_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _VERDICTS = ("fixed", "varies", "unsure")
 _FALLBACK_NAME = {"url": "page_address", "click": "item", "typed": "value"}
 
-# What a question's answer can do. The ids are code's (an answer maps to an edit by id); the model
-# writes the sentence and the labels. ``note`` changes nothing: its answer rides into the compile as text.
-FALLBACK_CHOICES: dict[str, list[tuple[str, str, str]]] = {
-    "value": [("varies", "Different every time", "Whoever uses it types or picks it."),
-              ("fixed", "Always this one", "It stays exactly as you recorded it.")],
-    "upload": [("each_run", "No, whoever uses it picks the file", "They are asked for the file before it starts."),
-               ("fixed_path", "Yes, always use this file", "It uses the file you picked while recording.")],
-    "confirm_before": [("confirm", "Yes, ask first", "A person approves this step each time before it happens."),
-                       ("no_confirm", "No, just do it", "It runs on its own.")],
-    "popup_dismiss": [("dismiss", "Yes, close it", "If it shows up, it is closed. If not, it carries on."),
-                      ("keep", "No, leave it", "It does nothing special about it.")],
-    "fork": [("by_input", "Let whoever uses it decide each time", "They get a question to answer before it starts."),
-             ("ask_human", "Stop and ask a person each time", "It waits on the popup until someone decides."),
-             ("stop", "Stop completely", "Treat this popup as a problem and end here.")],
+# One row per question effect: what a question's answer can do. The ids are code's (an answer maps to an
+# edit by id); the model writes the sentence and the labels. ``note`` changes nothing: its answer rides
+# into the compile as text, with 2-3 choices the model labels (``choices`` is None).
+#   choices       (id, stock label, detail): the ids the model may use, and the words used if its label is unusable
+#   guesses       the best_guess ids it may carry; none = never pre-filled (a popup is never answered for anyone)
+#   unsafe        a guess that would approve a step that cannot be undone: never pre-filled
+#   page_decides  the recorded page, not the model, says whether this is a decision popup (a fork) or a plain one
+RULES: dict[str, dict[str, Any]] = {
+    "value": {
+        "choices": [("varies", "Different every time", "Whoever uses it types or picks it."),
+                    ("fixed", "Always this one", "It stays exactly as you recorded it.")],
+        "guesses": {"varies", "fixed"}, "unsafe": set(), "page_decides": False},
+    "upload": {
+        "choices": [("each_run", "No, whoever uses it picks the file", "They are asked for the file before it starts."),
+                    ("fixed_path", "Yes, always use this file", "It uses the file you picked while recording.")],
+        "guesses": {"each_run", "fixed_path"}, "unsafe": set(), "page_decides": False},
+    "confirm_before": {
+        "choices": [("confirm", "Yes, ask first", "A person approves this step each time before it happens."),
+                    ("no_confirm", "No, just do it", "It runs on its own.")],
+        "guesses": {"confirm", "no_confirm"}, "unsafe": {"no_confirm"}, "page_decides": False},
+    "popup_dismiss": {
+        "choices": [("dismiss", "Yes, close it", "If it shows up, it is closed. If not, it carries on."),
+                    ("keep", "No, leave it", "It does nothing special about it.")],
+        "guesses": {"dismiss", "keep"}, "unsafe": set(), "page_decides": True},
+    "fork": {
+        "choices": [("by_input", "Let whoever uses it decide each time", "They get a question to answer before it starts."),
+                    ("ask_human", "Stop and ask a person each time", "It waits on the popup until someone decides."),
+                    ("stop", "Stop completely", "Treat this popup as a problem and end here.")],
+        "guesses": set(), "unsafe": set(), "page_decides": True},
+    "note": {"choices": None, "guesses": set(), "unsafe": set(), "page_decides": False},
 }
 _FALLBACK_PROMPT = {
     "upload": "Is the file the same every time?",
@@ -64,16 +84,6 @@ _FALLBACK_PROMPT = {
     "popup_dismiss": "A message box appeared here. Should it close it when it shows up?",
     "fork": "A message box asked for a decision. What should happen when it does?",
 }
-# effect -> best_guess it may carry. An effect with no entry is never pre-filled.
-GUESSES: dict[str, set[str]] = {
-    "value": {"varies", "fixed"},
-    "upload": {"each_run", "fixed_path"},
-    "confirm_before": {"confirm", "no_confirm"},
-    "popup_dismiss": {"dismiss", "keep"},
-}
-EFFECTS = (*FALLBACK_CHOICES, "note")
-# A guess that would approve a step that cannot be undone, or choose a popup option, is never pre-filled.
-UNSAFE_GUESSES = {("confirm_before", "no_confirm")}
 _UPLOAD_ACTIONS = ("upload", "upload_intent")
 # What the video model says when a file is picked or dragged in from outside the browser.
 _FILE_PICK_RE = re.compile(
@@ -331,6 +341,22 @@ def _text(value: Any, limit: int) -> str:
     return scrub_email(str(value or ""))[:limit]
 
 
+# The five things the check does to a model answer, in the order it does them. ``validation_report`` in
+# understanding.json counts every use of a rule, so a bad prompt shows up as a number instead of a silence.
+STAGES = ("shape", "reference", "override", "backfill", "safety")
+
+
+def _log(report: dict[str, Any], stage: str, rule: str, example: Any = "") -> None:
+    """Count one use of ``rule`` under ``stage``; the first example is kept. ``report`` is plain JSON."""
+    slot = report.setdefault(stage, {}).setdefault(rule, {"count": 0, "example": _text(example, 60)})
+    slot["count"] += 1
+
+
+def _count(report: dict[str, Any], stage: str, *rules: str) -> int:
+    got = report.get(stage) or {}
+    return sum(got[r]["count"] for r in (rules or tuple(got)) if r in got)
+
+
 def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
     """Code's ids, the model's labels. A label that is missing or unusable falls back to the stock one."""
     if effect == "note":
@@ -340,7 +366,7 @@ def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
         return [{"id": f"c{i}", "label": _text(c["label"], 90), "detail": ""} for i, c in enumerate(picked, 1)]
     given = {str(c.get("id")): c for c in offered or [] if isinstance(c, dict)}
     out = []
-    for cid, label, detail in FALLBACK_CHOICES[effect]:
+    for cid, label, detail in RULES[effect]["choices"]:
         mine = given.get(cid) or {}
         out.append({"id": cid, "label": _text(mine.get("label"), 90) or label, "detail": detail})
     return out
@@ -360,39 +386,68 @@ def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> di
 
 def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
                        values: dict[str, dict[str, Any]], taken: set[str],
-                       no_upload_question: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
+                       no_upload_question: frozenset[str] = frozenset(),
+                       report: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    report = {} if report is None else report
     out: list[dict[str, Any]] = []
     for q in raw_questions or []:
         if not isinstance(q, dict):
+            _log(report, "shape", "malformed_item", "question")
             continue
         effect = q.get("effect") or q.get("kind")
-        row = rows.get(q.get("row"))
+        row_ref = q.get("row")
+        row = rows.get(row_ref) if isinstance(row_ref, str) else None
         prompt = _text(q.get("prompt"), 240)
-        if effect not in EFFECTS or row is None or not prompt:
+        if not isinstance(effect, str) or effect not in RULES:
+            _log(report, "shape", "unknown_effect", effect)
+            continue
+        if row is None:
+            _log(report, "reference", "unknown_row", row_ref)
+            continue
+        if not prompt:
+            _log(report, "shape", "empty_text", row_ref)
             continue
         if effect == "upload" and row["row_ref"] in no_upload_question:
+            _log(report, "override", "upload_on_own_download", row_ref)
             continue
         ref = ""
         if effect == "value":
             ref = str(q.get("ref") or "")
             cand = by_ref.get(ref)
-            if cand is None or cand["kind"] == "typed":      # typed text is already an input once compiled
+            if cand is None:
+                _log(report, "reference", "unknown_ref", ref)
+                continue
+            if cand["kind"] == "typed":      # typed text is already an input once compiled
+                _log(report, "override", "typed_value_question", ref)
                 continue
             if ref not in values or values[ref]["verdict"] == "fixed":
+                if ref in values:
+                    _log(report, "override", "fixed_but_asked", ref)      # the model asked about what it called fixed
                 values[ref] = {"verdict": "unsure", "literal": cand["literal"],
                                "name": _unique_name("", taken, _FALLBACK_NAME[cand["kind"]])}
-        elif effect in ("fork", "popup_dismiss"):
+        elif RULES[effect]["page_decides"]:
             # The page decides which, not the model: a decision popup is a fork, anything else is not.
             if row.get("dialog") == "decision":
+                if effect != "fork":
+                    _log(report, "override", "popup_became_fork", row_ref)
                 effect = "fork"
             elif effect == "fork":
+                _log(report, "override", "fork_without_decision_popup", row_ref)
                 continue
         choices = _choices_for(effect, q.get("choices"))
         if not choices:
+            _log(report, "shape", "no_choices", row_ref)
             continue
         guess = str(q.get("best_guess") or "")
-        if guess not in GUESSES.get(effect, set()) or (effect, guess) in UNSAFE_GUESSES:
+        if guess and guess not in RULES[effect]["guesses"]:
+            _log(report, "safety", "invalid_guess", f"{effect}:{guess}")
             guess = ""
+        elif guess in RULES[effect]["unsafe"]:
+            _log(report, "safety", "unsafe_guess", f"{effect}:{guess}")
+            guess = ""
+        elif effect == "value" and guess and values[ref]["verdict"] == "varies" and guess != "varies":
+            _log(report, "override", "guess_contradicts_verdict", ref)      # the model's own two answers disagree
+            guess = "varies"
         rank = q.get("cost_rank")
         out.append({"kind": effect, "row": row["row_ref"], "event_id": row.get("event_id"), "prompt": prompt,
                     "why": _text(q.get("why"), 200), "choices": choices, "best_guess": guess,
@@ -401,7 +456,7 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
     return out
 
 
-def _dedupe(questions: list[dict[str, Any]], rows: dict[str, Any]) -> list[dict[str, Any]]:
+def _dedupe(questions: list[dict[str, Any]], rows: dict[str, Any], report: dict[str, Any]) -> list[dict[str, Any]]:
     """One question per recorded value and per (row, effect). A value question yields to a decision
     popup on its row; any other question on a row yields to that row's value question."""
     questions = sorted(questions, key=lambda q: q["cost_rank"])
@@ -409,20 +464,53 @@ def _dedupe(questions: list[dict[str, Any]], rows: dict[str, Any]) -> list[dict[
     seen: set[Any] = set()
     out = []
     for q in questions:
-        if q["kind"] == "value" and rows[q["row"]].get("dialog") == "decision":
-            continue
-        if q["kind"] not in ("value", "fork") and q["row"] in value_rows:
-            continue
         key = ("ref", q["ref"]) if q["kind"] == "value" else (q["row"], q["kind"])
-        if key in seen:
+        if (q["kind"] == "value" and rows[q["row"]].get("dialog") == "decision") \
+                or (q["kind"] not in ("value", "fork") and q["row"] in value_rows) or key in seen:
+            _log(report, "override", "duplicate_question", f"{q['kind']}@{q['row']}")
             continue
         seen.add(key)
         out.append(q)
     return out
 
 
+def _row_items(items: Any, rows: dict[str, Any], field: str, limit: int, report: dict[str, Any],
+               reason_limit: int = 0) -> list[dict[str, Any]]:
+    """``[{"row", field}]`` (plus ``reason`` when asked for) from a model list: unknown rows and empty text
+    are dropped and counted. A point the model settled itself is shown as "settled, because ...", so
+    one with no reason is dropped too."""
+    out = []
+    for d in items if isinstance(items, list) else []:
+        if not isinstance(d, dict):
+            _log(report, "shape", "malformed_item", field)
+            continue
+        row = d.get("row")
+        if not isinstance(row, str) or row not in rows:
+            _log(report, "reference", "unknown_row", row)
+            continue
+        text = _text(d.get(field), limit)
+        if not text:
+            _log(report, "shape", "empty_text", row)
+            continue
+        item = {"row": row, field: text}
+        if reason_limit:
+            item["reason"] = _text(d.get("reason"), reason_limit)
+            if not item["reason"]:
+                _log(report, "shape", "no_reason", row)
+                continue
+        out.append(item)
+    return out
+
+
 def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, Any]],
-             existing_inputs: set[str] | None = None) -> dict[str, Any]:
+             existing_inputs: set[str] | None = None, report: dict[str, Any] | None = None,
+             told: Any = ()) -> dict[str, Any]:
+    """The model's answer held to what code can act on, in five stages (see ``STAGES``): shape (types, lengths,
+    enums), reference (a ref or row that exists), override (a fact the recording knows beats the model's
+    word), backfill (a point that always needs a person, put back) and safety (no guess that approves
+    something that cannot be undone). Everything dropped, changed or added is counted in ``validation_report``.
+    ``told``: candidate refs the person already answered; the model owes no verdict for them."""
+    report = {} if report is None else report
     raw = raw if isinstance(raw, dict) else {}
     rows = {r["row_ref"]: r for r in merged}
     order = {ref: i for i, ref in enumerate(rows)}
@@ -431,47 +519,66 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
 
     values: dict[str, dict[str, Any]] = {}
     for item in raw.get("values") or []:
-        if not isinstance(item, dict) or item.get("ref") not in by_ref or item["ref"] in values:
+        if not isinstance(item, dict):
+            _log(report, "shape", "malformed_item", "value")
+            continue
+        ref = item.get("ref")
+        if not isinstance(ref, str) or ref not in by_ref:
+            _log(report, "reference", "unknown_ref", ref)
+            continue
+        if ref in values:
+            _log(report, "reference", "duplicate_ref", ref)
             continue
         verdict = str(item.get("verdict") or "").lower()
         if verdict not in _VERDICTS:
+            _log(report, "shape", "bad_verdict", ref)
             continue
-        cand = by_ref[item["ref"]]
+        cand = by_ref[ref]
         literal = cand["literal"]
         proposed = _text(item.get("literal"), 200)
-        if cand["kind"] == "url" and proposed and proposed.lower() in cand["recorded"].lower():
-            literal = proposed
+        if cand["kind"] == "url" and proposed:
+            if proposed.lower() in cand["recorded"].lower():
+                literal = proposed
+            else:
+                _log(report, "reference", "literal_outside_recorded", ref)
         name = ""
         if verdict != "fixed":
             name = _unique_name(_snake(str(item.get("name") or "")), taken, _FALLBACK_NAME[cand["kind"]])
-        values[item["ref"]] = {"verdict": verdict, "name": name, "literal": literal}
+        values[ref] = {"verdict": verdict, "name": name, "literal": literal}
+    if any(k in raw for k in _ANSWER_KEYS):       # a candidate the model gave no verdict for is treated as fixed: counted, because that is a silent default
+        for c in candidates:
+            if c["ref"] not in values and c["ref"] not in told:
+                _log(report, "shape", "no_verdict", c["ref"])
 
-    gaps = [{"row": g["row"], "note": _text(g.get("note"), 200)} for g in raw.get("gaps") or []
-            if isinstance(g, dict) and g.get("row") in rows and _text(g.get("note"), 200)]
-    detailed = [{"row": d["row"], "text": _text(d.get("text"), 240)} for d in raw.get("detailed_summary") or []
-                if isinstance(d, dict) and d.get("row") in rows and _text(d.get("text"), 240)]
-
-    decided = [{"row": d["row"], "text": _text(d.get("text"), 160), "reason": _text(d.get("reason"), 160)}
-               for d in raw.get("decided") or []
-               if isinstance(d, dict) and d.get("row") in rows and _text(d.get("text"), 160)][:MAX_DECIDED]
+    gaps = _row_items(raw.get("gaps"), rows, "note", 200, report)
+    detailed = _row_items(raw.get("detailed_summary"), rows, "text", 240, report)
+    decided = _row_items(raw.get("decided"), rows, "text", 160, report, reason_limit=160)
+    for d in decided[MAX_DECIDED:]:
+        _log(report, "shape", "decided_over_cap", d["row"])
+    decided = decided[:MAX_DECIDED]
 
     must = must_ask(merged)
     # An upload of a file the workflow downloaded itself has no question (see must_ask), whoever asks.
     no_upload = frozenset(r["row_ref"] for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS) \
         - {m["row"] for m in must if m["effect"] == "upload"}
-    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload)
+    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload, report)
     # The prompt tells the model never to ask about a gap; code enforces it. A free-form note on a
     # row the model itself called a gap is that same question. Only notes: a value, fork or upload
     # question on such a row is about the action, not about the gap.
     gap_rows = {g["row"] for g in gaps}
+    for q in questions:
+        if q["kind"] == "note" and q["row"] in gap_rows:
+            _log(report, "override", "note_on_gap", q["row"])
     questions = [q for q in questions if not (q["kind"] == "note" and q["row"] in gap_rows)]
     for m in must:
         if not any(q["row"] == m["row"] and q["kind"] == m["effect"] for q in questions):
+            _log(report, "backfill", "must_ask", f"{m['effect']}@{m['row']}")
             questions.append(_fallback_question(m["effect"], m["row"], rows[m["row"]]))
     # Gaps (idle time, video and browser log out of step) are kept for the log only, never asked:
     # the recording is replayed as captured, and a person cannot answer a timing note.
     # The one gap that does break a replay is a file picked outside the browser: that is asked.
     for row_ref, prompt in missed_file_picks(merged):
+        _log(report, "backfill", "missed_file_pick", row_ref)
         questions.append({"kind": "note", "row": row_ref, "event_id": None, "prompt": prompt, "why": "",
                           "choices": list(_FILE_PICK_CHOICES), "best_guess": "", "cost_rank": 1})
     have = {q.get("ref") for q in questions}
@@ -479,14 +586,15 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
         cand = by_ref[ref]
         if v["verdict"] == "fixed" or cand["kind"] == "typed" or ref in have:
             continue
+        _log(report, "backfill", "value_question_added", ref)
         questions.append(_value_question(cand, rows[cand["row_refs"][0]], "varies" if v["verdict"] == "varies" else ""))
-    questions = _dedupe(questions, rows)
+    questions = _dedupe(questions, rows, report)
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
     return {
         "goal": _text(raw.get("goal"), 200), "values": values, "gaps": gaps,
         "short_summary": _text(raw.get("short_summary"), 300), "detailed_summary": detailed,
-        "decided": decided, "questions": questions,
+        "decided": decided, "questions": questions, "validation_report": report,
     }
 
 
@@ -547,6 +655,7 @@ def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[d
         result["values"][c["ref"]] = {"verdict": "unsure", "literal": c["literal"],
                                       "name": _unique_name("", taken, _FALLBACK_NAME[c["kind"]])}
         result["questions"].append(_value_question(c, rows[c["row_refs"][0]], ""))      # asked, nothing pre-ticked
+        _log(result["validation_report"], "backfill", "unmentioned_selection", c["ref"])
         added = True
     if added:
         result["questions"].sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
@@ -554,6 +663,30 @@ def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[d
 
 _RETRY_NOTE = ("Your last reply could not be read. Return ONLY the JSON object described, nothing before "
                "or after it, and keep `decided` and `questions` short.")
+_RETRY_WEAK = ("Your last reply could be read but was not good enough: {reasons}. Return the whole JSON object again "
+               "and fix exactly that. Use only refs and rows that are in the input.")
+_GRADE_RANK = {"unusable": 0, "weak": 1, "ok": 2}
+
+
+def _grade(out: dict[str, Any], candidates: list[dict[str, Any]], told: Any) -> tuple[str, list[str]]:
+    """``(grade, reasons)`` for a checked answer, from code alone. ``unusable``: nothing to build on.
+    ``weak``: readable and safe, but it did not do the job (see the ``WEAK_*`` constants); one retry
+    with the reasons. Otherwise ``ok``. Run before the person's recording-time answers are laid over it."""
+    if not (out["goal"] or out["short_summary"] or out["values"]):
+        return "unusable", ["no goal, summary or values after checking"]
+    report, reasons = out["validation_report"], []
+    if not out["goal"]:
+        reasons.append("no goal")
+    owed = sum(1 for c in candidates if c["ref"] not in told)
+    missing = _count(report, "shape", "no_verdict")
+    if owed >= WEAK_MIN_CANDIDATES and missing > WEAK_UNJUDGED_SHARE * owed:
+        reasons.append(f"no verdict for {missing} of the {owed} candidates")
+    invented = _count(report, "reference", "unknown_ref", "unknown_row", "duplicate_ref")
+    if invented >= WEAK_REF_DROPS:
+        reasons.append(f"{invented} refs or rows that are not in the recording")
+    if _count(report, "shape", "no_reason"):
+        reasons.append("points in `decided` with no reason")
+    return ("weak" if reasons else "ok"), reasons
 
 
 def _attempt(caller: Caller, payload: dict[str, Any], timeout_ms: int) -> tuple[Any, list[Any], str]:
@@ -569,16 +702,18 @@ def _attempt(caller: Caller, payload: dict[str, Any], timeout_ms: int) -> tuple[
 
 
 def _checked(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, Any]],
-             existing_inputs: set[str] | None, told: dict[str, bool]) -> tuple[dict[str, Any], bool]:
-    """``(checked answer, whether the model's own answer was usable)``. The person's recording-time answers
-    win over the model's verdict and nothing is asked about a value they settled; they never make an
-    empty reply look usable."""
-    out = validate(raw, merged, candidates, existing_inputs)
-    usable = bool(out["goal"] or out["short_summary"] or out["values"])
+             existing_inputs: set[str] | None, told: dict[str, bool]) -> tuple[dict[str, Any], str, list[str]]:
+    """``(checked answer, grade, why)``: see ``_grade``. The person's recording-time answers win over the
+    model's verdict and nothing is asked about a value they settled; they never make an empty reply
+    look usable."""
+    out = validate(raw, merged, candidates, existing_inputs, told=told)
+    grade, why = _grade(out, candidates, told)
     by_ref = {c["ref"]: c for c in candidates}
     taken = {n.lower() for n in existing_inputs or set()} | {v["name"].lower() for v in out["values"].values() if v.get("name")}
     for ref, varies in told.items():
         cand, v = by_ref[ref], out["values"].get(ref)
+        if v and v["verdict"] != ("varies" if varies else "fixed"):
+            _log(out["validation_report"], "override", "person_hint", ref)      # the person's word beat the model's
         if varies:
             name = (v or {}).get("name") or _unique_name("", taken, _FALLBACK_NAME[cand["kind"]])
             taken.add(name.lower())
@@ -586,7 +721,7 @@ def _checked(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
         else:
             out["values"][ref] = {"verdict": "fixed", "name": "", "literal": cand["literal"]}
         out["questions"] = [q for q in out["questions"] if q.get("ref") != ref]
-    return out, usable
+    return out, grade, why
 
 
 def understand_timeline(
@@ -602,24 +737,33 @@ def understand_timeline(
     """The checked understanding plus ``candidates`` (each with verdict/name/literal) and
     ``source``: ``model`` (usable answer), ``fallback`` (call failed or empty), ``none`` (nothing to
     look at). ``hints`` is the recorder's ``varies`` map (what the person said while recording). A reply
-    that arrives but holds nothing usable is asked for once more. Never raises."""
+    that arrives but is not ``ok`` (see ``_grade``) is asked for once more, and the better of the two is
+    kept. Also saved: ``grade``, ``grade_reasons``, ``validation_report`` (what the check dropped, changed
+    or added, by stage) and ``prompt_version``. Never raises."""
+    from conxa_core.llm.client import TIMELINE_UNDERSTANDING_PROMPT_VERSION  # noqa: PLC0415 -- pulls in settings
+
     candidates = candidates_from_timeline(merged)
     result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "values": {},
                               "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
         return result
+    result["prompt_version"] = TIMELINE_UNDERSTANDING_PROMPT_VERSION
     told = told_from_hints(candidates, hints)
     payload = build_input(merged, task, chat, candidates, told=told, existing_inputs=existing_inputs)
     caller = call or _default_call
     raw, detail, reason = _attempt(caller, payload, timeout_ms)
-    checked, usable = _checked(raw, merged, candidates, existing_inputs, told)
-    if raw is not None and not usable:
-        raw2, detail2, reason2 = _attempt(caller, {**payload, "retry": _RETRY_NOTE}, timeout_ms)
-        checked2, usable2 = _checked(raw2, merged, candidates, existing_inputs, told)
-        if usable2:
-            raw, detail, reason, checked, usable = raw2, detail2, reason2, checked2, True
+    checked, grade, why = _checked(raw, merged, candidates, existing_inputs, told)
+    if raw is not None and grade != "ok":
+        note = _RETRY_NOTE if grade == "unusable" else _RETRY_WEAK.format(reasons="; ".join(why))
+        result["retried_because"] = why
+        raw2, detail2, reason2 = _attempt(caller, {**payload, "retry": note}, timeout_ms)
+        checked2, grade2, why2 = _checked(raw2, merged, candidates, existing_inputs, told)
+        if _GRADE_RANK[grade2] > _GRADE_RANK[grade]:
+            raw, detail, reason, checked, grade, why = raw2, detail2, reason2, checked2, grade2, why2
             result["retried"] = True
     result.update(checked)
+    result["grade"], result["grade_reasons"] = grade, why
+    usable = grade != "unusable"
     result["source"] = "model" if usable else "fallback"
     if not usable:
         # Kept in understanding.json: a silent fallback cannot be diagnosed afterwards.
@@ -633,6 +777,7 @@ def understand_timeline(
                                                   "name": _unique_name("", taken, _FALLBACK_NAME["url"])}
                     row = next(r for r in merged if r["row_ref"] == c["row_refs"][0])
                     result["questions"].append(_value_question(c, row, ""))      # asked, nothing pre-ticked
+                    _log(result["validation_report"], "backfill", "fallback_url_question", c["ref"])
         result["short_summary"] = f"{len(_events(merged))} recorded actions."
     _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs)
     for c in candidates:

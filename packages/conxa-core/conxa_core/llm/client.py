@@ -24,6 +24,10 @@ from conxa_core.config import settings
 
 _REQUEST_COUNTER = itertools.count(1)
 
+# Bump on ANY change to the `timeline_understanding` prompt below. conversation/timeline_understanding.py saves
+# it in understanding.json, so the drop/weak/fallback rates (scripts/eval_understanding.py rates) are per prompt.
+TIMELINE_UNDERSTANDING_PROMPT_VERSION = 1
+
 
 def _debug_log(message: str) -> None:
     if not settings.llm_debug:
