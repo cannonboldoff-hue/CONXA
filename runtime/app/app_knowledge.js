@@ -129,7 +129,11 @@ function decideKnown(popup, probe, { loopDepth = 0 } = {}) {
  * button labels and the page's route leave the machine -- never the popup's message, a file name,
  * a number or anything typed. `labels` are the visible buttons; `known` is whether the app map
  * recognised the popup. The cloud counts these per popup shape (docs/TRD.md 11.5, phase 6). */
-function observation(url, { title, labels, known }) {
+// The finer class of a decision popup (fork.js::classifySurface). `cl` stays "decision" for every
+// consumer that predates it; `sc` is the same popup in the shared surface vocabulary.
+const OBSERVED_CLASSES = new Set(["decision_benign", "decision_consequential"]);
+
+function observation(url, { title, labels, known, surface }) {
   const host = hostOf(url);
   if (!host) return null;
   const btns = asArray(labels).map(scrub.scrubLabel).filter(Boolean).slice(0, 6);
@@ -141,6 +145,7 @@ function observation(url, { title, labels, known }) {
     bt: btns,
     cl: "decision",
     k: known ? 1 : 0,
+    ...(OBSERVED_CLASSES.has(surface) ? { sc: surface } : {}),
   };
 }
 

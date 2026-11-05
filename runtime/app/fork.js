@@ -41,6 +41,10 @@ const DEFAULT_TIMEOUT_MS = 4000;
 const MIN_TIMEOUT_MS = 1500;
 const MAX_TIMEOUT_MS = 8000;
 
+// A quoted span: "..." or '...' (a quote that opens a word, so a contraction like don't is not one) or
+// the typographic pairs. Mirrors outcome_fork.py::_QUOTED_RE.
+const QUOTED_RE = /"[^"]*"|(?<![A-Za-z0-9])'[^']*'(?![A-Za-z0-9])|“[^”]*”|‘[^’]*’/g;
+
 function norm(s) {
   return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -56,7 +60,7 @@ function asArray(v) { return Array.isArray(v) ? v : []; }
 // Words of a dialog message with digits / quoted text stripped, so "report.pdf already exists"
 // and "q3.xlsx already exists" tokenize identically (matches the compiler's message_tokens).
 function messageTokens(text) {
-  return norm(String(text || "").replace(/(["'“”‘’]).*?\1/g, " ").replace(/\d+/g, " "))
+  return norm(String(text || "").replace(QUOTED_RE, " ").replace(/\d+/g, " "))
     .split(" ").filter((w) => w.length > 2);
 }
 
@@ -66,9 +70,16 @@ function probeLabels(probe) {
     .filter(Boolean);
 }
 
+// A popup title with quoted text and digits removed, so "Replace 'report.pdf'?" and
+// "Replace 'q3.xlsx'?" are the same popup. Mirrors outcome_fork.py::value_free_title. Applied to
+// BOTH sides so packs compiled before the compiler started stripping titles still match.
+function valueFreeTitle(text) {
+  return String(text == null ? "" : text).replace(QUOTED_RE, " ").replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function titleCompatible(sigTitle, probeTitle) {
-  const a = norm(sigTitle);
-  const b = norm(probeTitle);
+  const a = norm(valueFreeTitle(sigTitle));
+  const b = norm(valueFreeTitle(probeTitle));
   if (!a || !b) return true; // no title on one side: the button set has to carry the match
   return a === b || a.includes(b) || b.includes(a);
 }
@@ -191,6 +202,41 @@ function isDecisionDialog(probe) {
   return !labels.every((l) => PURE_DISMISS.has(norm(l)));
 }
 
+// A button that cannot be taken back or that spends / sends / publishes. A popup with any of these is
+// never answered by an agent; the run stops. Mirrors outcome_fork.py::is_irreversible_label (pinned
+// by decision_surface_cases.json). Errs wide: a wrong match only ever stops a run.
+const IRREVERSIBLE_RE = /\b(delete|remove|erase|permanently|pay|buy|purchase|order|checkout|send|submit|publish|transfer|revoke)\b/i;
+// Mirrors outcome_fork.py::_CONSEQUENTIAL_RE (the fork-local word list).
+const CONSEQUENTIAL_RE = /\b(replace|overwrite|discard|delete|remove|erase|override|permanently|don'?t save|do not save|revoke|reset|clear all)\b/i;
+
+function isIrreversibleLabel(label) {
+  return IRREVERSIBLE_RE.test(String(label == null ? "" : label));
+}
+
+// Surface classes, least to most cautious; when a surface fits several, the later one wins.
+const CAUTION_ORDER = ["notice", "obstruction", "decision_benign", "info_request", "decision_consequential", "fault"];
+
+function mostCautious(...classes) {
+  let best = null;
+  for (const c of classes) {
+    if (CAUTION_ORDER.includes(c) && (best === null || CAUTION_ORDER.indexOf(c) > CAUTION_ORDER.indexOf(best))) best = c;
+  }
+  return best;
+}
+
+/** The class of what dialogProbe() saw: notice | obstruction | decision_benign | info_request |
+ * decision_consequential | native, or null when nothing is open. "fault" comes from the fault probe,
+ * never from a dialog. Mirrors outcome_fork.py::classify_surface. */
+function classifySurface(probe) {
+  if (!probe) return null;
+  if (probe.native) return "native";
+  if (probe.hasFields) return "info_request";
+  const labels = probeLabelsRaw(probe);
+  if (probe.progress || (probe.live && labels.length < 2)) return "notice";
+  if (!isDecisionDialog(probe)) return "obstruction";
+  return labels.some((l) => CONSEQUENTIAL_RE.test(l) || isIrreversibleLabel(l)) ? "decision_consequential" : "decision_benign";
+}
+
 // Reserved id for "stop the run" in a pause's choice list. Not a slug, so it can never collide
 // with an option id derived from a button label.
 const STOP_CHOICE = "__stop__";
@@ -199,6 +245,19 @@ function probeLabelsRaw(probe) {
   return asArray(probe && probe.controls)
     .map((c) => String((c && (c.name || c.text)) || "").trim())
     .filter(Boolean);
+}
+
+/** What an agent (the MCP client) may be asked about an UNRECORDED question popup: only its visible
+ * buttons, and only when none of them looks irreversible. `blockedBy` names the first one that does,
+ * so the run can stop with a reason instead of asking. The "stop" choice is always offered. */
+function agentPopupChoices(probe) {
+  const labels = probeLabelsRaw(probe);
+  const blockedBy = labels.find(isIrreversibleLabel) || null;
+  const choices = blockedBy
+    ? []
+    : labels.map((l) => ({ id: l, label: l, role: CONSEQUENTIAL_RE.test(l) ? "consequential" : "unknown" }));
+  if (!blockedBy) choices.push({ id: STOP_CHOICE, label: "Stop the run", role: "stop" });
+  return { choices, blockedBy };
 }
 
 /** The choices a person is offered when a fork pauses. A recognised state offers its own options
@@ -215,13 +274,19 @@ function pauseChoices(state, probe) {
 
 module.exports = {
   isDecisionDialog,
+  classifySurface,
+  mostCautious,
+  isIrreversibleLabel,
+  CAUTION_ORDER,
   STOP_CHOICE,
   probeLabelsRaw,
   pauseChoices,
+  agentPopupChoices,
   DEFAULT_TIMEOUT_MS,
   clampTimeout,
   messageTokens,
   matchState,
+  valueFreeTitle,
   decide,
   decideUnknown,
   findOption,

@@ -1171,6 +1171,8 @@ function enrichStepsWithRecovery(steps, recovery) {
 // gate — run.js's dispatch treats it identically to the Tier A ladder's own Escape press).
 // The derived selector is NOT trusted here either: run.js routes it through
 // dismiss_patterns.js's isSafeDismissLabel gate at the moment it's clicked.
+const AGENT_VERDICT_KINDS = ["fault", "decision", "drift"];
+
 function applyStepOverrides(steps, overrides, opts = {}) {
   if (!Array.isArray(steps) || !overrides || typeof overrides !== "object") return steps;
   const out = steps.slice();
@@ -1187,6 +1189,13 @@ function applyStepOverrides(steps, overrides, opts = {}) {
         selector = rawVal.selector;
       } else if (Number.isInteger(rawVal.candidate_index) && typeof opts.resolveCandidateIndex === "function") {
         selector = opts.resolveCandidateIndex(idx, rawVal.candidate_index);
+      }
+
+      // EXEC-49 P5 (G8): the agent's reading of what is wrong. Caution-only: it can end the run with
+      // the agent's reason, it can never make the step do anything it would not otherwise do.
+      const verdict = rawVal.verdict;
+      if (verdict && typeof verdict === "object" && AGENT_VERDICT_KINDS.includes(verdict.kind)) {
+        patch = { ...(patch || {}), _agent_verdict: { kind: verdict.kind, why: String(verdict.why || "").replace(/\s+/g, " ").trim().slice(0, 200) } };
       }
 
       const dismiss = rawVal.dismiss;

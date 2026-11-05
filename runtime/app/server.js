@@ -10,6 +10,7 @@ const { loadInstallId } = require("./install_identity");
 const { installedSkillVersions } = require("./installed_versions");
 const { collectSyncErrors } = require("./sync_errors");
 const pageScripts = require("./page_scripts");
+const pageStatus = require("./page_status");
 const { plainCause } = require("./errors");
 const hostBrowser = require("./host_browser");
 const { inputsFailingPattern } = require("./interpolate");
@@ -1400,7 +1401,7 @@ async function _handleTool(name, args, extra) {
     // parked (e.g. resuming after an auth pause on the same still-open page, below) — that must
     // keep working exactly as before.
     if (_effAgentEnabled && resolved.length === 1 && primary.isResume && !_resumeOverride
-      && _existingPark && primary.steps[primary.resumeFrom]) {
+      && _existingPark && Number.isInteger(_existingPark.failedAt) && primary.steps[primary.resumeFrom]) {
       appendRecoveryEvent({ event: "recovery_resume_missing_override", slug: primary.entry.slug, step_index: primary.resumeFrom });
       _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc: "recovery_resume_missing_override" });
       if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
@@ -1419,7 +1420,14 @@ async function _handleTool(name, args, extra) {
     // A park still sitting under THIS skill's own key that we did not adopt (state diverged, a
     // non-resume call, or an override that didn't match) is stale for this run — discard it so it
     // can neither leak a browser nor interfere with what's about to run.
-    if (_getParkedRecovery(_parkKey)) await _discardPark(_parkKey, _resumeOverride ? "replaced" : "superseded");
+    // A pause park (popup decision, ai_review, hand-over, guard) that THIS call is resuming at its
+    // own step is adopted by its resume block further down, not stale: only a recovery park sets
+    // `failedAt`, the others carry their own step index.
+    const _leftPark = _getParkedRecovery(_parkKey);
+    const _isOwnPausePark = !!_leftPark && primary.isResume && resolved.length === 1
+      && [_leftPark.forkStepIndex, _leftPark.reviewStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex]
+        .some((n) => Number.isInteger(n) && n === primary.resumeFrom);
+    if (_leftPark && !_isOwnPausePark) await _discardPark(_parkKey, _resumeOverride ? "replaced" : "superseded");
 
     // An agent override with no live, state-matching park to resume on (TTL expired, page
     // crashed, or state diverged) must never silently continue mid-plan on a fresh page — the
@@ -1556,8 +1564,10 @@ async function _handleTool(name, args, extra) {
     // A guard pause parked AT a fork's index (a destructive option, test guard on) is a different
     // park and falls through to the guard resume below.
     const _forkAnswerKey = String(primary.resumeFrom);
+    // EXEC-49 P5: an agent-answered popup can pause at a step that is not a fork, so the step type no
+    // longer decides; the park (forkStepIndex === resume_from) does. An ai_review keeps its own path.
     const _forkAnswered = resolved.length === 1 && primary.isResume
-      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "outcome_fork"
+      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type !== "ai_review"
       && Object.prototype.hasOwnProperty.call(primary.reviewResults || {}, _forkAnswerKey);
     const _peekForkPark = _forkAnswered ? _getParkedRecovery(_parkKey) : null;
     const _resumeForkStep = !!(_forkAnswered && _peekForkPark && _peekForkPark.forkStepIndex === primary.resumeFrom);
@@ -1593,8 +1603,11 @@ async function _handleTool(name, args, extra) {
           );
         }
         // Re-ask against the current page; the park (and its TTL) stays alive.
+        const _man = primary.entry.manifest || {};
         const forkResp = await buildForkRequest(forkPark.page, primary.resumeFrom, forkPark.forkInfo || { choices: [] }, {
           validationErrors: validation.errors,
+          workflow: _man.name || primary.entry.slug,
+          goal: _man.description || "",
         });
         if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
         runRegistry.end(_runId);
@@ -1607,6 +1620,10 @@ async function _handleTool(name, args, extra) {
       _park = forkPark;
       clearReviewRetry(primary.entry.slug, primary.resumeFrom);
       primary.inputs[`__fork_choice_${primary.resumeFrom}`] = validation.choice;
+      if (forkPark.forkInfo && forkPark.forkInfo.agent) {
+        primary.inputs[`__fork_agent_${primary.resumeFrom}`] = 1;
+        if (forkPark.forkInfo.acted) primary.inputs[`__fork_acted_${primary.resumeFrom}`] = 1;
+      }
       appendRecoveryEvent({ event: "fork_answered", slug: primary.entry.slug, step_index: primary.resumeFrom, choice: validation.choice });
       _runTracker.emit("fork_answered", { si: primary.resumeFrom });
     }
@@ -1950,6 +1967,7 @@ async function _handleTool(name, args, extra) {
       // Attach page diagnostic listeners — called on initial page and again after re-auth context rebuild.
       // (declared above, outside the try block, so catch{}'s cleanup calls can see it — see comment there.)
       _attachPageListeners = (pg) => {
+        pageStatus.attach(pg); // EXEC-49: lets a failing step tell the app's own refusal (403, 429, 5xx) from a moved element
         pg.on("console", msg => {
           if (["error", "warning"].includes(msg.type()) && runtimeLog.consoleErrors.length < 50)
             runtimeLog.consoleErrors.push({ type: msg.type(), text: msg.text() });
@@ -2059,6 +2077,9 @@ async function _handleTool(name, args, extra) {
             stopBefore: si === 0 ? _stopBefore : undefined,
             resumeLoop: isResuming && _park ? _park.loopCursor : undefined, // a guard pause inside a loop body
             callees, // call_workflow: the workflows this skill calls, already loaded and checked
+            // EXEC-49 P5: an unrecorded question popup may be put to the caller (an MCP client with agent
+            // recovery on, or Build Studio's test with "let AI answer" on); never to a scheduled run.
+            answerPopups: (args.answer_popups === true || _effAgentEnabled) && trigger !== "scheduled",
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
           if (result && result.outputs) Object.assign(_outputs, result.outputs);
@@ -2354,7 +2375,11 @@ async function _handleTool(name, args, extra) {
         appendRecoveryEvent({ event: "fork_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
         log("info", "fork_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
         _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "fork" });
-        const forkResp = await buildForkRequest(_forkPage, runErr.stepIndex, runErr.info, {});
+        const _man = primary.entry.manifest || {};
+        const forkResp = await buildForkRequest(_forkPage, runErr.stepIndex, runErr.info, {
+          workflow: _man.name || primary.entry.slug,
+          goal: _man.description || "",
+        });
         if (forkResp && Array.isArray(forkResp.content)) {
           forkResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
@@ -2512,7 +2537,8 @@ async function _handleTool(name, args, extra) {
       // would let a step_overrides candidate pick a different (possibly wrong) element or row.
       const parkable = _failedPage && _effAgentEnabled && resolved.length === 1
         && typeof runErr.failedAt === "number" && !runErr.session_expired && !runErr.cancelled
-        && !runErr.destructiveHalt && !runErr.entityNotFound;
+        && !runErr.destructiveHalt && !runErr.entityNotFound
+        && !runErr.forkDecisionNeeded && !runErr.badInput && !runErr.fault;
       if (parkable) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();

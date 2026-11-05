@@ -92,6 +92,32 @@ test("matchState: recognises the dialog by title and button labels, ignoring the
   assert.strictEqual(seen.state.id, "exists");
 });
 
+test("matchState: a file name or number in the TITLE does not make a recorded popup unknown", () => {
+  const state = existsState({ mode: "stop" });
+  state.signature.title = "Replace ?"; // what the compiler stores: quoted text and digits already removed
+  const probe = { ...EXISTS_PROBE, title: "Replace “q3-forecast.xlsx”? (2 items)" };
+  assert.strictEqual(fork.matchState(probe, [state]).kind, "state");
+  // An older pack stored the raw recorded title: it matches too.
+  state.signature.title = "Replace 'report.pdf'?";
+  assert.strictEqual(fork.matchState(probe, [state]).kind, "state");
+});
+
+test("quoted names are stripped whatever quotes wrap them, and a contraction is not a quote", () => {
+  assert.strictEqual(fork.valueFreeTitle("Replace “report.pdf”?"), "Replace ?");
+  assert.strictEqual(fork.valueFreeTitle("Replace ‘report.pdf’?"), "Replace ?");
+  assert.strictEqual(fork.valueFreeTitle("Replace 'report.pdf'?"), "Replace ?");
+  assert.strictEqual(fork.valueFreeTitle("Don't replace it, you can't undo that"), "Don't replace it, you can't undo that");
+  assert.deepStrictEqual(fork.messageTokens("“q3-forecast” already exists"), fork.messageTokens("“other” already exists"));
+  assert.ok(!fork.messageTokens("“q3-forecast” already exists").includes("forecast"));
+});
+
+test("valueFreeTitle: strips quoted text and digits only", () => {
+  assert.strictEqual(fork.valueFreeTitle("Replace 'report.pdf'?"), "Replace ?");
+  assert.strictEqual(fork.valueFreeTitle("Delete 12 files"), "Delete files");
+  assert.strictEqual(fork.valueFreeTitle("Discard changes?"), "Discard changes?");
+  assert.strictEqual(fork.valueFreeTitle(null), "");
+});
+
 test("matchState: a missing button means unknown, not a loose match", () => {
   const probe = { ...EXISTS_PROBE, controls: [{ name: "Replace" }, { name: "Cancel" }] };
   assert.strictEqual(fork.matchState(probe, [existsState({ mode: "stop" })]).kind, "unknown");
@@ -191,7 +217,20 @@ test("isDecisionDialog agrees with the shared decision-surface cases", () => {
       native: !!c.native,
     };
     assert.strictEqual(fork.isDecisionDialog(probe), c.decision, c.name);
+    assert.strictEqual(fork.classifySurface({ ...probe, live: !!c.live, progress: !!c.progress }), c.class, `${c.name}: class`);
   }
+});
+
+test("isIrreversibleLabel agrees with the shared label list", () => {
+  const { irreversible_labels } = require("../fixtures/decision_surface_cases.json");
+  for (const c of irreversible_labels) assert.strictEqual(fork.isIrreversibleLabel(c.label), c.irreversible, JSON.stringify(c.label));
+});
+
+test("classifySurface: nothing open is null; mostCautious picks the more cautious class and ignores unknowns", () => {
+  assert.strictEqual(fork.classifySurface(null), null);
+  assert.strictEqual(fork.mostCautious("obstruction", "decision_consequential", "notice"), "decision_consequential");
+  assert.strictEqual(fork.mostCautious("decision_benign", "fault"), "fault");
+  assert.strictEqual(fork.mostCautious("native", undefined), null);
 });
 
 test("clampTimeout keeps the wait between 1.5s and 8s", () => {
@@ -438,4 +477,51 @@ test("buildForkRequest tells the agent to ask the user and marks the pause as hu
   assert.strictEqual(meta.requires_human, true);
   assert.strictEqual(meta.step_index, 3);
   assert.deepStrictEqual(meta.choices.map((c) => c.id), ["replace", "keep_both", "__stop__"]);
+});
+
+// ─── option tails (EXEC-49 G4): where the workflow goes after an option ─────────────────────────
+
+function withThen(then) {
+  const state = existsState({ mode: "auto", option_id: "keep_both", author_approved: true });
+  state.options.find((o) => o.id === "keep_both").then = then;
+  return state;
+}
+
+test("then: stop runs the option, closes the popup, then ends the run without running anything after it", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE });
+  await assert.rejects(
+    () => run(page, [forkStep([withThen("stop")]), nav("https://x.test/next")]),
+    (err) => err.forkDecisionNeeded === true && /does not cover that path/.test(err.message) && err.failedAt === 0,
+  );
+  assert.deepStrictEqual(page.gotos, ["https://x.test/keep"], "the option ran, the next step did not");
+});
+
+test("then: end finishes the run successfully on that path and skips the rest", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE });
+  const { result } = await run(page, [forkStep([withThen("end")]), nav("https://x.test/next")]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/keep"]);
+  assert.strictEqual(result.endedAt, 0);
+  assert.ok(result.warnings.some((w) => /run finished at step 1/.test(w)));
+});
+
+test("then: rejoin, or no tail at all, carries on with the next recorded step", async () => {
+  for (const then of ["rejoin", undefined, "sideways"]) {
+    const page = mockPage({ probe: EXISTS_PROBE });
+    const { result } = await run(page, [forkStep([withThen(then)]), nav("https://x.test/next")]);
+    assert.deepStrictEqual(page.gotos, ["https://x.test/keep", "https://x.test/next"], String(then));
+    assert.strictEqual(result.endedAt, undefined);
+  }
+});
+
+test("then: end inside a repeated step stops instead (ending would silently skip the remaining rows)", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE });
+  const loop = { type: "for_each", items: "files", as: "f", max_iterations: 3, steps: [forkStep([withThen("end")])] };
+  await assert.rejects(() => run(page, [loop], { files: "a,b,c" }), (err) => err.forkDecisionNeeded === true && err.runEnded !== true);
+});
+
+test("a fork's clean path never sees a tail", async () => {
+  const page = mockPage({ probe: null });
+  const { result } = await run(page, [forkStep([withThen("stop")]), nav("https://x.test/next")]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/next"]);
+  assert.strictEqual(result.endedAt, undefined);
 });

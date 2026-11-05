@@ -29,6 +29,8 @@ const { appendRecoveryEvent } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
 const { MAX_CALL_DEPTH } = require("./call_workflow");
 const fork = require("./fork");
+const pageStatus = require("./page_status");
+const { classifyFault, faultMessage } = require("./fault_classify");
 const appKnowledge = require("./app_knowledge");
 const {
   PAGE_LOAD_TIMEOUT_MS,
@@ -182,8 +184,36 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     // EXEC-30: Tier A's known-pattern ladder saw an INTERCEPTED failure and cleared nothing —
     // tell the agent tier this looks like an unrecognized overlay, not a plain missing element.
     if (cause.unknownOverlay) err.unknownOverlay = true;
+    // Deliberate stops, not exhausted recovery: without these flags the wrapper looked like an
+    // ordinary selector failure, so server.js parked it and handed it to an armed Tier B round.
+    if (cause.forkDecisionNeeded) err.forkDecisionNeeded = true;
+    if (cause.badInput) err.badInput = true;
+    if (cause.fault) {
+      err.fault = true;
+      err.faultKind = cause.faultKind;
+    }
+    if (cause.decisionDialog) err.decisionDialog = cause.decisionDialog;
   }
   return err;
+}
+
+// EXEC-49 — is this failed step's page showing the app's own refusal? Null when it is not, when a
+// popup is asking the person to choose (that is a decision, never a fault), when the step is a fork
+// (it handles its own popups), or when a native dialog has the renderer blocked.
+async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
+  if (step.type === "outcome_fork") return null;
+  if (ctx.dialogQueue && ctx.dialogQueue.length) return null;
+  const dlg = await evalOn(page, pageScripts.dialogProbe).catch(() => null);
+  if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) return null;
+  const probe = await evalOn(page, pageScripts.faultProbe).catch(() => null);
+  const p = probe && probe !== EVAL_TIMED_OUT ? probe : {};
+  const seen = pageStatus.recent(page, sinceMs);
+  return classifyFault({
+    alerts: [...(p.alerts || []), ...(p.invalid || [])],
+    offline: !!p.offline,
+    status: seen ? seen.status : null,
+    mayHaveActed,
+  });
 }
 
 // Executes ONE step against the given `steps` array at index `i`, mutating `state` in place
@@ -204,6 +234,7 @@ async function executeOneStep(ctx, state, steps, i) {
   }
 
   const step = steps[i];
+  const stepStartedAt = Date.now(); // a refusal the page reported before this is not this step's fault
   // run_if: a step that runs only when an input says so ("skip this field when it's empty"). It reads
   // the run's inputs and nothing else -- never the page -- so whether a step ran is decided by what the
   // caller supplied, and is reported rather than silent.
@@ -214,6 +245,19 @@ async function executeOneStep(ctx, state, steps, i) {
     return;
   }
   if (ctx.onStep) ctx.onStep(i);
+
+  // EXEC-49 P5 (G8): the agent looked at the page and said this is not a moved element. Honour it by
+  // ending the run with its reason: a verdict can only make a run stop sooner, never act further.
+  if (step._agent_verdict) {
+    const v = step._agent_verdict;
+    const why = v.why ? `: ${v.why}` : "";
+    appendRecoveryEvent({ event: "agent_verdict", slug: ctx.slug, step_index: i, kind: v.kind });
+    ctx.tracker.emit("step_fail", { si: i, fc: `agent_verdict_${v.kind}` });
+    const cause = v.kind === "decision"
+      ? Object.assign(new Error(`The assistant stopped the run at a decision nobody authorised${why}`), { forkDecisionNeeded: true })
+      : Object.assign(new Error(`The assistant stopped the run: the app reported a problem${why}`), { fault: true, faultKind: v.kind });
+    throw stepFailure(step, i, cause, null, state.warnings);
+  }
 
   // Resolve which live page this step runs on. Never falls back to the previous step's page
   // on a miss (see resolveStepPage) — a same-looking element on the wrong tab is worse than
@@ -282,6 +326,11 @@ async function executeOneStep(ctx, state, steps, i) {
       throw stepFailure(step, i, new Error("Can't stop inside a repeated or conditional step: pick the step that starts the loop instead."), null, state.warnings);
     }
     throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 0, stopBefore: true });
+  }
+
+  // EXEC-49 P5: server.js bound an answer for a popup that blocked THIS (non-fork) step on the previous call.
+  if (step.type !== "outcome_fork" && Object.prototype.hasOwnProperty.call(state.inputs, `__fork_choice_${i}`)) {
+    if (await answerBlockingPopup(ctx, state, step, page, i)) return;
   }
 
   // EXEC-13: ai_review is a planned pause (author-placed reasoning checkpoint), not a page
@@ -396,7 +445,13 @@ async function executeOneStep(ctx, state, steps, i) {
   }
 
   if (step.type === "outcome_fork") {
-    await runForkStep(ctx, state, step, page, i);
+    const outcome = await runForkStep(ctx, state, step, page, i);
+    // A popup can open after the watch window closed. For the next two steps of this same list, a
+    // popup this fork knows is still its popup, not a stranger blocking the click (EXEC-49 G5).
+    // Never in a dry run (nothing was closed, so it would be handled twice) or inside an option body.
+    state.armedFork = (outcome === "clean" || outcome === "continue") && !ctx.dryRun && !state.forkDepth
+      ? { steps, forkIndex: i, until: i + 2, states: step.states }
+      : null;
     state.hasExecutedStep = true;
     state.prevStepType = step.type;
     state.prevPage = page;
@@ -447,6 +502,7 @@ async function executeOneStep(ctx, state, steps, i) {
       delete step._dismiss_escape;
     }
   }
+  if (state.armedFork && step.type !== "outcome_fork") await handleLateFork(ctx, state, steps, i, step, page);
   if (step._dismiss_selector || step._dismiss_escape) {
     if (step._dismiss_escape) {
       await page.keyboard.press("Escape").catch(() => {});
@@ -648,6 +704,17 @@ async function executeOneStep(ctx, state, steps, i) {
     }
   }
 
+  // EXEC-49 — the app itself says it cannot go on as asked (expired sign-in, no access, offline,
+  // rate limit, duplicate data, a rejected form, a record that is gone). Re-finding the element
+  // cannot fix that and an agent round would only spend tokens, so stop here with a typed reason.
+  // Runs only for a step that already failed, after settle so a transient "Saving..." alert is gone.
+  const fault = await detectFault(ctx, page, step, { mayHaveActed, sinceMs: stepStartedAt });
+  if (fault) {
+    ctx.tracker.emit("step_fail", { si: i, fc: `fault_${fault.kind}` });
+    appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: fault.kind, source: fault.source });
+    throw stepFailure(step, i, Object.assign(new Error(faultMessage(fault)), { fault: true, faultKind: fault.kind }), preShot, state.warnings);
+  }
+
   // EXEC-24 — seed the guard with what we already know about the primary attempt. Two ways
   // the step's action may already have run: it threw from inside the action callback
   // (`mayHaveActed`, set at the withLocator seam), or it completed and only its post-condition
@@ -673,6 +740,7 @@ async function executeOneStep(ctx, state, steps, i) {
     if (step.destructive === true) primaryErr.destructiveHalt = true;
     if (primaryErr.decisionDialog) {
       emitAppObs(ctx.tracker, i, safePageUrl(page), primaryErr.decisionDialog.title, primaryErr.decisionDialog.buttons, false);
+      await askAboutBlockingPopup(ctx, state, step, page, i, primaryErr);
     }
     ctx.tracker.emit("step_fail", { si: i, fc: mapErrorToCode(primaryErr) });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
@@ -912,7 +980,8 @@ function safePageUrl(page) {
 // shape (scrub.js). Telemetry only: never read back by the run, never fails it.
 function emitAppObs(tracker, si, url, title, labels, known) {
   try {
-    const obs = appKnowledge.observation(url, { title, labels, known });
+    const surface = fork.classifySurface({ title, controls: (Array.isArray(labels) ? labels : []).map((name) => ({ name })) });
+    const obs = appKnowledge.observation(url, { title, labels, known, surface });
     if (obs) tracker.emit("app_obs", { si, ...obs });
   } catch (_) { /* advisory */ }
 }
@@ -978,6 +1047,24 @@ async function runForkOption(ctx, state, step, page, i, option, title) {
     state.forkDepth -= 1;
   }
   await confirmForkDialogClosed(ctx, state, step, page, i, title, option.label || option.id);
+
+  // Where the workflow goes from here (EXEC-49 G4). Default: carry on with the next recorded step.
+  // "end": this path is a complete run on its own. "stop": the rest of the workflow does not cover
+  // this path, so nothing past here may run. Inside a repeated step "end" would silently skip the
+  // remaining rows, so there it stops too.
+  const then = option.then === "end" || option.then === "stop" ? option.then : "rejoin";
+  if (then === "end" && !(state.loopDepth > 0)) {
+    appendRecoveryEvent({ event: "fork_option_end", slug: ctx.slug, step_index: i, option: option.id });
+    throw Object.assign(new Error("run_ended"), { runEnded: true, stepIndex: i });
+  }
+  if (then !== "rejoin") {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_option_stop" });
+    appendRecoveryEvent({ event: "fork_option_stop", slug: ctx.slug, step_index: i, option: option.id });
+    throw stepFailure(step, i, Object.assign(
+      new Error(`Stopped after "${option.label || option.id}" in the "${title}" popup: the rest of this workflow does not cover that path.`),
+      { forkDecisionNeeded: true },
+    ), null, state.warnings);
+  }
 }
 
 // The choice must have actually dealt with the popup. A dialog still on screen means the click
@@ -1025,6 +1112,266 @@ async function runVariantBranchStep(ctx, state, step, page, i) {
   }
 }
 
+// EXEC-49 P5 -- an UNRECORDED popup that asks a question, on a run whose caller can reason (an MCP
+// client, or Build Studio's test with "let AI answer" on). The run parks and asks that caller to pick
+// one of the popup's own visible buttons, deciding from the user's goal and asking the user when unsure.
+// Never offered when any button looks irreversible (delete, pay, send, publish...), never inside a
+// loop or an option body (a pause there has no cursor to resume from), never in a dry run: those stop.
+function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, known = false } = {}) {
+  const title = (probe && probe.title) || "a popup";
+  const stop = (why) => {
+    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "stop", src: "agent_gate" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", mode: "stop", source: "agent_gate", title, why });
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(
+      new Error(`Needs a decision: ${title}. ${why} Nothing was changed. Tell Conxa in the chat how this popup should be handled.`),
+      { forkDecisionNeeded: true },
+    ), null, state.warnings);
+  };
+  if (ctx.dryRun) stop("A dry run does not answer popups.");
+  if (state.loopDepth > 0 || state.forkDepth > 0) stop("Nobody can be asked inside a repeated or conditional step.");
+  const { choices, blockedBy } = fork.agentPopupChoices(probe);
+  if (blockedBy) stop(`It has a button that can't be undone ("${blockedBy}"), so it is never answered automatically.`);
+  ctx.tracker.emit("fork_paused", { si: i, st: "unknown", src: "agent" });
+  appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", mode: "pause", reason: "agent_decides", source: "agent", title });
+  throw Object.assign(new Error("fork_pause"), {
+    forkPause: true,
+    stepIndex: i,
+    step,
+    page,
+    info: {
+      title,
+      text: (probe && probe.text) || "",
+      reason: "agent_decides",
+      suggested: null,
+      unknown: true,
+      knownFromMap: !!known,
+      agent: true,
+      acted: !!acted,
+      stepIntent: step.intent || step.type || "",
+      choices,
+    },
+  });
+}
+
+// A step failed and a decision popup is what is in the way. Put the question to the caller, unless the
+// step can't be undone (that one fails closed) or this run has nobody to ask. Throws the pause; returns
+// when it should not ask, and the ordinary failure follows.
+async function askAboutBlockingPopup(ctx, state, step, page, i, primaryErr) {
+  if (!ctx.answerPopups || step.destructive === true) return;
+  const blocking = await observeDialog(page, ctx);
+  if (blocking && fork.isDecisionDialog(blocking)) {
+    agentPopupPause(ctx, state, step, page, i, blocking, { acted: !!(primaryErr.verifyFail || primaryErr.mayHaveActed) });
+  }
+}
+
+// Resume of an agent pause on a step that is NOT a fork: answer the popup with the chosen button, then
+// either carry on (the step's own action had not run) or only re-check its result (it had: running it
+// again could do the work twice). Called from executeOneStep when server.js bound the answer.
+// Returns true when the step is finished (its result was re-checked), false when it should now run.
+async function answerBlockingPopup(ctx, state, step, page, i) {
+  const choice = String(state.inputs[`__fork_choice_${i}`]);
+  const acted = state.inputs[`__fork_acted_${i}`] === 1;
+  const byAgent = state.inputs[`__fork_agent_${i}`] === 1;
+  for (const k of ["choice", "acted", "agent"]) delete state.inputs[`__fork_${k}_${i}`];
+  const fail = (code, message, extra = {}) => {
+    ctx.tracker.emit("step_fail", { si: i, fc: code });
+    throw stepFailure(step, i, Object.assign(new Error(message), extra), null, state.warnings);
+  };
+  const who = byAgent ? "agent" : "human";
+
+  if (choice === fork.STOP_CHOICE) {
+    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "stop", src: who });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, mode: "stop", source: who });
+    fail("fork_stopped_by_user", "Stopped at the popup, as you chose.", { forkDecisionNeeded: true });
+  }
+
+  const probe = await observeDialog(page, ctx);
+  if (!probe) {
+    // Whoever answered (or the person, in the page) already closed it.
+    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "handled_in_page", src: who });
+  } else {
+    const labels = new Set(fork.probeLabelsRaw(probe).map((l) => fork.norm(l)));
+    const title = probe.title || "a popup";
+    if (!labels.has(fork.norm(choice))) {
+      fail("fork_choice_invalid", `The popup changed: "${choice}" is no longer one of its buttons.`, { badInput: true });
+    }
+    // Checked again at click time, not only when the choices were offered: the popup may have changed.
+    if (byAgent && fork.isIrreversibleLabel(choice)) {
+      fail("fork_decision_needed", `"${choice}" can't be undone, so it is never chosen automatically. Nothing was changed.`, { forkDecisionNeeded: true });
+    }
+    countSurface(ctx, state, step, i, "unknown", title);
+    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", opt: choice, mode: "run", src: who });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", option: choice, mode: "run", source: who, title });
+    if (ctx.dryRun) {
+      state.warnings.push(`Dry run: did not click "${choice}" in the "${title}" popup.`);
+    } else {
+      try {
+        await clickDialogButtonByLabel(page, choice);
+      } catch (e) {
+        ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
+        throw stepFailure(step, i, e, null, state.warnings);
+      }
+      await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
+    }
+    state.warnings.push(`The "${title}" popup was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`);
+  }
+
+  if (!acted) return false; // the step's own action never ran: let it run now that the way is clear
+  // The action already ran and the popup was only in the way of seeing its result: check it, never redo it.
+  const verdict = await verifyStep(page, step, state.inputs, null, ctx.dialogQueue).catch(() => null);
+  if (verdict && verdict.pass) {
+    ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_after_popup" });
+    state.hasExecutedStep = true;
+    state.prevStepType = step.type;
+    state.prevPage = page;
+    return true;
+  }
+  fail("verify_fail_after_popup", `Step ${i + 1} had already run; after the popup was answered its result still could not be confirmed. It was not run again.`, { verifyFail: true });
+  return true;
+}
+
+// A surface the run keeps handling is a loop, not progress. Counted per (popup, loop row, called
+// workflow), because a legitimate "Saved" confirmation inside a for_each shows once per row.
+const MAX_SURFACE_HANDLINGS = 2;
+
+function countSurface(ctx, state, step, i, stateId, title) {
+  const row = state.loopCursor && state.loopCursor.rowId != null ? String(state.loopCursor.rowId) : "";
+  const key = [stateId, fork.norm(fork.valueFreeTitle(title)), row, (ctx.callStack || []).join(">")].join("|");
+  state.surfaceCounts = state.surfaceCounts || new Map();
+  const n = (state.surfaceCounts.get(key) || 0) + 1;
+  state.surfaceCounts.set(key, n);
+  if (n > MAX_SURFACE_HANDLINGS) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "surface_loop" });
+    appendRecoveryEvent({ event: "surface_loop", slug: ctx.slug, step_index: i, state: stateId, title, count: n });
+    throw stepFailure(step, i, Object.assign(
+      new Error(`The "${title}" popup keeps coming back (${n} times in this run), so the run was stopped instead of answering it again.`),
+      { forkDecisionNeeded: true },
+    ), null, state.warnings);
+  }
+}
+
+// A popup the previous fork step knows, caught on one of the next two steps (G5). Only a state the
+// fork lists is acted on: a stranger stays "left alone" as before.
+async function handleLateFork(ctx, state, steps, i, step, page) {
+  const armed = state.armedFork;
+  if (armed.steps !== steps) return;
+  if (i > armed.until) { state.armedFork = null; return; }
+  if (i <= armed.forkIndex || state.forkDepth > 0 || ctx.dryRun) return;
+  const probe = await observeDialog(page, ctx);
+  const seen = fork.matchState(probe, armed.states);
+  if (seen.kind !== "state") return;
+  state.armedFork = null;
+  const stateId = seen.state.id;
+  const title = (seen.state.signature && seen.state.signature.title) || (probe && probe.title) || "a popup";
+  let decision;
+  try {
+    decision = fork.decide(seen.state, state.inputs, { loopDepth: state.loopDepth || 0 });
+  } catch (e) {
+    ctx.tracker.emit("step_fail", { si: i, fc: e && e.badInput ? "bad_input" : "fork_decision" });
+    throw stepFailure(step, i, e, null, state.warnings);
+  }
+  // The test guard pauses at the fork's own index, which is behind us now: a destructive option
+  // cannot be paused for here, so it stops rather than running unguarded.
+  if (decision.do === "run" && ctx.guard && ctx.guard.pause && !ctx.guard.released
+      && (decision.option.steps || []).some((s) => s && s.destructive === true)) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(
+      new Error(`The "${title}" popup opened late and its answer can't be undone; the test guard is on, so the test stopped.`),
+      { forkDecisionNeeded: true },
+    ), null, state.warnings);
+  }
+  ctx.tracker.emit("fork_observed", { si: i, st: stateId, late: 1 });
+  await actOnForkDecision(ctx, state, step, page, i, decision, { stateId, title, probe, seen, known: null, late: true });
+}
+
+// What to do once a fork has decided. Shared by the fork step itself and by a late popup (a known
+// state that opened after the watch window closed, caught on one of the next steps). Returns
+// "continue" when the popup was left alone, nothing otherwise. `late` degrades a pause to a stop:
+// the resume path for a pause is bound to the fork step's own index.
+async function actOnForkDecision(ctx, state, step, page, i, decision, { stateId, title, probe, seen, known, late = false }) {
+  if (late && decision.do === "pause") {
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "stop", src: "late" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "stop", source: "late", title });
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(new Error(`Needs a decision: ${title}. It opened after the step that was meant to handle it.`), { forkDecisionNeeded: true }), null, state.warnings);
+  }
+
+  if (decision.do === "continue") {
+    // Nothing here is evidence of a choice, or the author said to leave it. Click nothing and go
+    // on as recorded; the warning travels with the run, so if this surface is what blocks the
+    // next step, that step's failure names it.
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "continue", src: "policy" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "continue", source: "policy", title });
+    state.warnings.push(`"${title}" was on screen and was left alone; the run went on as recorded.`);
+    return "continue";
+  }
+
+  if (decision.do === "pause") {
+    // A decision a person asked to be asked about (policy.reviewed). Park the page and hand
+    // server.js the question; it resumes through __fork_choice_<i>. Never answered by a model on
+    // the person's behalf.
+    ctx.tracker.emit("fork_paused", { si: i, st: stateId });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "pause", reason: decision.reason, title });
+    throw Object.assign(new Error("fork_pause"), {
+      forkPause: true,
+      stepIndex: i,
+      step,
+      page,
+      info: {
+        title,
+        text: (probe && probe.text) || "",
+        reason: decision.reason,
+        suggested: decision.suggested || null,
+        unknown: seen.kind !== "state",
+        knownFromMap: !!known,
+        choices: fork.pauseChoices(seen.kind === "state" ? seen.state : null, probe).map((c) => {
+          // A popup the app map knows: say which of its real buttons are risky. The labels are
+          // still only the ones on screen, so the answer can never name an invented action.
+          const role = known && c.role === "unknown" ? appKnowledge.roleOf(known, c.label) : null;
+          return role ? { ...c, role } : c;
+        }),
+      },
+    });
+  }
+
+  if (decision.do === "click") {
+    countSurface(ctx, state, step, i, stateId, title);
+    // The author's standing policy for a popup the app map knows (set in the App maps page, shipped
+    // with the skill). Same safety as a fork's `auto`: only a visible button, a consequential one
+    // only when the author approved it (decideKnown), and the destructive guard still applies.
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: decision.label, mode: "run", src: decision.source });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: decision.label, mode: "run", source: decision.source, title });
+    forkGuard(ctx, state, step, page, i, appKnowledge.roleOf(known, decision.label) === "consequential");
+    if (ctx.dryRun) {
+      state.warnings.push(`Dry run: did not click "${decision.label}" in the "${title}" popup.`);
+      return;
+    }
+    try {
+      await clickDialogButtonByLabel(page, decision.label);
+    } catch (e) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
+      throw stepFailure(step, i, e, null, state.warnings);
+    }
+    await confirmForkDialogClosed(ctx, state, step, page, i, title, decision.label);
+    return;
+  }
+
+  if (decision.do === "stop") {
+    const message = decision.message || `Needs a decision: ${title}`;
+    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "stop", src: "policy" });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "stop", source: "policy", title });
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(new Error(message), { forkDecisionNeeded: true }), null, state.warnings);
+  }
+
+  const option = decision.option;
+  countSurface(ctx, state, step, i, stateId, title);
+  ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: option.id, mode: "run", src: decision.source });
+  appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: option.id, mode: "run", source: decision.source, title });
+  await runForkOption(ctx, state, step, page, i, option, title);
+}
+
 async function runForkStep(ctx, state, step, page, i) {
   const states = Array.isArray(step.states) ? step.states : [];
   if (!states.length) {
@@ -1059,7 +1406,7 @@ async function runForkStep(ctx, state, step, page, i) {
     ctx.tracker.emit("fork_observed", { si: i, st: "clean" });
     ctx.tracker.emit("fork_clean", { si: i });
     appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "clean", mode: "none", source: "observed" });
-    return;
+    return "clean";
   }
 
   let decision;
@@ -1088,77 +1435,12 @@ async function runForkStep(ctx, state, step, page, i) {
   }
   ctx.tracker.emit("fork_observed", { si: i, st: stateId });
 
-  if (decision.do === "continue") {
-    // Nothing here is evidence of a choice, or the author said to leave it. Click nothing and go
-    // on as recorded; the warning travels with the run, so if this surface is what blocks the
-    // next step, that step's failure names it.
-    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "continue", src: "policy" });
-    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "continue", source: "policy", title });
-    state.warnings.push(`"${title}" was on screen and was left alone; the run went on as recorded.`);
-    return;
+  // EXEC-49 P5: a popup this fork never heard of, on a run whose caller can reason: ask it (the
+  // popup's own visible buttons only; irreversible-looking ones and loops stop instead).
+  if (seen.kind !== "state" && decision.do === "continue" && ctx.answerPopups && fork.isDecisionDialog(probe)) {
+    return agentPopupPause(ctx, state, step, page, i, probe, { known: !!known });
   }
-
-  if (decision.do === "pause") {
-    // A decision a person asked to be asked about (policy.reviewed). Park the page and hand
-    // server.js the question; it resumes through __fork_choice_<i>. Never answered by a model on
-    // the person's behalf.
-    ctx.tracker.emit("fork_paused", { si: i, st: stateId });
-    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "pause", reason: decision.reason, title });
-    throw Object.assign(new Error("fork_pause"), {
-      forkPause: true,
-      stepIndex: i,
-      step,
-      page,
-      info: {
-        title,
-        text: (probe && probe.text) || "",
-        reason: decision.reason,
-        suggested: decision.suggested || null,
-        unknown: seen.kind !== "state",
-        knownFromMap: !!known,
-        choices: fork.pauseChoices(seen.kind === "state" ? seen.state : null, probe).map((c) => {
-          // A popup the app map knows: say which of its real buttons are risky. The labels are
-          // still only the ones on screen, so the answer can never name an invented action.
-          const role = known && c.role === "unknown" ? appKnowledge.roleOf(known, c.label) : null;
-          return role ? { ...c, role } : c;
-        }),
-      },
-    });
-  }
-
-  if (decision.do === "click") {
-    // The author's standing policy for a popup the app map knows (set in the App maps page, shipped
-    // with the skill). Same safety as a fork's `auto`: only a visible button, a consequential one
-    // only when the author approved it (decideKnown), and the destructive guard still applies.
-    ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: decision.label, mode: "run", src: decision.source });
-    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: decision.label, mode: "run", source: decision.source, title });
-    forkGuard(ctx, state, step, page, i, appKnowledge.roleOf(known, decision.label) === "consequential");
-    if (ctx.dryRun) {
-      state.warnings.push(`Dry run: did not click "${decision.label}" in the "${title}" popup.`);
-      return;
-    }
-    try {
-      await clickDialogButtonByLabel(page, decision.label);
-    } catch (e) {
-      ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
-      throw stepFailure(step, i, e, null, state.warnings);
-    }
-    await confirmForkDialogClosed(ctx, state, step, page, i, title, decision.label);
-    return;
-  }
-
-  if (decision.do === "stop") {
-    const message = decision.message || `Needs a decision: ${title}`;
-    ctx.tracker.emit("fork_decided", { si: i, st: stateId, mode: "stop", src: "policy" });
-    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, mode: "stop", source: "policy", title });
-    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
-    throw stepFailure(step, i, Object.assign(new Error(message), { forkDecisionNeeded: true }), null, state.warnings);
-  }
-
-  const option = decision.option;
-  ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: option.id, mode: "run", src: decision.source });
-  appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: option.id, mode: "run", source: decision.source, title });
-  await runForkOption(ctx, state, step, page, i, option, title);
+  return actOnForkDecision(ctx, state, step, page, i, decision, { stateId, title, probe, seen, known });
 }
 
 // Re-entry after a person chose. Looks at the page again rather than trusting the park: the
@@ -1188,6 +1470,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
       ctx.tracker.emit("step_fail", { si: i, fc: "fork_choice_invalid" });
       throw stepFailure(step, i, Object.assign(new Error(`"${choice}" is not one of the choices for the "${title}" popup.`), { badInput: true }), null, state.warnings);
     }
+    countSurface(ctx, state, step, i, seen.state.id, title);
     ctx.tracker.emit("fork_decided", { si: i, st: seen.state.id, opt: option.id, mode: "run", src: "human" });
     appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: seen.state.id, option: option.id, mode: "run", source: "human", title });
     await runForkOption(ctx, state, step, page, i, option, title);
@@ -1200,7 +1483,12 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
     ctx.tracker.emit("step_fail", { si: i, fc: "fork_choice_invalid" });
     throw stepFailure(step, i, Object.assign(new Error(`The popup changed: "${choice}" is no longer one of its buttons.`), { badInput: true }), null, state.warnings);
   }
-  ctx.tracker.emit("fork_decided", { si: i, st: "unknown", opt: choice, mode: "run", src: "human" });
+  if (state.inputs[`__fork_agent_${i}`] === 1 && fork.isIrreversibleLabel(choice)) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+    throw stepFailure(step, i, Object.assign(new Error(`"${choice}" can't be undone, so it is never chosen automatically. Nothing was changed.`), { forkDecisionNeeded: true }), null, state.warnings);
+  }
+  countSurface(ctx, state, step, i, "unknown", title);
+  ctx.tracker.emit("fork_decided", { si: i, st: "unknown", opt: choice, mode: "run", src: state.inputs[`__fork_agent_${i}`] === 1 ? "agent" : "human" });
   appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", option: choice, mode: "run", source: "human", title });
   if (ctx.dryRun) {
     state.warnings.push(`Dry run: did not click "${choice}" in the "${title}" popup.`);
@@ -1215,7 +1503,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1333,15 +1621,28 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     appKnowledge: knowledge || null, // advisory popup knowledge for an unrecognised dialog (app_knowledge.js)
     callees: callees || null, // call_workflow: the workflows this one calls, loaded and checked at run start
     callStack: [slug],
+    answerPopups: answerPopups === true, // EXEC-49: an MCP client may be asked about an unrecorded question popup
   };
 
+  let endedAt = null;
   for (let i = startFrom; i < steps.length; i++) {
-    await executeOneStep(ctx, state, steps, i);
+    try {
+      await executeOneStep(ctx, state, steps, i);
+    } catch (e) {
+      // A popup option marked "end" finished the run on purpose: not a failure, and nothing after runs.
+      if (e && e.runEnded) {
+        endedAt = e.stepIndex;
+        state.warnings.push(`The run finished at step ${e.stepIndex + 1}: the answer chosen for the popup ends this workflow.`);
+        break;
+      }
+      throw e;
+    }
   }
 
   return {
     recoveredSteps: state.recoveredSteps, warnings: state.warnings, dryRunSkipped: state.dryRunSkipped,
     skippedByInput: state.skippedByInput, outputs: collectOutputs(steps, state.inputs),
+    ...(endedAt !== null ? { endedAt } : {}),
   };
 }
 
@@ -1457,6 +1758,10 @@ module.exports = {
   uniqueDownloadName,
   sweepOldRuns,
   runPlan,
+  stepFailure,
+  detectFault,
+  countSurface,
+  askAboutBlockingPopup,
   runIfDecision,
   collectOutputs,
   declaredOutputNames,

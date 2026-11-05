@@ -343,6 +343,36 @@ function dialogProbe() {
   return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, live, progress };
 }
 
+// EXEC-49 — fault probe. What the app itself is saying is wrong right now: visible role=alert /
+// aria-live=assertive regions, the message of a field marked aria-invalid, and whether the browser
+// is offline. Deliberately NOT loose page text: a plain "Required" label is not evidence of a fault.
+// Re-parsed standalone in the page realm like every function here, so it closes over nothing.
+// Returns { offline, alerts: string[], invalid: string[] } (at most 4 of each, 200 chars each).
+function faultProbe() {
+  const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
+  };
+  const alerts = [];
+  for (const el of document.querySelectorAll('[role="alert"], [aria-live="assertive"]')) {
+    if (alerts.length >= 4) break;
+    if (!visible(el)) continue;
+    const t = clean(el.innerText || el.textContent);
+    if (t) alerts.push(t);
+  }
+  const invalid = [];
+  for (const el of document.querySelectorAll('[aria-invalid="true"]')) {
+    if (invalid.length >= 4) break;
+    if (!visible(el)) continue;
+    const ids = `${el.getAttribute("aria-errormessage") || ""} ${el.getAttribute("aria-describedby") || ""}`.split(/\s+/).filter(Boolean);
+    const t = clean(ids.map((id) => document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent).join(" "));
+    if (t) invalid.push(t);
+  }
+  return { offline: navigator.onLine === false, alerts, invalid };
+}
+
 // EXEC-30 — live overlay probe. domInventory() truncates at 50 entries IN DOM ORDER, so a modal
 // appended late to <body> can be cut out entirely even though it is the only thing blocking the
 // step. This answers "is something sitting on top of the page right now" directly, independent of
@@ -575,6 +605,7 @@ module.exports = {
   inventoryEntryForElement,
   overlayProbe,
   dialogProbe,
+  faultProbe,
   INVENTORY_SELECTOR,
   scrollVirtualContainerStep,
   scrollDominantScrollableElement,

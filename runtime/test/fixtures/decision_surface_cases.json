@@ -1,15 +1,211 @@
 {
-  "_about": "One definition of 'is this surface asking the person to choose?', shared by the runtime (runtime/app/fork.js::isDecisionDialog) and the compiler (conxa_compile/compiler/outcome_fork.py::classify_dialog). Both test suites load this file, so the two implementations cannot drift. A surface is a decision only when it has no input fields, is not a native dialog, is not a cookie/consent banner, has two or more buttons, and those buttons are not all plain dismiss labels. Anything else -- a toast, a progress panel, a lone Cancel -- is not.",
+  "_about": "One definition of 'is this surface asking the person to choose?', shared by the runtime (runtime/app/fork.js::isDecisionDialog) and the compiler (conxa_compile/compiler/outcome_fork.py::classify_dialog). Both test suites load this file, so the two implementations cannot drift. A surface is a decision only when it has no input fields, is not a native dialog, is not a cookie/consent banner, has two or more buttons, and those buttons are not all plain dismiss labels. Anything else -- a toast, a progress panel, a lone Cancel -- is not. Each case also carries the surface `class` (notice | obstruction | decision_benign | info_request | decision_consequential | native) that fork.js::classifySurface and outcome_fork.py::classify_surface must agree on, and `irreversible_labels` pins is_irreversible_label / isIrreversibleLabel (a popup with an irreversible-looking button is never answered by an agent). `live` and `progress` are optional probe flags: a toast or progress panel is a notice.",
   "cases": [
-    { "name": "file exists: Replace / Keep both / Cancel", "title": "Upload options", "message": "report.pdf already exists in this location.", "buttons": ["Replace", "Keep both", "Cancel"], "decision": true },
-    { "name": "discard changes: Discard / Keep editing", "title": "Discard changes?", "message": "Unsaved edits.", "buttons": ["Discard", "Keep editing"], "decision": true },
-    { "name": "progress toast with no buttons", "title": "Uploading 1 item", "message": "Uploading", "buttons": [], "decision": false },
-    { "name": "progress panel with a single Cancel", "title": "Uploading 3 items", "message": "2 of 3 done", "buttons": ["Cancel"], "decision": false },
-    { "name": "snackbar with one Undo", "title": "", "message": "Item moved to trash", "buttons": ["Undo"], "decision": false },
-    { "name": "only plain dismiss labels", "title": "Heads up", "message": "Something changed.", "buttons": ["Close", "Cancel"], "decision": false },
-    { "name": "cookie banner", "title": "We use cookies", "message": "Pick your preferences.", "buttons": ["Accept all", "Reject all"], "decision": false },
-    { "name": "consent worded in the message only", "title": "Before you continue", "message": "We value your privacy.", "buttons": ["Agree", "Manage options"], "decision": false },
-    { "name": "form with a text field", "title": "Rename file", "message": "", "buttons": ["Save", "Cancel"], "has_fields": true, "decision": false },
-    { "name": "native confirm", "title": "confirm", "message": "Replace existing file?", "buttons": ["OK", "Cancel"], "native": true, "decision": false }
+    {
+      "name": "file exists: Replace / Keep both / Cancel",
+      "title": "Upload options",
+      "message": "report.pdf already exists in this location.",
+      "buttons": [
+        "Replace",
+        "Keep both",
+        "Cancel"
+      ],
+      "decision": true,
+      "class": "decision_consequential"
+    },
+    {
+      "name": "discard changes: Discard / Keep editing",
+      "title": "Discard changes?",
+      "message": "Unsaved edits.",
+      "buttons": [
+        "Discard",
+        "Keep editing"
+      ],
+      "decision": true,
+      "class": "decision_consequential"
+    },
+    {
+      "name": "progress toast with no buttons",
+      "title": "Uploading 1 item",
+      "message": "Uploading",
+      "buttons": [],
+      "decision": false,
+      "class": "notice",
+      "progress": true
+    },
+    {
+      "name": "progress panel with a single Cancel",
+      "title": "Uploading 3 items",
+      "message": "2 of 3 done",
+      "buttons": [
+        "Cancel"
+      ],
+      "decision": false,
+      "class": "notice",
+      "progress": true
+    },
+    {
+      "name": "snackbar with one Undo",
+      "title": "",
+      "message": "Item moved to trash",
+      "buttons": [
+        "Undo"
+      ],
+      "decision": false,
+      "class": "notice",
+      "live": true
+    },
+    {
+      "name": "only plain dismiss labels",
+      "title": "Heads up",
+      "message": "Something changed.",
+      "buttons": [
+        "Close",
+        "Cancel"
+      ],
+      "decision": false,
+      "class": "obstruction"
+    },
+    {
+      "name": "cookie banner",
+      "title": "We use cookies",
+      "message": "Pick your preferences.",
+      "buttons": [
+        "Accept all",
+        "Reject all"
+      ],
+      "decision": false,
+      "class": "obstruction"
+    },
+    {
+      "name": "consent worded in the message only",
+      "title": "Before you continue",
+      "message": "We value your privacy.",
+      "buttons": [
+        "Agree",
+        "Manage options"
+      ],
+      "decision": false,
+      "class": "obstruction"
+    },
+    {
+      "name": "form with a text field",
+      "title": "Rename file",
+      "message": "",
+      "buttons": [
+        "Save",
+        "Cancel"
+      ],
+      "has_fields": true,
+      "decision": false,
+      "class": "info_request"
+    },
+    {
+      "name": "native confirm",
+      "title": "confirm",
+      "message": "Replace existing file?",
+      "buttons": [
+        "OK",
+        "Cancel"
+      ],
+      "native": true,
+      "decision": false,
+      "class": "native"
+    },
+    {
+      "name": "open in app: a harmless choice",
+      "title": "Open in the app?",
+      "message": "Continue in the desktop app.",
+      "buttons": [
+        "Open app",
+        "Stay in browser"
+      ],
+      "decision": true,
+      "class": "decision_benign"
+    },
+    {
+      "name": "delete project: Delete / Cancel",
+      "title": "Delete project",
+      "message": "This cannot be undone.",
+      "buttons": [
+        "Delete",
+        "Cancel"
+      ],
+      "decision": true,
+      "class": "decision_consequential"
+    },
+    {
+      "name": "publish page: Publish / Not now",
+      "title": "Ready to go live?",
+      "message": "",
+      "buttons": [
+        "Publish",
+        "Not now"
+      ],
+      "decision": true,
+      "class": "decision_consequential"
+    }
+  ],
+  "irreversible_labels": [
+    {
+      "label": "Delete",
+      "irreversible": true
+    },
+    {
+      "label": "Delete forever",
+      "irreversible": true
+    },
+    {
+      "label": "Pay $20",
+      "irreversible": true
+    },
+    {
+      "label": "Send",
+      "irreversible": true
+    },
+    {
+      "label": "Submit order",
+      "irreversible": true
+    },
+    {
+      "label": "Publish",
+      "irreversible": true
+    },
+    {
+      "label": "Permanently remove",
+      "irreversible": true
+    },
+    {
+      "label": "Order by date",
+      "irreversible": true
+    },
+    {
+      "label": "Replace",
+      "irreversible": false
+    },
+    {
+      "label": "Overwrite",
+      "irreversible": false
+    },
+    {
+      "label": "Discard",
+      "irreversible": false
+    },
+    {
+      "label": "Keep both",
+      "irreversible": false
+    },
+    {
+      "label": "Cancel",
+      "irreversible": false
+    },
+    {
+      "label": "Payment settings",
+      "irreversible": false
+    },
+    {
+      "label": "",
+      "irreversible": false
+    }
   ]
 }

@@ -258,8 +258,19 @@ test("an unrecognised popup reports app_obs, scrubbed, and says whether the map 
   const events = [];
   await runPlan(page, [FORK], {}, 0, "ak-test", { tracker: { emit: (e, f) => events.push({ e, ...f }) }, appKnowledge: null });
   const obs = events.find((e) => e.e === "app_obs");
-  assert.deepStrictEqual(obs, { e: "app_obs", si: 0, host: "x.test", rt: "/editor", tt: ["discard", "changes"], bt: ["Discard", "Keep editing"], cl: "decision", k: 0 });
+  assert.deepStrictEqual(obs, { e: "app_obs", si: 0, host: "x.test", rt: "/editor", tt: ["discard", "changes"], bt: ["Discard", "Keep editing"], cl: "decision", k: 0, sc: "decision_consequential" });
   assert.ok(!JSON.stringify(events).includes("budget"), "no file name leaves the machine");
+});
+
+test("observation carries the finer class only when it is one of the two known decision classes", () => {
+  const labels = ["Open app", "Stay"];
+  const url = "https://x.test/editor";
+  assert.strictEqual(appKnowledge.observation(url, { title: "t", labels, surface: "decision_benign" }).sc, "decision_benign");
+  assert.strictEqual(appKnowledge.observation(url, { title: "t", labels, surface: "decision_consequential" }).sc, "decision_consequential");
+  for (const odd of [undefined, "notice", "fault", "<script>", 7]) {
+    assert.ok(!("sc" in appKnowledge.observation(url, { title: "t", labels, surface: odd })), String(odd));
+  }
+  assert.strictEqual(appKnowledge.observation(url, { title: "t", labels, surface: "decision_benign" }).cl, "decision", "cl is unchanged for older readers");
 });
 
 test("a recognised popup reports k=1; a recognised clean page reports nothing", async () => {

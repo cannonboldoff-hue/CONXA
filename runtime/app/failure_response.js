@@ -223,6 +223,15 @@ function overlayNoteText(overlay, resumeKey) {
 
 // EXEC-30 — the PREVIOUS round's dismiss nomination was refused. Tell the agent why, the same
 // way overrideNoteText explains a rejected target pick, so it doesn't just repeat the mistake.
+// EXEC-49 P5 (G8): lets the agent say "this is not a moved element" instead of guessing a candidate.
+// Caution-only on the runtime side: a verdict ends the run with the agent's reason.
+function verdictNoteText() {
+  return `\n\nIf the page shows an app error, a question popup that needs the user, or the app has ` +
+    `changed so this step no longer makes sense, do NOT pick an element. Answer with ` +
+    `step_overrides: { "<index>": { "verdict": { "kind": "fault" | "decision" | "drift", "why": "<one sentence for the user>" } } } ` +
+    `and the run will stop with your reason.`;
+}
+
 function dismissRejectedNoteText(err) {
   const reason = err && err.failedStep && err.failedStep._dismiss_rejected;
   if (!reason) return "";
@@ -307,6 +316,18 @@ function haltReasonNoteText(err) {
       `on the current page — it may be missing, filtered out, or the list changed. Acting on a ` +
       `different row would mean acting on the wrong record. Verify the record still exists, ` +
       `then re-run; do not attempt a candidate override.`;
+  }
+  if (err.forkDecisionNeeded) {
+    return `\n\nThe run stopped on purpose at a popup that needs a decision nobody has authorised. ` +
+      `Nothing was changed. Tell the user; do not attempt a candidate override or click the popup.`;
+  }
+  if (err.badInput) {
+    return `\n\nThe run stopped because an input or a setting is not valid, not because an element ` +
+      `moved. Fix the input and re-run; do not attempt a candidate override.`;
+  }
+  if (err.fault) {
+    return `\n\nThe run stopped because the app reported a problem (${err.faultKind || "fault"}). ` +
+      `Retrying with a different element will not help. Tell the user what the app said.`;
   }
   return "";
 }
@@ -531,7 +552,7 @@ async function buildFailureResponse(page, err, resolvedEntry, runTracker, steps,
 
   // PROD-3 — fail closed, same shape as the ceiling-reached terminal branch above: no digest, no
   // candidate list, no resumable park (server.js's `parkable` check excludes both flags too).
-  if (err.destructiveHalt || err.entityNotFound) {
+  if (err.destructiveHalt || err.entityNotFound || err.forkDecisionNeeded || err.badInput || err.fault) {
     // destructiveHalt is already logged at the moment cascade.js stops (destructive_recovery_halted);
     // entityNotFound has no earlier emit site (resolution.js is pure/sync-agnostic of the log), so
     // it's recorded here instead.
@@ -597,7 +618,7 @@ async function buildFailureResponse(page, err, resolvedEntry, runTracker, steps,
 
   const contextSections = buildContextSections(err, steps, failedAt, viewport, scrollY, stepAssertions);
   const notes = `${frameNotFoundNoteText(err)}${overrideNoteText(err)}` +
-    `${overlayNoteText(overlay, resumeKey)}${dismissRejectedNoteText(err)}`;
+    `${overlayNoteText(overlay, resumeKey)}${dismissRejectedNoteText(err)}${verdictNoteText()}`;
 
   const earlyDiffers = earlySnapshotDiffers(err, currentInventory);
 

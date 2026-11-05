@@ -59,6 +59,8 @@ async function buildForkRequest(page, stepIndex, info, opts = {}) {
     ? `\n\nThe previous answer was not usable:\n${opts.validationErrors.map((e) => `- ${e}`).join("\n")}`
     : "";
 
+  if (info.agent) return buildAgentRequest(page, stepIndex, info, opts, { url, choices, lines });
+
   const header =
     `Execution paused at step ${stepIndex + 1}: a popup needs a decision from the person running this.\n` +
     `Page URL: ${url}\n` +
@@ -91,6 +93,57 @@ async function buildForkRequest(page, stepIndex, info, opts = {}) {
         suggested: info.suggested || null,
         choices: choices.map((c) => ({ id: c.id, label: c.label, role: c.role })),
         requires_human: true,
+      },
+    },
+  };
+}
+
+// EXEC-49 P5: the popup was never taught to this workflow and the run has a caller that can reason (an
+// MCP client). It decides, from what the USER is trying to get done, and asks the user when unsure.
+// Only the popup's own visible buttons are offered, and none that looks irreversible (those never get
+// here: the run stops instead).
+async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, lines }) {
+  const retryNote = opts.validationErrors && opts.validationErrors.length
+    ? `\n\nThe previous answer was not usable:\n${opts.validationErrors.map((e) => `- ${e}`).join("\n")}`
+    : "";
+  const goal = [opts.workflow, opts.goal].filter(Boolean).join(" -- ");
+  const actedNote = info.acted
+    ? "\nThe step's own action already ran; this popup appeared as a result. After you answer, the step's result is re-checked, not repeated.\n"
+    : "";
+  const header =
+    `Execution paused at step ${stepIndex + 1}: a popup this workflow was never taught about appeared and needs an answer.\n` +
+    `Page URL: ${url}\n` +
+    (goal ? `Workflow: ${goal}\n` : "") +
+    (info.stepIntent ? `Step: ${info.stepIntent}\n` : "") +
+    `Popup: ${info.title || "(untitled)"}${info.text ? `\n${info.text}` : ""}\n${actedNote}\n` +
+    `Decide using what the user is trying to get done. If you are not sure which button is right, ` +
+    `ASK THE USER in the chat before answering -- it is their data. Pick only a button from this list:\n` +
+    `${lines.join("\n")}\n\n` +
+    `Then resume by calling execute_skill again with:\n` +
+    `  resume_from: ${stepIndex}\n` +
+    `  review_results: { "${stepIndex}": { "choice": "<id from the list above>" } }${retryNote}`;
+
+  const content = [{ type: "text", text: header }];
+  const shot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+  if (shot) {
+    content.push(
+      { type: "text", text: "Current page:" },
+      { type: "image", data: shot.toString("base64"), mimeType: "image/jpeg" }
+    );
+  }
+  return {
+    content,
+    _meta: {
+      "conxa/fork": {
+        step_index: stepIndex,
+        title: info.title || "",
+        message: info.text || "",
+        reason: info.reason || "",
+        unknown: true,
+        suggested: null,
+        choices: choices.map((c) => ({ id: c.id, label: c.label, role: c.role })),
+        requires_human: false,
+        agent: true,
       },
     },
   };
