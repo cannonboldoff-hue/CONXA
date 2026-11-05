@@ -1602,6 +1602,7 @@
         el,
         dialog_before: !!_queryOpenDialog(),
         expanded_before: el.getAttribute ? el.getAttribute("aria-expanded") : null,
+        surfaces_before: _surfaceTexts(),
       },
       // Phase 2: compile-time signals for LLM selector generation.
       ancestors: ancestorsChain,
@@ -1711,6 +1712,14 @@
     } catch (_e) {
       payload.post_condition = null;
     }
+    // What the app SAID in response (a new alert / status line / invalid-field message), as value-free
+    // words. Tells a later reader that a step was followed by an error or a notice, even though no
+    // popup opened. Observation only: nothing here becomes a step.
+    try {
+      payload.surface_context = buildSurfaceContext(payload.state_probe);
+    } catch (_e) {
+      payload.surface_context = null;
+    }
     delete payload.state_probe;
     // What the field holds after the pick: lets the compiler tell a day click that set a date
     // (value changed) from a click in a calendar app (nothing changed), by outcome and not by
@@ -1720,6 +1729,69 @@
       try { dc.field_display_value_after = readEditableValue(dc.__fieldEl); } catch (_e) {}
     }
     return report(payload);
+  }
+
+  // ── what the app said (EXEC-49 G9) ──────────────────────────────────────────────────────────
+  // `dom_diff` only sees interactive elements, so a toast or an inline error (plain text in a live
+  // region) never showed up in a recording. These helpers read the live regions directly.
+  function _surfaceTexts() {
+    const out = [];
+    const seen = new Set();
+    const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 200);
+    const visible = (el) => {
+      try {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
+      } catch (_e) { return false; }
+    };
+    const add = (kind, text) => {
+      const t = clean(text);
+      const key = kind + "\t" + t;
+      if (t && !seen.has(key) && out.length < 16) { seen.add(key); out.push(key); }
+    };
+    try {
+      for (const el of document.querySelectorAll('[role="alert"], [aria-live="assertive"], [role="status"], [aria-live="polite"]')) {
+        if (!visible(el)) continue;
+        const loud = el.getAttribute("role") === "alert" || el.getAttribute("aria-live") === "assertive";
+        add(loud ? "alert" : "status", el.innerText || el.textContent);
+      }
+      for (const el of document.querySelectorAll('[aria-invalid="true"]')) {
+        if (!visible(el)) continue;
+        const ids = ((el.getAttribute("aria-errormessage") || "") + " " + (el.getAttribute("aria-describedby") || "")).split(/\s+/).filter(Boolean);
+        add("invalid", ids.map((id) => { const n = document.getElementById(id); return n ? (n.innerText || n.textContent) : ""; }).join(" "));
+      }
+    } catch (_e) {}
+    return out;
+  }
+
+  // Words only, never the text: quoted spans, e-mail addresses, addresses and anything with a digit
+  // are dropped, so a customer's name or record number never rides along in a recording's metadata.
+  function _valueFreeWords(text) {
+    const stripped = String(text || "")
+      .replace(/"[^"]*"|(?<![A-Za-z0-9])'[^']*'(?![A-Za-z0-9])|\u201C[^\u201D]*\u201D|\u2018[^\u2019]*\u2019/g, " ")
+      .replace(/\S+@\S+/g, " ")
+      .replace(/https?:\/\/\S+/g, " ")
+      .replace(/\S*\d\S*/g, " ");
+    const words = [];
+    for (const w of stripped.toLowerCase().split(/[^a-z]+/)) {
+      if (w.length > 2 && !words.includes(w)) words.push(w);
+      if (words.length >= 10) break;
+    }
+    return words;
+  }
+
+  function buildSurfaceContext(probe) {
+    const before = new Set((probe && probe.surfaces_before) || []);
+    const items = [];
+    for (const line of _surfaceTexts()) {
+      if (before.has(line)) continue;
+      const tab = line.indexOf("\t");
+      const words = _valueFreeWords(line.slice(tab + 1));
+      if (words.length) items.push({ kind: line.slice(0, tab), words });
+      if (items.length >= 3) break;
+    }
+    return items.length ? { items } : null;
   }
 
   function _computeDomDiff(before, after) {

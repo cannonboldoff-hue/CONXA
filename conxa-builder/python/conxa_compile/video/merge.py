@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from conxa_compile.compiler.entity_binding import repeating_peers
-from conxa_compile.compiler.outcome_fork import classify_dialog
+from conxa_compile.compiler.outcome_fork import classify_dialog, classify_surface
 from conxa_compile.video import splice as splice_mod
 from conxa_compile.video.prepare import IDLE_KEEP_MS
 
@@ -171,6 +171,11 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             **({"peers": peers} if (peers := repeating_peers(ev)) else {}),
             # decision | dismissable | consent | form: the recorder saw this action inside a popup.
             **({"dialog": classify_dialog(ev["dialog_context"])} if isinstance(ev.get("dialog_context"), dict) else {}),
+            # notice | obstruction | decision_benign | info_request | decision_consequential | native
+            # (docs/Popup-and-State-Handling.md §3): the same popup, in the one shared vocabulary.
+            **({"surface": classify_surface(ev["dialog_context"])} if isinstance(ev.get("dialog_context"), dict) else {}),
+            # What the page said after this action (a new alert / status / invalid-field message), words only.
+            **({"said": ev["surface_context"]["items"]} if isinstance(ev.get("surface_context"), dict) and ev["surface_context"].get("items") else {}),
         }))
     seen: set[int] = set()
     for sub in subs:

@@ -1308,3 +1308,58 @@ def test_an_unknown_picker_reports_its_field_and_what_the_pick_left_in_it(page: 
     dc = [e for e in _action_events(page, "click") if e.get("date_context")][0]["date_context"]
     assert dc["field"].endswith("dob") or "dob" in dc["field"]
     assert dc["field_display_value_after"] == "03/15/2007"
+
+
+# ── what the app said after an action (EXEC-49 G9) ──────────────────────────────────────────
+
+
+def _click_and_wait(page: Page, selector: str) -> dict:
+    page.click(selector)
+    page.wait_for_timeout(700)
+    events = _action_events(page, "click")
+    assert events, "no click was recorded"
+    return events[-1]
+
+
+def test_a_new_alert_after_a_click_is_recorded_as_value_free_words(page: Page) -> None:
+    _install_bridge(
+        page,
+        """<button id="save" onclick="
+            const a = document.createElement('div');
+            a.setAttribute('role', 'alert');
+            a.textContent = 'The name “Q3 report 2026” already exists. Contact jo@acme.com (ticket 4411).';
+            document.body.appendChild(a);">Save</button>""",
+    )
+    event = _click_and_wait(page, "#save")
+    ctx = event["surface_context"]
+
+    assert ctx is not None, {k: event[k] for k in event if k in ("state_change", "surface_context")}
+    assert [i["kind"] for i in ctx["items"]] == ["alert"]
+    words = ctx["items"][0]["words"]
+    assert "already" in words and "exists" in words
+    assert not {"q3", "report", "jo", "acme", "2026", "4411"} & set(words), f"a value leaked: {words}"
+
+
+def test_a_message_that_was_already_on_the_page_is_not_attributed_to_the_click(page: Page) -> None:
+    _install_bridge(page, '<div role="alert">Heads up: maintenance tonight</div><button id="go">Go</button>')
+
+    assert _click_and_wait(page, "#go")["surface_context"] is None
+
+
+def test_an_invalid_field_message_is_recorded_too(page: Page) -> None:
+    _install_bridge(
+        page,
+        """<input id="email" aria-describedby="err"><span id="err" hidden>Email is invalid</span>
+        <button id="send" onclick="
+            document.getElementById('email').setAttribute('aria-invalid', 'true');
+            document.getElementById('err').hidden = false;">Send</button>""",
+    )
+    ctx = _click_and_wait(page, "#send")["surface_context"]
+
+    assert ctx is not None and ctx["items"][0]["kind"] == "invalid" and "invalid" in ctx["items"][0]["words"]
+
+
+def test_a_click_that_changes_no_message_records_no_surface_context(page: Page) -> None:
+    _install_bridge(page, '<button id="plain">Plain</button>')
+
+    assert _click_and_wait(page, "#plain")["surface_context"] is None

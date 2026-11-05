@@ -333,6 +333,21 @@ class SnapshotRef(BaseModel):
     dom_path: str | None = None   # relative blob path
 
 
+class SurfaceItem(BaseModel):
+    """One thing the app said in response to an action, as value-free words (never the text)."""
+
+    kind: Literal["alert", "status", "invalid"]
+    words: list[str] = Field(default_factory=list, max_length=10)
+
+
+class SurfaceContext(BaseModel):
+    """What the page said after an action: a new alert, status line or invalid-field message. A recorder
+    observation only. It never becomes a step; it tells a reader the action was followed by a notice or
+    an error even though no popup opened."""
+
+    items: list[SurfaceItem] = Field(default_factory=list, max_length=3)
+
+
 class RecordedEvent(BaseModel):
     """Single user action with all attached signals (paths, not bytes)."""
 
@@ -376,6 +391,8 @@ class RecordedEvent(BaseModel):
     # before this existed, and on every non-MCQ action regardless of recording age.
     choice_context: ChoiceContext | None = None
     dialog_context: DialogContext | None = None
+    # What the page said in response (a new alert / status line / invalid-field message), as words only.
+    surface_context: SurfaceContext | None = None
 
     # Phase 2: compile-time signals for LLM-based selector generation (REQUIRED).
     # Recordings without these cannot validate; must be re-recorded.

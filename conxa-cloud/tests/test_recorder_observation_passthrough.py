@@ -157,6 +157,24 @@ def test_legacy_event_without_dialog_context_stays_none() -> None:
     assert _finalize(_bridge_payload()).dialog_context is None
 
 
+SURFACE_CONTEXT = {"items": [{"kind": "alert", "words": ["name", "already", "exists"]}]}
+
+
+def test_surface_context_survives_finalization_and_the_round_trip() -> None:
+    from conxa_core.models.events import RecordedEvent
+
+    event = _finalize(_bridge_payload(surface_context=SURFACE_CONTEXT))
+
+    assert event.surface_context is not None, "surface_context was dropped at finalization"
+    assert event.surface_context.items[0].kind == "alert"
+    again = RecordedEvent.model_validate(event.model_dump())
+    assert again.surface_context.items[0].words == ["name", "already", "exists"]
+
+
+def test_legacy_event_without_surface_context_stays_none() -> None:
+    assert _finalize(_bridge_payload()).surface_context is None
+
+
 def test_native_dialog_events_carry_a_dialog_context() -> None:
     import json
 

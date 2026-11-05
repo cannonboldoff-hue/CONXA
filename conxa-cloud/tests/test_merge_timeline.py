@@ -74,6 +74,27 @@ def test_two_clicks_in_the_same_second_never_swap():
     assert [r["segment"]["intent"] for r in ev_rows] == ["first", "second"]
 
 
+def test_a_popup_click_carries_its_class_in_the_shared_vocabulary():
+    popup = {"kind": "dom", "container_signal": '[role="dialog"]', "title": "Upload options",
+             "message": "x already exists.", "has_fields": False,
+             "buttons": [{"name": "Replace", "chosen": True}, {"name": "Keep both"}, {"name": "Cancel"}]}
+    plain = ev("tab_0", 9_100, seq=2, text="Save")
+    with_popup = {**ev("tab_0", 5_100, seq=1, text="Replace"), "dialog_context": popup}
+    ev_rows = events_of(merge([with_popup, plain], [row(5, 6, "click"), row(9, 10, "click")]))
+    assert ev_rows[0]["dialog"] == "decision"
+    assert ev_rows[0]["surface"] == "decision_consequential"
+    assert "surface" not in ev_rows[1] and "dialog" not in ev_rows[1]
+
+
+def test_what_the_page_said_after_an_action_rides_on_its_row_as_words():
+    said = [{"kind": "alert", "words": ["name", "already", "exists"]}]
+    noisy = {**ev("tab_0", 5_100, seq=1, text="Save"), "surface_context": {"items": said}}
+    quiet = ev("tab_0", 9_100, seq=2, text="Next")
+    ev_rows = events_of(merge([noisy, quiet], [row(5, 6, "click"), row(9, 10, "click")]))
+    assert ev_rows[0]["said"] == said
+    assert "said" not in ev_rows[1]
+
+
 def test_kind_mismatch_loses_to_a_better_fitting_segment():
     events = [ev("tab_0", 5_000, "click", seq=1)]
     rows = [row(4, 6, "type", intent="typing"), row(4, 6, "click", intent="clicking")]
