@@ -1,0 +1,933 @@
+<title>Conxa Engine v2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one scrolling page, summary first, then one deep section per change. Same actor colours as the Conxa graph.
+   Red marks a weak point today; green marks what v2 adds; amber "Correction" boxes mark where the first version was wrong. */
+:root{
+  --paper:#F1F3EF; --panel:#FFFFFF; --sunk:#E7EBE6; --ink:#17201C; --muted:#56625C; --line:#D2D9D3;
+  --code:#0D6B65; --code-bg:#DDEFEC; --model:#9C560F; --model-bg:#F6E8D6; --human:#4A43A6; --human-bg:#E5E3F6;
+  --video:#8B3A6C; --video-bg:#F3E0EB; --data:#5E6A64; --data-bg:#ECEFEC;
+  --new:#1F7A3A; --bad:#B3261E; --on-badge:#FFFFFF;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#101513; --panel:#161D1A; --sunk:#1D2622; --ink:#E3EAE5; --muted:#97A49D; --line:#2C3833;
+  --code:#57C4B9; --code-bg:#163331; --model:#E3A660; --model-bg:#3A2A17; --human:#A49EF2; --human-bg:#26244A;
+  --video:#DD92C4; --video-bg:#3A1F31; --data:#A5B1AB; --data-bg:#222B27;
+  --new:#7CC47F; --bad:#F2877F; --on-badge:#101513; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#101513; --panel:#161D1A; --sunk:#1D2622; --ink:#E3EAE5; --muted:#97A49D; --line:#2C3833;
+  --code:#57C4B9; --code-bg:#163331; --model:#E3A660; --model-bg:#3A2A17; --human:#A49EF2; --human-bg:#26244A;
+  --video:#DD92C4; --video-bg:#3A1F31; --data:#A5B1AB; --data-bg:#222B27;
+  --new:#7CC47F; --bad:#F2877F; --on-badge:#101513; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--f-body);margin:0}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--sunk);padding:.05em .35em;border-radius:3px;overflow-wrap:anywhere}
+pre{margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;font:13px/1.5 var(--f-mono);color:var(--ink);min-width:0}
+pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(1.9rem,3.8vw,2.7rem);font-weight:700}
+h2{font-size:1.55rem;font-weight:600}
+h3{font-size:1.2rem;font-weight:600}
+h4{font-size:1rem;font-weight:600;letter-spacing:.01em}
+p{margin:0}
+a{color:var(--code)}
+a:focus-visible{outline:2px solid var(--code);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:26px 72px;display:flex;flex-direction:column;gap:40px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--code)}
+header{display:flex;flex-direction:column;gap:12px}
+.lede{max-width:78ch}
+.muted{color:var(--muted)} .small{font-size:13.5px}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+.lead{max-width:80ch}
+.keep{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.keep div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.keep b{font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+figcaption{font-size:13.5px;color:var(--muted);max-width:100ch}
+.scroll{overflow-x:auto;min-width:0}
+.scroll svg{display:block;width:100%;height:auto}
+.scroll.w1 svg{min-width:900px} .scroll.w2 svg{min-width:760px} .scroll.w3 svg{min-width:640px}
+svg text{font-family:var(--f-body)}
+.bx{stroke-width:1.75}
+.bx-code{fill:var(--code-bg);stroke:var(--code)} .bx-model{fill:var(--model-bg);stroke:var(--model)}
+.bx-human{fill:var(--human-bg);stroke:var(--human)} .bx-video{fill:var(--video-bg);stroke:var(--video)}
+.bx-data{fill:var(--data-bg);stroke:var(--data)}
+.bx-new{stroke:var(--new);stroke-width:3.5}
+.bx-bad{fill:none;stroke:var(--bad);stroke-width:1.75;stroke-dasharray:6 4}
+.t{font:600 15px var(--f-body);fill:var(--ink)} .s{font:400 12px var(--f-body);fill:var(--muted)}
+.tb{font:600 14px var(--f-body);fill:var(--bad)}
+.ed{fill:none;stroke:var(--muted);stroke-width:1.9} .ed-new{fill:none;stroke:var(--new);stroke-width:2.6}
+.ed-bad{fill:none;stroke:var(--bad);stroke-width:1.9;stroke-dasharray:5 4}
+.life{stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 5}
+.el{font:500 12px var(--f-mono);fill:var(--muted)} .el-new{font:500 12px var(--f-mono);fill:var(--new)} .el-bad{font:500 12px var(--f-mono);fill:var(--bad)}
+.row{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;fill:var(--muted)}
+.m-ink{fill:var(--muted)} .m-new{fill:var(--new)} .m-bad{fill:var(--bad)}
+.bg-bad{fill:var(--bad)} .bg-new{fill:var(--new)} .bg-t{font:600 10.5px var(--f-mono);fill:var(--on-badge)}
+.dot-on{fill:var(--ink)} .dot-new{fill:var(--new)} .dot-off{fill:none;stroke:var(--muted);stroke-width:1.75}
+.dot-part{fill:var(--model-bg);stroke:var(--model);stroke-width:1.75}
+.dn{font:600 11.5px var(--f-mono)} .dn-on{fill:var(--paper)} .dn-off{fill:var(--muted)} .dn-part{fill:var(--model)}
+.wl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;margin:0;padding:0;list-style:none}
+.wl li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;align-items:start}
+.pill{font:600 11px/1 var(--f-mono);padding:5px 0;border-radius:11px;text-align:center;color:var(--on-badge);display:inline-block;width:36px;flex:none}
+.pill.w{background:var(--bad)} .pill.c{background:var(--new)}
+.wl b,.card h3{font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card .hd{display:flex;gap:10px;align-items:center}
+.card dl{margin:0;display:grid;grid-template-columns:70px minmax(0,1fr);gap:6px 10px;font-size:14px}
+.card dt{font:600 10.5px/1.7 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.card dd{margin:0;min-width:0}
+.eff{margin-left:auto;font:500 11.5px var(--f-mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:3px 7px;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--panel)}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font:600 11px/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--sunk)}
+td.n{font:600 12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+td.y{color:var(--new);font-weight:600} td.no{color:var(--bad);font-weight:600} td.pt{color:var(--model);font-weight:600}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+ol.order,ol.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px;max-width:90ch}
+.asks,.bul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px;max-width:90ch}
+/* deep sections */
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{font:500 13px var(--f-mono);text-decoration:none;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.toc a:hover{border-color:var(--new);color:var(--new)}
+.deep{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:18px;min-width:0;scroll-margin-top:16px}
+.deep>.hd{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.deep .sub{display:flex;flex-direction:column;gap:8px;min-width:0}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.two>*{min-width:0}
+.fix{background:var(--model-bg);border:1px solid var(--model);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.fix b.lbl{font:600 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--model)}
+.refs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.refs li{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:10px;align-items:baseline}
+.refs li>code:first-child{font-size:12px;background:none;padding:0;color:var(--code)}
+.holds{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.tag{font:600 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sizes{display:flex;flex-wrap:wrap;gap:8px;font:500 12px var(--f-mono)}
+.sizes span{border:1px solid var(--line);border-radius:4px;padding:3px 8px;color:var(--muted)}
+.sizes span b{color:var(--ink);font-weight:600}
+/* Fig 1b: deep workflow graph */
+.scroll.w0 svg{min-width:1100px}
+.hdr{fill:var(--sunk);stroke:var(--ink);stroke-width:1.25}
+.st{font:600 13px var(--f-body);fill:var(--ink)} .s2{font:400 10.5px var(--f-mono);fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:14px;border-radius:3px;border:1.75px solid;display:inline-block}
+.lg-code{background:var(--code-bg);border-color:var(--code)!important} .lg-model{background:var(--model-bg);border-color:var(--model)!important}
+.lg-human{background:var(--human-bg);border-color:var(--human)!important} .lg-video{background:var(--video-bg);border-color:var(--video)!important}
+.lg-data{background:var(--data-bg);border-color:var(--data)!important}
+@media (max-width:980px){.keep,.cards,.wl,.two{grid-template-columns:minmax(0,1fr)}.refs li{grid-template-columns:minmax(0,1fr);gap:2px}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Proposal · checked line by line against the code, 2026-11-06</span>
+  <h1>Conxa Engine v2</h1>
+  <p class="lede">The engine is strong in the middle and open at both ends. Recording and compiling are careful and deterministic. But what the customer's runs learn stops at a dashboard and never reaches the compiler, most model answers are checked without a record of what was dropped, and nothing checks that every kind of action is handled all the way through. v2 keeps the spine and adds six changes that close those gaps.</p>
+  <p class="lede small muted">This version goes one level deeper. Each change now has its own section: what the code does today, with file and line; the exact data it adds; the order it runs in; what can go wrong; and how to build and test it. Reading the code also showed that four claims in the first version were wrong. Those are marked <b>Correction</b> where they appear.</p>
+</header>
+
+<section>
+  <h2>What stays, what changes</h2>
+  <div class="keep">
+    <div><b>Keep</b><p class="small">The order: record, understand, ask, compile, test, publish, run. The rule that the model never writes element addresses. Zero tokens for a normal run. The margin gate in the resolver. Every invariant in <code>CLAUDE.md</code>.</p></div>
+    <div><b>Close</b><p class="small">The path from field runs back to Studio. The silent model guards. The video dead end after ten minutes. The one-run approval and the all-at-once skill release.</p></div>
+    <div><b>Widen</b><p class="small">A contract that every action kind is handled end to end, and one typed step for the fuzzy middle of a task, so the engine covers more than clean click paths.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>What the first version got wrong</h2>
+  <div class="cards">
+    <div class="fix"><b class="lbl">Correction · C2</b><span>The video client already retries. It backs off from 2 s to 30 s for up to 600 s, resubmits a lost job twice, and caches the answer by video fingerprint. The real gap is smaller: the job lives only in memory, and after 600 s the card waits on a person.</span></div>
+    <div class="fix"><b class="lbl">Correction · C5</b><span>The runtime already reports the tier, winning signal, score and margin for each repaired step, and the cloud already builds a drift queue from them. The missing piece is Studio reading that data, not the runtime sending it.</span></div>
+    <div class="fix"><b class="lbl">Correction · C6</b><span>An install id already exists, and runtime updates already roll out by percentage. Rings for skill releases can reuse both. Only skill sync has no rollout today.</span></div>
+    <div class="fix"><b class="lbl">Correction · C1</b><span>Tier B is not silent. Rejected agent nominations are sent to the tracker with a reason. The second opinion saves what it applied but not what it dropped. So today 2 of 8 calls are fully counted and 2 are partly counted, not 1 of 8.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Today: a one-way line with six weak points</h2>
+  <figure>
+    <div class="scroll w1"><div id="fig1"></div></div>
+    <figcaption>Fig 1. The engine today. Author side runs left to right along the top, the customer's machine along the bottom, and the release wraps around to connect them. The second line of each box is what it hands on. Red badges mark weak points. The dashed box is where a return path to the compiler should be and is not.</figcaption>
+  </figure>
+  <figure>
+    <div class="scroll w0"><div id="fig1d"></div></div>
+    <div class="legend" aria-label="Colour key">
+      <span><i class="lg-code"></i>code</span><span><i class="lg-model"></i>a model</span><span><i class="lg-human"></i>a person</span>
+      <span><i class="lg-video"></i>video service</span><span><i class="lg-data"></i>stored data</span>
+    </div>
+    <figcaption>Fig 1b. The same engine, one level deeper. Each stage opens into the steps it runs, top to bottom, coloured by who does the work. The text under each column is what it hands to the next stage. Red badges sit on the exact step where a weak point lives. Telemetry and Cloud, bottom right, gather events from every runtime stage, and they end at a dashboard list, not at compile. Every step was checked in the code on 2026-11-06.</figcaption>
+  </figure>
+  <div class="scroll"><table>
+    <thead><tr><th>Weak point</th><th>Exact step in Fig 1b</th><th>Evidence in the code</th></tr></thead>
+    <tbody>
+    <tr><td class="n">W1</td><td>Compile: Second opinion. Compile: Follow-up questions, wording.</td><td><code>workflow_semantics.py:124</code> drops findings "silently". <code>clarify.py:392</code> keeps the template with no count.</td></tr>
+    <tr><td class="n">W2</td><td>Watch video: Track A, Pegasus job.</td><td><code>video_analysis_client.py:62–63</code>: <code>max_wait_s=600</code>. The job id is never written to disk.</td></tr>
+    <tr><td class="n">W3</td><td>Record: Capture DOM events. Compile: Build steps. Run: Kind dispatch.</td><td>42 kinds in <code>events.py:10</code>. Plain lookup at <code>handlers.js:1090</code>. No test links the two lists.</td></tr>
+    <tr><td class="n">W4</td><td>Run: Kind dispatch, next to Planned pauses.</td><td><code>run.js:344</code> and <code>:361</code> pause the run. No step type lets an agent act on the page.</td></tr>
+    <tr><td class="n">W5</td><td>Cloud: Drift queue, then the dashed box.</td><td><code>tracking_routes.py:198</code>: manual review only. Nothing in Build Studio calls it.</td></tr>
+    <tr><td class="n">W6</td><td>Test: Approve after 1 pass. Publish: All installs get it.</td><td><code>test_flow.py:495–506</code>. <code>skillpack_update_routes.py</code> has no rollout.</td></tr>
+    </tbody></table></div>
+  <ul class="wl">
+    <li><span class="pill w">W1</span><span><b>Most model guards are silent.</b> Five of eight model calls drop bad output without a record. The understanding check counts everything, Tier B rejections reach the tracker, and the second opinion saves only what it applied.</span></li>
+    <li><span class="pill w">W2</span><span><b>A long video outage still dead-ends.</b> The client retries for 600 s, but the job id lives in memory. Close Studio and it uploads again. After 600 s the card waits for a person to press Retry.</span></li>
+    <li><span class="pill w">W3</span><span><b>42 action kinds, no contract.</b> The recorder model lists 42 kinds. The runtime keeps its own handler table. No test checks that every kind has a compile rule and a handler.</span></li>
+    <li><span class="pill w">W4</span><span><b>No room for a fuzzy step.</b> A step is fully scripted or it falls to Tier B. <code>ai_review</code> and <code>handover</code> pause a run, but neither lets an agent carry out part of a task.</span></li>
+    <li><span class="pill w">W5</span><span><b>Field data stops at a dashboard.</b> Repair events reach the cloud's drift queue for manual review. Studio never reads them, so a fix that works in the field is never compiled in.</span></li>
+    <li><span class="pill w">W6</span><span><b>One run approves, one release ships to all.</b> Approve needs a single passing test. Skill sync gives every install the newest release at once.</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>v2: same spine, six changes, one return path</h2>
+  <figure>
+    <div class="scroll w1"><div id="fig2"></div></div>
+    <figcaption>Fig 2. The same layout with v2 changes in green. The runtime's existing repair events feed a step-health summary, Studio turns a step that keeps needing help into a proposed patch, and the patch goes back through compile, repeated tests and a ring release. Thick outlines are boxes that change.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>The six changes at a glance</h2>
+  <div class="cards">
+    <div class="card"><div class="hd"><span class="pill c">C1</span><h3>One ledger for every model call</h3><span class="eff">S–M</span></div>
+      <dl><dt>Today</dt><dd>The understanding check counts every drop in five stages. The other calls use their own rules, and four drop silently.</dd>
+      <dt>v2</dt><dd>Move the understanding check's counter into a shared helper. Every guard counts its drops into the same shape. Human Review shows "model changed 3, dropped 2". Observe first, then let graded calls retry.</dd>
+      <dt>Touches</dt><dd><code>timeline_understanding.py</code>, <code>workflow_semantics.py</code>, <code>clarify.py</code>, <code>intent_router.py</code>, <code>copilot_proposals.py</code>, <code>retarget.py</code></dd></dl></div>
+    <div class="card"><div class="hd"><span class="pill c">C2</span><h3>Video analysis that survives a restart</h3><span class="eff">S</span></div>
+      <dl><dt>Today</dt><dd>Retries for 600 s in memory, then a Retry card.</dd>
+      <dt>v2</dt><dd>Save the job id and state in the session folder. Resume the poll on restart without uploading again. When the budget runs out, schedule the next try instead of stopping.</dd>
+      <dt>Touches</dt><dd><code>video_analysis_client.py</code>, <code>understand_flow.py</code>, Studio start-up</dd></dl></div>
+    <div class="card"><div class="hd"><span class="pill c">C3</span><h3>An action contract</h3><span class="eff">S, then optional L</span></div>
+      <dl><dt>Today</dt><dd>42 kinds in the model, a separate handler table in the runtime, nothing linking them.</dd>
+      <dt>v2</dt><dd>One JSON file lists each kind and the step it becomes. A Python test and a Node test fail the build when the two sides disagree. Generating code from the file comes later, only if wanted.</dd>
+      <dt>Touches</dt><dd><code>events.py</code>, <code>handlers.js</code>, two new tests</dd></dl></div>
+    <div class="card"><div class="hd"><span class="pill c">C4</span><h3>A typed agent span</h3><span class="eff">M</span></div>
+      <dl><dt>Today</dt><dd>Planned pauses exist (<code>ai_review</code>, <code>handover</code>), but none acts on the page.</dd>
+      <dt>v2</dt><dd>A step with a goal, allowed actions, a required text or URL check and a budget. The runtime parks, the MCP client nominates one action at a time, and the runtime checks and does it.</dd>
+      <dt>Touches</dt><dd><code>skill_spec.py</code>, <code>patch_gate.py</code>, <code>run.js</code>, a new <code>agent_span.js</code>, editor</dd></dl></div>
+    <div class="card"><div class="hd"><span class="pill c">C5</span><h3>The heal loop</h3><span class="eff">M</span></div>
+      <dl><dt>Today</dt><dd>Repair events reach a cloud drift queue for manual review.</dd>
+      <dt>v2</dt><dd>The cloud counts them per step per release. Studio shows step health and proposes a code-built patch that promotes the signal that kept working. A person confirms it.</dd>
+      <dt>Touches</dt><dd><code>tracking_routes.py</code>, a Studio health view, <code>workflow_mutations.py</code></dd></dl></div>
+    <div class="card"><div class="hd"><span class="pill c">C6</span><h3>Prove it, then release in rings</h3><span class="eff">M</span></div>
+      <dl><dt>Today</dt><dd>One passing test approves. Skill sync has no rollout.</dd>
+      <dt>v2</dt><dd>Approve after three replays, where only the first goes past the guard. Skill releases reuse the runtime's rollout bucket and halt if the first ring does worse.</dd>
+      <dt>Touches</dt><dd><code>test_flow.py</code>, <code>skillpack_update_routes.py</code>, <code>sync.js</code>, publish routes</dd></dl></div>
+  </div>
+</section>
+
+<section>
+  <h2>One level deeper</h2>
+  <nav class="toc" aria-label="Jump to a change">
+    <a href="#c1">C1 Model ledger</a><a href="#c2">C2 Video job</a><a href="#c3">C3 Action contract</a>
+    <a href="#c4">C4 Agent span</a><a href="#c5">C5 Heal loop</a><a href="#c6">C6 Proof and rings</a>
+  </nav>
+  <p class="small muted lead">File and line numbers are from branch <code>feat/clarify-phase-0</code> at <code>cf22c16</code> plus uncommitted work. Data shapes are proposals: field names may change when built.</p>
+
+  <!-- C1 -->
+  <article class="deep" id="c1">
+    <div class="hd"><span class="pill c">C1</span><h3>One ledger for every model call</h3><span class="eff">S–M</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <p>The understanding check already does this well, so C1 copies it instead of inventing a new design. It runs an answer through five named stages, counts each rule it applies, grades the result and allows one retry.</p>
+      <ul class="refs">
+        <li><code>timeline_understanding.py:410</code><span><code>STAGES = ("shape", "reference", "override", "backfill", "safety")</code>. The comment says why: "a bad prompt shows up as a number instead of a silence".</span></li>
+        <li><code>timeline_understanding.py:413</code><span><code>_log(report, stage, rule, example)</code> counts one use of a rule and keeps the first example, cut to 60 characters with emails scrubbed.</span></li>
+        <li><code>timeline_understanding.py:761</code><span><code>_grade()</code> returns <code>unusable</code>, <code>weak</code> or <code>ok</code> from code alone. A weak answer gets one retry with the reasons.</span></li>
+        <li><code>workflow_semantics.py:124</code><span>The second opinion's guard. Its docstring: "Drop everything that isn't trustworthy, silently". Each gate is a bare <code>continue</code>.</span></li>
+        <li><code>build.py:2155</code><span>What the second opinion applied is saved under <code>compile_report["second_opinion"]</code>. What it dropped is not.</span></li>
+        <li><code>clarify.py:392</code><span><code>apply_reworded()</code> keeps the template wording field by field when the model's text fails a check. No count.</span></li>
+        <li><code>intent_router.py:85</code><span>A chat intent that is not allowed right now becomes plain "chat". No count.</span></li>
+        <li><code>copilot_proposals.py:93</code><span><code>gate_proposals()</code>: a failing proposal "is simply dropped, never shown with an error". No count.</span></li>
+        <li><code>failure_response.js:589, 601</code><span>Tier B rejections already emit <code>override_rejected</code> with a reason. This one is counted.</span></li>
+      </ul>
+    </div>
+
+    <div class="sub">
+      <h4>The eight calls, corrected</h4>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>Model call</th><th>When its output is bad, today</th><th>Counted today</th><th>Counted in v2</th></tr></thead>
+        <tbody>
+        <tr><td class="n">1</td><td>Pegasus 1.6</td><td>Retries up to 600 s, then a Retry card. Attempts are shown on the card but not saved.</td><td class="pt">◐ partly</td><td class="y">● saved in the job record (C2)</td></tr>
+        <tr><td class="n">2</td><td><code>timeline_understanding</code></td><td>One retry, then it asks the person instead.</td><td class="y">● counted</td><td class="y">● counted, same shape</td></tr>
+        <tr><td class="n">3</td><td>Second opinion</td><td>Bad findings dropped. Applied ones saved.</td><td class="pt">◐ applied only</td><td class="y">● dropped counted too</td></tr>
+        <tr><td class="n">4</td><td><code>clarify_question_copy</code></td><td>Template wording kept.</td><td class="no">○ not counted</td><td class="y">● counted</td></tr>
+        <tr><td class="n">5</td><td>Chat intent router</td><td>Falls back to plain chat.</td><td class="no">○ not counted</td><td class="y">● counted</td></tr>
+        <tr><td class="n">6</td><td>Chat change cards (and auto-fix)</td><td>Proposal dropped by the gate.</td><td class="no">○ not counted</td><td class="y">● counted</td></tr>
+        <tr><td class="n">7</td><td>Re-target, draw a region</td><td>Typed error codes reach the person, not a log.</td><td class="no">○ not counted</td><td class="y">● counted</td></tr>
+        <tr><td class="n">8</td><td>Tier B</td><td>Runtime re-checks and rejects.</td><td class="y">● sent to tracker</td><td class="y">● same rule names</td></tr>
+        </tbody></table></div>
+      <div class="panel">
+        <div class="scroll w3"><div id="fig5"></div></div>
+        <p class="small muted">Fig 3. Calls whose dropped or changed output is counted. Today 2 fully and 2 partly, of 8. The v2 row is the target, not a measurement.</p>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The shared helper</h4>
+        <p class="small">Lift <code>_log</code>, <code>_count</code> and <code>STAGES</code> out of the understanding check into one small module. Each guard keeps its own rules and only adds a <code>_log</code> call next to each drop. No guard changes what it keeps.</p>
+<pre><code># conxa_compile/llm/ledger.py  (new, ~40 lines)
+STAGES = ("shape", "reference", "override",
+          "backfill", "safety")
+
+def log(report, stage, rule, ref=""):
+    """Count one use of rule. ref is an id
+    (step_key, question id, candidate ref),
+    never model text or page text."""
+
+def count(report, stage, *rules) -> int: ...
+
+def entry(task, prompt_version, report,
+          grade="", attempts=1, ms=0) -> dict</code></pre>
+      </div>
+      <div class="sub">
+        <h4>One ledger line per call</h4>
+        <p class="small">Appended to a <code>model_ledger.jsonl</code> beside the workflow's clarify state. Human Review reads the last line per task.</p>
+<pre><code>{"ts": "2026-11-06T10:14:02Z",
+ "task": "workflow_semantics",
+ "prompt_version": 7,
+ "attempts": 1, "grade": "",
+ "report": {
+   "reference": {
+     "unknown_step_key": {"count": 2,
+                          "example": "s_41"}},
+   "safety": {
+     "unobserved_noise": {"count": 1,
+                          "example": "s_09"}}},
+ "applied": 3}</code></pre>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h4>Rule names for the second opinion</h4>
+      <p class="small">Each existing <code>continue</code> in <code>_validate_findings</code> becomes one named rule, so the count says which gate fired:</p>
+      <p class="small"><code>unknown_step_key</code> · <code>unknown_kind</code> · <code>settled_literal</code> · <code>bad_placeholder</code> · <code>name_collision</code> · <code>unobserved_optional</code> · <code>bad_phase</code> · <code>ungrounded_assertion</code> · <code>unobserved_noise</code> · <code>over_cap</code></p>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>Build order</h4>
+        <ol class="steps small">
+          <li>Move the helper out of the understanding check. Its tests must pass unchanged: the report is byte-identical.</li>
+          <li>Add <code>log</code> calls to the second opinion and write <code>compile_report["second_opinion"]["dropped"]</code>.</li>
+          <li>Same for wording, intent router, change cards and re-target.</li>
+          <li>Show the counts on Human Review: one line, rules on expand.</li>
+          <li>Switch <code>SKILL_MODEL_LEDGER=observe</code> to <code>retry</code> only for calls that have a grade. Today that is the understanding check alone.</li>
+        </ol>
+      </div>
+      <div class="sub">
+        <h4>What holds, what to watch</h4>
+        <ul class="holds">
+          <li>No guard changes what it keeps, so a compile stays byte-identical when the pass applies nothing.</li>
+          <li>The example is always an id, never model or page text, so the ledger holds no customer data.</li>
+          <li>Tier B needs no runtime change: its <code>override_rejected</code> reasons are mapped to the same rule names in the cloud summary.</li>
+          <li>Watch cost: a retry doubles tokens for that call. One retry only, and only where a grade exists. See <code>docs/cost_model.md</code>.</li>
+        </ul>
+        <p class="small"><span class="tag">Tests</span> One test per guard: feed a crafted bad answer, assert the rule counts.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- C2 -->
+  <article class="deep" id="c2">
+    <div class="hd"><span class="pill c">C2</span><h3>Video analysis that survives a restart</h3><span class="eff">S</span></div>
+    <div class="fix"><b class="lbl">Correction</b><span>The first version said the video call was "one request". It is a submit-and-poll job with backoff and a cache. C2 is smaller than proposed, and <code>signals.py</code> needs no change: the cache already lives there.</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <ul class="refs">
+        <li><code>video_analysis_client.py:62–63</code><span>Polls every 3 s, gives up after <code>max_wait_s=600</code>.</span></li>
+        <li><code>video_analysis_client.py:99</code><span><code>_retrying()</code> backs off 2 s, 4 s, 8 s up to 30 s on 502, 503, 504 or no network.</span></li>
+        <li><code>video_analysis_client.py:77–93</code><span>A job lost to a cloud restart is resubmitted, at most twice, then <code>VideoUnavailable</code>.</span></li>
+        <li><code>track_a.py:16–24</code><span>The answer is cached by the prepared video's fingerprint. Only a new recording or a changed blur setting reaches Pegasus.</span></li>
+        <li><code>understand_flow.py:120–130</code><span>Four failure types end in <code>_flow_video_failed</code> with the actions <code>retry_video</code> and <code>re_record</code>.</span></li>
+      </ul>
+      <p class="small">So the gaps are three. The job id is held only in memory, so closing Studio mid-wait means uploading again. After 600 s nothing tries again on its own. And nothing records how many tries it took.</p>
+    </div>
+
+    <figure>
+      <div class="scroll w2"><div id="fig6"></div></div>
+      <figcaption>Fig 4. The video job in v2. Green edges are new. A job that runs out of budget waits and tries again on a timer instead of stopping. "Blocked" (quota or signed out) and "Failed" (the cloud could not read the video) still need a person, as today.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The job record</h4>
+        <p class="small">One file per session: <code>sessions/&lt;id&gt;/video_job.json</code>. Written on submit and on every state change.</p>
+<pre><code>{"fingerprint": "&lt;prepared fingerprint&gt;",
+ "job_id": "vj_8f2c…",
+ "state": "waiting_cloud",
+ "attempts": 4,
+ "first_try": "2026-11-06T10:02:11Z",
+ "next_try":  "2026-11-06T10:14:00Z",
+ "last_error": "503 from /video/analyze",
+ "blocked_code": ""}</code></pre>
+        <p class="small"><span class="tag">States</span> <code>polling</code> · <code>done</code> · <code>waiting_cloud</code> · <code>blocked</code> · <code>failed</code>. A fingerprint that no longer matches the prepared video makes the record stale, and a fresh job starts.</p>
+      </div>
+      <div class="sub">
+        <h4>The order it runs in</h4>
+        <ol class="steps small">
+          <li>Submit, then write the record with the job id.</li>
+          <li>Poll as today. On success write <code>done</code> and go on to understanding.</li>
+          <li>When the 600 s budget runs out, write <code>waiting_cloud</code> and a <code>next_try</code>: 1, 2, 5, 10, then every 30 minutes, for up to 24 hours. Then <code>failed</code>.</li>
+          <li>On Studio start, look for records in <code>polling</code> or <code>waiting_cloud</code>. Poll the saved job id first. Upload again only if the cloud says the job is gone.</li>
+          <li>The card reads "Waiting for the video service. Next try 10:14. You can close Studio." Retry now stays on it.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>What holds</h4>
+        <ul class="holds">
+          <li>Pegasus stays required. The <code>watching</code> flag stays on while the job waits, so compile and test stay blocked.</li>
+          <li><code>VideoBlocked</code> (quota, trial, signed out) is never retried on a timer. Retrying will not help, and the person has to act.</li>
+          <li>The cache key is unchanged, so a finished job is never paid for twice.</li>
+        </ul>
+      </div>
+      <div class="sub">
+        <h4>One open question</h4>
+        <p class="small">The client treats a lost job as a cloud restart. That means cloud jobs are held in memory. After a long wait the saved job id may be gone, and resuming costs a fresh upload anyway. If cloud restarts are frequent, storing jobs in Postgres would make resume cheap. That is a cloud change and is left out of the S estimate.</p>
+        <p class="small"><span class="tag">Tests</span> Fake clock and fake client already exist in the constructor (<code>sleep</code>, <code>clock</code>). Test: budget out writes <code>waiting_cloud</code>; restart resumes the same job id; blocked never schedules.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- C3 -->
+  <article class="deep" id="c3">
+    <div class="hd"><span class="pill c">C3</span><h3>An action contract</h3><span class="eff">S, then optional L</span></div>
+    <div class="fix"><b class="lbl">Change of plan</b><span>The first version proposed one registry that both languages read, sized L. Most of the value comes from a contract test, which is small. Generating code from the registry can come later, or never.</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <ul class="refs">
+        <li><code>events.py:10</code><span><code>ActionKind</code>: a strict list of 42 kinds the recorder may produce, from <code>click</code> to <code>outcome_fork</code>.</span></li>
+        <li><code>handlers.js:388</code><span>The runtime's <code>HANDLERS</code> table. 15 entries inline, more added below it (<code>tab_open</code>, <code>popup</code>, <code>dialog_accept</code> and others).</span></li>
+        <li><code>handlers.js:58</code><span><code>NOOP_STEP_TYPES</code>: kinds that do nothing at run time, such as <code>frame_enter</code>.</span></li>
+        <li><code>handlers.js:1090</code><span>Dispatch is a plain lookup: <code>HANDLERS[step.type]</code>. A missing type is found only when a customer runs it.</span></li>
+        <li><code>test_invariants.js:26–44</code><span>The only cross-check: frame types are no-ops and tab types are not.</span></li>
+        <li><code>skill_package_builder_saved_skill.py</code><span>Some kinds change name at build time. <code>upload_intent</code> becomes <code>upload</code>. Nothing lists these renames in one place.</span></li>
+      </ul>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The contract file</h4>
+        <p class="small">One JSON file in <code>conxa-core</code>, beside the models. It follows the pattern of <code>decision_surface_cases.json</code>, which already pins one shared truth for both runtime and compiler.</p>
+<pre><code>{"version": 1,
+ "kinds": {
+  "click":         {"step": "click",
+                    "run": "handler",
+                    "recovery": true},
+  "upload_intent": {"step": "upload",
+                    "run": "handler",
+                    "recovery": true},
+  "frame_enter":   {"step": "frame_enter",
+                    "run": "noop",
+                    "recovery": false},
+  "dialog_appeared": {"step": null,
+     "why": "evidence only, folded into a fork"},
+  "focus":         {"step": null,
+     "why": "legacy, dropped at compile"}
+ }}</code></pre>
+      </div>
+      <div class="sub">
+        <h4>The two tests</h4>
+        <ol class="steps small">
+          <li><b>Python.</b> The file's keys equal <code>get_args(ActionKind)</code>. Every kind with a <code>step</code> compiles from a minimal fixture event to that step type. Every kind marked <code>recovery: false</code> gets <code>no_recovery_block</code>.</li>
+          <li><b>Node.</b> Every <code>step</code> with <code>run: "handler"</code> has an entry in <code>HANDLERS</code>. Every <code>run: "noop"</code> is in <code>NOOP_STEP_TYPES</code>. Every key in <code>HANDLERS</code> appears in the file, so a dead handler is caught too.</li>
+        </ol>
+        <p class="small">Adding a kind is then: add it to <code>ActionKind</code>, add one line to the file, and the tests say what else is missing.</p>
+        <h4>Later, optional</h4>
+        <p class="small">Generate <code>ActionKind</code> and <code>NOOP_STEP_TYPES</code> from the file, and let the editor read which fields each step type allows. That is the L part. Do it only if new kinds keep arriving.</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h4>What holds</h4>
+      <ul class="holds">
+        <li><code>frame_enter</code> and <code>frame_exit</code> keep <code>no_recovery_block</code>. The test now enforces it.</li>
+        <li>The iframe chain and the tab rule are untouched. The file says which step a kind becomes, not how it is resolved.</li>
+        <li>The first run of the test may fail. That is the point: it lists every kind the runtime cannot run today.</li>
+      </ul>
+    </div>
+  </article>
+
+  <!-- C4 -->
+  <article class="deep" id="c4">
+    <div class="hd"><span class="pill c">C4</span><h3>A typed agent span</h3><span class="eff">M</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <ul class="refs">
+        <li><code>run.js:344–357</code><span><code>ai_review</code> throws a planned pause. The server checks the answer against <code>output_schema</code> and binds it as an input.</span></li>
+        <li><code>run.js:361</code>, <code>handover.js</code><span><code>handover</code> pauses for a person (2FA, a CAPTCHA) and revalidates the page on resume.</span></li>
+        <li><code>failure_response.js</code><span>Tier B lets an agent nominate one candidate. The runtime checks it and does the action itself.</span></li>
+        <li><code>patch_gate.py</code><span><code>run_if</code> is refused on <code>ai_review</code>, <code>handover</code> and forks, so an input can never skip a guard.</span></li>
+      </ul>
+      <p class="small">The span joins these three ideas: a planned pause like <code>ai_review</code>, placed by the author, where the agent nominates actions like in Tier B, and the runtime does each one.</p>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The step</h4>
+<pre><code>{"type": "agent_span",
+ "key": "s14",
+ "goal": "Open the invoice for {{invoice_number}}
+          from the list",
+ "allowed": ["click", "fill", "scroll"],
+ "until": {"type": "text_present",
+           "target": "Invoice {{invoice_number}}",
+           "required": true},
+ "budget": {"actions": 12, "seconds": 120},
+ "on_budget": "fail"}</code></pre>
+        <p class="small"><code>until</code> takes only the text, URL and state types that the second opinion may already add. Never a raw selector. Without <code>until</code> the editor will not save the step.</p>
+      </div>
+      <div class="sub">
+        <h4>The order it runs in</h4>
+        <ol class="steps small">
+          <li>The runtime checks <code>until</code> first. If it already holds, the span ends with zero actions.</li>
+          <li>Otherwise it parks and returns the goal, the allowed actions, the budget left and an accessibility snapshot of the page.</li>
+          <li>The MCP client nominates one action on one element.</li>
+          <li>The runtime checks the action is allowed, the element is on the recorded host and tab, it is not a decision dialog, and its label does not look irreversible.</li>
+          <li>It does the action, spends one unit of budget, and checks <code>until</code> again.</li>
+          <li>It ends on success, or fails when the budget runs out.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>Where it refuses</h4>
+        <ul class="holds">
+          <li>Scheduled runs and runs with no agent attached: fail closed, as the decision-popup rule does today.</li>
+          <li>Inside a loop or option body, and right before a destructive step: refused by <code>patch_gate</code>.</li>
+          <li>Any popup that asks for a decision: the span stops. It never answers one. <code>fork.js::isDecisionDialog</code> and <code>isIrreversibleLabel</code> are reused as-is.</li>
+          <li>Outside the recovery cascade, like <code>ai_review</code>. It never touches <code>recovery_stage.js</code> or <code>retry_budget.js</code>.</li>
+        </ul>
+      </div>
+      <div class="sub">
+        <h4>What it changes for the product</h4>
+        <p class="small">A skill with a span is no longer zero-token on every run. The manifest should say <code>uses_agent: true</code> so a vendor never promises otherwise. The tracker gets <code>span_start</code>, <code>span_action</code> and <code>span_done</code> with the action count, so the cost shows on the dashboard.</p>
+        <p class="small"><span class="tag">Depends on</span> C3, so the new step type is in the contract from day one.</p>
+        <p class="small"><span class="tag">Tests</span> A fake agent that nominates a disallowed action, a decision-dialog button and an off-host link. Each must be refused without spending budget.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- C5 -->
+  <article class="deep" id="c5">
+    <div class="hd"><span class="pill c">C5</span><h3>The heal loop</h3><span class="eff">M</span></div>
+    <div class="fix"><b class="lbl">Correction</b><span>The first version said telemetry "stops in the cloud" and the runtime must add tier and margin. It already sends both. C5 drops from L to M because the runtime needs no change.</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <ul class="refs">
+        <li><code>run.js:580</code>, <code>cascade.js:177, 351</code><span><code>tier_ok</code> per step: <code>tier1_compiled</code>, <code>tier1_compiled_settled</code>, <code>layer1</code>, <code>tier2_a11y</code>, <code>tier1_after_popup</code>.</span></li>
+        <li><code>failure_response.js:584</code><span><code>tier_escalated</code> when a step goes to Tier B.</span></li>
+        <li><code>recovery.js:73</code><span><code>buildRepairEvent()</code>: tier, method, <code>signal_used</code>, score, margin, <code>stable_hash_match</code>, drift hint, app version fingerprint.</span></li>
+        <li><code>tracker.js</code><span>Each event envelope carries the workflow version (<code>wfv</code>), so counts can be split by release.</span></li>
+        <li><code>tracking_routes.py:198</code><span><code>GET /tracking/drift</code> builds a drift review queue from repair events. Pro and Enterprise only, for manual review on the cloud dashboard.</span></li>
+        <li><code>recovery_log.js:12</code><span>A richer local log stays on the customer's machine and never leaves it.</span></li>
+      </ul>
+      <p class="small">Nothing in Build Studio calls the drift route. The only reader is the cloud dashboard.</p>
+    </div>
+
+    <figure>
+      <div class="scroll w2"><div id="fig7"></div></div>
+      <figcaption>Fig 5. The heal loop, in time order from top to bottom. Grey is what exists today. Green is new. The cloud only counts; the patch is built in Studio by code, and a person confirms it.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The new cloud route</h4>
+        <p class="small"><code>GET /api/v1/tracking/{workspace_id}/step-health?skill=&lt;slug&gt;</code>. Pure counting over events already stored. Clerk-authenticated, same tier check as the drift queue.</p>
+<pre><code>{"skill": "create-invoice",
+ "release": "14",
+ "runs": 120,
+ "steps": [
+  {"step": 14, "ok_tier1": 79, "ok_tier2": 38,
+   "tier_b": 2, "failed": 1,
+   "median_margin": 0.11,
+   "won_by": {"role_name": 36, "text": 2},
+   "stable_hash_match": 0.97}]}</code></pre>
+      </div>
+      <div class="sub">
+        <h4>What Studio does with it</h4>
+        <ol class="steps small">
+          <li>A Health tab per workflow lists steps that needed help. Default threshold: more than 20 % of at least 10 runs.</li>
+          <li>When one signal kind won most repairs, Studio proposes a patch that moves it ahead of the broken one in the step's <code>identity_bundle</code> and recompiles that step's selectors with <code>selector_grammar.py</code>.</li>
+          <li>The patch goes through <code>patch_gate</code>, then the C6 replays, then a Confirm card. Nothing applies by itself.</li>
+          <li>The new release goes to the first ring.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>The honest limit</h4>
+        <p class="small">Telemetry may not carry page text, so it says which <i>kind</i> of signal worked, not the text it matched. Studio can only promote a signal the step already has. When the element itself changed (new label, new place), the Health tab says so and offers Human Edit re-target or a new recording. It cannot invent the fix.</p>
+      </div>
+      <div class="sub">
+        <h4>What holds</h4>
+        <ul class="holds">
+          <li>The cloud does not compile. It returns counts.</li>
+          <li>No model writes a selector: the patch is a code reorder of signals the compiler made, and the grammar writes the strings.</li>
+          <li>The resolver's margin gate and fingerprint check still decide at run time.</li>
+          <li>A new route under <code>/api/v1</code>, per the route rule.</li>
+        </ul>
+        <p class="small"><span class="tag">Ship in two steps</span> First the read-only Health tab, which has no risk. Then the patch proposal, once C6 rings exist.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- C6 -->
+  <article class="deep" id="c6">
+    <div class="hd"><span class="pill c">C6</span><h3>Prove it, then release in rings</h3><span class="eff">M</span></div>
+    <div class="fix"><b class="lbl">Correction</b><span>The first version said C6 "needs an install id". It exists in <code>install_identity.js</code>. Percentage rollout exists too, for runtime updates in <code>manifest_manager.js</code>. Skill releases can reuse both.</span></div>
+
+    <div class="sub">
+      <h4>What the code does today</h4>
+      <ul class="refs">
+        <li><code>test_flow.py:495–506</code><span><code>cmd_flow_approve</code> needs one passing test card. The "up to three attempts" in the file header are auto-fix tries after a failure, not repeat proof.</span></li>
+        <li><code>test_flow.py:162</code><span>A test can end <code>previewed</code>: it stopped at the guard before an irreversible step. Repeat replays can use this.</span></li>
+        <li><code>install_identity.js:8</code><span>One id per install, in <code>identity/install_id</code>. Sent in phone-home (<code>server.js:2618</code>), not in tracker events.</span></li>
+        <li><code>manifest_manager.js:46</code><span><code>rolloutBucket(installId, component)</code>: SHA-256 to a stable 0–99 bucket. <code>decideUpdate</code> uses it with <code>minimum_versions</code> and <code>required</code>.</span></li>
+        <li><code>skillpack_update_routes.py</code><span>Delta sync per group. No rollout: every install gets the newest release.</span></li>
+        <li><code>sync.js:42</code><span><code>version_manager</code> keeps the last few versions on disk, so going back is local.</span></li>
+      </ul>
+    </div>
+
+    <div class="two">
+      <div class="sub">
+        <h4>Part A: proof before Approve</h4>
+        <ol class="steps small">
+          <li>Run 1 as today, with the guard on. The person decides at any irreversible step.</li>
+          <li>Runs 2 and 3 run on their own and stop at the guard, ending <code>previewed</code>. Nothing irreversible is done twice.</li>
+          <li>If the person gave a second value for an input on the test card, run 3 uses it. That field is optional. With no second value, run 3 repeats the recorded inputs.</li>
+          <li>The card reports "3 of 3 passed. Step 7 needed help in 1 of 3." A step that needed help is a flaky step, and Approve says so.</li>
+        </ol>
+        <p class="small">Cost: about three times the test time. The sandbox caps recovery at the zero-token tiers, so the extra runs cost no model tokens unless AI is turned on for the test.</p>
+      </div>
+      <div class="sub">
+        <h4>Part B: rings for skill releases</h4>
+<pre><code># release record, new field
+"rollout": {"percent": 10,
+            "started_at": "2026-11-06T12:00Z",
+            "baseline": "13",
+            "halt_below": 0.9}</code></pre>
+        <ol class="steps small">
+          <li>Sync sends the install id in a header. The route serves the new release only when <code>rolloutBucket(id, "skill:" + slug) &lt; percent</code>.</li>
+          <li>The cloud compares success (<code>wf_ok</code> over all runs, split by <code>wfv</code>) between the ring and the baseline.</li>
+          <li>If the ring falls below <code>halt_below</code> times the baseline over at least 20 runs, promotion stops and the ring is served the baseline again.</li>
+          <li>Otherwise the owner raises the percent, or it rises on a schedule.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h4>What holds, what to check</h4>
+      <ul class="holds">
+        <li>The guard holds on every replay. Only run 1 can pass an irreversible step, and only with the person's say.</li>
+        <li>The install id is not a machine fingerprint and never enters tracker payloads; the success split uses the release version only.</li>
+        <li>To check before building: whether sync accepts moving back to an older release. Today versions only move forward, so halting may need the cloud to re-serve the baseline under a new version number.</li>
+      </ul>
+    </div>
+  </article>
+</section>
+
+<section>
+  <h2>Two mechanisms in pictures</h2>
+  <figure>
+    <div class="scroll w2"><div id="fig3"></div></div>
+    <figcaption>Fig 6. One model call, three ways. Five of eight calls today drop bad parts with no record. The understanding check keeps a full report. In v2 every call counts into the same shape and Human Review can show it.</figcaption>
+  </figure>
+  <figure>
+    <div class="scroll w2"><div id="fig4"></div></div>
+    <figcaption>Fig 7. Adding a new kind of action. Today it is four separate edits with nothing that checks them against each other. In v2 one contract file feeds two tests that fail the build when any side is missing.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Order to build</h2>
+  <ol class="order">
+    <li><b>C1 in observe mode, and C3's contract test.</b> Both are small and change no behaviour. C1 shows what the models do. C3 lists any kind the runtime cannot run today.</li>
+    <li><b>C2.</b> Small and independent. It removes the restart-and-upload-again failure.</li>
+    <li><b>C5's read-only Health tab.</b> The data already exists, so this is a cloud route and one Studio view.</li>
+    <li><b>C6.</b> Repeat replays first, then rings. Rings make every later release safer, including heal patches.</li>
+    <li><b>C5's patch proposals,</b> once rings exist.</li>
+    <li><b>C4 last.</b> It is a new product promise and needs a decision on zero-token marking.</li>
+  </ol>
+  <div class="sizes" aria-label="Revised effort sizes"><span>C1 <b>S–M</b></span><span>C2 <b>S</b></span><span>C3 <b>S</b> (+ optional L)</span><span>C4 <b>M</b></span><span>C5 <b>M</b> (was L)</span><span>C6 <b>M</b> (was M–L)</span></div>
+</section>
+
+<section>
+  <h2>Decisions for you</h2>
+  <ul class="asks">
+    <li><b>C4 changes the zero-token promise</b> for any skill with a span. Mark such skills <code>uses_agent: true</code> in the manifest?</li>
+    <li><b>C4 in the Studio test.</b> Should a span be tested by the Studio's own model through the metered proxy, as <code>ai_review</code> is, or only with a person driving?</li>
+    <li><b>C5 heal patches reorder identity signals by code, from field data.</b> No model writes a selector, but compiled selectors change without a new recording. Is a person's Confirm enough, or should this be written into the invariants first?</li>
+    <li><b>C5 tier.</b> The drift queue is Pro and Enterprise only. Should the Health tab follow the same rule?</li>
+    <li><b>C6 second input value.</b> Ask for an optional second value on the test card, or always replay the recorded inputs?</li>
+    <li><b>C2 cloud job store.</b> Keep cloud video jobs in memory, or store them so a resume never uploads again?</li>
+  </ul>
+  <p class="small muted">Every file and line on this page was read in the code on 2026-11-06. Data shapes, thresholds and effort sizes are proposals and estimates. A saved copy is in <code>docs/artifacts/conxa-engine-redesign/</code>.</p>
+</section>
+</div>
+
+<!-- Fig 6 (was 3): model ledger -->
+<template id="t3"><svg viewBox="0 0 920 540" role="img" aria-label="One model call three ways: today most guards drop bad parts silently, the understanding check keeps a report, and in v2 every call counts into one ledger shown in Human Review.">
+<defs><marker id="f3i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-ink"/></marker>
+<marker id="f3n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-new"/></marker>
+<marker id="f3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-bad"/></marker></defs>
+<text x="20" y="24" class="row">Today · 5 of 8 calls</text>
+<rect x="20" y="40" width="170" height="64" rx="7" class="bx bx-model"/><text x="32" y="66" class="t">Model call</text><text x="32" y="86" class="s">answer is untrusted</text>
+<rect x="250" y="40" width="170" height="64" rx="7" class="bx bx-code"/><text x="262" y="66" class="t">Its own guard</text><text x="262" y="86" class="s">rules differ per call</text>
+<rect x="480" y="40" width="170" height="64" rx="7" class="bx bx-data"/><text x="492" y="66" class="t">Result used</text><text x="492" y="86" class="s">what survived</text>
+<path d="M190 72 H250" class="ed" marker-end="url(#f3i)"/><path d="M420 72 H480" class="ed" marker-end="url(#f3i)"/>
+<path d="M335 104 V128" class="ed-bad" marker-end="url(#f3b)"/><text x="347" y="121" class="el-bad">bad parts</text>
+<rect x="250" y="128" width="170" height="44" rx="7" class="bx-bad"/><text x="335" y="155" text-anchor="middle" class="tb">Dropped, no record</text>
+<text x="20" y="214" class="row">Today · understanding check</text>
+<rect x="20" y="226" width="170" height="64" rx="7" class="bx bx-model"/><text x="32" y="252" class="t">Model call</text><text x="32" y="272" class="s">answer is untrusted</text>
+<rect x="250" y="226" width="170" height="64" rx="7" class="bx bx-code"/><text x="262" y="252" class="t">validate</text><text x="262" y="272" class="s">5 stages · grade · 1 retry</text>
+<rect x="480" y="226" width="170" height="64" rx="7" class="bx bx-data"/><text x="492" y="252" class="t">Result used</text><text x="492" y="272" class="s">what survived</text>
+<path d="M190 258 H250" class="ed" marker-end="url(#f3i)"/><path d="M420 258 H480" class="ed" marker-end="url(#f3i)"/>
+<path d="M335 290 V314" class="ed" marker-end="url(#f3i)"/><text x="347" y="307" class="el">counts</text>
+<rect x="250" y="314" width="170" height="44" rx="7" class="bx bx-data"/><text x="335" y="341" text-anchor="middle" class="t">validation_report</text>
+<text x="20" y="392" class="row">v2 · every call</text>
+<rect x="20" y="404" width="170" height="64" rx="7" class="bx bx-model"/><text x="32" y="430" class="t">Model call</text><text x="32" y="450" class="s">answer is untrusted</text>
+<rect x="250" y="404" width="170" height="64" rx="7" class="bx bx-code bx-new"/><text x="262" y="430" class="t">Its own guard</text><text x="262" y="450" class="s">+ shared ledger.log()</text>
+<rect x="480" y="404" width="170" height="64" rx="7" class="bx bx-data"/><text x="492" y="430" class="t">Result used</text><text x="492" y="450" class="s">what survived</text>
+<path d="M190 436 H250" class="ed-new" marker-end="url(#f3n)"/><path d="M420 436 H480" class="ed-new" marker-end="url(#f3n)"/>
+<path d="M335 468 V490" class="ed-new" marker-end="url(#f3n)"/><text x="347" y="484" class="el-new">counts</text>
+<rect x="250" y="490" width="170" height="44" rx="7" class="bx bx-data bx-new"/><text x="335" y="517" text-anchor="middle" class="t">Ledger line</text>
+<path d="M420 512 H480" class="ed-new" marker-end="url(#f3n)"/>
+<rect x="480" y="490" width="300" height="44" rx="7" class="bx bx-human bx-new"/><text x="492" y="517" class="t">Human Review: changed 3, dropped 2</text>
+</svg></template>
+
+<!-- Fig 7 (was 4): action contract -->
+<template id="t4"><svg viewBox="0 0 920 330" role="img" aria-label="Adding an action kind today needs four separate edits with no check; in v2 one contract file feeds a Python test and a Node test that fail the build if any side is missing.">
+<defs><marker id="f4i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-ink"/></marker>
+<marker id="f4n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-new"/></marker>
+<marker id="f4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-bad"/></marker></defs>
+<text x="20" y="12" class="row">Today</text><text x="510" y="12" class="row">v2</text>
+<line x1="490" y1="0" x2="490" y2="330" stroke="var(--line)" stroke-dasharray="3 5"/>
+<rect x="20" y="119" width="150" height="60" rx="7" class="bx bx-human"/><text x="32" y="145" class="t">New action kind</text><text x="32" y="165" class="s">for example a file step</text>
+<rect x="270" y="26" width="190" height="48" rx="7" class="bx bx-code"/><text x="282" y="55" class="t">ActionKind in events.py</text>
+<rect x="270" y="96" width="190" height="48" rx="7" class="bx bx-code"/><text x="282" y="125" class="t">rule in build.py</text>
+<rect x="270" y="166" width="190" height="48" rx="7" class="bx bx-code"/><text x="282" y="195" class="t">HANDLERS in handlers.js</text>
+<rect x="270" y="236" width="190" height="48" rx="7" class="bx bx-code"/><text x="282" y="265" class="t">editor form + gate</text>
+<path d="M170 149 L270 50" class="ed-bad" marker-end="url(#f4b)"/><path d="M170 149 L270 120" class="ed-bad" marker-end="url(#f4b)"/>
+<path d="M170 149 L270 190" class="ed-bad" marker-end="url(#f4b)"/><path d="M170 149 L270 260" class="ed-bad" marker-end="url(#f4b)"/>
+<text x="20" y="312" class="el-bad">4 edits, nothing checks they agree</text>
+<rect x="510" y="119" width="170" height="60" rx="7" class="bx bx-data bx-new"/><text x="522" y="145" class="t">action_kinds.json</text><text x="522" y="165" class="s">kind → step, run, recovery</text>
+<rect x="730" y="26" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="55" class="t">ActionKind</text>
+<rect x="730" y="96" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="125" class="t">compile rule</text>
+<rect x="730" y="166" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="195" class="t">HANDLERS / NOOP</text>
+<rect x="730" y="236" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="265" class="t">no_recovery_block</text>
+<path d="M680 149 L730 50" class="ed-new" marker-end="url(#f4n)"/><path d="M680 149 L730 120" class="ed-new" marker-end="url(#f4n)"/>
+<path d="M680 149 L730 190" class="ed-new" marker-end="url(#f4n)"/><path d="M680 149 L730 260" class="ed-new" marker-end="url(#f4n)"/>
+<rect x="510" y="236" width="170" height="48" rx="7" class="bx bx-code bx-new"/><text x="522" y="265" class="t">Py + Node tests</text>
+<path d="M595 236 V179" class="ed-new" marker-end="url(#f4n)"/><text x="607" y="213" class="el-new">checks</text>
+<text x="510" y="312" class="el-new">a kind with no handler fails the build</text>
+</svg></template>
+
+<!-- Fig 3 (ledger coverage) -->
+<template id="t5"><svg viewBox="0 0 660 150" role="img" aria-label="Calls whose dropped or changed output is counted: today calls 2 and 8 fully, calls 1 and 3 partly, the other four not at all; in the v2 target all eight.">
+<text x="0" y="40" class="row">Today</text>
+<text x="0" y="96" class="row">v2 target</text>
+<g id="dots5"></g>
+<text x="500" y="45" style="font:600 15px var(--f-body);fill:var(--ink)">2 full, 2 partly</text>
+<text x="500" y="101" style="font:600 15px var(--f-body);fill:var(--new)">8 of 8 counted</text>
+<circle cx="136" cy="134" r="7" class="dot-on"/><text x="150" y="138" class="el">counted</text>
+<circle cx="236" cy="134" r="7" class="dot-part"/><text x="250" y="138" class="el">partly</text>
+<circle cx="326" cy="134" r="7" class="dot-off"/><text x="340" y="138" class="el">not counted</text>
+</svg></template>
+
+<!-- Fig 4: video job states -->
+<template id="t6"><svg viewBox="0 0 900 320" role="img" aria-label="Video job states: submit, then poll; from polling the job ends done, blocked, failed, or waiting for the cloud; a lost job is resubmitted; waiting retries polling on a timer and survives a Studio restart.">
+<defs><marker id="f6i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-ink"/></marker>
+<marker id="f6n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-new"/></marker></defs>
+<rect x="20" y="95" width="150" height="60" rx="7" class="bx bx-code"/><text x="32" y="120" class="t">Submit</text><text x="32" y="140" class="s">upload prepared.mp4</text>
+<rect x="220" y="95" width="150" height="60" rx="7" class="bx bx-code bx-new"/><text x="232" y="120" class="t">Polling</text><text x="232" y="140" class="s">job id saved to disk</text>
+<path d="M170 125 H220" class="ed" marker-end="url(#f6i)"/>
+<path d="M260 155 C260 205 95 205 95 157" class="ed" marker-end="url(#f6i)"/><text x="110" y="218" class="el">job lost: resubmit, max 2</text>
+<rect x="540" y="10" width="300" height="52" rx="7" class="bx bx-data"/><text x="552" y="32" class="t">Done</text><text x="552" y="50" class="s">cached by fingerprint, go on to understanding</text>
+<rect x="540" y="80" width="300" height="52" rx="7" class="bx bx-human"/><text x="552" y="102" class="t">Blocked</text><text x="552" y="120" class="s">quota, trial or signed out: a person acts</text>
+<rect x="540" y="150" width="300" height="52" rx="7" class="bx bx-human"/><text x="552" y="172" class="t">Failed</text><text x="552" y="190" class="s">cloud could not read it: record again</text>
+<rect x="540" y="220" width="300" height="52" rx="7" class="bx bx-data bx-new"/><text x="552" y="242" class="t">Waiting for cloud</text><text x="552" y="260" class="s">600 s out: next_try saved, Studio can close</text>
+<path d="M370 115 L540 36" class="ed" marker-end="url(#f6i)"/>
+<path d="M370 122 L540 106" class="ed" marker-end="url(#f6i)"/>
+<path d="M370 130 L540 176" class="ed" marker-end="url(#f6i)"/>
+<path d="M370 140 L540 240" class="ed-new" marker-end="url(#f6n)"/>
+<path d="M540 262 C440 305 330 290 315 157" class="ed-new" marker-end="url(#f6n)"/><text x="330" y="302" class="el-new">timer or Studio start: poll saved job</text>
+</svg></template>
+
+<!-- Fig 5: heal loop sequence -->
+<template id="t7"><svg viewBox="0 0 900 560" role="img" aria-label="Heal loop sequence: the customer runtime sends tier and repair events to the cloud as today; the cloud counts them per step per release; Studio fetches step health, builds a signal-reorder patch by code, tests it three times, asks a person to confirm, and publishes to a ring; the ring installs sync the new release.">
+<defs><marker id="f7i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-ink"/></marker>
+<marker id="f7n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10z" class="m-new"/></marker></defs>
+<rect x="40" y="16" width="160" height="40" rx="7" class="bx bx-code"/><text x="120" y="41" text-anchor="middle" class="t">Customer runtime</text>
+<rect x="270" y="16" width="160" height="40" rx="7" class="bx bx-data"/><text x="350" y="41" text-anchor="middle" class="t">Conxa Cloud</text>
+<rect x="500" y="16" width="160" height="40" rx="7" class="bx bx-code"/><text x="580" y="41" text-anchor="middle" class="t">Build Studio</text>
+<rect x="720" y="16" width="160" height="40" rx="7" class="bx bx-human"/><text x="800" y="41" text-anchor="middle" class="t">Author</text>
+<line x1="120" y1="56" x2="120" y2="545" class="life"/><line x1="350" y1="56" x2="350" y2="545" class="life"/>
+<line x1="580" y1="56" x2="580" y2="545" class="life"/><line x1="800" y1="56" x2="800" y2="545" class="life"/>
+<path d="M120 90 H346" class="ed" marker-end="url(#f7i)"/><text x="132" y="82" class="el">tier_ok, repair_event (today)</text>
+<rect x="290" y="108" width="120" height="34" rx="6" class="bx bx-data"/><text x="350" y="130" text-anchor="middle" class="s">drift queue (today)</text>
+<rect x="290" y="156" width="120" height="34" rx="6" class="bx bx-data bx-new"/><text x="350" y="178" text-anchor="middle" class="s">count per step</text>
+<path d="M580 220 H354" class="ed-new" marker-end="url(#f7n)"/><text x="400" y="212" class="el-new">GET step-health</text>
+<path d="M350 250 H576" class="ed-new" marker-end="url(#f7n)"/><text x="400" y="242" class="el-new">step 14: help in 33 %</text>
+<rect x="500" y="270" width="160" height="40" rx="6" class="bx bx-code bx-new"/><text x="580" y="288" text-anchor="middle" class="s">reorder signals</text><text x="580" y="303" text-anchor="middle" class="s">by code, recompile step</text>
+<rect x="500" y="322" width="160" height="40" rx="6" class="bx bx-code bx-new"/><text x="580" y="340" text-anchor="middle" class="s">patch_gate, then</text><text x="580" y="355" text-anchor="middle" class="s">test × 3 (C6)</text>
+<path d="M580 388 H796" class="ed-new" marker-end="url(#f7n)"/><text x="600" y="380" class="el-new">Confirm card</text>
+<path d="M800 418 H584" class="ed-new" marker-end="url(#f7n)"/><text x="660" y="410" class="el-new">Confirm</text>
+<path d="M580 452 H354" class="ed-new" marker-end="url(#f7n)"/><text x="400" y="444" class="el-new">publish, ring 10 %</text>
+<path d="M350 492 H124" class="ed-new" marker-end="url(#f7n)"/><text x="160" y="484" class="el-new">delta sync, ring only</text>
+<text x="132" y="530" class="el">runs report back: the loop repeats</text>
+</svg></template>
+
+<script>
+(function(){
+var NS='http://www.w3.org/2000/svg';
+function el(t,a,x){var e=document.createElementNS(NS,t);for(var k in a)if(a[k]!=null)e.setAttribute(k,a[k]);if(x!=null)e.textContent=x;return e}
+var W=148,H=76,STEP=168,X0=12,Y=[56,290];
+function px(c){return X0+STEP*c}
+var NODES=[
+['rec',0,0,'code','Record','events + tab video',''],
+['vid',0,1,'video','Watch video','Pegasus via cloud','→ time segments'],
+['und',0,2,'model','Understand','1 model call','→ questions'],
+['ask',0,3,'human','Ask (Q1)','person confirms','→ stored answers'],
+['cmp',0,4,'code','Compile','IdentityBundle','→ SkillPackage'],
+['tst',0,5,'code','Test','sandbox, one run','→ pass or fail'],
+['pub',0,6,'code','Publish','every install at once','→ versioned release'],
+['syn',1,0,'code','Sync','delta by SHA-256',''],
+['run',1,1,'code','Run','resolve, gate, act','every step scripted'],
+['ta',1,2,'code','Tier A','0 tokens','exception ladder'],
+['tb',1,3,'model','Tier B','agent nominates','one candidate']];
+var V2NEW=[['hlt',1,4,'data','Step health','counted per step','per release'],['hl',1,5,'code','Heal proposal','signal reorder','→ same gates']];
+var OV={vid:['Video job','survives restart','→ time segments'],tst:['Test × 3','guard on run 1','→ pass rate'],
+ pub:['Rings','10 %, then all','auto-halt on drop'],run:['Run','steps or agent span',''],rec:['Record','kinds under contract','']};
+var CHG={rec:1,vid:1,tst:1,pub:1,run:1,hlt:1,hl:1};
+var B1={rec:['W3'],und:['W1'],cmp:['W1'],vid:['W2'],run:['W3','W4'],tst:['W6'],pub:['W6']};
+var B2={rec:['C3'],und:['C1'],cmp:['C1'],vid:['C2'],run:['C3','C4'],tst:['C6'],pub:['C6'],hlt:['C5'],hl:['C5']};
+function draw(host,v2,id){
+  var s=el('svg',{viewBox:'0 0 1180 456',role:'img','aria-label':v2?'v2 engine: the same spine with a model ledger, a video job that survives restart, an action contract, an agent span, a heal loop from step health back to compile, and ring release.':'Engine today: record, watch, understand, ask, compile, test and publish along the top, sync and run with Tier A and Tier B along the bottom, and no path back from the runtime to the compiler.'});
+  var d=el('defs');['ink','new','bad'].forEach(function(k){var m=el('marker',{id:id+k,viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});m.appendChild(el('path',{d:'M0,0 L10,5 L0,10z','class':'m-'+k}));d.appendChild(m)});s.appendChild(d);
+  s.appendChild(el('text',{x:12,y:26,'class':'row'},'Author side · Studio and cloud'));
+  s.appendChild(el('text',{x:12,y:260,'class':'row'},"Customer's machine"));
+  var list=NODES.concat(v2?V2NEW:[]),pos={};
+  list.forEach(function(n){pos[n[0]]={x:px(n[2]),y:Y[n[1]]}});
+  function line(d,cls,mk){s.appendChild(el('path',{d:d,'class':cls,'marker-end':mk?'url(#'+id+mk+')':null}))}
+  function txt(x,y,cls,t,anchor){s.appendChild(el('text',{x:x,y:y,'class':cls,'text-anchor':anchor||'start'},t))}
+  var i,ym=Y[0]+H/2,y2=Y[1]+H/2;
+  for(i=0;i<6;i++)line('M'+(px(i)+W)+' '+ym+' H'+px(i+1),'ed','ink');
+  for(i=0;i<3;i++)line('M'+(px(i)+W)+' '+y2+' H'+px(i+1),'ed','ink');
+  var pubc=px(6)+W/2,sync=px(0)+W/2;
+  line('M'+pubc+' '+(Y[0]+H)+' V424 H'+sync+' V'+(Y[1]+H),'ed','ink');
+  txt(600,444,'el','release, then delta sync','middle');
+  if(!v2){
+    line('M'+(px(3)+W)+' '+y2+' H'+px(4),'ed-bad','bad');
+    s.appendChild(el('rect',{x:px(4),y:Y[1],width:W+STEP,height:H,rx:7,'class':'bx-bad'}));
+    txt(px(4)+(W+STEP)/2,Y[1]+34,'tb','No path back to compile','middle');
+    txt(px(4)+(W+STEP)/2,Y[1]+54,'s','repair events stop at a dashboard queue','middle');
+  }else{
+    var runc=px(1)+W/2,hltc=px(4)+W/2,tbc=px(3)+W/2,hlc=px(5)+W/2,cmpc=px(4)+W/2;
+    line('M'+runc+' '+(Y[1]+H)+' V388 H'+hltc+' V'+(Y[1]+H),'ed-new','new');
+    line('M'+tbc+' '+(Y[1]+H)+' V388','ed-new');
+    txt((runc+tbc)/2+60,380,'el-new','repair events (already sent)','middle');
+    line('M'+(px(4)+W)+' '+y2+' H'+px(5),'ed-new','new');
+    line('M'+hlc+' '+Y[1]+' V210 H'+cmpc+' V'+(Y[0]+H),'ed-new','new');
+    txt((hlc+cmpc)/2,200,'el-new','patch, gated, Confirm','middle');
+  }
+  list.forEach(function(n){
+    var p=pos[n[0]],o=v2&&OV[n[0]]?OV[n[0]]:[n[4],n[5],n[6]];
+    var cls='bx bx-'+n[3]+(v2&&CHG[n[0]]?' bx-new':'');
+    s.appendChild(el('rect',{x:p.x,y:p.y,width:W,height:H,rx:7,'class':cls}));
+    txt(p.x+12,p.y+26,'t',o[0]);txt(p.x+12,p.y+47,'s',o[1]);if(o[2])txt(p.x+12,p.y+63,'s',o[2]);
+  });
+  list.forEach(function(n){
+    var p=pos[n[0]],bs=(v2?B2:B1)[n[0]]||[];
+    bs.forEach(function(b,j){var cx=p.x+W-14-j*30,cy=p.y;
+      s.appendChild(el('rect',{x:cx-13,y:cy-10,width:26,height:20,rx:10,'class':v2?'bg-new':'bg-bad'}));
+      s.appendChild(el('text',{x:cx,y:cy+4,'text-anchor':'middle','class':'bg-t'},b))});
+  });
+  if(!v2)[['W5',px(4)+W+STEP-14,Y[1]]].forEach(function(b){s.appendChild(el('rect',{x:b[1]-13,y:b[2]-10,width:26,height:20,rx:10,'class':'bg-bad'}));s.appendChild(el('text',{x:b[1],y:b[2]+4,'text-anchor':'middle','class':'bg-t'},b[0]))});
+  host.appendChild(s);
+}
+draw(document.getElementById('fig1'),false,'a');
+draw(document.getElementById('fig2'),true,'b');
+// Fig 1b: [stage, [[actor, title, detail, badge...]], [hands-on lines]]. actor: c code, m model, h person, v video, d data.
+var ACT={c:'code',m:'model',h:'human',v:'video',d:'data'};
+var TOPD=[
+ ['Record',[['h','Person acts','panel browser 1280×720'],['c','Capture DOM events','bridge.js','W3'],['c','Frames, tabs, boxes','session.py'],['v','Video per tab','screencast_video.py'],['h',"Person's hints",'hints.json']],['events.jsonl','tab videos · hints']],
+ ['Watch video',[['c','Stitch tabs, cut idle','prepare.py · splice.py'],['c','Shrink, blur, rings','typed values blurred'],['v','Track A: Pegasus job','600 s budget, in memory','W2'],['c','Track B: browser log','track_b.py'],['c','Merge on one clock','merge.py']],['merged timeline']],
+ ['Understand',[['c','Find candidates','code picks literals'],['m','One model call','timeline_understanding'],['c','Validate, 5 stages','validation_report'],['c','Grade, 1 retry','_grade: ok or weak'],['c',"Person's hints win",'override stage'],['c','Plan and score Qs','question_plan · scoring']],['understanding.json','questions']],
+ ['Ask (Q1)',[['c','Card with a guess','guess = suggestion'],['h','Person confirms','nothing pre-filled'],['d','Answer per event','decisions.json'],['c','Compile waits','lifecycle gate']],['decisions.json']],
+ ['Compile',[['c','Drop script events','origin = script'],['c','Normalize, dedupe','pipeline/'],['c','Build steps','IdentityBundle','W3'],['c','Write selectors','selector_grammar.py'],['c','Popup forks','outcome_fork.py'],['m','Second opinion','drops silently','W1'],['c','Replay answers','replay.py'],['m','Follow-up Qs, wording','clarify_question_copy','W1']],['SkillPackage','compile_report']],
+ ['Test',[['c','Stage sandbox','sandbox/.conxa'],['c','Run, Tier A only','MAX_RECOVERY_TIER=2'],['h','Guard pauses','before irreversible'],['m','Auto-fix, up to 3','chat change cards'],['h','Approve after 1 pass','cmd_flow_approve','W6']],['last_test_status']],
+ ['Publish',[['h','Person publishes','version-controlled'],['d','Cloud stores release','publish_routes.py'],['c','Installer, optional','pack.json only'],['d','All installs get it','no rollout for skills','W6']],['release N']]];
+var BOTD=[
+ ['Sync',[['c','Poll for delta','sync.js'],['c','SHA-256 per file','x-artifact-sha256'],['c','Stage, then swap','version_manager'],['c','Point current here','junction per skill']],['skill on disk']],
+ ['Run',[['m','Agent calls the tool','execute_skill (MCP)'],['c','Admit the run','≤5 runs · host_lock'],['c','Resolve the tab','tabs.js, never guesses'],['c','Planned pauses','ai_review · handover'],['c','Kind dispatch','HANDLERS[step.type]','W3','W4'],['c','Find the element','resolver, margin 0.15'],['c','Act, then verify','assertions.js'],['c','Fault? stop the run','detectFault']],['step ok, or','a failed step']],
+ ['Tier A',[['c','Settle and retry','page still loading'],['c','L1 exception ladder','cascade.js'],['c','L2 a11y, re-hover','zero tokens'],['c','Dialog scope','never a decision popup']],['recovered, or','exhausted']],
+ ['Tier B',[['c','Park the run','recovery_park.js'],['m','Agent nominates one','MCP client decides'],['c','Runtime re-checks','override_rejected'],['c','Resume or fail','step_fail to tracker']],['resumed, or failed']],
+ ['Telemetry',[['c','Batch events','tracker.js · tier_ok'],['c','Repair details','repair_event, margin'],['c','Spill if offline','sent later'],['d','Local recovery log','stays on the machine']],['events to cloud']],
+ ['Cloud',[['d','Ingest','/api/v1/tracking'],['d','Runs and ROI','cloud dashboard'],['d','Drift queue','manual review, Pro+']],['a person reads','a list']]];
+(function(host){
+  var CW=164,ST=186,X0=12,SH=44,SG=8,HH=40,ROWS=[{hy:40,sy:92,ly:26,data:TOPD,label:'Author side · Studio and cloud'},{hy:612,sy:664,ly:600,data:BOTD,label:"Customer's machine"}];
+  var s=el('svg',{viewBox:'0 0 1304 1124',role:'img','aria-label':'The engine today, one level deeper: seven author-side stages and six customer-side stages, each opened into its internal steps, with weak points W1 to W6 on the exact steps where they live, and field telemetry ending at a cloud dashboard list instead of reaching compile.'});
+  var d=el('defs');['ink','bad'].forEach(function(k){var m=el('marker',{id:'dk'+k,viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});m.appendChild(el('path',{d:'M0,0 L10,5 L0,10z','class':'m-'+k}));d.appendChild(m)});s.appendChild(d);
+  function T(x,y,c,t,a){s.appendChild(el('text',{x:x,y:y,'class':c,'text-anchor':a||null},t))}
+  function badge(cx,cy,b){s.appendChild(el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:9,'class':'bg-bad'}));T(cx,cy+4,'bg-t',b,'middle')}
+  ROWS.forEach(function(r){
+    T(X0,r.ly,'row',r.label);
+    var hands=r.sy+8*(SH+SG)+12;
+    r.data.forEach(function(st,i){
+      var x=X0+i*ST;
+      s.appendChild(el('rect',{x:x,y:r.hy,width:CW,height:HH,rx:7,'class':'hdr'}));T(x+10,r.hy+26,'t',st[0]);
+      var bad=r===ROWS[1]&&i===5;if(i<r.data.length-1||bad)s.appendChild(el('path',{d:'M'+(x+CW)+' '+(r.hy+HH/2)+' H'+(x+ST-2),'class':bad?'ed-bad':'ed','marker-end':'url(#dk'+(bad?'bad':'ink')+')'}));
+      s.appendChild(el('path',{d:'M'+(x+CW/2)+' '+(r.hy+HH)+' V'+r.sy,'class':'ed'}));
+      st[1].forEach(function(sb,j){
+        var y=r.sy+j*(SH+SG);
+        if(j)s.appendChild(el('path',{d:'M'+(x+CW/2)+' '+(y-SG)+' V'+y,'class':'ed'}));
+        s.appendChild(el('rect',{x:x,y:y,width:CW,height:SH,rx:6,'class':'bx bx-'+ACT[sb[0]]}));
+        T(x+10,y+19,'st',sb[1]);T(x+10,y+35,'s2',sb[2]);
+        sb.slice(3).forEach(function(b,k){badge(x+CW-16-k*30,y,b)});
+      });
+      st[2].forEach(function(h,k){T(x+4,hands+k*14,'el',(k?'  ':'→ ')+h)});
+    });
+  });
+  // release wraps from Publish down to Sync
+  var pubc=X0+6*ST+CW/2,sync=X0+CW/2;
+  s.appendChild(el('path',{d:'M'+pubc+' 548 V562 H'+sync+' V612','class':'ed','marker-end':'url(#dkink)'}));
+  T(652,578,'el','release N, then delta sync to every install','middle');
+  // the missing return path
+  var nx=X0+6*ST;
+  s.appendChild(el('rect',{x:nx,y:612,width:CW,height:208,rx:7,'class':'bx-bad'}));
+  T(nx+CW/2,660,'tb','No path back','middle');
+  ['Field results never','reach compile. A fix','that worked for a','customer is not','compiled in.'].forEach(function(l,k){T(nx+CW/2,690+k*18,'s',l,'middle')});
+  badge(nx+CW-16,612,'W5');
+  host.appendChild(s);
+})(document.getElementById('fig1d'));
+['3','4','5','6','7'].forEach(function(n){var t=document.getElementById('t'+n);document.getElementById('fig'+n).appendChild(t.content.cloneNode(true))});
+// Fig 3 dots: 1 partly (Pegasus), 2 counted (understanding), 3 partly (second opinion), 8 counted (Tier B)
+var TODAY=['part','on','part','off','off','off','off','on'],LBL={on:'counted',part:'partly counted',off:'not counted'};
+var g=document.getElementById('dots5');
+for(var i=0;i<8;i++){var cx=130+i*44,st=TODAY[i];
+  var c=el('circle',{cx:cx,cy:36,r:15,'class':'dot-'+st});c.appendChild(el('title',{},'Call '+(i+1)+': '+LBL[st]));g.appendChild(c);
+  g.appendChild(el('text',{x:cx,y:41,'text-anchor':'middle','class':'dn dn-'+st},String(i+1)));
+  var c2=el('circle',{cx:cx,cy:92,r:15,'class':'dot-new'});c2.appendChild(el('title',{},'Call '+(i+1)+': counted in v2 (target)'));g.appendChild(c2);
+  g.appendChild(el('text',{x:cx,y:97,'text-anchor':'middle','class':'dn dn-on'},String(i+1)));
+}
+})();
+</script>

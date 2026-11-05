@@ -1,0 +1,510 @@
+<title>Build Studio Chat Copilot</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one long reading column. Each section = a short plain explanation + one figure.
+   Colour says WHO decides (same encoding as the CONXA Workflow Engine page):
+   teal = code, amber = a model, indigo = the person, grey dashed = data on disk.
+   Marks use --code/--model/--human (validated); small text uses the darker/lighter -t variants. */
+:root{
+  --paper:#F1F3EF; --panel:#FFFFFF; --sunk:#E7EBE6; --ink:#17201C; --muted:#56625C; --line:#D2D9D3; --grid:#E3E8E3;
+  --code:#008A7C; --code-t:#00695F; --code-bg:#DDEFEC;
+  --model:#9C560F; --model-t:#8A4A0C; --model-bg:#F6E8D6;
+  --human:#4A43A6; --human-t:#4A43A6; --human-bg:#E5E3F6;
+  --data:#5E6A64; --data-bg:#ECEFEC; --crit:#B3261E; --ok:#2E7D32;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#101513; --panel:#161D1A; --sunk:#1D2622; --ink:#E3EAE5; --muted:#97A49D; --line:#2C3833; --grid:#1A221F;
+  --code:#2FA394; --code-t:#57C4B9; --code-bg:#163331;
+  --model:#C48033; --model-t:#E3A660; --model-bg:#3A2A17;
+  --human:#857FE4; --human-t:#A49EF2; --human-bg:#26244A;
+  --data:#A5B1AB; --data-bg:#222B27; --crit:#F2877F; --ok:#7CC47F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#101513; --panel:#161D1A; --sunk:#1D2622; --ink:#E3EAE5; --muted:#97A49D; --line:#2C3833; --grid:#1A221F;
+  --code:#2FA394; --code-t:#57C4B9; --code-bg:#163331;
+  --model:#C48033; --model-t:#E3A660; --model-bg:#3A2A17;
+  --human:#857FE4; --human-t:#A49EF2; --human-bg:#26244A;
+  --data:#A5B1AB; --data-bg:#222B27; --crit:#F2877F; --ok:#7CC47F; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.6 var(--f-body);margin:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(2rem,4.4vw,3rem);font-weight:700}
+h2{font-size:1.6rem;font-weight:600}
+h3{font-size:1.15rem;font-weight:600}
+p{margin:0}
+code{font:500 .86em var(--f-mono);background:var(--sunk);padding:.05em .35em;border-radius:3px;overflow-wrap:anywhere}
+ul,ol{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.wrap{max-width:1020px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 72px;display:flex;flex-direction:column;gap:44px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--code-t)}
+header{display:flex;flex-direction:column;gap:12px}
+.lede{max-width:70ch;font-size:1.08rem}
+.sec{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sec>p.intro{max-width:70ch}
+.muted{color:var(--muted)} .small{font-size:14px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 var(--f-mono);padding:5px 8px;border-radius:4px;white-space:nowrap}
+.chip::before{content:"";width:8px;height:8px;border-radius:2px;background:currentColor}
+.c-code{color:var(--code-t);background:var(--code-bg)} .c-model{color:var(--model-t);background:var(--model-bg)}
+.c-human{color:var(--human-t);background:var(--human-bg)} .c-data{color:var(--data);background:var(--data-bg)}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13.5px;color:var(--muted)}
+
+.four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.four>div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.four b{font:600 1.02rem var(--f-display)}
+.four span{font-size:14px;color:var(--muted)}
+
+figure{margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+figcaption{font-size:14px;color:var(--muted);max-width:80ch}
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow-x:auto;padding:12px;min-width:0}
+.fig svg{display:block;width:100%;height:auto;min-width:760px;margin:0 auto}
+
+/* diagram marks */
+.nd rect.b{stroke-width:1.75}
+.nd .tag{font:600 10.5px var(--f-mono);letter-spacing:.07em}
+.nd .t{font:600 15px var(--f-body);fill:var(--ink)}
+.nd .s{font:400 12.5px var(--f-mono);fill:var(--muted)}
+.nd .l{font:400 13px var(--f-body);fill:var(--ink)}
+.k-code rect.b{fill:var(--code-bg);stroke:var(--code)} .k-code .tag{fill:var(--code-t)}
+.k-model rect.b{fill:var(--model-bg);stroke:var(--model)} .k-model .tag{fill:var(--model-t)}
+.k-human rect.b{fill:var(--human-bg);stroke:var(--human)} .k-human .tag{fill:var(--human-t)}
+.k-data rect.b{fill:var(--data-bg);stroke:var(--data);stroke-dasharray:4 3} .k-data .tag{fill:var(--data)}
+.ed path.e{fill:none;stroke-width:1.9}
+.ed .e-code{stroke:var(--code)} .ed .e-model{stroke:var(--model);stroke-dasharray:5 4} .ed .e-human{stroke:var(--human)} .ed .e-data{stroke:var(--data);stroke-dasharray:3 4}
+.ed text{font:500 12px var(--f-mono);fill:var(--muted)}
+.ed .lbg{fill:var(--panel)}
+.m-code{fill:var(--code)} .m-model{fill:var(--model)} .m-human{fill:var(--human)} .m-data{fill:var(--data)}
+.note{font:400 12.5px var(--f-body);fill:var(--muted)}
+.sim [data-id]{opacity:.2;transition:opacity .15s}
+.sim [data-id].on{opacity:1}
+.sim [data-id].on rect.b{stroke-width:3}
+
+/* simulator */
+.sim-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+button{font:500 13.5px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px;cursor:pointer;text-align:left}
+button:hover{border-color:var(--code);color:var(--code-t)}
+button:focus-visible,summary:focus-visible,.row-hit:focus-visible{outline:2px solid var(--code);outline-offset:2px}
+button[aria-pressed="true"]{border-color:var(--human);background:var(--human-bg);color:var(--ink)}
+.res{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.res .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.res .q{font:500 1.05rem var(--f-body)}
+.callout{border-left:3px solid var(--code);background:var(--sunk);padding:9px 12px;border-radius:0 6px 6px 0;font-size:14.5px}
+.callout.m{border-left-color:var(--model)} .callout.h{border-left-color:var(--human)}
+
+/* chart */
+.chart{position:relative}
+.chart svg{min-width:640px}
+.ax{stroke:var(--line)} .gridl{stroke:var(--grid)}
+.ct{font:400 13px var(--f-body);fill:var(--ink)} .cv{font:500 12.5px var(--f-mono);fill:var(--ink)} .cx{font:400 12px var(--f-mono);fill:var(--muted)}
+.bar{stroke:var(--model);stroke-width:10;stroke-linecap:round}
+.dot{fill:var(--model);stroke:var(--panel);stroke-width:2}
+.row-hit{fill:transparent;cursor:default}
+.row-hit:hover,.row-hit:focus{fill:var(--sunk);fill-opacity:.7}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--paper);font-size:13px;line-height:1.45;padding:8px 10px;border-radius:6px;max-width:300px;opacity:0;transition:opacity .1s;z-index:3}
+.tip.show{opacity:1}
+
+/* tables + stacks */
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel)}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font:600 11px/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--sunk)}
+td.k{font-weight:600}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;min-width:0}
+.scroll table{min-width:560px}
+.stack{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.stack>div{display:grid;grid-template-columns:34px minmax(0,1fr) 150px;gap:12px;align-items:start;padding:11px 14px;border-bottom:1px solid var(--line)}
+.stack>div:last-child{border-bottom:0}
+.stack .n{font:600 13px var(--f-mono);color:var(--muted)}
+.stack .keep{font:600 11px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--code-t)}
+.stack .trim{font:500 11px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--model-t)}
+.stack>div.never{border-left:4px solid var(--code)} .stack>div.trimmed{border-left:4px solid var(--model)}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:10px}
+
+@media (max-width:900px){.four{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){.four{grid-template-columns:minmax(0,1fr)}.stack>div{grid-template-columns:28px minmax(0,1fr)}.stack>div .keep,.stack>div .trim{grid-column:2}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Build Studio · branch feat/clarify-phase-0 · read from the code 2026-11-06</span>
+  <h1>Build Studio Chat Copilot</h1>
+  <p class="lede">Every workflow in Build Studio has one conversation next to it. You type, or press a button on a card, and the chat either does something, asks you something, or answers. This page shows what happens to one message, step by step, and why the model is never the one who decides what is allowed to happen.</p>
+  <div class="legend" aria-label="Colour key">
+    <span class="chip c-code">Code decides</span>
+    <span class="chip c-model">A model is asked (advice only)</span>
+    <span class="chip c-human">You decide</span>
+    <span class="chip c-data">Saved on disk</span>
+  </div>
+</header>
+
+<section class="sec" aria-labelledby="idea">
+  <h2 id="idea">The idea in four lines</h2>
+  <div class="four">
+    <div><b>One thread per workflow</b><span>Plus a General Chat for talking before a workflow exists. Both are saved as a list of lines that is only ever added to.</span></div>
+    <div><b>Cheapest check first</b><span>A button press or a known phrase costs no model call. The model is asked only when code cannot tell what you meant.</span></div>
+    <div><b>The model proposes, code disposes</b><span>Every suggested edit passes three code gates before you can even see it. A suggestion that fails is dropped.</span></div>
+    <div><b>Nothing happens behind your back</b><span>Anything with a side effect waits for a Confirm or Apply press. Every applied change can be undone.</span></div>
+  </div>
+</section>
+
+<section class="sec" aria-labelledby="ladder">
+  <h2 id="ladder">Follow one message</h2>
+  <p class="intro">Each message falls down a ladder of questions. The first rung that can handle it takes it, and everything below is skipped. Pick an example to light up its path.</p>
+
+  <div class="sim-wrap">
+    <div class="chips" id="exChips" role="group" aria-label="Example messages"></div>
+    <div class="res" id="exRes" aria-live="polite"></div>
+  </div>
+
+  <figure>
+    <div class="fig">
+<svg id="svgLadder" viewBox="0 0 940 850" role="img" aria-label="Ladder of five checks a message passes through: card button, open question, command, change request, then the written reply. The first three are mostly code and cost zero or one short model call.">
+<defs>
+  <marker id="a-code" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-code"/></marker>
+  <marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-model"/></marker>
+  <marker id="a-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-human"/></marker>
+</defs>
+
+<!-- spine -->
+<g class="nd k-human" data-id="n0"><rect class="b" x="30" y="16" width="240" height="64" rx="8"/><text class="tag" x="42" y="34">YOU</text><text class="t" x="42" y="54">You send something</text><text class="s" x="42" y="71">typed text, or a card click</text></g>
+<g class="ed" data-id="e01"><path class="e e-human" d="M150 80 L150 138" marker-end="url(#a-human)"/></g>
+
+<g class="nd k-code" data-id="n1"><rect class="b" x="30" y="140" width="240" height="64" rx="8"/><text class="tag" x="42" y="158">CODE</text><text class="t" x="42" y="178">① Card button pressed?</text><text class="s" x="42" y="195">Apply · Confirm · Dismiss</text></g>
+<g class="ed" data-id="e12"><path class="e e-code" d="M150 204 L150 262" marker-end="url(#a-code)"/><rect class="lbg" x="158" y="224" width="26" height="16"/><text x="162" y="236">no</text></g>
+<g class="ed" data-id="e1y"><path class="e e-code" d="M270 172 L338 172" marker-end="url(#a-code)"/><text x="304" y="164" text-anchor="middle">yes</text></g>
+<g class="nd k-code" data-id="x1"><rect class="b" x="340" y="140" width="570" height="64" rx="8"/><text class="tag" x="354" y="158">CODE · NO MODEL CALL</text><text class="l" x="354" y="178">Runs that card's action with the same code the buttons use.</text><text class="l" x="354" y="195">The conversational model is never asked.</text></g>
+
+<g class="nd k-code" data-id="n2"><rect class="b" x="30" y="264" width="240" height="64" rx="8"/><text class="tag" x="42" y="282">CODE</text><text class="t" x="42" y="302">② A question card is open?</text><text class="s" x="42" y="319">and you typed an answer</text></g>
+<g class="ed" data-id="e23"><path class="e e-code" d="M150 328 L150 386" marker-end="url(#a-code)"/><rect class="lbg" x="158" y="348" width="26" height="16"/><text x="162" y="360">no</text></g>
+<g class="ed" data-id="e2y"><path class="e e-model" d="M270 296 L338 296" marker-end="url(#a-model)"/><text x="304" y="288" text-anchor="middle">yes</text></g>
+<g class="nd k-model" data-id="x2"><rect class="b" x="340" y="250" width="570" height="92" rx="8"/><text class="tag" x="354" y="268">CODE FIRST · 0–1 SHORT MODEL CALL</text><text class="l" x="354" y="288">Your words must match one of the card's own choices.</text><text class="l" x="354" y="305">Exact label: applied at once. Otherwise chat_map_answer picks one, or says</text><text class="l" x="354" y="322">“unclear” and the card stays open. Tick-lists point you back to the card.</text><text class="l" x="354" y="339">Not an answer at all? It may still be a command, so ③ is tried next.</text></g>
+
+<g class="nd k-code" data-id="n3"><rect class="b" x="30" y="388" width="240" height="64" rx="8"/><text class="tag" x="42" y="406">CODE</text><text class="t" x="42" y="426">③ Is it a command?</text><text class="s" x="42" y="443">“test it” · “approve” · “record again”</text></g>
+<g class="ed" data-id="e34"><path class="e e-code" d="M150 452 L150 510" marker-end="url(#a-code)"/><rect class="lbg" x="158" y="472" width="26" height="16"/><text x="162" y="484">no</text></g>
+<g class="ed" data-id="e3y"><path class="e e-model" d="M270 420 L338 420" marker-end="url(#a-model)"/><text x="304" y="412" text-anchor="middle">yes</text></g>
+<g class="nd k-model" data-id="x3"><rect class="b" x="340" y="374" width="570" height="92" rx="8"/><text class="tag" x="354" y="392">CODE FIRST · 0–1 SHORT MODEL CALL</text><text class="l" x="354" y="412">Exact phrase: no model. A message that sounds like a command (200 characters</text><text class="l" x="354" y="429">or fewer) gets one short chat_route_intent call. It may only pick an action the</text><text class="l" x="354" y="446">workflow allows right now. Side effects wait for a Confirm card; opening</text><text class="l" x="354" y="463">something shows a link card.</text></g>
+
+<g class="nd k-code" data-id="n4"><rect class="b" x="30" y="512" width="240" height="64" rx="8"/><text class="tag" x="42" y="530">CODE</text><text class="t" x="42" y="550">④ Could it ask for a change?</text><text class="s" x="42" y="567">workflow threads only</text></g>
+<g class="ed" data-id="e45"><path class="e e-code" d="M150 576 L150 634" marker-end="url(#a-code)"/><rect class="lbg" x="158" y="596" width="40" height="16"/><text x="162" y="608">then</text></g>
+<g class="ed" data-id="e4y"><path class="e e-model" d="M270 544 L338 544" marker-end="url(#a-model)"/><text x="304" y="536" text-anchor="middle">yes</text></g>
+<g class="nd k-model" data-id="x4"><rect class="b" x="340" y="498" width="570" height="92" rx="8"/><text class="tag" x="354" y="516">MODEL · 1–3 CALLS, THEN CODE GATES</text><text class="l" x="354" y="536">Change words, a step you are pointing at, or a failed last test.</text><text class="l" x="354" y="553">copilot_diagnose proposes edits and may ask for up to 2 extra lookups.</text><text class="l" x="354" y="570">Three code gates check every proposal; failures vanish silently.</text><text class="l" x="354" y="587">What survives becomes ONE change card (figure 3).</text></g>
+<g class="ed" data-id="e4f"><path class="e e-model" d="M625 590 L625 626" marker-end="url(#a-model)"/><text x="636" y="613">feeds the reply</text></g>
+
+<g class="nd k-model" data-id="n5"><rect class="b" x="30" y="636" width="240" height="64" rx="8"/><text class="tag" x="42" y="654">MODEL</text><text class="t" x="42" y="674">⑤ Write the reply</text><text class="s" x="42" y="691">studio_chat_reply · streamed</text></g>
+<g class="ed" data-id="e56"><path class="e e-data" d="M150 700 L150 758" marker-end="url(#a-code)"/></g>
+<g class="ed" data-id="e5y"><path class="e e-model" d="M270 668 L338 668" marker-end="url(#a-model)"/><text x="304" y="660" text-anchor="middle">always</text></g>
+<g class="nd k-model" data-id="x5"><rect class="b" x="340" y="628" width="570" height="80" rx="8"/><text class="tag" x="354" y="646">MODEL · 1 CALL</text><text class="l" x="354" y="666">The reply is told exactly which changes are on offer, so it cannot promise</text><text class="l" x="354" y="683">one that has no card. Words appear as they are written.</text><text class="l" x="354" y="700">General Chat only: one more call may draft a new-workflow card.</text></g>
+
+<g class="nd k-data" data-id="n6"><rect class="b" x="30" y="760" width="240" height="64" rx="8"/><text class="tag" x="42" y="778">DATA</text><text class="t" x="42" y="798">Saved to the thread</text><text class="s" x="42" y="815">append-only</text></g>
+<g class="nd k-data" data-id="x6"><rect class="b" x="340" y="760" width="570" height="64" rx="8"/><text class="tag" x="354" y="778">DATA · ONE TURN AT A TIME</text><text class="l" x="354" y="798">Cancel mid-reply and nothing half-finished is saved. A second message waits its turn.</text><text class="l" x="354" y="815">Every path above ends as lines added to the thread file.</text></g>
+</svg>
+    </div>
+    <figcaption>Figure 1. The ladder. Rungs ①–④ are checked by code. A model is called only where code cannot decide: to map loose words to a card choice, to tell a command from a question, to propose edits, and to write the reply. When you are pointing at a step in the editor, your message is never treated as a command.</figcaption>
+  </figure>
+</section>
+
+<section class="sec" aria-labelledby="cost">
+  <h2 id="cost">What each kind of message costs</h2>
+  <p class="intro">Every model call goes through the Conxa cloud and counts as an AI credit. Most things you do in chat cost nothing. Asking for a change costs the most, because a model has to look, propose and then explain.</p>
+  <figure>
+    <div class="fig chart" id="chartBox">
+<svg id="svgChart" viewBox="0 0 940 430" role="img" aria-label="Range chart of model calls per message type. Button presses and exact phrases cost zero. A command in your own words costs one. A plain question costs one. An answer to an open question costs zero or one. A change request costs two to four. General Chat costs two or three. An auto-fix run costs one to nine.">
+  <g id="chartG"></g>
+</svg>
+      <div class="tip" id="tip" role="tooltip"></div>
+    </div>
+    <figcaption>Figure 2. Model calls per message, from the code paths in Figure 1. A bar runs from the fewest to the most calls that path can make. Hover or focus a row for the reason. One extra call now and then folds old turns into a summary, and a question that also sounds like a command adds one routing call.</figcaption>
+  </figure>
+  <details>
+    <summary>Same numbers as a table</summary>
+    <div class="scroll"><table id="chartTable"><thead><tr><th>You do this</th><th>Fewest</th><th>Most</th><th>Why</th></tr></thead><tbody></tbody></table></div>
+  </details>
+</section>
+
+<section class="sec" aria-labelledby="change">
+  <h2 id="change">When you ask for a change</h2>
+  <p class="intro">This is the “copilot” part. A message that could ask for an edit goes through a pipeline where the model only suggests, code checks, and you press the button. The reply is written after the checks, so it describes only what is really on offer.</p>
+  <figure>
+    <div class="fig">
+<svg viewBox="0 0 940 480" role="img" aria-label="Change pipeline. Your message and the workflow digest go to the diagnose model, which may ask for more detail up to two times. Three code gates check each proposal and silently drop failures. The reply is written knowing the surviving changes, and they become one change card. Pressing Apply re-checks, applies all or nothing as one undo step, and Undo restores it unless the workflow changed since.">
+<defs>
+  <marker id="b-code" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-code"/></marker>
+  <marker id="b-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-model"/></marker>
+  <marker id="b-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-human"/></marker>
+  <marker id="b-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-data"/></marker>
+</defs>
+<!-- row 1 -->
+<g class="nd k-code"><rect class="b" x="19" y="50" width="150" height="130" rx="8"/><text class="tag" x="31" y="68">CODE</text><text class="t" x="31" y="90">Gather evidence</text><text class="l" x="31" y="112">your message</text><text class="l" x="31" y="130">step digest</text><text class="l" x="31" y="148">last failure + photo</text><text class="l" x="31" y="166">pinned facts</text></g>
+<g class="nd k-model"><rect class="b" x="207" y="50" width="150" height="130" rx="8"/><text class="tag" x="219" y="68">MODEL</text><text class="t" x="219" y="90">Diagnose</text><text class="l" x="219" y="112">copilot_diagnose</text><text class="l" x="219" y="130">suggests edits,</text><text class="l" x="219" y="148">each with a reason</text><text class="l" x="219" y="166">1 to 3 calls</text></g>
+<g class="nd k-code"><rect class="b" x="395" y="50" width="150" height="130" rx="8"/><text class="tag" x="407" y="68">CODE</text><text class="t" x="407" y="90">Three gates</text><text class="l" x="407" y="112">① field patch</text><text class="l" x="407" y="130">② popup step</text><text class="l" x="407" y="148">③ structural edit</text><text class="l" x="407" y="166">dry-run on a copy</text></g>
+<g class="nd k-model"><rect class="b" x="583" y="50" width="150" height="130" rx="8"/><text class="tag" x="595" y="68">MODEL</text><text class="t" x="595" y="90">Write the reply</text><text class="l" x="595" y="112">is handed a list of</text><text class="l" x="595" y="130">the offered changes,</text><text class="l" x="595" y="148">each worded by code</text></g>
+<g class="nd k-human"><rect class="b" x="771" y="50" width="150" height="130" rx="8"/><text class="tag" x="783" y="68">YOU</text><text class="t" x="783" y="90">One change card</text><text class="l" x="783" y="112">one reply = one card</text><text class="l" x="783" y="130">Apply or Dismiss</text></g>
+<g class="ed"><path class="e e-code" d="M169 115 L205 115" marker-end="url(#b-code)"/></g>
+<g class="ed"><path class="e e-model" d="M357 115 L393 115" marker-end="url(#b-model)"/></g>
+<g class="ed"><path class="e e-code" d="M545 115 L581 115" marker-end="url(#b-code)"/><rect class="lbg" x="548" y="92" width="30" height="16"/><text x="552" y="104">pass</text></g>
+<g class="ed"><path class="e e-model" d="M733 115 L769 115" marker-end="url(#b-model)"/></g>
+<!-- loop over diagnose -->
+<g class="ed"><path class="e e-model" d="M250 50 C250 8 314 8 314 48" marker-end="url(#b-model)"/><text x="282" y="24" text-anchor="middle">asks for more detail, 2 times at most</text></g>
+<!-- dropped -->
+<g class="ed"><path class="e e-data" d="M470 180 L470 246" marker-end="url(#b-data)"/><text x="480" y="216">fails a gate</text></g>
+<g class="nd k-data"><rect class="b" x="395" y="248" width="150" height="62" rx="8"/><text class="tag" x="407" y="266">DROPPED</text><text class="l" x="407" y="286">silently, no error</text><text class="l" x="407" y="302">shown to you</text></g>
+<!-- apply row -->
+<g class="ed"><path class="e e-human" d="M846 180 L846 346" marker-end="url(#b-human)"/><text x="856" y="270">you press Apply</text></g>
+<g class="nd k-human"><rect class="b" x="771" y="348" width="150" height="100" rx="8"/><text class="tag" x="783" y="366">YOU</text><text class="t" x="783" y="388">Apply</text><text class="l" x="783" y="410">step is found by its</text><text class="l" x="783" y="428">key, not its number</text></g>
+<g class="ed"><path class="e e-code" d="M771 398 L735 398" marker-end="url(#b-code)"/><rect class="lbg" x="738" y="376" width="30" height="16"/><text x="742" y="388">check</text></g>
+<g class="nd k-code"><rect class="b" x="583" y="348" width="150" height="100" rx="8"/><text class="tag" x="595" y="366">CODE</text><text class="t" x="595" y="388">All or nothing</text><text class="l" x="595" y="410">re-validate each edit,</text><text class="l" x="595" y="428">one failure restores</text></g>
+<g class="ed"><path class="e e-code" d="M583 398 L547 398" marker-end="url(#b-code)"/></g>
+<g class="nd k-data"><rect class="b" x="395" y="348" width="150" height="100" rx="8"/><text class="tag" x="407" y="366">DATA</text><text class="t" x="407" y="388">Applied</text><text class="l" x="407" y="410">ONE undo entry,</text><text class="l" x="407" y="428">logged as “copilot”</text></g>
+<g class="ed"><path class="e e-code" d="M395 398 L359 398" marker-end="url(#b-code)"/><rect class="lbg" x="362" y="376" width="30" height="16"/><text x="366" y="388">Undo</text></g>
+<g class="nd k-code"><rect class="b" x="207" y="348" width="150" height="100" rx="8"/><text class="tag" x="219" y="366">CODE</text><text class="t" x="219" y="388">Restore</text><text class="l" x="219" y="410">refused if the workflow</text><text class="l" x="219" y="428">changed since the edit</text></g>
+<text class="note" x="19" y="372">Dismiss is also kept:</text><text class="note" x="19" y="390">logged as rejected,</text><text class="note" x="19" y="408">nothing is changed.</text>
+</svg>
+    </div>
+    <figcaption>Figure 3. From message to applied edit. The model appears twice (diagnose, reply). Neither one can change the workflow: only the Apply press can, and only after code has checked the edit again against the workflow as it is at that moment.</figcaption>
+  </figure>
+
+  <div class="two">
+    <div class="card"><h3>What the three gates allow</h3>
+      <ul class="small">
+        <li><b>① Field patch.</b> Only fields that change <i>meaning</i>: typed value, input binding, intent, description, checks, consequence, branch timeout, loop limits, hover chain, review and hand-over settings. Never a selector, target or identity. Tested with the same validator Human Edit uses.</li>
+        <li><b>② Popup step.</b> Built from a popup actually seen during a test run, using the shared “try dismiss” builder.</li>
+        <li><b>③ Structural.</b> Insert, delete or move a step; set run inputs; replace text; turn a recorded value into a run input. Each one needs evidence from the workflow. A new click-type step can only borrow the identity of a step that already exists, and code does the copying.</li>
+      </ul>
+    </div>
+    <div class="card"><h3>What the model can look up</h3>
+      <p class="small">While diagnosing, the model may ask for more detail, at most twice. It gets text back, never a tool call into your workflow:</p>
+      <ul class="small">
+        <li><code>expand_step</code> full detail of one step</li>
+        <li><code>get_step_screenshot</code> the picture for a step</li>
+        <li><code>get_failure_evidence</code> what the last test saw</li>
+        <li><code>get_edit_history</code> what was already changed</li>
+        <li><code>list_workflows</code> the other workflows</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec" aria-labelledby="allowed">
+  <h2 id="allowed">What chat is allowed to do right now</h2>
+  <p class="intro">The workflow's stage decides which actions exist. Chat can only pick from that list, and a button, a stale confirm card or a typed command all get re-checked against it on the server. So “test it” does nothing while a compile is running.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Where the workflow is</th><th>Chat may do</th></tr></thead><tbody>
+    <tr><td class="k">Not recorded yet</td><td>Start recording</td></tr>
+    <tr><td class="k">Needs a starting page</td><td>Edit details</td></tr>
+    <tr><td class="k">Recording</td><td>Finish recording · Discard recording</td></tr>
+    <tr><td class="k">Waiting for sign-in</td><td>I'm signed in · Cancel</td></tr>
+    <tr><td class="k">Sign-in needed or expired</td><td>Sign in</td></tr>
+    <tr><td class="k">Recorded, ready to compile</td><td>Compile · Record again</td></tr>
+    <tr><td class="k">Compile failed</td><td>Compile · Show details</td></tr>
+    <tr><td class="k">Compiling</td><td>Nothing</td></tr>
+    <tr><td class="k">Compiled, ready to test</td><td>Test it · Open Human Edit</td></tr>
+    <tr><td class="k">Latest test failed</td><td>Fix it · Open Human Edit · Test it</td></tr>
+    <tr><td class="k">Auto-fix stopped</td><td>Keep fixing · Open Human Edit · Test it</td></tr>
+    <tr><td class="k">Test passed, not approved</td><td>Approve · Test it · Open Human Edit</td></tr>
+    <tr><td class="k">Approved</td><td>Test it · Open Human Edit · Publish (opens the page, never publishes)</td></tr>
+  </tbody></table></div>
+  <div class="callout">While a typed message is still being answered, <b>Test it</b> and <b>Approve</b> are removed. A change card may be about to arrive, and you should not test or approve the version it would change. The project docs add the same hold while a question is open or a compile is running.</div>
+  <div class="callout h">Actions that cost something or change things (record, discard, compile, test, fix, approve) post a <b>Confirm card</b> first. The reply says “nothing has happened yet”. Even then, “Test it” only opens a test card with your inputs pre-filled; you still press Run.</div>
+</section>
+
+<section class="sec" aria-labelledby="context">
+  <h2 id="context">What the model gets to see</h2>
+  <p class="intro">The cloud service keeps no memory between calls, so Studio rebuilds the whole picture every turn within a fixed budget: about 12,000 tokens in a workflow thread and 6,000 in General Chat. When it does not all fit, the lowest rows go first. Rows 1 to 4 are never dropped.</p>
+  <div class="stack" role="list">
+    <div class="never" role="listitem"><span class="n">1</span><span><b>Where the workflow is</b> and which cards are waiting on you, with the choices on each.</span><span class="keep">never dropped</span></div>
+    <div class="never" role="listitem"><span class="n">2</span><span><b>Pinned facts.</b> What you said the workflow is for, every question you answered, the run inputs, steps that can't be undone, review points.</span><span class="keep">never dropped</span></div>
+    <div class="never" role="listitem"><span class="n">3</span><span><b>Your latest message.</b></span><span class="keep">never dropped</span></div>
+    <div class="never" role="listitem"><span class="n">4</span><span><b>The rules and the list of things it may propose.</b> These sit outside the budgeted text.</span><span class="keep">never dropped</span></div>
+    <div class="trimmed" role="listitem"><span class="n">5</span><span><b>Workflow digest.</b> Gets at most 60% of what is left. Shrunk piece by piece before any step is dropped; the model can ask for one step in full.</span><span class="trim">shrunk first</span></div>
+    <div class="trimmed" role="listitem"><span class="n">6</span><span><b>Latest test failure</b> and its evidence.</span><span class="trim">next to go</span></div>
+    <div class="trimmed" role="listitem"><span class="n">7</span><span><b>Summary of older turns.</b> Once 6 or more turns no longer fit, one extra call folds them into a summary of about 180 words.</span><span class="trim">next to go</span></div>
+    <div class="trimmed" role="listitem"><span class="n">8</span><span><b>Recent turns word for word,</b> newest kept first, oldest trimmed first.</span><span class="trim">trimmed first</span></div>
+  </div>
+  <p class="small muted">Not drawn to scale: the rows are in priority order, not size. General Chat sees less, read-only: your groups and the apps they sign in to, your workflows and where each one stands, and which apps Studio has learned a map of. It cannot propose edits.</p>
+</section>
+
+<section class="sec" aria-labelledby="fix">
+  <h2 id="fix">Fix it: the copilot acting on its own</h2>
+  <p class="intro">After a failed test you can ask Studio to fix it. It runs the same propose-and-check pipeline in a loop, but applies each change itself and re-tests. It stops after three attempts and hands the decision back to you.</p>
+  <figure>
+    <div class="fig">
+<svg viewBox="0 0 940 300" role="img" aria-label="Auto-fix loop. A failed test leads to proposing one change, the three gates, applying it marked as automatic, and a guarded re-test. If still failing the loop returns to propose, up to three attempts. A pass ends the loop. No safe proposal, the Stop button, a re-test that did not finish, or three failed attempts stop the loop and ask you.">
+<defs>
+  <marker id="c-code" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-code"/></marker>
+  <marker id="c-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-model"/></marker>
+  <marker id="c-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="m-human"/></marker>
+</defs>
+<g class="nd k-data"><rect class="b" x="20" y="70" width="140" height="84" rx="8"/><text class="tag" x="32" y="88">DATA</text><text class="t" x="32" y="110">Test failed</text><text class="l" x="32" y="130">with a photo of</text><text class="l" x="32" y="146">the failure</text></g>
+<g class="nd k-model"><rect class="b" x="208" y="70" width="140" height="84" rx="8"/><text class="tag" x="220" y="88">MODEL</text><text class="t" x="220" y="110">Propose ONE</text><text class="l" x="220" y="130">change, or none</text><text class="l" x="220" y="146">if unsure</text></g>
+<g class="nd k-code"><rect class="b" x="396" y="70" width="140" height="84" rx="8"/><text class="tag" x="408" y="88">CODE</text><text class="t" x="408" y="110">Three gates</text><text class="l" x="408" y="130">same as figure 3</text></g>
+<g class="nd k-code"><rect class="b" x="584" y="70" width="140" height="84" rx="8"/><text class="tag" x="596" y="88">CODE</text><text class="t" x="596" y="110">Apply</text><text class="l" x="596" y="130">card marked auto,</text><text class="l" x="596" y="146">Undo kept</text></g>
+<g class="nd k-code"><rect class="b" x="772" y="70" width="148" height="84" rx="8"/><text class="tag" x="784" y="88">CODE</text><text class="t" x="784" y="110">Re-test</text><text class="l" x="784" y="130">pauses before steps</text><text class="l" x="784" y="146">that can't be undone</text></g>
+<g class="ed"><path class="e e-code" d="M160 112 L206 112" marker-end="url(#c-code)"/></g>
+<g class="ed"><path class="e e-model" d="M348 112 L394 112" marker-end="url(#c-model)"/></g>
+<g class="ed"><path class="e e-code" d="M536 112 L582 112" marker-end="url(#c-code)"/></g>
+<g class="ed"><path class="e e-code" d="M724 112 L770 112" marker-end="url(#c-code)"/></g>
+<g class="ed"><path class="e e-model" d="M846 70 C846 6 278 6 278 68" marker-end="url(#c-model)"/><rect class="lbg" x="440" y="12" width="236" height="18"/><text x="558" y="25" text-anchor="middle">still failing: try again, 3 attempts at most</text></g>
+<g class="ed"><path class="e e-code" d="M846 154 L846 206" marker-end="url(#c-code)"/><text x="856" y="184">passes</text></g>
+<g class="nd k-code"><rect class="b" x="772" y="208" width="148" height="64" rx="8"/><text class="tag" x="784" y="226">DONE</text><text class="l" x="784" y="246">card says it passed;</text><text class="l" x="784" y="262">you still approve</text></g>
+<g class="ed"><path class="e e-human" d="M466 154 L466 206" marker-end="url(#c-human)"/><text x="476" y="184">any stop</text></g>
+<g class="nd k-human"><rect class="b" x="208" y="208" width="456" height="64" rx="8"/><text class="tag" x="220" y="226">STOPPED · BACK TO YOU</text><text class="l" x="220" y="246">No safe fix found, you pressed Stop, the re-test did not finish, or 3 attempts failed.</text><text class="l" x="220" y="262">Choose Keep fixing or open Human Edit.</text></g>
+</svg>
+    </div>
+    <figcaption>Figure 4. The fix loop. Approval stays a separate human action, and the guard means no real, irreversible step runs without a person.</figcaption>
+  </figure>
+</section>
+
+<section class="sec" aria-labelledby="rails">
+  <h2 id="rails">What the model cannot do</h2>
+  <div class="two">
+    <div class="card"><h3>The model never</h3>
+      <ul class="small">
+        <li>writes a selector or touches a step's target or identity</li>
+        <li>picks an action the workflow does not allow right now</li>
+        <li>runs anything with a side effect without your Confirm</li>
+        <li>applies half a change: edits go in together or not at all</li>
+        <li>answers a question card for you when its words are unclear: the card stays open</li>
+        <li>decides what a failed gate means: the proposal is simply gone</li>
+      </ul>
+    </div>
+    <div class="card"><h3>Code always</h3>
+      <ul class="small">
+        <li>writes the one-line summary on a change card, from the checked fields</li>
+        <li>finds the step again by key when you press Apply, and refuses if it is gone</li>
+        <li>keeps one undo entry per card, and refuses Undo if the workflow moved on</li>
+        <li>saves your message the moment you send it, even if the model then fails</li>
+        <li>turns an out-of-credits or offline error into an error card with Retry</li>
+        <li>runs one turn at a time per thread; Cancel stops the stream and saves nothing half-done</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec" aria-labelledby="where">
+  <h2 id="where">Where it lives in the code</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Piece</th><th>File</th><th>Job</th></tr></thead><tbody>
+    <tr><td class="k">Turn loop</td><td><code>conversation/harness.py</code></td><td>The ladder: cards, commands, context, proposals, reply, save</td></tr>
+    <tr><td class="k">Command router</td><td><code>conversation/intent_router.py</code></td><td>Exact phrase first, then one short model call; only allowed ids</td></tr>
+    <tr><td class="k">Action table</td><td><code>conversation/actions.py</code></td><td>Every action chat can take, which need Confirm, and their phrases</td></tr>
+    <tr><td class="k">Lifecycle</td><td><code>conversation/lifecycle.py</code></td><td>Stage and allowed actions, rebuilt from the workflow's real state</td></tr>
+    <tr><td class="k">Context budget</td><td><code>conversation/context_pack.py</code></td><td>What goes in and what is dropped, in priority order</td></tr>
+    <tr><td class="k">Thread file</td><td><code>conversation/thread_store.py</code></td><td>Append-only lines; a card is revised by a newer line with the same id</td></tr>
+    <tr><td class="k">Proposals and gates</td><td><code>editor/copilot_proposals.py</code></td><td>The three gates and the one-line summaries</td></tr>
+    <tr><td class="k">Diagnose and lookups</td><td><code>llm/copilot.py</code>, <code>editor/copilot_retrieval.py</code></td><td>copilot_diagnose and the 2-round detail loop</td></tr>
+    <tr><td class="k">Cards and Apply / Undo</td><td><code>handlers/conversation.py</code>, <code>handlers/copilot.py</code></td><td>Card actions, the all-or-nothing apply, one undo entry</td></tr>
+    <tr><td class="k">Fix loop</td><td><code>handlers/test_flow.py</code></td><td>Up to 3 propose, apply, re-test rounds</td></tr>
+    <tr><td class="k">Screen</td><td><code>renderer/…/components/conversation/</code></td><td>Conversation, action strip and the card components</td></tr>
+  </tbody></table></div>
+  <p class="small muted">Read from the working tree on branch feat/clarify-phase-0 on 2026-11-06. The renderer is named but not read in detail, so how each card looks is not covered here.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+var NS='http://www.w3.org/2000/svg';
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+/* ── ladder simulator ── */
+var TRUNK=['n0','e01','n1','e12','n2','e23','n3'];
+var EX=[
+ {k:'apply',label:'Press Apply on a change card',msg:'(a click on Apply)',where:'Workflow thread · a change card is open',calls:'0',
+  path:['n0','e01','n1','e1y','x1'],
+  steps:['A card button was pressed, so rung ① takes it.','Code runs the card\'s action: it re-checks the edit and applies it as one undo step.'],
+  out:'The change is applied and the card shows Undo. The model was not asked at all.',tone:'c'},
+ {k:'phrase',label:'“test it”',msg:'test it',where:'Workflow thread · compiled, ready to test',calls:'0',
+  path:TRUNK.concat(['e3y','x3']),
+  steps:['Not a card click, and no question card is open.','The whole message is exactly one action\'s phrase, so the router needs no model.','“Test it” is allowed in this stage, and it has a side effect.'],
+  out:'A Confirm card appears and the reply says nothing has happened yet. You press Confirm, check the test inputs, then press Run.',tone:'h'},
+ {k:'words',label:'“run it with email bob@acme.com”',msg:'run it with email bob@acme.com',where:'Workflow thread · compiled, ready to test',calls:'1',
+  path:TRUNK.concat(['e3y','x3']),
+  steps:['Not an exact phrase, but it contains a command word, so rung ③ makes one short chat_route_intent call.','The model may only answer with an allowed action id. It picks “test” and the stated email.','Code keeps the value only if “email” is one of this workflow\'s real inputs.'],
+  out:'A Confirm card, then a test card with the email pre-filled. Nothing runs until you press Run.',tone:'h'},
+ {k:'answer',label:'“the second one” while a question is open',msg:'the second one',where:'Workflow thread · a question card is open',calls:'0–1',
+  path:['n0','e01','n1','e12','n2','e2y','x2'],
+  steps:['A question card is open and you typed instead of clicking.','No choice label matches exactly, so one short chat_map_answer call runs against the card\'s own choices.','If the answer is not one of those choices, it counts as “unclear”.'],
+  out:'A matched choice is applied through the same code as the button. If unclear, the card stays open and the chat asks you to pick on the card.',tone:'c'},
+ {k:'ask',label:'“what does step 3 do?”',msg:'what does step 3 do?',where:'Workflow thread · any stage with a compiled workflow',calls:'1',
+  path:TRUNK.concat(['e34','n4','e45','n5','e5y','x5','e56','n6','x6']),
+  steps:['No card, no command word, so rungs ①–③ pass it down.','No change words and no step is pointed at, so no proposals are made.','The context pack is built and one reply is streamed.'],
+  out:'A plain answer, saved to the thread. No card.',tone:'m'},
+ {k:'change',label:'“make the wait on step 4 five seconds”',msg:'make the wait on step 4 five seconds',where:'Workflow thread · compiled workflow',calls:'2–4',
+  path:TRUNK.concat(['e34','n4','e4y','x4','e4f','e45','n5','e5y','x5','e56','n6','x6']),
+  steps:['Change words (“make”, “wait”) mean rung ④ runs copilot_diagnose, 1 to 3 calls.','Each suggested edit goes through the three gates. Any that fails is dropped without a word.','The reply is written knowing exactly which edits survived.','One change card is posted with Apply and Dismiss.'],
+  out:'A reply plus one change card. Nothing is edited until you press Apply, and then Undo stays available.',tone:'m'},
+ {k:'open',label:'General Chat: “take me to the invoices workflow”',msg:'take me to the invoices workflow',where:'General Chat',calls:'0',
+  path:TRUNK.concat(['e3y','x3']),
+  steps:['An open-words phrase plus a workflow\'s name matches exactly one of your workflows.','The only action General Chat can route is “open a workflow”, so no model is asked.'],
+  out:'A link card. Opening it takes you to that workflow.',tone:'c'},
+ {k:'draft',label:'General Chat: “I want to automate downloading invoices from Stripe”',msg:'I want to automate downloading invoices from Stripe',where:'General Chat',calls:'2',
+  path:TRUNK.concat(['e34','n4','e45','n5','e5y','x5','e56','n6','x6']),
+  steps:['Not a command, and General Chat never proposes edits.','One reply is streamed.','One more call checks whether you agreed on a concrete task. If so it drafts a name, group and starting page.'],
+  out:'A reply, and maybe a draft card. Nothing is created until you press Create and record.',tone:'m'}
+];
+var svg=document.getElementById('svgLadder'),chips=document.getElementById('exChips'),res=document.getElementById('exRes');
+function show(k){
+  var ex=EX.filter(function(e){return e.k===k})[0];if(!ex)return;
+  Array.prototype.forEach.call(chips.children,function(b){b.setAttribute('aria-pressed',b.dataset.k===k?'true':'false')});
+  svg.classList.add('sim');
+  Array.prototype.forEach.call(svg.querySelectorAll('[data-id]'),function(g){g.classList.toggle('on',ex.path.indexOf(g.getAttribute('data-id'))>-1)});
+  var calls=ex.calls==='0'?'No model call':(ex.calls==='1'?'1 model call':ex.calls+' model calls');
+  res.innerHTML='<div class="meta"><span class="chip c-human">'+esc(ex.where)+'</span><span class="chip '+(ex.calls==='0'?'c-code':'c-model')+'">'+calls+'</span></div>'+
+   '<div class="q">“'+esc(ex.msg)+'”</div>'+
+   '<ol class="small">'+ex.steps.map(function(s){return '<li>'+esc(s)+'</li>'}).join('')+'</ol>'+
+   '<div class="callout '+(ex.tone==='h'?'h':ex.tone==='m'?'m':'')+'"><b>You see:</b> '+esc(ex.out)+'</div>';
+}
+EX.forEach(function(e){var b=document.createElement('button');b.type='button';b.dataset.k=e.k;b.textContent=e.label;b.setAttribute('aria-pressed','false');b.addEventListener('click',function(){show(e.k)});chips.appendChild(b)});
+show('change');
+
+/* ── model-calls range chart ── */
+var DATA=[
+ ['Press a card button',0,0,'Code runs the card action directly.'],
+ ['Type an exact phrase, like “test it”',0,0,'The router matches the phrase without a model.'],
+ ['Type a command in your own words',1,1,'One short chat_route_intent call decides which allowed action you meant.'],
+ ['Type an answer to an open question',0,1,'An exact label needs none. Loose words cost one chat_map_answer call.'],
+ ['Ask a plain question',1,1,'One streamed reply. No proposals are made.'],
+ ['Ask for a change',2,4,'copilot_diagnose is 1 call plus up to 2 detail lookups, then 1 for the reply. The same applies to any message typed after a failed test.'],
+ ['Talk in General Chat',2,3,'One reply, one call to check for a workflow draft, and one routing call if the words sound like “open” or “go”.'],
+ ['Let auto-fix run (3 tries)',1,9,'Each try asks for 1 to 3 diagnose calls. It can stop after the first try if no safe fix exists, or use all 3 tries.']
+];
+var g=document.getElementById('chartG'),tip=document.getElementById('tip'),box=document.getElementById('chartBox');
+var X0=360,UNIT=62,Y0=14,RH=44;
+function el(t,a,txt){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e}
+for(var i=0;i<=9;i++){var x=X0+i*UNIT;g.appendChild(el('line',{x1:x,y1:Y0,x2:x,y2:Y0+DATA.length*RH,'class':'gridl'}));g.appendChild(el('text',{x:x,y:Y0+DATA.length*RH+20,'text-anchor':'middle','class':'cx'},String(i)))}
+g.appendChild(el('line',{x1:X0,y1:Y0+DATA.length*RH,x2:X0+9*UNIT,y2:Y0+DATA.length*RH,'class':'ax'}));
+g.appendChild(el('text',{x:X0+4.5*UNIT,y:Y0+DATA.length*RH+44,'text-anchor':'middle','class':'cx'},'model calls for one message'));
+var tb=document.querySelector('#chartTable tbody');
+DATA.forEach(function(d,i){
+  var y=Y0+i*RH,cy=y+RH/2,a=X0+d[1]*UNIT,b=X0+d[2]*UNIT;
+  var row=el('g',{});
+  var hit=el('rect',{x:0,y:y+2,width:940,height:RH-4,rx:6,'class':'row-hit',tabindex:'0',role:'img','aria-label':d[0]+': '+(d[1]===d[2]?d[1]:d[1]+' to '+d[2])+' model calls. '+d[3]});
+  row.appendChild(hit);
+  row.appendChild(el('text',{x:X0-18,y:cy+4,'text-anchor':'end','class':'ct'},d[0]));
+  if(d[1]!==d[2])row.appendChild(el('line',{x1:a,y1:cy,x2:b,y2:cy,'class':'bar'}));
+  row.appendChild(el('circle',{cx:a,cy:cy,r:6,'class':'dot'}));
+  if(d[1]!==d[2])row.appendChild(el('circle',{cx:b,cy:cy,r:6,'class':'dot'}));
+  var lab=d[1]===d[2]?(d[1]===0?'none':d[1]+' call'):d[1]+'–'+d[2]+' calls';
+  row.appendChild(el('text',{x:b+16,y:cy+4,'class':'cv'},lab));
+  g.appendChild(row);
+  function place(ev){var r=box.getBoundingClientRect(),px=ev.clientX!=null&&ev.type!=='focus'?ev.clientX-r.left:r.width/2,py=(ev.clientY!=null&&ev.type!=='focus'?ev.clientY-r.top:hit.getBoundingClientRect().top-r.top)+16;
+    tip.style.left=Math.max(8,Math.min(px+12,r.width-310))+'px';tip.style.top=py+'px'}
+  function on(ev){tip.textContent=d[3];place(ev);tip.classList.add('show')}
+  function off(){tip.classList.remove('show')}
+  hit.addEventListener('pointerenter',on);hit.addEventListener('pointermove',place);hit.addEventListener('pointerleave',off);hit.addEventListener('focus',on);hit.addEventListener('blur',off);
+  var tr=document.createElement('tr');tr.innerHTML='<td class="k">'+esc(d[0])+'</td><td>'+d[1]+'</td><td>'+d[2]+'</td><td>'+esc(d[3])+'</td>';tb.appendChild(tr);
+});
+})();
+</script>
