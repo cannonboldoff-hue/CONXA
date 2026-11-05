@@ -153,6 +153,12 @@ flowchart LR
 
 ---
 
+**Watching the recording (Engine v2 C2).** After Finish the "watching" card shows the video analysis. If the video
+service is slow or down it does not stop with a button: the card says "Waiting for the video service. Next try 10:14. You
+can close Studio.", compile and test stay blocked, and the same cloud job is polled again on a timer (up to 24 hours).
+Closing and reopening Studio resumes it without uploading the video again. Only quota, trial, sign-in and unreadable-video
+failures stop the card, with Retry and Record again.
+
 ## 4. Group Page — Workflow Lifecycle Rail
 
 The Group Page (`/groups/:groupId`) is the primary interface for recording and managing every workflow in a group — there is no separate per-workflow page (removed 2026-08-13; see `docs/UI-UX-Brief.md` §2.3a). Each workflow's row carries a five-node `WorkflowStageRail` — Record → Compile → Review → Test → Ready to Package — where each node is the action for that stage, gated on the previous one's completion. Creating or renaming the group in Build Studio also creates/renames the matching folder under Conxa Cloud Skill Packages (same id and name), even if no workflow in it has been published yet. Cloud is not a second place to create groups.

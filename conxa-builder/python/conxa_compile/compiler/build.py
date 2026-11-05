@@ -49,6 +49,7 @@ from conxa_compile.compiler.selector_score import (
     score_selector_row,
 )
 from conxa_compile.compiler.stable_hash import compute_stable_hash
+from conxa_compile.llm import model_ledger
 from conxa_compile.compiler.second_opinion import (
     apply_second_opinion,
     archive_flagged_steps,
@@ -1824,6 +1825,14 @@ def compile_skill_package(
         # Read back by the question flow (conversation/understanding.py::understand), tied to this
         # compile so a stale file beside the recording can never be mistaken for it.
         compile_report["understanding"] = review_extras["understanding"]
+    # Engine v2 C1: what the second opinion's guard dropped, counted. Only when something was dropped,
+    # so a compile that dropped nothing stays byte-identical to one that never counted.
+    second_opinion_ledger = review_extras.get("ledger") or {}
+    if second_opinion_ledger and model_ledger.enabled():
+        compile_report["model_ledger"] = {
+            "second_opinion": {**model_ledger.summary(second_opinion_ledger), "report": second_opinion_ledger}}
+        model_ledger.append(session_root, model_ledger.entry(
+            "second_opinion", second_opinion_ledger, applied=len(compile_report.get("second_opinion") or [])))
     # Which recorded actions did not become a step of their own, and why: 10 actions in and 9
     # steps out should never be a mystery. Choice and date-picker merges are listed too
     # (`choice_collapsed` / `date_collapsed`); outcome forks and second-opinion removals are not

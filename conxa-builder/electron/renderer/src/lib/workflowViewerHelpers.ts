@@ -44,6 +44,7 @@ export const ADD_ACTION_OPTIONS = [
   { value: 'call_workflow', label: 'Call another workflow', category: 'Flow' },
   { value: 'clipboard_write', label: 'Copy to clipboard', category: 'Advanced' },
   { value: 'clipboard_read', label: 'Read clipboard', category: 'Advanced' },
+  { value: 'agent_span', label: 'Agent span', category: 'Advanced' },
   { value: 'check', label: 'Check', category: 'Validation' },
   { value: 'assert', label: 'Assert', category: 'Validation' },
   { value: 'screenshot', label: 'Screenshot', category: 'Validation' },

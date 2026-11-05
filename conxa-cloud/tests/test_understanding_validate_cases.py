@@ -15,8 +15,7 @@ from conxa_compile.conversation import timeline_understanding as TU
 DATA = json.loads((Path(__file__).parent / "fixtures" / "understanding_validate_cases.json").read_text("utf-8"))
 
 
-def _flat(report: dict) -> dict[str, int]:
-    return {f"{stage}.{rule}": slot["count"] for stage, rules in report.items() for rule, slot in rules.items()}
+from conxa_compile.llm.model_ledger import flat as _flat  # the one flattener, shared with the eval script
 
 
 @pytest.mark.parametrize("case", DATA["cases"], ids=[c["name"] for c in DATA["cases"]])

@@ -80,6 +80,63 @@ def _extract_ai_review_pause(result: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+_AGENT_SPAN_META_KEY = "conxa/agent_span"
+# Engine v2 C4: rounds the sandbox model may spend on one test run's agent spans. The span's own budget (at most
+# 15 actions) and the runtime's refusal limit end a span first; this only stops a misbehaving answerer.
+_MAX_AGENT_SPAN_ROUNDS = 30
+
+
+def _extract_agent_span_pause(result: dict[str, Any]) -> dict[str, Any] | None:
+    """The numbered-element request of an agent_span pause, or None. Only `_meta` is trusted (no prose fallback:
+    the review extractor's text match would misread the span request, which also says "resume_from: N", as an
+    ai_review question)."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    span = meta.get(_AGENT_SPAN_META_KEY)
+    if isinstance(span, dict) and isinstance(span.get("step_index"), int):
+        return {
+            "step_index": span["step_index"],
+            "goal": str(span.get("goal") or ""),
+            "allowed": [str(a) for a in span.get("allowed") or []],
+            "budget_left": span.get("budget_left") if isinstance(span.get("budget_left"), dict) else {},
+            "page_url": str(span.get("page_url") or ""),
+            "candidates": [c for c in span.get("candidates") or [] if isinstance(c, dict)],
+        }
+    return None
+
+
+def check_span_answer(data: Any, span: dict[str, Any], report: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The model's answer for one span round, held to what the runtime will accept, with every refusal counted
+    (llm/model_ledger). Returns the action to send, or a give-up that says why. Never raises: a model that
+    cannot answer ends the span with a reason instead of failing the test with a stack trace."""
+    from conxa_compile.llm.model_ledger import log as _log
+
+    def give_up(why: str) -> dict[str, Any]:
+        return {"status": "give_up", "why": why}
+
+    if not isinstance(data, dict):
+        _log(report, "shape", "malformed_reply")
+        return give_up("the model's answer was not a JSON object")
+    if str(data.get("status") or "").lower() == "give_up":
+        return give_up(str(data.get("why") or "the model gave up")[:200])
+    kind = str(data.get("kind") or "")
+    if kind not in ("click", "fill", "select", "scroll") or kind not in span.get("allowed", []):
+        _log(report, "override", "action_not_allowed", kind)
+        return give_up(f"the model chose \u201c{kind}\u201d, which this step does not allow")
+    action: dict[str, Any] = {"kind": kind}
+    if kind != "scroll":
+        index = data.get("candidate_index")
+        if isinstance(index, bool) or not isinstance(index, int):
+            _log(report, "shape", "bad_candidate_index", index)
+            return give_up("the model did not name an element number")
+        if not any(c.get("i") == index for c in span.get("candidates", [])):
+            _log(report, "reference", "unknown_candidate", index)
+            return give_up("the model named an element that is not in the list")
+        action["candidate_index"] = index
+    if data.get("value") is not None:
+        action["value"] = str(data["value"])[:200]
+    return action
+
+
 _GUARD_META_KEY = "conxa/guard"
 _FORK_META_KEY = "conxa/fork"
 _FORK_STOP = "__stop__"
@@ -202,6 +259,8 @@ def capabilities_needed(steps: list[Any]) -> set[str]:
             act = str(act.get("action") if isinstance(act, dict) else act or "").lower()
             if act == "extract":
                 need.add("outputs")
+            if act == "agent_span":
+                need.add("agent_span")
             if isinstance(s.get("run_if"), dict) and s["run_if"].get("input"):
                 need.add("run_if")
             hints = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
@@ -248,6 +307,7 @@ def _drive_runtime_pauses(
     mark: Any,
     fork_hook: Any = None,
     answer_popup: Any = None,
+    answer_span: Any = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Keep calling the runtime until it stops pausing. Returns ``(final result, stopped_at)``.
 
@@ -259,6 +319,7 @@ def _drive_runtime_pauses(
     ended the test (or said no); nothing past that point ran. Bounded, so a misbehaving answerer
     fails the test loudly instead of looping while holding a parked browser open."""
     pauses_seen = 0
+    span_rounds = 0
     while True:
         # Guard first: the review extractor's prose fallback would misread any pause as a review.
         guard = _extract_guard_pause(result)
@@ -272,6 +333,22 @@ def _drive_runtime_pauses(
                 return result, guard
             mark(f"Running the steps that can't be undone, from {guard['step_intent'] or 'here'}…")
             run_args = {**run_args, "resume_from": guard["step_index"], "_guard_release": True}
+            result = call(run_args)
+            continue
+        span = _extract_agent_span_pause(result)
+        if span is not None:
+            # Engine v2 C4: an agent_span. In a real run the caller's agent works through it; here Studio's own
+            # model does (metered), one candidate action per call, so the author sees the span work before
+            # approving. With "let AI answer" off there is no one to ask: the test ends at the span.
+            span_rounds += 1
+            if answer_span is None:
+                return result, {"step_index": span["step_index"], "step_intent": span["goal"],
+                                "remaining": 0, "run_id": "", "declined": True}
+            if span_rounds > _MAX_AGENT_SPAN_ROUNDS:
+                raise RuntimeError(f"An agent span used {span_rounds} rounds in one test run — stopping instead of looping.")
+            mark(f"The agent is working on step {span['step_index'] + 1}…")
+            action = answer_span(span, result.get("content") or [])
+            run_args = {**run_args, "resume_from": span["step_index"], "span_actions": {str(span["step_index"]): action}}
             result = call(run_args)
             continue
         fork = _extract_fork_pause(result)
@@ -869,6 +946,36 @@ class WorkflowsMixin:
             raise RuntimeError(f"AI review answer did not match the required output: {'; '.join(errors)}")
         return data
 
+    def _answer_agent_span(self, span: dict[str, Any], content: list[Any], workflow_id: str = "") -> dict[str, Any]:
+        """Engine v2 C4: Studio's stand-in for the MCP agent on an agent_span, one candidate action per call. Same
+        metering and route as `_answer_ai_review`. The answer is held to what the runtime will accept
+        (`check_span_answer`) and every refusal is counted in the workflow's model ledger; a model that cannot
+        answer gives the span up with a reason."""
+        from conxa_compile.llm import model_ledger
+        from conxa_compile.llm.client import call_llm
+        from conxa_core import llm as core_llm
+        from conxa_core.config import settings as _settings
+        from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, QuotaExceeded
+
+        self._install_proxy_router(usage_class="ai_credits")
+
+        context_text, image = _review_context_from_content(content)
+        payload: dict[str, Any] = {"user_text": context_text}
+        if image:
+            payload["image_base64"], payload["image_mime"] = image
+        timeout_ms = _settings.llm_vision_timeout_ms
+        try:
+            data = call_llm("agent_span", payload, timeout_ms)
+        except (QuotaExceeded, EntitlementBlocked):
+            raise
+        except CloudUnreachable:
+            data = core_llm.get_router().route_vision("agent_span", payload, timeout_ms)
+        report: dict[str, Any] = {}
+        action = check_span_answer(data, span, report)
+        if report and workflow_id:
+            model_ledger.append(_settings.data_dir / "workflows" / workflow_id, model_ledger.entry("agent_span", report))
+        return action
+
     def _answer_popup_choice(self, fork: dict[str, Any], content: list[Any]) -> str:
         """EXEC-49 P5: Studio's stand-in for the MCP client when the runtime puts a popup the workflow was
         never taught to its caller. Same metering and route as `_answer_ai_review`. It can only name one of
@@ -1159,6 +1266,9 @@ class WorkflowsMixin:
                 answer_review=self._answer_ai_review if use_ai else _no_ai_answer, guard_hook=guard_hook, review_hook=review_hook,
                 guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
                 answer_popup=popup_answerer,
+                # Engine v2 C4: an agent_span is answered by Studio's own model, only with "let AI answer" on.
+                answer_span=(lambda span, content: self._answer_agent_span(span, content, workflow_id))
+                if use_ai and _app_layer_supports(conxa_dir, "agent_span") else None,
             )
             _mark("Runtime call finished")
         except (RuntimeToolError, RuntimeError) as exc:

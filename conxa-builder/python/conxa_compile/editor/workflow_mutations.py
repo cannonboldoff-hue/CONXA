@@ -541,6 +541,7 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
         "wait_for_one_of": "wait_for_one_of_states",
         "for_each": "process_each_row",
         "ai_review": "ai_review_checkpoint",
+        "agent_span": "agent_span_goal",
     }.get(kind, f"{kind}_target")
     url = page_url if page_url.startswith(("http://", "https://")) else ""
     action: dict[str, Any] = {"action": kind}
@@ -620,6 +621,13 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
             "on_row_error": "stop",
             "steps": [],
         }
+    if kind == "agent_span":
+        # Engine v2 C4: the goal rides `value`; these top-level fields are what patch_gate.py validates and
+        # the packager reads. `until` is left unset on purpose: a span with no ending check is dropped at build
+        # with a compile-report warning, exactly like an ai_review with no prompt, rather than shipping open-ended.
+        step["agent_span_allowed"] = ["click", "fill", "select", "scroll"]
+        step["agent_span_budget"] = {"actions": 8, "seconds": 120}
+        step["agent_span_on_budget"] = "fail"
     if kind == "ai_review":
         # EXEC-13: an ai_review step carries no selector/identity_bundle (see
         # skill_package_builder_saved_skill.py's ai_review branch) — these top-level
@@ -697,6 +705,11 @@ def insert_step_after(document: dict[str, Any], action_kind: str, insert_after: 
         insert_at = insert_after + 1
         anchor_index = insert_after
     original_len = len(steps)
+    if action_kind.strip().lower() == "agent_span" and insert_at < len(steps):
+        from conxa_compile.editor.patch_gate import _is_destructive  # noqa: PLC0415 -- patch_gate imports this module's neighbours
+
+        if _is_destructive(steps[insert_at], get_policy_bundle().data):
+            raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
     steps.insert(insert_at, _new_manual_step(action_kind, _last_known_page_url(steps, anchor_index)))
     block["steps"] = steps
     skills[0] = block

@@ -777,6 +777,33 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
                 out["resume_when_timeout_ms"] = int(timeout_ms)
         return _copy_saved_common(step, out)
 
+    if action == "agent_span":
+        # Engine v2 C4: an author-placed span the caller's agent carries out. No selector. The goal rides the
+        # generic value. A span with no goal, no valid ending check or no allowed action is dropped, like an
+        # ai_review with no prompt, rather than shipping open-ended; the budget is always bounded.
+        goal = _action_value_text(step).strip()
+        until = step.get("agent_span_until")
+        allowed = step.get("agent_span_allowed")
+        if not goal or not isinstance(until, dict) or not str(until.get("type") or "").strip():
+            return None
+        allowed = [str(a) for a in allowed if str(a) in {"click", "fill", "select", "scroll"}] if isinstance(allowed, list) else []
+        if not allowed:
+            return None
+        budget = step.get("agent_span_budget") if isinstance(step.get("agent_span_budget"), dict) else {}
+        actions = budget.get("actions")
+        seconds = budget.get("seconds")
+        return _copy_saved_common(step, {
+            "type": "agent_span",
+            "goal": goal,
+            "allowed": list(dict.fromkeys(allowed)),
+            "until": {"type": str(until["type"]).strip(), "target": str(until.get("target") or ""), "required": True},
+            "budget": {
+                "actions": max(1, min(int(actions), 15)) if isinstance(actions, (int, float)) and not isinstance(actions, bool) else 8,
+                "seconds": max(10, min(int(seconds), 600)) if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else 120,
+            },
+            "on_budget": "fail",
+        })
+
     if action in {"if_present", "try_dismiss", "wait_for_one_of"}:
         return _saved_branch_step(step, action)
 

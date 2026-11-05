@@ -130,6 +130,46 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
     return out
 
 
+def gate_all(
+    doc: dict[str, Any],
+    raw_proposals: list[Any],
+    observed_overlays: list[dict[str, Any]] | None = None,
+    report: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """The three gates over one raw list, in the order the callers always used (patch_step, overlay
+    branch when overlays were observed, structural ops), plus the count of what none of them took.
+
+    Every gate sees the same raw list and skips the other kinds' proposals, so a per-gate count would
+    report every proposal as dropped by two of three. The count is therefore made here, per raw kind:
+    ``shape.malformed_item`` for a non-object, ``safety.gate_refused`` (example: ``patch``, ``overlay``
+    or ``structural``) for a proposal its own gate dropped (llm/model_ledger)."""
+    from conxa_compile.llm.model_ledger import log as _log  # noqa: PLC0415
+
+    raw_list = raw_proposals if isinstance(raw_proposals, list) else []
+    accepted = gate_proposals(doc, raw_list)
+    if observed_overlays:
+        accepted = accepted + gate_overlay_proposals(doc, observed_overlays, raw_list)
+    accepted = accepted + gate_structural_proposals(doc, raw_list)
+    if report is not None:
+        def kind_of(r: dict[str, Any]) -> str:
+            return "structural" if r.get("op") else "overlay" if r.get("overlay_id") else "patch"
+
+        wanted: dict[str, int] = {}
+        for r in raw_list:
+            if isinstance(r, dict):
+                wanted[kind_of(r)] = wanted.get(kind_of(r), 0) + 1
+            else:
+                _log(report, "shape", "malformed_item", type(r).__name__)
+        taken = {"patch": 0, "overlay": 0, "structural": 0}
+        for p in accepted:
+            taken["overlay" if p.get("command") == "insert_overlay_branch" else
+                  "structural" if p.get("command") == "structural_op" else "patch"] += 1
+        for kind, n in wanted.items():
+            for _ in range(max(0, n - taken.get(kind, 0))):
+                _log(report, "safety", "gate_refused", kind)
+    return accepted
+
+
 def _evidence_refs(raw: dict[str, Any]) -> list[str]:
     """BUILD-26 stage g: cosmetic passthrough for the two pre-existing proposal kinds (their
     system prompt now asks for evidence_refs too, but neither gate REQUIRES it — that would

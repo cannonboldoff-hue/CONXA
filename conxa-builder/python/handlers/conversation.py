@@ -276,20 +276,21 @@ class ConversationMixin:
             return digest_cache["d"]
 
         def gate(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            from conxa_compile.editor.copilot_proposals import (
-                gate_overlay_proposals,
-                gate_proposals,
-                gate_structural_proposals,
-            )
+            from conxa_compile.editor.copilot_proposals import gate_all
+            from conxa_compile.llm import model_ledger
 
             doc = read_skill(skill_id) if skill_id else None
             if doc is None:
                 return []
-            proposals = gate_proposals(doc, raw)
             observed = ((load_digest() or {}).get("runtime_evidence") or {}).get("observed_overlays") or []
-            if observed:
-                proposals = proposals + gate_overlay_proposals(doc, observed, raw)
-            return proposals + gate_structural_proposals(doc, raw)
+            report: dict[str, Any] = {}
+            out = gate_all(doc, raw, observed, report)
+            if report:
+                from conxa_core.config import settings
+
+                model_ledger.append(settings.data_dir / "workflows" / workflow.id,
+                                    model_ledger.entry("chat_change_cards", report, applied=len(out)))
+            return out
 
         return {
             "workflow": {"id": workflow.id, "name": workflow.name, "task_description": workflow.task_description},
@@ -312,6 +313,17 @@ class ConversationMixin:
         return handler(thread_id, card, action, body, rid, sink)
 
     # ── conversational actions (gap analysis G2) ────────────────────────────────────────────
+
+    @staticmethod
+    def _video_job_active(workflow_id: str) -> bool:
+        """Does this recording have a video-analysis job record that is still waiting (video/job.py)?"""
+        from conxa_compile.video import job as video_job
+        from conxa_core.config import settings
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow = get_workflow(workflow_id)
+        return bool(workflow and workflow.session_id
+                    and video_job.is_active(settings.data_dir / "sessions" / workflow.session_id))
 
     def _reconcile_interrupted(self, workflow_id: str) -> None:
         """A test (or auto-fix) card that says it is still going, in a Studio that is not testing anything, was
@@ -339,6 +351,8 @@ class ConversationMixin:
             if age < 30:
                 continue
             if card.get("card_type") == "watching_video":
+                if self._video_job_active(workflow_id):
+                    continue  # a saved cloud job is still wanted: the start-up resume (or Retry) picks it up
                 reason = "The app closed while it was watching the recording."
                 runtime_state.set_flags(workflow_id, video_error=reason)
                 harness.update_card(thread, card["card_id"], state="failed", reason=reason, actions=["retry_video", "re_record"])

@@ -21,7 +21,7 @@
 const MAX_CALL_DEPTH = 3;
 // Steps that stop the run and wait for an answer. They resume by top-level step index, which a step
 // inside a called workflow does not have.
-const PAUSE_STEP_TYPES = new Set(["ai_review", "handover", "outcome_fork"]);
+const PAUSE_STEP_TYPES = new Set(["ai_review", "handover", "outcome_fork", "agent_span"]);
 
 function walk(steps, visit) {
   for (const s of Array.isArray(steps) ? steps : []) {
@@ -49,7 +49,7 @@ function firstPauseType(steps) {
   return found;
 }
 
-const PAUSE_NAMES = { ai_review: "an AI review", handover: "a hand-over to a person", outcome_fork: "a popup decision" };
+const PAUSE_NAMES = { ai_review: "an AI review", handover: "a hand-over to a person", outcome_fork: "a popup decision", agent_span: "an agent span" };
 
 /**
  * @param {object} root  { entry, steps } -- the workflow being run

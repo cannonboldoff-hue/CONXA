@@ -77,7 +77,8 @@ def test_a_failed_review_leaves_the_extras_empty_and_never_raises(monkeypatch):
     monkeypatch.setattr(workflow_review, "read_cached", lambda *a, **k: None)
     out: dict = {}
     graph, findings = workflow_review.build_workflow_review([{"key": "k1", "action": "click"}], page_urls=[], extras_out=out)
-    assert graph.goal == "" and findings == [] and out == {"understanding": None, "loop_copy": []}
+    assert graph.goal == "" and findings == [] and out["understanding"] is None and out["loop_copy"] == []
+    assert out["ledger"] == {"shape": {"unreadable_reply": {"count": 1, "example": ""}}}  # the retry is counted
 
 
 def test_the_cache_key_changes_with_what_the_call_is_asked(monkeypatch):

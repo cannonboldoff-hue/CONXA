@@ -97,6 +97,11 @@ class StepEditorDTO(BaseModel):
     wait_until_kind: str | None = None
     wait_until_timeout_ms: int | None = None
     wait_until_on_timeout: str | None = None
+    # agent_span (Engine v2 C4; value-bearing: `value` is the goal). None on every other kind.
+    agent_span_allowed: list[str] | None = None
+    agent_span_until: dict[str, Any] | None = None
+    agent_span_budget: dict[str, Any] | None = None
+    agent_span_on_budget: str | None = None
     # Going-forward selector signals from identity_bundle — drives the runtime hot path.
     # Each entry: {selector (public display string), engine, durability, orthogonality_class,
     # unique_at_compile, source}. The editor's selector list is authoritative; this field

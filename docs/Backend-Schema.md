@@ -964,6 +964,25 @@ outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, st
 
 Studio RPCs: `set_fork_policy {skill_id, step_index, state_id, policy}`, `apply_variant {workflow_id, session_id, fork_step_key}`, `start_recording {…, variant_of}`, `flow_test_decision {decision: "fork:<choice>"}`.
 
+### 3.4m Agent Span Step (Engine v2 C4)
+
+The third planned pause, beside §3.4j and §3.4k: no `target`/`identity_bundle`, outside the recovery cascade. TRD
+§11.7 has the behaviour. Saved step (editor): `value` = the goal; `agent_span_allowed: ["click","fill","select","scroll"]`;
+`agent_span_until: {"type": "text_present|text_absent|url_pattern|url_changed|state_changed", "target": "…"}`
+(required; `target` omitted for the last two); `agent_span_budget: {"actions": 8, "seconds": 120}`;
+`agent_span_on_budget: "fail"`. Execution step (`execution.json`):
+
+```json
+{"type": "agent_span", "goal": "Open the invoice for {{invoice_number}}", "allowed": ["click", "fill"],
+ "until": {"type": "text_present", "target": "Invoice {{invoice_number}}", "required": true},
+ "budget": {"actions": 12, "seconds": 120}, "on_budget": "fail"}
+```
+
+`manifest.json` gains `uses_agent: true` (omitted when false) and `required_capabilities` gains `agent_span`.
+`execute_skill` takes `span_actions: {"<step index>": {"kind", "candidate_index", "value"} | {"status": "give_up", "why"}}`
+with `resume_from`. The response carries `_meta["conxa/agent_span"]`: `{step_index, goal, allowed, budget_left, page_url, candidates}`.
+Contract: `models/action_contract.json` (see TRD §7.7).
+
 ### 3.4l App map models (`conxa_core/models/app_graph.py`)
 
 Derived, data-free, Studio-local (cloud sync is a later phase). `Contribution` = what one compiled workflow learned on one host; `AppGraph` = `fold_contributions` over every contribution of that host and workspace. Mechanism and privacy rules: `docs/TRD.md` §11.5.
@@ -1390,6 +1409,31 @@ Invariants). When anything is applied or archived the whole `compile_report` is 
 mutated/filtered steps, because a `suggest_optional` conversion or a `flag_noise` removal changes
 a step's compiled shape (or the step count) after the first report was computed.
 
+### 3.9b Model ledger (Engine v2 C1, 2026-11-06)
+
+`model_ledger.jsonl` (session folder; a chat-level call writes it to `workflows/<id>/`): one JSON line per guarded
+model call.
+
+```json
+{"ts": "2026-11-06T10:14:02Z", "task": "second_opinion", "prompt_version": "", "attempts": 1, "grade": "",
+ "report": {"reference": {"unknown_step_key": {"count": 2, "example": "s_41"}},
+            "override": {"unobserved_noise": {"count": 1, "example": "s_09"}}},
+ "applied": 3}
+```
+
+`compile_report["model_ledger"]` = `{task: {dropped, changed, added, report}}`, written only when something was dropped
+(`dropped` = shape + reference counts, `changed` = override + safety, `added` = backfill). The Human Edit DTO exposes
+`compile_health.model_ledger` as `{task: {dropped, changed, added}}`, zero rows omitted. Tasks: `second_opinion`,
+`clarify_question_copy`, `chat_route_intent`, `chat_change_cards`, `region_selector`, `agent_span`. `example` is an id,
+never model or page text. Setting `SKILL_MODEL_LEDGER` (`observe` default, `off`).
+
+### 3.9c video_job.json (Engine v2 C2, 2026-11-06)
+
+`sessions/<id>/video_job.json`: `{fingerprint, job_id, state, attempts, first_try, first_try_ts, next_try, last_error,
+blocked_code, updated_at}`. `state` is `polling | waiting_cloud | done | blocked | failed`; `polling` and `waiting_cloud`
+are live. A record whose `fingerprint` is not the prepared video's is stale and ignored. Schedule after the n-th failed
+budget: 60, 120, 300, 600, then 1800 seconds; `failed` after 24 hours.
+
 ### 3.9a compile_report.archived_steps (BUILD-25 stage d, 2026-09-10)
 
 `flag_noise` is the second-opinion pass's one destructive kind, and the only one that changes the
@@ -1547,6 +1591,9 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
 | `park_resumed` | A parked run resumed execution on the same live page it paused on | `si` |
 | `handover_resumed` | (EXEC-21) A parked hand-over's self-driven resume completed | `si` |
+| `span_start` | (Engine v2 C4) An `agent_span` was reached and parked for the caller's agent | `si` |
+| `span_action` | An agent's nominated action on a span was carried out (`ok` 1) or refused (`ok` 0) | `si`, `ok` |
+| `span_done` | A span ended: its check held (`n` actions used) or it failed (`fc` the typed reason) | `si`, `n`, `fc` |
 | `call_start` | A `call_workflow` step began running the called workflow's steps | `si`, `n` (steps in the called workflow) |
 | `call_done` | The called workflow's steps all finished | `si` |
 | `wf_ok` | Workflow completed successfully | `dur` (ms), `tot`, `rec` (recovered steps) |

@@ -59,6 +59,17 @@ HANDOVER_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
     "handover_on_failure", "handover_resume_when", "handover_resume_when_timeout_ms",
 })
+# Engine v2 C4: an agent span. The goal rides the generic `value`; run_if is absent on purpose (an input must
+# never be able to skip a span's guards), and there is no `recovery`: nothing here is re-located.
+AGENT_SPAN_ALLOWED_KEYS = frozenset({
+    "intent", "semantic_description", "action", "validation", "value", "frame",
+    "agent_span_allowed", "agent_span_until", "agent_span_budget", "agent_span_on_budget",
+})
+AGENT_SPAN_KINDS = ("click", "fill", "select", "scroll")
+# The assertion types the second opinion may already add: text, address and state only, never a selector.
+AGENT_SPAN_UNTIL_TYPES = ("text_present", "text_absent", "url_changed", "url_pattern", "state_changed")
+AGENT_SPAN_MAX_ACTIONS = 15
+AGENT_SPAN_MAX_SECONDS = 600
 BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"}) | _RUN_IF
 FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"}) | _RUN_IF
 # An outcome fork's states/options/policy change only through the set_fork_policy mutation (the
@@ -161,6 +172,41 @@ def _validate_ai_review_attach(raw: Any) -> None:
     for name in raw:
         if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
             raise ValueError("ai_review_attach_invalid")
+
+
+def _validate_agent_span_until(raw: Any) -> None:
+    """The check that ends an agent span: required, and only a text, address or state claim."""
+    if not isinstance(raw, dict):
+        raise ValueError("agent_span_until_required")
+    kind = str(raw.get("type") or "").strip()
+    if kind not in AGENT_SPAN_UNTIL_TYPES:
+        raise ValueError("agent_span_until_type_invalid")
+    target = str(raw.get("target") or "").strip()
+    if kind in ("state_changed", "url_changed"):
+        if target:
+            raise ValueError("agent_span_until_target_not_allowed")
+    elif not target or len(target) > 200:
+        raise ValueError("agent_span_until_target_invalid")
+
+
+def _validate_agent_span_fields(patch: dict[str, Any]) -> None:
+    if "agent_span_allowed" in patch:
+        allowed = patch.get("agent_span_allowed")
+        if (not isinstance(allowed, list) or not allowed or len(set(allowed)) != len(allowed)
+                or any(a not in AGENT_SPAN_KINDS for a in allowed)):
+            raise ValueError("agent_span_allowed_invalid")
+    if "agent_span_until" in patch:
+        _validate_agent_span_until(patch.get("agent_span_until"))
+    if "agent_span_budget" in patch:
+        budget = patch.get("agent_span_budget")
+        actions = budget.get("actions") if isinstance(budget, dict) else None
+        seconds = budget.get("seconds") if isinstance(budget, dict) else None
+        if (isinstance(actions, bool) or not isinstance(actions, int) or not 1 <= actions <= AGENT_SPAN_MAX_ACTIONS
+                or isinstance(seconds, bool) or not isinstance(seconds, (int, float))
+                or not 10 <= seconds <= AGENT_SPAN_MAX_SECONDS):
+            raise ValueError("agent_span_budget_invalid")
+    if "agent_span_on_budget" in patch and str(patch.get("agent_span_on_budget") or "").strip().lower() != "fail":
+        raise ValueError("agent_span_on_budget_invalid")
 
 
 def _model_gated_run_if_input(run_if: Any, earlier_steps: list[dict[str, Any]] | None) -> bool:
@@ -607,6 +653,21 @@ def validate_editor_patch(
             timeout_ms = patch.get("handover_resume_when_timeout_ms")
             if timeout_ms is not None and (not isinstance(timeout_ms, (int, float)) or timeout_ms <= 0):
                 raise ValueError("handover_resume_when_timeout_ms_invalid")
+    if act == "agent_span":
+        # Engine v2 C4: the caller's agent works toward a goal one candidate action at a time. Like ai_review it
+        # is outside the recovery cascade (no `recovery`) and an input can never skip it (no `run_if`). It may not
+        # sit directly in front of a destructive step: an agent's last action must not be what an irreversible
+        # step then builds on. Put a person's confirmation (a confirm-only ai_review) between them.
+        if "recovery" in patch:
+            raise ValueError("agent_span_step_cannot_patch_recovery")
+        invalid_keys = sorted(set(patch) - AGENT_SPAN_ALLOWED_KEYS)
+        if invalid_keys:
+            raise ValueError("agent_span_step_allows_only_agent_span_fields")
+        if "value" in patch and not str(patch.get("value") or "").strip():
+            raise ValueError("agent_span_goal_empty")
+        _validate_agent_span_fields(patch)
+        if next_step is not None and _is_destructive(next_step, policy):
+            raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
     if act == "call_workflow":
         # Runs another workflow's steps, so nothing here to re-locate. The called workflow's id rides
         # the generic `value`; what is handed over and brought back are two name maps. Whether that
@@ -713,6 +774,8 @@ def validate_editor_patch(
         # not WHAT it acts on.
         if previous_step is not None and action_name(previous_step).lower() == "ai_review"                 and not is_confirm_only_review(previous_step):
             raise ValueError("destructive_step_cannot_directly_follow_ai_review")
+        if previous_step is not None and action_name(previous_step).lower() == "agent_span":
+            raise ValueError("destructive_step_cannot_directly_follow_agent_span")
 
         # PROD-3: when the compiler detected this step's target sits inside a repeating
         # container (a table row, a list item — see conxa_compile.compiler.entity_binding), a

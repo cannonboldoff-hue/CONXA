@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 MAX_CALL_DEPTH = 3
-_PAUSE_STEP_TYPES = {"ai_review", "handover", "outcome_fork"}
-_PAUSE_NAMES = {"ai_review": "an AI review", "handover": "a hand-over to a person", "outcome_fork": "a popup decision"}
+_PAUSE_STEP_TYPES = {"ai_review", "handover", "outcome_fork", "agent_span"}
+_PAUSE_NAMES = {"ai_review": "an AI review", "handover": "a hand-over to a person", "outcome_fork": "a popup decision", "agent_span": "an agent span"}
 
 
 def _walk(steps: Any, visit: Any) -> None:

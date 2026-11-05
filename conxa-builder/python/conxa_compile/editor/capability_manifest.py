@@ -24,6 +24,7 @@ from conxa_compile.editor.action_registry import (
     action_spec,
 )
 from conxa_compile.editor.patch_gate import (
+    AGENT_SPAN_ALLOWED_KEYS,
     AI_REVIEW_ALLOWED_KEYS,
     BRANCH_ALLOWED_KEYS,
     CHECK_ASSERT_ALLOWED_KEYS,
@@ -96,6 +97,13 @@ RUNTIME_NOTES: dict[str, str] = {
         "banner, a file-drop, and a loopback signal against a timeout, then resumes in the same "
         "call if it arrives in time. No answer to validate — the person may change the page."
     ),
+    "agent_span": (
+        "Pauses and hands the goal to the MCP caller's AI agent, which nominates ONE numbered element and action "
+        "(click, fill, select, scroll) per call; the runtime checks each against the allowed list and refuses "
+        "irreversible-looking buttons, other sites and popups that need a decision. Ends when the required `until` "
+        "check holds or the budget runs out. Never enters the recovery cascade; fails closed on a scheduled run, in a "
+        "dry run and inside a loop. A destructive step may not directly follow one (patch gate enforces this)."
+    ),
     "upload": "Resolves value as file path(s); can consume (delete) a prior download_observed file.",
     "upload_intent": (
         "Recorded provenance only — the packager collapses it to a real `upload` step at build "
@@ -124,6 +132,7 @@ _PER_KIND_ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "assert": CHECK_ASSERT_ALLOWED_KEYS,
     "ai_review": AI_REVIEW_ALLOWED_KEYS,
     "handover": HANDOVER_ALLOWED_KEYS,
+    "agent_span": AGENT_SPAN_ALLOWED_KEYS,
     "if_present": BRANCH_ALLOWED_KEYS,
     "try_dismiss": BRANCH_ALLOWED_KEYS,
     "wait_for_one_of": BRANCH_ALLOWED_KEYS,

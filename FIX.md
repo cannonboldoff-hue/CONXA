@@ -113,3 +113,19 @@ The page proposing six improvements to the engine was a high-level sketch. It no
 **Opened up the "how the engine works today" map one level deeper — 2026-11-06**
 The redesign page had a map of the engine with one box per stage, which hid what really happens inside each stage. A second, larger map now opens every stage into the steps it runs, colours each step by who does it (the product, an AI model, a person, the video service), and shows what each stage hands to the next. The six known weak spots now sit on the exact step where each one lives, with a table pointing to the proof.
 — 2026-11-06
+
+**The tool now keeps a count of what its checks throw away from the AI's answers — 2026-11-06**
+Before, the tool checked what the AI suggested and quietly dropped anything it did not trust, so a bad prompt left no trace. Now every one of those checks writes down how many suggestions it turned down and why, and the Diagnostics panel and the chat after a build say so. Nothing the checks decide has changed; it is like putting a counter on a turnstile that used to let people through unnoticed.
+— 2026-11-06
+
+**A slow or down video service no longer ends in a dead-end button — 2026-11-06**
+Watching a recording needs a video service, and when it was slow the tool gave up after ten minutes and waited for someone to press Retry. Now it remembers the job, says when it will try again, keeps trying for up to a day, and picks the same job up again if Studio is closed and reopened, without sending the video a second time. Running out of allowance or being signed out still stops straight away, because waiting would not help.
+— 2026-11-06
+
+**A safety net that checks every kind of action is handled all the way through — 2026-11-06**
+The tool knows 42 kinds of action in several places, and nothing checked that the list a recording can produce matched the list a customer's computer can run. A new checklist file now says what each kind turns into, and two automatic tests fail the build if any part is missing, instead of a customer finding out at run time. Today everything lines up.
+— 2026-11-06
+
+**Authors can now hand one fuzzy part of a task to the customer's AI assistant — 2026-11-06**
+Until now every step had to be exactly scripted. A new Agent span step lets the author write a goal, say which kinds of moves are allowed and how to tell the goal is reached, and the customer's AI assistant then works toward it one numbered choice at a time. It can never press a button that sends, pays or deletes, never leave the site, and never answer a popup that needs a person. A skill that uses it says so, and cannot be put on a schedule, because nobody would be there to help.
+— 2026-11-06

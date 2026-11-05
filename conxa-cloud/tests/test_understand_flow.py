@@ -37,7 +37,8 @@ def flow(env, monkeypatch, tmp_path):  # noqa: F811
     (settings.data_dir / "sessions" / "sess1").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(b, "_blur_all_typed_values", lambda: False)
     monkeypatch.setattr(b, "_install_proxy_router", lambda *a, **k: None)
-    monkeypatch.setattr(track_a, "run_track_a", lambda d, c, blur_all=False: {"rows": [], "splice_map": []})
+    monkeypatch.setattr(track_a, "run_track_a", lambda d, c, blur_all=False, job=None: {"rows": [], "splice_map": []})
+    monkeypatch.setattr("handlers.understand_flow._sleep", lambda s: None)       # the wait between video tries
     monkeypatch.setattr(track_b, "run_track_b", lambda d: TIMED)
     monkeypatch.setattr(tu, "_default_call", lambda task, payload, ms: RAW)
     compiled: list[str] = []
@@ -99,11 +100,100 @@ def test_nothing_to_ask_builds_at_once_and_a_free_description_comes_from_the_sum
     assert "building it now" in " ".join(_texts(wf.id, "assistant_message"))
 
 
-def test_video_service_down_blocks_everything_past_the_merge_and_retry_resumes(flow, monkeypatch):
+def test_video_service_down_is_waited_on_with_the_same_job_and_then_continues(flow, monkeypatch):
+    from conxa_compile.video import job as video_job
+
+    b, wf, compiled = flow
+    session = settings.data_dir / "sessions" / "sess1"
+    tries: list[str | None] = []
+    waits: list[float] = []
+
+    def flaky(d, c, blur_all=False, job=None):
+        tries.append(job.resume_id("fp1"))
+        if len(tries) == 1:
+            job.submitted("fp1", "vj_1")                    # the upload happened and the job id was saved
+        if len(tries) < 3:
+            raise VideoUnavailable("cloud answered 503")
+        job.done()
+        return {"rows": [], "splice_map": []}
+
+    monkeypatch.setattr(track_a, "run_track_a", flaky)
+    monkeypatch.setattr("handlers.understand_flow._sleep", waits.append)
+    b._flow_understand(wf.id, "rid")
+    assert tries == [None, "vj_1", "vj_1"]                  # later tries poll the saved job, no new upload
+    assert waits == [60.0, 120.0]                           # the schedule, not a dead end
+    assert [c["state"] for c in _cards(wf.id, "watching_video")] == ["done"]
+    assert video_job.load(session)["state"] == "done" and video_job.load(session)["attempts"] == 2
+    assert lifecycle_for_workflow(get_workflow(wf.id))["substate"] == "open" and runtime_state.get_flags(wf.id) == {}
+
+
+def test_video_wait_gives_up_after_the_deadline_with_a_retry_card(flow, monkeypatch):
+    from conxa_compile.video import job as video_job
+
+    b, wf, compiled = flow
+    monkeypatch.setattr(video_job, "GIVE_UP_AFTER_S", 0)
+
+    def down(d, c, blur_all=False, job=None):
+        raise VideoUnavailable("cloud answered 503")
+
+    monkeypatch.setattr(track_a, "run_track_a", down)
+    b._flow_understand(wf.id, "rid")
+    card = _cards(wf.id, "watching_video")[0]
+    assert card["state"] == "failed" and "24 hours" in card["reason"] and card["actions"] == ["retry_video", "re_record"]
+    assert video_job.load(settings.data_dir / "sessions" / "sess1")["state"] == "failed" and compiled == []
+
+
+def test_a_restart_resumes_a_waiting_video_job_and_a_finished_one_is_left_alone(flow, monkeypatch):
+    from conxa_compile.video import job as video_job
+
+    b, wf, _ = flow
+    session = settings.data_dir / "sessions" / "sess1"
+    started: list[str] = []
+    monkeypatch.setattr(b, "_flow_start_understand", lambda wid: started.append(wid))
+    b._resume_video_jobs()
+    assert started == []                                     # no record: nothing to resume
+    j = video_job.VideoJob(session)
+    j.submitted("fp1", "vj_1")
+    j.waiting("cloud answered 503")
+    b._resume_video_jobs()
+    assert started == [wf.id]
+    runtime_state.set_flags(wf.id, watching=True)
+    b._resume_video_jobs()
+    assert started == [wf.id]                                # already being watched in this process
+    runtime_state.set_flags(wf.id, watching=False)
+    (session / "understanding.json").write_text("{}")
+    b._resume_video_jobs()
+    assert started == [wf.id]                                # the understanding is already written
+    (session / "understanding.json").unlink()
+    j.done()
+    b._resume_video_jobs()
+    assert started == [wf.id]                                # a finished job is never restarted
+
+
+def test_a_restarted_watch_with_a_live_job_record_is_not_marked_failed(flow, monkeypatch):
+    import time
+
+    from conxa_compile.conversation import harness
+    from conxa_compile.video import job as video_job
+
+    b, wf, _ = flow
+    harness.post_card(f"wf:{wf.id}", "watching_video", "watching", elapsed_s=0, reason="", actions=[])
+    j = video_job.VideoJob(settings.data_dir / "sessions" / "sess1")
+    j.submitted("fp1", "vj_1")
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 120)
+    b._reconcile_interrupted(wf.id)
+    assert _cards(wf.id, "watching_video")[0]["state"] == "watching"
+
+
+def test_video_blocked_stops_at_once_and_retry_resumes(flow, monkeypatch):
+    from conxa_compile.video import job as video_job
+    from services.video_analysis_client import VideoBlocked
+
     b, wf, compiled = flow
 
-    def down(d, c, blur_all=False):
-        raise VideoUnavailable("cloud answered 503")
+    def down(d, c, blur_all=False, job=None):
+        raise VideoBlocked("trial_expired")
 
     monkeypatch.setattr(track_a, "run_track_a", down)
     b._flow_understand(wf.id, "rid")
@@ -113,12 +203,13 @@ def test_video_service_down_blocks_everything_past_the_merge_and_retry_resumes(f
     assert (lc["stage"], lc["substate"]) == ("understand", "video_failed")
     assert lc["allowed_actions"] == ["retry_video", "re_record"]       # no compile on offer
     assert clarify_store.load(wf.id) is None and compiled == []
+    assert video_job.load(settings.data_dir / "sessions" / "sess1")["state"] == "blocked"   # only a person can fix it
 
     restarted: list[str] = []
     monkeypatch.setattr(b, "_flow_start_understand", lambda wid: restarted.append(wid))
     assert _answer(b, wf, card, action="retry_video")["ok"] and restarted == [wf.id]
 
-    monkeypatch.setattr(track_a, "run_track_a", lambda d, c, blur_all=False: {"rows": [], "splice_map": []})
+    monkeypatch.setattr(track_a, "run_track_a", lambda d, c, blur_all=False, job=None: {"rows": [], "splice_map": []})
     b._flow_understand(wf.id, "rid2")                                     # what the retry thread runs
     assert lifecycle_for_workflow(get_workflow(wf.id))["substate"] == "open"
     assert runtime_state.get_flags(wf.id) == {}

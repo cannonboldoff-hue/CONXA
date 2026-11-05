@@ -122,6 +122,31 @@ def test_client_resubmits_when_the_job_is_lost(monkeypatch, video):
     assert sum(1 for m, _ in calls if m == "POST") == 2
 
 
+def test_client_reports_each_job_id_as_it_appears(monkeypatch, video):
+    seen = []
+    client, _, _ = make_client(monkeypatch, [
+        {"job_id": "j1"}, http_error(404, "unknown_job_id"),
+        {"job_id": "j2"}, {"status": "succeeded", "result": {"segments": []}}])
+    client.analyze(video, on_job_id=seen.append)
+    assert seen == ["j1", "j2"]                                   # the resubmitted job is saved too
+
+
+def test_client_resumes_a_saved_job_without_uploading_again(monkeypatch, video):
+    seen = []
+    client, calls, _ = make_client(monkeypatch, [{"status": "running"}, {"status": "succeeded", "result": {"segments": []}}])
+    assert client.analyze(video, resume_job_id="j7", on_job_id=seen.append)["segments"] == []
+    assert [m for m, _ in calls] == ["GET", "GET"] and calls[0][1].endswith("/video/analyze/j7")
+    assert seen == []                                             # nothing was submitted
+
+
+def test_client_uploads_after_all_when_a_saved_job_is_gone(monkeypatch, video):
+    seen = []
+    client, calls, _ = make_client(monkeypatch, [
+        http_error(404, "unknown_job_id"), {"job_id": "j8"}, {"status": "succeeded", "result": {"segments": []}}])
+    client.analyze(video, resume_job_id="j7", on_job_id=seen.append)
+    assert [m for m, _ in calls] == ["GET", "POST", "GET"] and seen == ["j8"]
+
+
 def test_client_does_not_retry_quota_or_failed_analysis(monkeypatch, video):
     client, _, _ = make_client(monkeypatch, [http_error(429, "video_quota_exceeded")])
     with pytest.raises(vac.VideoBlocked) as blocked:
@@ -158,3 +183,68 @@ def test_track_a_second_run_hits_the_cache_without_calling_pegasus(monkeypatch, 
     assert client.calls == 1
     assert (first["from_cache"], second["from_cache"]) == (False, True)
     assert second["rows"][0]["intent"] == "open menu" and second["fingerprint"] == "fp1"
+
+
+# --- the job record (Engine v2, C2) ---------------------------------------------------------
+
+class JobClient:
+    """Pegasus as the job record sees it: one analyze call that reports a job id, or fails."""
+
+    def __init__(self, fail=None):
+        self.fail, self.resumed = fail, []
+
+    def analyze(self, path, duration_s=0.0, *, resume_job_id=None, on_job_id=None):
+        self.resumed.append(resume_job_id)
+        if resume_job_id is None and on_job_id:
+            on_job_id("vj_1")
+        if self.fail:
+            raise self.fail
+        return {"segments": [seg(1, 2, action_kind="click", intent="open menu")], "duration_s": 8.0}
+
+
+def test_track_a_saves_the_job_and_a_later_run_resumes_it(monkeypatch, tmp_path):
+    from conxa_compile.video import job as video_job
+
+    monkeypatch.setattr(track_a, "prepare_video", lambda d, blur_all=False: FakePrepared(tmp_path / "prepared.mp4"))
+    unavailable = JobClient(fail=vac.VideoUnavailable("503"))
+    with pytest.raises(vac.VideoUnavailable):
+        track_a.run_track_a(tmp_path, unavailable, job=video_job.VideoJob(tmp_path))
+    assert video_job.load(tmp_path)["job_id"] == "vj_1" and video_job.is_active(tmp_path)
+
+    restarted = video_job.VideoJob(tmp_path)                      # a new Studio process reads the record
+    client = JobClient()
+    out = track_a.run_track_a(tmp_path, client, job=restarted)
+    assert client.resumed == ["vj_1"] and out["from_cache"] is False
+    assert video_job.load(tmp_path)["state"] == "done" and not video_job.is_active(tmp_path)
+
+
+def test_a_record_for_a_different_video_is_not_resumed(tmp_path):
+    from conxa_compile.video import job as video_job
+
+    j = video_job.VideoJob(tmp_path)
+    j.submitted("fp-old", "vj_old")
+    assert j.resume_id("fp-old") == "vj_old" and j.resume_id("fp-new") is None
+    j.submitted("fp-new", "vj_new")
+    assert video_job.load(tmp_path)["attempts"] == 0 and j.resume_id("fp-new") == "vj_new"
+
+
+def test_the_wait_schedule_grows_then_holds_and_ends_after_24_hours(tmp_path):
+    from conxa_compile.video import job as video_job
+
+    now = {"t": 1_000_000.0}
+    j = video_job.VideoJob(tmp_path, clock=lambda: now["t"])
+    j.submitted("fp1", "vj_1")
+    assert [j.waiting("503") for _ in range(7)] == [60, 120, 300, 600, 1800, 1800, 1800]
+    assert video_job.load(tmp_path)["state"] == "waiting_cloud" and video_job.load(tmp_path)["attempts"] == 7
+    now["t"] += video_job.GIVE_UP_AFTER_S
+    assert j.waiting("503") is None and video_job.load(tmp_path)["state"] == "failed"
+
+
+def test_blocked_and_failed_records_are_not_active(tmp_path):
+    from conxa_compile.video import job as video_job
+
+    j = video_job.VideoJob(tmp_path)
+    j.submitted("fp1", "vj_1")
+    j.blocked("trial_expired")
+    assert not video_job.is_active(tmp_path) and video_job.load(tmp_path)["blocked_code"] == "trial_expired"
+    assert video_job.load(tmp_path / "missing") is None

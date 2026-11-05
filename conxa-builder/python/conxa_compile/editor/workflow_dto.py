@@ -697,6 +697,10 @@ def step_to_dto(
         wait_until_kind=str(step.get("wait_until_kind") or "") or None,
         wait_until_timeout_ms=step.get("wait_until_timeout_ms") if isinstance(step.get("wait_until_timeout_ms"), int) and not isinstance(step.get("wait_until_timeout_ms"), bool) else None,
         wait_until_on_timeout=str(step.get("wait_until_on_timeout") or "") or None,
+        agent_span_allowed=[str(a) for a in step["agent_span_allowed"]] if isinstance(step.get("agent_span_allowed"), list) else None,
+        agent_span_until=step.get("agent_span_until") if isinstance(step.get("agent_span_until"), dict) else None,
+        agent_span_budget=step.get("agent_span_budget") if isinstance(step.get("agent_span_budget"), dict) else None,
+        agent_span_on_budget=str(step.get("agent_span_on_budget") or "") or None,
         ai_review_attach=[str(n) for n in step["ai_review_attach"]] if isinstance(step.get("ai_review_attach"), list) and step["ai_review_attach"] else None,
         recovery_view=_recovery_view(recovery, action_spec(action_name(step)).marker),
         fingerprint=_fingerprint_view(bundle),
@@ -746,7 +750,29 @@ def _compile_health(document: dict[str, Any], meta: dict[str, Any], skill_id: st
         # suggestion again. Filtering on every read is the one place that covers a fresh
         # compile, a page reload, and a post-accept refresh uniformly.
         "for_each_suggestions": _for_each_suggestions(report, skill_id),
+        # What the model guards dropped, changed or added, per call (llm/model_ledger.py).
+        "model_ledger": _model_ledger_view(report, meta),
     }
+
+
+def _model_ledger_view(report: dict[str, Any], meta: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """``{task: {dropped, changed, added}}`` for Human Review. The compile report holds the second opinion's
+    counts; the recording's ``model_ledger.jsonl`` adds later calls (question wording, re-target). A task with
+    nothing counted is left out. Never raises: a display glitch must not break Human Edit."""
+    from conxa_compile.llm import model_ledger
+
+    out = {task: {k: int(v.get(k) or 0) for k in ("dropped", "changed", "added")}
+           for task, v in (report.get("model_ledger") or {}).items() if isinstance(v, dict)}
+    try:
+        sid = str(meta.get("source_session_id") or "").strip()
+        if sid and model_ledger.enabled():
+            from conxa_core.config import settings
+
+            for task, row in model_ledger.last_per_task(settings.data_dir / "sessions" / sid).items():
+                out[task] = model_ledger.summary(row.get("report") or {})
+    except Exception:  # noqa: BLE001
+        pass
+    return {t: c for t, c in out.items() if any(c.values())}
 
 
 def _for_each_suggestions(report: dict[str, Any], skill_id: str) -> list[dict[str, Any]]:

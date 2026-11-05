@@ -788,6 +788,8 @@ class Backend(
     def serve(self) -> None:
         # Windows decodes a pipe with the locale code page by default, which turns curly quotes into "â€œ".
         sys.stdin.reconfigure(encoding="utf-8")
+        # A video analysis that was still waiting when Studio last closed resumes by itself (C2).
+        threading.Thread(target=self._resume_video_jobs, daemon=True).start()
         for line in sys.stdin:
             line = line.strip()
             if not line:

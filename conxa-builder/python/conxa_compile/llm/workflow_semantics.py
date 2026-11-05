@@ -66,6 +66,7 @@ import json
 from typing import Any
 
 from conxa_compile.editor.placeholder_grammar import is_valid_placeholder_id
+from conxa_compile.llm.model_ledger import log as _log
 
 _VALID_KINDS = frozenset({
     "rename_binding", "parameterize_literal", "suggest_optional", "label_phase",
@@ -127,9 +128,12 @@ def _validate_findings(
     step_keys_in_workflow: set[str],
     steps_context: list[dict[str, Any]],
     settled_literals: frozenset[str] = frozenset(),
+    report: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Drop everything that isn't trustworthy, silently — a rejected finding is
-    a normal outcome, not an error worth surfacing. Eight gates, and every one
+    """Drop everything that isn't trustworthy — a rejected finding is a normal
+    outcome, not an error worth surfacing to the person. Each drop is only
+    *counted* into ``report`` (``model_ledger.log``), never shown at the time, so
+    a bad prompt reads as a number in Human Review. Eight gates, and every one
     of them stands between an LLM and a compiled artifact a customer will run:
     an unknown step_key, an unknown kind, a name that isn't a valid placeholder
     id, a name that collides with a binding the compiler already assigned, an
@@ -138,6 +142,8 @@ def _validate_findings(
     flag on a step the recorder didn't itself observe as having no effect.
     The trailing cap keeps a talkative model from rewriting half the workflow."""
     if not isinstance(raw_findings, list):
+        if raw_findings is not None:
+            _log(report, "shape", "malformed_item", type(raw_findings).__name__)
         return []
 
     optional_hint_keys = {
@@ -156,52 +162,68 @@ def _validate_findings(
 
     for item in raw_findings:
         if not isinstance(item, dict):
+            _log(report, "shape", "malformed_item", type(item).__name__)
             continue
         step_key = str(item.get("step_key") or "").strip()
         kind = str(item.get("kind") or "").strip()
         proposed = str(item.get("proposed") or "").strip()
         if step_key not in step_keys_in_workflow:
+            _log(report, "reference", "unknown_step_key", step_key)
             continue
         if kind not in _VALID_KINDS:
+            _log(report, "shape", "unknown_kind", step_key)
             continue
         if kind == "parameterize_literal" and str(item.get("current") or "").strip().lower() in settled_literals:
+            _log(report, "override", "settled_literal", step_key)
             continue        # a value somebody already decided is not reopened here (lower-cased by the caller)
         if kind in _NAME_KINDS:
             if not is_valid_placeholder_id(proposed):
+                _log(report, "shape", "bad_placeholder", step_key)
                 continue
             if proposed in existing_bindings or proposed in seen_new_names:
+                _log(report, "reference", "name_collision", step_key)
                 continue
             seen_new_names.add(proposed)
         elif kind == "suggest_optional":
             if step_key not in optional_hint_keys:
+                _log(report, "override", "unobserved_optional", step_key)
                 continue
         elif kind == "label_phase":
             if proposed not in _VALID_PHASES:
+                _log(report, "shape", "bad_phase", step_key)
                 continue
         elif kind == "suggest_assertion":
             parsed = _parse_json_object(proposed)
             if parsed is None:
+                _log(report, "reference", "ungrounded_assertion", step_key)
                 continue
             a_type = str(parsed.get("type") or "").strip()
             a_target = str(parsed.get("target") or "").strip()
             if a_type not in _VALID_ASSERTION_TYPES:
+                _log(report, "reference", "ungrounded_assertion", step_key)
                 continue
             if a_type in ("state_changed", "url_changed"):  # both compare to the pre-action page
                 if a_target:
+                    _log(report, "reference", "ungrounded_assertion", step_key)
                     continue
             else:
                 if not a_target or len(a_target) > _MAX_ASSERTION_TARGET_LEN:
+                    _log(report, "reference", "ungrounded_assertion", step_key)
                     continue
                 if not _grounded_in_workflow(a_target, steps_context):
+                    _log(report, "reference", "ungrounded_assertion", step_key)
                     continue
             proposed = json.dumps({"type": a_type, "target": a_target}, sort_keys=True)
         elif kind == "flag_noise":
             if proposed not in _VALID_NOISE_CATEGORIES:
+                _log(report, "override", "unobserved_noise", step_key)
                 continue
             step_ctx = steps_by_key.get(step_key)
             if not step_ctx:
+                _log(report, "override", "unobserved_noise", step_key)
                 continue
             if step_ctx.get("has_required_assertion") or step_ctx.get("input_binding"):
+                _log(report, "override", "unobserved_noise", step_key)
                 continue
             if step_ctx.get("action") == "navigate":
                 # No post_condition_effect signal exists for a navigate (the recorder's
@@ -210,28 +232,27 @@ def _validate_findings(
                 # immediately before it is a navigate to the identical url on the
                 # identical tab. That match — never the model's own say-so — is the
                 # evidence. See docstring above.
-                if proposed != "duplicate_action":
-                    continue
                 prev = prev_by_key.get(step_key)
                 url = str(step_ctx.get("url") or "").strip()
-                if not prev or not url:
-                    continue
-                if prev.get("action") != "navigate":
-                    continue
-                if str(prev.get("url") or "").strip() != url:
-                    continue
-                if str(prev.get("tab_id") or "") != str(step_ctx.get("tab_id") or ""):
+                if (
+                    proposed != "duplicate_action"
+                    or not prev or not url
+                    or prev.get("action") != "navigate"
+                    or str(prev.get("url") or "").strip() != url
+                    or str(prev.get("tab_id") or "") != str(step_ctx.get("tab_id") or "")
+                ):
+                    _log(report, "override", "unobserved_noise", step_key)
                     continue
             else:
-                if step_ctx.get("action") not in _NOISE_SAFE_ACTIONS:
-                    continue
-                if step_ctx.get("post_condition_effect") != "none":
+                if step_ctx.get("action") not in _NOISE_SAFE_ACTIONS or step_ctx.get("post_condition_effect") != "none":
+                    _log(report, "override", "unobserved_noise", step_key)
                     continue
                 # A click whose only job is to start a download or open a file picker is
                 # SUPPOSED to leave post_condition_effect at "none" — the page itself doesn't
                 # visibly react. build.py::_review_inputs sets "causes" for exactly these
                 # steps; never let a noise flag land on one no matter what the model said.
                 if step_ctx.get("causes"):
+                    _log(report, "override", "unobserved_noise", step_key)
                     continue
         out.append({
             "step_key": step_key,
@@ -242,4 +263,6 @@ def _validate_findings(
         })
 
     cap = max(1, round(len(steps_context) * _MAX_FINDINGS_PER_STEP_RATIO))
+    for _ in out[cap:]:
+        _log(report, "safety", "over_cap")
     return out[:cap]

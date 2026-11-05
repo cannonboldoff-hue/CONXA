@@ -74,14 +74,31 @@ class VideoAnalysisClient:
         self._clock = clock
         self._auth_failures = 0
 
-    def analyze(self, video_path: Path, duration_s: float = 0.0) -> dict[str, Any]:
-        """Blocking. Returns the cloud result: {segments, duration_s, truncated}."""
+    def analyze(
+        self,
+        video_path: Path,
+        duration_s: float = 0.0,
+        *,
+        resume_job_id: str | None = None,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Blocking. Returns the cloud result: {segments, duration_s, truncated}.
+
+        ``resume_job_id`` polls a job an earlier run already submitted, so a restart does not upload the video
+        again; if the cloud no longer knows it, the video is submitted afresh as before. ``on_job_id`` is called
+        with each new job id the moment it exists, so the caller can save it (video/job.py)."""
         self._auth_failures = 0
         started = self._clock()
-        data = Path(video_path).read_bytes()
+        data: bytes | None = None
         resubmits = 0
+        job_id = resume_job_id
         while True:
-            job_id = self._retrying(lambda: self._submit(data, duration_s), started)
+            if job_id is None:
+                if data is None:
+                    data = Path(video_path).read_bytes()
+                job_id = self._retrying(lambda: self._submit(data, duration_s), started)
+                if on_job_id:
+                    on_job_id(job_id)
             try:
                 return self._poll(job_id, started)
             except _JobLost:
@@ -89,6 +106,7 @@ class VideoAnalysisClient:
                 if resubmits > 2:
                     raise VideoUnavailable("analysis job was lost repeatedly") from None
                 self._notify("retrying", started, "job lost, resubmitting")
+                job_id = None
 
     # -- internals -----------------------------------------------------------
 

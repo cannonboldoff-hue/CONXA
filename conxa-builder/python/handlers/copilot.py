@@ -29,11 +29,7 @@ from handlers.protocol import _CommandError, _event_sink, _safe_id, _skill_respo
 
 class CopilotMixin:
     def cmd_copilot_turn(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
-        from conxa_compile.editor.copilot_proposals import (
-            gate_overlay_proposals,
-            gate_proposals,
-            gate_structural_proposals,
-        )
+        from conxa_compile.editor.copilot_proposals import gate_all
         from conxa_compile.editor.evidence import EvidenceError, build_evidence_bundle
         from conxa_compile.llm.copilot import copilot_turn
         from conxa_core.storage.json_store import read_skill
@@ -90,15 +86,11 @@ class CopilotMixin:
             raise _CommandError("cloud_unreachable", str(exc)) from exc
 
         raw_proposals = result.get("proposals") or []
-        proposals = gate_proposals(doc, raw_proposals)
-        # BUILD-26 stage f: a second proposal KIND from the same model call — an overlay
-        # insertion, gated separately since it needs the run's observed_overlays rather than
-        # patch_gate's field allow-list. Stage g adds a THIRD kind — typed structural ops. All
-        # three are concatenated: the renderer only ever shows proposals[0].
+        # BUILD-26 stages f and g: three proposal KINDS from the one model call (patch_step, an overlay
+        # insertion that needs the run's observed_overlays, typed structural ops), each gated by its own
+        # gate and concatenated by gate_all: the renderer only ever shows proposals[0].
         observed_overlays = (evidence.get("runtime_evidence") or {}).get("observed_overlays") or []
-        if observed_overlays:
-            proposals = proposals + gate_overlay_proposals(doc, observed_overlays, raw_proposals)
-        proposals = proposals + gate_structural_proposals(doc, raw_proposals)
+        proposals = gate_all(doc, raw_proposals, observed_overlays)
         return {"reply": result.get("reply") or "", "proposals": proposals}
 
     def cmd_accept_copilot_proposal(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:

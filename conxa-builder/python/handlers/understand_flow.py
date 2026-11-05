@@ -6,7 +6,10 @@ and one ranked round of questions is asked. Answers are stored as decisions (nev
 when the last shown question is answered the compile starts by itself and replays them.
 
 Pegasus is a hard dependency: if the cloud is down, slow or refuses, nothing past the merge starts.
-The ``watching_video`` card says so and offers Retry (or Record again).
+A cloud that is only down or slow is waited on: the job id and next try are saved in the session folder
+(``video/job.py``), the card says when it tries again, and a restart of Studio resumes the same job.
+Quota, sign-in and unreadable-video failures stop at once; the ``watching_video`` card says so and
+offers Retry (or Record again).
 """
 
 from __future__ import annotations
@@ -21,6 +24,11 @@ from typing import Any
 from handlers.protocol import _CommandError, _event_sink
 
 _CARD_THROTTLE_S = 1.0
+
+
+def _sleep(seconds: float) -> None:
+    """The wait between video tries (a function so tests can skip it)."""
+    time.sleep(seconds)
 
 
 def _thread(workflow_id: str) -> str:
@@ -60,6 +68,31 @@ class UnderstandFlowMixin:
         rid = f"understand_{uuid.uuid4().hex[:10]}"
         threading.Thread(target=self._flow_understand_safe, args=(workflow_id, rid), daemon=True).start()
 
+    def _resume_video_jobs(self) -> None:
+        """At Studio start: a recording whose video analysis was still waiting when the app closed is picked up
+        again (its saved cloud job is polled first; the video is uploaded again only if the cloud lost the job).
+        Only recordings with a live job record and no finished understanding; never one already being watched.
+        Never raises: a resume that cannot start leaves the workflow as it was, and Retry still works."""
+        try:
+            from conxa_compile.conversation import runtime_state
+            from conxa_compile.video import job as video_job
+            from conxa_core.config import settings
+            from conxa_core.storage.workflow_store import list_workflows
+
+            for wf in list_workflows():
+                if not wf.session_id:
+                    continue
+                session_dir = settings.data_dir / "sessions" / wf.session_id
+                if (session_dir / "understanding.json").exists() or not video_job.is_active(session_dir):
+                    continue
+                if runtime_state.get_flags(wf.id).get("watching"):
+                    continue
+                self._flow_start_understand(wf.id)
+        except Exception:  # noqa: BLE001
+            import traceback
+
+            traceback.print_exc()
+
     def _flow_understand_safe(self, workflow_id: str, rid: str) -> None:
         try:
             self._flow_understand(workflow_id, rid)
@@ -82,7 +115,7 @@ class UnderstandFlowMixin:
 
         from conxa_compile.conversation import clarify_store, harness, runtime_state
         from conxa_compile.conversation import timeline_understanding as tu
-        from conxa_compile.video import track_a, track_b
+        from conxa_compile.video import job as video_job, track_a, track_b
         from conxa_compile.video.prepare import NoVideoError
         from conxa_core.config import settings
         from conxa_core.storage.workflow_store import get_workflow
@@ -114,20 +147,38 @@ class UnderstandFlowMixin:
             harness.update_card(thread, card_id, sink=sink, state="watching",
                                 elapsed_s=info.get("elapsed_s", 0), reason=str(info.get("reason") or ""))
 
+        job = video_job.VideoJob(session_dir)   # the saved cloud job id, attempts and next try (C2)
         try:
             client = VideoAnalysisClient(
                 self._cloud_api_base(), lambda: self._auth_service().get_token(),
                 client_header=os.environ.get("CONXA_PROXY_CLIENT", "build-studio"), on_wait=on_wait)
             blur_all = self._blur_all_typed_values()
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                fut_a = pool.submit(track_a.run_track_a, session_dir, client, blur_all=blur_all)
-                fut_b = pool.submit(track_b.run_track_b, session_dir)
-                a, timed = fut_a.result(), fut_b.result()
-        except VideoUnavailable as exc:
+            while True:
+                try:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        fut_a = pool.submit(track_a.run_track_a, session_dir, client, blur_all=blur_all, job=job)
+                        fut_b = pool.submit(track_b.run_track_b, session_dir)
+                        a, timed = fut_a.result(), fut_b.result()
+                    break
+                except VideoUnavailable as exc:
+                    # The video service did not answer within one budget. Pegasus stays required, so nothing
+                    # compiles, but the wait no longer ends in a button: try again on a timer, same cloud job.
+                    delay = job.waiting(str(exc))
+                    if delay is None:
+                        return self._flow_video_failed(
+                            workflow_id, card_id, f"The video service has not answered for 24 hours ({exc}). Try again.", sink)
+                    at = time.strftime("%H:%M", time.localtime(time.time() + delay))
+                    harness.update_card(thread, card_id, sink=sink, state="watching", elapsed_s=0,
+                                        reason=f"Waiting for the video service. Next try {at}. You can close Studio.")
+                    _sleep(delay)
+        except VideoUnavailable as exc:   # not reachable from the loop above; kept so a new raise site cannot dead-end silently
+            job.failed(str(exc))
             return self._flow_video_failed(workflow_id, card_id, f"Still couldn’t reach the video service ({exc}). Try again in a moment.", sink)
         except VideoBlocked as exc:
+            job.blocked(exc.code)
             return self._flow_video_failed(workflow_id, card_id, self._video_blocked_message(exc.code), sink)
         except VideoAnalysisFailed as exc:
+            job.failed(exc.code)
             return self._flow_video_failed(workflow_id, card_id, f"The video service couldn’t read this recording ({exc.code}).", sink)
         except NoVideoError as exc:
             return self._flow_video_failed(workflow_id, card_id, f"This recording has no video to watch ({exc}). Record it again.", sink)

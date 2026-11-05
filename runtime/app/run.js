@@ -85,6 +85,7 @@ const {
   uniqueDownloadName,
 } = require("./uploads");
 const handover = require("./handover");
+const agentSpan = require("./agent_span");
 const { dismissAgentNominated } = require("./dismiss_patterns");
 const learnedDismissals = require("./learned_dismissals");
 
@@ -403,6 +404,52 @@ async function executeOneStep(ctx, state, steps, i) {
     // the page and let the eventual resume drive itself; disarm() is NOT called here, the park
     // owns armed's lifetime until it resumes or discards.
     throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step, page, armed, dryRun: ctx.dryRun });
+  }
+
+  // Engine v2 C4: an author-placed span the caller's agent carries out, one candidate action at a time (see
+  // agent_span.js). The third planned pause beside ai_review and handover: no selector, never reaches
+  // executeStep/HANDLERS or the recovery cascade. server.js drives the rounds on the parked page and, when the
+  // author's `until` check holds, binds `__agent_span_done_<i>` into inputs before the resume; this just
+  // consumes it. It never asks a person, and it fails closed wherever no agent is there to answer.
+  if (step.type === "agent_span") {
+    const doneKey = `__agent_span_done_${i}`;
+    if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
+      delete state.inputs[doneKey];
+      state.hasExecutedStep = true;
+      state.prevStepType = step.type;
+      state.prevPage = page;
+      return;
+    }
+    if (ctx.dryRun) {
+      // A preview never lets an agent act on the page: the span is withheld, like a committing step.
+      state.dryRunSkipped.push({ index: i, intent: step.intent || step.type });
+      ctx.tracker.emit("dry_run_skip", { si: i });
+      state.hasExecutedStep = true;
+      state.prevStepType = step.type;
+      state.prevPage = page;
+      return;
+    }
+    const refuse = (code, message) => {
+      ctx.tracker.emit("step_fail", { si: i, fc: code });
+      throw stepFailure(step, i, Object.assign(new Error(message), { agentSpanRefused: code }), null, state.warnings);
+    };
+    if (state.loopDepth > 0 || state.forkDepth > 0) {
+      refuse("agent_span_inside_loop", "An agent span cannot run inside a repeated or conditional step.");
+    }
+    if (ctx.agentSpans === false) {
+      refuse("agent_span_no_agent", "This step needs an AI agent to carry it out, and a scheduled run has none. Run it from a chat instead.");
+    }
+    // Nothing to do when the goal is already met: zero actions, zero tokens.
+    if (await agentSpan.untilHolds(page, step.until, state.inputs, await capturePreStepSignature(page))) {
+      ctx.tracker.emit("span_done", { si: i, n: 0 });
+      state.hasExecutedStep = true;
+      state.prevStepType = step.type;
+      state.prevPage = page;
+      return;
+    }
+    const span = await agentSpan.begin(page, step, state.inputs);
+    ctx.tracker.emit("span_start", { si: i });
+    throw Object.assign(new Error("agent_span_pause"), { spanPause: true, stepIndex: i, step, page, span });
   }
 
   // EXEC-38 — "for each row, do steps A-C". Runs its body through THIS SAME function (recovery,
@@ -1503,7 +1550,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1622,6 +1669,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     callees: callees || null, // call_workflow: the workflows this one calls, loaded and checked at run start
     callStack: [slug],
     answerPopups: answerPopups === true, // EXEC-49: an MCP client may be asked about an unrecorded question popup
+    agentSpans: agentSpans !== false,   // Engine v2 C4: false (a scheduled run) = an agent_span step fails closed
   };
 
   let endedAt = null;

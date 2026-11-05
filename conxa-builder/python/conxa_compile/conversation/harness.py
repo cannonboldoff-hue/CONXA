@@ -294,7 +294,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
         # Not an answer. It may still be a command ("what are my options" is not, "test it" is) —
         # the lifecycle decides what is allowed, so a blocked action simply isn't routed.
         if flow_executor is not None:
-            routed = _route_command(kind, message, lifecycle, load_digest, workflows)
+            routed = _route_command(kind, message, lifecycle, load_digest, workflows, thread_id)
             if routed is not None:
                 return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
                                        new_items=new_items, flow_executor=flow_executor)
@@ -308,7 +308,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     # 1.5 ─ a command in free text ("test it", "approve", "record that again"): one of the actions the
     # lifecycle allows right now, never anything else. Side effects wait for a confirm card.
     if flow_executor is not None and not anchor:
-        routed = _route_command(kind, message, lifecycle, load_digest, workflows)
+        routed = _route_command(kind, message, lifecycle, load_digest, workflows, thread_id)
         if routed is not None:
             return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
                                    new_items=new_items, flow_executor=flow_executor)
@@ -412,18 +412,24 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
 
 
 def _route_command(kind: str, message: str, lifecycle: dict[str, Any] | None, load_digest: Any,
-                   workflows: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+                   workflows: list[dict[str, Any]] | None, thread_id: str = "") -> dict[str, Any] | None:
     from conxa_compile.conversation.intent_router import route_intent
+    from conxa_compile.llm import model_ledger
 
-    if kind == "chat":
-        return route_intent(message, ["open_workflow"], workflows=workflows) if workflows else None
-    allowed = [str(a) for a in (lifecycle or {}).get("allowed_actions") or []]
+    report: dict[str, Any] = {}  # what the router refused from the model, counted (llm/model_ledger)
+    try:
+        if kind == "chat":
+            return route_intent(message, ["open_workflow"], workflows=workflows, report=report) if workflows else None
+        allowed = [str(a) for a in (lifecycle or {}).get("allowed_actions") or []]
 
-    def inputs() -> list[str]:
-        rows = ((load_digest() if load_digest else None) or {}).get("inputs")
-        return [str(i.get("name") or i.get("id")) for i in rows or [] if isinstance(i, dict) and (i.get("name") or i.get("id"))]
+        def inputs() -> list[str]:
+            rows = ((load_digest() if load_digest else None) or {}).get("inputs")
+            return [str(i.get("name") or i.get("id")) for i in rows or [] if isinstance(i, dict) and (i.get("name") or i.get("id"))]
 
-    return route_intent(message, allowed, known_inputs=inputs)
+        return route_intent(message, allowed, known_inputs=inputs, report=report)
+    finally:
+        if report and thread_id:
+            model_ledger.append(ts.thread_path(thread_id).parent, model_ledger.entry("chat_route_intent", report))
 
 
 def _perform_routed(routed: dict[str, Any], *, thread_id: str, sink: Sink | None, turn_id: str,

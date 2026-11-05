@@ -407,18 +407,9 @@ def _text(value: Any, limit: int) -> str:
 
 # The five things the check does to a model answer, in the order it does them. ``validation_report`` in
 # understanding.json counts every use of a rule, so a bad prompt shows up as a number instead of a silence.
-STAGES = ("shape", "reference", "override", "backfill", "safety")
-
-
-def _log(report: dict[str, Any], stage: str, rule: str, example: Any = "") -> None:
-    """Count one use of ``rule`` under ``stage``; the first example is kept. ``report`` is plain JSON."""
-    slot = report.setdefault(stage, {}).setdefault(rule, {"count": 0, "example": _text(example, 60)})
-    slot["count"] += 1
-
-
-def _count(report: dict[str, Any], stage: str, *rules: str) -> int:
-    got = report.get(stage) or {}
-    return sum(got[r]["count"] for r in (rules or tuple(got)) if r in got)
+# The counter itself lives in llm/model_ledger.py so every other guard counts the same way (Engine v2, C1);
+# the names stay here because the golden tests and eval script import them from this module.
+from conxa_compile.llm.model_ledger import STAGES, count as _count, log as _log  # noqa: E402,F401
 
 
 def _fork_choices(row: dict[str, Any], offered: Any) -> list[dict[str, Any]]:

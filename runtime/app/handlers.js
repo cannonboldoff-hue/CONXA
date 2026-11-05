@@ -1061,7 +1061,7 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
 // is never one of these by the time executeStep runs — this set only matters if something calls
 // executeStep directly, bypassing run.js (a test harness, say), where the correct behavior is
 // still "do nothing" rather than the throw below.
-const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "for_each", "outcome_fork", "call_workflow"]);
+const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "agent_span", "for_each", "outcome_fork", "call_workflow"]);
 
 // What an extract step reads. `source`: text (visible text, the default), value (an input's value) or
 // attribute (named by `attribute`). `pattern`, if given, keeps the first capture group (or the whole
@@ -1228,6 +1228,7 @@ function applyStepOverrides(steps, overrides, opts = {}) {
 
 module.exports = {
   NOOP_STEP_TYPES,
+  PRE_DISPATCH_STEP_TYPES,
   probePresent,
   resolvableBranchStep,
   runBranchBody,

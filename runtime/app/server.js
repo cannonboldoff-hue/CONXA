@@ -109,6 +109,7 @@ const _discardAllParksImpl  = require("./recovery_park").discardAllParks;
 // cap) plus the candidate_index nomination maps published by each digest. Every
 // round is armed; there is no tier escalation. See recovery_stage.js.
 const recoveryStage = require("./recovery_stage");
+const agentSpanMod = require("./agent_span"); // Engine v2 C4: the agent_span step (rounds are driven below)
 const PARK_TTL_MS = Number(process.env.CONXA_RECOVERY_PARK_TTL_MS) || 180000;
 // RT-3: parks are keyed per skill (`${workspace_id}:${slug}`), not a single process-wide slot —
 // discarding one run's park must never touch a sibling run's parked recovery window.
@@ -944,6 +945,10 @@ async function _handleTool(name, args, extra) {
   if (name === "create_schedule") {
     const entry = _resolveSkill(String(args.slug || ""), args.workspace_id ? String(args.workspace_id) : null);
     if (!entry) return err(`Skill not found: ${args.slug}. Call list_skills first.`);
+    // Engine v2 C4: a skill with an agent span needs an AI agent in the loop on every run; a schedule has none.
+    if (entry.manifest && entry.manifest.uses_agent === true) {
+      return err(`"${entry.slug}" has a step that an AI agent has to carry out, so it can't run on a schedule. Run it from a chat instead.`);
+    }
     let rec;
     try {
       rec = await _schedulerStore().create({
@@ -1003,7 +1008,7 @@ async function _handleTool(name, args, extra) {
     const trigger = args._trigger === "scheduled" ? "scheduled" : "chat";
     const runs = name === "execute_sequence"
       ? (Array.isArray(args.skills) ? args.skills : [])
-      : [{ skill: args.skill, workspace_id: args.workspace_id, inputs: args.inputs, resume_from: args.resume_from, step_overrides: args.step_overrides, review_results: args.review_results, dry_run: args.dry_run }];
+      : [{ skill: args.skill, workspace_id: args.workspace_id, inputs: args.inputs, resume_from: args.resume_from, step_overrides: args.step_overrides, review_results: args.review_results, span_actions: args.span_actions, dry_run: args.dry_run }];
 
     if (runs.length === 0) return err("No skills provided.");
 
@@ -1171,6 +1176,8 @@ async function _handleTool(name, args, extra) {
         // never run through applyStepOverrides — an ai_review step carries no selector for
         // applyStepOverrides to inject, only a structured answer bound into `inputs`.
         reviewResults: (run.review_results && typeof run.review_results === "object") ? run.review_results : {},
+        // Engine v2 C4: the agent's next action for an agent_span step, keyed by step index.
+        spanActions: (run.span_actions && typeof run.span_actions === "object") ? run.span_actions : {},
         dryRun: run.dry_run === true,
         callees: _calls.callees,
         calleeEntries: _calls.entries,
@@ -1425,7 +1432,7 @@ async function _handleTool(name, args, extra) {
     // `failedAt`, the others carry their own step index.
     const _leftPark = _getParkedRecovery(_parkKey);
     const _isOwnPausePark = !!_leftPark && primary.isResume && resolved.length === 1
-      && [_leftPark.forkStepIndex, _leftPark.reviewStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex]
+      && [_leftPark.forkStepIndex, _leftPark.reviewStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex, _leftPark.spanStepIndex]
         .some((n) => Number.isInteger(n) && n === primary.resumeFrom);
     if (_leftPark && !_isOwnPausePark) await _discardPark(_parkKey, _resumeOverride ? "replaced" : "superseded");
 
@@ -1556,6 +1563,61 @@ async function _handleTool(name, args, extra) {
       }
     }
 
+    // Engine v2 C4: resuming an agent_span pause. The agent's nomination is checked and carried out on the
+    // PARKED page (agent_span.js::applyRound), one action per call. Not done yet: the park stays and a fresh
+    // request goes back. Done: the park is adopted and `__agent_span_done_<i>` lets run.js step past the span.
+    // Failed (budget, gave up, a popup that needs a person, left the site): the run ends with a typed reason.
+    // Like ai_review it is not gated on _effAgentEnabled and never touches recovery_stage / retry_budget.
+    const _resumeSpanStep = resolved.length === 1 && primary.isResume
+      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "agent_span";
+    if (_resumeSpanStep) {
+      const spanDef = primary.steps[primary.resumeFrom];
+      const spanPark = _getParkedRecovery(_parkKey);
+      const _endEarly = async (fc) => {
+        _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc });
+        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+        runRegistry.end(_runId);
+        await _receiptFlush; // see recovery_resume_refused above: avoid a no-op double flush
+        await _tracker.flush();
+        _tracker.destroy();
+      };
+      if (!spanPark || !spanPark.spanState || spanPark.spanStepIndex !== primary.resumeFrom) {
+        appendRecoveryEvent({ event: "span_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
+        await _endEarly("span_resume_refused");
+        return err(
+          `The agent span at step ${primary.resumeFrom + 1} has expired. Call execute_skill again for ` +
+          `"${primary.entry.slug}" without resume_from to restart the skill from the beginning.`
+        );
+      }
+      const round = await agentSpanMod.applyRound(
+        spanPark.page, spanPark.spanState, primary.spanActions[String(primary.resumeFrom)], primary.inputs);
+      if (round.kind === "done") {
+        clearTimeout(spanPark.timer);
+        _setParkedRecovery(_parkKey, null);
+        _park = spanPark;
+        primary.inputs[`__agent_span_done_${primary.resumeFrom}`] = true;
+        _runTracker.emit("span_done", { si: primary.resumeFrom, n: spanPark.spanState.used });
+      } else if (round.kind === "continue" || round.kind === "refused") {
+        _runTracker.emit("span_action", { si: primary.resumeFrom, ok: round.kind === "continue" ? 1 : 0 });
+        clearTimeout(spanPark.timer);
+        spanPark.timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
+        if (spanPark.timer.unref) spanPark.timer.unref();
+        const spanResp = await agentSpanMod.buildSpanRequest(spanPark.page, spanDef, primary.resumeFrom, spanPark.spanState,
+          round.kind === "refused" ? { refused: round.reason } : { continued: true });
+        if (spanResp && Array.isArray(spanResp.content)) spanResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
+        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
+        runRegistry.end(_runId);
+        await _tracker.flush();
+        _tracker.destroy();
+        return spanResp;
+      } else {
+        _runTracker.emit("span_done", { si: primary.resumeFrom, n: spanPark.spanState.used, fc: round.code });
+        await _discardPark(_parkKey, `span_${round.code}`);
+        await _endEarly(`agent_span_${round.code}`);
+        return err(`Agent span at step ${primary.resumeFrom + 1} ended (${round.code}): ${round.message}`);
+      }
+    }
+
     // Outcome-fork resume: a person answered "which option for this popup?". Like a hand-over there
     // is no page-drift refusal (the person may have clicked in the page themselves; run.js looks
     // again), but like ai_review an unusable answer gets a bounded re-ask rather than a failure.
@@ -1676,7 +1738,7 @@ async function _handleTool(name, args, extra) {
     // (A release that rides along with an ai_review answer — a person's "yes" to a confirm-only
     // review also lets the steps behind it through — is handled by the review resume above, which
     // adopts the review's own park; this block is only for a park the guard itself created.)
-    if (_guardRelease && !_resumeReviewStep && !_resumeForkStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
+    if (_guardRelease && !_resumeReviewStep && !_resumeSpanStep && !_resumeForkStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
       const guardPark = _getParkedRecovery(_parkKey);
       if (!guardPark || guardPark.guardStepIndex !== primary.resumeFrom) {
         appendRecoveryEvent({ event: "guard_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
@@ -2080,6 +2142,8 @@ async function _handleTool(name, args, extra) {
             // EXEC-49 P5: an unrecorded question popup may be put to the caller (an MCP client with agent
             // recovery on, or Build Studio's test with "let AI answer" on); never to a scheduled run.
             answerPopups: (args.answer_popups === true || _effAgentEnabled) && trigger !== "scheduled",
+            // Engine v2 C4: an agent_span needs an agent to answer; a scheduled run has none, so the step fails closed.
+            agentSpans: trigger !== "scheduled",
           });
           _totalRecovered += (result && result.recoveredSteps) ? result.recoveredSteps : 0;
           if (result && result.outputs) Object.assign(_outputs, result.outputs);
@@ -2355,6 +2419,29 @@ async function _handleTool(name, args, extra) {
           reviewResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
         return reviewResp;
+      }
+
+      // Engine v2 C4: an agent_span reached for the first time. A PLANNED pause, parked like the ai_review one
+      // above (same park shape, TTL and fingerprint), carrying the span's state (budget used, the element list
+      // the agent is answering) so each later call can be checked against it. No recovery state, no retry budget.
+      if (runErr.spanPause) {
+        const _spanPage = runErr.page || page;
+        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
+        if (timer.unref) timer.unref();
+        _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
+          page: _spanPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, spanStepIndex: runErr.stepIndex, spanState: runErr.span, timer, producedInputs: _producedInputs(primary),
+          pageFingerprint: await capturePageFingerprint(_spanPage),
+          leaseKey: _leaseKey, hostRelease: _hostRelease,
+          attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
+        await closeExtraTabs(_openedTabs, _spanPage);
+        appendRecoveryEvent({ event: "span_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
+        log("info", "span_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
+        _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "span" });
+        const spanResp = await agentSpanMod.buildSpanRequest(_spanPage, runErr.step, runErr.stepIndex, runErr.span, {});
+        if (spanResp && Array.isArray(spanResp.content)) {
+          spanResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
+        }
+        return spanResp;
       }
 
       // Outcome fork: the popup needs a person's decision. A PLANNED pause, parked exactly like the

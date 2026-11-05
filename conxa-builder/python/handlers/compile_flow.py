@@ -318,6 +318,13 @@ class CompileFlowMixin:
             lines.append(
                 f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
                 f"({', '.join(named)}{more}) — {why}. They’re listed in the compile report.")
+        # What the model's second opinion proposed and the checks refused (llm/model_ledger.py). Said only
+        # when something was refused, so a clean compile reads as it always did.
+        so_ledger = (report.get("model_ledger") or {}).get("second_opinion") or {}
+        refused = int(so_ledger.get("dropped") or 0) + int(so_ledger.get("changed") or 0)
+        if refused:
+            lines.append(f"The checks turned down {refused} suggestion{'s' if refused != 1 else ''} "
+                         "from the model’s second opinion.")
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
             lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")
@@ -428,14 +435,24 @@ class CompileFlowMixin:
         if reworded is None:
             return
         changed: list[dict[str, Any]] = []
+        ledger: dict[str, Any] = {}  # fields that kept the template wording, counted (llm/model_ledger)
 
         def edit(data: dict[str, Any]) -> None:
             live = [q for q in data.get("questions") or [] if isinstance(q, dict) and q.get("status") in ("open", "queued")]
             before = {q["id"]: json.dumps([q["title"], q["body"], q["choices"]], sort_keys=True) for q in live}
-            clarify.apply_reworded(live, reworded)
+            clarify.apply_reworded(live, reworded, ledger)
             changed.extend(dict(q) for q in live if json.dumps([q["title"], q["body"], q["choices"]], sort_keys=True) != before[q["id"]])
 
         clarify_store.mutate(workflow_id, edit)
+        if ledger:
+            from conxa_compile.llm import model_ledger
+            from conxa_core.config import settings
+            from conxa_core.storage.workflow_store import get_workflow
+
+            workflow = get_workflow(workflow_id)
+            if workflow is not None and workflow.session_id:
+                model_ledger.append(settings.data_dir / "sessions" / workflow.session_id,
+                                    model_ledger.entry("clarify_question_copy", ledger, applied=len(changed)))
         thread = _thread(workflow_id)
         for q in changed:
             card = ts.get_card(thread, q["card_id"]) if q.get("card_id") else None

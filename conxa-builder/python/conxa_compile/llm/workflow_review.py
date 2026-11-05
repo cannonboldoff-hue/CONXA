@@ -48,6 +48,7 @@ from conxa_core.models.skill_spec import WorkflowIntentGraph
 from conxa_compile.llm.llm_cache import cache_key, read_cached, write_cached
 from conxa_compile.llm.openapi_client import infer_workflow_review
 from conxa_compile.llm.workflow_intent import _graph_from_raw
+from conxa_compile.llm.model_ledger import log as _log
 from conxa_compile.llm.workflow_semantics import _validate_findings
 
 _NAMESPACE = "workflow_review"
@@ -121,8 +122,9 @@ def build_workflow_review(
     decided). The goal it holds replaces this call's own, and a `parameterize_literal` for a value it
     settled is dropped, so the chat and the skill never show two goals and a settled value is not
     reopened here."""
+    ledger: dict[str, Any] = {}  # what the guards below drop, counted (model_ledger); read back as extras_out["ledger"]
     if extras_out is not None:
-        extras_out.update(understanding=None, loop_copy=[])
+        extras_out.update(understanding=None, loop_copy=[], ledger=ledger)
     if not steps_context:
         return WorkflowIntentGraph(), []
 
@@ -176,6 +178,7 @@ def build_workflow_review(
         if _empty(raw) and not _infra_failure(error_detail):
             # One reply that could not be read (cut off, not JSON): ask once more, saying so. Not when
             # the router itself could not be reached; a second try would only wait the same time again.
+            _log(ledger, "shape", "unreadable_reply")
             raw = infer_workflow_review(
                 steps=steps_context,
                 page_urls=page_urls,
@@ -214,6 +217,6 @@ def build_workflow_review(
     settled = frozenset(str(v.get("literal") or "").strip().lower() for v in (prior_understanding or {}).get("settled") or [])
     findings = _validate_findings(
         raw.get("suggestions"), step_keys_in_workflow=step_keys_in_workflow, steps_context=steps_context,
-        settled_literals=settled - {""},
+        settled_literals=settled - {""}, report=ledger,
     )
     return graph, findings

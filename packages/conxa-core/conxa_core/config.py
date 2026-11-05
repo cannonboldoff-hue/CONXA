@@ -199,6 +199,11 @@ class Settings(BaseSettings):
     # as a plain click, answering the popup on the person's behalf (see CLAUDE.md invariants).
     compile_outcome_forks: bool = True
 
+    # Engine v2 C1: every model guard counts what it drops into ``model_ledger.jsonl`` beside the
+    # recording (conxa_compile/llm/model_ledger.py). "off" stops the file and the compile-report copy.
+    # Env: SKILL_MODEL_LEDGER.
+    model_ledger: str = "observe"
+
     # Clarifying questions (docs/reports/Clarifying-Questions-Architecture-Investigation.md).
     # clarify_ledger: every question gets a facet + slot; "report" only writes what the slot dedupe and
     # the vacuity check WOULD drop (clarify.json "ledger_report"), "enforce" drops it, "off" skips both.

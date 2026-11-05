@@ -57,6 +57,11 @@ type FormValues = {
   ai_review_output_schema_json: string
   ai_review_on_failure: 'abort' | 'use_default' | 'continue'
   ai_review_default_value: string
+  agent_span_allowed: string[]
+  agent_span_until_type: 'text_present' | 'text_absent' | 'url_changed' | 'url_pattern' | 'state_changed'
+  agent_span_until_target: string
+  agent_span_actions: string
+  agent_span_seconds: string
   assertions: AssertionDraft[]
   // BUILD-51: when a step runs, what to do when its record is gone, and what an extract step reads
   run_if_input: string
@@ -149,6 +154,11 @@ const emptyForm: FormValues = {
   call_inputs_text: '',
   call_outputs_text: '',
   wait_until_on_timeout: 'fail',
+  agent_span_allowed: ['click', 'fill', 'select', 'scroll'],
+  agent_span_until_type: 'text_present',
+  agent_span_until_target: '',
+  agent_span_actions: '8',
+  agent_span_seconds: '120',
   assertions: [],
   run_if_input: '',
   run_if_op: 'not_empty',
@@ -221,6 +231,13 @@ function defaultsFromStep(step: StepEditorDTO): FormValues {
     call_inputs_text: mapToLines(step.call_workflow_inputs),
     call_outputs_text: mapToLines(step.call_workflow_outputs),
     wait_until_on_timeout: step.wait_until_on_timeout === 'continue' ? 'continue' : 'fail',
+    agent_span_allowed: Array.isArray(step.agent_span_allowed) && step.agent_span_allowed.length
+      ? step.agent_span_allowed
+      : ['click', 'fill', 'select', 'scroll'],
+    agent_span_until_type: (step.agent_span_until?.type as FormValues['agent_span_until_type']) || 'text_present',
+    agent_span_until_target: String(step.agent_span_until?.target || ''),
+    agent_span_actions: String(step.agent_span_budget?.actions ?? 8),
+    agent_span_seconds: String(step.agent_span_budget?.seconds ?? 120),
     ai_review_default_value:
       step.ai_review_default_value === undefined || step.ai_review_default_value === null
         ? ''
@@ -560,6 +577,48 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
           throw e
         }
       }
+      if (actionKind === 'agent_span') {
+        const goal = values.value.trim()
+        const untilType = values.agent_span_until_type
+        const untilTarget = values.agent_span_until_target.trim()
+        const actions = Number(values.agent_span_actions)
+        const seconds = Number(values.agent_span_seconds)
+        const fail = (field: 'value' | 'agent_span_until_target' | 'agent_span_actions' | 'agent_span_seconds' | 'agent_span_allowed', message: string): never => {
+          const err = new Error(message)
+          methods.setError(field, { message })
+          if (!silent) toast.error(message)
+          throw err
+        }
+        if (!goal) fail('value', 'Say what the agent should get done')
+        if (!values.agent_span_allowed.length) fail('agent_span_allowed', 'Allow at least one action')
+        const needsTarget = untilType !== 'state_changed' && untilType !== 'url_changed'
+        if (needsTarget && !untilTarget) fail('agent_span_until_target', 'Say how to tell the goal is reached')
+        if (!Number.isInteger(actions) || actions < 1 || actions > 15) fail('agent_span_actions', 'Actions must be a whole number from 1 to 15')
+        if (!Number.isFinite(seconds) || seconds < 10 || seconds > 600) fail('agent_span_seconds', 'Time must be between 10 and 600 seconds')
+        const patch: Record<string, unknown> = {
+          semantic_description: values.intent,
+          value: goal,
+          action: { action: 'agent_span', value: goal },
+          agent_span_allowed: values.agent_span_allowed,
+          agent_span_until: needsTarget ? { type: untilType, target: untilTarget } : { type: untilType },
+          agent_span_budget: { actions, seconds: Math.round(seconds) },
+          agent_span_on_budget: 'fail',
+        }
+        try {
+          const res = await patchStep(skillId, patchIndex, patch, false, path)
+          onWorkflowUpdated(res.workflow)
+          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
+          const next = findUpdatedStep(res.workflow, step.id)
+          if (next) methods.reset(defaultsFromStep(next))
+          if (!silent) toast.success('Step saved')
+          return
+        } catch (e) {
+          const msg = errorMessage(e, 'Save failed')
+          methods.setError('root', { message: msg })
+          if (!silent) toast.error(msg)
+          throw e
+        }
+      }
       if (actionKind === 'wait_until') {
         const what = values.value.trim()
         if (!what) {
@@ -868,6 +927,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const isScrollStep = step.flags.is_scroll || actionKind === 'scroll'
   const isWaitStep = actionKind === 'wait'
   const isWaitUntilStep = actionKind === 'wait_until'
+  const isAgentSpanStep = actionKind === 'agent_span'
   const isClipboardStep = actionKind === 'clipboard_write' || actionKind === 'clipboard_read'
   const isCallWorkflowStep = actionKind === 'call_workflow'
   const isScreenshotStep = actionKind === 'screenshot'
@@ -875,7 +935,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const isExtractStep = actionKind === 'extract'
   const isBoundStep = Object.keys(step.entity_binding || {}).length > 0
   // The patch gate refuses a run condition on a confirmation, hand-over or marker, and a popup decision.
-  const canHaveCondition = !isMarkerStep && !isAiReviewStep && actionKind !== 'handover' && actionKind !== 'outcome_fork'
+  const canHaveCondition = !isMarkerStep && !isAiReviewStep && !isAgentSpanStep && actionKind !== 'handover' && actionKind !== 'outcome_fork'
     && actionKind !== 'for_each' && !isCheckStep
   const showSelectorAndAnchorTools =
     !hideSelectorTools &&
@@ -1189,6 +1249,64 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                   <code>result_that_workflow_reads = your_name</code>. Later steps use it as {'{{your_name}}'}. The workflow you call must be built first
                   (a version is pinned when you build). It cannot contain an AI review, a hand-over or a popup decision.
                 </p>
+              </div>
+            </>
+          ) : null}
+          {isAgentSpanStep ? (
+            <>
+              <div className="grid gap-2">
+                <Label>What the agent may do</Label>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {(['click', 'fill', 'select', 'scroll'] as const).map((kind) => (
+                    <label key={kind} className="flex items-center gap-2">
+                      <input type="checkbox" value={kind} {...methods.register('agent_span_allowed')} />
+                      {kind === 'click' ? 'Click' : kind === 'fill' ? 'Type into a field' : kind === 'select' ? 'Pick from a list' : 'Scroll'}
+                    </label>
+                  ))}
+                </div>
+                {methods.formState.errors.agent_span_allowed ? (
+                  <p className="text-destructive text-xs">{methods.formState.errors.agent_span_allowed.message}</p>
+                ) : null}
+                <p className="text-muted-foreground text-xs">
+                  The AI agent picks one numbered element at a time from what the page shows. It never presses a button that sends, pays, deletes or
+                  publishes, never opens another site, and never answers a popup that asks for a decision. Runs that use this step need an agent, so
+                  they cannot be scheduled.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="agent_span_until_type">The goal is reached when</Label>
+                  <select id="agent_span_until_type" className={fieldSelectClass} {...methods.register('agent_span_until_type')}>
+                    <option value="text_present">This text shows on the page</option>
+                    <option value="text_absent">This text is gone</option>
+                    <option value="url_pattern">The address matches</option>
+                    <option value="url_changed">The address changes</option>
+                    <option value="state_changed">The page visibly changes</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="agent_span_until_target">Text or address pattern</Label>
+                  <Input id="agent_span_until_target" type="text" placeholder="e.g., Invoice {{invoice_number}}" {...methods.register('agent_span_until_target')} />
+                  {methods.formState.errors.agent_span_until_target ? (
+                    <p className="text-destructive text-xs">{methods.formState.errors.agent_span_until_target.message}</p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="agent_span_actions">Most actions</Label>
+                  <Input id="agent_span_actions" type="number" min={1} max={15} {...methods.register('agent_span_actions')} />
+                  {methods.formState.errors.agent_span_actions ? (
+                    <p className="text-destructive text-xs">{methods.formState.errors.agent_span_actions.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="agent_span_seconds">Give up after (seconds)</Label>
+                  <Input id="agent_span_seconds" type="number" min={10} max={600} {...methods.register('agent_span_seconds')} />
+                  {methods.formState.errors.agent_span_seconds ? (
+                    <p className="text-destructive text-xs">{methods.formState.errors.agent_span_seconds.message}</p>
+                  ) : null}
+                </div>
               </div>
             </>
           ) : null}

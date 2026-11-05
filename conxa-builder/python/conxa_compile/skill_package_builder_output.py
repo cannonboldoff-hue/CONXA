@@ -58,6 +58,8 @@ def execution_capabilities(steps: list[Any]) -> list[str]:
                 need.add("clipboard")
             if s.get("type") == "call_workflow":
                 need.add("call_workflow")
+            if s.get("type") == "agent_span":
+                need.add("agent_span")
             for st in s.get("states") if isinstance(s.get("states"), list) else []:
                 for o in (st.get("options") if isinstance(st, dict) and isinstance(st.get("options"), list) else []):
                     if not isinstance(o, dict):
@@ -304,6 +306,11 @@ def _write_skill_packs_format(
         # instead of running a step it would misread (required_runtime compares the host exe, not this).
         if required_capabilities:
             manifest["required_capabilities"] = required_capabilities
+        # Engine v2 C4: a span is carried out by the caller's agent, so a run is no longer zero-token. Said in
+        # the manifest so a vendor (and `create_schedule`) can tell without opening execution.json. Omitted
+        # when false, so the common manifest is unchanged.
+        if "agent_span" in required_capabilities:
+            manifest["uses_agent"] = True
         # AUTH-1: hosts the recording visited that no group app covers — the runtime warns (never
         # blocks) about them before step 0. Omitted when empty so the common manifest is unchanged
         # and a runtime that predates the field simply never reads it.

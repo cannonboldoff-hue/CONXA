@@ -61,6 +61,11 @@ ACTION_KIND_ORDER = (
     # (on_failure, an optional resume_when probe) is a top-level `handover_*` field validated by
     # patch_gate.py, same convention as ai_review's own `ai_review_*` fields.
     "handover",
+    # Engine v2 C4: an author-placed span the caller's agent carries out one candidate action at a time
+    # (runtime/app/agent_span.js). No selector (the agent picks from elements the runtime lists) and no
+    # recovery; the generic value is the goal and everything else is a top-level `agent_span_*` field
+    # validated by patch_gate.py, same convention as ai_review and handover above.
+    "agent_span",
     # Browser clipboard, for a site that needs a real paste. NOTE the browser clipboard IS the
     # computer's clipboard, so what is written stays there until something replaces it. Value-bearing:
     # write's value is the text; read's value is the name the text is kept under (like extract).
@@ -147,6 +152,7 @@ INSERTABLE_ACTIONS = frozenset(
         "extract",
         "ai_review",
         "handover",
+        "agent_span",
         "clipboard_write",
         "clipboard_read",
         "call_workflow",
@@ -203,6 +209,8 @@ VALUE_ACTIONS = frozenset(
         # EXEC-21: likewise not a page-interaction value — this is the message shown to the
         # person in the hand-over banner (see VALUE_LABELS below).
         "handover",
+        # Engine v2 C4: the goal the agent works toward (see VALUE_LABELS below).
+        "agent_span",
         "clipboard_write",
         "clipboard_read",
         "call_workflow",
@@ -235,6 +243,7 @@ ACTION_LABELS = {
     "screenshot": "Screenshot",
     "ai_review": "AI Review",
     "handover": "Hand over to person",
+    "agent_span": "Agent span",
     "clipboard_write": "Copy to clipboard",
     "clipboard_read": "Read clipboard",
     "call_workflow": "Call another workflow",
@@ -272,6 +281,7 @@ CATEGORIES = {
     "extract": "validation",
     "ai_review": "validation",
     "handover": "validation",
+    "agent_span": "advanced",
     "clipboard_write": "advanced",
     "clipboard_read": "advanced",
     "call_workflow": "flow",
@@ -314,6 +324,7 @@ VALUE_LABELS = {
     "ai_review": "Output binding name",
     "extract": "Output name",
     "handover": "Message shown to the person",
+    "agent_span": "What the agent should get done",
     "clipboard_write": "Text to copy",
     "clipboard_read": "Name to keep it under",
     "call_workflow": "Workflow to call (its id)",
@@ -412,6 +423,9 @@ def default_action_value(kind: str) -> Any:
         return "Text to copy"
     if normalized == "clipboard_read":
         return "clipboard_text"
+    if normalized == "agent_span":
+        # Engine v2 C4: the goal the agent works toward; {{input}} names are filled from the run's inputs.
+        return "Describe what the agent should get done"
     if normalized == "handover":
         # EXEC-21: not a page-interaction value — the message shown to the person (see
         # VALUE_LABELS above).

@@ -44,8 +44,13 @@ def route_intent(
     workflows: list[dict[str, Any]] | None = None,
     call: Caller | None = None,
     timeout_ms: int = 15_000,
+    report: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """``{"action", "slots", "source"}`` or None (= just talk). Never raises."""
+    """``{"action", "slots", "source"}`` or None (= just talk). Never raises. ``report`` (llm/model_ledger)
+    counts what is refused from a model answer: ``shape.malformed_reply``, ``reference.action_not_allowed``,
+    ``reference.unknown_workflow``. A plain "chat" answer is a normal outcome and is not counted."""
+    from conxa_compile.llm.model_ledger import log as _log  # noqa: PLC0415
+
     options = routable(allowed)
     if not options or not text.strip():
         return None
@@ -79,9 +84,12 @@ def route_intent(
     except Exception:  # noqa: BLE001 -- routing is a convenience; the conversational reply still works
         return None
     if not isinstance(data, dict):
+        _log(report, "shape", "malformed_reply")
         return None
     action = str(data.get("action") or "").strip()
     if action not in {o.id for o in options}:
+        if action and action != "chat":
+            _log(report, "reference", "action_not_allowed", action)
         return None  # "chat", unclear, or an id that is not allowed right now
     slots: dict[str, Any] = {}
     raw = data.get("slots") if isinstance(data.get("slots"), dict) else {}
@@ -90,6 +98,7 @@ def route_intent(
     if action == "open_workflow":
         hit = next((w for w in workflows or [] if w["id"] == raw.get("workflow_id")), None)
         if hit is None:
+            _log(report, "reference", "unknown_workflow", raw.get("workflow_id"))
             return None
         slots = {"workflow_id": hit["id"], "name": hit.get("name") or ""}
     return {"action": action, "slots": slots, "source": "model"}

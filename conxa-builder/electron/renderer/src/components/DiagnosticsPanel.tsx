@@ -71,6 +71,15 @@ export function DiagnosticsPanel({ workflow, currentStep, skillId, version }: Pr
         <Row label="Structural fingerprint" value={health.structural_fingerprint_present ? 'present' : 'absent'} />
       </section>
 
+      {health.model_ledger && Object.keys(health.model_ledger).length > 0 ? (
+        <section>
+          <p className={cn(SECTION_LABEL, 'pb-1.5')}>What the model changed or dropped</p>
+          {Object.entries(health.model_ledger).map(([task, c]) => (
+            <Row key={task} label={task} value={`changed ${c.changed}, dropped ${c.dropped}, added ${c.added}`} mono />
+          ))}
+        </section>
+      ) : null}
+
       {Object.keys(routerStats).length > 0 ? (
         <section>
           <p className={cn(SECTION_LABEL, 'pb-2')}>LLM router stats</p>

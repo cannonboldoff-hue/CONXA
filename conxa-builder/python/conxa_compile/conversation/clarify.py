@@ -389,30 +389,41 @@ def reword_payload(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def apply_reworded(questions: list[dict[str, Any]], reworded: Any) -> None:
+def apply_reworded(questions: list[dict[str, Any]], reworded: Any, report: dict[str, Any] | None = None) -> None:
     """Fold a model's friendlier wording into ``questions`` (in place), field by field.
 
     Only title, body and the label/detail of existing single-choice options can change; ids, order,
     what each choice does and every key besides those are code's. A field is taken only when it is a
     non-empty string of sane length, has no ``{{`` placeholder and keeps every “quoted” item of the
     original (so a recorded name or value can't be dropped or invented); anything else keeps the
-    template text. Never raises."""
+    template text. Never raises. ``report`` (llm/model_ledger) counts every field that kept its
+    template: ``shape.malformed_reply``, ``reference.unknown_question``, ``override.reword_rejected``."""
+    from conxa_compile.llm.model_ledger import log as _ledger_log  # noqa: PLC0415 -- clarify is imported very early
+
     if not isinstance(reworded, dict) or not isinstance(reworded.get("questions"), list):
+        if reworded:
+            _ledger_log(report, "shape", "malformed_reply")
         return
     by_id = {str(r.get("id")): r for r in reworded["questions"] if isinstance(r, dict)}
     allowed = {item["id"] for item in reword_payload(questions)}
 
-    def ok(new: Any, old: str, limit: int) -> bool:
-        return (isinstance(new, str) and 0 < len(new.strip()) <= limit and "{{" not in new
+    def ok(new: Any, old: str, limit: int, qid: str) -> bool:
+        good = (isinstance(new, str) and 0 < len(new.strip()) <= limit and "{{" not in new
                 and all(m in new for m in _QUOTED.findall(old)))
+        if not good:
+            _ledger_log(report, "override", "reword_rejected", qid)
+        return good
 
     for q in questions:
         r = by_id.get(q["id"])
+        if q["id"] in allowed and r is None:
+            _ledger_log(report, "reference", "unknown_question", q["id"])
+            continue
         if r is None or q["id"] not in allowed:
             continue
-        if ok(r.get("title"), q["title"], 200):
+        if ok(r.get("title"), q["title"], 200, q["id"]):
             q["title"] = r["title"].strip()
-        if ok(r.get("body"), q["body"], 500):
+        if ok(r.get("body"), q["body"], 500, q["id"]):
             q["body"] = r["body"].strip()
         if q.get("multi"):
             continue
@@ -421,9 +432,9 @@ def apply_reworded(questions: list[dict[str, Any]], reworded: Any) -> None:
             n = new_choices.get(str(c["id"]))
             if n is None or str(c["id"]).startswith("option:"):
                 continue
-            if ok(n.get("label"), c["label"], 90):
+            if ok(n.get("label"), c["label"], 90, q["id"]):
                 c["label"] = n["label"].strip()
-            if ok(n.get("detail"), c.get("detail", ""), 220) or (n.get("detail") == "" and not c.get("detail")):
+            if (n.get("detail") == "" and not c.get("detail")) or ok(n.get("detail"), c.get("detail", ""), 220, q["id"]):
                 c["detail"] = str(n.get("detail") or "").strip()
 
 

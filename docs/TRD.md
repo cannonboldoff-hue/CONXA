@@ -1094,6 +1094,31 @@ The pass **never** touches `target`, `identity_bundle`, `compiled_selectors`, `w
 
 **Reviewer edit log** (`editor/edit_log.py`): every mutating Human Edit command (hooked once in `backend.py::Backend.dispatch`, so undo/redo are covered) appends one line per changed field to `data/skills/{skill_id}/edits.jsonl`. Keyed on `step_key`, allow-listed fields only (`input_binding`, `value`, `intent`, `semantic_description`, `action.action`, `optional_hint`, `branch`, `validation.assertions`); failure-silent. `conxa-cloud/scripts/eval_suggestions.py` reports `override_rate` (edits on fields the pass wrote), `miss_rate`, and the copilot's accept and verified-fix rates.
 
+### 7.3a Model Ledger (Engine v2 C1, 2026-11-06)
+
+Every guard that holds a model's answer to what code can act on counts what it drops, in the one shape the
+understanding check already used: `{stage: {rule: {count, example}}}` over the five stages `shape`, `reference`,
+`override`, `backfill`, `safety`. The counter is `conxa_compile/llm/model_ledger.py` (`log`, `count`, `summary`, `flat`,
+`entry`, `append`); `timeline_understanding.py` re-imports it, so its `validation_report` is unchanged. The guard still
+decides what it keeps, and `ref` in a count is always an id (a step key, a question id), never model or page text.
+
+| Call | Where it counts | Rules |
+|---|---|---|
+| Second opinion | `llm/workflow_semantics.py::_validate_findings` (per gate), `llm/workflow_review.py` (unreadable reply) | `unknown_step_key`, `unknown_kind`, `settled_literal`, `bad_placeholder`, `name_collision`, `unobserved_optional`, `bad_phase`, `ungrounded_assertion`, `unobserved_noise`, `over_cap`, `malformed_item`, `unreadable_reply` |
+| Question wording | `conversation/clarify.py::apply_reworded` | `reword_rejected`, `unknown_question`, `malformed_reply` |
+| Chat intent router | `conversation/intent_router.py::route_intent` | `action_not_allowed`, `unknown_workflow`, `malformed_reply` |
+| Chat change cards | `editor/copilot_proposals.py::gate_all` (one count per raw kind, not per gate: the three gates see the same list) | `gate_refused`, `malformed_item` |
+| Re-target (draw a region) | `editor/retarget.py::preview_retarget` | `over_cap`, `no_dom_match`, `not_unique_or_fragile` |
+| Agent span (Studio test) | `handlers/workflows.py::check_span_answer` | `malformed_reply`, `action_not_allowed`, `bad_candidate_index`, `unknown_candidate` |
+| Tier B | Runtime, unchanged: `override_rejected` with a reason goes to the tracker (`failure_response.js`) | not mapped to these names yet (the cloud summary in C5 would do it) |
+
+Each call appends one line to `model_ledger.jsonl` in the recording's session folder (a chat-level call: the
+workflow's folder). The second opinion also writes `compile_report["model_ledger"]`, and only when something was
+dropped, so a clean compile stays byte-identical. `compile_health.model_ledger` (`editor/workflow_dto.py`) merges both
+for the Diagnostics panel, and the post-compile chat message says how many suggestions the checks turned down.
+`SKILL_MODEL_LEDGER=off` stops the file and the report copy. It counts only: no guard changes what it keeps.
+Not hooked into `call_llm`: reference and override checks need each caller's context.
+
 ### 7.4 Human Review Copilot
 
 "Conxa Copilot" is a chat panel in Human Edit (`components/copilot/CopilotPanel.tsx`, `CopilotLauncher.tsx`; floating, not in the Tools rail). It diagnoses the latest test failure and proposes edits as accept/reject diffs. **The copilot proposes, the reviewer disposes.** It's a user-initiated editor action and never writes an element address.
@@ -1187,6 +1212,18 @@ The conversation-led Build Studio (plan: [`Build-Studio-Conversation-Plan.md`](B
 - **Auto-fix (BUILD-40).** Off the happy path and **outside the recovery cascade** — Tier A stays zero-token, auto-fix only runs after a test has already failed. With the Settings switch on (default; `data/studio_settings.json`), a failed test starts a loop of at most three attempts: the copilot's own `copilot_diagnose` call proposes at most one change, the same three gates filter it, it is applied by the same command a reviewer's Apply click uses (`source="auto_fix"` in `edits.jsonl`) and listed as a `pending_change` card with the exact change and Undo, then the workflow is rebuilt and re-tested **with the guard always on**. It stops on three failures, Stop, no in-gate proposal, or a change that can't apply, and offers Resume or Human Edit. This is a deliberate shift from "the reviewer accepts each proposal" (see the "Human Review is the gate" note in §7.3): the mitigations are the gates, the listing with Undo, the edit-log attribution, the guard on every re-test, and approval staying human and being revoked by any later edit.
 - **Destructive flag.** The runtime reads only `step.destructive`, exported from `identity_bundle.destructive`; `sync_derived_step_fields` now re-syncs it whenever `consequence` is patched, so marking a step irreversible in Human Edit (or accepting a copilot proposal that does) actually reaches the runtime.
 
+**Video job (Engine v2 C2, 2026-11-06).** The video analysis is a submit-and-poll cloud job; its wait now outlives
+one request and one Studio session. `conxa_compile/video/job.py` keeps `sessions/<id>/video_job.json`
+(`fingerprint`, `job_id`, `state`, `attempts`, `first_try`, `next_try`, `last_error`, `blocked_code`; states `polling`,
+`waiting_cloud`, `done`, `blocked`, `failed`). `VideoAnalysisClient.analyze` takes `resume_job_id` (poll a saved job
+without uploading again; if the cloud lost it, submit afresh as before) and `on_job_id` (called with each new id).
+When one 600 s budget runs out, `_flow_understand` waits 1, 2, 5, 10 minutes, then 30 minutes, for up to 24 hours,
+then fails with the Retry card. The card says when it tries again; the `watching` flag stays on, so compile and test
+stay blocked. Quota, trial, sign-in and unreadable-video failures stop at once (`blocked` / `failed`). At Studio start
+`_resume_video_jobs` re-starts every recording with a live record and no `understanding.json`, and
+`_reconcile_interrupted` leaves such a card alone. Pegasus stays required. The cloud's own job store is still in
+memory (a cloud restart makes the saved id 404, which costs one new upload).
+
 ### 7.4b Connection, Engine State and Sign-in Expiry (BUILD-43, 2026-10-18)
 
 Studio depends on two things the person can lose without losing their work: the local **engine** (the Python backend) and **Conxa Cloud**.
@@ -1251,6 +1288,16 @@ Browser replay is the first executor, not the last: skills may graduate to nativ
 - Branch primitives define their condition in contract terms (identity/state), with browser evaluation on the executor side.
 - Every new `SkillStep`/`SkillPackage` field must be tagged at introduction and added to `docs/Backend-Schema.md` §3.0 in the same change (ARCH-3).
 
+
+**Action contract (Engine v2 C3, 2026-11-06).** `packages/conxa-core/conxa_core/models/action_contract.json` states
+what each of the 42 recorded kinds becomes (`step`), how the runtime runs it (`run`: `handler`, `noop`, `intercept`),
+whether recovery applies, and which builder turns it into a step (`via`); `step_only` lists the editor-authored types
+that are not recorder kinds. Nothing reads it at run time and it is not shipped to customers. Two tests fail the build
+when the sides disagree: `conxa-cloud/tests/test_action_contract.py` (kinds equal `ActionKind`; step-only types equal
+the editor registry minus `ActionKind`; recovery flags equal `action_policy`; the packager builds each `packager` kind
+into the named step) and `runtime/test/unit/test_action_contract.js` (every named type is in `HANDLERS` /
+`NOOP_STEP_TYPES` / `PRE_DISPATCH_STEP_TYPES` as stated, and nothing in those sets is missing from the file).
+**Adding a kind:** add it to `ActionKind`, add one entry here, and the tests name what else is missing.
 
 ---
 
@@ -1827,6 +1874,41 @@ in the middle of this one, through the same `executeOneStep` (tabs, Tier A recov
   the version of the workflow it calls (built in the same call, or read from an earlier build). Rebuilding the
   callee alone changes its version and makes the caller refuse until it is rebuilt: deliberate.
 - *Telemetry.* `call_start`, `call_done`; the callee's steps are counted under the caller.
+
+### 11.7 Agent Span (Engine v2 C4, 2026-11-06)
+
+An author-placed span the caller's AI agent carries out one candidate action at a time: the third planned pause,
+beside `ai_review` (a question) and `handover` (a person). Like both it has no selector, never reaches
+`executeStep`/`HANDLERS` or the Tier 1-4 recovery cascade, and never touches `recovery_stage.js` or `retry_budget.js`.
+It is not a violation of "Tier A costs zero tokens" for the same reason an `ai_review` is not: it is explicit,
+editor-visible and author-placed, and it sits outside every selector/a11y resolution path. A skill with a span is no
+longer zero-token on every run, so its manifest carries `uses_agent: true` and `create_schedule` refuses it.
+
+**Step.** `value` is the goal (`{{input}}` is filled from the run's inputs); top-level `agent_span_allowed` (subset of
+`click`, `fill`, `select`, `scroll`), `agent_span_until` (required: `text_present`, `text_absent`, `url_pattern`,
+`url_changed` or `state_changed`, never a selector), `agent_span_budget` (`actions` 1-15, `seconds` 10-600) and
+`agent_span_on_budget` (`fail`). The packager writes `goal`, `allowed`, `until` (`required: true`), `budget`,
+`on_budget`; a span with no goal, no valid check or no allowed action is dropped at build with a warning, like an
+`ai_review` with no prompt. `patch_gate.py` refuses `run_if` and `recovery`, and refuses a span directly before a
+destructive step (and the reverse), so an agent's last action is never what an irreversible step builds on.
+
+**Run.** `run.js` checks `until` first (already true: zero actions). It fails closed in a dry run (withheld, listed),
+on a scheduled run (`ctx.agentSpans === false`: no agent to answer), and inside a loop, option or called workflow.
+Otherwise it parks (`agentSpanStepIndex`) and `agent_span.js::buildSpanRequest` returns the goal, the allowed actions,
+the budget left and a numbered list of the page's visible interactive elements (page text framed as untrusted data).
+The agent answers with `execute_skill` `resume_from: <i>` and `span_actions: {"<i>": {kind, candidate_index, value}}`
+(or `{status: "give_up"}`). The runtime refuses, without spending budget, an action the step does not allow, a number not
+in the list it just sent, a disabled element, a password / file / hidden field, a link to another site, and a button
+whose label looks irreversible (`fork.js::isIrreversibleLabel`); after the fourth refusal the span fails. A popup that
+asks for a decision stops the span (`fork.js::isDecisionDialog`), as does leaving the host. The agent never types a
+selector, and the runtime never asks a person. An accepted action is done with Playwright, costs one action, and `until`
+is checked again; the span ends on success or fails (`agent_span_exhausted`, `_gave_up`, `_refused_too_often`,
+`_decision_dialog`, `_left_host`). Telemetry: `span_start`, `span_action`, `span_done`.
+
+**Studio test.** With "let AI answer" on, `handlers/workflows.py::_answer_agent_span` stands in for the agent through
+the metered proxy (task `agent_span`); `check_span_answer` holds each answer to what the runtime accepts and counts
+refusals in the model ledger. With it off, the test ends at the span ("passed up to here"). The capability
+`agent_span` in `runtime/app/version.json` and `manifest.required_capabilities` makes an older engine refuse the pack.
 
 ## 12. Telemetry
 

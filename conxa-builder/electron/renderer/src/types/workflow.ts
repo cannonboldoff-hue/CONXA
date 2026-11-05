@@ -146,6 +146,11 @@ export type StepEditorDTO = {
   call_workflow_outputs?: Record<string, string> | null
   wait_until_timeout_ms?: number | null
   wait_until_on_timeout?: string | null
+  /** Engine v2 C4: an agent span's own config (the goal rides `value`). Absent on every other step kind. */
+  agent_span_allowed?: string[] | null
+  agent_span_until?: { type?: string; target?: string } | null
+  agent_span_budget?: { actions?: number; seconds?: number } | null
+  agent_span_on_budget?: string | null
   /** BUILD-51: run only when an input says so / what to do when the bound record is gone / what an
    * `extract` step reads. Empty or null when the step has none. */
   run_if?: { input?: string; op?: string; value?: string }
@@ -213,6 +218,9 @@ export type CompileHealth = {
   structural_fingerprint_present?: boolean
   /** Diagnostics-tier only — provider/router telemetry from compile time. */
   llm_router_stats?: Record<string, unknown>
+  /** What each model guard dropped, changed or added at compile and review time, per call
+   *  (conxa_compile/llm/model_ledger.py). A call with nothing counted is absent. */
+  model_ledger?: Record<string, { dropped: number; changed: number; added: number }>
   /** One-click "generalize this to a loop" suggestion(s) — compiler/loop_suggestion.py.
    *  Deterministic (no LLM); already excludes anything this skill's reviewer previously
    *  rejected. See ForEachSuggestionBanner.tsx. */

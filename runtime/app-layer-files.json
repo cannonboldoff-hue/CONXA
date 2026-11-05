@@ -143,6 +143,8 @@
       "_note": "Heartbeat-stamped lock files — makes host_lock.js mutual exclusion hold across engine processes (chat-host vs scheduler-daemon)." },
     { "name": "review_pause.js",      "profile": "default",
       "_note": "Extracted from server.js: review-pause gate for scheduled runs (PROD-5)." },
+    { "name": "agent_span.js",        "profile": "default",
+      "_note": "Engine v2 C4: the agent_span step (candidate-only agent actions) — run.js and server.js both require it directly; omitting it hard-crashes any pack containing an agent_span step." },
     { "name": "handover.js",          "profile": "default",
       "_note": "EXEC-21: hand-over pause/resume primitive (banner/file/loopback-HTTP signals) — run.js and server.js both require it directly; omitting it hard-crashes any pack containing a handover step." },
     { "name": "scheduler_cli.js",     "profile": "default",

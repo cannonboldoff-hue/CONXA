@@ -51,6 +51,10 @@ const CORE_TOOL_DEFS = [
           type: "object",
           description: "AI review checkpoints: map of \"<step index>\" → your structured answer object to that step's question (see the review request's Question and, if present, its required output schema). Used together with resume_from to continue past an ai_review pause. Example: { \"5\": { \"visible\": true, \"why\": \"the Payment Successful banner is showing\" } }.",
         },
+        span_actions: {
+          type: "object",
+          description: "Agent spans: map of \"<step index>\" → your next action for that step's goal. Pick ONE numbered element from the span request's list: { \"kind\": \"click\" | \"fill\" | \"select\" | \"scroll\", \"candidate_index\": <n>, \"value\": \"<text for fill or select; up / down for scroll>\" }, or { \"status\": \"give_up\", \"why\": \"<one line>\" } when the goal cannot be reached. Used together with resume_from; call again after each action until the span ends. You cannot give a selector, open another site, or press a button that sends, pays, deletes or publishes. Example: { \"5\": { \"kind\": \"fill\", \"candidate_index\": 3, \"value\": \"INV-1042\" } }.",
+        },
         watch:       { type: "boolean", description: "true = open a visible browser so the user can watch; false = run headlessly in the background." },
         wait_for_auth: { type: "boolean", description: "Default true: when sign-in is missing, return at once and let the run start by itself after the user signs in. false = never wait — fail immediately with the sign-in message instead, so nothing starts later behind the caller's back (used by Build Studio's Run Test)." },
         dry_run:     { type: "boolean", description: "PROD-3-DRYRUN: run every step except the final committing (irreversible) action — that step is resolved (proving its target still exists) but never clicked/submitted. Use to preview a skill with a destructive final step before actually committing it. Read-only/reversible steps still run normally." },

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from conxa_compile.conversation import timeline_understanding as tu
+from conxa_compile.llm.model_ledger import flat
 
 
 def sessions(root: Path, n: int) -> list[Path]:
@@ -38,8 +39,7 @@ def sessions(root: Path, n: int) -> list[Path]:
 
 def flat_report(und: dict[str, Any]) -> dict[str, int]:
     """``{"stage.rule": count}`` from an understanding's validation_report (empty for files written before it existed)."""
-    return {f"{stage}.{rule}": slot["count"] for stage, rules in (und.get("validation_report") or {}).items()
-            for rule, slot in rules.items()}
+    return flat(und.get("validation_report") or {})
 
 
 def summarize(und: dict[str, Any], payload_chars: int = 0) -> dict[str, Any]:

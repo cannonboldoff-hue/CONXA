@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import Any
 
 from conxa_compile.editor.step_path import NestedPath, StepPathError, get_nested_step, with_nested_step
+from conxa_compile.llm.model_ledger import append as _ledger_append, entry as _ledger_entry, log as _ledger_log
 
 
 class RetargetError(Exception):
@@ -362,17 +363,29 @@ def preview_retarget(
         # dom_snapshot at all.
         frame_nested = _is_frame_nested(step)
         candidates: list[dict[str, Any]] = []
+        ledger: dict[str, Any] = {}  # what this guard refuses from the vision model, counted (llm/model_ledger)
+        for _ in raw_candidates[5:]:
+            _ledger_log(ledger, "safety", "over_cap", step_index)
         for cand in raw_candidates[:5]:
             if frame_nested:
                 match_count = -1
             else:
                 _passes, match_count = validate_selector(cand.selector, dom_snapshot)
                 if match_count == 0:
+                    _ledger_log(ledger, "reference", "no_dom_match", step_index)
                     continue
             candidates.append(_candidate_row(step, cand.selector, match_count, cand.intent, source="llm"))
         # Same rule as the review path: no non-unique matches, nothing below the durability
         # floor — a freshly re-picked element deserves the same bar as a reviewed one.
-        candidates = _prune_review_candidates(candidates)
+        offered = _prune_review_candidates(candidates)
+        for _ in range(len(candidates) - len(offered)):
+            _ledger_log(ledger, "safety", "not_unique_or_fragile", step_index)
+        candidates = offered
+        if ledger:
+            from conxa_core.config import settings
+
+            _ledger_append(settings.data_dir / "sessions" / source_session_id,
+                           _ledger_entry("region_selector", ledger, applied=len(candidates)))
 
         # Regenerate recovery anchors here too (Continue), not at Apply — same drawn region, so
         # paying for the vision call now means Apply never has to (see apply_retarget below).
