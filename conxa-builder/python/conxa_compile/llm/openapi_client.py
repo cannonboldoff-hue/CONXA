@@ -21,6 +21,8 @@ def _call_llm_or_none(task: str, payload: dict[str, Any], timeout_ms: int, *, er
     try:
         return call_llm(task, payload, timeout_ms, error_detail=error_detail)
     except CloudUnreachable:
+        if error_detail is not None:
+            error_detail.append("cloud_unreachable")
         return None
 
 
@@ -165,6 +167,8 @@ def infer_workflow_review(
     task_description: str = "",
     review_inputs: dict[str, Any] | None = None,
     loop_candidates: list[dict[str, Any]] | None = None,
+    understanding: dict[str, Any] | None = None,
+    retry: str = "",
 ) -> dict[str, Any] | None:
     """Single multimodal whole-workflow LLM call producing BOTH the workflow
     intent graph (goal + per-step intent) AND BUILD-25's compile-time review
@@ -189,6 +193,9 @@ def infer_workflow_review(
             **({"candidates": review_inputs["candidates"], "ends_with_checks": review_inputs.get("ends_with_checks") or []}
                if task_description and review_inputs and review_inputs.get("candidates") else {}),
             **({"loop_candidates": loop_candidates} if loop_candidates else {}),
+            # What the pre-compile check already settled, and (retry) why the last reply was not usable.
+            **({"understanding": understanding} if understanding else {}),
+            **({"retry": retry} if retry else {}),
         },
     }
     data = _call_llm_or_none(

@@ -126,6 +126,7 @@ def _validate_findings(
     *,
     step_keys_in_workflow: set[str],
     steps_context: list[dict[str, Any]],
+    settled_literals: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
     """Drop everything that isn't trustworthy, silently — a rejected finding is
     a normal outcome, not an error worth surfacing. Eight gates, and every one
@@ -163,6 +164,8 @@ def _validate_findings(
             continue
         if kind not in _VALID_KINDS:
             continue
+        if kind == "parameterize_literal" and str(item.get("current") or "").strip().lower() in settled_literals:
+            continue        # a value somebody already decided is not reopened here (lower-cased by the caller)
         if kind in _NAME_KINDS:
             if not is_valid_placeholder_id(proposed):
                 continue

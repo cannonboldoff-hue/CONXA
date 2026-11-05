@@ -60,7 +60,7 @@ def test_workflow_review_sends_one_text_message_and_never_an_image():
 
 def test_workflow_review_body_gets_its_own_token_budget():
     body = _openai_body_dict("workflow_review", _payload([]), json_mode=True)
-    assert body["max_tokens"] == 6144
+    assert body["max_tokens"] == 12288
     assert body["response_format"] == {"type": "json_object"}
 
 

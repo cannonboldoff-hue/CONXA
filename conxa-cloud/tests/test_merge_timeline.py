@@ -159,3 +159,10 @@ def test_track_b_runs_the_real_pipeline_and_merges(tmp_path):
     merged = track_b.build_merged_timeline(tmp_path, track_a, timed)
     assert (tmp_path / track_b.MERGED_FILE).is_file()
     assert [r["event_id"] for r in merged if r["kind"] == "event"] == [1, 2]
+
+
+def test_a_row_carries_the_title_of_the_page_it_was_recorded_on():
+    titled = {**ev("tab_0", 5_100, seq=1, text="Save"), "page": {"url": "https://a.test/", "title": "Settings"}}
+    plain = ev("tab_0", 9_100, seq=2, text="Next")
+    ev_rows = events_of(merge([titled, plain], [row(5, 6), row(9, 10)]))
+    assert ev_rows[0]["title"] == "Settings" and ev_rows[1]["title"] == ""

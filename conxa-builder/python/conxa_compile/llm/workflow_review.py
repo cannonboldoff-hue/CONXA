@@ -54,7 +54,22 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 5  # 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
+_PROMPT_VERSION = 6  # 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
+
+
+_RETRY_NOTE = "Your last reply could not be read. Return ONLY the JSON object described, nothing before or after it."
+
+
+def _empty(raw: dict[str, Any] | None) -> bool:
+    """No reply, or one with no goal, no step intents and no suggestions."""
+    return not raw or (
+        not str(raw.get("goal") or "").strip() and not (raw.get("steps") or []) and not (raw.get("suggestions") or [])
+    )
+
+
+def _infra_failure(error_detail: list[str] | None) -> bool:
+    """The router or the cloud could not be reached (marked by ``openapi_client._call_llm_or_none``)."""
+    return "cloud_unreachable" in (error_detail or [])
 
 
 def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:
@@ -90,6 +105,7 @@ def build_workflow_review(
     review_inputs: dict[str, Any] | None = None,
     loop_candidates: list[dict[str, Any]] | None = None,
     extras_out: dict[str, Any] | None = None,
+    prior_understanding: dict[str, Any] | None = None,
 ) -> tuple[WorkflowIntentGraph, list[dict[str, Any]]]:
     """One multimodal LLM call producing (workflow intent graph, BUILD-25
     findings). Returns (WorkflowIntentGraph(), []) on any failure or an empty
@@ -99,7 +115,12 @@ def build_workflow_review(
     BUILD-55: the same answer may also carry `understanding` (the description check) and
     `loop_copy` (wording for loop suggestions). Neither is part of the return value; they are
     written into ``extras_out`` when given -- ``understanding`` stamped with the description it
-    was written for (``for_task``), so a later edit to the description makes it stale."""
+    was written for (``for_task``), so a later edit to the description makes it stale.
+
+    ``prior_understanding`` is what the pre-compile check already settled (goal, settled values, points it
+    decided). The goal it holds replaces this call's own, and a `parameterize_literal` for a value it
+    settled is dropped, so the chat and the skill never show two goals and a settled value is not
+    reopened here."""
     if extras_out is not None:
         extras_out.update(understanding=None, loop_copy=[])
     if not steps_context:
@@ -126,6 +147,8 @@ def build_workflow_review(
         extra_key["review_candidates"] = review_inputs["candidates"]
     if loop_candidates:
         extra_key["loop_candidates"] = loop_candidates
+    if prior_understanding:
+        extra_key["understanding"] = prior_understanding
     key = cache_key(
         _CACHE_VERSION,
         steps=steps_for_key,
@@ -148,7 +171,23 @@ def build_workflow_review(
             task_description=task,
             review_inputs=review_inputs,
             loop_candidates=loop_candidates,
+            understanding=prior_understanding,
         )
+        if _empty(raw) and not _infra_failure(error_detail):
+            # One reply that could not be read (cut off, not JSON): ask once more, saying so. Not when
+            # the router itself could not be reached; a second try would only wait the same time again.
+            raw = infer_workflow_review(
+                steps=steps_context,
+                page_urls=page_urls,
+                sibling_bindings=sibling_bindings or {},
+                model=model,
+                error_detail=error_detail,
+                task_description=task,
+                review_inputs=review_inputs,
+                loop_candidates=loop_candidates,
+                understanding=prior_understanding,
+                retry=_RETRY_NOTE,
+            )
         if not raw or (
             not str(raw.get("goal") or "").strip()
             and not (raw.get("steps") or [])
@@ -168,9 +207,13 @@ def build_workflow_review(
     _sidecar_write(sidecar, key, raw)
 
     graph = _graph_from_raw(raw)
+    if prior_understanding and prior_understanding.get("goal"):
+        graph.goal = str(prior_understanding["goal"])
     if not settings.llm_semantic_suggestions_enabled:
         return graph, []
+    settled = frozenset(str(v.get("literal") or "").strip().lower() for v in (prior_understanding or {}).get("settled") or [])
     findings = _validate_findings(
-        raw.get("suggestions"), step_keys_in_workflow=step_keys_in_workflow, steps_context=steps_context
+        raw.get("suggestions"), step_keys_in_workflow=step_keys_in_workflow, steps_context=steps_context,
+        settled_literals=settled - {""},
     )
     return graph, findings

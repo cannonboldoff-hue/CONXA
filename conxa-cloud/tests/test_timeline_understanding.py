@@ -512,3 +512,82 @@ def test_the_rules_table_matches_the_effect_table_in_the_workflow_graph():
         if rule["choices"]:
             assert re.findall(r"<code>(\w+)</code>", ids) == [c[0] for c in rule["choices"]], effect
         assert guess == ("never" if not rule["guesses"] else "confirm only" if rule["unsafe"] else "yes"), effect
+
+
+# --- quality: what the model is shown, and what is never left to a silent default -------------------
+
+
+def test_model_input_carries_title_popup_buttons_what_the_page_said_and_video_agreement():
+    a = {**event(1, "click", "Save", url="https://app.test/a"), "title": "Settings",
+         "said": [{"kind": "alert", "words": ["name", "taken"]}]}
+    b = {**event(2, "type", "Name", value="x" * 300, url="https://app.test/a"), "title": "Settings", "flags": ["value_seen_in_both"]}
+    c = {**event(3, "click", "Delete", url="https://app.test/a", dialog="decision"), "title": "Confirm", "dialog_buttons": ["Delete", "Cancel"]}
+    rows = TU.build_input([a, b, c], "", "", [])["rows"]
+    assert rows[0]["title"] == "Settings" and "title" not in rows[1] and rows[2]["title"] == "Confirm"
+    assert rows[0]["said"] == ["alert: name taken"]
+    assert rows[1]["video"] == "confirmed" and len(rows[1]["value"]) == TU.VALUE_CHARS
+    assert rows[2]["buttons"] == ["Delete", "Cancel"]
+    assert "video" not in rows[0] and "buttons" not in rows[0]
+
+
+def test_a_long_recording_drops_scrolls_first_and_never_a_row_a_candidate_rests_on(monkeypatch):
+    monkeypatch.setattr(TU, "MAX_ROWS", 10)
+    merged = [event(n, "scroll") for n in range(1, 9)] + [
+        event(9, "type", "Search", value="INV-1"), event(10, "click", "Download PDF"),
+        event(11, "click", "Other"), event(12, "click", "More")]
+    cands = TU.candidates_from_timeline(merged)
+    payload = TU.build_input(merged, "", "", cands)
+    refs = [r["ref"] for r in payload["rows"]]
+    assert len(refs) == 10 and {"r9", "r10", "r11", "r12"} <= set(refs) and refs[0] == "r3"
+    assert payload["rows_omitted"] == 2 and not any(c["unsent"] for c in cands)
+
+
+def test_a_candidate_whose_rows_are_cut_off_is_left_out_of_the_input_and_asked_instead(monkeypatch):
+    monkeypatch.setattr(TU, "MAX_ROWS", 4)
+    merged = [event(n, "click", f"Item {n}", url=f"https://app.test/{n}") for n in range(1, 13)]
+    cands = TU.candidates_from_timeline(merged)
+    payload = TU.build_input(merged, "pick items", "", cands)
+    assert len(payload["rows"]) == 4 and payload["rows_omitted"] == 8
+    sent = {c["ref"] for c in payload["candidates"]}
+    assert sent and any(c["unsent"] for c in cands) and all(c["unsent"] == (c["ref"] not in sent) for c in cands)
+
+    out = TU.understand_timeline(merged, "pick items", call=lambda t, p, ms: raw_answer(values=[], questions=[]))
+    assert out["rows_omitted"] == 8
+    unsent_urls = [c["ref"] for c in out["candidates"] if c["unsent"] and c["kind"] == "url"]
+    assert all(out["values"][ref]["verdict"] == "unsure" for ref in unsent_urls)       # asked, never assumed fixed
+
+
+def test_a_page_address_the_model_left_unjudged_is_asked_again_then_asked_of_the_person():
+    calls = []
+
+    def model(task, payload, ms):
+        calls.append(payload)
+        return raw_answer(values=[{"ref": "typed:3", "verdict": "varies", "name": "invoice_number"},
+                                  {"ref": "click:5", "verdict": "fixed"}], questions=[])
+
+    out = TU.understand_timeline(MERGED, "download invoices", call=model)
+    assert len(calls) == 2 and "url:2" in calls[1]["retry"]
+    assert out["values"]["url:2"]["verdict"] == "unsure"
+    asked = [q for q in out["questions"] if q.get("ref") == "url:2"]
+    assert asked and asked[0]["best_guess"] == ""                       # nothing pre-ticked
+
+    calls.clear()
+    no_task = TU.understand_timeline(MERGED, "", call=model)
+    assert "url:2" not in no_task["values"]                             # nothing to compare it against: not asked
+
+
+def test_review_context_reads_the_understanding_and_the_persons_answer_wins(tmp_path):
+    assert TU.review_context(tmp_path) is None                          # never went through the understanding
+    (tmp_path / "understanding.json").write_text(json.dumps({
+        "goal": "Download an invoice.",
+        "detailed_summary": [{"row": "r3", "text": "Types the invoice number."}, {"row": "r99", "text": "ghost"}],
+        "decided": [{"row": "r1", "text": "Same page each run.", "reason": "x"}],
+        "candidates": [{"ref": "typed:3", "event_ids": [3], "literal": "INV-20931", "verdict": "fixed"},
+                       {"ref": "click:5", "event_ids": [5], "literal": "Download PDF", "verdict": "unsure"}]}), encoding="utf-8")
+    (tmp_path / "merged_timeline.json").write_text(json.dumps(MERGED), encoding="utf-8")
+    decisions.record(tmp_path, {"id": "q1", "kind": "value", "event_ids": [3]}, {"choice": "varies"})
+    ctx = TU.review_context(tmp_path)
+    assert ctx["goal"] == "Download an invoice."
+    assert ctx["summary_by_event"] == {"3": "Types the invoice number."}      # a row the timeline does not have is dropped
+    assert ctx["settled"] == [{"literal": "INV-20931", "verdict": "varies"}]  # the person's answer beat the model; "unsure" is not settled
+    assert ctx["decided"] == ["Same page each run."]

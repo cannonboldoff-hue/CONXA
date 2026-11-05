@@ -60,7 +60,8 @@
     {
       "name": "no verdict for most candidates is weak",
       "raw": {"goal": "Download an invoice.", "short_summary": "x", "values": [{"ref": "typed:3", "verdict": "varies", "name": "invoice_number"}]},
-      "expect": {"grade": "weak", "retried": false, "calls": 2, "questions": [], "report": {"shape.no_verdict": 2}}
+      "expect": {"grade": "weak", "retried": false, "calls": 2, "questions": ["value@r2:url:2"], "report": {"shape.no_verdict": 2,
+      "backfill.unmentioned_selection": 1}}
     },
     {
       "name": "a guess on a fork is stripped, and the confirm before it is put back",

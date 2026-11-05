@@ -26,7 +26,7 @@ _REQUEST_COUNTER = itertools.count(1)
 
 # Bump on ANY change to the `timeline_understanding` prompt below. conversation/timeline_understanding.py saves
 # it in understanding.json, so the drop/weak/fallback rates (scripts/eval_understanding.py rates) are per prompt.
-TIMELINE_UNDERSTANDING_PROMPT_VERSION = 1
+TIMELINE_UNDERSTANDING_PROMPT_VERSION = 2
 
 
 def _debug_log(message: str) -> None:
@@ -469,6 +469,10 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
         loop_candidates = (data or {}).get("loop_candidates")
         if loop_candidates:
             text_payload["loop_candidates"] = loop_candidates
+        if (data or {}).get("understanding"):
+            text_payload["understanding"] = data["understanding"]
+        if (data or {}).get("retry"):
+            text_payload["retry"] = str(data["retry"])
         content = json.dumps(text_payload, ensure_ascii=False)
         return [
             {
@@ -481,6 +485,18 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "is for. Use it only to pick better names, goals and phases; the recorded "
                     "steps remain the source of truth and it never justifies a step that was "
                     "not recorded.\n\n"
+                    "Each step may also carry: summary (one line on what the step does, written "
+                    "from a look at the whole recording; base its intent on it), seen (what a video "
+                    "of the recording showed around the step: visible_target, screen_after, purpose) "
+                    "and field_label (what the control is called on the page, for example the label "
+                    "of an input box). They help you name things; none of them licenses a selector "
+                    "or a step that was not recorded.\n"
+                    "If the input has understanding, it is what an earlier check of this same "
+                    "recording already settled: goal (use it as your goal), settled (recorded values "
+                    "already decided, each with verdict fixed or varies: never suggest "
+                    "parameterize_literal for one of these literals) and decided (points already "
+                    "settled: do not reopen them). If the input has retry, your last reply could "
+                    "not be read: return ONLY the JSON object.\n\n"
                     "Return strict JSON with keys:\n"
                     "goal (one sentence), steps (array of {index, intent_token, intent, "
                     "verification_anchor}), decision_points (array of {step_index, "
@@ -884,11 +900,12 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "\n"
                     "INPUT (JSON)\n"
                     "- `rows`: the recording in time order, each with a `ref` (r1, r2...).\n"
-                    "- Row without `kind` = an event: action, target, role, value, `url` (left out while unchanged from the row before), `dialog` (happened inside a popup), `peers` (the target was one of that many like items in a list), `seen` (what a video model saw: visible_target, intent, screen_after, and screen_before only when the row before has no screen_after; left out if it missed it).\n"
+                    "- Row without `kind` = an event: action, target, role, value, `url` and `title` (the page address and title, left out while unchanged from the row before), `dialog` (happened inside a popup), `buttons` (that popup's own button labels), `peers` (the target was one of that many like items in a list), `said` (what the page said right after the action), `video` (\"confirmed\": the video also showed this value), `seen` (what a video model saw: visible_target, intent, screen_after, and screen_before only when the row before has no screen_after). A row with no `seen` was missed by the video: trust the browser event and do not guess its purpose from the rows around it.\n"
                     "- Row with `kind` observation = something with no browser event: a wait, a native dialog, a download bar.\n"
                     "- `task` (what the person said it is for, may be empty), `chat` (what they said while recording), `candidates` (values taken from the recording), `must_ask` (moments that always need a person: a popup asking for a decision = fork, a file going in = upload).\n"
                     "- `told` (may be absent): candidate refs the person already answered while recording, \"varies\" or \"fixed\". Treat as settled: give that verdict, ask nothing about them.\n"
                     "- `existing_inputs` (may be absent): input names already taken. Reuse one only for the same thing, never for a different thing.\n"
+                    "- `rows_omitted` (may be absent): how many rows were left out of `rows` because the recording is long. Judge only the candidates you are given.\n"
                     "- `retry` (may be absent): your last reply could not be read. Return ONLY the JSON object.\n"
                     "\n"
                     "OUTPUT: ONLY a JSON object, keys in this order\n"
@@ -917,7 +934,15 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "\n"
                     "EXAMPLE (shape and judgement only, not this recording)\n"
                     "Input: {\"task\":\"download an invoice\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://app.example/invoices\"},{\"ref\":\"r2\",\"action\":\"type\",\"target\":\"Search\",\"value\":\"INV-20931\",\"seen\":{\"intent\":\"find the invoice\"}},{\"ref\":\"r3\",\"action\":\"click\",\"target\":\"Download PDF\",\"seen\":{\"intent\":\"download it\",\"screen_after\":\"a download bar shows the file\"}}],\"candidates\":[{\"ref\":\"typed:2\",\"kind\":\"typed\",\"recorded\":\"INV-20931\",\"rows\":[\"r2\"]},{\"ref\":\"click:3\",\"kind\":\"click\",\"recorded\":\"Download PDF\",\"rows\":[\"r3\"]}],\"must_ask\":[]}\n"
-                    "Output: {\"goal\":\"Download an invoice as a PDF.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page.\"},{\"row\":\"r2\",\"text\":\"Types the invoice number into the search box.\"},{\"row\":\"r3\",\"text\":\"Clicks Download PDF; a download bar shows the file.\"}],\"values\":[{\"ref\":\"typed:2\",\"verdict\":\"varies\",\"name\":\"invoice_number\"},{\"ref\":\"click:3\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page, the same every run.\",\"reason\":\"The task never names another page.\"}],\"questions\":[{\"effect\":\"note\",\"row\":\"r2\",\"prompt\":\"What should happen if no invoice matches the number?\",\"why\":\"The recording only shows a match.\",\"choices\":[{\"label\":\"Stop and report it\"},{\"label\":\"Skip it and finish\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"Searches for an invoice by its number and downloads the PDF.\"}"
+                    "Output: {\"goal\":\"Download an invoice as a PDF.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page.\"},{\"row\":\"r2\",\"text\":\"Types the invoice number into the search box.\"},{\"row\":\"r3\",\"text\":\"Clicks Download PDF; a download bar shows the file.\"}],\"values\":[{\"ref\":\"typed:2\",\"verdict\":\"varies\",\"name\":\"invoice_number\"},{\"ref\":\"click:3\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page, the same every run.\",\"reason\":\"The task never names another page.\"}],\"questions\":[{\"effect\":\"note\",\"row\":\"r2\",\"prompt\":\"What should happen if no invoice matches the number?\",\"why\":\"The recording only shows a match.\",\"choices\":[{\"label\":\"Stop and report it\"},{\"label\":\"Skip it and finish\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"Searches for an invoice by its number and downloads the PDF.\"}\n"
+                    "\n"
+                    "EXAMPLE 2 (a list pick and a typed name)\n"
+                    "Input: {\"task\":\"add a contact to the Sales group\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://crm.example/contacts\",\"title\":\"Contacts\"},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Priya Nair\",\"role\":\"row\",\"peers\":24,\"seen\":{\"intent\":\"open a contact\"}},{\"ref\":\"r3\",\"action\":\"type\",\"target\":\"Group name\",\"value\":\"Sales\",\"video\":\"confirmed\"},{\"ref\":\"r4\",\"action\":\"click\",\"target\":\"Save\"}],\"candidates\":[{\"ref\":\"click:2\",\"kind\":\"click\",\"recorded\":\"Priya Nair\",\"rows\":[\"r2\"],\"in_set\":true},{\"ref\":\"typed:3\",\"kind\":\"typed\",\"recorded\":\"Sales\",\"rows\":[\"r3\"]},{\"ref\":\"click:4\",\"kind\":\"click\",\"recorded\":\"Save\",\"rows\":[\"r4\"]}],\"must_ask\":[]}\n"
+                    "Output: {\"goal\":\"Add a chosen contact to the Sales group.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the contacts page.\"},{\"row\":\"r2\",\"text\":\"Picks one contact from the list.\"},{\"row\":\"r3\",\"text\":\"Types the group name.\"},{\"row\":\"r4\",\"text\":\"Clicks Save.\"}],\"values\":[{\"ref\":\"click:2\",\"verdict\":\"varies\",\"name\":\"contact\"},{\"ref\":\"typed:3\",\"verdict\":\"fixed\"},{\"ref\":\"click:4\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r3\",\"text\":\"The group is Sales every run.\",\"reason\":\"The task names the Sales group.\"}],\"questions\":[],\"gaps\":[],\"short_summary\":\"Opens a contact from the list and adds it to the Sales group.\"}\n"
+                    "\n"
+                    "EXAMPLE 3 (a popup asking for a decision after a step that cannot be undone)\n"
+                    "Input: {\"task\":\"remove the old export\",\"rows\":[{\"ref\":\"r1\",\"action\":\"click\",\"target\":\"Delete export\",\"seen\":{\"intent\":\"delete the file\",\"screen_after\":\"a box asks to confirm\"}},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Delete\",\"dialog\":\"decision\",\"buttons\":[\"Delete\",\"Cancel\"]}],\"candidates\":[],\"must_ask\":[{\"row\":\"r1\",\"effect\":\"confirm_before\"},{\"row\":\"r2\",\"effect\":\"fork\"}]}\n"
+                    "Output: {\"goal\":\"Delete the old export file.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Clicks Delete export; a box asks to confirm.\"},{\"row\":\"r2\",\"text\":\"Clicks Delete in the box.\"}],\"values\":[],\"decided\":[],\"questions\":[{\"effect\":\"confirm_before\",\"row\":\"r1\",\"prompt\":\"Deleting the export cannot be undone. Should it check with a person before it deletes?\",\"why\":\"A wrong delete cannot be taken back.\",\"choices\":[{\"id\":\"confirm\",\"label\":\"Check first\"},{\"id\":\"no_confirm\",\"label\":\"Delete without checking\"}],\"best_guess\":\"\",\"cost_rank\":1},{\"effect\":\"fork\",\"row\":\"r2\",\"prompt\":\"The app asks whether to delete. What should it do each run?\",\"why\":\"The recording shows one answer only.\",\"choices\":[{\"id\":\"by_input\",\"label\":\"Let the caller decide\"},{\"id\":\"ask_human\",\"label\":\"Ask a person\"},{\"id\":\"stop\",\"label\":\"Stop the run\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"Deletes an old export after the app asks to confirm.\"}"
                 ),
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False, separators=(",", ":"))},
@@ -947,7 +972,8 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
 #  * anchor_vision_frameset: one label and one short sentence.
 #  * region_selector: a handful of selector candidates with rationale.
 #  * workflow_review: a whole-workflow intent graph AND a suggestions array in one reply, the largest
-#    structured JSON of any task (was 4096; the description check and loop wording ride on this call).
+#    structured JSON of any task (was 4096, then 6144; the description check and loop wording ride on
+#    this call, and it writes an intent for every step, so a long workflow needs the room).
 #  * copilot_diagnose / copilot_reply / studio_chat_reply: 16384 leaves a reasoning-capable model room to
 #    finish its hidden chain-of-thought before the answer starts. OpenRouter's z-ai/glm-5.3-flash
 #    consumed 2048 entirely on it and returned finish_reason="length" with an empty answer.
@@ -959,7 +985,7 @@ TASK_OUTPUT_BUDGET: dict[str, int] = {
     "anchor_vision": 1024,
     "anchor_vision_frameset": 300,
     "region_selector": 1536,
-    "workflow_review": 6144,
+    "workflow_review": 12288,
     "copilot_diagnose": 16384,
     "copilot_reply": 16384,
     "studio_chat_reply": 16384,

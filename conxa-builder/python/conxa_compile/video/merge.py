@@ -172,6 +172,7 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             "role": str((ev.get("semantic") or {}).get("role") or (ev.get("target") or {}).get("role") or ""),
             "value": (ev.get("action") or {}).get("value"),
             "url": str((ev.get("page") or {}).get("url") or ""),
+            "title": str((ev.get("page") or {}).get("title") or "")[:80],
             "t_ms": e["wall"],
             "segment": row,
             "flags": flags,

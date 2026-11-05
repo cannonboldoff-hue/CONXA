@@ -1781,8 +1781,20 @@ def compile_skill_package(
     # (the "does it match what I said?" check) and words the download→upload loop suggestion, so
     # neither costs a call of its own. Both are asked of the steps as they are right now; the
     # answers are matched back by step key.
+    # What the video model saw goes onto the steps first, so the review call can read it too (a
+    # recording that was never watched has no merged timeline, so this is a no-op for it).
+    apply_video_context(steps, session_root)
+    # The understanding written before this compile and the person's answers to it. When it exists
+    # the description check below is already answered there (handlers/compile_flow.py uses that one
+    # and discards this call's), so it is not asked twice.
+    try:
+        from conxa_compile.conversation.timeline_understanding import review_context  # noqa: PLC0415
+
+        understanding_ctx = review_context(session_root)
+    except Exception:  # noqa: BLE001 -- advisory: no context is today's behaviour, never a failed compile
+        understanding_ctx = None
     review_inputs: dict[str, Any] = {}
-    if task_description.strip():
+    if task_description.strip() and understanding_ctx is None:
         try:
             from conxa_compile.conversation.understanding import review_inputs as _review_inputs_for  # noqa: PLC0415
 
@@ -1806,10 +1818,8 @@ def compile_skill_package(
         review_inputs=review_inputs,
         loop_candidates=loop_candidates,
         extras_out=review_extras,
+        understanding_ctx=understanding_ctx,
     )
-    # What the video model saw, in words, on every step it matched (a recording that was never
-    # watched has no merged timeline, so this is a no-op for it).
-    apply_video_context(steps, session_root)
     if review_extras.get("understanding"):
         # Read back by the question flow (conversation/understanding.py::understand), tied to this
         # compile so a stale file beside the recording can never be mistaken for it.
@@ -1933,9 +1943,20 @@ def _next_effect_cause(steps: list[SkillStep], i: int) -> str | None:
     return None
 
 
+def _understanding_for_review(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The part of the understanding the review call is told as a whole (goal, the values the
+    person or the pre-compile check settled, the points it decided itself). The per-step lines
+    ride on each step as `summary` instead."""
+    if not ctx:
+        return None
+    out = {k: ctx[k] for k in ("goal", "settled", "decided") if ctx.get(k)}
+    return out or None
+
+
 def _review_inputs(
     steps: list[SkillStep],
     compile_report: dict[str, Any],
+    understanding_ctx: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Compact per-step payload for the merged workflow-review call (BUILD-25's
     second opinion + BUILD-26's intent-graph merge) — action, text, url,
@@ -1973,6 +1994,20 @@ def _review_inputs(
             "post_condition_effect": str(step.signals.get("post_condition_effect") or ""),
             "has_required_assertion": any(a.required for a in step.validation.assertions),
         }
+        # What the control is called on the page (an input box has no text of its own).
+        fp = step.identity_bundle.fingerprint
+        field_label = next((v for v in (fp.aria_label, fp.label_text, fp.placeholder, fp.name) if v), "")
+        if field_label:
+            item["field_label"] = field_label[:80]
+        vc = step.video_context
+        if vc is not None:
+            seen = {k: v[:160] for k, v in (("visible_target", vc.visible_target), ("screen_after", vc.screen_after),
+                                            ("purpose", vc.purpose)) if v}
+            if seen:
+                item["seen"] = seen
+        line = (understanding_ctx or {}).get("summary_by_event", {}).get(str(step.source_event))
+        if line:
+            item["summary"] = line
         causes = _next_effect_cause(steps, i)
         if causes:
             item["causes"] = causes
@@ -2104,6 +2139,7 @@ def _apply_second_opinion(
     review_inputs: dict[str, Any] | None = None,
     loop_candidates: list[dict[str, Any]] | None = None,
     extras_out: dict[str, Any] | None = None,
+    understanding_ctx: dict[str, Any] | None = None,
 ) -> tuple[list[SkillStep], dict[str, Any], WorkflowIntentGraph]:
     """Run the merged workflow-review call (BUILD-25's second opinion merged
     with the workflow-intent graph, BUILD-26 — see llm/workflow_review.py) and
@@ -2139,7 +2175,7 @@ def _apply_second_opinion(
     error_detail: list[str] = []
     try:
         graph, findings = build_workflow_review(
-            _review_inputs(steps, compile_report),
+            _review_inputs(steps, compile_report, understanding_ctx),
             page_urls=page_urls,
             sibling_bindings=_sibling_bindings(visited_hosts, skill_id),
             task_description=task_description,
@@ -2148,6 +2184,7 @@ def _apply_second_opinion(
             review_inputs=review_inputs,
             loop_candidates=loop_candidates,
             extras_out=extras_out,
+            prior_understanding=_understanding_for_review(understanding_ctx),
         )
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile
         graph, findings = WorkflowIntentGraph(), []

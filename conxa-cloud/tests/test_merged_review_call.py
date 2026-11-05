@@ -176,3 +176,83 @@ def test_popup_buttons_reach_the_wording_call_as_context_only():
     item = next(i for i in clarify.reword_payload([q]))
     assert item["popup_buttons"] == ["Replace", "Keep both"]
     assert all(not c["id"].startswith("option:") for c in item["choices"])     # the popup's own buttons are never reworded
+
+
+# ── the review reads the understanding, and is asked once more when a reply is unreadable ──────────
+
+
+def test_the_understanding_and_a_retry_note_reach_the_model_and_the_prompt_explains_them():
+    system, plain = _review_text()
+    assert '"understanding"' not in plain and '"retry"' not in plain
+    _, asked = _review_text(understanding={"goal": "G", "settled": [{"literal": "x", "verdict": "fixed"}]}, retry="again")
+    assert '"understanding"' in asked and '"retry"' in asked
+    assert all(word in system for word in ("understanding", "field_label", "summary", "seen", "retry"))
+
+
+def test_the_understanding_sets_the_goal_and_a_settled_value_is_not_suggested_again(monkeypatch):
+    monkeypatch.setattr(workflow_review, "read_cached", lambda *a, **k: None)
+    monkeypatch.setattr(workflow_review, "write_cached", lambda *a, **k: None)
+    monkeypatch.setattr(workflow_review, "infer_workflow_review", lambda **k: _raw(goal="Its own goal", suggestions=[
+        {"step_key": "k1", "kind": "parameterize_literal", "current": " INV-20931 ", "proposed": "invoice_number", "why": "w"},
+        {"step_key": "k2", "kind": "parameterize_literal", "current": "acme", "proposed": "customer", "why": "w"}]))
+    steps = [{"key": "k1", "action": "type"}, {"key": "k2", "action": "type"}]
+    ctx = {"goal": "Download an invoice.", "settled": [{"literal": "inv-20931", "verdict": "varies"}]}
+    graph, findings = workflow_review.build_workflow_review(steps, page_urls=[], prior_understanding=ctx)
+    assert graph.goal == "Download an invoice."
+    assert [f["current"] for f in findings] == ["acme"]
+    graph, findings = workflow_review.build_workflow_review(steps, page_urls=[])
+    # the cap on findings is a share of the steps, so only the first survives without the understanding:
+    # which is why a settled value is dropped before the cap, not after it
+    assert graph.goal == "Its own goal" and [f["current"].strip() for f in findings] == ["INV-20931"]
+
+
+def test_an_unreadable_review_reply_is_asked_for_once_more_but_an_unreachable_router_is_not(monkeypatch):
+    monkeypatch.setattr(workflow_review, "read_cached", lambda *a, **k: None)
+    monkeypatch.setattr(workflow_review, "write_cached", lambda *a, **k: None)
+    calls: list[dict] = []
+
+    def flaky(**k):
+        calls.append(k)
+        return None if len(calls) == 1 else _raw()
+
+    monkeypatch.setattr(workflow_review, "infer_workflow_review", flaky)
+    graph, _ = workflow_review.build_workflow_review([{"key": "k1", "action": "click"}], page_urls=[])
+    assert len(calls) == 2 and not calls[0].get("retry") and calls[1]["retry"] and graph.goal == "Copy a file"
+
+    calls.clear()
+
+    def down(**k):
+        calls.append(k)
+        k["error_detail"].append("cloud_unreachable")
+        return None
+
+    monkeypatch.setattr(workflow_review, "infer_workflow_review", down)
+    workflow_review.build_workflow_review([{"key": "k1", "action": "click"}], page_urls=[], error_detail=[])
+    assert len(calls) == 1
+
+
+def test_the_cache_key_changes_with_the_understanding(monkeypatch):
+    keys: list[str] = []
+    monkeypatch.setattr(workflow_review, "read_cached", lambda ns, key, v: keys.append(key))
+    monkeypatch.setattr(workflow_review, "infer_workflow_review", lambda **k: None)
+    steps = [{"key": "k1", "action": "click"}]
+    workflow_review.build_workflow_review(steps, page_urls=[])
+    workflow_review.build_workflow_review(steps, page_urls=[], prior_understanding={"goal": "G"})
+    assert len(set(keys)) == 2
+
+
+def test_review_inputs_carry_the_field_label_what_the_video_saw_and_the_understanding_line():
+    from conxa_compile.compiler.build import _review_inputs, _understanding_for_review
+    from conxa_core.models.skill_spec import SkillStep, VideoContext
+
+    typed = SkillStep(action={"action": "type"}, intent="enter_value", source_event=3,
+                      video_context=VideoContext(visible_target="Search box", screen_after="one row left", purpose="find it"))
+    typed.identity_bundle.fingerprint.placeholder = "Search invoices"
+    bare = SkillStep(action={"action": "click"}, intent="click", source_event=None)
+    ctx = {"goal": "G", "summary_by_event": {"3": "Types the invoice number."}, "settled": [], "decided": ["d"]}
+    out = _review_inputs([typed, bare], {}, ctx)
+    assert out[0]["field_label"] == "Search invoices" and out[0]["summary"] == "Types the invoice number."
+    assert out[0]["seen"] == {"visible_target": "Search box", "screen_after": "one row left", "purpose": "find it"}
+    assert not {"field_label", "seen", "summary"} & set(out[1])
+    assert _understanding_for_review(ctx) == {"goal": "G", "decided": ["d"]} and _understanding_for_review(None) is None
+    assert "summary" not in _review_inputs([typed], {})[0]                       # no understanding: exactly as before

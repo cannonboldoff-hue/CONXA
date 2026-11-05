@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The two AI checks that read a recording now see much more, and stop guessing when they miss something — 2026-11-05**
+When you record a task, an AI reads it twice: once before the tool asks you questions, and once while the workflow is built. The second reader used to work blind: it never saw what the video showed, never saw what the first reader had worked out, and never saw what you had already answered. Now both readers share the same notes, so the goal is worded once and a value you already settled is not reopened. The first reader also gets the page titles, the popup's own buttons and a smarter way of trimming very long recordings, and when it skips a page address it now asks you instead of quietly treating it as "always the same". If the second reader's answer comes back unreadable, it is asked once more, and it now has twice the room to write long answers.
+— 2026-11-05
+
 **The tool now keeps a tally of the mistakes it catches when an AI first reads a recording — 2026-11-05**
 Before it asks you any questions about a recording, an AI reads it and the tool double-checks the AI's answer. Until now, anything wrong in that answer was quietly thrown away, so nobody could tell whether the AI was getting better or worse. The tool now writes down what it threw out and marks each answer good, weak or unusable. When an answer is weak it asks the AI to try once more, and the workflow diagram now shows the same safety check at every place an AI is used.
 — 2026-11-05

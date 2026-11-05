@@ -22,6 +22,7 @@ import json
 import re
 import sys
 import threading
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
@@ -31,6 +32,10 @@ from conxa_compile.conversation.clarify import _question
 
 TASK = "timeline_understanding"
 MAX_ROWS = 250
+# Rows that say least about what a recording means: dropped first when it is longer than MAX_ROWS.
+_LOW_VALUE_ACTIONS = ("scroll", "hover")
+_LOW_VALUE_OBSERVATIONS = ("idle_wait", "unmatched_segment")
+VALUE_CHARS = 160                 # how much of a typed value a row carries
 MAX_QUESTIONS = 5                 # shown at once; the rest are queued under "More questions"
 MAX_CLICK_CANDIDATES = 6
 MAX_TYPED_CANDIDATES = 6
@@ -301,13 +306,47 @@ def told_from_hints(candidates: list[dict[str, Any]], varies: dict[str, Any] | N
     return told
 
 
+def _words(words: Any) -> str:
+    """Value-free words the page said (the recorder keeps them as a list), as one short line."""
+    return (" ".join(map(str, words)) if isinstance(words, list) else str(words))[:120]
+
+
+def _select_rows(merged: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rows to send. All of them up to MAX_ROWS; beyond that the ones that say least go first
+    (scrolls, hovers, idle waits, video-only moments) and never a row a candidate, a must-ask point
+    or a popup rests on. Still too long: the rest of the recording is cut off at the end."""
+    if len(merged) <= MAX_ROWS:
+        return merged
+    needed = {ref for c in candidates for ref in c["row_refs"]}
+    needed |= {m["row"] for m in must_ask(merged)}
+    needed |= {ref for ref, _ in missed_file_picks(merged)}
+    needed |= {r["row_ref"] for r in merged if r.get("dialog")}
+
+    def low_value(r: dict[str, Any]) -> bool:
+        if r["row_ref"] in needed:
+            return False
+        return r.get("action") in _LOW_VALUE_ACTIONS if r.get("kind") == "event" else r.get("type") in _LOW_VALUE_OBSERVATIONS
+
+    spare = len(merged) - MAX_ROWS
+    kept: list[dict[str, Any]] = []
+    for r in merged:
+        if spare > 0 and low_value(r):
+            spare -= 1
+            continue
+        kept.append(r)
+    return kept[:MAX_ROWS]
+
+
 def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: list[dict[str, Any]], *,
                 told: dict[str, bool] | None = None, existing_inputs: set[str] | None = None) -> dict[str, Any]:
     # Compact on purpose (the prompt in conxa_core/llm/client.py says how to read it): no empty keys,
-    # no `kind` on an event, `url` only when it changes, and `seen` without what the row before said.
+    # no `kind` on an event, `url` and `title` only when they change, and `seen` without what the row before said.
+    # A candidate none of whose rows are sent is marked ``unsent`` and left out: the model cannot judge what it cannot see.
     rows: list[dict[str, Any]] = []
-    prev_url, prev_after = None, ""
-    for r in merged[:MAX_ROWS]:
+    prev_url, prev_title, prev_after = None, None, ""
+    sent = _select_rows(merged, candidates)
+    sent_refs = {r["row_ref"] for r in sent}
+    for r in sent:
         seen = _seen(r.get("segment"), prev_after)
         if r.get("kind") == "event":
             value = r.get("value")
@@ -315,21 +354,30 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
                 "ref": r["row_ref"], "action": r.get("action"),
                 "target": scrub_email(r["target"]) if r.get("target") else None,
                 "role": r.get("role") or None,
-                "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:80] if value else None),
+                "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:VALUE_CHARS] if value else None),
                 "url": r.get("url") if r.get("url") != prev_url else None,
+                "title": scrub_email(r["title"]) if r.get("title") and r.get("title") != prev_title else None,
                 "seen": seen, "dialog": r.get("dialog") or None, "peers": r.get("peers") or None,
+                "buttons": r.get("dialog_buttons") or None,
+                "said": [f"{i.get('kind')}: {_words(i.get('words'))}" for i in (r.get("said") or [])[:3]
+                         if isinstance(i, dict) and i.get("words")] or None,
+                "video": "confirmed" if "value_seen_in_both" in (r.get("flags") or []) else None,
             }
             prev_url = r.get("url") or prev_url
+            prev_title = r.get("title") or prev_title
         else:
             row = {"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
                    "seconds": r.get("seconds"), "seen": seen}
         rows.append({k: v for k, v in row.items() if v not in (None, "")})
         prev_after = (r.get("segment") or {}).get("screen_after") or ""
+    for c in candidates:
+        c["unsent"] = not any(ref in sent_refs for ref in c["row_refs"])
     return {
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
+        **({"rows_omitted": len(merged) - len(rows)} if len(merged) > len(rows) else {}),
         "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"],
                         **({"in_set": True} if c.get("in_set") else {})}
-                       for c in candidates],
+                       for c in candidates if not c["unsent"]],
         "must_ask": must_ask(merged),
         **({"told": {ref: "varies" if v else "fixed" for ref, v in told.items()}} if told else {}),
         **({"existing_inputs": sorted(existing_inputs)} if existing_inputs else {}),
@@ -566,7 +614,7 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
         values[ref] = {"verdict": verdict, "name": name, "literal": literal}
     if any(k in raw for k in _ANSWER_KEYS):       # a candidate the model gave no verdict for is treated as fixed: counted, because that is a silent default
         for c in candidates:
-            if c["ref"] not in values and c["ref"] not in told:
+            if c["ref"] not in values and c["ref"] not in told and not c.get("unsent"):
                 _log(report, "shape", "no_verdict", c["ref"])
 
     gaps = _row_items(raw.get("gaps"), rows, "note", 200, report)
@@ -657,8 +705,10 @@ def _describe_unusable(raw: Any, detail: list[str]) -> str:
 
 
 def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[dict[str, Any]],
-                                      merged: list[dict[str, Any]], existing_inputs: set[str] | None) -> None:
+                                      merged: list[dict[str, Any]], existing_inputs: set[str] | None,
+                                      ask_urls: bool = False) -> None:
     """An item picked out of a list that the model said nothing about is asked, not assumed fixed.
+    So is a page address, when there is a description to compare it against (``ask_urls``).
 
     "Fixed" must be a decision somebody made: the model (it may well say the task names this exact
     item) or the person. A silent default is wrong in the common case, because choosing from a list
@@ -669,7 +719,7 @@ def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[d
     order = {ref: i for i, ref in enumerate(rows)}
     added = False
     for c in candidates:
-        if not c.get("in_set") or c["ref"] in result["values"]:
+        if not (c.get("in_set") or (ask_urls and c["kind"] == "url")) or c["ref"] in result["values"]:
             continue
         result["values"][c["ref"]] = {"verdict": "unsure", "literal": c["literal"],
                                       "name": _unique_name("", taken, _FALLBACK_NAME[c["kind"]])}
@@ -696,10 +746,17 @@ def _grade(out: dict[str, Any], candidates: list[dict[str, Any]], told: Any) -> 
     report, reasons = out["validation_report"], []
     if not out["goal"]:
         reasons.append("no goal")
-    owed = sum(1 for c in candidates if c["ref"] not in told)
+    owed = sum(1 for c in candidates if c["ref"] not in told and not c.get("unsent"))
     missing = _count(report, "shape", "no_verdict")
     if owed >= WEAK_MIN_CANDIDATES and missing > WEAK_UNJUDGED_SHARE * owed:
         reasons.append(f"no verdict for {missing} of the {owed} candidates")
+    else:
+        # A page address or an item picked from a list left unjudged is never safe to leave as "fixed",
+        # however few candidates there are, so one of them missing is asked for again too.
+        unjudged = [c["ref"] for c in candidates if c["ref"] not in told and not c.get("unsent")
+                    and (c["kind"] == "url" or c.get("in_set")) and c["ref"] not in out["values"]]
+        if unjudged:
+            reasons.append(f"no verdict for {', '.join(unjudged[:4])}, which each need one")
     invented = _count(report, "reference", "unknown_ref", "unknown_row", "duplicate_ref")
     if invented >= WEAK_REF_DROPS:
         reasons.append(f"{invented} refs or rows that are not in the recording")
@@ -769,6 +826,9 @@ def understand_timeline(
     result["prompt_version"] = TIMELINE_UNDERSTANDING_PROMPT_VERSION
     told = told_from_hints(candidates, hints)
     payload = build_input(merged, task, chat, candidates, told=told, existing_inputs=existing_inputs)
+    if payload.get("rows_omitted"):
+        result["rows_omitted"] = payload["rows_omitted"]
+        print(f"[timeline_understanding] {payload['rows_omitted']} of {len(merged)} rows not sent", file=sys.stderr)
     caller = call or _default_call
     raw, detail, reason = _attempt(caller, payload, timeout_ms)
     checked, grade, why = _checked(raw, merged, candidates, existing_inputs, told)
@@ -798,10 +858,51 @@ def understand_timeline(
                     result["questions"].append(_value_question(c, row, ""))      # asked, nothing pre-ticked
                     _log(result["validation_report"], "backfill", "fallback_url_question", c["ref"])
         result["short_summary"] = f"{len(_events(merged))} recorded actions."
-    _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs)
+    _ask_about_unmentioned_selections(result, candidates, merged, existing_inputs, ask_urls=bool(task.strip()))
     for c in candidates:
         c.update(result["values"].get(c["ref"]) or {"verdict": "fixed", "name": "", "literal": c["literal"]})
     return result
+
+
+def review_context(session_dir: Path) -> dict[str, Any] | None:
+    """What the compile's review call is told about the recording: the understanding written before
+    the build, in words. ``summary_by_event`` is the line for each recorded action (by event id),
+    ``settled`` the values somebody decided (the model's verdict, over-ruled by the person's answer in
+    ``decisions.json``), ``decided`` the points it settled itself. ``None`` for a recording that never
+    went through the understanding (the review then runs exactly as before). Never raises."""
+    from conxa_compile.compiler.video_context import MERGED_FILE  # noqa: PLC0415
+    from conxa_compile.conversation import decisions  # noqa: PLC0415
+
+    root = Path(session_dir)
+    try:
+        und = json.loads((root / "understanding.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(und, dict):
+        return None
+    try:
+        merged = json.loads((root / MERGED_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        merged = []
+    event_of_row = {r.get("row_ref"): r.get("event_id") for r in merged if isinstance(r, dict) and r.get("event_id") is not None}
+    summary = {str(event_of_row[d["row"]]): str(d["text"]) for d in und.get("detailed_summary") or []
+               if isinstance(d, dict) and d.get("text") and d.get("row") in event_of_row}
+    answered: dict[Any, str] = {}
+    for d in decisions.load(root):
+        if d.get("kind") == "value" and d.get("choice") in ("varies", "fixed"):
+            answered.update({eid: d["choice"] for eid in d.get("event_ids") or []})
+    settled = []
+    for c in und.get("candidates") or []:
+        if not isinstance(c, dict):
+            continue
+        verdict = next((answered[e] for e in c.get("event_ids") or [] if e in answered), c.get("verdict"))
+        literal = str(c.get("literal") or "").strip()[:120]
+        if literal and verdict in ("fixed", "varies"):
+            settled.append({"literal": literal, "verdict": verdict})
+    return {
+        "goal": str(und.get("goal") or ""), "summary_by_event": summary, "settled": settled[:40],
+        "decided": [str(d["text"]) for d in und.get("decided") or [] if isinstance(d, dict) and d.get("text")][:MAX_DECIDED],
+    }
 
 
 # --- questions ------------------------------------------------------------------------------
