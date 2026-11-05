@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-23](#sg-23-an-unrecorded-popup-can-be-answered-by-the-mcp-client) | An unrecorded question popup can be answered by the MCP client | Runtime | Low (mitigated) | `runtime/app/run.js`, `runtime/app/fork.js`, `runtime/app/fork_pause.js` |
 | [SG-22](#sg-22-clipboard-steps-and-the-data-an-ai-review-is-shown) | Clipboard steps and the data an AI review is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/review_pause.js` |
 | [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
@@ -684,6 +685,45 @@ hidden in an attached file can still give a misleading answer to a safe step.
 
 Mark inputs as secret in the editor and refuse them in `clipboard_write` and `ai_review` prompts; offer
 `restore previous clipboard after the step`; show attached file names to the person before an unattended run.
+
+---
+
+## SG-23 — An Unrecorded Popup Can Be Answered By The MCP Client
+
+**Severity:** Low (mitigated)
+**Component:** Runtime — `runtime/app/run.js` (`agentPopupPause`, `answerBlockingPopup`, `askAboutBlockingPopup`), `runtime/app/fork.js` (`agentPopupChoices`, `isIrreversibleLabel`), `runtime/app/fork_pause.js`, `runtime/app/server.js` (fork resume)
+
+### Description
+
+Until 2026-11-05 a popup that asks a question was never answered on anyone's behalf: an unrecorded one was
+left alone, a recorded one followed the author's policy, and only a person could pick. EXEC-49 lets the MCP
+client (Claude Desktop, or Build Studio's own model when "let AI answer" is on) pick one button of a popup
+**nobody recorded**. A wrong pick on a real application (Replace the wrong file, Keep the wrong copy) is a
+data change made without the owner's say.
+
+### Mitigations in place
+
+The runtime parks and asks; it never picks itself. Only the popup's own visible buttons are offered, and the
+pick is checked again against the live page at click time. A popup with **any** irreversible-looking button
+(delete, remove, erase, permanently, pay, buy, purchase, order, checkout, send, submit, publish, transfer,
+revoke) is never offered: the run stops. It also stops in a dry run, inside a repeated step or an option body,
+for a step the compiler marked destructive, on a scheduled run, and when the author's own fork says
+`unknown_policy: stop`. The request tells the client to decide from the user's goal and to ask the user in the
+chat when unsure. Every answer is logged (`fork_decision` `source: "agent"`, telemetry `fork_decided src:
+"agent"`, and the popup's shape goes to the app map through `app_obs`) so the author can give it a standing
+answer. A recorded popup is unchanged: a consequential option still never runs without `author_approved`.
+The same popup handled more than twice in one run stops the run (`surface_loop`).
+
+### Residual risk
+
+The word list errs wide but cannot know a customer's vocabulary: a button called "Confirm" on an irreversible
+action passes the list. "Replace" and "Overwrite" are deliberately answerable. The client may answer without
+asking the user. Nothing here stops a client that ignores the instruction.
+
+### Recommended Fix
+
+Let the author mark words irreversible for an app (in the app map's policy page); show agent-answered popups
+in the run report so the owner sees them without reading the log.
 
 ---
 

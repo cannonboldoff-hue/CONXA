@@ -57,3 +57,19 @@ Creating a workflow used to stop you until you typed a sentence describing the t
 **The behind-the-scenes side no longer takes a typed task description either — 2026-11-05**
 Even after the box was removed from the new workflow page, the engine still had a spot to receive that sentence, and the chat assistant still offered one when it drafted a workflow. Both are gone. The tool still writes its own short description after it watches your recording.
 — 2026-11-05
+
+**A written plan for handling surprise popups and unexpected screens — 2026-11-05**
+Workflows are recorded once, but real apps do not always show the same screens: a popup can appear only sometimes, an error can show up, or a sign-in can run out. We wrote down one shared plan for all of these instead of fixing them one by one. Every surprise is sorted into a small set of kinds (in the way, just a notice, a question, a risky question, asks for information, an error, or a quiet change), and each kind has one clear rule: close it, ignore it, follow the author's answer, hand it to a person, or stop safely. The AI helper can explain what it sees, but it can only ever make a run more careful, never answer a risky question by itself.
+— 2026-11-05
+
+**A research report on where Conxa wins for a business, and where it does not — 2026-11-05**
+We studied how Conxa compares with AI assistants that click through websites, older office robots, and tools that connect apps through their back doors. The report explains, in plain business terms, why recording a task once and letting a company hand it to all its customers can cost less and be safer than paying per run or per robot. It also lists the honest limits, such as having no paying customers yet and only working on Windows today, so sales claims stay truthful.
+— 2026-11-05
+
+**Rewrote the Conxa business-advantages report in plain language — 2026-11-05**
+The research report on where Conxa wins and where it does not was written for specialists and was hard to read. It now explains every idea in everyday words, with a small glossary, simple comparisons (a taxi versus a train track), and clear warnings about which claims are still unproven. The facts and sources are unchanged, so anyone in the company can read it and use it with customers.
+— 2026-11-05
+
+**Unexpected popups and app errors are now handled instead of derailing a run — 2026-11-05**
+Before, a popup nobody had recorded was either ignored until the next click broke, or an app error such as "no access" was treated like a button that had moved and sent to the AI for nothing. Now the run stops at once with a plain reason when the app itself refuses, a popup that keeps coming back stops the run, and a popup that opens a moment late is still recognised. An unexpected question popup is put to the AI assistant to answer, but never when one of its buttons could not be undone, such as delete or pay.
+— 2026-11-05

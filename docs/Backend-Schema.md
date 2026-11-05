@@ -937,7 +937,9 @@ outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, st
 # clean:  {observed: bool, observed_in: [session_id]}
 # states: [{ id, kind: "dialog", observed_in: [session_id],
 #            signature: {title, button_labels, message_tokens, container_selector},
-#            options:   [{ id, label, role: "dismiss"|"consequential"|"neutral", recorded: bool, steps: [saved-step dicts] }],
+#            options:   [{ id, label, role: "dismiss"|"consequential"|"neutral", recorded: bool, steps: [saved-step dicts],
+#                          then?: "end"|"stop" }],     # where the workflow goes AFTER this option; absent = rejoin
+#            then_reviewed?: bool,                      # the author answered the "do the next steps still fit?" question
 #            policy:    {mode:"auto", option_id, author_approved, reviewed?}
 #                     |  {mode:"by_input", input, suggested?, reviewed?}
 #                     |  {mode:"ask_human", suggested?, reviewed?}
@@ -950,8 +952,11 @@ outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, st
 - `Workflow.last_test_outcome` (`dict | None`: `{outcome, title, step_index, step_key, reason, at}`) records a test that ended without a pass or failure (`ended_at_popup`, `ended_before_irreversible`, `stopped`, `previewed`). `last_test_status` is untouched; a pass, a failure or any edit clears it; the lifecycle shows substate `partial` while it is set.
 - `policy.reviewed` marks a state the author has answered (so Clarify never asks again). It is also the only thing that lets the runtime pause: `ask_human` / `by_input` without it stop instead, and `execution.json` carries it through (`_saved_fork_step`). Nothing pauses by default; `unknown_policy` `continue` (an older `ask_human` reads the same) leaves an unrecognised surface alone.
 - `by_input` declares a `select` input named `policy.input` (options = option labels + `ask`, default `ask`) and sets the fork step's `input_binding`/`value` to it.
-- `message_tokens` are value-free words (quoted text and digits stripped); the popup's message never ships.
+- `message_tokens` are value-free words (quoted text and digits stripped); the popup's message never ships. `signature.title` is value-free the same way (`outcome_fork.py::value_free_title`: quoted text in straight or typographic quotes, and digits, removed), and the runtime strips both sides when matching, so packs compiled before this still match.
+- `option.then` (EXEC-49 G4) is written only by `set_fork_policy` (`policy.then = {"<option_id>": "rejoin"|"end"|"stop"}`, alone or with a mode). `rejoin` (the default, key absent) carries on with the next recorded step; `end` finishes the run successfully on that path (`runPlan` returns `endedAt`; inside a repeated step it stops instead); `stop` ends the run as "that path is not covered" (non-parkable `forkDecisionNeeded`). A pack that uses `end`/`stop` declares the app-layer capability `fork_then` in `manifest.required_capabilities`.
 - The execution form (`execution.json`) is `{type:"outcome_fork", timeout_ms, unknown_policy, clean:{observed}, states:[{id, kind, signature, options:[{id,label,role,steps}], policy}]}` (`skill_package_builder_saved_skill.py::_saved_fork_step`); an option with no runnable steps, or a fork with none, is dropped with a warning. Older runtimes fail loudly on the unknown type — bump `required_runtime` for packs containing one.
+
+`RecordedEvent.surface_context` (optional; EXEC-49 G9): `{items: [{kind: "alert"|"status"|"invalid", words: [str]}]}` (≤3 items, ≤10 words each): what the page SAID after the action (a new `role=alert`/`aria-live`/`role=status` region or an `aria-invalid` field's message) as value-free words, never the text (`bridge.js::buildSurfaceContext`). Observation only: it never becomes a step. The merged understanding row carries it as `said`, and a popup click's row also carries `surface` (the shared class from `outcome_fork.py::classify_surface`).
 
 `RecordedEvent.dialog_context` (optional; absent on older recordings): `{kind: "dom"|"native", container_signal, role, title, message (≤300, compile-time only), has_fields, buttons: [{tag, role, name, text, testid, id, chosen}] (≤8)}`.
 
@@ -1535,8 +1540,8 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `fork_observed` | (Outcome fork) The fork step looked at the page | `si`, `st` (`clean`, `unknown`, or the matched state id) |
 | `fork_clean` | (Outcome fork) No popup appeared — the clean path | `si` |
 | `fork_unknown` | (Outcome fork) A popup appeared that no state recognises | `si` |
-| `fork_decided` | (Outcome fork) A policy or a person chose what to do | `si`, `st`, `opt` (option id/label, when one ran), `mode` (`run` \| `stop` \| `handled_in_page`), `src` (`policy` \| `input` \| `human`) |
-| `fork_paused` | (Outcome fork) The step stopped to ask a person | `si`, `st` |
+| `fork_decided` | (Outcome fork) A policy, a person or an agent chose what to do | `si`, `st`, `opt` (option id/label, when one ran), `mode` (`run` \| `stop` \| `handled_in_page`), `src` (`policy` \| `input` \| `human` \| `agent` \| `agent_gate` \| `late`), `late` (1 when the popup was caught on a step after the fork) |
+| `fork_paused` | (Outcome fork) The step stopped to ask a person, or (`src: "agent"`, EXEC-49) to put an unrecorded popup to the MCP client | `si`, `st`, `src` |
 | `app_obs` | (App maps, phase 6) A decision popup this run could not place — an unrecognised fork popup, or one that blocked a click and was left alone. Scrubbed to its shape by `runtime/app/scrub.js` | `si`, `host` (lowercase, no `www.`), `rt` (page route, ids as `:id`), `tt` (<=8 title words), `bt` (<=6 button labels; none that carried a file name, number or quoted text), `cl` (`decision`), `k` (1 if the shipped app map recognised it). Never the popup's message |
 | `fork_answered` | (Outcome fork) A person's answer was accepted on resume | `si` |
 | `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |

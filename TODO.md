@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 47 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 48 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **116** |
+| **Total** | **117** |
 
 ---
 
@@ -375,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (38 remaining)
+## P2 — High Value, Do Soon (39 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -638,6 +638,15 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Dependencies:** item 1 depends on EXEC-29's dialog pre-arm; item 4 on the tracking/drift dashboards.
 - **Complexity:** M overall; each item is independent.
 - **Success criteria:** a workflow recorded against a popup that sometimes appears runs unattended on the paths the author approved, and every other path ends with a person's decision — never a silent Replace, Delete or Cancel.
+
+### EXEC-49 — One model for popups, faults and silent state changes (design: `docs/Popup-and-State-Handling.md`)
+- **Category:** Execution & Recovery / Builder
+- **Description:** Today only decision dialogs have a shared classifier and a branch shape. The design classifies every surface into six classes (obstruction, notice, benign decision, consequential decision, information request, fault, plus silent change), looks up provenance (recorded / app map / unknown) and applies one table across clarification, compile, runtime and Tier B. Gaps G1–G10 in §9 of the design: one classifier for every surface; value-free fork titles (today `fork.js::titleCompatible` compares the raw title, so a file name in the title makes a recorded popup "unknown"); "does it always appear?" and option-by-option answers in the pre-compile questions; option tails `rejoin`/`end`/`stop`; late-popup arming (also EXEC-44 item 2); a per-run loop guard; a fault probe that cancels without spending Tier B; a caution-only Tier B `verdict`; record-time context for toasts and inline errors; the class in field telemetry.
+- **Status (2026-11-05):** G1, G2, G4–G10 built (runtime, compile, Studio, recorder, telemetry; see docs/Popup-and-State-Handling.md and TRD 10.1/11.4). **Still open:** G3 (the pre-compile fork question offering one choice per button, and a "this popup always appears" answer that compiles to plain steps), counting Tier A dismissals toward the loop guard, a pause-resume test through server.js at tier 4, and a live run against a real app. The CI capability list in build-runtime-app.yml also lacks wait_until, clipboard and call_workflow (pre-existing). Nothing is committed yet.
+- **Why required:** a recording is one path; without this, any other valid state looks like a selector failure, or an unrecorded popup is left alone until the next click fails.
+- **Dependencies:** builds on EXEC-44 and APP-1; G3 changes the pre-compile fork-question rule written in CLAUDE.md (update that invariant when it lands). Three choices in the design's §10 need the owner's confirmation first.
+- **Complexity:** L overall; suggested order G2 → G1 → G7 → G6/G5 → G3/G4 → G8 → G9/G10, each shippable alone.
+- **Success criteria:** the §7 scenario table of the design passes as runtime + compile tests; an unrecorded fault never reaches Tier B; no decision popup is ever answered without an author's approval.
 
 ### APP-1 — App maps: finish the learned map of each web app (phase 8)
 - **Category:** Builder / Execution & Recovery / Cloud
