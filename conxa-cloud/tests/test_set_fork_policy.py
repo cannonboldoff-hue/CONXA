@@ -148,3 +148,76 @@ def test_each_answer_becomes_a_set_fork_policy_op(choice, mode):
     assert len(ops) == 1 and ops[0]["op"] == "set_fork_policy"
     assert ops[0]["policy"]["mode"] == mode and ops[0]["state_id"] == "dialog_upload_options"
     assert receipt
+
+
+# ── where the workflow goes after an option (EXEC-49 G4) ─────────────────────────────────────
+
+
+def test_tails_alone_change_the_options_and_leave_the_policy_untouched():
+    base = set_fork_policy(_doc(), 1, "dialog_upload_options", {"mode": "by_input"})
+    out = set_fork_policy(base, 1, "dialog_upload_options", {"then": {"keep_both": "stop", "cancel": "end"}})
+    state = _state(out)
+    by_id = {o["id"]: o for o in state["options"]}
+    assert by_id["keep_both"]["then"] == "stop" and by_id["cancel"]["then"] == "end"
+    assert "then" not in by_id["replace"]
+    assert state["policy"] == _state(base)["policy"], "a tails-only call must not rewrite the policy"
+    assert state["then_reviewed"] is True
+
+
+def test_rejoin_removes_a_tail_and_the_original_document_is_not_mutated():
+    doc = _doc()
+    once = set_fork_policy(doc, 1, "dialog_upload_options", {"then": {"keep_both": "stop"}})
+    assert all("then" not in o for o in _state(doc)["options"]), "the caller's document was changed"
+    twice = set_fork_policy(once, 1, "dialog_upload_options", {"then": {"keep_both": "rejoin"}})
+    assert "then" not in next(o for o in _state(twice)["options"] if o["id"] == "keep_both")
+
+
+def test_a_mode_and_tails_together_set_both():
+    out = set_fork_policy(_doc(), 1, "dialog_upload_options", {"mode": "ask_human", "then": {"cancel": "stop"}})
+    assert _state(out)["policy"]["mode"] == "ask_human" and _state(out)["policy"]["reviewed"] is True
+    assert next(o for o in _state(out)["options"] if o["id"] == "cancel")["then"] == "stop"
+
+
+@pytest.mark.parametrize("then,code", [
+    ({"nope": "stop"}, "fork_option_not_found"),
+    ({"cancel": "explode"}, "fork_then_invalid"),
+    (["cancel"], "fork_then_invalid"),
+])
+def test_invalid_tails_are_rejected(then, code):
+    with pytest.raises(ValueError, match=code):
+        set_fork_policy(_doc(), 1, "dialog_upload_options", {"then": then})
+
+
+def _human_doc():
+    return set_fork_policy(_doc(), 1, "dialog_upload_options", {"mode": "by_input"})
+
+
+def test_a_popup_left_to_the_person_asks_whether_the_other_choices_fit_the_next_steps():
+    q = next(q for q in clarify.generate_questions(_human_doc()) if q["kind"] == "fork_then")
+    assert [c["id"] for c in q["choices"]] == ["same", "stop", "end"]
+    assert q["other_option_ids"] == ["keep_both", "cancel"] and q["fork_state_id"] == "dialog_upload_options"
+    assert "Keep both" in q["title"] and "Replace" in q["title"]
+
+
+def test_no_tail_question_for_an_automatic_popup_an_unanswered_one_or_an_answered_one():
+    assert not [q for q in clarify.generate_questions(_doc()) if q["kind"] == "fork_then"]  # not reviewed yet
+    auto = set_fork_policy(_doc(), 1, "dialog_upload_options", {"mode": "auto", "option_id": "replace"})
+    assert not [q for q in clarify.generate_questions(auto) if q["kind"] == "fork_then"]  # only one path ever runs
+    answered = set_fork_policy(_human_doc(), 1, "dialog_upload_options", {"then": {"keep_both": "rejoin", "cancel": "rejoin"}})
+    assert not [q for q in clarify.generate_questions(answered) if q["kind"] == "fork_then"]
+
+
+@pytest.mark.parametrize("choice,how", [("same", "rejoin"), ("stop", "stop"), ("end", "end")])
+def test_each_tail_answer_becomes_a_tails_only_set_fork_policy_op(choice, how):
+    q = next(q for q in clarify.generate_questions(_human_doc()) if q["kind"] == "fork_then")
+    ops, _ = clarify.plan_answer(q, {"choice": choice}, _human_doc())
+    assert ops == [{"op": "set_fork_policy", "step_key": q["step_keys"][0], "state_id": "dialog_upload_options",
+                    "policy": {"then": {"keep_both": how, "cancel": how}}}]
+
+
+def test_an_answer_that_is_not_one_of_the_choices_changes_nothing():
+    q = next(q for q in clarify.generate_questions(_doc()) if q["kind"] == "fork")
+    ops, receipt = clarify.plan_answer(q, {"choice": "burn_it_down"}, _doc())
+    assert ops == [] and "not one of the choices" in receipt
+    t = next(q for q in clarify.generate_questions(_human_doc()) if q["kind"] == "fork_then")
+    assert clarify.plan_answer(t, {"choice": "maybe"}, _human_doc())[0] == []

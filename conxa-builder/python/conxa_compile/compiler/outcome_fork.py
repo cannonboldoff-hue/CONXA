@@ -58,6 +58,9 @@ CONSENT = "consent"
 FORM = "form"
 
 
+_QUOTED_RE = re.compile(r"\"[^\"]*\"|(?<![A-Za-z0-9])'[^']*'(?![A-Za-z0-9])|“[^”]*”|‘[^’]*’")
+
+
 def _norm(s: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).strip()
 
@@ -71,13 +74,22 @@ def message_tokens(text: str) -> list[str]:
     """Words of a dialog message with quoted text and digits stripped, so "report.pdf already
     exists" and "q3.xlsx already exists" tokenize identically (and customer file names never ride
     along into a shipped pack). Mirrors runtime/app/fork.js::messageTokens."""
-    stripped = re.sub(r"([\"'“”‘’]).*?\1", " ", str(text or ""))
+    stripped = _QUOTED_RE.sub(" ", str(text or ""))
     stripped = re.sub(r"\d+", " ", stripped)
     seen: list[str] = []
     for w in _norm(stripped).split():
         if len(w) > 2 and w not in seen:
             seen.append(w)
     return seen[:12]
+
+
+def value_free_title(text: Any) -> str:
+    """A popup title with quoted text and digits removed, so "Replace 'report.pdf'?" and
+    "Replace 'q3.xlsx'?" are the same popup and a customer's file name never ships in a pack.
+    Mirrors runtime/app/fork.js::valueFreeTitle."""
+    stripped = _QUOTED_RE.sub(" ", str(text or ""))
+    stripped = re.sub(r"\d+", " ", stripped)
+    return re.sub(r"\s+", " ", stripped).strip()
 
 
 def _button_name(b: dict[str, Any]) -> str:
@@ -106,6 +118,60 @@ def classify_dialog(ctx: Any) -> str:
     if all(_norm(_button_name(b)) in _PURE_DISMISS for b in buttons):
         return DISMISSABLE
     return DECISION
+
+
+# A button that, once pressed, cannot be taken back or that spends / sends / publishes. A popup with
+# any of these is NEVER answered by an agent (EXEC-49 P5): the run stops instead. Mirrors
+# runtime/app/fork.js::isIrreversibleLabel, pinned by decision_surface_cases.json. Wrongly matching
+# only ever stops a run, so the list errs wide ("Order by" counts).
+_IRREVERSIBLE_RE = re.compile(
+    r"\b(delete|remove|erase|permanently|pay|buy|purchase|order|checkout|send|submit|publish|"
+    r"transfer|revoke)\b",
+    re.IGNORECASE,
+)
+
+
+def is_irreversible_label(label: Any) -> bool:
+    return bool(_IRREVERSIBLE_RE.search(str(label or "")))
+
+
+# Surface classes (docs/Popup-and-State-Handling.md §3). Least to most cautious: when a surface fits
+# several, the later one wins. ``native`` is outside the order: a browser alert/confirm/prompt has
+# its own dialog_accept/dialog_dismiss step and is never answered through a button click.
+NOTICE = "notice"
+OBSTRUCTION = "obstruction"
+DECISION_BENIGN = "decision_benign"
+INFO_REQUEST = "info_request"
+DECISION_CONSEQUENTIAL = "decision_consequential"
+FAULT = "fault"
+NATIVE = "native"
+CAUTION_ORDER = (NOTICE, OBSTRUCTION, DECISION_BENIGN, INFO_REQUEST, DECISION_CONSEQUENTIAL, FAULT)
+
+
+def most_cautious(*classes: str | None) -> str | None:
+    known = [c for c in classes if c in CAUTION_ORDER]
+    return max(known, key=CAUTION_ORDER.index) if known else None
+
+
+def classify_surface(ctx: Any) -> str | None:
+    """The class of what is on screen: notice | obstruction | decision_benign | info_request |
+    decision_consequential | native, or None when there is nothing. ``fault`` comes from the
+    runtime's fault probe, never from a dialog. ``live`` / ``progress`` are optional keys the
+    runtime probe sets (the recorder does not), so a toast or progress panel reads as a notice."""
+    if not isinstance(ctx, dict):
+        return None
+    if ctx.get("kind") == "native" or ctx.get("native"):
+        return NATIVE
+    if ctx.get("has_fields"):
+        return INFO_REQUEST
+    buttons = [b for b in (ctx.get("buttons") or []) if isinstance(b, dict) and _button_name(b)]
+    if ctx.get("progress") or (ctx.get("live") and len(buttons) < 2):
+        return NOTICE
+    if classify_dialog(ctx) != DECISION:
+        return OBSTRUCTION
+    if any(_CONSEQUENTIAL_RE.search(_button_name(b)) or is_irreversible_label(_button_name(b)) for b in buttons):
+        return DECISION_CONSEQUENTIAL
+    return DECISION_BENIGN
 
 
 def option_role(label: str, *, recorded_consequence: str = "") -> str:
@@ -170,7 +236,7 @@ def _dump(step: SkillStep) -> dict[str, Any]:
 
 def _fork_signature(ctx: dict[str, Any]) -> dict[str, Any]:
     return {
-        "title": str(ctx.get("title") or ""),
+        "title": value_free_title(ctx.get("title")),
         "button_labels": [_button_name(b) for b in ctx.get("buttons") or [] if isinstance(b, dict) and _button_name(b)],
         "message_tokens": message_tokens(str(ctx.get("message") or "")),
         "container_selector": str(ctx.get("container_signal") or ""),
@@ -180,7 +246,7 @@ def _fork_signature(ctx: dict[str, Any]) -> dict[str, Any]:
 def _same_dialog(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return (
         a.get("container_signal") == b.get("container_signal")
-        and _norm(a.get("title")) == _norm(b.get("title"))
+        and _norm(value_free_title(a.get("title"))) == _norm(value_free_title(b.get("title")))
     )
 
 

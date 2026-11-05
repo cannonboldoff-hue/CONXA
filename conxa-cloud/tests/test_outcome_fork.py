@@ -15,7 +15,11 @@ from conxa_compile.compiler.outcome_fork import (
     FORM,
     build_outcome_forks,
     classify_dialog,
+    classify_surface,
+    is_irreversible_label,
     message_tokens,
+    most_cautious,
+    value_free_title,
 )
 
 CONTAINER = '[role="dialog"]'
@@ -99,6 +103,29 @@ def test_message_tokens_drop_file_names_and_numbers():
     assert "q3" not in message_tokens('"q3.xlsx" already exists')
 
 
+def test_quoted_names_are_stripped_whatever_quotes_wrap_them_and_a_contraction_is_not_a_quote():
+    assert value_free_title("Replace “report.pdf”?") == "Replace ?"
+    assert value_free_title("Replace ‘report.pdf’?") == "Replace ?"
+    assert value_free_title("Don't replace it, you can't undo that") == "Don't replace it, you can't undo that"
+    assert message_tokens("“q3-forecast” already exists") == message_tokens("“other” already exists")
+    assert "forecast" not in message_tokens("“q3-forecast” already exists")
+
+
+def test_value_free_title_drops_quoted_names_and_numbers():
+    assert value_free_title("Replace 'report.pdf'?") == value_free_title("Replace 'q3.xlsx'?") == "Replace ?"
+    assert value_free_title("Delete 12 files") == "Delete files"
+    assert value_free_title("Discard changes?") == "Discard changes?"
+    assert value_free_title(None) == ""
+
+
+def test_a_file_name_in_the_title_never_ships_in_the_signature():
+    out, forks = _fork_of([_upload(), _click("Replace", _ctx("Replace", title="Replace 'report.pdf'?"))])
+    state = forks[0].outcome_fork["states"][0]
+    assert state["signature"]["title"] == "Replace ?"
+    assert "'report.pdf'" not in json.dumps(forks[0].outcome_fork)
+    assert "report.pdf" not in forks[0].semantic_description
+
+
 # ── fork construction ──────────────────────────────────────────────────────────────────────
 
 
@@ -136,6 +163,23 @@ def test_classify_dialog_agrees_with_the_shared_decision_surface_cases():
             **({"kind": "native"} if c.get("native") else {}),
         }
         assert (classify_dialog(ctx) == DECISION) is c["decision"], c["name"]
+        ctx.update({"live": bool(c.get("live")), "progress": bool(c.get("progress"))})
+        assert classify_surface(ctx) == c["class"], f"{c['name']}: class"
+
+
+def test_is_irreversible_label_agrees_with_the_shared_label_list():
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "runtime" / "test" / "fixtures" / "decision_surface_cases.json"
+    for c in json.loads(path.read_text(encoding="utf-8"))["irreversible_labels"]:
+        assert is_irreversible_label(c["label"]) is c["irreversible"], c["label"]
+
+
+def test_most_cautious_picks_the_later_class_and_ignores_unknowns():
+    assert most_cautious("obstruction", "decision_consequential", "notice") == "decision_consequential"
+    assert most_cautious("decision_benign", "fault") == "fault"
+    assert most_cautious("native", None) is None
+    assert classify_surface(None) is None
 
 
 def test_a_harmless_recorded_choice_runs_automatically_but_unapproved():
@@ -288,3 +332,49 @@ def test_second_opinion_never_archives_a_fork():
     key = step_keys(out)[0]
     kept, archived = archive_flagged_steps(out, [{"kind": "flag_noise", "step_key": key, "proposed": "noise", "why": "x"}])
     assert archived == [] and len(kept) == 1
+
+
+# ── option tails (EXEC-49 G4) ──────────────────────────────────────────────────────────────
+
+
+def test_a_tail_is_exported_only_when_it_is_not_the_default(tmp_path):
+    steps, forks = _fork_of([_click("Replace", _ctx("Replace"))])
+    options = forks[0].outcome_fork["states"][0]["options"]
+    options[1]["then"] = "stop"
+    options[2]["then"] = "end"
+    options[0]["then"] = "sideways"  # not a tail: dropped, never shipped
+    execution, _ = _export(tmp_path, steps)
+    exported = {o["id"]: o for o in next(s for s in execution if s["type"] == "outcome_fork")["states"][0]["options"]}
+    assert exported["keep_both"]["then"] == "stop" and exported["cancel"]["then"] == "end"
+    assert "then" not in exported["replace"]
+
+
+def test_a_pack_with_a_tail_declares_the_capability_and_one_without_does_not(tmp_path):
+    from conxa_compile.skill_package_builder_output import execution_capabilities
+
+    steps, forks = _fork_of([_click("Replace", _ctx("Replace"))])
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    plain, _ = _export(tmp_path / "a", steps)
+    assert "fork_then" not in execution_capabilities(plain)
+    forks[0].outcome_fork["states"][0]["options"][1]["then"] = "stop"
+    tailed, _ = _export(tmp_path / "b", steps)
+    assert "fork_then" in execution_capabilities(tailed)
+
+
+def test_capabilities_inside_a_fork_option_body_are_found():
+    from conxa_compile.skill_package_builder_output import execution_capabilities
+
+    fork = {"type": "outcome_fork", "states": [{"id": "s", "options": [
+        {"id": "a", "steps": [{"type": "wait_until"}, {"type": "clipboard_read"}]}]}]}
+    assert execution_capabilities([fork]) == ["clipboard", "wait_until"]
+
+
+def test_studio_asks_for_the_capability_before_a_test_too():
+    from handlers.workflows import capabilities_needed
+
+    saved = {"action": "outcome_fork", "outcome_fork": {"states": [{"id": "s", "options": [
+        {"id": "a", "then": "stop", "steps": []}, {"id": "b", "steps": []}]}]}}
+    assert capabilities_needed([saved]) == {"fork_then"}
+    saved["outcome_fork"]["states"][0]["options"][0].pop("then")
+    assert capabilities_needed([saved]) == set()

@@ -212,7 +212,12 @@ def set_fork_policy(
     "by_input"[, "input"]}`` (the person running it chooses per run: declares a select input whose
     options are the option labels plus "ask", default "ask"), ``{"mode": "ask_human"}`` or
     ``{"mode": "stop"[, "message"]}``. A state the author has answered is marked ``reviewed`` so it
-    is never asked about again."""
+    is never asked about again.
+
+    ``policy["then"]`` (optional, alone or with a mode) says where the workflow goes after an option
+    that is not the recorded one: ``{"<option_id>": "rejoin" | "end" | "stop"}``. ``rejoin`` is the
+    default (carry on with the next recorded step), ``end`` finishes the run on that path, ``stop``
+    ends it as "this path is not covered". A call with ``then`` and no mode changes nothing else."""
     doc = dict(document)
     skills = list(doc.get("skills") or [])
     if not skills:
@@ -230,11 +235,32 @@ def set_fork_policy(
     state = next((s for s in states if s.get("id") == state_id), None)
     if state is None:
         raise ValueError("fork_state_not_found")
-    options = [o for o in state.get("options") or [] if isinstance(o, dict)]
+    options = [dict(o) for o in state.get("options") or [] if isinstance(o, dict)]
+    state["options"] = options
+
+    raw_then = (policy or {}).get("then")
+    if raw_then is not None:
+        if not isinstance(raw_then, dict):
+            raise ValueError("fork_then_invalid")
+        known = {o.get("id") for o in options}
+        for option_id, how in raw_then.items():
+            if option_id not in known:
+                raise ValueError("fork_option_not_found")
+            if how not in ("rejoin", "end", "stop"):
+                raise ValueError("fork_then_invalid")
+        for o in options:
+            how = raw_then.get(o.get("id"))
+            if how == "rejoin":
+                o.pop("then", None)
+            elif how:
+                o["then"] = how
+        state["then_reviewed"] = True
 
     mode = str((policy or {}).get("mode") or "")
     new_policy: dict[str, Any]
-    if mode == "auto":
+    if not mode and raw_then is not None:
+        new_policy = dict(state.get("policy") or {})  # tails only: the policy itself is untouched
+    elif mode == "auto":
         option_id = str(policy.get("option_id") or "")
         if option_id not in {o.get("id") for o in options}:
             raise ValueError("fork_option_not_found")
@@ -252,7 +278,8 @@ def set_fork_policy(
         new_policy = {"mode": "stop", "message": str(policy.get("message") or f"Needs a decision: {(state.get('signature') or {}).get('title') or 'a popup'}")}
     else:
         raise ValueError("fork_policy_mode_invalid")
-    new_policy["reviewed"] = True
+    if mode or raw_then is None:
+        new_policy["reviewed"] = True
     state["policy"] = new_policy
     fork["states"] = [state if s.get("id") == state_id else s for s in states]
     step["outcome_fork"] = fork

@@ -479,12 +479,17 @@ def _saved_fork_step(step: dict[str, Any]) -> dict[str, Any] | None:
             body = _saved_branch_steps_list(raw_opt.get("steps"))
             if not body:
                 continue
-            options_out.append({
+            opt_out = {
                 "id": str(raw_opt["id"]),
                 "label": str(raw_opt.get("label") or raw_opt["id"]),
                 "role": str(raw_opt.get("role") or "neutral"),
                 "steps": body,
-            })
+            }
+            # Where the workflow goes after this option (EXEC-49 G4). Omitted for the default, so a pack
+            # that never uses it stays loadable by an engine that predates it.
+            if raw_opt.get("then") in ("end", "stop"):
+                opt_out["then"] = raw_opt["then"]
+            options_out.append(opt_out)
         if not options_out:
             continue
         option_ids = {o["id"] for o in options_out}

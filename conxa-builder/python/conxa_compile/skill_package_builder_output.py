@@ -58,6 +58,13 @@ def execution_capabilities(steps: list[Any]) -> list[str]:
                 need.add("clipboard")
             if s.get("type") == "call_workflow":
                 need.add("call_workflow")
+            for st in s.get("states") if isinstance(s.get("states"), list) else []:
+                for o in (st.get("options") if isinstance(st, dict) and isinstance(st.get("options"), list) else []):
+                    if not isinstance(o, dict):
+                        continue
+                    if o.get("then") in ("end", "stop"):
+                        need.add("fork_then")
+                    walk(o.get("steps"))
             bundle = s.get("identity_bundle") if isinstance(s.get("identity_bundle"), dict) else {}
             if "{{" in json.dumps([bundle.get("signals"), bundle.get("fingerprint")], default=str):
                 need.add("templated_click")

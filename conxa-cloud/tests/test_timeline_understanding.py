@@ -222,6 +222,15 @@ def test_a_note_answer_is_stored_as_text_and_changes_nothing_else(tmp_path):
     assert d["note"] == "If nothing matches? Skip it" and "values" not in d
 
 
+def test_an_answer_the_question_never_offered_is_remembered_as_skipped(tmp_path):
+    q = {"id": "fork:r5", "kind": "fork", "title": "Popup?", "event_ids": [5],
+         "choices": [{"id": "by_input", "label": "Let whoever uses it decide"}, {"id": "stop", "label": "Stop"}]}
+    d = decisions.record(tmp_path, q, {"choice": "option:replace"})[0]
+    assert d["skipped"] is True and "choice" not in d
+    d = decisions.record(tmp_path, q, {"choice": "by_input"})[0]
+    assert d["skipped"] is False and d["choice"] == "by_input"
+
+
 # ─── choosing one item out of a list is not a silent "fixed" ────────────────────────────────
 
 def _row(tag, parent_tag, n_rows, cap=False):

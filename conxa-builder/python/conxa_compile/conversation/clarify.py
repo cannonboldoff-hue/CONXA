@@ -36,7 +36,7 @@ MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
-    "coverage": -1, "upload": 0, "fork": 1, "known_popup": 1.5, "confirm": 2, "chosen_values": 2.5,
+    "coverage": -1, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "chosen_values": 2.5,
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
@@ -170,6 +170,32 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None) 
         input_name="on_" + (re.sub(r"[^a-z0-9]+", "_", popup.lower()).strip("_") or "popup")[:40],
         # Context for the wording call only (the popup's own buttons); nothing reads it back as a choice.
         popup_buttons=[str(b) for b in sig.get("button_labels") or []][:6],
+    )
+
+
+def _fork_then_question(key: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    """Asked once a popup is left to the person running it (or to a person): what should happen if they
+    pick something OTHER than what was recorded. The recorded choice rejoins the recorded steps by
+    definition; any other choice may leave the page somewhere the rest of the steps do not fit. Choices
+    are fixed facts; the answer becomes ``then`` on those options."""
+    options = [o for o in state.get("options") or [] if isinstance(o, dict) and o.get("id")]
+    others = [o for o in options if not o.get("recorded") and not o.get("then")]
+    if not others:
+        return None
+    sig = state.get("signature") or {}
+    popup = str(sig.get("title") or "a popup")
+    recorded = next((str(o.get("label") or o["id"]) for o in options if o.get("recorded")), "")
+    names = ", ".join(f"“{o.get('label') or o['id']}”" for o in others[:3])
+    return _question(
+        "fork_then", f"fork_then:{key}:{state['id']}",
+        f"If someone picks {names} instead{f' of “{recorded}”' if recorded else ''}, do the next steps still make sense?",
+        f"The “{popup}” message box can go different ways. You only recorded one of them, so I can\u2019t be sure the steps after it fit the others.",
+        [
+            {"id": "same", "label": "Yes, carry on with the same steps", "detail": "It continues exactly as recorded after any choice."},
+            {"id": "stop", "label": "No, stop there", "detail": "If someone picks another choice, the choice is made and the run stops. Nothing after it runs."},
+            {"id": "end", "label": "No, that finishes the job", "detail": "If someone picks another choice, the run ends there and counts as done."},
+        ],
+        step_keys_=[key], fork_state_id=state["id"], other_option_ids=[o["id"] for o in others],
     )
 
 
@@ -642,6 +668,19 @@ def generate_questions(
             if isinstance(state, dict) and state.get("id") and not (state.get("policy") or {}).get("reviewed"):
                 out.append(_fork_question(keys[i], state, fork_copy))
 
+    # 1b' ─ a popup left to a person: the recorded choice rejoins the steps, the others may not.
+    for i, s in enumerate(steps):
+        if _action_name(s) != "outcome_fork":
+            continue
+        for state in ((s.get("outcome_fork") or {}).get("states") or []):
+            if not (isinstance(state, dict) and state.get("id")) or state.get("then_reviewed"):
+                continue
+            policy = state.get("policy") or {}
+            if policy.get("reviewed") and policy.get("mode") in ("by_input", "ask_human"):
+                q = _fork_then_question(keys[i], state)
+                if q is not None:
+                    out.append(q)
+
     # 1c ─ popups other workflows on this app met right after the same step (the app map).
     for kp in (known_popups or [])[:MAX_KNOWN_POPUP_QUESTIONS]:
         i = int(kp.get("step_index", -1))
@@ -772,8 +811,18 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             return ops, "Someone approves it first"
         return ops, "Goes ahead without asking"
 
+    if kind == "fork_then":
+        how = {"same": "rejoin", "stop": "stop", "end": "end"}.get(str(answer.get("choice") or ""))
+        if how is None:
+            return ops, "Nothing changed \u2014 that is not one of the choices"
+        ops.append({"op": "set_fork_policy", "step_key": keys[0], "state_id": question.get("fork_state_id"),
+                    "policy": {"then": {oid: how for oid in question.get("other_option_ids") or []}}})
+        return ops, {"rejoin": "Carries on with the same steps", "stop": "Stops there", "end": "Ends there, counted as done"}[how]
+
     if kind == "fork":
         choice = str(answer.get("choice") or "")
+        if choice not in {c["id"] for c in question.get("choices") or []}:
+            return ops, "Nothing changed \u2014 that is not one of the choices"
         label = next((c["label"] for c in question.get("choices") or [] if c["id"] == choice), "")
         if choice.startswith("option:"):
             policy = {"mode": "auto", "option_id": choice[len("option:"):]}

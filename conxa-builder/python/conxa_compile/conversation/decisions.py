@@ -30,6 +30,10 @@ def decision_from_answer(question: dict[str, Any], answer: dict[str, Any] | None
     """What to remember about one answered question. ``answer`` is the card's reply:
     ``{"choice": id}``, ``{"selected": [ids]}`` or ``None``/``{}`` for a skipped question."""
     answer = answer if isinstance(answer, dict) else {}
+    # An id the question never offered is not an answer: remember it as skipped rather than replay it.
+    offered = {c.get("id") for c in question.get("choices") or [] if isinstance(c, dict)}
+    if answer.get("choice") and offered and str(answer["choice"]) not in offered:
+        answer = {}
     decision: dict[str, Any] = {
         "qid": question["id"], "kind": question["kind"],
         "event_ids": [e for e in question.get("event_ids") or [] if e is not None],
