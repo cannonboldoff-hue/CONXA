@@ -105,6 +105,7 @@ class ConversationMixin:
             raise _CommandError("workflow_not_found", "No such workflow.")
         self._reconcile_interrupted(ident)
         self._resume_question_building(ident, rid)
+        self._reask_unanswered(ident, _event_sink(rid))
         page = ts.load(thread_id, before=int(before) if before is not None else None, limit=int(payload.get("limit") or _THREAD_PAGE))
         if before is None:
             # Read-only, once per skill: the reviewer's old copilot history joins the thread.
@@ -159,7 +160,7 @@ class ConversationMixin:
         if replying:
             runtime_state.set_flags(ident, replying=True)
         try:
-            return harness.run_turn(
+            result = harness.run_turn(
                 thread_id=thread_id,
                 message=str(payload.get("message") or ""),
                 sink=sink,
@@ -172,6 +173,9 @@ class ConversationMixin:
                 flow_executor=run_action,
                 **ctx,
             )
+            if replying:
+                self._remind_open_question(ident, sink)
+            return result
         except ValueError as exc:
             raise _CommandError("invalid_input", str(exc)) from exc
         except (EntitlementBlocked, QuotaExceeded, ProxyUnavailable, CloudUnreachable) as exc:
@@ -458,7 +462,7 @@ class ConversationMixin:
             self._flow_start_compile(workflow_id)
             return {"ok": True, "message": "Compiling the recording."}
         if action == "answer_clarify":
-            self._flow_post_next_question(workflow_id, sink, promote_queued=True)
+            self._flow_post_next_question(workflow_id, sink, promote_assumed=True)
             return {"ok": True, "message": "Here’s the next question."}
         if action == "test":
             prepared = self.cmd_flow_test_prepare(base, rid)

@@ -186,8 +186,7 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
         <span className="mt-[3px]"><StatusGlyph kind={state === 'answered' ? 'ok' : 'none'} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[var(--text-primary)]">{title}</p>
-          <p className="text-xs text-[var(--text-meta)]">{receipt || (state === 'skipped' ? 'Left as it was' : '')}</p>
-        </div>
+          <p className="text-xs text-[var(--text-meta)]">{receipt || (state === 'skipped' ? 'Left as it was' : '')}</p>        </div>
         {item.can_reopen === true && !confirmBack && (
           <button
             type="button"
@@ -228,7 +227,9 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
     await send('choose', { choice: id })
     setSingle('')
   }
-  const next = () => (multi ? send('choose', { selected: [...picked], ...(customText ? { custom_text: customText } : {}) }) : send('skip'))
+  // Every question must be answered: there is no skip. A tick-list is sent by the arrow, a single choice by picking it.
+  const next = () => send('choose', { selected: [...picked], ...(customText ? { custom_text: customText } : {}) })
+  const canCheck = Array.isArray(item.actions) && item.actions.includes('checked')
 
   return (
     <CardShell
@@ -237,8 +238,9 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
       footer={
         <>
           <Button variant="ghost" size="icon-sm" disabled={busy || !prevId} onClick={goPrev} aria-label="Previous question"><ChevronLeft /></Button>
-          <Button variant="ghost" size="icon-sm" disabled={busy} onClick={next} aria-label={multi ? 'Confirm and go to the next question' : 'Skip to the next question'}><ChevronRight /></Button>
+          {multi && <Button variant="ghost" size="icon-sm" disabled={busy} onClick={next} aria-label="Confirm and go to the next question"><ChevronRight /></Button>}
           {multi && <span className="text-xs text-[var(--text-meta)]">Tick what applies, then press the arrow.</span>}
+          {canCheck && <Button variant="outline" size="sm" disabled={busy} onClick={() => send('checked')}>I’ve checked it — it’s right</Button>}
           {state === 'failed' && typeof item.error === 'string' && <span className="basis-full text-xs text-status-error">✕ {item.error}</span>}
         </>
       }
@@ -322,7 +324,7 @@ type Summary = {
   goal?: string
   input_names?: string[]
   queued?: number
-  /** Questions the compiler's own default answered; say "ask me" to be asked them. */
+  /** Things the harness was sure about, so it did not ask; say "ask me" to be asked them. */
   assumptions?: { qid: string; title: string; default: string }[]
 }
 
@@ -388,7 +390,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''} · {s.inputs} input{s.inputs === 1 ? '' : 's'}
         {s.input_names && s.input_names.length ? ` (${s.input_names.join(', ')})` : ''}
         {s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
-        {s.queued ? ` · ${s.queued} more question${s.queued === 1 ? '' : 's'} when you want them` : ''}
+        {s.queued ? ` · ${s.queued} thing${s.queued === 1 ? '' : 's'} I was sure about (say “ask me” to check)` : ''}
       </p>
       {s.assumptions && s.assumptions.length > 0 && (
         <div className="mt-2 text-xs text-[var(--text-meta)]">

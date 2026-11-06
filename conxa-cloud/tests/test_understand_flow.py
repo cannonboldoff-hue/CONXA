@@ -479,7 +479,9 @@ def test_a_note_typed_before_the_build_is_handed_to_the_chat_once_nothing_is_lef
         pending = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"]
         if not pending:
             break
-        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "skip"}, "r")
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "own",
+                           "payload": {"custom_text": "fine as it is"}}, "r")
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "resume"}, "r")   # the chat hand-off is over
     assert done.wait(5) and len(sent) == 1
     assert sent[0]["thread_id"] == f"wf:{wf.id}" and "If nothing matches, stop" in sent[0]["message"]
     b._flow_route_notes(wf.id)                                                           # said once, never repeated
@@ -523,3 +525,22 @@ def test_each_question_leaves_a_value_free_trail_of_shown_answered_and_reopened(
     assert answered["qid"] == "confirm_before:r2" and answered["facet"] == "consequence" and answered["choice"] == "confirm"
     assert answered["guess"] == "confirm" and answered["kept_guess"] is True          # the pre-selected guess was the answer kept
     assert not any("text" in e or "value" in e or "literal" in e for e in events)
+
+
+def test_questions_past_the_cap_are_all_asked_before_the_build_starts(flow, monkeypatch):
+    b, wf, compiled = flow
+    monkeypatch.setattr(tu, "MAX_QUESTIONS", 1)          # RAW holds two questions: one is shown, one is held back
+    b._flow_understand(wf.id, "rid")
+    data = clarify_store.load(wf.id)
+    assert sorted(q["status"] for q in data["questions"]) == ["open", "queued"]
+    answers = {"value": {"choice": "varies"}, "confirm_before": {"choice": "confirm"}}
+    asked = 0
+    for _ in range(10):
+        pending = _open_cards(wf)
+        if not pending:
+            break
+        assert compiled == []                           # the held-back one still blocks the build
+        _answer(b, wf, pending[0], **answers[pending[0]["question_kind"]])
+        asked += 1
+    assert asked == 2                                   # it came forward on its own: none was left unasked
+    assert compiled == [wf.id]                          # and only then did the build start, once

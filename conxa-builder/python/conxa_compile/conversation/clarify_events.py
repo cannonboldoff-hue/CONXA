@@ -55,8 +55,9 @@ def answered(workflow_id: str, question: dict[str, Any], answer: dict[str, Any] 
     """The choice ids only. ``kept_guess`` says whether the pre-selected guess was the answer kept."""
     answer = answer or {}
     choice = answer.get("choice")
-    log(workflow_id, "answered" if (choice or answer.get("selected")) else "skipped", question,
-        choice=choice, selected=answer.get("selected") or None,
+    log(workflow_id, "answered" if (choice or answer.get("selected") or answer.get("custom_text") or answer.get("checked"))
+        else "skipped", question,
+        choice=choice, selected=answer.get("selected") or None, own_words=True if answer.get("custom_text") else None,
         kept_guess=(choice == question.get("best_guess")) if choice and question.get("best_guess") else None)
 
 

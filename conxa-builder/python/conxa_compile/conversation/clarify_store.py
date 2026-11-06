@@ -95,6 +95,10 @@ def summary(workflow_id: str) -> dict[str, Any] | None:
         "skipped": sum(1 for q in qs if q.get("status") == "skipped"),
         "total": len(qs),
     }
+    # Every question the person has not answered yet: shown, being applied, or held back for later.
+    # An "assumed" one is the harness being sure, so it is not a question and never counts.
+    out["unanswered"] = out["open"] + out["queued"]
+    out["assumed"] = sum(1 for q in qs if q.get("status") == "assumed")
     if data.get("stage"):
         out["stage"] = data["stage"]   # "understand" while the pre-compile questions are being answered
         # The model's read of the recording failed, so these questions are plain: offer a re-watch.
@@ -143,8 +147,8 @@ def mark_stale(workflow_id: str, live_keys: set[str]) -> int:
         for q in data.get("questions") or []:
             if isinstance(q, dict) and q.get("step_keys") and not set(q["step_keys"]) <= live_keys and not q.get("stale"):
                 q["stale"] = True
-                if q.get("status") == "open":
-                    q["status"] = "skipped"      # nothing left to ask about
+                if q.get("status") in ("open", "queued"):
+                    q["status"] = "superseded"   # nothing left to ask, and not a question left unanswered about
                     q["receipt"] = "The steps this was about were re-recorded"
                 count[0] += 1
 

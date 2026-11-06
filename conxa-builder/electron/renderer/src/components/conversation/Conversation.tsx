@@ -182,6 +182,12 @@ export function Conversation({
 
   const items = useMemo(() => visibleItems(t.items), [t.items])
   const hasItems = items.length > 0
+  // A question nobody has answered is pinned above the composer, outside the scroll area, so it can never
+  // scroll out of view or sit in older history. Its place in the history is a one-line pointer.
+  const liveQuestion = useMemo(
+    () => [...items].reverse().find((i) => i.kind === 'card' && i.card_type === 'clarify_question' && (i.state === 'open' || i.state === 'failed')),
+    [items],
+  )
 
   const toBottom = useCallback(() => {
     const el = scroller.current
@@ -249,9 +255,15 @@ export function Conversation({
           )}
           {!ready && <ThreadSkeleton />}
           {showEmpty && (empty ?? <p className="text-sm text-[var(--text-meta)]">Nothing here yet.</p>)}
-          {items.map((item) => (
-            <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />
-          ))}
+          {items.map((item) =>
+            item === liveQuestion ? (
+              <p key={item.card_id ?? item.id} className="text-xs text-[var(--text-meta)]">
+                {String(item.title ?? 'A question')} — waiting for your answer below
+              </p>
+            ) : (
+              <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />
+            ),
+          )}
           {tail}
           {t.streaming && <AssistantMessage text={t.streaming.text} streaming />}
           {t.turnId && !t.streaming && <AssistantMessage text="" streaming />}
@@ -271,6 +283,11 @@ export function Conversation({
           </Button>
         )}
       </div>
+      {liveQuestion && (
+        <div className="mx-auto max-h-[50vh] w-full max-w-[44rem] overflow-y-auto px-4 pt-2" aria-label="Question waiting for your answer">
+          <ItemView key={liveQuestion.card_id ?? liveQuestion.id} threadId={threadId} item={liveQuestion} />
+        </div>
+      )}
       <Composer {...composerProps} />
     </div>
   )

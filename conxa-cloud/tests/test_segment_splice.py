@@ -91,7 +91,7 @@ def test_answers_about_surviving_steps_are_kept_and_the_rest_flagged_stale(data_
     qs = {q["id"]: q for q in clarify_store.load("w1")["questions"]}
     assert not qs["keep"].get("stale") and not qs["global"].get("stale")
     assert qs["gone"]["stale"] is True and qs["gone"]["status"] == "answered"
-    assert qs["open_gone"]["status"] == "skipped" and "re-recorded" in qs["open_gone"]["receipt"]
+    assert qs["open_gone"]["status"] == "superseded" and "re-recorded" in qs["open_gone"]["receipt"]
     assert clarify_store.mark_stale("w1", {"a#1"}) == 0                              # idempotent
 
 

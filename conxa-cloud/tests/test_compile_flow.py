@@ -243,7 +243,7 @@ def test_answering_applies_existing_mutations_and_the_counts_add_up(env):
     assert get_workflow(wf.id).signed_off is False
 
 
-def test_skipping_keeps_the_compilers_default_and_changes_nothing(env):
+def test_a_question_cannot_be_skipped_and_typing_your_own_words_answers_it(env):
     b, wf, _out = env
     _fake_compile(b, wf)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
@@ -252,12 +252,17 @@ def test_skipping_keeps_the_compilers_default_and_changes_nothing(env):
 
     skill_id = get_workflow(wf.id).skill_id
     before = read_skill(skill_id)
-    for _ in range(2):
-        q = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
-        assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "skip"}, "r")["ok"]
-    assert read_skill(skill_id) == before  # byte-identical: unanswered questions never touch the skill
-    assert all(c["state"] == "skipped" for c in _cards(wf.id, "clarify_question"))
-    assert _cards(wf.id, "workflow_summary")  # and testing is never blocked: the summary still arrives
+    q = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
+    with pytest.raises(_CommandError) as exc:
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "skip"}, "r")
+    assert exc.value.code == "card_action_unsupported"
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"   # nothing ended it
+    assert read_skill(skill_id) == before
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                           "payload": {"custom_text": "ask my manager first"}}, "r")
+    assert r["ok"] and r["to_chat"]
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "answered"   # own words count as the answer
+    assert read_skill(skill_id) == before   # and nothing is applied until the chat proposes a change
 
 
 def test_a_workflow_edited_in_human_edit_meanwhile_fails_the_answer_cleanly(env):
@@ -275,7 +280,7 @@ def test_a_workflow_edited_in_human_edit_meanwhile_fails_the_answer_cleanly(env)
     r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
     assert r["ok"] is False and r["code"] == "proposal_stale"
     card = _cards(wf.id, "clarify_question")[0]
-    assert card["state"] == "failed" and "changed in Human Edit" in card["error"] and card["actions"] == ["choose", "skip"]
+    assert card["state"] == "failed" and "changed in Human Edit" in card["error"] and card["actions"] == ["choose"]
 
 
 def test_out_of_credits_and_failures_are_their_own_states(env):
@@ -516,7 +521,7 @@ def test_general_chat_can_see_the_persons_workflows_and_groups_read_only(env):
     assert "The person's workflows (read-only)" in titles
 
 
-def test_questions_past_the_cap_are_queued_not_lost_and_come_back_when_asked(env):
+def test_questions_past_the_cap_are_queued_then_asked_without_being_requested(env):
     b, wf, _out = env
 
     def many(skill_id):
@@ -528,18 +533,23 @@ def test_questions_past_the_cap_are_queued_not_lost_and_come_back_when_asked(env
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
     data = clarify_store.load(wf.id)
     assert [q["status"] for q in data["questions"]] == ["open"] * 5 + ["queued"] * 3
-    assert clarify_store.summary(wf.id)["queued"] == 3
+    assert clarify_store.summary(wf.id)["unanswered"] == 8        # held back is not answered
     first = _cards(wf.id, "clarify_question")[0]
-    assert first["total"] == 5                                      # the queue is not part of "1 of N"
-    for _ in range(5):
-        card = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
-        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "skip"}, "r")
-    assert "held back 3 smaller questions" in _texts(wf.id, "assistant_message")[-1]
+    assert first["total"] == 5
     from conxa_core.storage.workflow_store import get_workflow
 
-    assert "answer_clarify" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
-    assert b._run_flow_action(wf.id, "answer_clarify", {}, "r", lambda e: None)["ok"]
+    for _ in range(5):
+        assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+        card = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "choose", "payload": {"choice": "no"}}, "r")
+    # nothing was asked for: the held-back three come forward on their own, and still block the test
     assert [q["status"] for q in clarify_store.load(wf.id)["questions"]][5:] == ["open"] * 3
+    assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    for _ in range(3):
+        card = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"][0]
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "choose", "payload": {"choice": "no"}}, "r")
+    assert clarify_store.summary(wf.id)["unanswered"] == 0
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
 
 
 # ── BUILD-55 B2: an answer is all-or-nothing and never applied twice ───────────────────────
@@ -569,7 +579,7 @@ def test_an_answer_whose_second_edit_fails_restores_the_workflow_and_a_retry_app
     assert r["ok"] is False and r["code"] == "patch_failed"
     assert read_skill(skill_id) == before                       # the half-applied insert was rolled back
     card = _cards(wf.id, "clarify_question")[0]
-    assert card["state"] == "failed" and card["actions"] == ["choose", "skip"]
+    assert card["state"] == "failed" and card["actions"] == ["choose"]
     assert clarify_store.get_question(wf.id, q1["question_id"])["status"] == "open"
 
     monkeypatch.setattr(b, "cmd_patch_step", real_patch)
@@ -600,7 +610,7 @@ def test_an_attempt_that_died_after_changing_the_workflow_is_not_run_again(env):
     assert r["ok"] is False and r["code"] == "interrupted"
     assert read_skill(skill_id) == before
     card = _cards(wf.id, "clarify_question")[0]
-    assert card["state"] == "failed" and card["actions"] == ["skip"]
+    assert card["state"] == "failed" and card["actions"] == ["checked"]
 
 
 def test_a_dead_attempt_that_changed_nothing_can_be_tried_again(env):
@@ -685,11 +695,11 @@ def test_a_question_answered_while_the_wording_call_runs_is_left_alone(env, monk
     _fake_compile(b, wf)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
     q1 = _cards(wf.id, "clarify_question")[0]
-    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "skip"}, "r")["ok"]
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "no"}}, "r")["ok"]
     gate.set()
     time.sleep(0.5)
     done = _cards(wf.id, "clarify_question")[0]
-    assert done["state"] == "skipped" and not done["title"].startswith("Friendly")
+    assert done["state"] == "answered" and not done["title"].startswith("Friendly")
 
 
 # ── BUILD-55 B5: a check cut short by a restart is rebuilt when the workflow is opened ─────
@@ -773,7 +783,7 @@ def test_the_pencil_after_the_build_restores_the_workflow_and_asks_the_question_
 # ── Phase 2: scoring on ──
 
 
-def test_scoring_on_keeps_asking_what_it_must_lists_assumptions_and_a_failing_test_wakes_deferred_ones(env, monkeypatch):
+def test_scoring_on_keeps_asking_what_it_must_and_lists_what_it_was_sure_about(env, monkeypatch):
     from conxa_compile.conversation import clarify_store
     from conxa_core.config import settings
 
@@ -788,17 +798,23 @@ def test_scoring_on_keeps_asking_what_it_must_lists_assumptions_and_a_failing_te
     assert "assumptions" not in data                                                # nothing here was cheap enough to assume
     # an assumed question is listed in the summary and comes back on "ask me"
     clarify_store.mutate(wf.id, lambda d: (d["questions"].append({"id": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?",
-                                                                 "status": "queued", "assumed": True, "choices": []}),
+                                                                 "status": "assumed", "assumed": True, "body": "", "choices": [], "step_keys": []}),
                                            d.__setitem__("assumptions", [{"qid": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?",
                                                                           "default": "No checks needed"}])))
     b._flow_post_summary(wf.id, lambda e: None)
     summary = _cards(wf.id, "workflow_summary")[-1]["summary"]
     assert summary["assumptions"] == [{"qid": "q_assumed", "kind": "done_when", "title": "How can we tell it worked?", "default": "No checks needed"}]
-    # a question left for the test is asked when a test fails at its step
-    key = by_kind["confirm"]["step_keys"][0]
-    clarify_store.update_question(wf.id, by_kind["values"]["id"], status="deferred", step_keys=[key])
-    b._tf_followup(wf.id, key, {}, lambda e: None)
-    assert clarify_store.get_question(wf.id, by_kind["values"]["id"])["status"] == "open"
+    # what the harness was sure about is not a question: it blocks nothing, and "ask me" brings it forward
+    from conxa_core.storage.workflow_store import get_workflow
+
+    assert clarify_store.summary(wf.id)["assumed"] == 1
+    assert clarify_store.summary(wf.id)["unanswered"] == len([q for q in clarify_store.load(wf.id)["questions"] if q["status"] == "open"])
+    for q in clarify_store.load(wf.id)["questions"]:
+        if q["status"] == "open":
+            clarify_store.update_question(wf.id, q["id"], status="answered")
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    b._flow_post_next_question(wf.id, lambda e: None, promote_assumed=True)
+    assert clarify_store.get_question(wf.id, "q_assumed")["status"] == "open"
 
 
 # ── Phase 3: re-evaluation after an answer ──
@@ -824,3 +840,48 @@ def test_an_answer_that_changes_the_workflow_raises_the_question_it_newly_makes_
     assert [q["kind"] for q in added] == ["missing_item"] and added[0]["status"] in ("open", "queued")
     b._flow_reevaluate(wf.id)                        # asked now: never asked twice
     assert len([q for q in clarify_store.load(wf.id)["questions"] if q["kind"] == "missing_item"]) == 1
+
+
+# ── Every question is a hard blocker, and an unanswered one keeps coming back ───────────────
+
+
+def test_an_unanswered_question_blocks_testing_approval_publishing_and_an_early_build(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    from conxa_core.storage.workflow_store import get_workflow
+
+    allowed = lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    assert "test" not in allowed and "approve" not in allowed and "publish" not in allowed
+    with pytest.raises(_CommandError) as e:
+        b._require_no_unanswered_questions([get_workflow(wf.id)])      # the publish / installer gate
+    assert e.value.code == "unanswered_questions"
+    # a question still open while the recording is being understood also holds the build, whichever door is used
+    clarify_store.mutate(wf.id, lambda d: d.__setitem__("stage", "understand"))
+    with pytest.raises(_CommandError) as e:
+        b.cmd_flow_compile({"workflow_id": wf.id}, "rid2")
+    assert e.value.code == "unanswered_questions"
+
+
+def test_opening_the_conversation_asks_an_unanswered_question_again_but_never_stacks_a_second_card(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    before = len(_cards(wf.id, "clarify_question"))
+    b._reask_unanswered(wf.id, lambda e: None)
+    assert len(_cards(wf.id, "clarify_question")) == before          # its card is still on screen: nothing added
+    first = [q for q in clarify_store.load(wf.id)["questions"] if q["status"] == "open"][0]
+    clarify_store.update_question(wf.id, first["id"], card_id=None)  # as if the card had been lost
+    b._reask_unanswered(wf.id, lambda e: None)
+    assert len(_cards(wf.id, "clarify_question")) == before + 1
+
+
+def test_a_defer_decision_leaves_the_question_open(env, monkeypatch):
+    from conxa_compile.conversation import question_plan
+    from conxa_core.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "clarify_scoring", "on")
+    qs = [{"id": "d", "kind": "relative_date", "status": "open", "decision": {"action": "defer"}, "step_keys": [], "choices": []}]
+    monkeypatch.setattr("conxa_compile.conversation.scoring.decide", lambda q, doc: {"action": "defer"})
+    out, _ = question_plan.apply_scoring(qs, {"skills": [{"steps": []}]}, "post_compile")
+    assert out[0]["status"] == "open"

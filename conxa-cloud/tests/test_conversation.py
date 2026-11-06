@@ -398,7 +398,7 @@ def test_old_turns_are_folded_into_a_stored_summary(monkeypatch):
 def test_clarify_summary_counts_by_status():
     assert clarify_store.summary("w1") is None
     clarify_store.save("w1", {"questions": [{"id": "a", "status": "open"}, {"id": "b", "status": "answered"}, {"id": "c", "status": "skipped"}]})
-    assert clarify_store.summary("w1") == {"open": 1, "answered": 1, "skipped": 1, "total": 3, "queued": 0}
+    assert clarify_store.summary("w1") == {"open": 1, "answered": 1, "skipped": 1, "total": 3, "queued": 0, "unanswered": 1, "assumed": 0}
     clarify_store.save("w1", {"questions": [{"id": "a", "status": "open"}, {"id": "b", "status": "answered"}, {"id": "c", "status": "skipped"}]})
     clarify_store.update_question("w1", "a", status="answered")
     assert clarify_store.next_open("w1") is None

@@ -383,19 +383,6 @@ class TestFlowMixin:
             from conxa_core.storage.json_store import read_skill
             from conxa_core.storage.workflow_store import get_workflow
 
-            # A question left for the test (scoring said a failing test would point at it) is asked now.
-            woke: list[str] = []
-
-            def wake(data: dict[str, Any]) -> None:
-                for dq in data.get("questions") or []:
-                    if isinstance(dq, dict) and dq.get("status") == "deferred" and step_key in (dq.get("step_keys") or []):
-                        dq["status"] = "open"
-                        woke.append(dq["id"])
-
-            clarify_store.mutate(workflow_id, wake)
-            if woke:
-                self._flow_post_next_question(workflow_id, sink)
-                return
             workflow = get_workflow(workflow_id)
             doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
             q = clarify.test_followup_question(doc, step_key, inputs) if doc else None
@@ -512,6 +499,7 @@ class TestFlowMixin:
             raise _CommandError("not_passed", "Only a passing test can be approved.")
         if workflow.last_test_status != "passed":
             raise _CommandError("test_required", "The workflow changed since that test. Test it again, then approve.")
+        self._require_allowed(workflow.id, "approve")   # an unanswered question blocks approval
         result = self.cmd_sign_off_workflow({"skill_id": workflow.skill_id}, rid)
         if not result.get("signed_off"):
             raise _CommandError("approve_failed", "Couldn’t approve this workflow.")

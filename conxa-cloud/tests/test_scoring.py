@@ -67,14 +67,14 @@ def test_apply_scoring_records_in_shadow_and_acts_only_when_on(monkeypatch, mode
     else:
         assert by["skip_when_empty"]["decision"]["action"] == "assume_show" and by["confirm"]["decision"]["action"] == "ask"
     if mode == "on":
-        assert by["skip_when_empty"]["status"] == "queued" and by["skip_when_empty"]["assumed"] is True
+        assert by["skip_when_empty"]["status"] == "assumed" and by["skip_when_empty"]["assumed"] is True
         assert by["confirm"]["status"] == "open"
         assert [a["qid"] for a in assumptions] == [by["skip_when_empty"]["id"]] and assumptions[0]["default"]
     else:
         assert by["skip_when_empty"]["status"] == "open" and assumptions == []
 
 
-def test_a_deferrable_question_waits_and_questions_before_the_build_are_untouched(monkeypatch):
+def test_a_deferrable_question_stays_open_and_questions_before_the_build_are_untouched(monkeypatch):
     monkeypatch.setattr(settings, "clarify_scoring", "on")
     doc = {"skills": [{"steps": [{"action": {"action": "date_pick"}, "intent": "pick due", "input_binding": "due", "value": "{{due}}",
                                   "handler_hints": {"date_picker": {"recorded_value": "2099-01-01"}}}]}], "inputs": [{"id": "due"}]}
@@ -82,7 +82,7 @@ def test_a_deferrable_question_waits_and_questions_before_the_build_are_untouche
          "choices": [{"id": "relative"}, {"id": "fixed_input"}]}
     pre = {"id": "v", "kind": "value", "phase": "pre_compile", "status": "open", "best_guess": "varies", "choices": []}
     out, assumptions = question_plan.apply_scoring([q, pre], doc, "post_compile")
-    assert q["status"] == "deferred" and assumptions == [] and pre["status"] == "open" and pre["decision"]["action"] == "confirm"
+    assert q["status"] == "open" and assumptions == [] and pre["status"] == "open" and pre["decision"]["action"] == "confirm"
 
 
 def test_what_this_person_usually_answers_on_this_app_moves_the_chance_the_default_is_wrong(tmp_path, monkeypatch):

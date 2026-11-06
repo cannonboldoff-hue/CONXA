@@ -132,8 +132,8 @@ class UnderstandFlowMixin:
         runtime_state.set_flags(workflow_id, watching=True, video_error="")
         # A re-watch replaces the questions of the last round: close their cards so none is answered twice.
         for old in (clarify_store.load(workflow_id) or {}).get("questions") or []:
-            if isinstance(old, dict) and old.get("status") == "open" and old.get("card_id"):
-                harness.update_card(thread, old["card_id"], sink=sink, state="skipped", actions=[],
+            if isinstance(old, dict) and old.get("status") in ("open", "applying") and old.get("card_id"):
+                harness.update_card(thread, old["card_id"], sink=sink, state="reverted", actions=[],
                                     receipt="Replaced by a fresh look at the recording")
         card = harness.post_card(thread, "watching_video", "watching", sink=sink, elapsed_s=0, reason="", actions=[])
         card_id = card["card_id"]
@@ -381,27 +381,21 @@ class UnderstandFlowMixin:
         if card.get("state") not in ("open", "failed"):
             return {"ok": False, "code": "not_open", "message": "This question was already answered."}
         self._archive_pre_questions(workflow_id, qid)
-        if action == "skip":
-            decisions.record(session_dir, question, None)
-            clarify_store.update_question(workflow_id, qid, status="skipped", receipt="Left as recorded")
-            clarify_store.ledger_set(workflow_id, question, "skipped")
-            clarify_events.log(workflow_id, "skipped", question)
-            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt="Left as recorded", actions=[],
-                                can_reopen=True)
-            self._flow_post_next_question(workflow_id, sink)
-            return {"ok": True}
         if action == "own":
-            # Nothing is compiled yet, so chat has nothing to change: keep the words and carry on as recorded.
+            # Nothing is compiled yet, so chat has nothing to change: the words are the answer, they reach the
+            # build as context, and the chat gets them once the build is done (_flow_route_notes).
             text = str(body.get("custom_text") or "").strip()[:500]
             if not text:
                 raise _CommandError("invalid_input", "Type your answer first.")
-            # A note's own words are what the build should know (they reach the compile as context).
-            decisions.record(session_dir, question, None, own_text=text if question["kind"] == "note" else "")
-            receipt = f"Noted: “{text}” — left as recorded. Tell the chat after it’s built if a step should change."
-            clarify_store.update_question(workflow_id, qid, status="skipped", receipt=receipt, own_text=text)
-            clarify_store.ledger_set(workflow_id, question, "skipped")
-            clarify_events.log(workflow_id, "skipped", question, own_words=True)
-            harness.update_card(thread_id, card_id, sink=sink, state="skipped", receipt=receipt, actions=[], can_reopen=True)
+            decisions.record(session_dir, question, None, own_text=text)
+            receipt = f"Noted: “{text}”. I’ll keep it in mind when I build it."
+            answer = {"custom_text": text}
+            clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
+            clarify_store.update_question(workflow_id, qid, own_text=text)
+            clarify_store.ledger_set(workflow_id, question, "answered", "own")
+            clarify_events.answered(workflow_id, question, answer)
+            harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
+                                can_reopen=True)
             self._flow_post_next_question(workflow_id, sink)
             return {"ok": True}
         if action not in ("choose", "retry"):

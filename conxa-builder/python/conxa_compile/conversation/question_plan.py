@@ -65,8 +65,9 @@ def apply_scoring(
     """``(questions, assumptions)``. ``shadow`` only stores each open question's decision on it
     (``q["decision"]``) and changes nothing. ``on`` also acts, for post-compile questions only: an
     ``assume`` / ``assume_show`` question keeps the compiler's default (it is parked as ``queued`` with
-    ``assumed`` set, so "ask me" still opens it) and a ``defer`` question waits (``deferred``) until a test
-    points at its steps. Questions asked before the build are never assumed or deferred (scoring.decide)."""
+    ``assumed`` set, so "ask me" still opens it). A ``defer`` decision is ignored: the question stays open,
+    because every question that is asked must be answered. Questions asked before the build are never assumed
+    (scoring.decide)."""
     chosen = scoring_mode()
     if chosen == "off":
         return questions, []
@@ -86,8 +87,7 @@ def apply_scoring(
                 continue
             if action in ("assume", "assume_show"):
                 _, receipt = scoring.default_answer(q, doc) or ({}, "")
-                q.update(status="queued", assumed=True)
+                q.update(status="assumed", assumed=True)
                 assumptions.append({"qid": q["id"], "kind": q["kind"], "title": q["title"], "default": receipt})
-            elif action == "defer":
-                q["status"] = "deferred"
+            # A "defer" question stays open: nothing waits invisibly for a failed test to wake it.
     return questions, assumptions

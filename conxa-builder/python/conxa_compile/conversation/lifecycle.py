@@ -55,7 +55,8 @@ def derive_lifecycle(
     last_test = _g(wf, "last_test_status") or "never"
     signed_off = bool(_g(wf, "signed_off"))
     warnings = int(_g(wf, "compile_steps_with_warnings") or 0)
-    open_q = int(cl.get("open") or 0)
+    # Every question is a hard blocker: shown, being applied, or held back for the next batch.
+    open_q = int(cl.get("unanswered") if cl.get("unanswered") is not None else cl.get("open") or 0)
 
     stage, substate, glyph, note = "record", "not_recorded", NONE, "Not recorded yet"
     actions: list[str] = ["record"]
@@ -123,7 +124,7 @@ def derive_lifecycle(
         elif open_q > 0:
             stage, substate, glyph = "clarify", "open", WARN
             note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
-            # Every question that was asked is answered (or skipped) before any test.
+            # Every question that was asked is answered before any test, approval or publish.
             actions = ["answer_clarify", "edit"]
         elif pending_changes > 0:
             stage, substate, glyph, note, actions = "edit", "change_pending", WARN, "A proposed change is waiting — apply or dismiss it", ["edit"]
@@ -155,8 +156,8 @@ def derive_lifecycle(
     if rt.get("replying"):
         actions = [a for a in actions if a not in ("test", "approve")]
 
-    # Questions held back past the first few are still waiting for the person.
-    if int(cl.get("queued") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not (
+    # "Ask me": the things the harness was sure about can still be put to the person. Never blocks anything.
+    if int(cl.get("assumed") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not (
         rt.get("testing") or rt.get("compiling") or rt.get("queued") or rt.get("understanding")
     ):
         actions = actions + ["answer_clarify"]
