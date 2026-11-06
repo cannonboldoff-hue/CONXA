@@ -538,9 +538,9 @@ def generate_questions(
         if s.get("consequence") != "irreversible" or i == 0:
             continue
         prev = steps[i - 1]
-        from conxa_compile.editor.patch_gate import is_confirm_only_review
+        from conxa_compile.editor.patch_gate import is_confirm_only_span
 
-        if _action_name(prev) == "ai_review" and is_confirm_only_review(prev):
+        if _action_name(prev) == "agent_span" and is_confirm_only_span(prev):
             continue  # already guarded
         name = step_name(s)
         out.append(_question(
@@ -773,7 +773,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
     multi-choice one. Ops (run in order by the handler):
 
     ``{"op": "patch", "step_key", "patch"}``        — ``cmd_patch_step`` (the gated mutation)
-    ``{"op": "insert_review", "before_step_key", "prompt", "title"}`` — insert + configure a confirm-only review
+    ``{"op": "insert_review", "before_step_key", "prompt", "title"}`` — insert + configure a confirm-only (question-only) agent span
     ``{"op": "confirm_optional", "step_key", "keep_as_step"}``
     ``{"op": "drop_inputs", "ids"}``                — remove inputs nothing references any more
     ``{"op": "delete_step", "step_key"}``           — ``cmd_delete_step`` (an extract the person decided not to report)

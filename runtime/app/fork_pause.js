@@ -1,10 +1,10 @@
 "use strict";
 // fork_pause.js — the pause/resume contract for an outcome fork that needs a PERSON to decide
 // (an unreviewed consequential option like Replace, a policy of "ask me", or a popup nobody
-// recorded). A sibling of review_pause.js (ai_review) and handover.js: a planned pause, not a
+// recorded). A sibling of agent_span.js and handover.js: a planned pause, not a
 // failure, so it never touches recovery_stage.js's escalation state or retry_budget.js's map.
 //
-// What differs from ai_review, and why:
+// What differs from an agent span's answer, and why:
 // - The question is for a human. The response says so in plain words and carries
 //   `_meta["conxa/fork"].requires_human = true`, so the Build Studio sandbox routes it to a
 //   person (never to its LLM answerer) and an MCP agent is told to ask the user rather than
@@ -16,6 +16,21 @@
 //   run.js::runForkAnswer looks at the page again and copes with that.
 
 const { STOP_CHOICE } = require("./fork");
+
+// Bounded re-ask for an unusable popup answer. Its own small piece of state, apart from recovery's budget.
+const REVIEW_RETRY_MAX = 2;
+const _reviewRetries = new Map(); // `${slug}:${stepIndex}` -> attempts
+
+function checkReviewRetry(slug, stepIndex) {
+  const key = `${slug}:${stepIndex}`;
+  const attempts = (_reviewRetries.get(key) || 0) + 1;
+  _reviewRetries.set(key, attempts);
+  return attempts <= REVIEW_RETRY_MAX;
+}
+
+function clearReviewRetry(slug, stepIndex) {
+  _reviewRetries.delete(`${slug}:${stepIndex}`);
+}
 
 // Accept either {choice: "<id>"} or the bare id string -- an MCP agent will do both.
 function validateForkAnswer(answer, validIds) {
@@ -149,4 +164,4 @@ async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, li
   };
 }
 
-module.exports = { validateForkAnswer, buildForkRequest, STOP_CHOICE };
+module.exports = { validateForkAnswer, buildForkRequest, STOP_CHOICE, checkReviewRetry, clearReviewRetry, REVIEW_RETRY_MAX };

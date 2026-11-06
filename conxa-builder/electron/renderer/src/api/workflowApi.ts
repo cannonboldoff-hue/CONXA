@@ -626,7 +626,7 @@ export function acceptCopilotProposal(
 
 /** Accepts several `structural_op` proposals as ONE batch — one document write, one undo entry,
  *  aborting the whole batch untouched if any op in it turns out stale. Use this when the reviewer
- *  accepts a multi-step proposal (e.g. "insert an ai_review checkpoint, then hover the result")
+ *  accepts a multi-step proposal (e.g. "insert an agent step, then hover the result")
  *  as a single action rather than one accept per step. */
 export function acceptCopilotProposalBatch(
   skillId: string,

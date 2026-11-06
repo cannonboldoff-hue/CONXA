@@ -964,24 +964,37 @@ outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, st
 
 Studio RPCs: `set_fork_policy {skill_id, step_index, state_id, policy}`, `apply_variant {workflow_id, session_id, fork_step_key}`, `start_recording {…, variant_of}`, `flow_test_decision {decision: "fork:<choice>"}`.
 
-### 3.4m Agent Span Step (Engine v2 C4)
+### 3.4m Agent Span Step (Engine v2 C4; Browser-Use style and absorbing `ai_review`, 2026-11-06)
 
-The third planned pause, beside §3.4j and §3.4k: no `target`/`identity_bundle`, outside the recovery cascade. TRD
-§11.7 has the behaviour. Saved step (editor): `value` = the goal; `agent_span_allowed: ["click","fill","select","scroll"]`;
-`agent_span_until: {"type": "text_present|text_absent|url_pattern|url_changed|state_changed", "target": "…"}`
-(required; `target` omitted for the last two); `agent_span_budget: {"actions": 8, "seconds": 120}`;
-`agent_span_on_budget: "fail"`. Execution step (`execution.json`):
+A planned pause beside §3.4k: no `target`/`identity_bundle`, outside the recovery cascade. TRD §11.7 has the behaviour.
+Saved step (editor): `value` = the goal; `agent_span_allowed: ["click","fill","select","scroll","send_keys","navigate",
+"go_back","open_tab","switch_tab","close_tab"]` (a subset; `[]` plus an answer schema is a plain question);
+`agent_span_until: {"type": "text_present|text_absent|url_pattern|url_changed|state_changed", "target": "…"} | null`
+(optional; `target` omitted for the last two); `agent_span_budget: {"actions": 25, "seconds": 600}` (1-100, 10-1800);
+`agent_span_on_budget: "fail"`; and the answer fields `agent_span_answer_schema` (a plain-fields JSON schema),
+`agent_span_output_name`, `agent_span_on_failure` (`abort|use_default|continue`), `agent_span_default_value`,
+`agent_span_attach` (up to 5 input names holding a local file path). Execution step (`execution.json`):
 
 ```json
-{"type": "agent_span", "goal": "Open the invoice for {{invoice_number}}", "allowed": ["click", "fill"],
+{"type": "agent_span", "goal": "Open the invoice for {{invoice_number}}", "allowed": ["click", "fill", "navigate"],
  "until": {"type": "text_present", "target": "Invoice {{invoice_number}}", "required": true},
- "budget": {"actions": 12, "seconds": 120}, "on_budget": "fail"}
+ "budget": {"actions": 25, "seconds": 600}, "on_budget": "fail",
+ "answer": {"schema": {"type": "object", "required": ["total"], "properties": {"total": {"type": "string"}}},
+            "output_name": "invoice", "on_failure": "abort"},
+ "attach": ["downloaded_file"]}
 ```
 
-`manifest.json` gains `uses_agent: true` (omitted when false) and `required_capabilities` gains `agent_span`.
-`execute_skill` takes `span_actions: {"<step index>": {"kind", "candidate_index", "value"} | {"status": "give_up", "why"}}`
-with `resume_from`. The response carries `_meta["conxa/agent_span"]`: `{step_index, goal, allowed, budget_left, page_url, candidates}`.
-Contract: `models/action_contract.json` (see TRD §7.7).
+`until`, `answer` and `attach` are omitted when unset. A question span has `"allowed": []`. `manifest.json` gains
+`uses_agent: true` (omitted when false) and `required_capabilities` gains `agent_span` and `agent_span_v2`.
+`execute_skill` takes `span_actions: {"<step index>": <one action>}` with `resume_from`, where an action is
+`{"kind": "click|fill|select", "candidate_index": n, "value"?}`, `{"kind": "scroll", "value": "up|down"}`,
+`{"kind": "send_keys", "value": "Enter"}`, `{"kind": "navigate|open_tab", "url": "https://…"}`, `{"kind": "go_back"}`,
+`{"kind": "switch_tab|close_tab", "tab": n}`, `{"kind": "wait", "value": seconds}`, `{"kind": "read_text"}`,
+`{"kind": "done", "answer"?: {…}}` or `{"status": "give_up", "why"}`; any action may carry `"user_confirmed": true`
+(only after the agent has asked the person). The response carries `_meta["conxa/agent_span"]`: `{step_index, goal,
+allowed, budget_left, page_url, candidates (each with in_dialog), context {skill, description, steps_done,
+steps_after, inputs}, tabs [{tab, url, title, active}], history, answer_schema, decision_dialog?,
+needs_user_confirmation? (the button label)}`. Contract: `models/action_contract.json` (see TRD §7.7).
 
 ### 3.4l App map models (`conxa_core/models/app_graph.py`)
 
@@ -1039,7 +1052,7 @@ for_each: dict   # {rows: {container_selector}} XOR {items}, plus as, max_iterat
   runtime by `CONXA_MAX_LOOP_ITERATIONS` (default 100).
 - **`on_row_error`** `"stop" | "continue"`, default `"stop"` — `[contract]`. `"stop"` propagates a
   row failure as a normal run failure; `"continue"` skips the failing row and proceeds (never
-  applies to a cancellation or an `ai_review` pause inside the body — those always propagate).
+  applies to a cancellation or a hand-over pause inside the body — those always propagate).
   **EXEC-40 (2026-09-13):** a `"continue"` loop that finishes with any row failed, or a loop of
   either mode that finds zero rows/items to process, now pushes a message into the run's own
   `warnings` array (`runtime/app/run.js::runForEachStep`) — previously only tracker-only telemetry
@@ -1124,79 +1137,21 @@ decoding isn't). A raw substring check previously missed any filename containing
 character (`+`, space, non-ASCII, ...) entirely, with no error — the suggestion simply never
 appeared. See `docs/TRD.md` §11.2's BUILD-34 writeup.
 
-### 3.4j AI Review Step (EXEC-13)
+### 3.4n AI Review Step (EXEC-13): removed 2026-11-06
 
-An author-placed reasoning checkpoint, not a page action — no `target`/`identity_bundle`, and
-outside the Tier 1-4 recovery cascade entirely (never a `recovery` block). See `docs/TRD.md` §11.3
-for the full park/resume mechanism; this section is the data shape.
-
-**Execution step** (`execution.json`, emitted by `skill_package_builder_saved_skill.py`'s
-`ai_review` branch):
-
-```python
-{
-  "type": "ai_review",
-  "prompt": str,                       # required — dropped at build time (with a warning) if blank
-  "on_failure": "abort" | "use_default" | "continue",   # default "abort"
-  "output_schema": dict | omitted,     # a JSON-Schema-shaped object (required/properties/type/enum
-                                        # only — see the hand-rolled validator note below), or
-                                        # omitted to accept any answer
-  "default_value": Any | omitted,      # present only when on_failure == "use_default"
-  "reference_screenshot_ref": str | omitted,   # relative path under the skill's visuals/ dir
-  "output_name": str | omitted,        # falls back to `ai_review_output_<step index>` at runtime
-}
-```
-
-**Editor-side (pre-compile) fields**, top-level siblings of `action` on the saved document —
-patched only through `patch_gate.py`'s dedicated `ai_review` branch, which rejects a `recovery`
-patch outright and requires `ai_review_default_value` whenever `ai_review_on_failure` is
-`"use_default"`:
-
-```python
-ai_review_prompt: str
-ai_review_output_schema: dict | None
-ai_review_on_failure: "abort" | "use_default" | "continue"
-ai_review_default_value: Any
-ai_review_reference_screenshot_ref: str | None
-ai_review_attach: list[str] | None      # up to 5 input names holding a local file path (see below)
-```
-
-**Using the answer, and showing the model data (2026-10-30).** The runtime step gains an optional
-`attach: [input_name, ...]`. At pause time `{{inputs}}` in the prompt are filled in, and each attached input
-that holds a path inside this run's download folder (`inputs.downloaded_files_dir`) and ends in `.csv`,
-`.tsv`, `.txt`, `.json`, `.md` or `.log` is inlined (first 64 KB) between untrusted-data markers; the same text
-is mirrored in `_meta["conxa/ai_review"].attachments` (`[{name, file, text, note}]`). On resume the answer is
-bound whole under `output_name` AND each plain field (string, number, boolean) as `<output_name>_<field>`, so
-later steps use `{{x_field}}` and `run_if` can test it. A named `ai_review` output is reported in `outputs`
-like an `extract`. `patch_gate` refuses a `run_if` on a destructive step that reads a free-form `ai_review`
-answer (`destructive_step_cannot_be_gated_by_ai_review_answer`); only a confirm-only review may gate one.
-
-**`execute_skill` gains `review_results: { "<step_index>": <answer> }`** — the resume payload for
-a paused `ai_review` step, parallel to `execute_skill`'s `step_overrides` param but never run
-through `applyStepOverrides`: the answer is bound straight into `inputs` under the step's
-`output_name`. A pause response carries `_meta: {"conxa/ai_review": {step_index, prompt,
-output_schema}}` alongside its `content` blocks, for a programmatic (non-agent) caller to answer
-without parsing the prose header — see `docs/TRD.md` §11.3 for the Build Studio sandbox's own use
-of this.
-
-**Answer validation** (`runtime/app/review_pause.js::validateReviewAnswer`, mirrored in Python by
-`handlers/workflows.py::_validate_ai_review_answer` for the Studio sandbox path) is a hand-rolled
-structural check against `output_schema` — required fields present, declared `type` matches
-(`string`/`boolean`/`number`/`integer`/`object`/`array`), declared `enum` membership — not full
-JSON Schema (no `$ref`, no nested `items`/`additionalProperties` validation, no string `format`).
-Deliberate: the schema an author writes here is always shallow (a `yes`/`no` + reason, a single
-value), and a real JSON Schema validator would be new weight in every customer's runtime bundle for
-constraints nobody authors on this surface.
-
-**Safety:** the patch gate refuses to save a destructive step that directly follows an `ai_review`
-step (`destructive_step_cannot_directly_follow_ai_review` — the sibling of PROD-3's entity-binding
-confirmation gate) — a review answer may gate *whether* a later step runs, never supply *what* a
-destructive step acts on.
+Replaced by a question-only agent span (§3.4m): the prompt is the span's goal (`value`), `ai_review_output_schema`
+is `agent_span_answer_schema`, `ai_review_on_failure` / `_default_value` / `_attach` are `agent_span_on_failure` /
+`_default_value` / `_attach`, and the output binding name moved from `value` to `agent_span_output_name`. The answer is
+bound under that name and as `<name>_<field>`, as before. `ai_review_reference_screenshot_ref` was never wired and is
+gone. The confirm-only schema is `patch_gate.CONFIRM_ONLY_SPAN_SCHEMA` (was `CONFIRM_ONLY_REVIEW_SCHEMA`). The error
+codes became `destructive_step_cannot_directly_follow_agent_span` and
+`destructive_step_cannot_be_gated_by_span_answer`. A pack that still holds an `ai_review` step fails loudly at run time
+("Unrecognized step type") until it is rebuilt.
 
 ### 3.4k Hand-Over Step (EXEC-21, hand-over shape)
 
-`ai_review`'s human sibling: a planned pause with no `target`/`identity_bundle`, outside the
-Tier 1-4 recovery cascade for the same reasons as §3.4j. See `docs/TRD.md` §11.4 for the full
+The human sibling of the agent span: a planned pause with no `target`/`identity_bundle`, outside the
+Tier 1-4 recovery cascade for the same reasons as §3.4m. See `docs/TRD.md` §11.4 for the full
 park/resume mechanism (three resume signals — banner, file drop, loopback HTTP — and why the host
 lock is released rather than held for the pause); this section is the data shape.
 
@@ -1216,8 +1171,8 @@ lock is released rather than held for the pause); this section is the data shape
 }
 ```
 
-**Editor-side (pre-compile) fields.** Unlike `ai_review`, the message shown to the person rides
-the step's generic `value` field (the same one `ai_review` uses for its output binding name) —
+**Editor-side (pre-compile) fields.** Unlike the span's answer fields, the message shown to the person rides
+the step's generic `value` field (the same one the span uses for its goal) —
 `VALUE_LABELS["handover"]` labels it "Message shown to the person" — so no dedicated
 `handover_message` field exists. Patched only through `patch_gate.py`'s `handover` branch, which
 rejects a `recovery` patch outright:
@@ -1230,7 +1185,7 @@ handover_resume_when_timeout_ms: int | None  # must be > 0 when present
 ```
 
 **No new `execute_skill` parameter.** A hand-over produces no structured answer, so unlike
-`ai_review`'s `review_results` there is nothing to pass alongside `resume_from` — and in practice a
+a popup answer's `review_results` there is nothing to pass alongside `resume_from` — and in practice a
 resume is normally self-driven (the runtime process itself calls `execute_skill` again the moment
 a signal fires, per §10.10), not agent-initiated. A pause response carries `_meta: {"conxa/handover":
 {step_index, message, run_id, resume_http: {port, token, path} | null, resume_file}}` for a
@@ -1588,7 +1543,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `fork_paused` | (Outcome fork) The step stopped to ask a person, or (`src: "agent"`, EXEC-49) to put an unrecorded popup to the MCP client | `si`, `st`, `src` |
 | `app_obs` | (App maps, phase 6) A decision popup this run could not place — an unrecognised fork popup, or one that blocked a click and was left alone. Scrubbed to its shape by `runtime/app/scrub.js` | `si`, `host` (lowercase, no `www.`), `rt` (page route, ids as `:id`), `tt` (<=8 title words), `bt` (<=6 button labels; none that carried a file name, number or quoted text), `cl` (`decision`), `k` (1 if the shipped app map recognised it). Never the popup's message |
 | `fork_answered` | (Outcome fork) A person's answer was accepted on resume | `si` |
-| `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `ai_review` checkpoint, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
+| `park_created` | A run paused and parked its live page — Tier 3/4 agent recovery, an `agent_span`, or (EXEC-21) a `handover` step, all sharing one park primitive (`docs/TRD.md` §10.2/§11.3/§11.4) | `si`, `kind` (`"handover"` when a hand-over parked; omitted for the other two cases) |
 | `park_resumed` | A parked run resumed execution on the same live page it paused on | `si` |
 | `handover_resumed` | (EXEC-21) A parked hand-over's self-driven resume completed | `si` |
 | `span_start` | (Engine v2 C4) An `agent_span` was reached and parked for the caller's agent | `si` |
@@ -2798,10 +2753,10 @@ always starting cold.
 **A third proposal kind — typed structural ops (stage g)** may also appear in `copilot_turn`'s
 `proposals` array — `command: "structural_op"`:
 ```json
-{"id": "c4a1...", "command": "structural_op", "op": "insert_step", "action_kind": "ai_review",
- "after_step_key": "h1#1", "fields": {"ai_review_prompt": "Did the payment go through?"},
+{"id": "c4a1...", "command": "structural_op", "op": "insert_step", "action_kind": "agent_span",
+ "after_step_key": "h1#1", "fields": {"value": "Did the payment go through?"},
  "identity_from_step_key": null, "why": "...", "evidence_refs": ["h1#1"],
- "preview": {"before": null, "after": "Insert ai_review after step h1#1"}}
+ "preview": {"before": null, "after": "Insert agent_span after step h1#1"}}
 ```
 `op` is one of `insert_step` (`action_kind`, `after_step_key`, `fields?`,
 `identity_from_step_key?` — required and re-validated whenever `action_kind` needs a page
@@ -2878,7 +2833,7 @@ Events (id = request id): `thread_item{thread_id, item}` (an appended item, or a
 
 New LLM tasks (shared engine `conxa_core/llm/client.py`, so the cloud must be deployed with it): `studio_chat_reply` (streamed prose), `chat_map_answer`, `thread_summarize`, `studio_chat_actions` (JSON).
 
-**Test resilience (gap analysis G11).** New command `flow_sign_in_then_test{workflow_id}` (workflow must be compiled; returns `{next: "sign_in" | "test"}`). `test_run` and `autofix` cards gain the state `interrupted` (action `test_again`). `patch_step` on a confirm-only `ai_review` in front of an irreversible step is refused with `confirmation_guards_a_destructive_step` unless the edit keeps it confirm-only. New in-memory flag `retest_after_sign_in`. **Segments and evidence (gap analysis G6/G10).** `execute_skill` takes the internal `_stop_before_step` (integer, Studio only) and, when it parks, returns `_meta["conxa/stopped_at"] = {step_index, step_intent, run_id}`; the app layer advertises it as capability `stop_before`. `test_workflow` accepts `stop_before_step` and returns `status: "stopped_at_step"` with `stopped_at`, `stopped_intent`, `run_id`. New command `splice_segment{skill_id, segment_skill_id, from_step_key}` returns the usual skill response plus `replaced_from`, `added`, `stale_answers`. `clarify.json` questions may carry `stale: true`. `test_run` failed cards gain `failure_image` (a `conxa-asset://local/sandbox-evidence/<run id>/_evidence/<name>.jpg|png` address). **Extract, `run_if`, `on_missing` (gap analysis G4/G5).** `SkillStep` gains `extract` (`{source: text|value|attribute, attribute?, pattern?}`; the step's `value` is its output name) and `run_if` (`{input, op: not_empty|equals|not_equals, value?}`); an entity-bound step may carry `on_missing: "skip"`. Execution step shapes: `{type: "extract", selector | identity_bundle, output_name, extract}`, any step may carry `run_if`, a bound step `on_missing`. `execute_skill`'s success result adds, only when a step extracted something, an `Outputs:` text block (`  name: value` lines) and `structuredContent: {outputs: {name: value}}`; a skipped step adds a `Skipped because ...` block and a warning. `ActionKind` gains `extract`. The app layer's `version.json` capabilities gain `outputs` and `run_if`. New command `flow_capture_value{workflow_id, card_id, on?}` (recording card must be `recording`). `test_run` cards gain `outputs{name: value}` once passed. New Clarify question kind `output` (`output_name`; answer `keep` | `remove`, remove deletes the extract step). **Compile accounting (gap analysis G7/G8).** `compile_report` gains `events_total` (recorded events handed to the compiler) and `dropped[{sequence, pass: cleanup|navigation_folded, action}]` (capped at 200). `clarify.json` questions may have `status: "queued"` (held back past the first five; `clarify_store.summary()` returns `queued`). `data/sessions/<id>/second_opinion.json` is `{key, raw}`, the model's pinned second-opinion answer for that recording. **Conversation-driven actions (gap analysis G2/G9).** New card types: `confirm_action` (`action`, `label`, `describe`, `slots`; states `open` → `running` → `done`/`failed` + `receipt`, or `dismissed`; actions `confirm`, `cancel`) and `action_link` (`action`, `target` = edit | publish | workflow | details, `workflow_id`, `title`; state `open` → `opened`; action `open`). New command `flow_do_action{workflow_id, action, slots?}` runs a `kind: "flow"` entry of `conversation/actions.ACTIONS` and returns `{ok, message}`; `thread_turn` now also returns `routed: <action id>` when a typed command was routed. New LLM task `chat_route_intent` (text; `{user_text}` = JSON `{actions[], input_names[], message, workflows?[]}` in, `{action, slots}` out, `action` must be one of `actions` or `chat`).
+**Test resilience (gap analysis G11).** New command `flow_sign_in_then_test{workflow_id}` (workflow must be compiled; returns `{next: "sign_in" | "test"}`). `test_run` and `autofix` cards gain the state `interrupted` (action `test_again`). `patch_step` on a confirm-only `agent_span` question in front of an irreversible step is refused with `confirmation_guards_a_destructive_step` unless the edit keeps it confirm-only. New in-memory flag `retest_after_sign_in`. **Segments and evidence (gap analysis G6/G10).** `execute_skill` takes the internal `_stop_before_step` (integer, Studio only) and, when it parks, returns `_meta["conxa/stopped_at"] = {step_index, step_intent, run_id}`; the app layer advertises it as capability `stop_before`. `test_workflow` accepts `stop_before_step` and returns `status: "stopped_at_step"` with `stopped_at`, `stopped_intent`, `run_id`. New command `splice_segment{skill_id, segment_skill_id, from_step_key}` returns the usual skill response plus `replaced_from`, `added`, `stale_answers`. `clarify.json` questions may carry `stale: true`. `test_run` failed cards gain `failure_image` (a `conxa-asset://local/sandbox-evidence/<run id>/_evidence/<name>.jpg|png` address). **Extract, `run_if`, `on_missing` (gap analysis G4/G5).** `SkillStep` gains `extract` (`{source: text|value|attribute, attribute?, pattern?}`; the step's `value` is its output name) and `run_if` (`{input, op: not_empty|equals|not_equals, value?}`); an entity-bound step may carry `on_missing: "skip"`. Execution step shapes: `{type: "extract", selector | identity_bundle, output_name, extract}`, any step may carry `run_if`, a bound step `on_missing`. `execute_skill`'s success result adds, only when a step extracted something, an `Outputs:` text block (`  name: value` lines) and `structuredContent: {outputs: {name: value}}`; a skipped step adds a `Skipped because ...` block and a warning. `ActionKind` gains `extract`. The app layer's `version.json` capabilities gain `outputs` and `run_if`. New command `flow_capture_value{workflow_id, card_id, on?}` (recording card must be `recording`). `test_run` cards gain `outputs{name: value}` once passed. New Clarify question kind `output` (`output_name`; answer `keep` | `remove`, remove deletes the extract step). **Compile accounting (gap analysis G7/G8).** `compile_report` gains `events_total` (recorded events handed to the compiler) and `dropped[{sequence, pass: cleanup|navigation_folded, action}]` (capped at 200). `clarify.json` questions may have `status: "queued"` (held back past the first five; `clarify_store.summary()` returns `queued`). `data/sessions/<id>/second_opinion.json` is `{key, raw}`, the model's pinned second-opinion answer for that recording. **Conversation-driven actions (gap analysis G2/G9).** New card types: `confirm_action` (`action`, `label`, `describe`, `slots`; states `open` → `running` → `done`/`failed` + `receipt`, or `dismissed`; actions `confirm`, `cancel`) and `action_link` (`action`, `target` = edit | publish | workflow | details, `workflow_id`, `title`; state `open` → `opened`; action `open`). New command `flow_do_action{workflow_id, action, slots?}` runs a `kind: "flow"` entry of `conversation/actions.ACTIONS` and returns `{ok, message}`; `thread_turn` now also returns `routed: <action id>` when a typed command was routed. New LLM task `chat_route_intent` (text; `{user_text}` = JSON `{actions[], input_names[], message, workflows?[]}` in, `{action, slots}` out, `action` must be one of `actions` or `chat`).
 
 **Follow-ups to the conversation roadmap (BUILD-49..53).** *Execution steps* gain `source_step_key` (the document step they came from; the runtime echoes it on every `test_phase` entry so a failed row maps back to a step). *Manifest* gains `required_capabilities: [..]` (names from the app layer's `version.json` `capabilities`: `date_offset`, `ask_missing`, `templated_click`, `variant_branch`; the runtime refuses a pack whose capability it lacks — `required_runtime` compares the host exe, not the app layer). New capabilities: `outputs` schema on per-skill tools, `date_offset`, `ask_missing`, `templated_click`, `loop_guard`, `variant_branch`. *Step fields:* `handler_hints.date_picker.date_offset_days` (int; the date is today plus N and the step takes no input), `on_missing` accepts `"ask"` (pauses like a hand-over), a `wait_for_one_of` with `branch.flow: true` (options are `{selector, identity_bundle, steps}`; the chosen option's steps run as full steps and a failure fails the run), identity-bundle text signals and fingerprint text may hold `{{input}}` (clicked item that changes each run). *compile_report.dropped* entries are `{sequence, pass: cleanup|navigation_folded|choice_collapsed|date_collapsed, action, value?}`. *Clarify question kinds* added: `dropped_value`, `test_followup`, `relative_date`, `skip_when_empty`, `missing_item` (all advisory, never blocking); `missing_item` answers `skip|ask|fail`. *Cards:* `record_plan` (`steps[]`, read-only); the `recording` card's `refs` may carry `segment_from` (step key) and `segment_mode` (`replace|branch`). *Commands:* `flow_rerecord_from{skill_id|workflow_id, step_key|step_index, mode}`, `set_date_offset`, `branch_segment`, `compile{segment:true}`, `test_workflow{handoff_park:true}` (returns `handed_off_run_id`), `start_recording{adopt_run_id}` (the recording takes the panel run's id as its session id). Runtime args: `_handoff_park` (Studio only; result `_meta["conxa/handed_off"] = {run_id, step_index}`). Browser-panel control op `adopt_view{runId, kind, viewport}` → `{tabId, targetId}`. LLM task `record_plan` (`{user_text}` in, `{steps[]}` out).
 New data: `Workflow.task_description`; `data/workflows/<id>/thread.jsonl`; `data/workflows/<id>/clarify.json` (BUILD-32 questions and answers, plus `understanding: {goal_summary, coverage:{ok,note}, source: model|fallback|none}` — deliberately outside the skill document; `chosen_values` questions carry `items[{ref,name,literal,recorded}]` and a `recorded{name→literal}` map the test card pre-fills from); `data/chats/<chat_id>.jsonl` and `data/chats/index.json`.

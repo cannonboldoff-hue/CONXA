@@ -33,7 +33,6 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   upload: 'Upload a file',
   upload_intent: 'Upload a file',
   check: 'Check',
-  ai_review: 'AI review',
   marker: 'Marker',
   if_present: 'If present',
   try_dismiss: 'Dismiss if shown',

@@ -59,7 +59,10 @@ def execution_capabilities(steps: list[Any]) -> list[str]:
             if s.get("type") == "call_workflow":
                 need.add("call_workflow")
             if s.get("type") == "agent_span":
+                # agent_span_v2: the Browser-Use-style span (any URL, tabs, answers). An older app layer that
+                # only has "agent_span" would misread it, so it refuses the pack.
                 need.add("agent_span")
+                need.add("agent_span_v2")
             for st in s.get("states") if isinstance(s.get("states"), list) else []:
                 for o in (st.get("options") if isinstance(st, dict) and isinstance(st.get("options"), list) else []):
                     if not isinstance(o, dict):

@@ -81,15 +81,6 @@ class StepEditorDTO(BaseModel):
     check_threshold: float | None = None
     check_selector: str | None = None
     check_text: str | None = None
-    # EXEC-13: ai_review is value-bearing (the "value" is the output binding name) and carries
-    # no selector — its own config lives in these top-level `ai_review_*` fields, patchable only
-    # through patch_gate.py's dedicated ai_review branch. None on every other step kind.
-    ai_review_prompt: str | None = None
-    ai_review_output_schema: dict[str, Any] | None = None
-    ai_review_on_failure: str | None = None
-    ai_review_default_value: Any = None
-    # Names of run inputs holding a file path (e.g. "downloaded_file") the reviewer is shown.
-    ai_review_attach: list[str] | None = None
     # wait_until (a value-bearing step: `value` is what to wait for). None on every other kind.
     # call_workflow (value-bearing: `value` is the called workflow's id): names handed over / brought back.
     call_workflow_inputs: dict[str, str] | None = None
@@ -102,6 +93,14 @@ class StepEditorDTO(BaseModel):
     agent_span_until: dict[str, Any] | None = None
     agent_span_budget: dict[str, Any] | None = None
     agent_span_on_budget: str | None = None
+    # The answer a span may return (what the removed ai_review step did): a question the agent answers with a
+    # structured object bound into `inputs` under `agent_span_output_name`. None unless the span wants an answer.
+    agent_span_answer_schema: dict[str, Any] | None = None
+    agent_span_output_name: str | None = None
+    agent_span_on_failure: str | None = None
+    agent_span_default_value: Any = None
+    # Names of run inputs holding a file path (e.g. "downloaded_file") the agent is shown.
+    agent_span_attach: list[str] | None = None
     # Going-forward selector signals from identity_bundle — drives the runtime hot path.
     # Each entry: {selector (public display string), engine, durability, orthogonality_class,
     # unique_at_compile, source}. The editor's selector list is authoritative; this field

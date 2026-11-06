@@ -73,8 +73,8 @@ def test_a_multi_op_batch_lands_as_one_undo_entry(backend, monkeypatch, tmp_path
         "payload": {
             "skill_id": "skill_struct_1", "command": "structural_op", "proposal_id": "p1,p2",
             "ops": [
-                {"op": "insert_step", "action_kind": "ai_review", "after_step_key": keys[0],
-                 "fields": {"ai_review_prompt": "Did it submit?"}},
+                {"op": "insert_step", "action_kind": "agent_span", "after_step_key": keys[0],
+                 "fields": {"value": "Did it submit?"}},
                 {"op": "insert_step", "action_kind": "hover", "after_step_key": keys[0],
                  "identity_from_step_key": keys[0]},
             ],

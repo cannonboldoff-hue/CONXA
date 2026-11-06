@@ -35,8 +35,8 @@ def test_insert_step_of_a_non_selector_kind_needs_no_identity_source():
     keys = step_keys(doc["skills"][0]["steps"])
     out = gate_structural_proposals(doc, [
         {
-            "op": "insert_step", "action_kind": "ai_review", "after_step_key": keys[0],
-            "fields": {"ai_review_prompt": "Did it work?"},
+            "op": "insert_step", "action_kind": "agent_span", "after_step_key": keys[0],
+            "fields": {"value": "Did it work?"},
             "why": "checkpoint", "evidence_refs": [keys[0]],
         },
     ])

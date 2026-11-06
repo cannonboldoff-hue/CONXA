@@ -540,7 +540,6 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
         "try_dismiss": "try_dismiss_interstitial",
         "wait_for_one_of": "wait_for_one_of_states",
         "for_each": "process_each_row",
-        "ai_review": "ai_review_checkpoint",
         "agent_span": "agent_span_goal",
     }.get(kind, f"{kind}_target")
     url = page_url if page_url.startswith(("http://", "https://")) else ""
@@ -622,31 +621,14 @@ def _new_manual_step(action_kind: str, page_url: str) -> dict[str, Any]:
             "steps": [],
         }
     if kind == "agent_span":
+        from conxa_compile.editor.patch_gate import AGENT_SPAN_KINDS  # noqa: PLC0415 -- patch_gate imports this module's neighbours
+
         # Engine v2 C4: the goal rides `value`; these top-level fields are what patch_gate.py validates and
-        # the packager reads. `until` is left unset on purpose: a span with no ending check is dropped at build
-        # with a compile-report warning, exactly like an ai_review with no prompt, rather than shipping open-ended.
-        step["agent_span_allowed"] = ["click", "fill", "select", "scroll"]
-        step["agent_span_budget"] = {"actions": 8, "seconds": 120}
+        # the packager reads. The goal is left blank on purpose: a span with no goal is dropped at build with a
+        # compile-report warning rather than shipping empty. `until` is optional: the agent ends the span with done.
+        step["agent_span_allowed"] = list(AGENT_SPAN_KINDS)
+        step["agent_span_budget"] = {"actions": 25, "seconds": 600}
         step["agent_span_on_budget"] = "fail"
-    if kind == "ai_review":
-        # EXEC-13: an ai_review step carries no selector/identity_bundle (see
-        # skill_package_builder_saved_skill.py's ai_review branch) — these top-level
-        # `ai_review_*` fields, not `action`, are what patch_gate.py validates and the
-        # serializer reads. The prompt is deliberately left blank: the patch gate rejects a
-        # blank prompt on save (`ai_review_prompt_empty`), and a step left unconfigured is
-        # dropped at build time with a compile-report warning rather than shipping empty.
-        # `output_schema` seeds the canonical "yes/no + why" shape editable in the renderer's
-        # preset picker; an author who wants no schema can clear it.
-        step["ai_review_prompt"] = ""
-        step["ai_review_output_schema"] = {
-            "type": "object",
-            "required": ["answer", "why"],
-            "properties": {
-                "answer": {"type": "string", "enum": ["yes", "no"]},
-                "why": {"type": "string"},
-            },
-        }
-        step["ai_review_on_failure"] = "abort"
     return step
 
 
@@ -689,7 +671,12 @@ def add_known_popup_fork(document: dict[str, Any], step_index: int, popup: dict[
     return doc
 
 
-def insert_step_after(document: dict[str, Any], action_kind: str, insert_after: int | None = None) -> dict[str, Any]:
+def insert_step_after(
+    document: dict[str, Any], action_kind: str, insert_after: int | None = None, *, confirm_only: bool = False,
+) -> dict[str, Any]:
+    """Insert a manual step. ``confirm_only`` (agent_span only) inserts the question-only "a person confirms"
+    span Clarify offers: no actions, and an answer that must be a yes, so it may sit right before a step that
+    cannot be undone."""
     doc = dict(document)
     skills = list(doc.get("skills") or [])
     if not skills:
@@ -705,12 +692,23 @@ def insert_step_after(document: dict[str, Any], action_kind: str, insert_after: 
         insert_at = insert_after + 1
         anchor_index = insert_after
     original_len = len(steps)
-    if action_kind.strip().lower() == "agent_span" and insert_at < len(steps):
+    if action_kind.strip().lower() == "agent_span" and insert_at < len(steps) and not confirm_only:
         from conxa_compile.editor.patch_gate import _is_destructive  # noqa: PLC0415 -- patch_gate imports this module's neighbours
 
         if _is_destructive(steps[insert_at], get_policy_bundle().data):
             raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
-    steps.insert(insert_at, _new_manual_step(action_kind, _last_known_page_url(steps, anchor_index)))
+    new_step = _new_manual_step(action_kind, _last_known_page_url(steps, anchor_index))
+    if confirm_only:
+        from conxa_compile.editor.patch_gate import CONFIRM_ONLY_SPAN_SCHEMA  # noqa: PLC0415
+
+        if action_kind.strip().lower() != "agent_span":
+            raise ValueError("confirm_only_needs_agent_span")
+        new_step["agent_span_allowed"] = []
+        new_step["agent_span_answer_schema"] = copy.deepcopy(CONFIRM_ONLY_SPAN_SCHEMA)
+        new_step["agent_span_output_name"] = "confirmed_to_continue"
+        new_step["agent_span_on_failure"] = "abort"
+        new_step["agent_span_budget"] = {"actions": 1, "seconds": 600}
+    steps.insert(insert_at, new_step)
     block["steps"] = steps
     skills[0] = block
     doc["skills"] = skills

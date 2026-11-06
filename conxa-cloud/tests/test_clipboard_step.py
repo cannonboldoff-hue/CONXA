@@ -56,7 +56,7 @@ def test_produced_names_are_never_asked_of_the_caller():
     steps = [
         {"type": "extract", "output_name": "ticket"},
         {"type": "clipboard_read", "output_name": "pasted"},
-        {"type": "ai_review", "output_name": "verdict", "output_schema": {"properties": {"choice": {}, "why": {}}}},
+        {"type": "agent_span", "goal": "g", "answer": {"output_name": "verdict", "schema": {"properties": {"choice": {}, "why": {}}}}},
         {"type": "fill", "value": "{{ticket}} {{pasted}} {{verdict_choice}} {{customer}}"},
     ]
     assert _produced_names(steps) == {"ticket", "pasted", "verdict", "verdict_choice", "verdict_why"}

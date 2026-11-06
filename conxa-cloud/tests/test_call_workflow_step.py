@@ -107,7 +107,7 @@ def test_a_skill_without_calls_is_left_alone(tmp_path):
 
 @pytest.mark.parametrize("call,callee_steps,inputs,message", [
     ({}, [{"type": "handover"}], [], "contains a hand-over to a person"),
-    ({}, [{"type": "for_each", "steps": [{"type": "ai_review"}]}], [], "contains an AI review"),
+    ({}, [{"type": "for_each", "steps": [{"type": "agent_span"}]}], [], "contains an agent span"),
     ({"inputs": {"nope": "1"}}, [{"type": "click"}], [{"name": "id", "optional": True}], "input\\(s\\) it does not take: nope"),
     ({}, [{"type": "click"}], [{"name": "id"}], "does not give 'callee' the input\\(s\\) it needs: id"),
     ({"outputs": {"total": "t"}}, [{"type": "click"}], [], "result\\(s\\) it does not produce: total"),

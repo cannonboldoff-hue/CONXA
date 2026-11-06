@@ -43,7 +43,8 @@ This document is the detailed reference for known security gaps across all three
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
 | [SG-23](#sg-23-an-unrecorded-popup-can-be-answered-by-the-mcp-client) | An unrecorded question popup can be answered by the MCP client | Runtime | Low (mitigated) | `runtime/app/run.js`, `runtime/app/fork.js`, `runtime/app/fork_pause.js` |
-| [SG-22](#sg-22-clipboard-steps-and-the-data-an-ai-review-is-shown) | Clipboard steps and the data an AI review is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/review_pause.js` |
+| [SG-24](#sg-24-an-agent-span-can-go-anywhere-with-the-signed-in-browser) | An agent span can go to any site with the signed-in browser | Runtime | Medium | `runtime/app/agent_span.js` |
+| [SG-22](#sg-22-clipboard-steps-and-the-data-an-agent-span-is-shown) | Clipboard steps and the data an agent span is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/agent_span.js` |
 | [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
 
@@ -648,10 +649,10 @@ policy forbids it; move the job store to the database (CLOUD-21) so a restart do
 
 ---
 
-## SG-22 — Clipboard Steps And The Data An AI Review Is Shown
+## SG-22 — Clipboard Steps And The Data An Agent Span Is Shown
 
 **Severity:** Low (mitigated)
-**Component:** Runtime — `runtime/app/handlers.js` (`clipboard_write`, `clipboard_read`), `runtime/app/review_pause.js` (`readAttachments`, prompt fill-in)
+**Component:** Runtime — `runtime/app/handlers.js` (`clipboard_write`, `clipboard_read`), `runtime/app/agent_span.js` (`readAttachments`, goal fill-in)
 
 ### Description
 
@@ -660,7 +661,7 @@ Two runtime features move customer data to places it did not go before.
 1. **Clipboard steps.** The browser clipboard is the computer's clipboard. `clipboard_write` leaves its text
    there until something replaces it, so a workflow that writes a secret (a `{{password}}` input) leaves it
    readable by other programs. `clipboard_read` can see whatever the person last copied, in any program.
-2. **AI review data.** `{{inputs}}` named in an `ai_review` prompt, and files named in `attach`, are sent to
+2. **Agent-span data.** `{{inputs}}` named in an agent span's goal, the run's non-secret-looking inputs, and files named in `attach`, are sent to
    the MCP client's model. Text in a downloaded file (or on a page) is third-party content and can try to give
    the model orders (prompt injection).
 
@@ -668,23 +669,64 @@ Two runtime features move customer data to places it did not go before.
 
 Clipboard: runs only on a secure page in front, per origin, behind a deadline; a read binds into the run's
 inputs only (never an event, a failure report or the run's `outputs`) and no error contains clipboard text; the
-editor says plainly that written text stays on the clipboard. AI review: only inputs the author names in the
-prompt are filled in; attachments are limited to text files inside this run's own download folder (a
+editor says plainly that written text stays on the clipboard. Agent span: only inputs the author names in the
+goal are filled in, and the context sent to the agent lists any input whose name looks secret (password, token, key, otp, cookie, auth, credential) as `(hidden)`; attachments are limited to text files inside this run's own download folder (a
 caller-supplied path elsewhere is refused), cut at 64 KB, and framed as untrusted data; the answer is checked
-against `output_schema`; `patch_gate` stops a destructive step from directly following a free-form review or
-being gated by its answer (only a confirm-only `{confirmed: true}` review may), and a decision popup is never
-answered by a model.
+against the span's answer schema; `patch_gate` stops a destructive step from directly following a free-form span or
+being gated by its answer (only a confirm-only `{confirmed: true}` question may).
 
 ### Residual risk
 
-An author can still put a secret in an `ai_review` prompt or write one to the clipboard; the runtime cannot tell
+An author can still put a secret in a span goal or write one to the clipboard; the runtime cannot tell
 a secret input from any other. Clipboard text is not cleared after a run. A model that follows instructions
 hidden in an attached file can still give a misleading answer to a safe step.
 
 ### Recommended Fix
 
-Mark inputs as secret in the editor and refuse them in `clipboard_write` and `ai_review` prompts; offer
+Mark inputs as secret in the editor and refuse them in `clipboard_write` and span goals; offer
 `restore previous clipboard after the step`; show attached file names to the person before an unattended run.
+
+---
+
+## SG-24 — An Agent Span Can Go Anywhere With The Signed-In Browser
+
+**Severity:** Medium
+**Component:** Runtime — `runtime/app/agent_span.js` (`refusalReason`, `perform`), `runtime/app/server.js` (`_resumeSpanStep`)
+
+### Description
+
+Since 2026-11-06 an `agent_span` is a Browser-Use-style agent: the MCP client sees the page and the workflow's
+context and sends one action per call, and it may `navigate` or `open_tab` to **any** http(s) address. The old
+one-site rule is gone. The customer's browser holds signed-in sessions, so a hostile page (or hostile text on a
+normal page, in an attached file, or from `read_text`) that talks the model into following its own
+instructions ("open this address and type the saved password") can act with the person's access. The runtime
+cannot see the model's reasoning, only the action it asks for.
+
+### Mitigations in place
+
+Page text, element labels, read text and attached files are all framed as untrusted data, and the request
+tells the agent that only the goal and the person are instructions. The agent never supplies a selector (an
+element number from the list the runtime just sent); a password, file or hidden field is never filled; only
+http(s) addresses are accepted (`javascript:`, `file:`, `data:` and browser-internal schemes are refused);
+actions, tabs and the budget are bounded (at most 100 actions, 1800 s). A click or an Enter on something that
+looks irreversible (`fork.js::isIrreversibleLabel`) is refused until the agent repeats it with
+`user_confirmed: true`, and the instructions tell it to ask the person in the chat first. The span fails
+closed on a scheduled run, in a dry run, inside a loop and inside a called workflow; `uses_agent: true` is in
+the manifest; `patch_gate` keeps a span away from a destructive step. The Build Studio test routes the
+"allow this?" question to a person and drops any `user_confirmed` the sandbox model sends.
+
+### Residual risk
+
+`user_confirmed` is trusted from the MCP client: a manipulated model can set it without asking. The word list
+cannot know a customer's vocabulary ("Confirm" on an irreversible action passes). Navigation is not host-locked:
+runs on a platform are serialized by `host_lock.js`, but a span that wanders to another site is not. A model
+can still be tricked into a harmless-looking wrong action (a wrong tab, a wrong field).
+
+### Recommended Fix
+
+A per-span domain allow-list (default: the recorded hosts) that the runtime enforces on `navigate`, `open_tab`
+and link clicks, and a short-lived confirm token minted by the runtime when the person answers (so the model
+cannot invent one). Until then, use spans only where the signed-in browser is acceptable to expose.
 
 ---
 

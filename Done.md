@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 38 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65 |
+| BUILD — Build Studio | 39 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **99** | |
+| **Total** | **100** | |
 
 ---
 
-## BUILD — Build Studio (34 done)
+## BUILD — Build Studio (39 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -742,6 +742,16 @@ inferred from `outer_html`, not read directly.
 **Resolved:** 2026-11-06 (behind settings; see `TODO.md` BUILD-65 for what is left)
 - **Category:** Builder
 - **Resolution:** Phase 0: eight question kinds the understanding-first path had silently switched off are asked again (two passes so replay still matches), chat reaches the understanding call, typed "stays as recorded" verdicts untick `values` by event id, cuts are counted and said. Phase 1: `unknowns.py` / `question_plan.py` give every question a facet and an event-id slot; vacuity and slot dedupe (`SKILL_CLARIFY_LEDGER`, report first); `clarify.json["ledger"]`. Phase 2: `scoring.py` (ask / confirm / assume / assume-and-show / defer, safety floor, shadow mode), assumptions in the summary card, deferred questions woken by a failing test. Phase 3: re-evaluation after an answer, notes handed to the chat, dropdown / radio / date asked before the build, second-read audit (`clarify_audit`), per-app answer memory, coverage question back. Phase 4: `clarify_events.jsonl`, `scripts/eval_clarify.py`, gold and selection fixtures.
+
+### BUILD-69 — `_answer_ai_review`'s docstring and TRD §11.3 said the metered class is `human_edit`, the code passes `usage_class="ai_credits"`
+**Resolved:** 2026-11-06
+- **Category:** Builder
+- **Resolution:** Moot: the `ai_review` step and `_answer_ai_review` were removed (folded into the agent span). TRD §11.3 is now a removal note, and TRD §11.7 and `_answer_agent_span`'s docstring both say `ai_credits`, which is what the code does.
+
+### BUILD-70 — One question stream: ask when unsure, and every question must be answered
+**Resolved:** 2026-11-06
+- **Category:** Builder
+- **Resolution:** No question can end unanswered any more. The skip action is gone (the card has no skip arrow; `skip` is refused), typing your own words counts as the answer (the chat still proposes any change), `defer` is ignored (the question stays open) and a question the harness was sure about is `assumed`, not a question. Questions held back past `MAX_QUESTIONS` come forward on their own before the build / the summary. `clarify_store.summary()["unanswered"]` blocks `test`/`approve`/`publish` in `lifecycle` and in `cmd_flow_compile`, `cmd_flow_approve`, `cmd_publish_skill_pack`, `cmd_build_installer`. An unanswered question is re-asked when the conversation opens (`_reask_unanswered`, never a second card), named after a typed message, and pinned above the composer by `Conversation.tsx`. A recompile or re-watch closes the old round's open cards (`reverted`). The pre/post-compile split stays internal (`phase`); the person sees one stream. Also fixes pre-compile questions past the 5th never being asked.
 
 ## EXEC — Execution & Recovery (28 done)
 

@@ -210,10 +210,11 @@ def test_answering_applies_existing_mutations_and_the_counts_add_up(env):
     r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
     assert r["ok"] and r["receipt"] == "Someone approves it first"
     steps = read_skill(skill_id)["skills"][0]["steps"]
-    assert [s["action"] if isinstance(s["action"], str) else s["action"]["action"] for s in steps][-2:] == ["ai_review", "click"]
+    assert [s["action"] if isinstance(s["action"], str) else s["action"]["action"] for s in steps][-2:] == ["agent_span", "click"]
     review = steps[-2]
-    assert review["ai_review_output_schema"]["required"] == ["confirmed"] and review["ai_review_on_failure"] == "abort"
-    assert "send invoice" in review["ai_review_prompt"].lower()
+    assert review["agent_span_answer_schema"]["required"] == ["confirmed"] and review["agent_span_on_failure"] == "abort"
+    assert review["agent_span_allowed"] == []
+    assert "send invoice" in review["value"].lower()
     assert _cards(wf.id, "clarify_question")[0]["state"] == "answered"
 
     # the next question appears only now
@@ -574,7 +575,7 @@ def test_an_answer_whose_second_edit_fails_restores_the_workflow_and_a_retry_app
     monkeypatch.setattr(b, "cmd_patch_step", real_patch)
     r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")
     assert r["ok"]
-    assert _step_actions(read_skill(skill_id)).count("ai_review") == 1   # not two
+    assert _step_actions(read_skill(skill_id)).count("agent_span") == 1   # not two
 
 
 def _mark_applying(wf, q, *, since, base_version):
@@ -614,7 +615,7 @@ def test_a_dead_attempt_that_changed_nothing_can_be_tried_again(env):
     q1 = _cards(wf.id, "clarify_question")[0]
     _mark_applying(wf, q1, since=1.0, base_version=version)
     assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "yes"}}, "r")["ok"]
-    assert _step_actions(read_skill(skill_id)).count("ai_review") == 1
+    assert _step_actions(read_skill(skill_id)).count("agent_span") == 1
 
 
 def test_a_live_attempt_is_refused_so_a_double_click_cannot_apply_twice(env):

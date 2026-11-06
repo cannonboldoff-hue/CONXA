@@ -5,7 +5,7 @@ are being written, every call is checked and stamped with the version of the wor
 
   * the called workflow must exist (built in this call, or by an earlier one);
   * no workflow may call itself, directly or through others, and the chain stays within MAX_CALL_DEPTH;
-  * a called workflow may not hold a pause (ai_review, handover, a popup decision) -- a pause inside a
+  * a called workflow may not hold a pause (an agent span, handover, a popup decision) -- a pause inside a
     call would resume at the wrong step;
   * the inputs handed over must be ones the called workflow takes, every one it requires must be given
     (or have a default), and every result asked for must be one it produces.
@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 MAX_CALL_DEPTH = 3
-_PAUSE_STEP_TYPES = {"ai_review", "handover", "outcome_fork", "agent_span"}
-_PAUSE_NAMES = {"ai_review": "an AI review", "handover": "a hand-over to a person", "outcome_fork": "a popup decision", "agent_span": "an agent span"}
+_PAUSE_STEP_TYPES = {"handover", "outcome_fork", "agent_span"}
+_PAUSE_NAMES = {"handover": "a hand-over to a person", "outcome_fork": "a popup decision", "agent_span": "an agent span"}
 
 
 def _walk(steps: Any, visit: Any) -> None:

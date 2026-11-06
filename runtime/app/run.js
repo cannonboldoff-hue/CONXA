@@ -289,7 +289,7 @@ async function executeOneStep(ctx, state, steps, i) {
   // RT-9 — Studio-only test guard. A caller that passes `_pause_before_irreversible` asks the run to
   // stop, parked on the live page, BEFORE the first step the compiler marked `destructive` (send,
   // submit, pay, delete, publish). It resumes only when the caller says so (`_guard_release`), which
-  // releases every later destructive step in the run at once. Like ai_review it is a planned pause,
+  // releases every later destructive step in the run at once. Like agent_span it is a planned pause,
   // not a failure and not recovery: it never touches recovery_stage.js or retry_budget.js, and with
   // no `guard` on ctx (every customer run, every MCP caller) this block is inert. A dry run already
   // withholds destructive steps, so the guard has nothing to do there.
@@ -334,37 +334,13 @@ async function executeOneStep(ctx, state, steps, i) {
     if (await answerBlockingPopup(ctx, state, step, page, i)) return;
   }
 
-  // EXEC-13: ai_review is a planned pause (author-placed reasoning checkpoint), not a page
-  // action and not a Tier 1-4 recovery candidate — it carries no selector/identity_bundle, so
-  // it must never reach executeStep/HANDLERS or recoverStep. server.js validates a resumed
-  // review answer against the step's output_schema and binds it under `__ai_review_answer_<i>`
-  // in `inputs` *before* calling runPlan (see the `_resumeReviewStep` block); this interception
-  // just consumes it and moves on. A fresh arrival (no bound answer yet) throws a distinct,
-  // non-recovery signal that server.js's catch block special-cases (like `cancelled`/
-  // `session_expired`) to park the page and return a review request instead of a failure.
-  if (step.type === "ai_review") {
-    const answerKey = `__ai_review_answer_${i}`;
-    if (Object.prototype.hasOwnProperty.call(state.inputs, answerKey)) {
-      const outputName = step.output_name || `ai_review_output_${i}`;
-      const answer = state.inputs[answerKey];
-      state.inputs[outputName] = answer;
-      Object.assign(state.inputs, flattenAnswer(outputName, answer));
-      delete state.inputs[answerKey];
-      state.hasExecutedStep = true;
-      state.prevStepType = step.type;
-      state.prevPage = page;
-      return;
-    }
-    throw Object.assign(new Error("ai_review_pause"), { reviewPause: true, stepIndex: i, step, page });
-  }
-
   // EXEC-21 (hand-over shape): a step the recording deliberately left for a PERSON, not the
-  // agent — 2FA, a CAPTCHA, an e-signature. Like ai_review, this is a planned pause: no
+  // agent — 2FA, a CAPTCHA, an e-signature. Like agent_span, this is a planned pause: no
   // selector, no identity_bundle, never reaches executeStep/HANDLERS or the recovery cascade.
   // Two speeds (see handover.js's header): most hand-overs finish inside HANDOVER_INCALL_MS and
   // never leave this function — the person clicks the in-page banner and execution just
   // continues in this same call. If they haven't by then, this throws a distinct non-recovery
-  // signal (mirroring ai_review_pause) that server.js parks the page on and returns a pause
+  // signal (mirroring agent_span_pause) that server.js parks the page on and returns a pause
   // response for; the SAME armed banner/file/http signals stay live on the parked page, so the
   // eventual resume is driven by the person's own click, not by another MCP call polling in.
   // A resumed call binds `__handover_done_<i>` into inputs (server.js's resume path) after
@@ -406,15 +382,24 @@ async function executeOneStep(ctx, state, steps, i) {
     throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step, page, armed, dryRun: ctx.dryRun });
   }
 
-  // Engine v2 C4: an author-placed span the caller's agent carries out, one candidate action at a time (see
-  // agent_span.js). The third planned pause beside ai_review and handover: no selector, never reaches
+  // Engine v2 C4: an author-placed span the caller's agent carries out, one action at a time (see
+  // agent_span.js). It also does what the removed ai_review step did: with an `answer` it asks a question and
+  // binds the structured reply. A planned pause beside handover: no selector, never reaches
   // executeStep/HANDLERS or the recovery cascade. server.js drives the rounds on the parked page and, when the
-  // author's `until` check holds, binds `__agent_span_done_<i>` into inputs before the resume; this just
-  // consumes it. It never asks a person, and it fails closed wherever no agent is there to answer.
+  // span ends well, binds `__agent_span_done_<i>` (and `__agent_span_answer_<i>`) into inputs before the resume;
+  // this just consumes them. It never asks a person itself, and it fails closed wherever no agent is there to answer.
   if (step.type === "agent_span") {
     const doneKey = `__agent_span_done_${i}`;
     if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
       delete state.inputs[doneKey];
+      const answerKey = `__agent_span_answer_${i}`;
+      if (Object.prototype.hasOwnProperty.call(state.inputs, answerKey)) {
+        const outputName = (step.answer && step.answer.output_name) || `agent_span_output_${i}`;
+        const answer = state.inputs[answerKey];
+        state.inputs[outputName] = answer;
+        Object.assign(state.inputs, flattenAnswer(outputName, answer));
+        delete state.inputs[answerKey];
+      }
       state.hasExecutedStep = true;
       state.prevStepType = step.type;
       state.prevPage = page;
@@ -439,15 +424,20 @@ async function executeOneStep(ctx, state, steps, i) {
     if (ctx.agentSpans === false) {
       refuse("agent_span_no_agent", "This step needs an AI agent to carry it out, and a scheduled run has none. Run it from a chat instead.");
     }
-    // Nothing to do when the goal is already met: zero actions, zero tokens.
-    if (await agentSpan.untilHolds(page, step.until, state.inputs, await capturePreStepSignature(page))) {
+    // Nothing to do when the author's check already holds and no answer is wanted: zero actions, zero tokens.
+    if (!step.answer && await agentSpan.untilHolds(page, step.until, state.inputs, await capturePreStepSignature(page))) {
       ctx.tracker.emit("span_done", { si: i, n: 0 });
       state.hasExecutedStep = true;
       state.prevStepType = step.type;
       state.prevPage = page;
       return;
     }
-    const span = await agentSpan.begin(page, step, state.inputs);
+    const brief = (s) => String((s && (s.intent || s.description || s.type)) || "").slice(0, 80);
+    const span = await agentSpan.begin(page, step, state.inputs, {
+      skill: ctx.slug,
+      stepsDone: steps.slice(0, i).map(brief).slice(-12),
+      stepsAfter: steps.slice(i + 1).map(brief).slice(0, 12),
+    });
     ctx.tracker.emit("span_start", { si: i });
     throw Object.assign(new Error("agent_span_pause"), { spanPause: true, stepIndex: i, step, page, span });
   }
@@ -977,7 +967,7 @@ async function runForEachStep(ctx, state, step, page, i) {
         for (const n of bodyOutputs) if (state.inputs[n] !== undefined) perRow[n].push(state.inputs[n]);
         processed++;
       } catch (bodyErr) {
-        // Cancellation and an ai_review/handover pause inside the body are never row-level
+        // Cancellation and a handover pause inside the body are never row-level
         // failures — they must always propagate immediately regardless of on_row_error. (Note:
         // patch_gate.py refuses to compile a handover step inside a for_each body in the first
         // place — unwinding this loop on a pause loses the iteration cursor, so resuming would
@@ -987,7 +977,7 @@ async function runForEachStep(ctx, state, step, page, i) {
           bodyErr.loop.perRow = JSON.parse(JSON.stringify(perRow));
           throw bodyErr;
         }
-        if (bodyErr && (bodyErr.cancelled || bodyErr.reviewPause || bodyErr.handoverPause)) throw bodyErr;
+        if (bodyErr && (bodyErr.cancelled || bodyErr.handoverPause)) throw bodyErr;
         failed++;
         ctx.tracker.emit("for_each_row_fail", { si: i, row_index: idx, continued: onRowError === "continue" });
         if (onRowError !== "continue") throw bodyErr;
@@ -1569,7 +1559,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   // identically inside a loop body as at the top level. Mutated in place, never reassigned.
   const state = {
     // The flat input-variable namespace steps read {{placeholders}} from and some steps
-    // (ai_review, download_observed) write into — shared and mutated across the whole run,
+    // (agent_span answers, download_observed) write into — shared and mutated across the whole run,
     // for_each body iterations included, exactly as it always was as a bare closure variable.
     inputs,
     recoveredSteps: 0,
@@ -1712,22 +1702,12 @@ function runIfDecision(step, inputs) {
   return { skip: !run, input: String(cond.input) };
 }
 
-// A {{placeholder}} cannot reach inside an object, so each plain field of an ai_review answer is also
-// bound on its own as `<output_name>_<field>`. That is what lets a later step use the answer, and what
+// A {{placeholder}} cannot reach inside an object, so each plain field of an agent_span answer is also bound on
+// its own as `<output_name>_<field>` (see agent_span.js). That is what lets a later step use the answer, and what
 // `run_if` reads to choose between steps.
-function flattenAnswer(outputName, answer) {
-  const out = {};
-  if (answer && typeof answer === "object" && !Array.isArray(answer)) {
-    for (const [k, v] of Object.entries(answer)) {
-      if (/^[a-zA-Z][a-zA-Z0-9_]*$/.test(k) && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
-        out[`${outputName}_${k}`] = v;
-      }
-    }
-  }
-  return out;
-}
+const flattenAnswer = agentSpan.flattenAnswer;
 
-// Every extract / ai_review output_name, nested bodies included. `withPrivate` also lists a
+// Every extract / agent_span answer output_name, nested bodies included. `withPrivate` also lists a
 // clipboard_read's name: it must survive a pause (server.js carries it across) but is never reported
 // to the caller, because the clipboard may hold anything the person copied.
 function declaredOutputNames(steps, withPrivate = false) {
@@ -1735,7 +1715,8 @@ function declaredOutputNames(steps, withPrivate = false) {
   const walk = (list) => {
     for (const s of Array.isArray(list) ? list : []) {
       if (!s || typeof s !== "object") continue;
-      if ((s.type === "extract" || s.type === "ai_review") && s.output_name) names.push(String(s.output_name));
+      if (s.type === "extract" && s.output_name) names.push(String(s.output_name));
+      if (s.type === "agent_span" && s.answer && s.answer.output_name) names.push(String(s.answer.output_name));
       if (withPrivate && s.type === "clipboard_read" && s.output_name) names.push(String(s.output_name));
       walk(s.steps);
       if (s.for_each) walk(s.for_each.steps);

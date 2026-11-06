@@ -11,7 +11,7 @@
  *     against (`call.version`, pinned when the caller was built) -- a callee updated on its own never
  *     silently changes what the caller does;
  *   - no cycle (A calls B calls A) and no more than MAX_CALL_DEPTH calls deep;
- *   - the callee holds no pause (ai_review, handover, a popup decision): a pause inside a call would
+ *   - the callee holds no pause (an agent span, handover, a popup decision): a pause inside a call would
  *     resume at the wrong step, so the same rule as a handover inside a loop body applies;
  *   - the inputs handed over match what the callee declares, and the outputs asked for exist.
  *
@@ -21,7 +21,7 @@
 const MAX_CALL_DEPTH = 3;
 // Steps that stop the run and wait for an answer. They resume by top-level step index, which a step
 // inside a called workflow does not have.
-const PAUSE_STEP_TYPES = new Set(["ai_review", "handover", "outcome_fork", "agent_span"]);
+const PAUSE_STEP_TYPES = new Set(["handover", "outcome_fork", "agent_span"]);
 
 function walk(steps, visit) {
   for (const s of Array.isArray(steps) ? steps : []) {
@@ -49,7 +49,7 @@ function firstPauseType(steps) {
   return found;
 }
 
-const PAUSE_NAMES = { ai_review: "an AI review", handover: "a hand-over to a person", outcome_fork: "a popup decision", agent_span: "an agent span" };
+const PAUSE_NAMES = { handover: "a hand-over to a person", outcome_fork: "a popup decision", agent_span: "an agent span" };
 
 /**
  * @param {object} root  { entry, steps } -- the workflow being run

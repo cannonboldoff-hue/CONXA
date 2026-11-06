@@ -128,7 +128,7 @@ flowchart LR
     R -- Finish --> C[Compile card<br/>real stages · queued · out of credits]
     R -- Discard / browser closed --> R2[Record again · Save N actions]
     C --> U[Understanding check<br/>task vs. recording · values that change each run]
-    U --> Q[Clarify questions<br/>one at a time, up to 5 · Test waits until every asked question is answered or skipped, and until any proposed chat change is applied or dismissed]
+    U --> Q[Clarify questions<br/>one at a time, up to 5 · Every question must be answered (no skip; typing your own words answers it) and the open one is pinned above the composer. Test, Approve and Publish wait until every asked question is answered, and until any proposed chat change is applied or dismissed]
     Q --> SUM[Summary card]
     SUM --> T[Test inputs]
     SUM --> E[Human Edit<br/>Test changes]
@@ -147,7 +147,7 @@ flowchart LR
 
 **When a recorded popup is a decision (outcome forks).** If the recording contained a popup that asked the person to choose ("file already exists: Replace / Keep both / Cancel"), Clarify asks one extra question per such popup — what should the workflow do when it appears: run one of its buttons every time, let the person running it choose each time (adds a setting), pause and ask, or stop. Choosing a risky button there is what authorises it to run unattended; until the question is answered a risky recorded choice pauses and asks. After the questions an optional card offers to **record the case where the popup does not appear**: a second, short recording is compared with the first by rule (no compile, no credit); the first recording and the author's answers are never touched. At run time the workflow looks for the popup for a few seconds, does what the policy says, and a popup it has never seen pauses and asks the person with only the buttons actually on screen. In a Build Studio test the question appears on the test card; only a person answers it. See TRD §11.4.
 
-**How the questions are chosen (BUILD-65).** There is one list of questions, not two. Each one names what it settles (a value that may change, a popup, a step that cannot be undone, what "done" means) and which recorded action it is about, so the same thing is never asked twice and a question whose every answer changes nothing is not asked. With scoring on, cheap questions the compiler's default already answers are not asked: they appear under "Left as the compiler had it" in the summary and come back on "ask me". A question a failing test would point at is held back until a test fails at that step. A decision popup and a step that cannot be undone always ask. After an answer changes the workflow, any question that change newly makes possible is asked straight away. Words typed to a question before the build are passed to the chat once the summary is shown, so they can become a change you can Apply or Undo. See TRD §11.
+**How the questions are chosen (BUILD-65).** There is one list of questions, not two. Each one names what it settles (a value that may change, a popup, a step that cannot be undone, what "done" means) and which recorded action it is about, so the same thing is never asked twice and a question whose every answer changes nothing is not asked. With scoring on, things the harness is sure about are not questions: they appear under "Left as the compiler had it" in the summary and come back on "ask me". Everything it does ask must be answered; nothing is deferred to a later test. A decision popup and a step that cannot be undone always ask. After an answer changes the workflow, any question that change newly makes possible is asked straight away. Words typed to a question before the build are passed to the chat once the summary is shown, so they can become a change you can Apply or Undo. See TRD §11.
 
 **Where the browser is:** tests, recording and sign-in all draw into Studio's own browser panel on the right (BUILD-46, TRD §4.7a). After "Create and start recording" the panel docks in ("Getting ready"), shows the sign-in page first for every group app that is unconnected or whose saved sign-in has expired (amber edge, "Not recorded"). Studio notices the person is signed in by itself — once the sign-in tab leaves the login page it runs the same confirmation the **I'm signed in** button does — and carries on to the next app or the recording; the button and Cancel stay as the fallback. A cancelled sign-in never touches the app's saved one. Then it records (red edge, timer, Pause / Discard / **Finish and save**). Site-opened tabs appear as tabs in the panel; **Widen** folds the conversation to a rail. Finishing closes the panel and the inspector returns. Without the panel (or from a dialog that has nowhere to draw it) the old separate Chromium window is used. **What stays the same:** compiling and testing run on this computer; the cloud is used for the model proxy, credits and publishing. **Who decides:** the person approves; edits revoke approval; no step that can't be undone runs in a test unless a person allows it; Clarify answers and auto-fix changes go through the same gated edit commands as Human Edit. **When something is unavailable:** offline pauses compile/chat/publish, a stopped engine shows a restart notice, an expired sign-in pauses the test instead of failing it (see TRD §7.4b).
 
@@ -350,27 +350,29 @@ steps cannot patch `recovery`/`validation` since branch bodies are best-effort a
 recovery. `try_dismiss`/`wait_for_one_of` show read-only summary badges only — no authoring UI
 for their candidate/option lists yet.
 
-**AI Review step authoring (EXEC-13, 2026-09-14):** `ai_review` (§10.9 of `docs/TRD.md`) is now
-insertable from the Add-action menu alongside the branch primitives above. It has no selector to
-pick and no post-condition to assert, so its config block replaces the usual selector/Validation
-panels entirely: a required question, an answer-shape preset that fills an editable JSON schema
-textarea, an on-failure policy (abort / use a default / continue), and — like `wait`/`screenshot`
-before it — the generic Value field, here labelled "Output binding name" and doubling as the name
-later steps read the answer back from. Testing a workflow containing one in the Build Studio no
-longer fails outright: the sandbox has no MCP agent to answer the paused checkpoint, so it answers
-the checkpoint itself through the metered cloud LLM proxy and resumes, the same way a real agent
-would over MCP on a customer's machine (at zero cost there, since that path runs on the customer's
-own Claude subscription).
+**Agent step authoring (Engine v2 C4; Browser-Use style, 2026-11-06):** `agent_span` (§11.7 of `docs/TRD.md`) is
+insertable from the Add-action menu. It replaces the old AI Review step. It has no selector to pick and no
+post-condition to assert, so its config block replaces the usual selector/Validation panels: the generic Value field
+(labelled "What the agent should get done"), the actions the agent may use (click, type, pick, scroll, press a key, go
+to an address, go back, open / switch / close a tab), an optional "goal is reached when" check, a budget (most actions,
+give up after N seconds), and an optional **answer**: a preset (a person says yes first; yes or no with a reason; a piece
+of text; one choice from a list; custom JSON), the name later steps use, files to show, and what to do if no usable
+answer arrives. Untick every action to make it a plain question. The agent sees the page, the steps already done and
+those still to come, and can go to any address, so the editor says plainly that it needs an agent (cannot be scheduled)
+and that the agent must ask the person before pressing anything that sends, pays, deletes or publishes. Testing one in
+Build Studio: with "let AI answer" on, the sandbox's own model works through it (metered); a "person says yes first"
+question and any "allow this button?" request go to the tester, never to the model; with it off the test stops at the
+step. Old workflows that still hold an AI Review step must be re-created as a question span and rebuilt.
 
 **Hand-over step authoring (EXEC-21, hand-over shape, 2026-09-15):** `handover` (§10.10 of
-`docs/TRD.md`) is `ai_review`'s human sibling in the Add-action menu — same "no selector, no
+`docs/TRD.md`) is the agent step's human sibling in the Add-action menu — same "no selector, no
 Validation panel" shape, but the generic Value field (labelled "Message shown to the person" here,
 rather than an output binding name) is the message a person sees on the pause banner, since that's
 the one thing every hand-over must have and it's the field every action-kind editor already
-renders. On-failure is narrower than `ai_review`'s (abort / continue — no "use a default", since a
+renders. On-failure is narrower than the agent step's (abort / continue — no "use a default", since a
 hand-over produces no answer value). Testing one in the Build Studio requires an actual person: the
 sandbox forces a visible browser and shows the same in-page banner a production run would, and the
-tester clicks it themselves to resume — there is no cloud-proxy stand-in the way `ai_review`'s
+tester clicks it themselves to resume — there is no cloud-proxy stand-in the way the agent step's
 sandbox answerer provides, because nothing but a person can do what a hand-over step exists for.
 
 **"Treat as optional?" suggestion (recording-next-steps.md Priority 2, 2026-07-10):** the recorder

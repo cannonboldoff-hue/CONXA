@@ -1,6 +1,6 @@
 "use strict";
 
-// EXEC-21 (hand-over shape): the human sibling of ai_review's planned pause (test_ai_review.js).
+// EXEC-21 (hand-over shape): the human sibling of the agent_span planned pause (test_agent_span.js).
 // Two things are under test here, same split as that file:
 //   • handover.js — arm()/disarm() (the three signal sources: banner binding, loopback HTTP,
 //     file drop), revalidate(), and buildHandoverRequest().
@@ -154,7 +154,7 @@ test("buildHandoverRequest: includes the message and a current screenshot", asyn
 });
 
 // ── run.js's runPlan interception ────────────────────────────────────────────
-// Same idlePage/idleContext fixture shape as test_ai_review.js: a handover step has no `tab`
+// Same idlePage/idleContext fixture shape as test_agent_span.js: a handover step has no `tab`
 // block, so resolveStepPage takes the tab_0 shortcut and never touches real Playwright.
 const idleContext = {
   on: () => {}, off: () => {},

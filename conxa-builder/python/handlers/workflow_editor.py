@@ -29,7 +29,7 @@ class WorkflowEditorMixin:
         top-level and path-addressed (branch-body) flows so both go through the same gate.
 
         `previous_step` (top-level patches only — see validate_editor_patch's docstring) is the
-        step immediately before this one, for EXEC-13's destructive-after-ai_review lint."""
+        step immediately before this one, for the destructive-after-agent_span lint."""
         from conxa_compile.compiler.selector_filters import selector_passes_filters
         from conxa_compile.compiler.selector_grammar import (
             compute_merged_display_target,
@@ -356,7 +356,7 @@ class WorkflowEditorMixin:
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         self._push_undo(skill_id, copy.deepcopy(doc))
-        doc = insert_step_after(doc, action_kind, insert_after)
+        doc = insert_step_after(doc, action_kind, insert_after, confirm_only=bool(payload.get("confirm_only")))
         write_skill(skill_id, doc)
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))

@@ -38,14 +38,15 @@ from conxa_compile.policy.bundle import get_policy_bundle
 # BUILD-26 stage g: widened from the original five to every field that actually changes
 # execution behaviour without ever touching an element address — see CLAUDE.md's correction that
 # recovery.max_attempts/no_recovery_block are NOT here because the runtime never reads them.
-# ai_review_*/handover_* aren't listed here since they're only meaningful on those two kinds —
+# agent_span_*/handover_* aren't listed here since they're only meaningful on those two kinds —
 # `gate_proposals` below intersects this set against what `validate_editor_patch` accepts for the
-# step's actual kind, so an ai_review_* field proposed against a click step is dropped there.
+# step's actual kind, so an agent_span_* field proposed against a click step is dropped there.
 _ALLOWED_FIELDS = frozenset({
     "value", "input_binding", "intent", "semantic_description", "validation.assertions",
     "consequence", "entity_binding.confirmed", "branch.timeout_ms",
     "for_each.max_iterations", "for_each.on_row_error", "handler_hints.hover_chain",
-    "ai_review_prompt", "ai_review_output_schema", "ai_review_on_failure", "ai_review_default_value",
+    "agent_span_until", "agent_span_budget", "agent_span_allowed", "agent_span_answer_schema",
+    "agent_span_output_name", "agent_span_on_failure", "agent_span_default_value",
     "handover_on_failure", "handover_resume_when", "handover_resume_when_timeout_ms",
 })
 
@@ -344,7 +345,7 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
     The selector rule is enforced exactly once, here: `insert_step` of a kind in SELECTOR_ACTIONS
     is dropped unless it names `identity_from_step_key`, an EXISTING step whose identity_bundle is
     then copied verbatim — the model names a source, Python copies the signal, the model never
-    writes one. A kind not in SELECTOR_ACTIONS (ai_review, handover, wait, check, assert,
+    writes one. A kind not in SELECTOR_ACTIONS (agent_span, handover, wait, check, assert,
     navigate, scroll, screenshot) never needs one.
     """
     policy = get_policy_bundle().data

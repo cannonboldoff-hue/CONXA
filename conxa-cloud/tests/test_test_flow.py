@@ -27,7 +27,7 @@ from handlers.workflows import (  # noqa: E402
     _extract_fork_pause,
     _extract_guard_pause,
     _extract_session_expired,
-    _is_confirm_only_review_request,
+    _is_confirm_only_span_request,
 )
 
 CONFIRM_SCHEMA = {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}}
@@ -40,9 +40,18 @@ def _guard_result(step=3, run_id="run_1", remaining=2):
     }
 
 
-def _review_result(step=2, schema=CONFIRM_SCHEMA, prompt="Send the invoice?"):
-    return {"content": [{"type": "text", "text": "Review"}],
-            "_meta": {"conxa/ai_review": {"step_index": step, "prompt": prompt, "output_schema": schema}}}
+QUESTION_ONLY = ["done", "give_up", "wait", "read_text"]
+
+
+def _span_result(step=2, schema=CONFIRM_SCHEMA, prompt="Send the invoice?", allowed=None, needs_confirm=None):
+    meta = {"step_index": step, "goal": prompt, "allowed": QUESTION_ONLY if allowed is None else allowed,
+            "answer_schema": schema, "candidates": [{"i": 0, "tag": "button", "name": "Send"}]}
+    if needs_confirm:
+        meta["needs_user_confirmation"] = needs_confirm
+    return {"content": [{"type": "text", "text": "Span"}], "_meta": {"conxa/agent_span": meta}}
+
+
+_review_result = _span_result  # the confirm-only question is the old "review"
 
 
 DONE = {"content": [{"type": "text", "text": "Done. URL: https://x.test"}]}
@@ -57,7 +66,7 @@ class Calls:
         return self.results.pop(0)
 
     def drive(self, first, **kw):
-        defaults = dict(call=self.call, cancel_run=self.cancelled.append, answer_review=lambda r, c: {"answer": "yes"},
+        defaults = dict(call=self.call, cancel_run=self.cancelled.append,
                         guard_hook=None, review_hook=None, guard_requested=True, previewed=False, mark=self.marks.append)
         defaults.update(kw)
         return _drive_runtime_pauses(first, {"skill": "s", "inputs": {}}, **defaults)
@@ -80,10 +89,11 @@ def test_the_app_layer_must_say_it_can_guard(tmp_path):
     assert _app_layer_supports(tmp_path, "test_guard") is True
 
 
-def test_only_a_yes_only_review_counts_as_confirm_only():
-    assert _is_confirm_only_review_request({"output_schema": CONFIRM_SCHEMA})
-    assert not _is_confirm_only_review_request({"output_schema": {"type": "object", "properties": {"answer": {"type": "string"}}}})
-    assert not _is_confirm_only_review_request({"output_schema": None})
+def test_only_a_yes_only_question_span_counts_as_confirm_only():
+    assert _is_confirm_only_span_request({"allowed": QUESTION_ONLY, "answer_schema": CONFIRM_SCHEMA})
+    assert not _is_confirm_only_span_request({"allowed": QUESTION_ONLY, "answer_schema": {"type": "object", "properties": {"answer": {"type": "string"}}}})
+    assert not _is_confirm_only_span_request({"allowed": QUESTION_ONLY, "answer_schema": None})
+    assert not _is_confirm_only_span_request({"allowed": ["click", *QUESTION_ONLY], "answer_schema": CONFIRM_SCHEMA}), "a span that can act is not a plain question"
 
 
 # ── the pause loop ──────────────────────────────────────────────────────────────────────────
@@ -119,7 +129,8 @@ def test_a_persons_yes_to_a_confirmation_also_releases_the_guard_in_one_call():
     asked: list = []
     result, stopped = c.drive(_review_result(step=2), review_hook=lambda r: asked.append(r) or True)
     assert result is DONE and stopped is None and len(asked) == 1
-    assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 2, "review_results": {"2": {"confirmed": True}}, "_guard_release": True}]
+    assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 2,
+                       "span_actions": {"2": {"kind": "done", "answer": {"confirmed": True}}}, "_guard_release": True}]
 
 
 def test_a_persons_no_ends_the_test_and_nothing_is_sent():
@@ -134,20 +145,57 @@ def test_a_preview_run_never_asks_to_release_a_guard_it_does_not_have():
     assert "_guard_release" not in c.args[0]
 
 
-def test_an_ordinary_review_is_still_answered_by_the_sandbox_not_the_person():
+def test_an_ordinary_span_is_answered_by_the_sandbox_not_the_person():
     free = {"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}}
     c = Calls([DONE])
     person: list = []
-    c.drive(_review_result(schema=free), review_hook=lambda r: person.append(r) or True, answer_review=lambda r, content: {"answer": "ok"})
-    assert person == [] and c.args[0]["review_results"] == {"2": {"answer": "ok"}}
+    c.drive(_span_result(schema=free), review_hook=lambda r: person.append(r) or True,
+            answer_span=lambda span, content: {"kind": "done", "answer": {"answer": "ok"}})
+    assert person == [] and c.args[0]["span_actions"] == {"2": {"kind": "done", "answer": {"answer": "ok"}}}
     assert "_guard_release" not in c.args[0]
 
 
+def test_with_no_model_to_ask_the_test_ends_at_the_span():
+    c = Calls([])
+    _, stopped = c.drive(_span_result(schema=None, allowed=["click", *QUESTION_ONLY]), answer_span=None)
+    assert stopped["declined"] is True and c.args == []
+
+
+def test_a_button_the_runtime_wants_a_yes_for_goes_to_the_person_and_is_resent_confirmed():
+    asked: list = []
+    c = Calls([_span_result(schema=None, allowed=["click", *QUESTION_ONLY], needs_confirm="Send invoice"), DONE])
+    result, stopped = c.drive(
+        _span_result(schema=None, allowed=["click", *QUESTION_ONLY]),
+        answer_span=lambda span, content: {"kind": "click", "candidate_index": 0},
+        review_hook=lambda r: asked.append(r["prompt"]) or True,
+    )
+    assert result is DONE and stopped is None
+    assert "Send invoice" in asked[0]
+    assert c.args[0]["span_actions"] == {"2": {"kind": "click", "candidate_index": 0}}
+    assert c.args[1]["span_actions"] == {"2": {"kind": "click", "candidate_index": 0, "user_confirmed": True}}
+
+
+def test_the_model_can_never_confirm_for_the_person():
+    asked: list = []
+    c = Calls([_span_result(schema=None, allowed=["click", *QUESTION_ONLY], needs_confirm="Send invoice")])
+    _, stopped = c.drive(
+        _span_result(schema=None, allowed=["click", *QUESTION_ONLY]),
+        answer_span=lambda span, content: {"kind": "click", "candidate_index": 0, "user_confirmed": True},
+        review_hook=lambda r: asked.append(r) or False,   # the person says no
+    )
+    assert stopped["declined"] is True and len(c.args) == 1, "nothing was resent after the no"
+    # and with nobody to ask at all the test also ends rather than letting the model decide
+    c2 = Calls([_span_result(schema=None, allowed=["click", *QUESTION_ONLY], needs_confirm="Send invoice")])
+    _, stopped2 = c2.drive(_span_result(schema=None, allowed=["click", *QUESTION_ONLY]),
+                           answer_span=lambda span, content: {"kind": "click", "candidate_index": 0}, review_hook=None)
+    assert stopped2["declined"] is True
+
+
 def test_a_misbehaving_run_cannot_loop_forever():
-    free = {"type": "object", "properties": {"answer": {"type": "string"}}}
-    c = Calls([_review_result(schema=free)] * 20)
-    with pytest.raises(RuntimeError, match="paused"):
-        c.drive(_review_result(schema=free))
+    c = Calls([_span_result(schema=None, allowed=["scroll", *QUESTION_ONLY])] * 200)
+    with pytest.raises(RuntimeError, match="rounds"):
+        c.drive(_span_result(schema=None, allowed=["scroll", *QUESTION_ONLY]),
+                answer_span=lambda span, content: {"kind": "scroll"})
 
 
 # ── the conversation's test card ────────────────────────────────────────────────────────────
@@ -605,14 +653,14 @@ def test_the_persons_choice_resumes_the_fork_step_with_that_choice():
 def test_a_fork_pause_never_reaches_the_model_answerer():
     asked = []
     c = Calls([DONE])
-    c.drive(_fork_result(), fork_hook=lambda f: "keep_both", answer_review=lambda r, content: asked.append(r) or {"answer": "x"})
+    c.drive(_fork_result(), fork_hook=lambda f: "keep_both", answer_span=lambda r, content: asked.append(r) or {"kind": "done"})
     assert asked == []
 
 
 def test_with_no_one_to_ask_the_test_ends_at_the_popup_and_the_model_is_not_consulted():
     asked = []
     c = Calls([])
-    result, stopped = c.drive(_fork_result(), fork_hook=None, answer_review=lambda r, content: asked.append(r))
+    result, stopped = c.drive(_fork_result(), fork_hook=None, answer_span=lambda r, content: asked.append(r))
     assert stopped["declined"] is True and c.args == [] and asked == []
 
 

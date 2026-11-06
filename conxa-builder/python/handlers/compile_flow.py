@@ -914,7 +914,6 @@ class CompileFlowMixin:
     def _apply_clarify_ops(self, skill_id: str, ops: list[dict[str, Any]], rid: str) -> int:
         """Run an answer's ops through the commands a reviewer would use. Returns steps added."""
         from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
-        from conxa_compile.editor.patch_gate import CONFIRM_ONLY_REVIEW_SCHEMA
         from conxa_compile.editor.workflow_mutations import _scan_placeholder_ids
         from conxa_core.storage.json_store import read_skill
 
@@ -937,10 +936,9 @@ class CompileFlowMixin:
                 i = index_of(op["before_step_key"])
                 if i <= 0:
                     raise _CommandError("cannot_insert", "There is no step to put a confirmation in front of.")
-                self.cmd_insert_step({"skill_id": skill_id, "action_kind": "ai_review", "insert_after": i - 1}, rid)
-                self.cmd_patch_step({"skill_id": skill_id, "step_index": i, "patch": {
-                    "ai_review_prompt": op["prompt"], "ai_review_output_schema": dict(CONFIRM_ONLY_REVIEW_SCHEMA),
-                    "ai_review_on_failure": "abort"}}, rid)
+                self.cmd_insert_step({"skill_id": skill_id, "action_kind": "agent_span", "insert_after": i - 1,
+                                      "confirm_only": True}, rid)
+                self.cmd_patch_step({"skill_id": skill_id, "step_index": i, "patch": {"value": op["prompt"]}}, rid)
                 self._log_edit("insert_step", skill_id, before, source="clarify", proposal_id=None)
                 added += 1
             elif kind == "set_fork_policy":

@@ -69,82 +69,90 @@ def test_editing_validation_on_a_legacy_step_without_a_required_check_raises():
         validate_editor_patch(step, patch, {})
 
 
-# ── EXEC-13: ai_review step patches ──────────────────────────────────────────
+# ── agent_span answers (what the removed ai_review step did): question-only span patches ─────
 
-def _ai_review_step() -> dict:
+def _question_span() -> dict:
     return {
-        "action": {"action": "ai_review"},
+        "action": {"action": "agent_span"},
         "intent": "Check whether the save succeeded",
-        "value": "save_succeeded",
-        "ai_review_prompt": "Is the confirmation banner visible?",
+        "value": "Is the confirmation banner visible?",
+        "agent_span_allowed": [],
+        "agent_span_answer_schema": {"type": "object", "required": ["visible"], "properties": {"visible": {"type": "boolean"}}},
+        "agent_span_output_name": "save_succeeded",
     }
 
 
-def test_ai_review_step_accepts_a_valid_prompt_patch():
-    step = _ai_review_step()
-    validate_editor_patch(step, {"ai_review_prompt": "Is X visible?"}, {})
+def test_a_question_span_accepts_a_valid_goal_patch():
+    validate_editor_patch(_question_span(), {"value": "Is X visible?"}, {})
 
 
-def test_ai_review_step_accepts_full_config_with_schema_and_use_default():
-    step = _ai_review_step()
+def test_a_question_span_accepts_full_config_with_schema_and_use_default():
     patch = {
-        "ai_review_prompt": "Is X visible?",
-        "ai_review_output_schema": {"type": "object", "required": ["visible"]},
-        "ai_review_reference_screenshot_ref": "visuals/Image_3.jpg",
-        "ai_review_on_failure": "use_default",
-        "ai_review_default_value": {"visible": False},
+        "value": "Is X visible?",
+        "agent_span_answer_schema": {"type": "object", "required": ["visible"]},
+        "agent_span_output_name": "x_visible",
+        "agent_span_on_failure": "use_default",
+        "agent_span_default_value": {"visible": False},
+        "agent_span_attach": ["downloaded_file"],
     }
-    validate_editor_patch(step, patch, {})
+    validate_editor_patch(_question_span(), patch, {})
 
 
-def test_ai_review_step_rejects_empty_prompt():
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_prompt_empty"):
-        validate_editor_patch(step, {"ai_review_prompt": "   "}, {})
+def test_a_span_rejects_an_empty_goal():
+    with pytest.raises(ValueError, match="agent_span_goal_empty"):
+        validate_editor_patch(_question_span(), {"value": "   "}, {})
 
 
-def test_ai_review_step_rejects_non_object_output_schema():
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_output_schema_must_be_object"):
-        validate_editor_patch(step, {"ai_review_output_schema": "not an object"}, {})
+def test_a_span_rejects_a_non_object_answer_schema():
+    with pytest.raises(ValueError, match="agent_span_answer_schema_must_be_object"):
+        validate_editor_patch(_question_span(), {"agent_span_answer_schema": "not an object"}, {})
 
 
-def test_ai_review_step_rejects_invalid_on_failure():
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_on_failure_invalid"):
-        validate_editor_patch(step, {"ai_review_on_failure": "retry_forever"}, {})
+def test_a_span_rejects_an_invalid_on_failure():
+    with pytest.raises(ValueError, match="agent_span_on_failure_invalid"):
+        validate_editor_patch(_question_span(), {"agent_span_on_failure": "retry_forever"}, {})
 
 
-def test_ai_review_step_use_default_requires_default_value():
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_use_default_requires_default_value"):
-        validate_editor_patch(step, {"ai_review_on_failure": "use_default"}, {})
+def test_use_default_requires_a_default_value():
+    with pytest.raises(ValueError, match="agent_span_use_default_requires_default_value"):
+        validate_editor_patch(_question_span(), {"agent_span_on_failure": "use_default"}, {})
 
 
-def test_ai_review_step_use_default_allowed_when_step_already_carries_a_default():
+def test_use_default_is_allowed_when_the_step_already_carries_a_default():
     # The patch only changes on_failure; the step itself already has a default_value from an
     # earlier edit — must not be forced to resubmit it every time.
-    step = _ai_review_step()
-    step["ai_review_default_value"] = {"visible": False}
-    validate_editor_patch(step, {"ai_review_on_failure": "use_default"}, {})
+    step = _question_span()
+    step["agent_span_default_value"] = {"visible": False}
+    validate_editor_patch(step, {"agent_span_on_failure": "use_default"}, {})
 
 
-def test_ai_review_step_rejects_recovery_patch():
+def test_a_span_rejects_a_bad_output_name_and_bad_attach():
+    with pytest.raises(ValueError, match="agent_span_output_name_invalid"):
+        validate_editor_patch(_question_span(), {"agent_span_output_name": "not a name!"}, {})
+    with pytest.raises(ValueError, match="agent_span_attach_invalid"):
+        validate_editor_patch(_question_span(), {"agent_span_attach": ["fine", "bad name"]}, {})
+
+
+def test_a_span_needs_actions_or_an_answer():
+    step = _question_span()
+    with pytest.raises(ValueError, match="agent_span_needs_actions_or_answer"):
+        validate_editor_patch(step, {"agent_span_answer_schema": None}, {})
+
+
+def test_a_span_rejects_a_recovery_patch():
     # No selector/identity to recover — recovery is excluded from the allowlist entirely,
-    # not merely left unused (CLAUDE.md: ai_review is a checkpoint, not a recovery fallback).
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_step_cannot_patch_recovery"):
-        validate_editor_patch(step, {"recovery": {"max_attempts": 2}}, {})
+    # not merely left unused (CLAUDE.md: a span is an explicit step, not a recovery fallback).
+    with pytest.raises(ValueError, match="agent_span_step_cannot_patch_recovery"):
+        validate_editor_patch(_question_span(), {"recovery": {"max_attempts": 2}}, {})
 
 
-def test_ai_review_step_rejects_unknown_keys():
-    step = _ai_review_step()
-    with pytest.raises(ValueError, match="ai_review_step_allows_only_ai_review_fields"):
-        validate_editor_patch(step, {"target": {"primary_selector": "#x"}}, {})
+def test_a_span_rejects_unknown_keys():
+    with pytest.raises(ValueError, match="agent_span_step_allows_only_agent_span_fields"):
+        validate_editor_patch(_question_span(), {"target": {"primary_selector": "#x"}}, {})
 
 
 # ── EXEC-21 (hand-over shape): handover step patches ────────────────────────
-# The human sibling of ai_review above — same shape, but the message shown to the person rides
+# The human sibling of the agent span above — same shape, but the message shown to the person rides
 # the generic `value` field (see action_registry.py's VALUE_LABELS) rather than a dedicated
 # `handover_message` field.
 
@@ -206,7 +214,7 @@ def test_handover_step_rejects_unknown_keys():
         validate_editor_patch(step, {"target": {"primary_selector": "#x"}}, {})
 
 
-# ── EXEC-13 / PROD-3: destructive step cannot directly follow ai_review ─────
+# ── EXEC-13 / PROD-3: destructive step cannot directly follow an agent span ─────
 
 def _destructive_click_step() -> dict:
     return {
@@ -218,52 +226,68 @@ def _destructive_click_step() -> dict:
     }
 
 
-def test_destructive_step_cannot_directly_follow_ai_review():
+def test_destructive_step_cannot_directly_follow_an_agent_span():
     step = _destructive_click_step()
-    with pytest.raises(ValueError, match="destructive_step_cannot_directly_follow_ai_review"):
-        validate_editor_patch(step, {"intent": "Delete the record"}, {}, previous_step=_ai_review_step())
+    with pytest.raises(ValueError, match="destructive_step_cannot_directly_follow_agent_span"):
+        validate_editor_patch(step, {"intent": "Delete the record"}, {}, previous_step=_question_span())
 
 
-def _confirm_review(**over) -> dict:
+def _confirm_span(**over) -> dict:
     step = {
-        "action": "ai_review",
-        "ai_review_prompt": "Send the invoice?",
-        "ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}},
-        "ai_review_on_failure": "abort",
+        "action": "agent_span",
+        "intent": "Confirm before sending",
+        "value": "Send the invoice?",
+        "agent_span_allowed": [],
+        "agent_span_answer_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}},
+        "agent_span_on_failure": "abort",
     }
     step.update(over)
     return step
 
 
-def test_a_confirm_only_review_may_directly_precede_a_destructive_step():
+def test_a_confirm_only_span_may_directly_precede_a_destructive_step():
     """BUILD-39: a yes/no that ends the run on "no" can only gate WHETHER the step runs."""
-    validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_review())
+    validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_span())
 
 
 @pytest.mark.parametrize(
     "over",
     [
         # a free-form answer could carry WHAT to act on
-        {"ai_review_output_schema": {"type": "object", "required": ["customer"], "properties": {"customer": {"type": "string"}}}},
+        {"agent_span_answer_schema": {"type": "object", "required": ["customer"], "properties": {"customer": {"type": "string"}}}},
         # extra fields beside the boolean
-        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}, "who": {"type": "string"}}}},
+        {"agent_span_answer_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}, "who": {"type": "string"}}}},
         # a string, not a boolean
-        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "string"}}}},
+        {"agent_span_answer_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "string"}}}},
         # a bare boolean lets "no" through as a valid answer, so the run would carry on
-        {"ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}}}},
+        {"agent_span_answer_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean"}}}},
         # "no" must end the run, not be swallowed
-        {"ai_review_on_failure": "continue"},
-        {"ai_review_on_failure": "use_default", "ai_review_default_value": {"confirmed": True}},
+        {"agent_span_on_failure": "continue"},
+        {"agent_span_on_failure": "use_default", "agent_span_default_value": {"confirmed": True}},
         # no schema at all
-        {"ai_review_output_schema": None},
+        {"agent_span_answer_schema": None},
+        # a span that can act is not a plain question, whatever its answer shape
+        {"agent_span_allowed": ["click"]},
     ],
 )
 def test_anything_wider_than_confirm_only_is_still_refused(over):
-    with pytest.raises(ValueError, match="destructive_step_cannot_directly_follow_ai_review"):
-        validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_review(**over))
+    with pytest.raises(ValueError, match="destructive_step_cannot_directly_follow_agent_span"):
+        validate_editor_patch(_destructive_click_step(), {"intent": "Send invoice"}, {}, previous_step=_confirm_span(**over))
 
 
-def test_destructive_step_after_a_non_ai_review_step_is_allowed():
+def test_a_free_question_span_cannot_directly_precede_a_destructive_step_but_a_confirm_one_can():
+    nxt = _destructive_click_step()
+    with pytest.raises(ValueError, match="agent_span_cannot_directly_precede_a_destructive_step"):
+        validate_editor_patch(_question_span(), {"value": "Which one?"}, {}, next_step=nxt)
+    validate_editor_patch(_confirm_span(), {"value": "Really send it?"}, {}, next_step=nxt)
+
+
+def test_a_confirm_only_span_cannot_be_loosened_in_front_of_a_destructive_step():
+    with pytest.raises(ValueError, match="confirmation_guards_a_destructive_step"):
+        validate_editor_patch(_confirm_span(), {"agent_span_on_failure": "continue"}, {}, next_step=_destructive_click_step())
+
+
+def test_destructive_step_after_a_non_span_step_is_allowed():
     step = _destructive_click_step()
     previous = {"action": {"action": "click"}, "intent": "Open the record"}
     validate_editor_patch(step, {"intent": "Delete the record"}, {}, previous_step=previous)

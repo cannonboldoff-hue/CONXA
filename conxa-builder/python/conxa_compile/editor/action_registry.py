@@ -47,24 +47,19 @@ ACTION_KIND_ORDER = (
     # from the recording (full IdentityBundle) like any click; the step's `value` is the output name
     # and its `extract` block says what to read. See runtime/app/handlers.js::extract.
     "extract",
-    # EXEC-13: author-placed reasoning checkpoint — pauses execution, asks Claude a stored
-    # question about the live page, binds the structured answer into `inputs` under
-    # `output_name`. No selector/identity_bundle (SELECTOR_ACTIONS excludes it); value-bearing
-    # (the "value" carried is the output binding name, not a page-interaction value — see
-    # VALUE_LABELS below) like "wait"/"screenshot" before it.
-    "ai_review",
     # EXEC-21 (hand-over shape): pauses execution and yields the live page to a PERSON for the
-    # part only they can do (2FA, a CAPTCHA, an e-signature) — the human sibling of ai_review
-    # immediately above, same "no selector/identity_bundle, value-bearing like wait/screenshot"
+    # part only they can do (2FA, a CAPTCHA, an e-signature) — the human sibling of the
+    # agent span below, same "no selector/identity_bundle, value-bearing like wait/screenshot"
     # shape. The generic value field (VALUE_LABELS below) carries the message shown to the
-    # person, exactly as ai_review's carries its output binding name — everything else
+    # person, exactly as the span's carries its goal — everything else
     # (on_failure, an optional resume_when probe) is a top-level `handover_*` field validated by
-    # patch_gate.py, same convention as ai_review's own `ai_review_*` fields.
+    # patch_gate.py, same convention as the span's own `agent_span_*` fields.
     "handover",
-    # Engine v2 C4: an author-placed span the caller's agent carries out one candidate action at a time
-    # (runtime/app/agent_span.js). No selector (the agent picks from elements the runtime lists) and no
-    # recovery; the generic value is the goal and everything else is a top-level `agent_span_*` field
-    # validated by patch_gate.py, same convention as ai_review and handover above.
+    # Engine v2 C4: an author-placed Browser-Use-style span the caller's agent carries out one action at a time
+    # (runtime/app/agent_span.js). It also replaces the removed ai_review step (2026-11-06): with an answer schema and no
+    # allowed actions it is a question whose structured answer is bound into `inputs`. No selector (the agent
+    # picks from elements the runtime lists) and no recovery; the generic value is the goal and everything else
+    # is a top-level `agent_span_*` field validated by patch_gate.py, same convention as handover above.
     "agent_span",
     # Browser clipboard, for a site that needs a real paste. NOTE the browser clipboard IS the
     # computer's clipboard, so what is written stays there until something replaces it. Value-bearing:
@@ -150,7 +145,6 @@ INSERTABLE_ACTIONS = frozenset(
         "wait_until",
         "screenshot",
         "extract",
-        "ai_review",
         "handover",
         "agent_span",
         "clipboard_write",
@@ -203,9 +197,6 @@ VALUE_ACTIONS = frozenset(
         "upload",
         # The output name the run reports the read value under (see VALUE_LABELS below).
         "extract",
-        # EXEC-13: not a page-interaction value — this is the output binding name later steps
-        # read the reviewed answer back from (see VALUE_LABELS below).
-        "ai_review",
         # EXEC-21: likewise not a page-interaction value — this is the message shown to the
         # person in the hand-over banner (see VALUE_LABELS below).
         "handover",
@@ -241,7 +232,6 @@ ACTION_LABELS = {
     "wait": "Wait",
     "wait_until": "Wait until",
     "screenshot": "Screenshot",
-    "ai_review": "AI Review",
     "handover": "Hand over to person",
     "agent_span": "Agent span",
     "clipboard_write": "Copy to clipboard",
@@ -279,7 +269,6 @@ CATEGORIES = {
     "wait_until": "validation",
     "screenshot": "validation",
     "extract": "validation",
-    "ai_review": "validation",
     "handover": "validation",
     "agent_span": "advanced",
     "clipboard_write": "advanced",
@@ -321,7 +310,6 @@ VALUE_LABELS = {
     "wait": "Milliseconds",
     "wait_until": "What to wait for",
     "upload": "File path input",
-    "ai_review": "Output binding name",
     "extract": "Output name",
     "handover": "Message shown to the person",
     "agent_span": "What the agent should get done",
@@ -415,10 +403,6 @@ def default_action_value(kind: str) -> Any:
         return "{{file_path}}"
     if normalized == "extract":
         return "extracted_value"
-    if normalized == "ai_review":
-        # EXEC-13: not a page-interaction value — the output binding name later steps read the
-        # reviewed answer back from (see VALUE_LABELS above).
-        return "review_answer"
     if normalized == "clipboard_write":
         return "Text to copy"
     if normalized == "clipboard_read":

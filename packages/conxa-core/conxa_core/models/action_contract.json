@@ -52,7 +52,6 @@
     "check":             {"step": "check",             "run": "handler",   "recovery": false, "via": "packager"}
   },
   "step_only": {
-    "ai_review":       {"run": "intercept", "recovery": false},
     "handover":        {"run": "intercept", "recovery": false},
     "agent_span":      {"run": "intercept", "recovery": false},
     "for_each":        {"run": "intercept", "recovery": false},

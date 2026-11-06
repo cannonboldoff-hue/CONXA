@@ -25,7 +25,7 @@ from conxa_compile.policy.intent_ontology import sanitize_intent_token
 # below and `editor/capability_manifest.py` read, so the copilot's capability manifest can never
 # drift from what the gate actually enforces (they are the same object, not two lists kept in
 # sync by hand).
-# run_if lets a step run only when an input says so. Deliberately absent from AI_REVIEW / HANDOVER / FORK:
+# run_if lets a step run only when an input says so. Deliberately absent from AGENT_SPAN / HANDOVER / FORK:
 # a confirmation or a hand-over to a person must never be switchable by an input, or a destructive step
 # after it could run unguarded.
 _RUN_IF = frozenset({"run_if"})
@@ -50,26 +50,27 @@ CHECK_ASSERT_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "check_kind", "check_pattern", "check_threshold",
     "check_selector", "check_text", "signals", "recovery", "frame",
 })
-AI_REVIEW_ALLOWED_KEYS = frozenset({
-    "intent", "semantic_description", "action", "validation", "value", "frame",
-    "ai_review_prompt", "ai_review_output_schema", "ai_review_on_failure",
-    "ai_review_default_value", "ai_review_reference_screenshot_ref", "ai_review_attach",
-})
 HANDOVER_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
     "handover_on_failure", "handover_resume_when", "handover_resume_when_timeout_ms",
 })
-# Engine v2 C4: an agent span. The goal rides the generic `value`; run_if is absent on purpose (an input must
-# never be able to skip a span's guards), and there is no `recovery`: nothing here is re-located.
+# Engine v2 C4: an agent span (a Browser-Use-style agent; it also replaced the old ai_review question, 2026-11-06).
+# The goal rides the generic `value`; run_if is absent on purpose (an input must never be able to skip a span's
+# guards), and there is no `recovery`: nothing here is re-located.
 AGENT_SPAN_ALLOWED_KEYS = frozenset({
     "intent", "semantic_description", "action", "validation", "value", "frame",
     "agent_span_allowed", "agent_span_until", "agent_span_budget", "agent_span_on_budget",
+    "agent_span_answer_schema", "agent_span_output_name", "agent_span_on_failure",
+    "agent_span_default_value", "agent_span_attach",
 })
-AGENT_SPAN_KINDS = ("click", "fill", "select", "scroll")
+# Mirrors runtime/app/agent_span.js ALLOWED_KINDS (done / give_up / wait / read_text are always available).
+AGENT_SPAN_KINDS = (
+    "click", "fill", "select", "scroll", "send_keys", "navigate", "go_back", "open_tab", "switch_tab", "close_tab",
+)
 # The assertion types the second opinion may already add: text, address and state only, never a selector.
 AGENT_SPAN_UNTIL_TYPES = ("text_present", "text_absent", "url_changed", "url_pattern", "state_changed")
-AGENT_SPAN_MAX_ACTIONS = 15
-AGENT_SPAN_MAX_SECONDS = 600
+AGENT_SPAN_MAX_ACTIONS = 100
+AGENT_SPAN_MAX_SECONDS = 1800
 BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"}) | _RUN_IF
 FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"}) | _RUN_IF
 # An outcome fork's states/options/policy change only through the set_fork_policy mutation (the
@@ -163,21 +164,23 @@ def _validate_run_if(raw: Any) -> None:
         raise ValueError("run_if_value_required")
 
 
-def _validate_ai_review_attach(raw: Any) -> None:
-    """Names of run inputs that hold a file path the reviewer is shown. None / [] clears it."""
+def _validate_agent_span_attach(raw: Any) -> None:
+    """Names of run inputs that hold a file path the agent is shown. None / [] clears it."""
     if raw in (None, []):
         return
     if not isinstance(raw, list) or len(raw) > 5:
-        raise ValueError("ai_review_attach_invalid")
+        raise ValueError("agent_span_attach_invalid")
     for name in raw:
         if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
-            raise ValueError("ai_review_attach_invalid")
+            raise ValueError("agent_span_attach_invalid")
 
 
 def _validate_agent_span_until(raw: Any) -> None:
-    """The check that ends an agent span: required, and only a text, address or state claim."""
+    """The check that ends an agent span: optional (None clears it), and only a text, address or state claim."""
+    if raw is None:
+        return
     if not isinstance(raw, dict):
-        raise ValueError("agent_span_until_required")
+        raise ValueError("agent_span_until_invalid")
     kind = str(raw.get("type") or "").strip()
     if kind not in AGENT_SPAN_UNTIL_TYPES:
         raise ValueError("agent_span_until_type_invalid")
@@ -189,10 +192,11 @@ def _validate_agent_span_until(raw: Any) -> None:
         raise ValueError("agent_span_until_target_invalid")
 
 
-def _validate_agent_span_fields(patch: dict[str, Any]) -> None:
+def _validate_agent_span_fields(patch: dict[str, Any], step: dict[str, Any]) -> None:
     if "agent_span_allowed" in patch:
         allowed = patch.get("agent_span_allowed")
-        if (not isinstance(allowed, list) or not allowed or len(set(allowed)) != len(allowed)
+        # An empty list is a question-only span; it then needs an answer schema (checked below).
+        if (not isinstance(allowed, list) or len(set(allowed)) != len(allowed)
                 or any(a not in AGENT_SPAN_KINDS for a in allowed)):
             raise ValueError("agent_span_allowed_invalid")
     if "agent_span_until" in patch:
@@ -207,20 +211,41 @@ def _validate_agent_span_fields(patch: dict[str, Any]) -> None:
             raise ValueError("agent_span_budget_invalid")
     if "agent_span_on_budget" in patch and str(patch.get("agent_span_on_budget") or "").strip().lower() != "fail":
         raise ValueError("agent_span_on_budget_invalid")
+    if "agent_span_answer_schema" in patch:
+        schema = patch.get("agent_span_answer_schema")
+        if schema is not None and not isinstance(schema, dict):
+            raise ValueError("agent_span_answer_schema_must_be_object")
+    if "agent_span_output_name" in patch:
+        name = str(patch.get("agent_span_output_name") or "").strip()
+        if name and not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+            raise ValueError("agent_span_output_name_invalid")
+    if "agent_span_attach" in patch:
+        _validate_agent_span_attach(patch.get("agent_span_attach"))
+    if "agent_span_on_failure" in patch:
+        on_failure = str(patch.get("agent_span_on_failure") or "").strip().lower()
+        if on_failure not in {"abort", "use_default", "continue"}:
+            raise ValueError("agent_span_on_failure_invalid")
+        if on_failure == "use_default" and "agent_span_default_value" not in patch \
+                and "agent_span_default_value" not in step:
+            raise ValueError("agent_span_use_default_requires_default_value")
+    merged = {**step, **patch}
+    if not merged.get("agent_span_allowed") and not merged.get("agent_span_answer_schema"):
+        raise ValueError("agent_span_needs_actions_or_answer")
 
 
 def _model_gated_run_if_input(run_if: Any, earlier_steps: list[dict[str, Any]] | None) -> bool:
-    """True when ``run_if`` reads an answer a free-form ``ai_review`` produced.
+    """True when ``run_if`` reads an answer a free-form agent span produced.
 
-    An ai_review binds its answer as ``<output_name>`` and one input per plain field,
-    ``<output_name>_<field>``. A confirm-only review is exempt: it can only gate *whether* a step runs."""
+    A span with an answer binds it as ``<output_name>`` and one input per plain field,
+    ``<output_name>_<field>``. A confirm-only span is exempt: it can only gate *whether* a step runs."""
     if not isinstance(run_if, dict) or not run_if.get("input"):
         return False
     wanted = str(run_if["input"])
     for earlier in earlier_steps or []:
-        if action_name(earlier).lower() != "ai_review" or is_confirm_only_review(earlier):
+        if action_name(earlier).lower() != "agent_span" or not earlier.get("agent_span_answer_schema") \
+                or is_confirm_only_span(earlier):
             continue
-        out = str(earlier.get("value") or "").strip()
+        out = str(earlier.get("agent_span_output_name") or "").strip()
         if out and (wanted == out or wanted.startswith(out + "_")):
             return True
     return False
@@ -406,10 +431,10 @@ def _validate_for_each_source(step: dict[str, Any], raw_patch: Any) -> None:
         raise ValueError("for_each_requires_exactly_one_row_source")
 
 
-# `enum: [true]` is what makes "no" end the run: an ai_review answer that doesn't satisfy the
+# `enum: [true]` is what makes "no" end the run: a span answer that doesn't satisfy the
 # schema is re-asked a bounded number of times and then `on_failure: abort` applies, whereas a
 # valid `{confirmed: false}` would simply be bound and the run would carry on.
-CONFIRM_ONLY_REVIEW_SCHEMA: dict[str, Any] = {
+CONFIRM_ONLY_SPAN_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["confirmed"],
     "properties": {"confirmed": {"type": "boolean", "enum": [True]}},
@@ -426,15 +451,17 @@ def _is_destructive(step: dict[str, Any], policy: dict[str, Any]) -> bool:
         return False
 
 
-def is_confirm_only_review(step: dict[str, Any]) -> bool:
-    """A review step whose only acceptable answer is "yes" and whose "no" ends the run.
+def is_confirm_only_span(step: dict[str, Any]) -> bool:
+    """A question-only agent span whose only acceptable answer is "yes" and whose "no" ends the run.
 
-    EXEC-13 refuses a destructive step directly after an ``ai_review`` because a model's free
-    answer must never supply *what* a destructive step acts on. A confirm-only review (schema
-    exactly ``{confirmed: boolean (only true allowed)}``, ``on_failure == "abort"``) can only gate *whether* the next
-    step runs, never what it acts on, so Clarify's "a person confirms before sending" is allowed
-    to sit directly before the step it guards (BUILD-39). TRD §11.3."""
-    schema = step.get("ai_review_output_schema")
+    A destructive step is refused directly after an agent span because a model's free answer or last
+    action must never supply *what* a destructive step acts on. A confirm-only span (no allowed actions,
+    schema exactly ``{confirmed: boolean (only true allowed)}``, ``on_failure == "abort"``) can only gate
+    *whether* the next step runs, never what it acts on, so Clarify's "a person confirms before sending"
+    is allowed to sit directly before the step it guards (BUILD-39). TRD §11.7."""
+    if step.get("agent_span_allowed"):
+        return False
+    schema = step.get("agent_span_answer_schema")
     if not isinstance(schema, dict):
         return False
     props = schema.get("properties")
@@ -450,7 +477,7 @@ def is_confirm_only_review(step: dict[str, Any]) -> bool:
         return False
     if set(schema.get("required") or []) != {"confirmed"}:
         return False
-    return str(step.get("ai_review_on_failure") or "abort").strip().lower() == "abort"
+    return str(step.get("agent_span_on_failure") or "abort").strip().lower() == "abort"
 
 
 def validate_editor_patch(
@@ -479,12 +506,12 @@ def validate_editor_patch(
     step pass `in_branch_body=False` (the default), same as an ordinary top-level step.
 
     `previous_step`, when given, is the step immediately before this one in the same step list
-    (top-level only — EXEC-13's destructive-after-ai_review lint below only makes sense there;
-    branch bodies never enter recovery and don't carry ai_review either). Omitted by callers that
+    (top-level only — the destructive-after-agent_span lint below only makes sense there;
+    branch bodies never enter recovery and don't carry agent spans either). Omitted by callers that
     can't cheaply resolve it (e.g. a first step has none); the lint below simply doesn't fire.
 
     `earlier_steps`, when given, is every top-level step before this one. It lets the gate refuse a
-    `run_if` on a destructive step that reads a free-form ai_review answer (a model may gate whether a
+    `run_if` on a destructive step that reads a free-form agent-span answer (a model may gate whether a
     step runs only when its answer is a plain yes/no confirmation, never choose which irreversible
     action runs). Omitted by callers that can't resolve it; the lint then doesn't fire.
     """
@@ -503,7 +530,7 @@ def validate_editor_patch(
     if earlier_steps:
         effective_run_if = patch["run_if"] if "run_if" in patch else step.get("run_if")
         if _model_gated_run_if_input(effective_run_if, earlier_steps) and _is_destructive({**step, **patch}, policy):
-            raise ValueError("destructive_step_cannot_be_gated_by_ai_review_answer")
+            raise ValueError("destructive_step_cannot_be_gated_by_span_answer")
 
     if "on_missing" in patch:
         if patch.get("on_missing") not in (None, "", "fail", "skip", "ask"):
@@ -583,50 +610,8 @@ def validate_editor_patch(
                 raise ValueError("extract_output_name_invalid")
         if "extract" in patch:
             _validate_extract_spec(patch.get("extract"))
-    if act == "ai_review":
-        # A confirm-only review is what lets a destructive step sit right behind it (the check further down only
-        # inspects the destructive step when IT is patched). Editing the review into a free-form one afterwards
-        # would quietly turn a person's go/no-go into a model's answer in front of a step that can't be undone.
-        after_edit = {**step, **{k: v for k, v in patch.items() if k.startswith("ai_review_")}}
-        if (next_step is not None and is_confirm_only_review(step) and not is_confirm_only_review(after_edit)
-                and _is_destructive(next_step, policy)):
-            raise ValueError("confirmation_guards_a_destructive_step")
-        # EXEC-13: an author-placed reasoning checkpoint, not a selector/identity step. Config
-        # fields are top-level, sibling to `action` — the same shape check/assert's check_kind/
-        # check_pattern/etc. use above, not the scroll/drag_drop pattern of nesting inside
-        # `action` (the saved-skill export normalizes `action` down to a plain string before
-        # _saved_step_to_execution_step ever runs, so kind-specific config can't live there).
-        # No `recovery` block is meaningful here (nothing to re-locate) — excluded from the
-        # allowlist entirely, checked ahead of the generic allowlist so this specific mistake
-        # gets its own message rather than the generic one.
-        if "recovery" in patch:
-            raise ValueError("ai_review_step_cannot_patch_recovery")
-        invalid_keys = sorted(set(patch) - AI_REVIEW_ALLOWED_KEYS)
-        if invalid_keys:
-            raise ValueError("ai_review_step_allows_only_ai_review_fields")
-        if "ai_review_prompt" in patch:
-            prompt = str(patch.get("ai_review_prompt") or "").strip()
-            if not prompt:
-                raise ValueError("ai_review_prompt_empty")
-        if "ai_review_output_schema" in patch:
-            output_schema = patch.get("ai_review_output_schema")
-            if output_schema is not None and not isinstance(output_schema, dict):
-                raise ValueError("ai_review_output_schema_must_be_object")
-        if "ai_review_attach" in patch:
-            _validate_ai_review_attach(patch.get("ai_review_attach"))
-        if "ai_review_reference_screenshot_ref" in patch:
-            reference_ref = patch.get("ai_review_reference_screenshot_ref")
-            if reference_ref is not None and not str(reference_ref).strip():
-                raise ValueError("ai_review_reference_screenshot_ref_empty")
-        if "ai_review_on_failure" in patch:
-            on_failure = str(patch.get("ai_review_on_failure") or "").strip().lower()
-            if on_failure not in {"abort", "use_default", "continue"}:
-                raise ValueError("ai_review_on_failure_invalid")
-            if on_failure == "use_default" and "ai_review_default_value" not in patch \
-                    and "ai_review_default_value" not in step:
-                raise ValueError("ai_review_use_default_requires_default_value")
     if act == "handover":
-        # EXEC-21 (hand-over shape): the human sibling of ai_review above — same "no recovery
+        # EXEC-21 (hand-over shape): the human sibling of the agent span below — same "no recovery
         # block, config lives in top-level fields" shape, but the message shown to the person
         # rides the generic `value` field (VALUE_LABELS covers this in action_registry.py)
         # rather than a dedicated `handover_message` field, since that's the one thing every
@@ -654,10 +639,16 @@ def validate_editor_patch(
             if timeout_ms is not None and (not isinstance(timeout_ms, (int, float)) or timeout_ms <= 0):
                 raise ValueError("handover_resume_when_timeout_ms_invalid")
     if act == "agent_span":
-        # Engine v2 C4: the caller's agent works toward a goal one candidate action at a time. Like ai_review it
-        # is outside the recovery cascade (no `recovery`) and an input can never skip it (no `run_if`). It may not
-        # sit directly in front of a destructive step: an agent's last action must not be what an irreversible
-        # step then builds on. Put a person's confirmation (a confirm-only ai_review) between them.
+        # Engine v2 C4: the caller's agent works toward a goal one action at a time (or answers one question).
+        # It is outside the recovery cascade (no `recovery`) and an input can never skip it (no `run_if`). It
+        # may not sit directly in front of a destructive step: an agent's last action or free answer must not be
+        # what an irreversible step then builds on. Put a person's confirmation (a confirm-only span) between them.
+        # Editing a confirm-only span into a free one in front of a destructive step would quietly turn a person's
+        # go/no-go into a model's answer, so that is refused too.
+        after_edit = {**step, **{k: v for k, v in patch.items() if k.startswith("agent_span_")}}
+        if (next_step is not None and is_confirm_only_span(step) and not is_confirm_only_span(after_edit)
+                and _is_destructive(next_step, policy)):
+            raise ValueError("confirmation_guards_a_destructive_step")
         if "recovery" in patch:
             raise ValueError("agent_span_step_cannot_patch_recovery")
         invalid_keys = sorted(set(patch) - AGENT_SPAN_ALLOWED_KEYS)
@@ -665,8 +656,8 @@ def validate_editor_patch(
             raise ValueError("agent_span_step_allows_only_agent_span_fields")
         if "value" in patch and not str(patch.get("value") or "").strip():
             raise ValueError("agent_span_goal_empty")
-        _validate_agent_span_fields(patch)
-        if next_step is not None and _is_destructive(next_step, policy):
+        _validate_agent_span_fields(patch, step)
+        if next_step is not None and not is_confirm_only_span(after_edit) and _is_destructive(next_step, policy):
             raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
     if act == "call_workflow":
         # Runs another workflow's steps, so nothing here to re-locate. The called workflow's id rides
@@ -767,14 +758,13 @@ def validate_editor_patch(
         if not anchors:
             raise ValueError("destructive_step_requires_signals_anchors")
         # EXEC-13 / PROD-3 guardrail: a destructive step reading its target straight off an
-        # ai_review answer has no entity binding to prove it's acting on the right record.
-        # PROD-3's entity binding is now real (see below), but a review answer still isn't a
+        # agent span's answer (or built on its last action) has no entity binding to prove it's acting
+        # on the right record. PROD-3's entity binding is now real (see below), but a span answer still isn't a
         # declared run input or a recorded literal a binding can be built from — route through a
-        # conditional (EXEC-1) instead: let the review gate WHETHER the destructive step runs,
+        # conditional (EXEC-1) instead: let a confirm-only span gate WHETHER the destructive step runs,
         # not WHAT it acts on.
-        if previous_step is not None and action_name(previous_step).lower() == "ai_review"                 and not is_confirm_only_review(previous_step):
-            raise ValueError("destructive_step_cannot_directly_follow_ai_review")
-        if previous_step is not None and action_name(previous_step).lower() == "agent_span":
+        if previous_step is not None and action_name(previous_step).lower() == "agent_span" \
+                and not is_confirm_only_span(previous_step):
             raise ValueError("destructive_step_cannot_directly_follow_agent_span")
 
         # PROD-3: when the compiler detected this step's target sits inside a repeating

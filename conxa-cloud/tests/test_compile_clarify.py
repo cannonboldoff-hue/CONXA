@@ -192,7 +192,7 @@ def test_hidden_fields_and_choice_controls_are_never_offered():
 def test_an_already_guarded_destructive_step_is_not_asked_about():
     doc = _doc([
         _step("click", "open"),
-        {**_step("ai_review", "confirm"), "ai_review_output_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}}, "ai_review_on_failure": "abort", "action": "ai_review"},
+        {**_step("agent_span", "confirm"), "agent_span_allowed": [], "agent_span_answer_schema": {"type": "object", "required": ["confirmed"], "properties": {"confirmed": {"type": "boolean", "enum": [True]}}}, "agent_span_on_failure": "abort", "action": "agent_span"},
         _step("click", "send_invoice", consequence="irreversible"),
     ])
     assert generate_questions(doc) == []

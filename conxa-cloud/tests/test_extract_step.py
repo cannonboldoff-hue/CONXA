@@ -137,8 +137,8 @@ def test_the_gate_refuses_a_malformed_run_if(run_if, code):
 
 
 def test_a_confirmation_or_hand_over_can_never_be_switched_off_by_an_input():
-    """If an input could skip the ai_review that guards a destructive step, the guard would be optional."""
-    for kind in ("ai_review", "handover"):
+    """If an input could skip the agent span that guards a destructive step, the guard would be optional."""
+    for kind in ("agent_span", "handover"):
         with pytest.raises(ValueError):
             validate_editor_patch({"action": {"action": kind}, "intent": "x", "value": "answer"}, {"run_if": {"input": "note"}}, POLICY)
 
@@ -265,25 +265,27 @@ def test_the_gate_only_lets_a_bound_step_choose_to_skip_when_its_record_is_missi
         validate_editor_patch({"action": {"action": "click"}, "intent": "x", "target": {"primary_selector": "#x"}}, {"on_missing": "skip"}, POLICY)
 
 
-# ── a confirmation guarding a destructive step cannot be edited into a free-form review ────
+# ── a confirmation guarding a destructive step cannot be edited into a free-form span ────
 
 
-def _confirm_review():
-    from conxa_compile.editor.patch_gate import CONFIRM_ONLY_REVIEW_SCHEMA
+def _confirm_span():
+    from conxa_compile.editor.patch_gate import CONFIRM_ONLY_SPAN_SCHEMA
 
-    return {"action": {"action": "ai_review"}, "intent": "confirm_send", "value": "ok", "ai_review_prompt": "Send?",
-            "ai_review_output_schema": dict(CONFIRM_ONLY_REVIEW_SCHEMA), "ai_review_on_failure": "abort"}
+    return {"action": {"action": "agent_span"}, "intent": "confirm_send", "value": "Send?", "agent_span_allowed": [],
+            "agent_span_answer_schema": dict(CONFIRM_ONLY_SPAN_SCHEMA), "agent_span_on_failure": "abort"}
 
 
-def test_a_confirm_only_review_in_front_of_an_irreversible_step_cannot_be_loosened():
+def test_a_confirm_only_span_in_front_of_an_irreversible_step_cannot_be_loosened():
     nxt = {"action": {"action": "click"}, "intent": "send_invoice", "consequence": "irreversible"}
-    loosened = {"ai_review_output_schema": {"type": "object", "properties": {"answer": {"type": "string"}}, "required": ["answer"]}}
+    loosened = {"agent_span_answer_schema": {"type": "object", "properties": {"answer": {"type": "string"}}, "required": ["answer"]}}
     with pytest.raises(ValueError, match="confirmation_guards_a_destructive_step"):
-        validate_editor_patch(_confirm_review(), loosened, POLICY, next_step=nxt)
+        validate_editor_patch(_confirm_span(), loosened, POLICY, next_step=nxt)
     with pytest.raises(ValueError, match="confirmation_guards_a_destructive_step"):
-        validate_editor_patch(_confirm_review(), {"ai_review_on_failure": "use_default"}, POLICY, next_step=nxt)
-    # the prompt is free text for the person; wording changes stay allowed
-    validate_editor_patch(_confirm_review(), {"ai_review_prompt": "Really send it?"}, POLICY, next_step=nxt)
-    # nothing destructive behind it, or no neighbour known: loosening is fine (a plain review)
-    validate_editor_patch(_confirm_review(), loosened, POLICY, next_step={"action": {"action": "click"}, "intent": "next"})
-    validate_editor_patch(_confirm_review(), loosened, POLICY)
+        validate_editor_patch(_confirm_span(), {"agent_span_on_failure": "use_default", "agent_span_default_value": {"confirmed": True}}, POLICY, next_step=nxt)
+    with pytest.raises(ValueError, match="confirmation_guards_a_destructive_step"):
+        validate_editor_patch(_confirm_span(), {"agent_span_allowed": ["click"]}, POLICY, next_step=nxt)
+    # the goal is free text for the person; wording changes stay allowed
+    validate_editor_patch(_confirm_span(), {"value": "Really send it?"}, POLICY, next_step=nxt)
+    # nothing destructive behind it, or no neighbour known: loosening is fine (a plain question)
+    validate_editor_patch(_confirm_span(), loosened, POLICY, next_step={"action": {"action": "click"}, "intent": "next"})
+    validate_editor_patch(_confirm_span(), loosened, POLICY)

@@ -46,19 +46,19 @@ type FormValues = {
   check_threshold: string
   check_selector: string
   check_text: string
-  ai_review_prompt: string
-  ai_review_output_schema_preset: 'yes_no' | 'text' | 'choice' | 'none' | 'custom'
-  ai_review_attach: string
+  agent_span_answer_preset: 'none' | 'confirm' | 'yes_no' | 'text' | 'choice' | 'custom'
+  agent_span_attach: string
   wait_until_kind: 'element_visible' | 'element_hidden' | 'text_visible' | 'url_contains' | 'load_state'
   wait_until_timeout_s: string
   call_inputs_text: string
   call_outputs_text: string
   wait_until_on_timeout: 'fail' | 'continue'
-  ai_review_output_schema_json: string
-  ai_review_on_failure: 'abort' | 'use_default' | 'continue'
-  ai_review_default_value: string
+  agent_span_answer_json: string
+  agent_span_output_name: string
+  agent_span_on_failure: 'abort' | 'use_default' | 'continue'
+  agent_span_default_value: string
   agent_span_allowed: string[]
-  agent_span_until_type: 'text_present' | 'text_absent' | 'url_changed' | 'url_pattern' | 'state_changed'
+  agent_span_until_type: 'none' | 'text_present' | 'text_absent' | 'url_changed' | 'url_pattern' | 'state_changed'
   agent_span_until_target: string
   agent_span_actions: string
   agent_span_seconds: string
@@ -93,10 +93,16 @@ function linesToMap(text: string): Record<string, string> | null {
   return out
 }
 
-// EXEC-13: canonical shapes the preset picker offers — 'custom' isn't a real option, it's what
+// Canonical shapes the answer preset picker offers — 'custom' isn't a real option, it's what
 // defaultsFromStep falls back to when a saved schema doesn't match any preset, so the raw JSON
 // textarea (always editable underneath) is the source of truth rather than the picker.
-const AI_REVIEW_SCHEMA_PRESETS: Record<'yes_no' | 'text' | 'choice' | 'none', Record<string, unknown> | null> = {
+// 'confirm' is the "a person says yes first" question: its only valid answer is yes, and a no ends the run.
+const SPAN_ANSWER_PRESETS: Record<'confirm' | 'yes_no' | 'text' | 'choice' | 'none', Record<string, unknown> | null> = {
+  confirm: {
+    type: 'object',
+    required: ['confirmed'],
+    properties: { confirmed: { type: 'boolean', enum: [true] } },
+  },
   yes_no: {
     type: 'object',
     required: ['answer', 'why'],
@@ -116,14 +122,29 @@ const AI_REVIEW_SCHEMA_PRESETS: Record<'yes_no' | 'text' | 'choice' | 'none', Re
   none: null,
 }
 
-function presetForAiReviewSchema(schema: unknown): FormValues['ai_review_output_schema_preset'] {
+function presetForSpanAnswer(schema: unknown): FormValues['agent_span_answer_preset'] {
   if (!schema || typeof schema !== 'object') return 'none'
   const json = JSON.stringify(schema)
-  for (const key of ['yes_no', 'text', 'choice'] as const) {
-    if (JSON.stringify(AI_REVIEW_SCHEMA_PRESETS[key]) === json) return key
+  for (const key of ['confirm', 'yes_no', 'text', 'choice'] as const) {
+    if (JSON.stringify(SPAN_ANSWER_PRESETS[key]) === json) return key
   }
   return 'custom'
 }
+
+// Every action the agent can be given (runtime/app/agent_span.js ALLOWED_KINDS); done, give up, wait and
+// read page text are always available.
+const SPAN_ACTION_KINDS: ReadonlyArray<{ kind: string; label: string }> = [
+  { kind: 'click', label: 'Click' },
+  { kind: 'fill', label: 'Type into a field' },
+  { kind: 'select', label: 'Pick from a list' },
+  { kind: 'scroll', label: 'Scroll' },
+  { kind: 'send_keys', label: 'Press a key' },
+  { kind: 'navigate', label: 'Go to an address' },
+  { kind: 'go_back', label: 'Go back' },
+  { kind: 'open_tab', label: 'Open a tab' },
+  { kind: 'switch_tab', label: 'Switch tab' },
+  { kind: 'close_tab', label: 'Close a tab' },
+]
 
 const emptyForm: FormValues = {
   intent: '',
@@ -143,22 +164,22 @@ const emptyForm: FormValues = {
   check_threshold: '0.9',
   check_selector: '',
   check_text: '',
-  ai_review_prompt: '',
-  ai_review_output_schema_preset: 'yes_no',
-  ai_review_output_schema_json: JSON.stringify(AI_REVIEW_SCHEMA_PRESETS.yes_no, null, 2),
-  ai_review_on_failure: 'abort',
-  ai_review_default_value: '',
-  ai_review_attach: '',
+  agent_span_answer_preset: 'none',
+  agent_span_answer_json: '',
+  agent_span_output_name: '',
+  agent_span_on_failure: 'abort',
+  agent_span_default_value: '',
+  agent_span_attach: '',
   wait_until_kind: 'load_state',
   wait_until_timeout_s: '30',
   call_inputs_text: '',
   call_outputs_text: '',
   wait_until_on_timeout: 'fail',
-  agent_span_allowed: ['click', 'fill', 'select', 'scroll'],
-  agent_span_until_type: 'text_present',
+  agent_span_allowed: SPAN_ACTION_KINDS.map((a) => a.kind),
+  agent_span_until_type: 'none',
   agent_span_until_target: '',
-  agent_span_actions: '8',
-  agent_span_seconds: '120',
+  agent_span_actions: '25',
+  agent_span_seconds: '600',
   assertions: [],
   run_if_input: '',
   run_if_op: 'not_empty',
@@ -219,31 +240,33 @@ function defaultsFromStep(step: StepEditorDTO): FormValues {
     check_threshold: String(step.check_threshold ?? 0.9),
     check_selector: String(step.check_selector || ''),
     check_text: String(step.check_text || ''),
-    ai_review_prompt: String(step.ai_review_prompt || ''),
-    ai_review_output_schema_preset: presetForAiReviewSchema(step.ai_review_output_schema),
-    ai_review_output_schema_json: step.ai_review_output_schema
-      ? JSON.stringify(step.ai_review_output_schema, null, 2)
+    agent_span_answer_preset: presetForSpanAnswer(step.agent_span_answer_schema),
+    agent_span_answer_json: step.agent_span_answer_schema
+      ? JSON.stringify(step.agent_span_answer_schema, null, 2)
       : '',
-    ai_review_on_failure: (step.ai_review_on_failure as FormValues['ai_review_on_failure']) || 'abort',
-    ai_review_attach: Array.isArray(step.ai_review_attach) ? step.ai_review_attach.join(', ') : '',
+    agent_span_output_name: String(step.agent_span_output_name || ''),
+    agent_span_on_failure: (step.agent_span_on_failure as FormValues['agent_span_on_failure']) || 'abort',
+    agent_span_attach: Array.isArray(step.agent_span_attach) ? step.agent_span_attach.join(', ') : '',
     wait_until_kind: (step.wait_until_kind as FormValues['wait_until_kind']) || 'load_state',
     wait_until_timeout_s: String(Math.round((step.wait_until_timeout_ms ?? 30000) / 1000)),
     call_inputs_text: mapToLines(step.call_workflow_inputs),
     call_outputs_text: mapToLines(step.call_workflow_outputs),
     wait_until_on_timeout: step.wait_until_on_timeout === 'continue' ? 'continue' : 'fail',
-    agent_span_allowed: Array.isArray(step.agent_span_allowed) && step.agent_span_allowed.length
+    // An empty list is a question-only span, so it is kept as is when the step has an answer.
+    agent_span_allowed: Array.isArray(step.agent_span_allowed)
+      && (step.agent_span_allowed.length > 0 || step.agent_span_answer_schema)
       ? step.agent_span_allowed
-      : ['click', 'fill', 'select', 'scroll'],
-    agent_span_until_type: (step.agent_span_until?.type as FormValues['agent_span_until_type']) || 'text_present',
+      : SPAN_ACTION_KINDS.map((a) => a.kind),
+    agent_span_until_type: (step.agent_span_until?.type as FormValues['agent_span_until_type']) || 'none',
     agent_span_until_target: String(step.agent_span_until?.target || ''),
-    agent_span_actions: String(step.agent_span_budget?.actions ?? 8),
-    agent_span_seconds: String(step.agent_span_budget?.seconds ?? 120),
-    ai_review_default_value:
-      step.ai_review_default_value === undefined || step.ai_review_default_value === null
+    agent_span_actions: String(step.agent_span_budget?.actions ?? 25),
+    agent_span_seconds: String(step.agent_span_budget?.seconds ?? 600),
+    agent_span_default_value:
+      step.agent_span_default_value === undefined || step.agent_span_default_value === null
         ? ''
-        : typeof step.ai_review_default_value === 'string'
-          ? step.ai_review_default_value
-          : JSON.stringify(step.ai_review_default_value),
+        : typeof step.agent_span_default_value === 'string'
+          ? step.agent_span_default_value
+          : JSON.stringify(step.agent_span_default_value),
     assertions: (step.validation.assertions || []) as AssertionDraft[],
     run_if_input: String(step.run_if?.input || ''),
     run_if_op: (step.run_if?.op as FormValues['run_if_op']) || 'not_empty',
@@ -403,71 +426,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
       const isMarkerStep = actionSpecFlag(step, 'marker')
       const isCheckStep = actionKind === 'check' || actionKind === 'assert'
       const isNavigateStep = actionKind === 'navigate'
-      const isAiReviewStep = actionKind === 'ai_review'
       if (isMarkerStep) return
-      if (isAiReviewStep) {
-        const prompt = values.ai_review_prompt.trim()
-        if (!prompt) {
-          const err = new Error('Prompt is required')
-          methods.setError('ai_review_prompt', { message: err.message })
-          if (!silent) toast.error(err.message)
-          throw err
-        }
-        let outputSchema: Record<string, unknown> | null = null
-        const schemaText = values.ai_review_output_schema_json.trim()
-        if (schemaText) {
-          try {
-            const parsed = JSON.parse(schemaText) as unknown
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
-            outputSchema = parsed as Record<string, unknown>
-          } catch {
-            const err = new Error('Expected answer schema must be valid JSON (an object)')
-            methods.setError('ai_review_output_schema_json', { message: err.message })
-            if (!silent) toast.error(err.message)
-            throw err
-          }
-        }
-        const onFailure = values.ai_review_on_failure
-        if (onFailure === 'use_default' && !values.ai_review_default_value.trim()) {
-          const err = new Error('A default value is required when "Use a default value" is selected')
-          methods.setError('ai_review_default_value', { message: err.message })
-          if (!silent) toast.error(err.message)
-          throw err
-        }
-        const patch: Record<string, unknown> = {
-          semantic_description: values.intent,
-          action: { action: 'ai_review' },
-          ai_review_prompt: prompt,
-          ai_review_output_schema: outputSchema,
-          ai_review_on_failure: onFailure,
-          ai_review_attach: values.ai_review_attach.split(',').map((n) => n.trim()).filter(Boolean),
-        }
-        if (onFailure === 'use_default') {
-          // A default value is free-form: an author typing `{"answer":"no"}` gets a real object
-          // bound back into inputs on failure; plain text (e.g. `no`) is kept as a string.
-          let defaultValue: unknown = values.ai_review_default_value
-          try { defaultValue = JSON.parse(values.ai_review_default_value) } catch { /* keep raw string */ }
-          patch.ai_review_default_value = defaultValue
-        }
-        if (canEditField('value')) {
-          patch.value = values.value
-          patch.action = { action: 'ai_review', value: values.value }
-        }
-        try {
-          const res = await patchStep(skillId, patchIndex, patch, false, path)
-          onWorkflowUpdated(res.workflow)
-          if (res.can_undo !== undefined) onHistoryUpdate?.(res.can_undo, res.can_redo ?? false)
-          const next = findUpdatedStep(res.workflow, step.id)
-          if (next) methods.reset(defaultsFromStep(next))
-          if (!silent) toast.success('Step saved')
-          return
-        } catch (e) {
-          const msg = errorMessage(e, 'Save failed')
-          methods.setError('root', { message: msg })
-          if (!silent) toast.error(msg)
-          throw e
-        }
-      }
       if (isNavigateStep) {
         const url = values.url.trim()
         if (!/^https?:\/\//i.test(url)) {
@@ -583,26 +542,53 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
         const untilTarget = values.agent_span_until_target.trim()
         const actions = Number(values.agent_span_actions)
         const seconds = Number(values.agent_span_seconds)
-        const fail = (field: 'value' | 'agent_span_until_target' | 'agent_span_actions' | 'agent_span_seconds' | 'agent_span_allowed', message: string): never => {
+        type SpanField = 'value' | 'agent_span_until_target' | 'agent_span_actions' | 'agent_span_seconds' | 'agent_span_allowed' | 'agent_span_answer_json' | 'agent_span_default_value'
+        const fail = (field: SpanField, message: string): never => {
           const err = new Error(message)
           methods.setError(field, { message })
           if (!silent) toast.error(message)
           throw err
         }
         if (!goal) fail('value', 'Say what the agent should get done')
-        if (!values.agent_span_allowed.length) fail('agent_span_allowed', 'Allow at least one action')
-        const needsTarget = untilType !== 'state_changed' && untilType !== 'url_changed'
+        let answerSchema: Record<string, unknown> | null = null
+        const answerText = values.agent_span_answer_preset === 'none' ? '' : values.agent_span_answer_json.trim()
+        if (answerText) {
+          try {
+            const parsed = JSON.parse(answerText) as unknown
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
+            answerSchema = parsed as Record<string, unknown>
+          } catch {
+            fail('agent_span_answer_json', 'The expected answer must be valid JSON (an object)')
+          }
+        }
+        if (!values.agent_span_allowed.length && !answerSchema) fail('agent_span_allowed', 'Allow at least one action, or ask for an answer')
+        const needsTarget = untilType !== 'none' && untilType !== 'state_changed' && untilType !== 'url_changed'
         if (needsTarget && !untilTarget) fail('agent_span_until_target', 'Say how to tell the goal is reached')
-        if (!Number.isInteger(actions) || actions < 1 || actions > 15) fail('agent_span_actions', 'Actions must be a whole number from 1 to 15')
-        if (!Number.isFinite(seconds) || seconds < 10 || seconds > 600) fail('agent_span_seconds', 'Time must be between 10 and 600 seconds')
+        if (!Number.isInteger(actions) || actions < 1 || actions > 100) fail('agent_span_actions', 'Actions must be a whole number from 1 to 100')
+        if (!Number.isFinite(seconds) || seconds < 10 || seconds > 1800) fail('agent_span_seconds', 'Time must be between 10 and 1800 seconds')
+        const onFailure = values.agent_span_on_failure
+        if (answerSchema && onFailure === 'use_default' && !values.agent_span_default_value.trim()) {
+          fail('agent_span_default_value', 'A default value is required when "Use a default value" is selected')
+        }
         const patch: Record<string, unknown> = {
           semantic_description: values.intent,
           value: goal,
           action: { action: 'agent_span', value: goal },
           agent_span_allowed: values.agent_span_allowed,
-          agent_span_until: needsTarget ? { type: untilType, target: untilTarget } : { type: untilType },
+          agent_span_until: untilType === 'none' ? null : needsTarget ? { type: untilType, target: untilTarget } : { type: untilType },
           agent_span_budget: { actions, seconds: Math.round(seconds) },
           agent_span_on_budget: 'fail',
+          agent_span_answer_schema: answerSchema,
+          agent_span_output_name: values.agent_span_output_name.trim(),
+          agent_span_on_failure: onFailure,
+          agent_span_attach: values.agent_span_attach.split(',').map((n) => n.trim()).filter(Boolean),
+        }
+        if (answerSchema && onFailure === 'use_default') {
+          // A default value is free-form: an author typing `{"answer":"no"}` gets a real object
+          // bound back into inputs on failure; plain text (e.g. `no`) is kept as a string.
+          let defaultValue: unknown = values.agent_span_default_value
+          try { defaultValue = JSON.parse(values.agent_span_default_value) } catch { /* keep raw string */ }
+          patch.agent_span_default_value = defaultValue
         }
         try {
           const res = await patchStep(skillId, patchIndex, patch, false, path)
@@ -903,8 +889,9 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const checkKind = useWatch({ control: methods.control, name: 'check_kind' }) || 'url'
   const scrollMode = useWatch({ control: methods.control, name: 'scroll_mode' }) || 'scroll_only'
   const assertions = useWatch({ control: methods.control, name: 'assertions' }) || []
-  const aiReviewSchemaPreset = useWatch({ control: methods.control, name: 'ai_review_output_schema_preset' }) || 'yes_no'
-  const aiReviewOnFailure = useWatch({ control: methods.control, name: 'ai_review_on_failure' }) || 'abort'
+  const spanAnswerPreset = useWatch({ control: methods.control, name: 'agent_span_answer_preset' }) || 'none'
+  const spanOnFailure = useWatch({ control: methods.control, name: 'agent_span_on_failure' }) || 'abort'
+  const spanUntilType = useWatch({ control: methods.control, name: 'agent_span_until_type' }) || 'none'
   const extractSource = useWatch({ control: methods.control, name: 'extract_source' }) || 'text'
   const runIfOp = useWatch({ control: methods.control, name: 'run_if_op' }) || 'not_empty'
 
@@ -931,11 +918,10 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const isClipboardStep = actionKind === 'clipboard_write' || actionKind === 'clipboard_read'
   const isCallWorkflowStep = actionKind === 'call_workflow'
   const isScreenshotStep = actionKind === 'screenshot'
-  const isAiReviewStep = actionKind === 'ai_review'
   const isExtractStep = actionKind === 'extract'
   const isBoundStep = Object.keys(step.entity_binding || {}).length > 0
   // The patch gate refuses a run condition on a confirmation, hand-over or marker, and a popup decision.
-  const canHaveCondition = !isMarkerStep && !isAiReviewStep && !isAgentSpanStep && actionKind !== 'handover' && actionKind !== 'outcome_fork'
+  const canHaveCondition = !isMarkerStep && !isAgentSpanStep && actionKind !== 'handover' && actionKind !== 'outcome_fork'
     && actionKind !== 'for_each' && !isCheckStep
   const showSelectorAndAnchorTools =
     !hideSelectorTools &&
@@ -1045,102 +1031,6 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
               )}
             </>
           ) : null}
-          {isAiReviewStep ? (
-            <>
-              <div className="grid gap-2">
-                <Label htmlFor="ai_review_prompt" className="flex items-center gap-1.5">
-                  Question
-                  <InfoHint {...editorHelp.actionStep} size="md" side="top" align="start" />
-                </Label>
-                <Textarea
-                  id="ai_review_prompt"
-                  className={cn(fieldTextareaClass, 'min-h-20 w-full text-sm')}
-                  placeholder="e.g., Is there an error banner on this page? Answer yes or no and say why."
-                  {...methods.register('ai_review_prompt')}
-                />
-                {methods.formState.errors.ai_review_prompt ? (
-                  <p className="text-destructive text-xs">{methods.formState.errors.ai_review_prompt.message}</p>
-                ) : null}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ai_review_attach">Files to show (optional)</Label>
-                <Input
-                  id="ai_review_attach"
-                  type="text"
-                  placeholder="e.g., downloaded_file"
-                  {...methods.register('ai_review_attach')}
-                />
-                <p className="text-muted-foreground text-xs">
-                  Names of inputs that hold a downloaded file. Text files only (csv, txt, json), up to 64 KB, from this run's downloads.
-                  You can also use {'{{input_name}}'} in the question.
-                </p>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ai_review_output_schema_preset">Expected answer</Label>
-                <select
-                  id="ai_review_output_schema_preset"
-                  className={fieldSelectClass}
-                  {...methods.register('ai_review_output_schema_preset', {
-                    onChange: (e) => {
-                      const key = e.target.value as 'yes_no' | 'text' | 'choice' | 'none' | 'custom'
-                      if (key === 'yes_no' || key === 'text' || key === 'choice') {
-                        methods.setValue(
-                          'ai_review_output_schema_json',
-                          JSON.stringify(AI_REVIEW_SCHEMA_PRESETS[key], null, 2),
-                          { shouldDirty: true },
-                        )
-                      } else if (key === 'none') {
-                        methods.setValue('ai_review_output_schema_json', '', { shouldDirty: true })
-                      }
-                    },
-                  })}
-                >
-                  <option value="yes_no">Yes / no, with a reason</option>
-                  <option value="text">A single text value (a computed or read value)</option>
-                  <option value="choice">One choice from a list</option>
-                  <option value="none">No schema — accept anything</option>
-                  <option value="custom" disabled hidden>
-                    Custom (edit the JSON below)
-                  </option>
-                </select>
-                <p className="text-muted-foreground text-xs">
-                  Picking a preset fills in the JSON schema below — edit it directly for anything else.
-                </p>
-                {aiReviewSchemaPreset !== 'none' ? (
-                  <Textarea
-                    id="ai_review_output_schema_json"
-                    className={cn(fieldTextareaClass, 'min-h-32 w-full font-mono text-xs')}
-                    {...methods.register('ai_review_output_schema_json')}
-                  />
-                ) : null}
-                {methods.formState.errors.ai_review_output_schema_json ? (
-                  <p className="text-destructive text-xs">{methods.formState.errors.ai_review_output_schema_json.message}</p>
-                ) : null}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ai_review_on_failure">If a usable answer never arrives</Label>
-                <select id="ai_review_on_failure" className={fieldSelectClass} {...methods.register('ai_review_on_failure')}>
-                  <option value="abort">Abort the run</option>
-                  <option value="use_default">Use a default value</option>
-                  <option value="continue">Continue anyway</option>
-                </select>
-              </div>
-              {aiReviewOnFailure === 'use_default' ? (
-                <div className="grid gap-2">
-                  <Label htmlFor="ai_review_default_value">Default value</Label>
-                  <Input
-                    id="ai_review_default_value"
-                    type="text"
-                    placeholder='e.g., {"answer":"no","why":"no answer received"} or a plain value'
-                    {...methods.register('ai_review_default_value')}
-                  />
-                  {methods.formState.errors.ai_review_default_value ? (
-                    <p className="text-destructive text-xs">{methods.formState.errors.ai_review_default_value.message}</p>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          ) : null}
           {isNavigateStep ? (
             <div className="grid gap-2">
               <Label htmlFor="url" className="text-sm font-medium">Page address</Label>
@@ -1247,7 +1137,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                 />
                 <p className="text-muted-foreground text-xs">
                   <code>result_that_workflow_reads = your_name</code>. Later steps use it as {'{{your_name}}'}. The workflow you call must be built first
-                  (a version is pinned when you build). It cannot contain an AI review, a hand-over or a popup decision.
+                  (a version is pinned when you build). It cannot contain an agent step, a hand-over or a popup decision.
                 </p>
               </div>
             </>
@@ -1257,10 +1147,10 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
               <div className="grid gap-2">
                 <Label>What the agent may do</Label>
                 <div className="flex flex-wrap gap-4 text-sm">
-                  {(['click', 'fill', 'select', 'scroll'] as const).map((kind) => (
+                  {SPAN_ACTION_KINDS.map(({ kind, label }) => (
                     <label key={kind} className="flex items-center gap-2">
                       <input type="checkbox" value={kind} {...methods.register('agent_span_allowed')} />
-                      {kind === 'click' ? 'Click' : kind === 'fill' ? 'Type into a field' : kind === 'select' ? 'Pick from a list' : 'Scroll'}
+                      {label}
                     </label>
                   ))}
                 </div>
@@ -1268,15 +1158,17 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                   <p className="text-destructive text-xs">{methods.formState.errors.agent_span_allowed.message}</p>
                 ) : null}
                 <p className="text-muted-foreground text-xs">
-                  The AI agent picks one numbered element at a time from what the page shows. It never presses a button that sends, pays, deletes or
-                  publishes, never opens another site, and never answers a popup that asks for a decision. Runs that use this step need an agent, so
-                  they cannot be scheduled.
+                  The AI agent works like a person at the browser: it sees the page, the steps already done and the steps still to come, and does
+                  one thing at a time. It can read the page and say it is finished at any time. It can go to any address, so only use this step
+                  where you trust the agent with the signed-in browser. Before it presses a button that sends, pays, deletes or publishes, it must
+                  ask the person using the workflow. Runs that use this step need an agent, so they cannot be scheduled.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="agent_span_until_type">The goal is reached when</Label>
+                  <Label htmlFor="agent_span_until_type">The goal is reached when (optional)</Label>
                   <select id="agent_span_until_type" className={fieldSelectClass} {...methods.register('agent_span_until_type')}>
+                    <option value="none">The agent says it is done</option>
                     <option value="text_present">This text shows on the page</option>
                     <option value="text_absent">This text is gone</option>
                     <option value="url_pattern">The address matches</option>
@@ -1284,30 +1176,104 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
                     <option value="state_changed">The page visibly changes</option>
                   </select>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="agent_span_until_target">Text or address pattern</Label>
-                  <Input id="agent_span_until_target" type="text" placeholder="e.g., Invoice {{invoice_number}}" {...methods.register('agent_span_until_target')} />
-                  {methods.formState.errors.agent_span_until_target ? (
-                    <p className="text-destructive text-xs">{methods.formState.errors.agent_span_until_target.message}</p>
-                  ) : null}
-                </div>
+                {spanUntilType !== 'none' && spanUntilType !== 'url_changed' && spanUntilType !== 'state_changed' ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="agent_span_until_target">Text or address pattern</Label>
+                    <Input id="agent_span_until_target" type="text" placeholder="e.g., Invoice {{invoice_number}}" {...methods.register('agent_span_until_target')} />
+                    {methods.formState.errors.agent_span_until_target ? (
+                      <p className="text-destructive text-xs">{methods.formState.errors.agent_span_until_target.message}</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="agent_span_actions">Most actions</Label>
-                  <Input id="agent_span_actions" type="number" min={1} max={15} {...methods.register('agent_span_actions')} />
+                  <Input id="agent_span_actions" type="number" min={1} max={100} {...methods.register('agent_span_actions')} />
                   {methods.formState.errors.agent_span_actions ? (
                     <p className="text-destructive text-xs">{methods.formState.errors.agent_span_actions.message}</p>
                   ) : null}
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="agent_span_seconds">Give up after (seconds)</Label>
-                  <Input id="agent_span_seconds" type="number" min={10} max={600} {...methods.register('agent_span_seconds')} />
+                  <Input id="agent_span_seconds" type="number" min={10} max={1800} {...methods.register('agent_span_seconds')} />
                   {methods.formState.errors.agent_span_seconds ? (
                     <p className="text-destructive text-xs">{methods.formState.errors.agent_span_seconds.message}</p>
                   ) : null}
                 </div>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="agent_span_answer_preset">Answer to report back (optional)</Label>
+                <select
+                  id="agent_span_answer_preset"
+                  className={fieldSelectClass}
+                  {...methods.register('agent_span_answer_preset', {
+                    onChange: (e) => {
+                      const key = e.target.value as keyof typeof SPAN_ANSWER_PRESETS | 'custom'
+                      if (key === 'custom') return
+                      methods.setValue(
+                        'agent_span_answer_json',
+                        key === 'none' ? '' : JSON.stringify(SPAN_ANSWER_PRESETS[key], null, 2),
+                        { shouldDirty: true },
+                      )
+                    },
+                  })}
+                >
+                  <option value="none">No answer needed</option>
+                  <option value="confirm">A person says yes first (a no ends the run)</option>
+                  <option value="yes_no">Yes or no, with a reason</option>
+                  <option value="text">A piece of text</option>
+                  <option value="choice">One choice from a list</option>
+                  <option value="custom">Custom (edit the JSON below)</option>
+                </select>
+                <p className="text-muted-foreground text-xs">
+                  An answer is how this step passes something to later steps, for example a number it read or a yes/no that decides which
+                  step runs. Untick every action above to make this a plain question.
+                </p>
+              </div>
+              {spanAnswerPreset !== 'none' ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="agent_span_answer_json">Expected answer (JSON)</Label>
+                    <Textarea id="agent_span_answer_json" rows={6} className="font-mono text-xs" {...methods.register('agent_span_answer_json')} />
+                    {methods.formState.errors.agent_span_answer_json ? (
+                      <p className="text-destructive text-xs">{methods.formState.errors.agent_span_answer_json.message}</p>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="agent_span_output_name">Name later steps use</Label>
+                      <Input id="agent_span_output_name" type="text" placeholder="e.g., verdict" {...methods.register('agent_span_output_name')} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="agent_span_attach">Files to show (optional)</Label>
+                      <Input id="agent_span_attach" type="text" placeholder="e.g., downloaded_file" {...methods.register('agent_span_attach')} />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="agent_span_on_failure">If a usable answer never arrives</Label>
+                    <select id="agent_span_on_failure" className={fieldSelectClass} {...methods.register('agent_span_on_failure')}>
+                      <option value="abort">Stop the run</option>
+                      <option value="use_default">Use a default value</option>
+                      <option value="continue">Carry on with an empty answer</option>
+                    </select>
+                  </div>
+                  {spanOnFailure === 'use_default' ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="agent_span_default_value">Default value</Label>
+                      <Input
+                        id="agent_span_default_value"
+                        type="text"
+                        placeholder='e.g., {"answer":"no","why":"no answer received"} or a plain value'
+                        {...methods.register('agent_span_default_value')}
+                      />
+                      {methods.formState.errors.agent_span_default_value ? (
+                        <p className="text-destructive text-xs">{methods.formState.errors.agent_span_default_value.message}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </>
           ) : null}
           {isWaitUntilStep ? (
@@ -1402,7 +1368,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
             </div>
           ) : null}
 
-      {!hideSelectorTools && !isAiReviewStep && canEdit('validation') ? (
+      {!hideSelectorTools && !isAgentSpanStep && canEdit('validation') ? (
         <StepValidationPanel
           step={step}
           assertions={assertions}

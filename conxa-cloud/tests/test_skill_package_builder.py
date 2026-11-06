@@ -257,64 +257,65 @@ class TestBranchStepSerialization:
     def test_unsupported_action_still_drops_to_none(self):
         assert _saved_step_to_execution_step({"action": "not_a_real_action"}) is None
 
-    # ── EXEC-13: ai_review ──────────────────────────────────────────────────
-    # Config lives in top-level ai_review_* fields (the check_kind/check_pattern shape), not
+    # ── agent_span answers (what the removed ai_review step did) ─────────────────────────
+    # Config lives in top-level agent_span_* fields (the check_kind/check_pattern shape), not
     # nested under `action` — `action` here is the plain-string saved-skill shape, matching
     # every other _saved_step_to_execution_step branch in this file.
 
-    def test_ai_review_step_serializes_prompt_and_defaults_on_failure_to_abort(self):
-        step = {"action": "ai_review", "ai_review_prompt": "Is the banner visible?"}
+    def test_a_question_span_serializes_its_answer_and_defaults_on_failure_to_abort(self):
+        step = {"action": "agent_span", "value": "Is the banner visible?", "agent_span_allowed": [],
+                "agent_span_answer_schema": {"type": "object", "required": ["visible"]}}
         out = _saved_step_to_execution_step(step)
-        assert out == {"type": "ai_review", "prompt": "Is the banner visible?", "on_failure": "abort"}
+        assert out["type"] == "agent_span" and out["goal"] == "Is the banner visible?" and out["allowed"] == []
+        assert out["answer"] == {"schema": {"type": "object", "required": ["visible"]}, "on_failure": "abort"}
+        assert out["budget"] == {"actions": 25, "seconds": 600} and "until" not in out
 
-    def test_ai_review_step_dropped_when_prompt_is_blank(self):
-        assert _saved_step_to_execution_step({"action": "ai_review", "ai_review_prompt": "   "}) is None
-        assert _saved_step_to_execution_step({"action": "ai_review"}) is None
+    def test_a_span_is_dropped_when_it_has_no_goal_or_nothing_to_do(self):
+        assert _saved_step_to_execution_step({"action": "agent_span", "value": "   ", "agent_span_allowed": ["click"]}) is None
+        assert _saved_step_to_execution_step({"action": "agent_span", "value": "Do it", "agent_span_allowed": []}) is None
+        assert _saved_step_to_execution_step({"action": "agent_span", "value": "Do it"}) is None
 
-    def test_ai_review_step_serializes_full_config(self):
+    def test_a_span_serializes_full_answer_config(self):
         step = {
-            "action": "ai_review",
-            "ai_review_prompt": "Is the banner visible?",
-            "ai_review_output_schema": {"type": "object", "required": ["visible"]},
-            "ai_review_reference_screenshot_ref": "visuals/Image_3.jpg",
-            "ai_review_on_failure": "use_default",
-            "ai_review_default_value": {"visible": False},
-            "value": "banner_visible",
+            "action": "agent_span",
+            "value": "Is the banner visible?",
+            "agent_span_allowed": [],
+            "agent_span_answer_schema": {"type": "object", "required": ["visible"]},
+            "agent_span_on_failure": "use_default",
+            "agent_span_default_value": {"visible": False},
+            "agent_span_output_name": "banner_visible",
         }
         out = _saved_step_to_execution_step(step)
-        assert out == {
-            "type": "ai_review",
-            "prompt": "Is the banner visible?",
+        assert out["answer"] == {
+            "schema": {"type": "object", "required": ["visible"]},
             "on_failure": "use_default",
-            "output_schema": {"type": "object", "required": ["visible"]},
-            "reference_screenshot_ref": "visuals/Image_3.jpg",
             "default_value": {"visible": False},
             "output_name": "banner_visible",
         }
 
-    def test_ai_review_step_omits_default_value_unless_on_failure_is_use_default(self):
+    def test_a_span_omits_default_value_unless_on_failure_is_use_default(self):
         step = {
-            "action": "ai_review",
-            "ai_review_prompt": "Is the banner visible?",
-            "ai_review_default_value": {"visible": False},
+            "action": "agent_span", "value": "Is the banner visible?", "agent_span_allowed": [],
+            "agent_span_answer_schema": {"type": "object"},
+            "agent_span_default_value": {"visible": False},
         }
         out = _saved_step_to_execution_step(step)
-        assert "default_value" not in out
-        assert out["on_failure"] == "abort"
+        assert "default_value" not in out["answer"]
+        assert out["answer"]["on_failure"] == "abort"
 
-    def test_ai_review_step_omits_empty_output_schema_and_reference_ref(self):
-        step = {
-            "action": "ai_review",
-            "ai_review_prompt": "Is the banner visible?",
-            "ai_review_output_schema": {},
-            "ai_review_reference_screenshot_ref": "   ",
-        }
-        out = _saved_step_to_execution_step(step)
-        assert "output_schema" not in out
-        assert "reference_screenshot_ref" not in out
+    def test_a_span_omits_an_empty_answer_schema(self):
+        step = {"action": "agent_span", "value": "Do it", "agent_span_allowed": ["click"], "agent_span_answer_schema": {}}
+        assert "answer" not in _saved_step_to_execution_step(step)
+
+    def test_a_span_answer_names_are_produced_by_the_run_not_asked_of_the_caller(self):
+        from conxa_compile.skill_package_builder_saved_skill import _produced_names
+
+        names = _produced_names([{"type": "agent_span", "goal": "g", "answer": {
+            "output_name": "verdict", "schema": {"properties": {"choice": {"type": "string"}}}}}])
+        assert names == {"verdict", "verdict_choice"}
 
     # ── EXEC-21 (hand-over shape): handover ──────────────────────────────────
-    # The human sibling of ai_review above — same shape, but the message shown to the person
+    # The human sibling of the agent span above — same shape, but the message shown to the person
     # rides the generic `value` field rather than a dedicated `handover_message` field.
 
     def test_handover_step_serializes_message_and_defaults_on_failure_to_abort(self):
@@ -1262,17 +1263,16 @@ class TestSavedSkillJsonBuild:
         assert len(warnings) == 1
         assert "drag" in warnings[0].lower()
 
-    def test_saved_skill_export_drops_unconfigured_ai_review_with_warning(self, tmp_path):
-        """EXEC-13: an inserted-but-never-configured AI Review step (blank prompt, the
-        _new_manual_step scaffold) is dropped with an actionable warning — same shape as
-        drag_drop above — instead of failing the whole build."""
+    def test_saved_skill_export_drops_unconfigured_agent_span_with_warning(self, tmp_path):
+        """An inserted-but-never-configured agent span (blank goal) is dropped with an actionable
+        warning — same shape as drag_drop above — instead of failing the whole build."""
         saved_skill = {
-            "meta": {"id": "skill_123", "title": "Unconfigured Review Among Others"},
+            "meta": {"id": "skill_123", "title": "Unconfigured Span Among Others"},
             "inputs": [],
             "skills": [
                 {
                     "steps": [
-                        {"action": {"action": "ai_review"}, "ai_review_prompt": ""},
+                        {"action": {"action": "agent_span"}, "value": "", "agent_span_allowed": ["click"]},
                         {"action": {"action": "wait", "ms": 750}},
                     ]
                 }
@@ -1282,18 +1282,18 @@ class TestSavedSkillJsonBuild:
 
         _build_workflow_from_saved_skill(
             bundle_root=tmp_path,
-            workflow_slug="unconfigured_review_among_others",
+            workflow_slug="unconfigured_span_among_others",
             saved_skill=saved_skill,
             on_warning=warnings.append,
         )
 
         execution = json.loads(
-            (tmp_path / "skills" / "unconfigured_review_among_others" / "execution.json").read_text(encoding="utf-8")
+            (tmp_path / "skills" / "unconfigured_span_among_others" / "execution.json").read_text(encoding="utf-8")
         )
         assert [step["type"] for step in execution] == ["wait"]
         assert len(warnings) == 1
-        assert "ai review" in warnings[0].lower()
-        assert "prompt" in warnings[0].lower()
+        assert "agent step" in warnings[0].lower()
+        assert "goal" in warnings[0].lower()
 
     def test_normalizes_human_edit_input_id_to_runtime_name(self):
         inputs = _normalize_saved_skill_inputs(

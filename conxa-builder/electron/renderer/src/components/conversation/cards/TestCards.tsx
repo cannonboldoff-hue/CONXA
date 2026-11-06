@@ -56,7 +56,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   const [guard, setGuard] = useState(item.guard !== false)
   const showBrowser = item.show_browser !== false
   const [useAi, setUseAi] = useState(item.use_ai === true)
-  const aiSteps = Number(item.ai_review_count ?? 0)
+  const aiSteps = Number(item.agent_step_count ?? 0)
   const [tried, setTried] = useState(false)
   const state = String(item.state)
   const irreversible = (Array.isArray(item.irreversible) ? item.irreversible : []) as string[]
@@ -127,15 +127,15 @@ export function TestInputsCard({ threadId, item }: CardProps) {
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <input type="checkbox" role="switch" className="mt-1 accent-white" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
           <span>
-            <span className="text-[var(--text-primary)]">Let AI answer review steps and unexpected popups</span>
+            <span className="text-[var(--text-primary)]">Let AI answer agent steps and unexpected popups</span>
             <span className="block text-xs text-[var(--text-meta)]">
               {useAi
                 ? aiSteps === 0
                   ? 'Uses AI credits only if an unexpected popup appears and has to be answered.'
-                  : `Uses AI credits for ${plural(aiSteps, 'review step')}, and for any unexpected popup.`
+                  : `Uses AI credits for ${plural(aiSteps, 'agent step')}, and for any unexpected popup.`
                 : aiSteps === 0
                   ? 'Off: the test stops at an unexpected popup, with no credits used.'
-                  : 'Off: the test stops at the first AI review step or unexpected popup, with no credits used.'}
+                  : 'Off: the test stops at the first agent step or unexpected popup, with no credits used.'}
             </span>
           </span>
         </label>

@@ -52,7 +52,7 @@ test("loadCallees: refuses, in plain words, everything that could go wrong", () 
     ["missing required input", { b: { ...ok, required: ["id"] } }, [call("b")], /does not give "b" the input\(s\) it needs: id/],
     ["unknown output", { b: ok }, [call("b", { outputs: { total: "t" } })], /does not produce/],
     ["pause inside", { b: { ...ok, steps: [{ type: "handover" }] } }, [call("b")], /hand-over to a person, which cannot run inside/],
-    ["ai_review inside", { b: { ...ok, steps: [{ type: "for_each", steps: [{ type: "ai_review" }] }] } }, [call("b")], /AI review/],
+    ["agent_span inside", { b: { ...ok, steps: [{ type: "for_each", steps: [{ type: "agent_span" }] }] } }, [call("b")], /agent span/],
   ];
   for (const [name, skills, steps, pattern] of cases) {
     const w = world(skills);

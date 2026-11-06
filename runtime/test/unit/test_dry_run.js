@@ -8,7 +8,7 @@ const assert = require("node:assert");
 
 const { runPlan } = require("../../app/run");
 
-// Same minimal tab-registry fixture test_ai_review.js uses for a step with no `.tab` block.
+// Same minimal tab-registry fixture test_agent_span.js uses for a step with no `.tab` block.
 const idleContext = { on: () => {} };
 
 // A page that resolves exactly one testid-signal target — mirrors test_resolver.js's known-good

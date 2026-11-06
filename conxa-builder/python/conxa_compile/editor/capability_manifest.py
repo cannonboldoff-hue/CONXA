@@ -25,7 +25,6 @@ from conxa_compile.editor.action_registry import (
 )
 from conxa_compile.editor.patch_gate import (
     AGENT_SPAN_ALLOWED_KEYS,
-    AI_REVIEW_ALLOWED_KEYS,
     BRANCH_ALLOWED_KEYS,
     CHECK_ASSERT_ALLOWED_KEYS,
     DEFAULT_ALLOWED_KEYS,
@@ -87,22 +86,21 @@ RUNTIME_NOTES: dict[str, str] = {
         "on_timeout is continue. Never enters the recovery cascade."
     ),
     "screenshot": "Capture-and-discard — produces no artifact a later step can read.",
-    "ai_review": (
-        "Pauses the run and asks the MCP caller (or the Studio sandbox) the stored prompt against "
-        "the live page; binds the JSON answer into inputs under output_name. Never enters the "
-        "recovery cascade. A destructive step may not directly follow one (patch gate enforces this)."
-    ),
     "handover": (
         "Pauses and yields the live page to a person (2FA/CAPTCHA/e-signature); races an in-page "
         "banner, a file-drop, and a loopback signal against a timeout, then resumes in the same "
         "call if it arrives in time. No answer to validate — the person may change the page."
     ),
     "agent_span": (
-        "Pauses and hands the goal to the MCP caller's AI agent, which nominates ONE numbered element and action "
-        "(click, fill, select, scroll) per call; the runtime checks each against the allowed list and refuses "
-        "irreversible-looking buttons, other sites and popups that need a decision. Ends when the required `until` "
-        "check holds or the budget runs out. Never enters the recovery cascade; fails closed on a scheduled run, in a "
-        "dry run and inside a loop. A destructive step may not directly follow one (patch gate enforces this)."
+        "Pauses and hands the goal to the MCP caller's AI agent (Browser-Use style), which sends ONE action per "
+        "call (click, fill, select, scroll, send_keys, navigate, go_back, open_tab, switch_tab, close_tab; wait, "
+        "read_text and done are always allowed) on a numbered element the runtime listed; the runtime refuses "
+        "irreversible-looking buttons until the agent has asked the person and sends user_confirmed. A span with no "
+        "allowed actions and an answer schema is a question: the agent's JSON answer is bound into inputs under "
+        "output_name (this replaced ai_review). Ends when the agent sends done (and the optional `until` check "
+        "holds) or the budget runs out. Never enters the recovery cascade; fails closed on a scheduled run, in a "
+        "dry run and inside a loop. A destructive step may not directly follow one unless it is a confirm-only "
+        "question (patch gate enforces this)."
     ),
     "upload": "Resolves value as file path(s); can consume (delete) a prior download_observed file.",
     "upload_intent": (
@@ -130,7 +128,6 @@ _PER_KIND_ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "screenshot": WAIT_SCREENSHOT_ALLOWED_KEYS,
     "check": CHECK_ASSERT_ALLOWED_KEYS,
     "assert": CHECK_ASSERT_ALLOWED_KEYS,
-    "ai_review": AI_REVIEW_ALLOWED_KEYS,
     "handover": HANDOVER_ALLOWED_KEYS,
     "agent_span": AGENT_SPAN_ALLOWED_KEYS,
     "if_present": BRANCH_ALLOWED_KEYS,
@@ -204,7 +201,7 @@ if __name__ == "__main__":
             assert row["runtime_note"], f"{row['kind']} is insertable but has no runtime_note"
 
     policy = get_policy_bundle().data
-    for kind in ("navigate", "scroll", "wait", "wait_until", "check", "ai_review", "handover", "if_present", "for_each"):
+    for kind in ("navigate", "scroll", "wait", "wait_until", "check", "agent_span", "handover", "if_present", "for_each"):
         scaffold = _new_manual_step(kind, "")
         allowed = _PER_KIND_ALLOWED_KEYS[kind if kind != "screenshot" else "wait"]
         for key in allowed:

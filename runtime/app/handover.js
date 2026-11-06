@@ -2,15 +2,15 @@
 /**
  * handover.js — EXEC-21 (hand-over shape): yields the live page to a person for the part only
  * they can do (2FA, CAPTCHA, e-signature, a one-off login), then reclaims it and resumes the
- * run from the next step. Reuses EXEC-13's shipped park-and-resume primitive (review_pause.js /
+ * run from the next step. Reuses EXEC-13's shipped park-and-resume primitive (agent_span.js /
  * recovery_park.js — same `_parks` Map, same divergence-fingerprint idea) with a different
  * answerer and three changes forced by the human timescale, all handled by the caller
  * (server.js), not here: the wait is unbounded (a person, not a model, so no fixed TTL like
- * ai_review's PARK_TTL_MS); the host lock is released for the pause window rather than held, so
+ * the agent span's PARK_TTL_MS); the host lock is released for the pause window rather than held, so
  * a long hand-over does not starve every sibling run touching the same platform; and there is no
  * structured answer to validate — "done" is the whole signal.
  *
- * Not a recovery mechanism — see review_pause.js's header for why ai_review deliberately stays
+ * Not a recovery mechanism — see agent_span.js's header for why an agent span deliberately stays
  * outside the Tier 1-4 cascade (no selector, no identity_bundle, never touches recovery_stage.js
  * or retry_budget.js's state). The same reasoning applies here.
  *

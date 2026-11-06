@@ -469,7 +469,7 @@ function _readDeclaredInputs(entry) {
   return [];
 }
 
-// What a paused run has produced so far: every extract / ai_review output that holds a value.
+// What a paused run has produced so far: every extract / agent-span answer output that holds a value.
 function _producedInputs(primary) {
   const out = {};
   for (const n of declaredOutputNames(primary.steps || [], true)) {
@@ -661,32 +661,15 @@ async function _buildFailureResponse(page, errObj, resolvedEntry, runTracker, st
   );
 }
 
-// EXEC-13: ai_review pause/resume — a sibling to the Tier 3/4 recovery machinery above, not
-// part of it (see review_pause.js's header). Kept as its own module/requires rather than folded
-// into failure_response.js because a review is a planned pause, not a failure, and must never
-// touch recovery_stage.js's escalation state or retry_budget.js's retry-budget map.
-const {
-  checkReviewRetry,
-  clearReviewRetry,
-  validateReviewAnswer,
-  buildReviewRequest,
-  REVIEW_RETRY_MAX,
-} = require("./review_pause");
-
-function _buildReviewRequest(page, step, stepIndex, resolvedEntry, opts) {
-  return buildReviewRequest(page, step, stepIndex, resolvedEntry, { skillPacksDir: SKILL_PACKS_DIR, ...opts });
-}
-
-// Outcome-fork pause/resume: a popup decision only a person can make. Same reasoning for its own
-// module as ai_review above -- a planned pause, never recovery -- and a human (not a model)
-// answers it; see fork_pause.js's header.
-const { validateForkAnswer, buildForkRequest } = require("./fork_pause");
+// Outcome-fork pause/resume: a popup decision only a person can make. A planned pause, never
+// recovery -- and a human (not a model) answers it; see fork_pause.js's header.
+const { validateForkAnswer, buildForkRequest, checkReviewRetry, clearReviewRetry, REVIEW_RETRY_MAX } = require("./fork_pause");
 const appKnowledgeFile = require("./app_knowledge");
 
-// EXEC-21 (hand-over shape): the human sibling of ai_review above, same reasoning for staying
+// EXEC-21 (hand-over shape): the human sibling of the agent span, same reasoning for staying
 // its own module — a hand-over is a planned pause, not a failure, and must never touch
 // recovery_stage.js's escalation state or retry_budget.js's map. See handover.js's header for
-// why its park differs from ai_review's (host lock released, no fixed TTL, no closeExtraTabs).
+// why its park differs from the span's (host lock released, no fixed TTL, no closeExtraTabs).
 const handoverMod = require("./handover");
 const HANDOVER_PARK_TTL_MS = handoverMod.HANDOVER_PARK_TTL_MS;
 
@@ -1172,9 +1155,9 @@ async function _handleTool(name, args, extra) {
         inputs:     (run.inputs && typeof run.inputs === "object") ? run.inputs : {},
         resumeFrom: isResume ? run.resume_from : 0,
         isResume,
-        // EXEC-13: ai_review answers keyed by step index, parallel to step_overrides above but
-        // never run through applyStepOverrides — an ai_review step carries no selector for
-        // applyStepOverrides to inject, only a structured answer bound into `inputs`.
+        // Popup-decision answers keyed by step index ({choice}), parallel to step_overrides above but
+        // never run through applyStepOverrides — a popup answer carries no selector for
+        // applyStepOverrides to inject.
         reviewResults: (run.review_results && typeof run.review_results === "object") ? run.review_results : {},
         // Engine v2 C4: the agent's next action for an agent_span step, keyed by step index.
         spanActions: (run.span_actions && typeof run.span_actions === "object") ? run.span_actions : {},
@@ -1427,12 +1410,12 @@ async function _handleTool(name, args, extra) {
     // A park still sitting under THIS skill's own key that we did not adopt (state diverged, a
     // non-resume call, or an override that didn't match) is stale for this run — discard it so it
     // can neither leak a browser nor interfere with what's about to run.
-    // A pause park (popup decision, ai_review, hand-over, guard) that THIS call is resuming at its
+    // A pause park (popup decision, agent span, hand-over, guard) that THIS call is resuming at its
     // own step is adopted by its resume block further down, not stale: only a recovery park sets
     // `failedAt`, the others carry their own step index.
     const _leftPark = _getParkedRecovery(_parkKey);
     const _isOwnPausePark = !!_leftPark && primary.isResume && resolved.length === 1
-      && [_leftPark.forkStepIndex, _leftPark.reviewStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex, _leftPark.spanStepIndex]
+      && [_leftPark.forkStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex, _leftPark.spanStepIndex]
         .some((n) => Number.isInteger(n) && n === primary.resumeFrom);
     if (_leftPark && !_isOwnPausePark) await _discardPark(_parkKey, _resumeOverride ? "replaced" : "superseded");
 
@@ -1461,113 +1444,11 @@ async function _handleTool(name, args, extra) {
       );
     }
 
-    // EXEC-13: resuming an ai_review pause is the review sibling of the override-adoption block
-    // above — same park (same `_parkKey`, same live page), but the resumed step carries a
-    // structured answer instead of a corrected selector. Unlike an override, divergence and an
-    // invalid answer do NOT refuse outright: a review answer is a judgment about page STATE, so
-    // if the state changed (or the answer didn't parse) the right move is a bounded re-ask
-    // against the current page, not a hard refusal — see review_pause.js's header.
-    //
-    // Deliberately NOT gated on _effAgentEnabled: CONXA_MAX_RECOVERY_TIER / the Strict Mode
-    // ceiling governs escalation into the Tier 1-4 RECOVERY cascade. An ai_review step is not
-    // recovery — it's an author-placed checkpoint that must be answerable by any MCP caller,
-    // including the Build Studio sandbox (tier 2, no agent), which answers it itself via the
-    // cloud proxy (see handlers/workflows.py::cmd_test_workflow). The matching park-creation
-    // branch below (runErr.reviewPause) was already unconditional.
-    const _resumeReviewStep = resolved.length === 1 && primary.isResume
-      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "ai_review";
-    if (_resumeReviewStep) {
-      const stepDef = primary.steps[primary.resumeFrom];
-      const reviewPark = _getParkedRecovery(_parkKey);
-      const answerKey = String(primary.resumeFrom);
-      const hasAnswer = Object.prototype.hasOwnProperty.call(primary.reviewResults, answerKey);
-
-      if (!reviewPark) {
-        // TTL expired (or the process restarted) — nothing left to reason against. Tear this run
-        // down by hand, exactly like the override refusal above: we exit before the try/finally
-        // that normally releases the run slot and flushes the tracker.
-        appendRecoveryEvent({ event: "review_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
-        _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc: "review_resume_refused" });
-        if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
-        runRegistry.end(_runId);
-        await _receiptFlush; // see recovery_resume_refused above — avoid a no-op double flush
-        await _tracker.flush();
-        _tracker.destroy();
-        return err(
-          `The review window for step ${primary.resumeFrom + 1} has expired. Call execute_skill again for ` +
-          `"${primary.entry.slug}" without resume_from to restart the skill from the beginning.`
-        );
-      }
-
-      const currentFp = await capturePageFingerprint(reviewPark.page).catch(() => null);
-      const parkedFp  = reviewPark.pageFingerprint;
-      const diverged = !currentFp || !parkedFp
-        || currentFp.url !== parkedFp.url
-        || Math.abs(currentFp.interactiveCount - parkedFp.interactiveCount) > PARK_DIVERGENCE_TOLERANCE;
-      const validation = hasAnswer
-        ? validateReviewAnswer(primary.reviewResults[answerKey], stepDef.output_schema)
-        : { valid: false, errors: ["no answer supplied for this step index"] };
-
-      if (diverged || !validation.valid) {
-        const withinBudget = checkReviewRetry(primary.entry.slug, primary.resumeFrom);
-        if (!withinBudget) {
-          // Bounded re-ask attempts exhausted — apply the step's on_failure policy instead of
-          // looping forever.
-          clearReviewRetry(primary.entry.slug, primary.resumeFrom);
-          const onFailure = stepDef.on_failure || "abort";
-          if (onFailure === "abort") {
-            await _discardPark(_parkKey, "review_retry_exhausted");
-            if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
-            runRegistry.end(_runId);
-            await _receiptFlush; // see recovery_resume_refused above — avoid a no-op double flush
-            await _tracker.flush();
-            _tracker.destroy();
-            return err(
-              `AI review at step ${primary.resumeFrom + 1} did not produce a usable answer after ` +
-              `${REVIEW_RETRY_MAX} attempt(s): ${validation.errors.join("; ") || "page state kept changing"}. ` +
-              `Call execute_skill again without resume_from to restart the skill from the beginning.`
-            );
-          }
-          // use_default / continue: adopt the SAME parked page so execution resumes exactly
-          // where it paused — restarting on a fresh page here would break every later step's
-          // assumption about where in the app the workflow already got to.
-          clearTimeout(reviewPark.timer);
-          _setParkedRecovery(_parkKey, null);
-          _park = reviewPark;
-          primary.inputs[`__ai_review_answer_${primary.resumeFrom}`] =
-            onFailure === "use_default" ? stepDef.default_value : null;
-          appendRecoveryEvent({ event: "review_on_failure_applied", slug: primary.entry.slug,
-            step_index: primary.resumeFrom, policy: onFailure });
-        } else {
-          // Re-ask: keep the park alive (its TTL timer keeps running) and return a fresh review
-          // request against the CURRENT page state instead of resuming execution this call.
-          const reviewResp = await _buildReviewRequest(reviewPark.page, stepDef, primary.resumeFrom, primary.entry, {
-            validationErrors: validation.valid ? null : validation.errors,
-            pageDrifted: diverged,
-            inputs: primary.inputs,
-          });
-          if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
-          runRegistry.end(_runId);
-          await _tracker.flush();
-          _tracker.destroy();
-          return reviewResp;
-        }
-      } else {
-        // Valid answer, page unchanged — adopt the park and bind the answer so run.js's
-        // ai_review interception (right before executeStep) consumes it and moves straight past.
-        clearTimeout(reviewPark.timer);
-        _setParkedRecovery(_parkKey, null);
-        _park = reviewPark;
-        clearReviewRetry(primary.entry.slug, primary.resumeFrom);
-        primary.inputs[`__ai_review_answer_${primary.resumeFrom}`] = primary.reviewResults[answerKey];
-      }
-    }
-
     // Engine v2 C4: resuming an agent_span pause. The agent's nomination is checked and carried out on the
     // PARKED page (agent_span.js::applyRound), one action per call. Not done yet: the park stays and a fresh
     // request goes back. Done: the park is adopted and `__agent_span_done_<i>` lets run.js step past the span.
-    // Failed (budget, gave up, a popup that needs a person, left the site): the run ends with a typed reason.
-    // Like ai_review it is not gated on _effAgentEnabled and never touches recovery_stage / retry_budget.
+    // Failed (budget, gave up, too many refusals, no usable answer): the run ends with a typed reason.
+    // It is not gated on _effAgentEnabled and never touches recovery_stage / retry_budget.
     const _resumeSpanStep = resolved.length === 1 && primary.isResume
       && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type === "agent_span";
     if (_resumeSpanStep) {
@@ -1596,14 +1477,16 @@ async function _handleTool(name, args, extra) {
         _setParkedRecovery(_parkKey, null);
         _park = spanPark;
         primary.inputs[`__agent_span_done_${primary.resumeFrom}`] = true;
+        if (round.bind) primary.inputs[`__agent_span_answer_${primary.resumeFrom}`] = round.answer === undefined ? null : round.answer;
         _runTracker.emit("span_done", { si: primary.resumeFrom, n: spanPark.spanState.used });
       } else if (round.kind === "continue" || round.kind === "refused") {
-        _runTracker.emit("span_action", { si: primary.resumeFrom, ok: round.kind === "continue" ? 1 : 0 });
+        _runTracker.emit("span_action", { si: primary.resumeFrom, ok: round.kind === "continue" ? 1 : 0, ...(round.needsConfirm ? { confirm: 1 } : {}) });
         clearTimeout(spanPark.timer);
         spanPark.timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (spanPark.timer.unref) spanPark.timer.unref();
         const spanResp = await agentSpanMod.buildSpanRequest(spanPark.page, spanDef, primary.resumeFrom, spanPark.spanState,
-          round.kind === "refused" ? { refused: round.reason } : { continued: true });
+          { ...(round.kind === "refused" ? { refused: round.reason } : { continued: true }), inputs: primary.inputs });
+        if (round.needsConfirm && spanResp._meta && spanResp._meta["conxa/agent_span"]) spanResp._meta["conxa/agent_span"].needs_user_confirmation = round.label || "an action that looks irreversible";
         if (spanResp && Array.isArray(spanResp.content)) spanResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
         runRegistry.end(_runId);
@@ -1620,16 +1503,16 @@ async function _handleTool(name, args, extra) {
 
     // Outcome-fork resume: a person answered "which option for this popup?". Like a hand-over there
     // is no page-drift refusal (the person may have clicked in the page themselves; run.js looks
-    // again), but like ai_review an unusable answer gets a bounded re-ask rather than a failure.
+    // again), but an unusable answer gets a bounded re-ask rather than a failure.
     // A call that names an outcome_fork step AND carries an answer, with no matching fork park,
     // is refused outright: restarting on a fresh page would answer a popup that is not there.
     // A guard pause parked AT a fork's index (a destructive option, test guard on) is a different
     // park and falls through to the guard resume below.
     const _forkAnswerKey = String(primary.resumeFrom);
     // EXEC-49 P5: an agent-answered popup can pause at a step that is not a fork, so the step type no
-    // longer decides; the park (forkStepIndex === resume_from) does. An ai_review keeps its own path.
+    // longer decides; the park (forkStepIndex === resume_from) does. An agent_span keeps its own path.
     const _forkAnswered = resolved.length === 1 && primary.isResume
-      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type !== "ai_review"
+      && primary.steps[primary.resumeFrom] && primary.steps[primary.resumeFrom].type !== "agent_span"
       && Object.prototype.hasOwnProperty.call(primary.reviewResults || {}, _forkAnswerKey);
     const _peekForkPark = _forkAnswered ? _getParkedRecovery(_parkKey) : null;
     const _resumeForkStep = !!(_forkAnswered && _peekForkPark && _peekForkPark.forkStepIndex === primary.resumeFrom);
@@ -1690,7 +1573,7 @@ async function _handleTool(name, args, extra) {
       _runTracker.emit("fork_answered", { si: primary.resumeFrom });
     }
 
-    // EXEC-21: resuming a hand-over pause — the human sibling of the ai_review resume above.
+    // EXEC-21: resuming a hand-over pause — the human sibling of the agent_span resume above.
     // Two differences from review, both because a hand-over has no structured answer to
     // validate: (1) there is nothing to re-ask for, so a call naming a handover step with no
     // live park just refuses outright, same message shape as an expired review window; (2) page
@@ -1735,10 +1618,10 @@ async function _handleTool(name, args, extra) {
     // run on from the step) or ends the test (the park just times out). A release with no live park
     // is refused outright: restarting on a fresh page would run the irreversible step against a page
     // that is nowhere near where the workflow had got to.
-    // (A release that rides along with an ai_review answer — a person's "yes" to a confirm-only
-    // review also lets the steps behind it through — is handled by the review resume above, which
-    // adopts the review's own park; this block is only for a park the guard itself created.)
-    if (_guardRelease && !_resumeReviewStep && !_resumeSpanStep && !_resumeForkStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
+    // (A release that rides along with an agent-span answer — a person's "yes" to a confirm-only
+    // span also lets the steps behind it through — is handled by the span resume above, which
+    // adopts the span's own park; this block is only for a park the guard itself created.)
+    if (_guardRelease && !_resumeSpanStep && !_resumeForkStep && !_resumeHandoverStep && resolved.length === 1 && primary.isResume) {
       const guardPark = _getParkedRecovery(_parkKey);
       if (!guardPark || guardPark.guardStepIndex !== primary.resumeFrom) {
         appendRecoveryEvent({ event: "guard_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
@@ -2396,32 +2279,7 @@ async function _handleTool(name, args, extra) {
           _meta: { "conxa/session_expired": { run_id: _runId, step_index: failedAt } } };
       }
 
-      // EXEC-13: ai_review reached this step for the first time (not a resume) — this is a
-      // PLANNED pause, not a failure. Park the live page exactly like the Tier 3/4 `parkable`
-      // branch below (same _setParkedRecovery shape, same PARK_TTL_MS), but return a review
-      // request instead of a failure response, and never touch recoveryStage's escalation state
-      // or retry_budget.js's budget — see review_pause.js's header for why those stay separate.
-      if (runErr.reviewPause) {
-        const _reviewPage = runErr.page || page;
-        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
-        if (timer.unref) timer.unref();
-        _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
-          page: _reviewPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, reviewStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
-          pageFingerprint: await capturePageFingerprint(_reviewPage),
-          leaseKey: _leaseKey, hostRelease: _hostRelease,
-          attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
-        await closeExtraTabs(_openedTabs, _reviewPage);
-        appendRecoveryEvent({ event: "review_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
-        log("info", "review_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
-        _runTracker.emit("park_created", { si: runErr.stepIndex });
-        const reviewResp = await _buildReviewRequest(_reviewPage, runErr.step, runErr.stepIndex, primary.entry, { inputs: primary.inputs });
-        if (reviewResp && Array.isArray(reviewResp.content)) {
-          reviewResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
-        }
-        return reviewResp;
-      }
-
-      // Engine v2 C4: an agent_span reached for the first time. A PLANNED pause, parked like the ai_review one
+      // Engine v2 C4: an agent_span reached for the first time. A PLANNED pause, parked like the other pauses
       // above (same park shape, TTL and fingerprint), carrying the span's state (budget used, the element list
       // the agent is answering) so each later call can be checked against it. No recovery state, no retry budget.
       if (runErr.spanPause) {
@@ -2437,7 +2295,7 @@ async function _handleTool(name, args, extra) {
         appendRecoveryEvent({ event: "span_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PARK_TTL_MS });
         log("info", "span_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
         _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "span" });
-        const spanResp = await agentSpanMod.buildSpanRequest(_spanPage, runErr.step, runErr.stepIndex, runErr.span, {});
+        const spanResp = await agentSpanMod.buildSpanRequest(_spanPage, runErr.step, runErr.stepIndex, runErr.span, { inputs: primary.inputs });
         if (spanResp && Array.isArray(spanResp.content)) {
           spanResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
@@ -2445,7 +2303,7 @@ async function _handleTool(name, args, extra) {
       }
 
       // Outcome fork: the popup needs a person's decision. A PLANNED pause, parked exactly like the
-      // ai_review one above (same park shape, TTL and fingerprint), with the valid choices stored on
+      // agent_span one above (same park shape, TTL and fingerprint), with the valid choices stored on
       // the park so the answer can be checked against what was actually offered. No recovery state,
       // no retry budget -- nothing has been clicked.
       if (runErr.forkPause) {
@@ -2474,7 +2332,7 @@ async function _handleTool(name, args, extra) {
       }
 
       // RT-9: the test guard reached a step that can't be undone. Park the live page exactly like
-      // the ai_review pause above (same park shape, same TTL, same fingerprint) and tell the caller
+      // the agent_span pause above (same park shape, same TTL, same fingerprint) and tell the caller
       // what it is about to do — no recovery state, no retry budget, nothing sent yet.
       if (runErr.guardPause) {
         const _guardPage = runErr.page || page;
@@ -2508,7 +2366,7 @@ async function _handleTool(name, args, extra) {
 
       // EXEC-21 (hand-over shape): reached this step for the first time (not a resume) and the
       // in-call wait (handover.HANDOVER_INCALL_MS) already expired without the person
-      // signalling — see handover.js's header. Park the live page like ai_review above, but
+      // signalling — see handover.js's header. Park the live page like agent_span above, but
       // with three deliberate differences: the host lock is RELEASED (not held) for the length
       // of the pause, since a human-scale wait would otherwise starve every sibling run
       // touching the same platform (re-acquired above, on resume, gated on hostRelease being

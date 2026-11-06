@@ -50,49 +50,28 @@ def _redact_sensitive_test_inputs(skill_id: str, inputs: dict[str, Any]) -> dict
     return {k: ("" if str(k).strip().lower() in sensitive_ids else v) for k, v in inputs.items()}
 
 
-# EXEC-13: bounds the Studio sandbox's answer-and-resume loop for an ai_review checkpoint (see
-# cmd_test_workflow). A misconfigured workflow whose later steps never see a satisfying answer
-# would otherwise hold the parked browser/host-lock open indefinitely.
-_MAX_AI_REVIEW_PAUSES = 5
-_AI_REVIEW_META_KEY = "conxa/ai_review"
-
-
-def _extract_ai_review_pause(result: dict[str, Any]) -> dict[str, Any] | None:
-    """Pull {step_index, prompt, output_schema} from an ai_review pause response, or None if
-    `result` isn't one. Primary source is `_meta["conxa/ai_review"]`
-    (runtime/app/review_pause.js::buildReviewRequest) — the MCP SDK's ResultSchema is a loose
-    object, so this survives the stdio round-trip unmodified. Falls back to the prose header's
-    `resume_from: N` line (no schema available on that path, so the answer goes unvalidated
-    locally and leans on the runtime's own bounded re-ask instead)."""
-    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
-    review = meta.get(_AI_REVIEW_META_KEY)
-    if isinstance(review, dict) and isinstance(review.get("step_index"), int):
-        return {
-            "step_index": review["step_index"],
-            "prompt": str(review.get("prompt") or ""),
-            "output_schema": review.get("output_schema") if isinstance(review.get("output_schema"), dict) else None,
-        }
-    for item in result.get("content") or []:
-        if isinstance(item, dict) and item.get("type") == "text":
-            m = re.search(r"resume_from:\s*(\d+)", str(item.get("text") or ""))
-            if m:
-                return {"step_index": int(m.group(1)), "prompt": "", "output_schema": None}
-    return None
+# Bounds the Studio sandbox's answer-and-resume loop for popup decisions (see cmd_test_workflow). A misconfigured
+# workflow whose popup never settles would otherwise hold the parked browser/host-lock open indefinitely.
+_MAX_PAUSES = 5
 
 
 _AGENT_SPAN_META_KEY = "conxa/agent_span"
 # Engine v2 C4: rounds the sandbox model may spend on one test run's agent spans. The span's own budget (at most
-# 15 actions) and the runtime's refusal limit end a span first; this only stops a misbehaving answerer.
-_MAX_AGENT_SPAN_ROUNDS = 30
+# 100 actions) and the runtime's refusal limit end a span first; this only stops a misbehaving answerer.
+_MAX_AGENT_SPAN_ROUNDS = 100
+# The kinds that need an element number from the list; the rest carry a url, a tab, a key or nothing.
+_SPAN_INDEXED = ("click", "fill", "select")
+_SPAN_ACTING = ("click", "fill", "select", "scroll", "send_keys", "navigate", "go_back", "open_tab", "switch_tab", "close_tab")
+_SPAN_ALWAYS = ("done", "give_up", "wait", "read_text")
 
 
 def _extract_agent_span_pause(result: dict[str, Any]) -> dict[str, Any] | None:
-    """The numbered-element request of an agent_span pause, or None. Only `_meta` is trusted (no prose fallback:
-    the review extractor's text match would misread the span request, which also says "resume_from: N", as an
-    ai_review question)."""
+    """The request of an agent_span pause (goal, workflow context, numbered elements, tabs, the answer schema when
+    it is a question), or None. Only `_meta` is trusted: the prose also says "resume_from: N"."""
     meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
     span = meta.get(_AGENT_SPAN_META_KEY)
     if isinstance(span, dict) and isinstance(span.get("step_index"), int):
+        needs = span.get("needs_user_confirmation")
         return {
             "step_index": span["step_index"],
             "goal": str(span.get("goal") or ""),
@@ -100,14 +79,30 @@ def _extract_agent_span_pause(result: dict[str, Any]) -> dict[str, Any] | None:
             "budget_left": span.get("budget_left") if isinstance(span.get("budget_left"), dict) else {},
             "page_url": str(span.get("page_url") or ""),
             "candidates": [c for c in span.get("candidates") or [] if isinstance(c, dict)],
+            "tabs": [t for t in span.get("tabs") or [] if isinstance(t, dict)],
+            "answer_schema": span.get("answer_schema") if isinstance(span.get("answer_schema"), dict) else None,
+            "decision_dialog": span.get("decision_dialog") if isinstance(span.get("decision_dialog"), dict) else None,
+            "needs_confirm": str(needs) if needs else "",
         }
     return None
+
+
+def _is_confirm_only_span_request(span: dict[str, Any]) -> bool:
+    """A question-only span whose only answer is "yes": the workflow author's own "should a person confirm?"."""
+    from conxa_compile.editor.patch_gate import is_confirm_only_span
+
+    acting = [k for k in span.get("allowed") or [] if k in _SPAN_ACTING]
+    return is_confirm_only_span({
+        "agent_span_allowed": acting, "agent_span_answer_schema": span.get("answer_schema"), "agent_span_on_failure": "abort",
+    })
 
 
 def check_span_answer(data: Any, span: dict[str, Any], report: dict[str, Any] | None = None) -> dict[str, Any]:
     """The model's answer for one span round, held to what the runtime will accept, with every refusal counted
     (llm/model_ledger). Returns the action to send, or a give-up that says why. Never raises: a model that
-    cannot answer ends the span with a reason instead of failing the test with a stack trace."""
+    cannot answer ends the span with a reason instead of failing the test with a stack trace. The model never
+    gets to say the person agreed to something (`user_confirmed` is dropped): only the Studio's own person-prompt
+    can add that."""
     from conxa_compile.llm.model_ledger import log as _log
 
     def give_up(why: str) -> dict[str, Any]:
@@ -116,14 +111,14 @@ def check_span_answer(data: Any, span: dict[str, Any], report: dict[str, Any] | 
     if not isinstance(data, dict):
         _log(report, "shape", "malformed_reply")
         return give_up("the model's answer was not a JSON object")
-    if str(data.get("status") or "").lower() == "give_up":
+    if str(data.get("status") or "").lower() == "give_up" or data.get("kind") == "give_up":
         return give_up(str(data.get("why") or "the model gave up")[:200])
     kind = str(data.get("kind") or "")
-    if kind not in ("click", "fill", "select", "scroll") or kind not in span.get("allowed", []):
+    if kind not in _SPAN_ACTING + _SPAN_ALWAYS or kind not in span.get("allowed", []):
         _log(report, "override", "action_not_allowed", kind)
         return give_up(f"the model chose \u201c{kind}\u201d, which this step does not allow")
     action: dict[str, Any] = {"kind": kind}
-    if kind != "scroll":
+    if kind in _SPAN_INDEXED:
         index = data.get("candidate_index")
         if isinstance(index, bool) or not isinstance(index, int):
             _log(report, "shape", "bad_candidate_index", index)
@@ -132,8 +127,18 @@ def check_span_answer(data: Any, span: dict[str, Any], report: dict[str, Any] | 
             _log(report, "reference", "unknown_candidate", index)
             return give_up("the model named an element that is not in the list")
         action["candidate_index"] = index
-    if data.get("value") is not None:
-        action["value"] = str(data["value"])[:200]
+    if kind in ("navigate", "open_tab"):
+        action["url"] = str(data.get("url") or "")[:2000]
+    if kind in ("switch_tab", "close_tab"):
+        tab = data.get("tab")
+        if isinstance(tab, bool) or not isinstance(tab, int):
+            _log(report, "shape", "bad_tab", tab)
+            return give_up("the model did not name a tab number")
+        action["tab"] = tab
+    if kind == "done" and isinstance(data.get("answer"), (dict, list, str, int, float, bool)):
+        action["answer"] = data["answer"]
+    if data.get("value") is not None and kind not in ("done", "navigate", "open_tab"):
+        action["value"] = str(data["value"])[:2000]
     return action
 
 
@@ -166,10 +171,9 @@ def _extract_stopped_at(result: dict[str, Any]) -> dict[str, Any] | None:
 
 def _extract_fork_pause(result: dict[str, Any]) -> dict[str, Any] | None:
     """Pull the question from an outcome-fork pause (a popup that needs a PERSON to decide), or None
-    when `result` isn't one. Only `_meta` is trusted, and this MUST be checked before
-    _extract_ai_review_pause: the fork's prose also contains "resume_from: N", which the review
-    extractor's text fallback would misread as an ai_review question and hand to the model --
-    exactly what a human-only decision must never reach."""
+    when `result` isn't one. Only `_meta` is trusted: the fork's prose also contains "resume_from: N",
+    which a prose-matching extractor would misread and hand to the model -- exactly what a human-only
+    decision must never reach."""
     meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
     fork = meta.get(_FORK_META_KEY)
     if isinstance(fork, dict) and isinstance(fork.get("step_index"), int):
@@ -193,7 +197,7 @@ def _extract_guard_pause(result: dict[str, Any]) -> dict[str, Any] | None:
     """Pull {step_index, step_intent, remaining_irreversible, run_id} from an RT-9 guard pause
     (runtime/app/server.js: the run stopped, parked, before a step that can't be undone), or None
     when `result` isn't one. Only `_meta` is trusted — there is deliberately no prose fallback,
-    because the ai_review extractor above treats any "resume_from" text as a review pause."""
+    because a prose-matching extractor would treat any "resume_from" text as a pause of its own."""
     meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
     guard = meta.get(_GUARD_META_KEY)
     if isinstance(guard, dict) and isinstance(guard.get("step_index"), int):
@@ -260,7 +264,7 @@ def capabilities_needed(steps: list[Any]) -> set[str]:
             if act == "extract":
                 need.add("outputs")
             if act == "agent_span":
-                need.add("agent_span")
+                need.add("agent_span_v2")
             if isinstance(s.get("run_if"), dict) and s["run_if"].get("input"):
                 need.add("run_if")
             hints = s.get("handler_hints") if isinstance(s.get("handler_hints"), dict) else {}
@@ -287,19 +291,12 @@ def capabilities_needed(steps: list[Any]) -> set[str]:
     return need
 
 
-def _is_confirm_only_review_request(review: dict[str, Any]) -> bool:
-    from conxa_compile.editor.patch_gate import is_confirm_only_review
-
-    return is_confirm_only_review({"ai_review_output_schema": review.get("output_schema"), "ai_review_on_failure": "abort"})
-
-
 def _drive_runtime_pauses(
     result: dict[str, Any],
     run_args: dict[str, Any],
     *,
     call: Any,
     cancel_run: Any,
-    answer_review: Any,
     guard_hook: Any,
     review_hook: Any,
     guard_requested: bool,
@@ -312,16 +309,17 @@ def _drive_runtime_pauses(
     """Keep calling the runtime until it stops pausing. Returns ``(final result, stopped_at)``.
 
     Four kinds of pause: a popup decision (an outcome fork -- only the person decides, never the
-    model; with no one to ask the test ends there), the RT-9 guard (a step that can't be undone — the person decides), a
-    confirm-only review (the workflow author's own "should a person confirm?" — the person answers,
-    and "yes" also releases the guard in the same resume so they are not asked twice), and an
-    ordinary ai_review (the sandbox model answers, as before). ``stopped_at`` is set when the person
-    ended the test (or said no); nothing past that point ran. Bounded, so a misbehaving answerer
-    fails the test loudly instead of looping while holding a parked browser open."""
+    model; with no one to ask the test ends there), the RT-9 guard (a step that can't be undone — the person decides),
+    and an agent span. A span is one of: a confirm-only question (the workflow author's own "should a person
+    confirm?" — the person answers, and "yes" also releases the guard in the same resume so they are not asked
+    twice), a button the runtime wants the person's yes for before it is pressed (the person answers; the model
+    never does), or ordinary work the sandbox model does, one action per round. ``stopped_at`` is set when the
+    person ended the test (or said no); nothing past that point ran. Bounded, so a misbehaving answerer fails
+    the test loudly instead of looping while holding a parked browser open."""
     pauses_seen = 0
     span_rounds = 0
+    last_action: dict[str, Any] | None = None
     while True:
-        # Guard first: the review extractor's prose fallback would misread any pause as a review.
         guard = _extract_guard_pause(result)
         if guard is not None:
             decision = guard_hook(guard) if guard_hook is not None else "end_here"
@@ -338,23 +336,41 @@ def _drive_runtime_pauses(
         span = _extract_agent_span_pause(result)
         if span is not None:
             # Engine v2 C4: an agent_span. In a real run the caller's agent works through it; here Studio's own
-            # model does (metered), one candidate action per call, so the author sees the span work before
-            # approving. With "let AI answer" off there is no one to ask: the test ends at the span.
+            # model does (metered), one action per call, so the author sees the span work before approving. With
+            # "let AI answer" off there is no one to ask: the test ends at the span.
             span_rounds += 1
-            if answer_span is None:
-                return result, {"step_index": span["step_index"], "step_intent": span["goal"],
-                                "remaining": 0, "run_id": "", "declined": True}
             if span_rounds > _MAX_AGENT_SPAN_ROUNDS:
                 raise RuntimeError(f"An agent span used {span_rounds} rounds in one test run — stopping instead of looping.")
-            mark(f"The agent is working on step {span['step_index'] + 1}…")
-            action = answer_span(span, result.get("content") or [])
-            run_args = {**run_args, "resume_from": span["step_index"], "span_actions": {str(span["step_index"]): action}}
+            declined = {"step_index": span["step_index"], "step_intent": span["goal"], "remaining": 0, "run_id": "", "declined": True}
+            extra: dict[str, Any] = {}
+            if span["needs_confirm"] and last_action is not None and review_hook is not None:
+                # The runtime refused an irreversible-looking action until a person says yes. Only a person can.
+                mark(f"Waiting for your yes at step {span['step_index'] + 1}…")
+                if not review_hook({"step_index": span["step_index"], "prompt": f"The agent wants to do something that can't be undone: {span['needs_confirm']}. Allow it?"}):
+                    return result, declined
+                action = {**last_action, "user_confirmed": True}
+            elif span["needs_confirm"]:
+                return result, declined
+            elif _is_confirm_only_span_request(span) and review_hook is not None:
+                mark(f"Waiting for your confirmation at step {span['step_index'] + 1}…")
+                if not review_hook({"step_index": span["step_index"], "prompt": span["goal"]}):
+                    return result, declined
+                action = {"kind": "done", "answer": {"confirmed": True}}
+                if guard_requested and not previewed:
+                    extra["_guard_release"] = True
+            else:
+                if answer_span is None:
+                    return result, declined
+                mark(f"The agent is working on step {span['step_index'] + 1}…")
+                action = answer_span(span, result.get("content") or [])
+            last_action = action
+            run_args = {**run_args, "resume_from": span["step_index"], "span_actions": {str(span["step_index"]): action}, **extra}
             result = call(run_args)
             continue
         fork = _extract_fork_pause(result)
         if fork is not None:
             pauses_seen += 1
-            if pauses_seen > _MAX_AI_REVIEW_PAUSES:
+            if pauses_seen > _MAX_PAUSES:
                 raise RuntimeError(
                     f"A popup decision paused {pauses_seen} times in one test run — stopping instead of looping."
                 )
@@ -377,36 +393,12 @@ def _drive_runtime_pauses(
                         "review_results": {str(fork["step_index"]): {"choice": choice}}}
             result = call(run_args)
             continue
-        review = _extract_ai_review_pause(result)
-        if review is None:
-            return result, None
-        pauses_seen += 1
-        if pauses_seen > _MAX_AI_REVIEW_PAUSES:
-            raise RuntimeError(
-                f"AI review paused {pauses_seen} times in one test run — stopping "
-                "instead of looping. Check the workflow for a review step whose answer "
-                "never satisfies a later step."
-            )
-        extra: dict[str, Any] = {}
-        if review_hook is not None and _is_confirm_only_review_request(review):
-            mark(f"Waiting for your confirmation at step {review['step_index'] + 1}…")
-            if not review_hook(review):
-                return result, {"step_index": review["step_index"], "step_intent": review.get("prompt", ""),
-                                "remaining": 0, "run_id": "", "declined": True}
-            answer = {"confirmed": True}
-            if guard_requested and not previewed:
-                extra["_guard_release"] = True
-        else:
-            mark(f"Answering AI review at step {review['step_index'] + 1}…")
-            answer = answer_review(review, result.get("content") or [])
-        run_args = {**run_args, "resume_from": review["step_index"], "review_results": {str(review["step_index"]): answer}, **extra}
-        result = call(run_args)
+        return result, None
 
 
 def _review_context_from_content(content: list[Any]) -> tuple[str, tuple[str, str] | None]:
-    """Split an ai_review pause's MCP content blocks into (joined text, last image). The LAST
-    image block is always the current-page screenshot — buildReviewRequest pushes an optional
-    reference image first, the current one last."""
+    """Split a pause's MCP content blocks into (joined text, last image). The LAST image block is
+    always the current-page screenshot."""
     text_parts: list[str] = []
     image: tuple[str, str] | None = None
     for item in content or []:
@@ -437,10 +429,10 @@ def _matches_type(value: Any, type_name: str) -> bool:
     return True  # unknown type token — don't block on it
 
 
-def _validate_ai_review_answer(answer: Any, output_schema: dict[str, Any] | None) -> list[str]:
-    """Same hand-rolled structural check as runtime/app/review_pause.js::validateReviewAnswer
+def _validate_answer_schema(answer: Any, output_schema: dict[str, Any] | None) -> list[str]:
+    """Same hand-rolled structural check as runtime/app/agent_span.js::validateAnswer
     (required fields + type + enum, not full JSON Schema) — mirrored here so a malformed Studio
-    answer fails fast instead of burning the runtime's own two bounded re-asks."""
+    answer fails fast."""
     if not output_schema:
         return []
     if not isinstance(answer, dict):
@@ -589,6 +581,19 @@ class WorkflowsMixin:
                         return wf
         raise _CommandError("workflow_not_found", f"No workflow with slug {skill_slug!r}")
 
+    @staticmethod
+    def _require_no_unanswered_questions(workflows: list[Any]) -> None:
+        """Every question the Studio asked is a hard blocker: nothing ships while one is unanswered."""
+        from conxa_compile.conversation import clarify_store
+
+        for wf in workflows:
+            n = int((clarify_store.summary(wf.id) or {}).get("unanswered") or 0)
+            if n:
+                raise _CommandError(
+                    "unanswered_questions",
+                    f"“{wf.name}” has {n} unanswered question{'s' if n != 1 else ''}. Answer them in its conversation first.",
+                )
+
     def _require_confirmed_entity_bindings(self, skill_id: str, skill_slug: str) -> None:
         """PROD-3 publish gate: an irreversible step whose compiler-detected entity binding
         (a repeating row/record container) was never confirmed by the vendor cannot be
@@ -679,6 +684,8 @@ class WorkflowsMixin:
         skill_slug = workflow.slug
         if not workflow.skill_id:
             raise _CommandError("workflow_uncompiled", f"Workflow {skill_slug!r} is not compiled yet")
+
+        self._require_no_unanswered_questions([workflow])
 
         # PROD-3: patch_gate only fires on an edit — this is the check that actually blocks a
         # release. A destructive step whose compile-time-detected entity binding is still
@@ -804,6 +811,9 @@ class WorkflowsMixin:
         pack = get_skill_pack(workspace_id)
         if pack is None:
             raise _CommandError("skill_pack_not_found", f"No skill pack built yet for workspace {workspace_id}")
+        from conxa_core.storage.workflow_store import list_workflows
+
+        self._require_no_unanswered_questions([w for w in list_workflows(workspace_id) if w.signed_off])
         company_slug = workspace_dir_slug(workspace_id)
         version = _validate_release_version(payload.get("version"))
         release_notes = _validate_release_notes(payload.get("release_notes"))
@@ -897,58 +907,11 @@ class WorkflowsMixin:
             })
         return result
 
-    def _answer_ai_review(self, review: dict[str, Any], content: list[Any]) -> dict[str, Any]:
-        """EXEC-13: Studio's stand-in answerer for an ai_review checkpoint when no MCP agent is
-        present to answer it (see cmd_test_workflow's park/resume loop). Metered exactly like
-        every other Human Edit vision call — `usage_class="ai_credits"` routes through
-        `ensure_ai_credits_available`/`record_llm_usage` on the cloud proxy, no new entitlement
-        surface (conxa-cloud/backend/app/api/llm_proxy_routes.py::_meter_and_call).
-
-        Tries the text-model route first (`call_llm`'s default for a task not in VISION_TASKS —
-        deliberate: multimodal providers accept the image on either route, only the *model
-        selected* differs) and falls back once to the vision route directly on a provider-side
-        failure. Raises RuntimeError on any failure — the caller (cmd_test_workflow) already
-        catches RuntimeError and surfaces it as a failed test.
-        """
-        from conxa_compile.llm.client import call_llm
-        from conxa_core import llm as core_llm
-        from conxa_core.config import settings as _settings
-        from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, QuotaExceeded
-
-        self._install_proxy_router(usage_class="ai_credits")
-
-        context_text, image = _review_context_from_content(content)
-        prompt = str(review.get("prompt") or "")
-        output_schema = review.get("output_schema")
-        schema_note = (
-            f"\n\nYour answer must be a JSON object matching this schema:\n{json.dumps(output_schema)}"
-            if output_schema
-            else "\n\nReturn a JSON object with a single \"answer\" string field."
-        )
-        payload: dict[str, Any] = {"user_text": f"Question: {prompt}{schema_note}\n\n{context_text}"}
-        if image:
-            payload["image_base64"], payload["image_mime"] = image
-
-        timeout_ms = _settings.llm_vision_timeout_ms
-        try:
-            data = call_llm("ai_review", payload, timeout_ms)
-        except (QuotaExceeded, EntitlementBlocked):
-            # Retrying via the vision route hits the same quota/entitlement wall — propagate
-            # immediately rather than burning a second (also-blocked) call.
-            raise
-        except CloudUnreachable:
-            data = core_llm.get_router().route_vision("ai_review", payload, timeout_ms)
-
-        if not isinstance(data, dict):
-            raise RuntimeError("AI review answerer returned no usable response.")
-        errors = _validate_ai_review_answer(data, output_schema if isinstance(output_schema, dict) else None)
-        if errors:
-            raise RuntimeError(f"AI review answer did not match the required output: {'; '.join(errors)}")
-        return data
-
     def _answer_agent_span(self, span: dict[str, Any], content: list[Any], workflow_id: str = "") -> dict[str, Any]:
-        """Engine v2 C4: Studio's stand-in for the MCP agent on an agent_span, one candidate action per call. Same
-        metering and route as `_answer_ai_review`. The answer is held to what the runtime will accept
+        """Engine v2 C4: Studio's stand-in for the MCP agent on an agent_span, one action per call. Metered exactly
+        like every other Human Edit vision call (`usage_class="ai_credits"`, no new entitlement surface). Tries the
+        text-model route first and falls back once to the vision route on a provider-side failure. The answer is
+        held to what the runtime will accept
         (`check_span_answer`) and every refusal is counted in the workflow's model ledger; a model that cannot
         answer gives the span up with a reason."""
         from conxa_compile.llm import model_ledger
@@ -960,7 +923,11 @@ class WorkflowsMixin:
         self._install_proxy_router(usage_class="ai_credits")
 
         context_text, image = _review_context_from_content(content)
-        payload: dict[str, Any] = {"user_text": context_text}
+        schema_note = (
+            f"\n\nWhen you send done, include \"answer\": a JSON object matching this schema:\n{json.dumps(span['answer_schema'])}"
+            if span.get("answer_schema") else ""
+        )
+        payload: dict[str, Any] = {"user_text": f"{context_text}{schema_note}"}
         if image:
             payload["image_base64"], payload["image_mime"] = image
         timeout_ms = _settings.llm_vision_timeout_ms
@@ -978,7 +945,7 @@ class WorkflowsMixin:
 
     def _answer_popup_choice(self, fork: dict[str, Any], content: list[Any]) -> str:
         """EXEC-49 P5: Studio's stand-in for the MCP client when the runtime puts a popup the workflow was
-        never taught to its caller. Same metering and route as `_answer_ai_review`. It can only name one of
+        never taught to its caller. Same metering and route as `_answer_agent_span`. It can only name one of
         the buttons the runtime offered (or stop); when it cannot tell, it stops. Anything else raises, and
         the test fails loudly rather than guessing."""
         from conxa_compile.llm.client import call_llm
@@ -1001,15 +968,15 @@ class WorkflowsMixin:
 
         timeout_ms = _settings.llm_vision_timeout_ms
         try:
-            data = call_llm("ai_review", payload, timeout_ms)
+            data = call_llm("popup_choice", payload, timeout_ms)
         except (QuotaExceeded, EntitlementBlocked):
             raise
         except CloudUnreachable:
-            data = core_llm.get_router().route_vision("ai_review", payload, timeout_ms)
+            data = core_llm.get_router().route_vision("popup_choice", payload, timeout_ms)
 
         if not isinstance(data, dict):
             raise RuntimeError("The popup answerer returned no usable response.")
-        errors = _validate_ai_review_answer(data, schema)
+        errors = _validate_answer_schema(data, schema)
         if errors:
             raise RuntimeError(f"The popup answer did not match the offered buttons: {'; '.join(errors)}")
         return str(data["choice"])
@@ -1046,19 +1013,14 @@ class WorkflowsMixin:
         #   guard        — pause before the first step that can't be undone (RT-9) instead of running it
         #   _phase_hook  — called with each runtime test_phase entry (step starts, with names)
         #   _guard_hook  — called when the guard pauses; returns "run_rest" or "end_here"
-        #   _review_hook — called with a confirm-only ai_review request; returns True (yes) or False (no)
+        #   _review_hook — called with a confirm-only agent-span request (or a button the runtime wants a yes for);
+        #                  returns True (yes) or False (no)
         # The hooks are Python callables an in-process caller passes; a JSON caller cannot supply them.
         guard_requested = bool(payload.get("guard"))
         _hook = lambda name: payload.get(name) if callable(payload.get(name)) else None  # noqa: E731
         phase_hook, guard_hook, review_hook = _hook("_phase_hook"), _hook("_guard_hook"), _hook("_review_hook")
         fork_hook = _hook("_fork_hook")  # called with a popup-decision question; returns a choice id
-        use_ai = payload.get("use_ai", True) is not False  # off: an ai_review checkpoint fails the test instead of asking the model
-
-        def _no_ai_answer(review: dict[str, Any], content: list[Any]) -> dict[str, Any]:
-            raise RuntimeError(
-                f"Step {int(review.get('step_index') or 0) + 1} needs an AI review, but AI is turned off for this test. "
-                "Turn it on and test again."
-            )
+        use_ai = payload.get("use_ai", True) is not False  # off: an agent span ends the test ("passed up to here") instead of asking the model
 
         workflow = get_workflow(workflow_id)
         if workflow is None:
@@ -1250,11 +1212,10 @@ class WorkflowsMixin:
                 env={"CONXA_DATA_DIR": str(test_data_dir)},
                 phase_sink=_phase_sink,
             )
-            # EXEC-13: no MCP agent is present in a Studio test run to answer an ai_review
-            # checkpoint's park/resume request — Studio answers it itself through the metered
-            # cloud proxy and resumes, exactly like a real agent would. Bounded (not `while True`)
-            # so a misbehaving answerer fails the test loudly instead of looping forever holding
-            # the parked browser/host-lock open.
+            # No MCP agent is present in a Studio test run to answer an agent span's park/resume
+            # request — Studio answers it itself through the metered cloud proxy and resumes, exactly
+            # like a real agent would. Bounded (not `while True`) so a misbehaving answerer fails the
+            # test loudly instead of looping forever holding the parked browser/host-lock open.
             result, stopped_at_guard = _drive_runtime_pauses(
                 result, run_args,
                 call=lambda args: call_runtime_tool(
@@ -1263,12 +1224,12 @@ class WorkflowsMixin:
                 cancel_run=lambda run_id: call_runtime_tool(
                     runtime_dir, "cancel_execution", {"run_id": run_id}, conxa_dir=conxa_dir,
                     env={"CONXA_DATA_DIR": str(test_data_dir)}),
-                answer_review=self._answer_ai_review if use_ai else _no_ai_answer, guard_hook=guard_hook, review_hook=review_hook,
+                guard_hook=guard_hook, review_hook=review_hook,
                 guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
                 answer_popup=popup_answerer,
                 # Engine v2 C4: an agent_span is answered by Studio's own model, only with "let AI answer" on.
                 answer_span=(lambda span, content: self._answer_agent_span(span, content, workflow_id))
-                if use_ai and _app_layer_supports(conxa_dir, "agent_span") else None,
+                if use_ai and _app_layer_supports(conxa_dir, "agent_span_v2") else None,
             )
             _mark("Runtime call finished")
         except (RuntimeToolError, RuntimeError) as exc:

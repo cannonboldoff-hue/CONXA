@@ -131,9 +131,9 @@ def pinned_facts(digest: dict[str, Any] | None, clarify: dict[str, Any] | None, 
         irreversible = [_step_name(s) for s in digest.get("steps") or [] if isinstance(s, dict) and s.get("consequence") == "irreversible"]
         if irreversible:
             facts.append("Steps that can't be undone: " + ", ".join(f"“{n}”" for n in irreversible))
-        reviews = [_step_name(s) for s in digest.get("steps") or [] if isinstance(s, dict) and s.get("action_kind") == "ai_review"]
+        reviews = [_step_name(s) for s in digest.get("steps") or [] if isinstance(s, dict) and s.get("action_kind") == "agent_span"]
         if reviews:
-            facts.append("Confirmation / review points: " + ", ".join(f"“{n}”" for n in reviews))
+            facts.append("Agent-span / confirmation points: " + ", ".join(f"“{n}”" for n in reviews))
         inputs = digest.get("inputs")
         if isinstance(inputs, list) and inputs:
             names = [str(i.get("name") or i.get("id")) for i in inputs if isinstance(i, dict)]

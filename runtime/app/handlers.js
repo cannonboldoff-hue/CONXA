@@ -1055,13 +1055,13 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
   await answerDialog(dialog, step, inputs);
 };
 
-// Step types run.js's executeOneStep intercepts BEFORE ever reaching this dispatcher: ai_review
+// Step types run.js's executeOneStep intercepts BEFORE ever reaching this dispatcher: agent_span
 // and handover are planned pauses with no selector or handler at all, for_each is a loop
 // primitive whose body steps re-enter executeOneStep directly. In normal operation `step.type`
 // is never one of these by the time executeStep runs — this set only matters if something calls
 // executeStep directly, bypassing run.js (a test harness, say), where the correct behavior is
 // still "do nothing" rather than the throw below.
-const PRE_DISPATCH_STEP_TYPES = new Set(["ai_review", "handover", "agent_span", "for_each", "outcome_fork", "call_workflow"]);
+const PRE_DISPATCH_STEP_TYPES = new Set(["handover", "agent_span", "for_each", "outcome_fork", "call_workflow"]);
 
 // What an extract step reads. `source`: text (visible text, the default), value (an input's value) or
 // attribute (named by `attribute`). `pattern`, if given, keeps the first capture group (or the whole

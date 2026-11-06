@@ -22,6 +22,12 @@ from typing import Any
 
 from handlers.protocol import _CommandError, _event_sink, _safe_id
 
+
+def _is_confirm_only_span(step: dict) -> bool:
+    from conxa_compile.editor.patch_gate import is_confirm_only_span
+
+    return is_confirm_only_span(step)
+
 MAX_AUTOFIX_ATTEMPTS = 3
 _DECISION_TIMEOUT_S = 170  # just under the runtime's 180 s park window
 
@@ -93,7 +99,8 @@ class TestFlowMixin:
         card = harness.post_card(
             _thread(workflow_id), "test_inputs", "open", sink=sink, inputs=inputs, irreversible=irreversible[-3:],
             irreversible_count=len(irreversible), guard=True, show_browser=True, use_ai=False,
-            ai_review_count=sum(1 for s in steps if isinstance(s, dict) and clarify._action_name(s) == "ai_review"),
+            agent_step_count=sum(1 for s in steps if isinstance(s, dict) and clarify._action_name(s) == "agent_span"
+                                 and not _is_confirm_only_span(s)),
             version=int((doc.get("meta") or {}).get("version") or 1), step_count=len(steps),
             actions=["run"],
         )

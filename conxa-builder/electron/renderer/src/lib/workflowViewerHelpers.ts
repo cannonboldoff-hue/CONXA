@@ -48,7 +48,6 @@ export const ADD_ACTION_OPTIONS = [
   { value: 'check', label: 'Check', category: 'Validation' },
   { value: 'assert', label: 'Assert', category: 'Validation' },
   { value: 'screenshot', label: 'Screenshot', category: 'Validation' },
-  { value: 'ai_review', label: 'AI Review', category: 'Validation' },
   { value: 'click', label: 'Click', category: 'Pointer' },
   { value: 'dblclick', label: 'Double click', category: 'Pointer' },
   { value: 'right_click', label: 'Right click', category: 'Pointer' },

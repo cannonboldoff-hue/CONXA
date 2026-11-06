@@ -574,7 +574,7 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
 
     if action == "extract":
         # Reads a value off the matched element into the output named by `value` (the editor keeps the
-        # name there, like ai_review). No name or no target means there is nothing to read or report,
+        # name there, like a span's output name). No name or no target means there is nothing to read or report,
         # so the step is dropped with the same warning the unexportable cases give.
         selector = _step_selector(step)
         name = _action_value_text(step).strip()
@@ -716,56 +716,19 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
             out["selector"] = selector
         return _copy_saved_common(step, out)
 
-    if action == "ai_review":
-        # EXEC-13: a planned pause, not a page action — no selector to resolve. Config lives in
-        # top-level `ai_review_*` fields (the same shape check/assert's check_kind/check_pattern/
-        # etc. use, per _saved_check_like_step above) rather than nested under `action` — the
-        # saved-skill export normalizes `action` down to a plain string before this function
-        # ever runs, so scroll/drag_drop's action-dict nesting isn't available here.
-        # `reference_screenshot_ref` is author-set at edit time (there is no recorded screenshot
-        # to auto-associate — ai_review is inserted during Human Edit, not captured during
-        # recording), pointing at wherever the editor already saved it under `visuals/`.
-        # `output_name` is omitted when blank; run.js falls back to `ai_review_output_<step
-        # index>` at execution time using the same index space.
-        prompt = str(step.get("ai_review_prompt") or "").strip()
-        if not prompt:
-            return None
-        out: dict[str, Any] = {
-            "type": "ai_review",
-            "prompt": prompt,
-            "on_failure": str(step.get("ai_review_on_failure") or "abort").strip().lower(),
-        }
-        output_schema = step.get("ai_review_output_schema")
-        if isinstance(output_schema, dict) and output_schema:
-            out["output_schema"] = output_schema
-        reference_ref = str(step.get("ai_review_reference_screenshot_ref") or "").strip()
-        if reference_ref:
-            out["reference_screenshot_ref"] = reference_ref
-        attach = step.get("ai_review_attach")
-        if isinstance(attach, list):
-            names = [str(n) for n in attach if isinstance(n, str) and n.strip()]
-            if names:
-                out["attach"] = names
-        if out["on_failure"] == "use_default":
-            out["default_value"] = step.get("ai_review_default_value")
-        output_name = _action_value_text(step).strip()
-        if output_name:
-            out["output_name"] = output_name
-        return _copy_saved_common(step, out)
-
     if action == "handover":
         # EXEC-21 (hand-over shape): a planned pause, no selector — the human sibling of
-        # ai_review immediately above. The message shown to the person rides the generic value
+        # agent_span below. The message shown to the person rides the generic value
         # field (see action_registry.py's VALUE_LABELS) rather than a dedicated
         # `handover_message` field; everything else lives in top-level `handover_*` fields, same
-        # convention as ai_review's `ai_review_*` fields.
+        # convention as the span's `agent_span_*` fields.
         message = _action_value_text(step).strip()
         if not message:
             return None
         out: dict[str, Any] = {
             "type": "handover",
             "message": message,
-            # No use_default here (unlike ai_review) — a hand-over produces no answer value to
+            # No use_default here (unlike a span answer) — a hand-over produces no answer value to
             # fall back to, only abort (default) or continue past it are meaningful.
             "on_failure": str(step.get("handover_on_failure") or "abort").strip().lower(),
         }
@@ -778,31 +741,53 @@ def _saved_step_to_execution_step(step: dict[str, Any]) -> dict[str, Any] | None
         return _copy_saved_common(step, out)
 
     if action == "agent_span":
-        # Engine v2 C4: an author-placed span the caller's agent carries out. No selector. The goal rides the
-        # generic value. A span with no goal, no valid ending check or no allowed action is dropped, like an
-        # ai_review with no prompt, rather than shipping open-ended; the budget is always bounded.
+        # Engine v2 C4: an author-placed span the caller's agent carries out (a Browser-Use-style loop), which
+        # also does what the removed ai_review step did: with an answer schema it asks a question and binds the
+        # structured reply. No selector. The goal rides the generic value. A span with no goal, or with neither
+        # an allowed action nor an answer, is dropped (with a warning at build) rather than shipping open-ended;
+        # the budget is always bounded. The ending check (`until`) is optional.
         goal = _action_value_text(step).strip()
-        until = step.get("agent_span_until")
-        allowed = step.get("agent_span_allowed")
-        if not goal or not isinstance(until, dict) or not str(until.get("type") or "").strip():
+        if not goal:
             return None
-        allowed = [str(a) for a in allowed if str(a) in {"click", "fill", "select", "scroll"}] if isinstance(allowed, list) else []
-        if not allowed:
+        allowed = step.get("agent_span_allowed")
+        allowed = [str(a) for a in allowed if str(a) in _AGENT_SPAN_KINDS] if isinstance(allowed, list) else []
+        schema = step.get("agent_span_answer_schema")
+        schema = schema if isinstance(schema, dict) and schema else None
+        if not allowed and schema is None:
             return None
         budget = step.get("agent_span_budget") if isinstance(step.get("agent_span_budget"), dict) else {}
         actions = budget.get("actions")
         seconds = budget.get("seconds")
-        return _copy_saved_common(step, {
+        out: dict[str, Any] = {
             "type": "agent_span",
             "goal": goal,
             "allowed": list(dict.fromkeys(allowed)),
-            "until": {"type": str(until["type"]).strip(), "target": str(until.get("target") or ""), "required": True},
             "budget": {
-                "actions": max(1, min(int(actions), 15)) if isinstance(actions, (int, float)) and not isinstance(actions, bool) else 8,
-                "seconds": max(10, min(int(seconds), 600)) if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else 120,
+                "actions": max(1, min(int(actions), 100)) if isinstance(actions, (int, float)) and not isinstance(actions, bool) else 25,
+                "seconds": max(10, min(int(seconds), 1800)) if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else 600,
             },
             "on_budget": "fail",
-        })
+        }
+        until = step.get("agent_span_until")
+        if isinstance(until, dict) and str(until.get("type") or "").strip():
+            out["until"] = {"type": str(until["type"]).strip(), "target": str(until.get("target") or ""), "required": True}
+        if schema is not None:
+            answer: dict[str, Any] = {
+                "schema": schema,
+                "on_failure": str(step.get("agent_span_on_failure") or "abort").strip().lower(),
+            }
+            output_name = str(step.get("agent_span_output_name") or "").strip()
+            if output_name:
+                answer["output_name"] = output_name
+            if answer["on_failure"] == "use_default":
+                answer["default_value"] = step.get("agent_span_default_value")
+            out["answer"] = answer
+        attach = step.get("agent_span_attach")
+        if isinstance(attach, list):
+            names = [str(n) for n in attach if isinstance(n, str) and n.strip()]
+            if names:
+                out["attach"] = names
+        return _copy_saved_common(step, out)
 
     if action in {"if_present", "try_dismiss", "wait_for_one_of"}:
         return _saved_branch_step(step, action)
@@ -945,9 +930,15 @@ def _dialog_input_descriptions(source_steps: list[dict[str, Any]]) -> dict[str, 
     return {}
 
 
+# Mirrors runtime/app/agent_span.js ALLOWED_KINDS and editor/patch_gate.py AGENT_SPAN_KINDS.
+_AGENT_SPAN_KINDS = {
+    "click", "fill", "select", "scroll", "send_keys", "navigate", "go_back", "open_tab", "switch_tab", "close_tab",
+}
+
+
 def _produced_names(steps: Any) -> set[str]:
     """Names a run binds into its own inputs: extract / clipboard_read ``output_name``, and an
-    ai_review's ``output_name`` plus ``<output_name>_<field>`` for each plain field of its schema
+    an agent span answer's ``output_name`` plus ``<output_name>_<field>`` for each plain field of its schema
     (run.js binds those so a later step can use ``{{x_field}}``)."""
     out: set[str] = set()
 
@@ -956,12 +947,16 @@ def _produced_names(steps: Any) -> set[str]:
             if not isinstance(s, dict):
                 continue
             kind, name = s.get("type"), str(s.get("output_name") or "")
-            if name and kind in {"extract", "clipboard_read", "ai_review"}:
+            if name and kind in {"extract", "clipboard_read"}:
                 out.add(name)
-                if kind == "ai_review":
-                    props = (s.get("output_schema") or {}).get("properties") if isinstance(s.get("output_schema"), dict) else None
+            if kind == "agent_span" and isinstance(s.get("answer"), dict):
+                answer = s["answer"]
+                span_name = str(answer.get("output_name") or "")
+                if span_name:
+                    out.add(span_name)
+                    props = (answer.get("schema") or {}).get("properties") if isinstance(answer.get("schema"), dict) else None
                     for field in props if isinstance(props, dict) else []:
-                        out.add(f"{name}_{field}")
+                        out.add(f"{span_name}_{field}")
             if kind == "call_workflow" and isinstance(s.get("call"), dict) and isinstance(s["call"].get("outputs"), dict):
                 out.update(str(v) for v in s["call"]["outputs"].values())
             walk(s.get("steps"))
@@ -991,7 +986,7 @@ def _merge_saved_inputs_with_execution_placeholders(
     # A for_each loop's own {{<as>_id}}/{{<as>_index}} are populated by run.js at replay time,
     # never something a user/agent supplies — same reason downloaded_file* is excluded below.
     loop_vars = for_each_loop_variable_names(execution_steps)
-    # Values the run itself produces (an extract, an ai_review answer and its fields, a clipboard read)
+    # Values the run itself produces (an extract, an agent-span answer and its fields, a clipboard read)
     # are filled in by the runtime, never something the caller supplies.
     produced = _produced_names(execution_steps)
     # The primary record->compile path (compiler/build.py) already declares file_path with a
@@ -1405,12 +1400,12 @@ def _build_workflow_from_saved_skill(
                 if on_warning:
                     on_warning(f"Step {raw_index}: the popup decision has no runnable choices and was removed from the skill.")
                 continue
-            if normalize_action_kind(action) == "ai_review":
-                # EXEC-13: an inserted-but-unconfigured AI Review step (blank prompt — see
-                # _new_manual_step) has nothing to ask. Same drop-and-warn shape as drag_drop
-                # above, rather than failing the whole build over one unfinished checkpoint.
+            if normalize_action_kind(action) == "agent_span":
+                # An inserted-but-unconfigured agent span (no goal yet, or neither an allowed action nor an
+                # answer — see _new_manual_step) has nothing to do. Same drop-and-warn shape as drag_drop
+                # above, rather than failing the whole build over one unfinished step.
                 if on_warning:
-                    on_warning(f"Step {raw_index}: AI Review has no prompt yet and was removed from the skill. Add a prompt in Human Edit, then rebuild.")
+                    on_warning(f"Step {raw_index}: the agent step has no goal yet (or nothing it may do) and was removed from the skill. Complete it in Human Edit, then rebuild.")
                 continue
             if normalize_action_kind(action) in {"check", "assert"} and \
                     str(raw.get("check_kind") or "").strip().lower().replace("-", "_") == "snapshot":

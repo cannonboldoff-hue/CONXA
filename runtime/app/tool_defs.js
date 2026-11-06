@@ -49,11 +49,11 @@ const CORE_TOOL_DEFS = [
         },
         review_results: {
           type: "object",
-          description: "AI review checkpoints: map of \"<step index>\" → your structured answer object to that step's question (see the review request's Question and, if present, its required output schema). Used together with resume_from to continue past an ai_review pause. Example: { \"5\": { \"visible\": true, \"why\": \"the Payment Successful banner is showing\" } }.",
+          description: "Popup decisions: map of \"<step index>\" → { \"choice\": \"<id from the popup request's list>\" }. Used together with resume_from to continue past a popup-decision pause. Example: { \"5\": { \"choice\": \"keep_both\" } }.",
         },
         span_actions: {
           type: "object",
-          description: "Agent spans: map of \"<step index>\" → your next action for that step's goal. Pick ONE numbered element from the span request's list: { \"kind\": \"click\" | \"fill\" | \"select\" | \"scroll\", \"candidate_index\": <n>, \"value\": \"<text for fill or select; up / down for scroll>\" }, or { \"status\": \"give_up\", \"why\": \"<one line>\" } when the goal cannot be reached. Used together with resume_from; call again after each action until the span ends. You cannot give a selector, open another site, or press a button that sends, pays, deletes or publishes. Example: { \"5\": { \"kind\": \"fill\", \"candidate_index\": 3, \"value\": \"INV-1042\" } }.",
+          description: "Agent spans: map of \"<step index>\" → your next action for that step's goal. ONE action per call, then call again until the span ends. Actions: { \"kind\": \"click\", \"candidate_index\": n } | { \"kind\": \"fill\", \"candidate_index\": n, \"value\": \"text\" } | { \"kind\": \"select\", \"candidate_index\": n, \"value\": \"option\" } | { \"kind\": \"scroll\", \"value\": \"up\" | \"down\" } | { \"kind\": \"send_keys\", \"value\": \"Enter\" } | { \"kind\": \"navigate\", \"url\": \"https://...\" } | { \"kind\": \"go_back\" } | { \"kind\": \"open_tab\", \"url\": \"https://...\" } | { \"kind\": \"switch_tab\", \"tab\": n } | { \"kind\": \"close_tab\", \"tab\": n } | { \"kind\": \"wait\", \"value\": seconds } | { \"kind\": \"read_text\" } | { \"kind\": \"done\", \"answer\": {...} } (answer only when the request asks for one) | { \"status\": \"give_up\", \"why\": \"<one line>\" }. candidate_index is a number from the request's element list; you never give a selector. A button that sends, pays, deletes or publishes is refused until you have asked the person in the chat and they said yes; then repeat the same action with \"user_confirmed\": true. Used together with resume_from. Example: { \"5\": { \"kind\": \"fill\", \"candidate_index\": 3, \"value\": \"INV-1042\" } }.",
         },
         watch:       { type: "boolean", description: "true = open a visible browser so the user can watch; false = run headlessly in the background." },
         wait_for_auth: { type: "boolean", description: "Default true: when sign-in is missing, return at once and let the run start by itself after the user signs in. false = never wait — fail immediately with the sign-in message instead, so nothing starts later behind the caller's back (used by Build Studio's Run Test)." },
@@ -83,7 +83,7 @@ const CORE_TOOL_DEFS = [
               inputs:  { type: "object" },
               resume_from:    { type: "integer", description: "0-based step index to resume from after a failure." },
               step_overrides: { type: "object", description: "Tier 3/4 self-healing overrides keyed by step index — prefer candidate_index nominations from the ranked element list, plus an optional \"dismiss\" entry for an unrecognized overlay (see execute_skill)." },
-              review_results: { type: "object", description: "AI review checkpoint answers keyed by step index (see execute_skill)." },
+              review_results: { type: "object", description: "Popup decision answers keyed by step index (see execute_skill)." },
               dry_run:        { type: "boolean", description: "PROD-3-DRYRUN: see execute_skill." },
             },
             required: ["skill"],

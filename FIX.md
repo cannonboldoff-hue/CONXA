@@ -38,6 +38,14 @@ When the tool decides which saved logins a workflow needs, it compares website a
 The tool decides whether a page is a sign-in page in several places: while recording, when checking a saved login, while signing in, and when a run fails. Each place kept its own slightly different list of words, so they could disagree. They now all read one shared list, with a test that keeps the two programming languages in step. A run also no longer decides a customer's login has expired just because a normal settings page has "auth" in its address.
 — 2026-11-05
 
+**The redesign page now says what was built and what was not — 2026-11-06**
+The engine redesign page still read like a plan, even though four of its six changes are now built. It now opens with a short status table, shows a green "As built" note on each finished change saying where the real version differs from the plan, and marks the two unfinished changes as not built. Answered questions are marked decided, so the page can be read as a record of where things stand.
+— 2026-11-06
+
+**The helper that acts on a page for the customer's AI assistant can now work like a real browsing assistant — 2026-11-06**
+Before, the "Agent span" step could only click, type, pick from a list or scroll on one website, and it could not even look at the rest of the task, so authors needed a separate "AI review" step to ask a question. Now one step does both: the assistant is told what the whole task is, what has been done and what comes next, and it can press keys, go to other addresses, open and close tabs, read the page, and hand back an answer that later steps can use. It still asks the person first before pressing anything that sends, pays, deletes or publishes, and the old "AI review" step is gone. This matters because jobs that vary from one customer to the next no longer need to be scripted click by click.
+— 2026-11-06
+
 **Risky-button detection no longer depends on a short English word list buried in the code — 2026-11-05**
 The tool decides whether a button does something permanent (like deleting) by looking for certain words, and that list lived inside the program. The list now sits in a settings file with a test that checks it, and it knows a few more words such as "terminate" and "unsubscribe". When a button is followed by an "are you sure?" popup, the tool now asks the person who recorded it whether someone should approve that step first, even if the button's label is in another language. Nothing pauses on its own while a workflow runs.
 — 2026-11-05

@@ -36,8 +36,9 @@ def _destructive():
 def test_the_scaffold_has_no_ending_check_and_no_recovery_block():
     step = _new_manual_step("agent_span", "https://app.test")
     assert step["action"]["action"] == "agent_span"
-    assert step["agent_span_allowed"] == ["click", "fill", "select", "scroll"]
-    assert step["agent_span_budget"] == {"actions": 8, "seconds": 120} and step["agent_span_on_budget"] == "fail"
+    assert step["agent_span_allowed"] == ["click", "fill", "select", "scroll", "send_keys", "navigate", "go_back",
+                                          "open_tab", "switch_tab", "close_tab"]
+    assert step["agent_span_budget"] == {"actions": 25, "seconds": 600} and step["agent_span_on_budget"] == "fail"
     assert "agent_span_until" not in step and step["recovery"]["max_attempts"] == 0
 
 
@@ -53,24 +54,31 @@ def test_a_valid_edit_passes_and_run_if_and_recovery_are_refused():
 
 @pytest.mark.parametrize("patch, error", [
     ({"value": "  "}, "agent_span_goal_empty"),
-    ({"agent_span_allowed": []}, "agent_span_allowed_invalid"),
-    ({"agent_span_allowed": ["click", "navigate"]}, "agent_span_allowed_invalid"),
+    ({"agent_span_allowed": []}, "agent_span_needs_actions_or_answer"),
+    ({"agent_span_allowed": ["click", "teleport"]}, "agent_span_allowed_invalid"),
     ({"agent_span_allowed": ["click", "click"]}, "agent_span_allowed_invalid"),
-    ({"agent_span_until": None}, "agent_span_until_required"),
+    ({"agent_span_until": "soon"}, "agent_span_until_invalid"),
     ({"agent_span_until": {"type": "selector_present", "target": "#x"}}, "agent_span_until_type_invalid"),
     ({"agent_span_until": {"type": "text_present", "target": ""}}, "agent_span_until_target_invalid"),
     ({"agent_span_until": {"type": "text_present", "target": "x" * 201}}, "agent_span_until_target_invalid"),
     ({"agent_span_until": {"type": "state_changed", "target": "x"}}, "agent_span_until_target_not_allowed"),
     ({"agent_span_budget": {"actions": 0, "seconds": 60}}, "agent_span_budget_invalid"),
-    ({"agent_span_budget": {"actions": 16, "seconds": 60}}, "agent_span_budget_invalid"),
+    ({"agent_span_budget": {"actions": 101, "seconds": 60}}, "agent_span_budget_invalid"),
     ({"agent_span_budget": {"actions": 5, "seconds": 5}}, "agent_span_budget_invalid"),
-    ({"agent_span_budget": {"actions": 5, "seconds": 601}}, "agent_span_budget_invalid"),
+    ({"agent_span_budget": {"actions": 5, "seconds": 1801}}, "agent_span_budget_invalid"),
     ({"agent_span_budget": {"actions": True, "seconds": 60}}, "agent_span_budget_invalid"),
     ({"agent_span_on_budget": "continue"}, "agent_span_on_budget_invalid"),
 ])
 def test_edits_that_would_make_a_span_open_ended_or_unsafe_are_refused(patch, error):
     with pytest.raises(ValueError, match=error):
         validate_editor_patch(_span(), patch, POLICY)
+
+
+def test_the_ending_check_is_optional_and_the_browser_actions_are_allowed():
+    step = _span()
+    validate_editor_patch(step, {"agent_span_until": None}, POLICY)
+    validate_editor_patch(step, {"agent_span_allowed": ["click", "navigate", "open_tab", "send_keys"],
+                                 "agent_span_budget": {"actions": 100, "seconds": 1800}}, POLICY)
 
 
 def test_a_span_may_not_sit_directly_before_a_destructive_step_and_the_other_way_round():
@@ -96,20 +104,46 @@ def test_inserting_a_span_in_front_of_a_destructive_step_is_refused():
     assert out["skills"][0]["steps"][2]["action"]["action"] == "agent_span"
 
 
+def test_a_confirm_only_question_may_be_inserted_in_front_of_a_destructive_step():
+    doc = {"meta": {"version": 1}, "skills": [{"steps": [
+        {"action": {"action": "navigate"}, "url": "https://app.test", "intent": "go"}, _destructive()]}]}
+    out = insert_step_after(doc, "agent_span", 0, confirm_only=True)
+    step = out["skills"][0]["steps"][1]
+    assert step["agent_span_allowed"] == [] and step["agent_span_on_failure"] == "abort"
+    assert step["agent_span_answer_schema"]["properties"]["confirmed"]["enum"] == [True]
+    with pytest.raises(ValueError, match="confirm_only_needs_agent_span"):
+        insert_step_after(doc, "click", 0, confirm_only=True)
+
+
 # ── the package ─────────────────────────────────────────────────────────────────────────────────
 
-def test_the_packager_writes_a_bounded_step_with_a_required_check():
-    built = _saved_step_to_execution_step(_span(agent_span_allowed=["click", "click", "navigate", "fill"],
-                                                agent_span_budget={"actions": 99, "seconds": 5000}))
+def test_the_packager_writes_a_bounded_step_with_its_check():
+    built = _saved_step_to_execution_step(_span(agent_span_allowed=["click", "click", "teleport", "navigate", "fill"],
+                                                agent_span_budget={"actions": 999, "seconds": 50000}))
     assert built["type"] == "agent_span" and built["goal"] == "Open the invoice for {{invoice}}"
-    assert built["allowed"] == ["click", "fill"]
+    assert built["allowed"] == ["click", "navigate", "fill"]
     assert built["until"] == {"type": "text_present", "target": "Invoice {{invoice}}", "required": True}
-    assert built["budget"] == {"actions": 15, "seconds": 600} and built["on_budget"] == "fail"
-    assert "selector" not in built and "identity_bundle" not in built
+    assert built["budget"] == {"actions": 100, "seconds": 1800} and built["on_budget"] == "fail"
+    assert "answer" not in built and "selector" not in built and "identity_bundle" not in built
 
 
-@pytest.mark.parametrize("over", [{"value": ""}, {"agent_span_until": None}, {"agent_span_until": {"target": "x"}},
-                                  {"agent_span_allowed": []}, {"agent_span_allowed": ["navigate"]}])
+def test_a_span_without_an_ending_check_is_still_built():
+    built = _saved_step_to_execution_step(_span(agent_span_until=None))
+    assert "until" not in built and built["allowed"]
+
+
+def test_a_question_span_carries_its_answer_to_the_package():
+    built = _saved_step_to_execution_step(_span(
+        agent_span_allowed=[], agent_span_until=None,
+        agent_span_answer_schema={"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"}}},
+        agent_span_output_name="banner", agent_span_on_failure="use_default", agent_span_default_value={"ok": False},
+        agent_span_attach=["downloaded_file", "", 3]))
+    assert built["allowed"] == [] and built["attach"] == ["downloaded_file"]
+    assert built["answer"] == {"schema": {"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"}}},
+                               "on_failure": "use_default", "output_name": "banner", "default_value": {"ok": False}}
+
+
+@pytest.mark.parametrize("over", [{"value": ""}, {"agent_span_allowed": []}, {"agent_span_allowed": ["teleport"]}])
 def test_an_unfinished_span_is_dropped_at_build_not_shipped_open_ended(over):
     step = _span(**over)
     if "value" in over:
@@ -117,11 +151,11 @@ def test_an_unfinished_span_is_dropped_at_build_not_shipped_open_ended(over):
     assert _saved_step_to_execution_step(step) is None
 
 
-def test_a_span_defaults_its_budget_and_needs_the_capability():
+def test_a_span_defaults_its_budget_and_needs_the_capabilities():
     built = _saved_step_to_execution_step(_span(agent_span_budget=None))
-    assert built["budget"] == {"actions": 8, "seconds": 120}
-    assert execution_capabilities([built]) == ["agent_span"]
-    assert capabilities_needed([{"action": {"action": "agent_span"}}]) == {"agent_span"}
+    assert built["budget"] == {"actions": 25, "seconds": 600}
+    assert execution_capabilities([built]) == ["agent_span", "agent_span_v2"]
+    assert capabilities_needed([{"action": {"action": "agent_span"}}]) == {"agent_span_v2"}
     assert execution_capabilities([{"type": "click"}]) == []
 
 
@@ -132,7 +166,8 @@ def test_a_called_workflow_may_not_contain_a_span():
 # ── the Studio test ─────────────────────────────────────────────────────────────────────────────
 
 SPAN_REQUEST = {"content": [{"type": "text", "text": "x"}], "_meta": {"conxa/agent_span": {
-    "step_index": 2, "goal": "Open it", "allowed": ["click", "fill"], "page_url": "https://app.test",
+    "step_index": 2, "goal": "Open it", "allowed": ["click", "fill", "done", "give_up", "wait", "read_text"],
+    "page_url": "https://app.test",
     "budget_left": {"actions": 3, "seconds": 60},
     "candidates": [{"i": 0, "name": "Open"}, {"i": 1, "name": "Search"}]}}}
 DONE = {"content": [{"type": "text", "text": "Done."}]}
@@ -151,6 +186,11 @@ def test_a_valid_model_answer_is_passed_on_and_a_bad_one_is_counted_and_becomes_
     assert check_span_answer({"kind": "fill", "candidate_index": 1, "value": "INV-7"}, span, report)["value"] == "INV-7"
     assert report == {}
     assert check_span_answer({"kind": "scroll"}, {**span, "allowed": ["scroll"]}, report) == {"kind": "scroll"}
+    assert check_span_answer({"kind": "navigate", "url": "https://x.test/"}, {**span, "allowed": ["navigate"]}, report) == {
+        "kind": "navigate", "url": "https://x.test/"}
+    assert check_span_answer({"kind": "done", "answer": {"ok": True}}, span, report) == {"kind": "done", "answer": {"ok": True}}
+    assert check_span_answer({"kind": "click", "candidate_index": 0, "user_confirmed": True}, span, report) == {
+        "kind": "click", "candidate_index": 0}, "the model can never say the person agreed"
     for bad in ({"kind": "select", "candidate_index": 0, "value": "x"}, {"kind": "click", "candidate_index": 9},
                 {"kind": "click", "candidate_index": "0"}, {"kind": "click"}, "text", None):
         assert check_span_answer(bad, span, report)["status"] == "give_up"
@@ -169,7 +209,7 @@ def _drive(results, answer_span):
         return queue.pop(0)
 
     out, stopped = _drive_runtime_pauses(
-        queue.pop(0), {"skill": "s"}, call=call, cancel_run=lambda _r: None, answer_review=lambda *_a: {},
+        queue.pop(0), {"skill": "s"}, call=call, cancel_run=lambda _r: None,
         guard_hook=None, review_hook=None, guard_requested=False, previewed=False, mark=lambda _m: None,
         answer_span=answer_span)
     return out, stopped, calls
