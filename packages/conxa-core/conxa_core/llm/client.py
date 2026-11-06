@@ -26,7 +26,15 @@ _REQUEST_COUNTER = itertools.count(1)
 
 # Bump on ANY change to the `timeline_understanding` prompt below. conversation/timeline_understanding.py saves
 # it in understanding.json, so the drop/weak/fallback rates (scripts/eval_understanding.py rates) are per prompt.
-TIMELINE_UNDERSTANDING_PROMPT_VERSION = 3
+TIMELINE_UNDERSTANDING_PROMPT_VERSION = 4
+
+# One rule for any text a person reads in the Studio. Appended to every person-facing prompt below so the
+# wording does not drift prompt by prompt; code (display_text.has_machine_words) drops what still slips through.
+PLAIN_WORDS = (
+    "Write for someone who has never seen code. Talk to the person as \"you\". Short sentences, under 20 words. "
+    "Name things by the words shown on screen. Never write a web address or any part of one, a code, a selector, "
+    "a snake_case name, or the words run, row, candidate or ref. Say \"each time\", not \"each run\"."
+)
 
 
 def _debug_log(message: str) -> None:
@@ -159,7 +167,8 @@ _STUDIO_RULES = (
     "\"Changes you are offering\" section, describe only those changes, in your own words, and say "
     "they take effect when the person presses Apply; never promise a change that is not listed. "
     "When the person asked for a change and that section says none could be prepared, say so "
-    "plainly and point them to Human Edit instead of describing what you would have done."
+    "plainly and point them to Human Edit instead of describing what you would have done. "
+    + PLAIN_WORDS
 )
 
 _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
@@ -990,7 +999,11 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             {
                 "role": "system",
                 "content": (
-                    "A person recorded a task in a browser. Read the recording and return what it means. Plain words a non-technical person reads.\n"
+                    "A person recorded a task in a browser. Read the recording and return what it means.\n"
+                    "\n"
+                    "WORDS THE PERSON READS (`goal`, `short_summary`, `decided.text`, question `prompt` and `why`, choice `label`)\n"
+                    + PLAIN_WORDS + "\n"
+                    "The INPUT below is for you. Do not copy its refs, page addresses or odd names into those fields.\n"
                     "\n"
                     "INPUT (JSON)\n"
                     "- `rows`: the recording in time order, each with a `ref` (r1, r2...).\n"
@@ -1003,13 +1016,13 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "- `retry` (may be absent): your last reply could not be read. Return ONLY the JSON object.\n"
                     "\n"
                     "OUTPUT: ONLY a JSON object, keys in this order\n"
-                    "{\"goal\": \"one sentence\",\n"
+                    "{\"goal\": \"one sentence, what the task achieves\",\n"
                     " \"detailed_summary\": [{\"row\": \"r1\", \"text\": \"what happens here, under 15 words\"}],\n"
                     " \"values\": [{\"ref\": \"<candidate ref>\", \"verdict\": \"fixed|varies|unsure\", \"name\": \"short_snake_case_input_name (varies/unsure only)\", \"literal\": \"url candidates only: the exact part of the address that changes\"}],\n"
-                    " \"decided\": [{\"row\": \"r2\", \"text\": \"a point you settled yourself\", \"reason\": \"why\"}],\n"
+                    " \"decided\": [{\"row\": \"r2\", \"text\": \"one short line starting with You, what you will assume each time\", \"reason\": \"why, for the record\"}],\n"
                     " \"questions\": [{\"effect\": \"value|upload|confirm_before|popup_dismiss|fork|note\", \"row\": \"r5\", \"ref\": \"candidate ref, value only\", \"prompt\": \"one plain sentence about their task\", \"why\": \"one line on why it matters\", \"choices\": [{\"id\": \"<id below>\", \"label\": \"short answer in your own words\"}], \"best_guess\": \"an id, or empty\", \"cost_rank\": 1}],\n"
                     " \"gaps\": [{\"row\": \"r3\", \"note\": \"something the video showed that the browser did not record, or the other way round\"}],\n"
-                    " \"short_summary\": \"one sentence for the whole task; name a value that may change by its kind (a file), not the recorded one\"}\n"
+                    " \"short_summary\": \"one or two sentences telling the person what they did, starting with You; name a value that may change by its kind (a file), not the recorded one\"}\n"
                     "\n"
                     "RULES\n"
                     "- varies: the task describes a kind of thing, or does not name this one, so a future run would use a different one.\n"
@@ -1025,19 +1038,20 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "- Never answer a fork or a confirm_before yourself: leave best_guess empty.\n"
                     "- Never ask about a gap, idle time, a download bar, or the video and browser being out of step: list it in `gaps` only.\n"
                     "- `cost_rank` 1 = the question where a wrong guess costs the most.\n"
+                    "- A candidate with `app_button` true is the app's own button, menu item or tab, not something picked from a list: fixed unless the task says it changes. Do not ask about it unless you truly cannot tell.\n"
                     "- Never invent a ref or a row. Never write a selector. Never claim a gap you cannot see in the rows.\n"
                     "\n"
                     "EXAMPLE (shape and judgement only, not this recording)\n"
                     "Input: {\"task\":\"download an invoice\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://app.example/invoices\"},{\"ref\":\"r2\",\"action\":\"type\",\"target\":\"Search\",\"value\":\"INV-20931\",\"seen\":{\"intent\":\"find the invoice\"}},{\"ref\":\"r3\",\"action\":\"click\",\"target\":\"Download PDF\",\"seen\":{\"intent\":\"download it\",\"screen_after\":\"a download bar shows the file\"}}],\"candidates\":[{\"ref\":\"typed:2\",\"kind\":\"typed\",\"recorded\":\"INV-20931\",\"rows\":[\"r2\"]},{\"ref\":\"click:3\",\"kind\":\"click\",\"recorded\":\"Download PDF\",\"rows\":[\"r3\"]}],\"must_ask\":[]}\n"
-                    "Output: {\"goal\":\"Download an invoice as a PDF.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page.\"},{\"row\":\"r2\",\"text\":\"Types the invoice number into the search box.\"},{\"row\":\"r3\",\"text\":\"Clicks Download PDF; a download bar shows the file.\"}],\"values\":[{\"ref\":\"typed:2\",\"verdict\":\"varies\",\"name\":\"invoice_number\"},{\"ref\":\"click:3\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page, the same every run.\",\"reason\":\"The task never names another page.\"}],\"questions\":[{\"effect\":\"note\",\"row\":\"r2\",\"prompt\":\"What should happen if no invoice matches the number?\",\"why\":\"The recording only shows a match.\",\"choices\":[{\"label\":\"Stop and report it\"},{\"label\":\"Skip it and finish\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"Searches for an invoice by its number and downloads the PDF.\"}\n"
+                    "Output: {\"goal\":\"Download an invoice as a PDF.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page.\"},{\"row\":\"r2\",\"text\":\"Types the invoice number into the search box.\"},{\"row\":\"r3\",\"text\":\"Clicks Download PDF; a download bar shows the file.\"}],\"values\":[{\"ref\":\"typed:2\",\"verdict\":\"varies\",\"name\":\"invoice_number\"},{\"ref\":\"click:3\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r1\",\"text\":\"You always start on the invoices page.\",\"reason\":\"The task never names another page.\"}],\"questions\":[{\"effect\":\"note\",\"row\":\"r2\",\"prompt\":\"What should happen if no invoice matches the number?\",\"why\":\"The recording only shows a match.\",\"choices\":[{\"label\":\"Stop and report it\"},{\"label\":\"Skip it and finish\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"You searched for an invoice by its number and downloaded it as a PDF.\"}\n"
                     "\n"
                     "EXAMPLE 2 (a list pick and a typed name)\n"
                     "Input: {\"task\":\"add a contact to the Sales group\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://crm.example/contacts\",\"title\":\"Contacts\"},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Priya Nair\",\"role\":\"row\",\"peers\":24,\"seen\":{\"intent\":\"open a contact\"}},{\"ref\":\"r3\",\"action\":\"type\",\"target\":\"Group name\",\"value\":\"Sales\",\"video\":\"confirmed\"},{\"ref\":\"r4\",\"action\":\"click\",\"target\":\"Save\"}],\"candidates\":[{\"ref\":\"click:2\",\"kind\":\"click\",\"recorded\":\"Priya Nair\",\"rows\":[\"r2\"],\"in_set\":true},{\"ref\":\"typed:3\",\"kind\":\"typed\",\"recorded\":\"Sales\",\"rows\":[\"r3\"]},{\"ref\":\"click:4\",\"kind\":\"click\",\"recorded\":\"Save\",\"rows\":[\"r4\"]}],\"must_ask\":[]}\n"
-                    "Output: {\"goal\":\"Add a chosen contact to the Sales group.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the contacts page.\"},{\"row\":\"r2\",\"text\":\"Picks one contact from the list.\"},{\"row\":\"r3\",\"text\":\"Types the group name.\"},{\"row\":\"r4\",\"text\":\"Clicks Save.\"}],\"values\":[{\"ref\":\"click:2\",\"verdict\":\"varies\",\"name\":\"contact\"},{\"ref\":\"typed:3\",\"verdict\":\"fixed\"},{\"ref\":\"click:4\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r3\",\"text\":\"The group is Sales every run.\",\"reason\":\"The task names the Sales group.\"}],\"questions\":[],\"gaps\":[],\"short_summary\":\"Opens a contact from the list and adds it to the Sales group.\"}\n"
+                    "Output: {\"goal\":\"Add a chosen contact to the Sales group.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the contacts page.\"},{\"row\":\"r2\",\"text\":\"Picks one contact from the list.\"},{\"row\":\"r3\",\"text\":\"Types the group name.\"},{\"row\":\"r4\",\"text\":\"Clicks Save.\"}],\"values\":[{\"ref\":\"click:2\",\"verdict\":\"varies\",\"name\":\"contact\"},{\"ref\":\"typed:3\",\"verdict\":\"fixed\"},{\"ref\":\"click:4\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r3\",\"text\":\"You always add the contact to the Sales group.\",\"reason\":\"The task names the Sales group.\"}],\"questions\":[],\"gaps\":[],\"short_summary\":\"You opened a contact from the list and added it to the Sales group.\"}\n"
                     "\n"
                     "EXAMPLE 3 (a popup asking for a decision after a step that cannot be undone)\n"
                     "Input: {\"task\":\"remove the old export\",\"rows\":[{\"ref\":\"r1\",\"action\":\"click\",\"target\":\"Delete export\",\"seen\":{\"intent\":\"delete the file\",\"screen_after\":\"a box asks to confirm\"}},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Delete\",\"dialog\":\"decision\",\"buttons\":[\"Delete\",\"Cancel\"]}],\"candidates\":[],\"must_ask\":[{\"row\":\"r1\",\"effect\":\"confirm_before\"},{\"row\":\"r2\",\"effect\":\"fork\"}]}\n"
-                    "Output: {\"goal\":\"Delete the old export file.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Clicks Delete export; a box asks to confirm.\"},{\"row\":\"r2\",\"text\":\"Clicks Delete in the box.\"}],\"values\":[],\"decided\":[],\"questions\":[{\"effect\":\"confirm_before\",\"row\":\"r1\",\"prompt\":\"Deleting the export cannot be undone. Should it check with a person before it deletes?\",\"why\":\"A wrong delete cannot be taken back.\",\"choices\":[{\"id\":\"confirm\",\"label\":\"Check first\"},{\"id\":\"no_confirm\",\"label\":\"Delete without checking\"}],\"best_guess\":\"\",\"cost_rank\":1},{\"effect\":\"fork\",\"row\":\"r2\",\"prompt\":\"The app asks whether to delete. What should it do each run?\",\"why\":\"The recording shows one answer only.\",\"choices\":[{\"id\":\"by_input\",\"label\":\"Let the caller decide\"},{\"id\":\"ask_human\",\"label\":\"Ask a person\"},{\"id\":\"stop\",\"label\":\"Stop the run\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"Deletes an old export after the app asks to confirm.\"}"
+                    "Output: {\"goal\":\"Delete the old export file.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Clicks Delete export; a box asks to confirm.\"},{\"row\":\"r2\",\"text\":\"Clicks Delete in the box.\"}],\"values\":[],\"decided\":[],\"questions\":[{\"effect\":\"confirm_before\",\"row\":\"r1\",\"prompt\":\"Deleting the export cannot be undone. Should it check with a person before it deletes?\",\"why\":\"A wrong delete cannot be taken back.\",\"choices\":[{\"id\":\"confirm\",\"label\":\"Check first\"},{\"id\":\"no_confirm\",\"label\":\"Delete without checking\"}],\"best_guess\":\"\",\"cost_rank\":1},{\"effect\":\"fork\",\"row\":\"r2\",\"prompt\":\"The app asks whether to delete. What should it do each run?\",\"why\":\"The recording shows one answer only.\",\"choices\":[{\"id\":\"by_input\",\"label\":\"Let the caller decide\"},{\"id\":\"ask_human\",\"label\":\"Ask a person\"},{\"id\":\"stop\",\"label\":\"Stop the run\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"You deleted an old export file after the app asked you to confirm.\"}"
                 ),
             },
             {"role": "user", "content": json.dumps(data or payload, ensure_ascii=False, separators=(",", ":"))},

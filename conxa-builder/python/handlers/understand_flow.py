@@ -219,10 +219,12 @@ class UnderstandFlowMixin:
         # A point a question below asks about is the person's to settle, not stated as decided; a gap
         # is one of those questions.
         asked = {q.get("row") for q in und.get("questions") or []}
-        extra = [f"• {d['text']}" + (f" — {d['reason']}" if d.get("reason") else "")
-                 for d in (und.get("decided") or []) if d.get("row") not in asked][:3]
-        closing = ("A few quick questions first — most already have my best guess filled in." if has_questions
-                   else "That's all I need — building it now.")
+        # The model's reason is kept in understanding.json for the record; the chat shows only the point.
+        extra = [f"• {d['text']}" for d in (und.get("decided") or []) if d.get("row") not in asked][:3]
+        n = len(und.get("questions") or [])
+        closing = (("One thing to check first. Most questions have my best guess filled in." if n == 1
+                    else "A few things to check first. Most have my best guess filled in.") if has_questions
+                   else "That’s everything I need. I’m building it now.")
         if und.get("source") == "fallback":
             # The model's read of the recording failed or came back empty: say so, so nobody trusts a
             # thin summary or waits for guesses that are not there.
@@ -230,9 +232,10 @@ class UnderstandFlowMixin:
                        "from what was clicked and nothing is filled in for you." if has_questions
                        else "I couldn’t work out the details of this recording this time, so I’m building it as recorded. "
                             "Check the steps carefully once it’s done.")
-        head = und.get("short_summary") or und.get("goal") or "I watched the recording."
+        summary = und.get("short_summary") or und.get("goal")
+        head = f"I watched your recording. {summary}" if summary else "I watched your recording."
         cut = limits_sentence(und.get("limits"))
-        return "\n\n".join([head, *(["\n".join(extra)] if extra else []), *([cut] if cut else []), closing])
+        return "\n\n".join([head, *(["I’ll assume:\n" + "\n".join(extra)] if extra else []), *([cut] if cut else []), closing])
 
     @staticmethod
     def _video_blocked_message(code: str) -> str:
@@ -465,7 +468,8 @@ def _fill_description(workflow_id: str) -> None:
         und = json.loads((settings.data_dir / "sessions" / workflow.session_id / "understanding.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return
-    text = str(und.get("short_summary") or "").strip()
+    # The goal, not the summary: the summary speaks to the person ("You opened…"), a description does not.
+    text = str(und.get("goal") or und.get("short_summary") or "").strip()
     if text:
         # A value the person said changes each run is not this workflow's fixed subject: name it by its input.
         from conxa_compile.conversation import decisions
@@ -484,7 +488,9 @@ def _short_value(v: dict[str, Any]) -> str:
     lit = str(v.get("literal") or "")
     if v.get("kind") == "url":
         return lit.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
-    return re.sub(r",?\s*\([^)]*\)\s*$", "", lit).strip()
+    from conxa_compile.display_text import clean_name
+
+    return clean_name(lit)
 
 
 def _dumps(value: Any) -> str:

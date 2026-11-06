@@ -67,7 +67,7 @@ def test_watching_then_one_round_of_questions_and_no_compile_yet(flow):
     assert [c["question_kind"] for c in _open_cards(wf)] == ["confirm_before"]        # one at a time, most costly first
     assert {q["kind"] for q in data["questions"]} == {"confirm_before", "value"}      # no fixed summary/coverage card
     said = _texts(wf.id, "assistant_message")[-1]
-    assert said.startswith("Types the PO number and sends the invoice.") and "A few quick questions" in said
+    assert said.startswith("I watched your recording. Types the PO number and sends the invoice.") and "A few things to check" in said
     assert runtime_state.get_flags(wf.id) == {} and compiled == []
     session = settings.data_dir / "sessions" / "sess1"
     assert (session / "understanding.json").is_file() and (session / "merged_timeline.json").is_file()

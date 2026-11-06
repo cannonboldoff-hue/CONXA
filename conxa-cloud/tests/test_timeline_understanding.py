@@ -174,7 +174,9 @@ def test_one_question_per_value_and_per_row_and_a_note_needs_choices():
                       MERGED, TU.candidates_from_timeline(MERGED))
     assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2")]
     assert [c["id"] for c in out["questions"][0]["choices"]] == ["c1", "c2"]
-    assert out["questions"][1]["prompt"] == "Same repo every time?"
+    # A value question is worded by code (the model's sentence repeats the raw recorded name).
+    assert out["questions"][1]["prompt"] == "You opened “settings”. Next time, is it always this page, or a different one each time?"
+    assert [c["label"] for c in out["questions"][1]["choices"]] == ["A different one each time", "Always “settings”"]
 
 
 def test_a_value_question_names_an_address_by_its_last_part_and_hides_emails():
@@ -675,3 +677,55 @@ def test_the_second_read_drops_what_cannot_be_acted_on_and_counts_it(monkeypatch
     report = out["audit"]["validation_report"]
     assert out["audit"]["questions"] == []
     assert {"unknown_facet", "audit_selector_like", "malformed_item"} <= {r for stage in report.values() for r in stage}
+
+
+# ── plain-language display ─────────────────────────────────────────────────────────────────────
+
+def _app_button_timeline():
+    button = {**event(1, "click", "New folder Alt+C then F"), "shown": "New folder", "role": "button"}
+    item = {**event(2, "click", "Report.pdf, (File)"), "shown": "Report.pdf", "role": "row", "peers": 9}
+    return [button, item]
+
+
+def test_labels_are_the_cleaned_name_but_the_raw_value_is_kept_for_replay():
+    cands = {c["ref"]: c for c in TU.candidates_from_timeline(_app_button_timeline())}
+    assert cands["click:1"]["label"] == "New folder" and cands["click:1"]["literal"] == "New folder Alt+C then F"
+    assert cands["click:2"]["label"] == "Report.pdf" and cands["click:2"]["literal"] == "Report.pdf, (File)"
+    payload = TU.build_input(_app_button_timeline(), "", "", list(cands.values()))
+    assert [c["recorded"] for c in payload["candidates"]] == ["New folder", "Report.pdf"]
+
+
+def test_only_an_apps_own_button_is_flagged_not_a_list_pick():
+    cands = {c["ref"]: c for c in TU.candidates_from_timeline(_app_button_timeline())}
+    assert cands["click:1"]["app_button"] is True and cands["click:2"]["app_button"] is False
+    payload = TU.build_input(_app_button_timeline(), "", "", list(cands.values()))
+    assert payload["candidates"][0]["app_button"] is True and "app_button" not in payload["candidates"][1]
+
+
+def test_a_button_the_model_called_fixed_is_not_asked_but_a_list_pick_still_is():
+    merged = _app_button_timeline()
+    cands = TU.candidates_from_timeline(merged)
+    ask = lambda ref, row: {"effect": "value", "row": row, "ref": ref, "prompt": "Same?", "cost_rank": 2}   # noqa: E731
+    out = TU.validate({"goal": "g", "values": [{"ref": "click:1", "verdict": "fixed"}, {"ref": "click:2", "verdict": "fixed"}],
+                       "questions": [ask("click:1", "r1"), ask("click:2", "r2")]}, merged, cands)
+    assert [q["ref"] for q in out["questions"]] == ["click:2"]
+    assert out["validation_report"]["override"]["fixed_app_button_not_asked"]["count"] == 1
+
+
+def test_a_button_the_model_is_unsure_about_is_still_asked_in_plain_words():
+    merged = _app_button_timeline()
+    out = TU.validate({"goal": "g", "values": [{"ref": "click:1", "verdict": "unsure"}]}, merged, TU.candidates_from_timeline(merged))
+    q = next(q for q in out["questions"] if q["ref"] == "click:1")
+    assert q["prompt"] == "You picked “New folder”. Next time, is it always this one, or a different one each time?"
+
+
+def test_text_a_person_reads_is_dropped_when_it_carries_machine_words():
+    out = TU.validate(raw_answer(
+        short_summary="Opens https://x.io/a?pli=1",
+        decided=[{"row": "r1", "text": "You land on the page; the ?pli=1 bit is a leftover.", "reason": "x"},
+                 {"row": "r2", "text": "You always start on the home page.", "reason": "x"}],
+        questions=[{"kind": "confirm_before", "row": "r5", "prompt": "Click the invoice_number button?", "cost_rank": 1}]),
+        MERGED, TU.candidates_from_timeline(MERGED))
+    assert out["short_summary"] == ""
+    assert [d["text"] for d in out["decided"]] == ["You always start on the home page."]
+    assert out["questions"][0]["prompt"] == TU._FALLBACK_PROMPT["confirm_before"]

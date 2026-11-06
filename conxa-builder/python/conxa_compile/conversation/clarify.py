@@ -27,7 +27,7 @@ import os
 import re
 from typing import Any, Callable
 
-from conxa_compile.compiler.identity_bundle import strip_keyboard_shortcut_tail
+from conxa_compile.display_text import clean_name
 from conxa_compile.compiler.step_key import step_keys
 from conxa_core.config import settings
 from conxa_core.models.prose_binding import readable as _readable
@@ -74,15 +74,9 @@ def _action_title(step: dict[str, Any]) -> str:
         return f"Go to {url[:60]}" if url else ""
     if act in _LABELLED_VERBS:
         fp = (step.get("identity_bundle") or {}).get("fingerprint") or {}
-        label = next((" ".join(str(fp.get(f)).split()) for f in _LABEL_FIELDS if str(fp.get(f) or "").strip()), "")
-        label = _MAC_SHORTCUT_TAIL.sub("", strip_keyboard_shortcut_tail(label)).strip() or label
+        label = clean_name(next((fp.get(f) for f in _LABEL_FIELDS if str(fp.get(f) or "").strip()), ""))
         return f"{_LABELLED_VERBS[act]} {_quoted(label)}" if label else ""
     return ""
-
-
-# A menu item's keyboard-shortcut hint the page shows beside its name ("File upload Alt+C then U")
-# is removed by the shared strip_keyboard_shortcut_tail; this only adds macOS symbol hints ("Save ⌘S").
-_MAC_SHORTCUT_TAIL = re.compile(r"\s+[⌘⌥⇧⌃]\S*$")
 
 
 def step_name(step: dict[str, Any]) -> str:

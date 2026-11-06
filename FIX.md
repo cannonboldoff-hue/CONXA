@@ -2,6 +2,18 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Removed the empty black bar above the chat while the browser is open — 2026-11-07**
+While recording or testing, an empty dark bar sat above the conversation. It was reserved for a "show browser" button that only appears when the browser is hidden, so with the browser open it held nothing. The bar now shows only when that button is needed, and the chat gets the room back.
+— 2026-11-07
+
+**Removed the two small icons on the far right while the browser is open — 2026-11-07**
+When you record or test, the browser sits on the right, and a thin strip with two little icons was squeezed in beside it. They were not needed there and just took up room. The strip now stays hidden while the browser is showing and comes back when it closes.
+— 2026-11-07
+
+**Fixed the local test build refusing to run because two new parts were missing from its packing list — 2026-11-06**
+The local build that prepares the test engine stopped at its safety check. Two recently added pieces were not on the list of things to pack, so the engine would have crashed when starting. They are on the list now, and the build finishes, so test runs use the latest engine.
+— 2026-11-06
+
 **When a test fails, Studio now explains why and waits for your OK before changing anything — 2026-11-06**
 Before, a failed test made Studio quietly change your workflow up to three times, one change after another, and only then tell you. Now it works out what went wrong, tells you the cause in plain words, and suggests one fix. Nothing changes until you press Apply, and you can also just type how you'd fix it yourself. After you approve, it tests again right away, and if it fails again it asks again, with no limit on rounds.
 — 2026-11-06
@@ -61,3 +73,19 @@ Before, the "Agent span" step could only click, type, pick from a list or scroll
 **Updated the workflow engine diagram so questions can come at any time — 2026-11-06**
 The diagram still showed two fixed rounds of questions, one before the build and one after, with a "skip" button. Now it shows one steady stream: the helper asks whenever it is unsure, every question it asks must be answered, and nothing can be tested, approved or published until they are. Like a checklist that grows as you go, but cannot be signed off while any box is empty.
 — 2026-11-06
+
+**Trimmed the workflow engine overview page to a single view — 2026-11-06**
+The shared overview page had four tabs, three of which compared our product with another company's recorder and listed reference tables. Those three tabs are gone, so the page now shows only our own workflow map. This keeps the page focused on what we actually build.
+— 2026-11-06
+
+**Upgraded the workflow engine map with the newest parts and easier navigation — 2026-11-06**
+The map of how a recording becomes a finished automation was missing several pieces we built this week. It now shows them: the step where an AI assistant handles one fuzzy part of a task, the check that stops a run when the app itself says no, the chat cards that wait for your Apply, and the tally of what our safety checks throw away. You can also search the map, press one button to light up everything before and after a box, and step through it with the arrow keys.
+— 2026-11-06
+
+**The workflow engine map now fills the whole screen, with details in a pop-up — 2026-11-06**
+The map used to share the screen with a side panel of details, which made the boxes small. The side panel is gone and the map now uses the full width. Clicking a box lights up its connections, and double-clicking it opens its details in a pop-up you can close with Escape.
+— 2026-11-06
+
+**The message after watching a recording now talks like a person — 2026-11-07**
+After you record, the chat used to describe your workflow in the machine's own words, such as a button name with its keyboard shortcut stuck on the end, or a note about a web address leftover. It now says what you did in plain sentences, lists a few things it will assume without long explanations, and cleans every name before showing it. It also stops asking whether an ordinary app button, like "New folder", changes each time. This makes the first thing you read feel like a helper talking to you, not a log file.
+— 2026-11-07

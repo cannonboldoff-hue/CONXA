@@ -27,8 +27,10 @@ from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
 from conxa_compile.compiler.destructive_semantics import label_has_destructive_word
+from conxa_compile.compiler.entity_binding import CONTROL_ROLES
 from conxa_compile.compiler.selector_filters import scrub_email
 from conxa_compile.conversation.clarify import _question
+from conxa_compile.display_text import display_label, has_machine_words, person_text
 
 TASK = "timeline_understanding"
 MAX_ROWS = 250
@@ -168,9 +170,7 @@ def _short_label(cand: dict[str, Any]) -> str:
     text = str(cand.get("label") or cand["recorded"])
     if cand.get("kind") == "url":
         text = cand["literal"].split("?")[0].rstrip("/").rsplit("/", 1)[-1] or text
-    if len(text) <= 60:
-        return text
-    return text[:60].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return display_label(text)
 
 
 def _events(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -213,11 +213,18 @@ def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] 
                     cuts[bucket] = cuts.get(bucket, 0) + 1
                 continue
             counts[bucket] += 1
+            # ``recorded`` / ``literal`` stay raw (matching and replay use them); ``label`` is what a person reads.
             groups[key] = {"ref": f"{kind}:{row.get('event_id')}", "kind": kind, "event_ids": [], "row_refs": [],
                            "recorded": recorded[:200], "literal": literal[:200],
-                           "label": str(row.get("target") or "")[:200], "in_set": False}
+                           "label": display_label(recorded if kind == "control" else (row.get("shown") or row.get("target") or ""), 200),
+                           "in_set": False,
+                           "app_button": kind == "click"}
         if in_set:
             groups[key]["in_set"] = True
+        # The app's own button / menu item / tab (not a list pick): fixed unless the task says otherwise.
+        # Every row of the group must be one, so a label that is sometimes a list item is still asked about.
+        if str(row.get("role") or "").lower() not in CONTROL_ROLES or in_set:
+            groups[key]["app_button"] = False
         groups[key]["event_ids"].append(row.get("event_id"))
         groups[key]["row_refs"].append(row["row_ref"])
     return list(groups.values())
@@ -367,7 +374,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
             value = r.get("value")
             row = {
                 "ref": r["row_ref"], "action": r.get("action"),
-                "target": scrub_email(r["target"]) if r.get("target") else None,
+                "target": scrub_email(r.get("shown") or r["target"]) if (r.get("shown") or r.get("target")) else None,
                 "role": r.get("role") or None,
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:VALUE_CHARS] if value else None),
                 "url": r.get("url") if r.get("url") != prev_url else None,
@@ -391,8 +398,10 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
     return {
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
         **({"rows_omitted": len(merged) - len(rows)} if len(merged) > len(rows) else {}),
-        "candidates": [{"ref": c["ref"], "kind": c["kind"], "recorded": c["recorded"], "rows": c["row_refs"],
-                        **({"in_set": True} if c.get("in_set") else {})}
+        "candidates": [{"ref": c["ref"], "kind": c["kind"],
+                        "recorded": c["label"] if c["kind"] == "click" else c["recorded"], "rows": c["row_refs"],
+                        **({"in_set": True} if c.get("in_set") else {}),
+                        **({"app_button": True} if c.get("app_button") else {})}
                        for c in candidates if not c["unsent"]],
         "must_ask": must_ask(merged),
         **({"told": {ref: "varies" if v else "fixed" for ref, v in told.items()}} if told else {}),
@@ -402,7 +411,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
 
 def _text(value: Any, limit: int) -> str:
     """Model text a person will read: one line, no email address (an account label carries one)."""
-    return scrub_email(str(value or ""))[:limit]
+    return person_text(value, limit)
 
 
 # The five things the check does to a model answer, in the order it does them. ``validation_report`` in
@@ -451,11 +460,27 @@ def _fallback_question(effect: str, row_ref: str, row: dict[str, Any]) -> dict[s
             "choices": _fork_choices(row, None) if effect == "fork" else _choices_for(effect, None), "best_guess": "", "cost_rank": 1}
 
 
+# What a value question says, by the kind of thing recorded. Code writes it (the model's label would repeat the
+# raw name); the label inside is already the cleaned one.
+_VALUE_PROMPT = {
+    "url": "You opened “{label}”. Next time, is it always this page, or a different one each time?",
+    "control": "You chose “{label}”. Next time, is it always this, or a different choice each time?",
+    "click": "You picked “{label}”. Next time, is it always this one, or a different one each time?",
+    "typed": "You typed “{label}”. Next time, is it always this, or something different each time?",
+}
+
+
 def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> dict[str, Any]:
     label = _short_label(cand)
     return {"kind": "value", "row": row["row_ref"], "event_id": row.get("event_id"), "ref": cand["ref"],
-            "prompt": f"Is “{label}” the same every time, or different each run?", "why": "",
-            "choices": _choices_for("value", None), "best_guess": guess, "cost_rank": 3}
+            "prompt": _VALUE_PROMPT.get(cand["kind"], _VALUE_PROMPT["click"]).format(label=label), "why": "",
+            "choices": _value_choices(label), "best_guess": guess, "cost_rank": 3}
+
+
+def _value_choices(label: str) -> list[dict[str, Any]]:
+    """Both answers named for this item, by code. Ids are code's, so the saved answer and replay are unchanged."""
+    words = {"varies": "A different one each time", "fixed": f"Always “{label}”"}
+    return [{"id": cid, "label": words[cid], "detail": detail} for cid, _stock, detail in RULES["value"]["choices"]]
 
 
 def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
@@ -494,6 +519,9 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             if cand["kind"] == "typed":      # typed text is already an input once compiled
                 _log(report, "override", "typed_value_question", ref)
                 continue
+            if cand.get("app_button") and ref in values and values[ref]["verdict"] == "fixed":
+                _log(report, "override", "fixed_app_button_not_asked", ref)    # the app's own button, called fixed: not asked
+                continue
             if ref not in values or (values[ref]["verdict"] == "fixed" and cand["kind"] != "control"):
                 if ref in values:
                     _log(report, "override", "fixed_but_asked", ref)      # the model asked about what it called fixed
@@ -508,7 +536,17 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             elif effect == "fork":
                 _log(report, "override", "fork_without_decision_popup", row_ref)
                 continue
-        choices = _fork_choices(row, q.get("choices")) if effect == "fork" else _choices_for(effect, q.get("choices"))
+        if effect == "value":
+            # Code words a value question: the model's sentence and labels would repeat the raw name.
+            made = _value_question(by_ref[ref], row, "")
+            prompt, choices = made["prompt"], made["choices"]
+        else:
+            if has_machine_words(prompt):
+                _log(report, "override", "machine_words", f"{effect}:prompt")
+                if effect not in _FALLBACK_PROMPT:       # a free-form note has no stock sentence to fall back on
+                    continue
+                prompt = _FALLBACK_PROMPT[effect]
+            choices = _fork_choices(row, q.get("choices")) if effect == "fork" else _choices_for(effect, q.get("choices"))
         if not choices:
             _log(report, "shape", "no_choices", row_ref)
             continue
@@ -627,6 +665,10 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     gaps = _row_items(raw.get("gaps"), rows, "note", 200, report)
     detailed = _row_items(raw.get("detailed_summary"), rows, "text", 240, report)
     decided = _row_items(raw.get("decided"), rows, "text", 160, report, reason_limit=160)
+    for d in decided:
+        if has_machine_words(d["text"]):
+            _log(report, "override", "machine_words", f"decided:{d['row']}")
+    decided = [d for d in decided if not has_machine_words(d["text"])]
     for d in decided[MAX_DECIDED:]:
         _log(report, "shape", "decided_over_cap", d["row"])
     decided = decided[:MAX_DECIDED]
@@ -670,9 +712,16 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     questions = _dedupe(questions, rows, report)
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
+    goal, summary = _text(raw.get("goal"), 200), _text(raw.get("short_summary"), 300)
+    if has_machine_words(summary):
+        _log(report, "override", "machine_words", "short_summary")
+        summary = ""
+    if has_machine_words(goal):
+        _log(report, "override", "machine_words", "goal")
+        goal = ""
     return {
-        "goal": _text(raw.get("goal"), 200), "values": values, "gaps": gaps,
-        "short_summary": _text(raw.get("short_summary"), 300), "detailed_summary": detailed,
+        "goal": goal, "values": values, "gaps": gaps,
+        "short_summary": summary, "detailed_summary": detailed,
         "decided": decided, "questions": questions, "validation_report": report,
     }
 

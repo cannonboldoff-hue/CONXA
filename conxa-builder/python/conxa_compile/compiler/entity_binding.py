@@ -123,7 +123,7 @@ def _pick_identifier(row: dict[str, Any]) -> str:
 # --- is the target one item picked from a list? ----------------------------------------------
 # Controls act on the page; the other things a person clicks (a link, an option, a cell) name an
 # item. A control inside a row (a per-row "Edit") is still a control.
-_CONTROL_ROLES = frozenset({
+CONTROL_ROLES = frozenset({
     "button", "menuitem", "menuitemcheckbox", "menuitemradio", "tab", "switch", "combobox",
     "textbox", "input", "select", "textarea", "checkbox", "radio",
 })
@@ -165,7 +165,7 @@ def repeating_peers(ev: Step) -> int:
     captures, no text and no model. Looks further up than ``detect_entity_binding`` because it only
     needs to know that a row exists, not to build a selector for it."""
     role = str((ev.get("semantic") or {}).get("role") or (ev.get("target") or {}).get("role") or "").strip().lower()
-    if role in _CONTROL_ROLES:
+    if role in CONTROL_ROLES:
         return 0
     ancestors = ev.get("ancestors") or []
     for i in range(min(len(ancestors) - 1, _PEER_SEARCH_DEPTH)):
