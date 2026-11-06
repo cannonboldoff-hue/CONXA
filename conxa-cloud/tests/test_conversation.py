@@ -161,7 +161,7 @@ _BASE = dict(target_url="https://a.example.com", session_id=None, recording_stat
         (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(pending_changes=1), "edit", "change_pending", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k", compile_steps_with_warnings=2), {}, "edit", "recommended", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k"), {}, "test", "ready", "warn"),
-        (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(runtime={"testing": True, "autofix_attempt": 2}), "test", "autofix", "run"),
+        (dict(session_id="s", recording_status="compiled", skill_id="k"), dict(runtime={"investigating": True}), "test", "investigating", "run"),
         (dict(session_id="s", recording_status="compiled", skill_id="k", last_test_status="failed"), {}, "test", "failed", "fail"),
         (dict(session_id="s", recording_status="compiled", skill_id="k", last_test_status="passed"), {}, "approve", "ready", "warn"),
         (dict(session_id="s", recording_status="compiled", skill_id="k", last_test_status="passed", signed_off=True), {}, "approve", "approved", "ok"),

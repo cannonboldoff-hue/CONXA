@@ -993,7 +993,7 @@ Every state ends with a way forward. Built before this phase: loading skeletons 
 - **Engine stopped.** The workspace is replaced by “Build Studio’s engine stopped” (workflows are saved on this computer) with **Restart engine** and **Copy diagnostics**; navigation stays visible but dimmed and inert, the inspector is hidden. During the automatic restart the same panel reads “Restarting…”.
 - **Sign-in expired during a test.** The test card pauses (▲ “A sign-in expired during the test”): nothing failed in the workflow and no automatic fix is tried; the person signs in again from the group page and tests again. (The mockup resumes by itself after sign-in; Studio does not — see TRD §7.4b.)
 - **Leaving Human Edit with an unsaved change.** A small confirm: “Save the change to step N?” — **Save and leave**, **Discard**, **Keep editing** (Esc).
-- **Settings** is a 800×560 popup over the current screen (left list: Account, Usage, Testing, About). Usage shows the meters with the single **AI credits** name; Testing holds the auto-fix switch. The old full page is gone; `/settings` opens the popup.
+- **Settings** is a 800×560 popup over the current screen (left list: Account, Usage, Testing, About). Usage shows the meters with the single **AI credits** name; Testing holds the find-the-cause switch. The old full page is gone; `/settings` opens the popup.
 - **First launch** (`/welcome`, shown when the workspace has no groups): headline, the three steps (Record it once / Answer a few questions / Test, then approve), **New workflow** and **Plan one in chat first**, and a “This computer” list — signed in, recording browser (with **Install now** when missing), local test runner. A failing check explains itself and never blocks the page.
 
 

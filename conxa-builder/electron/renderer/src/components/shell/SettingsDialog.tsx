@@ -59,7 +59,7 @@ function AccountTab() {
   )
 }
 
-/** The auto-fix switch: after a failed test, apply one safe change at a time and re-test, up to three times. */
+/** The find-the-cause switch: after a failed test, explain why and propose one fix; nothing changes until the person presses Apply. */
 function TestingTab() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['studio-settings'], queryFn: getStudioSettings, retry: false })
@@ -72,9 +72,9 @@ function TestingTab() {
     <label className={cn(BOX, 'flex cursor-pointer items-start gap-4 p-4 text-sm')}>
       <input type="checkbox" className="mt-1 accent-white" checked={on} disabled={q.isLoading || m.isPending} onChange={(e) => m.mutate(e.target.checked)} />
       <span>
-        <span className="block text-[var(--text-primary)]">Fix a failed test automatically</span>
+        <span className="block text-[var(--text-primary)]">Find the cause when a test fails</span>
         <span className="block text-[var(--text-meta)]">
-          After a test fails, Build Studio makes one safe change, shows it with Undo, and tests again — up to three times, then it asks you.
+          After a test fails, Build Studio explains what went wrong and proposes a fix. Nothing changes until you press Apply; then it tests again.
           Re-tests always pause before steps that can’t be undone. Approving stays your decision.
         </span>
       </span>

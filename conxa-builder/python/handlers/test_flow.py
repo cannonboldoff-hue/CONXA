@@ -7,10 +7,12 @@ crosses a step that can't be undone without a person: the guard pauses before it
 steps for real" / "End the test here"), a confirm-only review is answered by the person, and an
 engine that predates the guard is previewed (dry run) instead of run for real.
 
-When a test fails and auto-fix is on, ``_tf_autofix`` makes **one gated change at a time** — the
-same proposals the copilot makes, through the same gates, applied by the same command a reviewer's
-Apply click uses, edit-logged ``source="auto_fix"``, listed with View change / Undo — and re-tests
-with the guard always on, up to three attempts. Approval stays a separate human action.
+When a test fails and "find the cause" is on, ``_tf_investigate`` explains the root cause in plain
+words and proposes **at most one change** — the same proposal the copilot makes, through the same
+gates — as an ordinary change card. Nothing is applied until the person presses Apply; Apply (on this
+card or on a change card from the person's own chat message) re-tests at once with the guard on
+(``_tf_retest_after_fix``). A test that fails again investigates again: there is no attempt cap, and
+every fix needs its own approval. Approving the workflow stays a separate human action.
 """
 
 from __future__ import annotations
@@ -28,7 +30,6 @@ def _is_confirm_only_span(step: dict) -> bool:
 
     return is_confirm_only_span(step)
 
-MAX_AUTOFIX_ATTEMPTS = 3
 _DECISION_TIMEOUT_S = 170  # just under the runtime's 180 s park window
 
 _waiters: dict[str, dict[str, Any]] = {}
@@ -142,11 +143,11 @@ class TestFlowMixin:
                 from conxa_compile.conversation import studio_settings
 
                 # A value the person typed is the first suspect for a step that couldn't find its
-                # element: ask before Auto-fix starts rewriting steps that may be fine.
+                # element: ask before proposing to rewrite steps that may be fine.
                 if self._tf_input_check(workflow_id, inputs):
                     return
                 if studio_settings.load().get("autofix_enabled"):
-                    self._tf_autofix(workflow_id, inputs, show_browser, use_ai)
+                    self._tf_investigate(workflow_id)
         except Exception:  # noqa: BLE001 — never take the engine down from a background test
             import traceback
 
@@ -191,8 +192,7 @@ class TestFlowMixin:
         card = harness.post_card(thread, "test_run", "running", sink=sink, rows=rows, attempt=attempt, auto=auto,
                                  guard=guard, started_at=started, actions=["stop"])
         card_id = card["card_id"]
-        runtime_state.set_flags(workflow_id, testing=True, autofix_attempt=attempt if auto else 0, recording_discarded=False,
-                                sign_in_expired=False)
+        runtime_state.set_flags(workflow_id, testing=True, recording_discarded=False, sign_in_expired=False)
         released = {"v": False}
         # What the run last stopped to ask. A test the person ends is reported by THAT cause, never by
         # a guess: ending at a popup is not "ending before a step that can't be undone".
@@ -300,7 +300,7 @@ class TestFlowMixin:
         except Exception as exc:  # noqa: BLE001
             return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs)
         finally:
-            runtime_state.set_flags(workflow_id, testing=False, autofix_attempt=0)
+            runtime_state.set_flags(workflow_id, testing=False)
 
         status = result.get("status")
         for r in rows:
@@ -540,14 +540,14 @@ class TestFlowMixin:
     def cmd_flow_autofix_stop(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         return self.cmd_flow_test_stop(payload, rid)
 
-    def cmd_flow_autofix_resume(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+    def cmd_flow_investigate(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         workflow = self._flow_workflow(payload)
-        inputs = dict(workflow.last_test_inputs or {})
-        threading.Thread(target=self._tf_autofix, args=(workflow.id, inputs, True), daemon=True).start()
+        threading.Thread(target=self._tf_investigate, args=(workflow.id,), daemon=True).start()
         return {"ok": True}
 
-    def _tf_propose_fix(self, workflow_id: str) -> list[dict[str, Any]]:
-        """One gated fix proposal for the latest failure — the copilot's own call and gates."""
+    def _tf_propose_fix(self, workflow_id: str) -> tuple[str, list[dict[str, Any]]]:
+        """The copilot's plain-words reading of the latest failure, and at most one gated fix proposal —
+        its own call and gates. ("", []) when there is nothing to read."""
         from conxa_compile.conversation.context_pack import build_context_pack
         from conxa_compile.editor.evidence import EvidenceError, build_evidence_bundle
         from conxa_compile.llm.copilot import _capability_manifest_text, copilot_turn
@@ -555,13 +555,15 @@ class TestFlowMixin:
 
         workflow = get_workflow(workflow_id)
         if workflow is None or not workflow.skill_id:
-            return []
+            return "", []
         try:
             digest = build_evidence_bundle(workflow.skill_id, run_id=workflow.last_test_run_id, detail="digest")
         except EvidenceError:
-            return []
-        message = ("The last test failed. Diagnose the failing step from the evidence and propose at most ONE change "
-                   "that is within the allowed change types and that you are confident fixes it. Propose nothing if unsure.")
+            return "", []
+        message = ("The last test failed. In plain, everyday words for a non-technical person, say what went wrong "
+                   "(the root cause, from the evidence) and what you would change to fix it. Then propose at most ONE "
+                   "change that is within the allowed change types and that you are confident fixes it. If you are "
+                   "unsure, propose nothing: say what you saw and ask how the person would like it fixed.")
         pack = build_context_pack(message=message, budget_tokens=12_000, digest=digest,
                                   failure={"last_test": digest.get("last_test"), "runtime_evidence": digest.get("runtime_evidence")})
         user_text = ("Capability manifest — what you may propose and what the runtime does with each step kind:\n"
@@ -572,72 +574,75 @@ class TestFlowMixin:
         result = copilot_turn(skill_id=workflow.skill_id, evidence=digest, transcript=[], message=message,
                               on_delta=None, user_text=user_text, screenshot_path=shot)
         ctx = self._thread_context("wf", workflow_id, None)
-        return ctx["gate_proposals"]([p for p in result.get("proposals") or [] if isinstance(p, dict)])
+        proposals = ctx["gate_proposals"]([p for p in result.get("proposals") or [] if isinstance(p, dict)])
+        return str(result.get("reply") or "").strip(), proposals[:1]
 
-    def _tf_autofix(self, workflow_id: str, inputs: dict[str, Any], show_browser: bool, use_ai: bool = False) -> None:
+    def _tf_investigate(self, workflow_id: str) -> None:
+        """Find why the latest test failed and put a fix to the person. Changes nothing itself: the fix is an
+        ordinary change card, and pressing Apply on it (or on one made from the person's own words) re-tests."""
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
 
         thread = _thread(workflow_id)
-        rid = f"autofix_{uuid.uuid4().hex[:10]}"
+        rid = f"investigate_{uuid.uuid4().hex[:10]}"
         sink = _event_sink(rid)
         stop = _autofix_stop.setdefault(workflow_id, threading.Event())
         stop.clear()
-        card = harness.post_card(thread, "autofix", "running", sink=sink, attempt=1, max_attempts=MAX_AUTOFIX_ATTEMPTS,
-                                 changes=[], phase="Finding the cause", actions=["stop"])
+        runtime_state.set_flags(workflow_id, investigating=True)
+        card = harness.post_card(thread, "autofix", "running", sink=sink, phase="Finding the cause", actions=["stop"])
         card_id = card["card_id"]
-        harness.emit_item(sink, thread, ts.append(
-            thread, "assistant_message",
-            text="I’ll fix this and test again on my own, up to 3 attempts — then I stop and ask you. Re-tests always pause "
-                 "before the steps that can’t be undone, so nothing real is sent without your OK. Every change shows up "
-                 "here, and you can undo it."))
-        changes: list[dict[str, Any]] = []
-        self._install_proxy_router(sink=sink, usage_class="ai_credits")
 
-        def stop_with(reason: str) -> None:
-            runtime_state.set_flags(workflow_id, autofix_attempt=0)
-            harness.update_card(thread, card_id, sink=sink, state="stopped", reason=reason, changes=changes,
-                                actions=["resume", "human_edit"])
+        def end(state: str, **extra: Any) -> None:
+            harness.update_card(thread, card_id, sink=sink, state=state, actions=extra.pop("actions", []), **extra)
+
+        def say(text: str) -> None:
+            harness.emit_item(sink, thread, ts.append(thread, "assistant_message", text=text))
 
         try:
-            for attempt in range(1, MAX_AUTOFIX_ATTEMPTS + 1):
-                runtime_state.set_flags(workflow_id, autofix_attempt=attempt)
-                harness.update_card(thread, card_id, sink=sink, attempt=attempt, phase="Finding the cause", changes=changes)
-                if stop.is_set():
-                    return stop_with("You pressed Stop.")
-                try:
-                    proposals = self._tf_propose_fix(workflow_id)
-                except Exception as exc:  # noqa: BLE001 — entitlement/quota/cloud errors end the loop cleanly
-                    return stop_with(str(exc)[:160] or "I couldn’t reach the AI service.")
-                if not proposals:
-                    return stop_with("I couldn’t find a fix I’m sure about within the safe edit types.")
-                if stop.is_set():  # pressed while it was thinking: nothing may be applied after Stop
-                    return stop_with("You pressed Stop.")
-                proposal = proposals[0]
-                change = harness.post_card(
-                    thread, "pending_change", "open", sink=sink,
-                    refs={"skill_id": self._flow_workflow({"workflow_id": workflow_id}).skill_id, "proposal_id": proposal.get("id"),
-                          "step_key": proposal.get("step_key")},
-                    title=_change_title(proposal), why=proposal.get("why") or "", proposal=proposal, preview=proposal.get("preview"),
-                    actions=["apply", "dismiss"], auto=True,
-                )
-                applied = self._card_pending_change(thread, change, "apply", {"source": "auto_fix"}, rid, sink)
-                if not applied.get("ok"):
-                    return stop_with(applied.get("message") or "That change couldn’t be applied.")
-                changes.append({"card_id": change["card_id"], "title": _change_title(proposal)})
-                harness.update_card(thread, card_id, sink=sink, phase="Re-testing", changes=changes)
-                if stop.is_set():
-                    return stop_with("You pressed Stop.")
-                outcome = self._tf_run_test(workflow_id, inputs, guard=True, show_browser=show_browser, use_ai=use_ai,
-                                            attempt=attempt + 1, auto=True)
-                if outcome == "passed":
-                    runtime_state.set_flags(workflow_id, autofix_attempt=0)
-                    harness.update_card(thread, card_id, sink=sink, state="passed", attempts=attempt + 1, changes=changes, actions=[])
-                    return
-                if outcome in ("stopped", "ended", "previewed", "needs_sign_in"):
-                    return stop_with("The re-test didn’t run to the end.")
-            stop_with("Three attempts didn’t fix it.")
+            self._install_proxy_router(sink=sink, usage_class="ai_credits")
+            try:
+                reply, proposals = self._tf_propose_fix(workflow_id)
+            except Exception as exc:  # noqa: BLE001 — entitlement/quota/cloud errors end the round cleanly
+                return end("failed", reason=str(exc)[:160] or "I couldn’t reach the AI service.", actions=["investigate", "human_edit"])
+            if stop.is_set():  # pressed while it was thinking: nothing may be posted after Stop
+                return end("stopped", actions=["investigate", "human_edit"])
+            if reply:
+                say(reply)
+            if not proposals:
+                say("I’m not sure how to fix this. Tell me how you’d like it fixed here in the chat, or open Human Edit.")
+                return end("no_fix", actions=["investigate", "human_edit"])
+            proposal = proposals[0]
+            harness.post_card(
+                thread, "pending_change", "open", sink=sink,
+                refs={"skill_id": self._flow_workflow({"workflow_id": workflow_id}).skill_id, "proposal_id": proposal.get("id"),
+                      "step_key": proposal.get("step_key")},
+                title=_change_title(proposal), why=proposal.get("why") or "", proposal=proposal, preview=proposal.get("preview"),
+                actions=["apply", "dismiss"],
+            )
+            end("done")
         finally:
-            runtime_state.set_flags(workflow_id, autofix_attempt=0)
+            runtime_state.set_flags(workflow_id, investigating=False)
+
+    def _tf_retest_after_fix(self, workflow_id: str, sink: Any) -> bool:
+        """After a change card is applied: re-test at once, with the guard on, when the workflow's latest test
+        failed. Any edit resets ``last_test_status``, so "failed" is read from the newest test card in the thread.
+        Returns True when a re-test started; False (and nothing happens) when it did not apply or may not start now."""
+        from conxa_compile.conversation import harness, runtime_state, thread_store as ts
+        from conxa_core.storage.workflow_store import get_workflow
+
+        workflow = get_workflow(workflow_id)
+        if workflow is None or not workflow.skill_id or not workflow.last_test_inputs:
+            return False
+        newest = next((c for c in reversed(ts.fold(ts.read_raw(_thread(workflow_id))))
+                       if c.get("kind") == "card" and c.get("card_type") == "test_run"), None)
+        if newest is None or newest.get("state") != "failed" or runtime_state.get_flags(workflow_id).get("testing"):
+            return False
+        try:
+            self._require_allowed(workflow_id, "test")  # an open question or another unapplied change holds it back
+        except _CommandError:
+            return False
+        harness.log_event(_thread(workflow_id), "Testing again with your change", glyph="none", sink=sink)
+        threading.Thread(target=self._tf_background, args=(workflow_id, dict(workflow.last_test_inputs), True, True), daemon=True).start()
+        return True
 
 
 def _change_title(proposal: dict[str, Any]) -> str:

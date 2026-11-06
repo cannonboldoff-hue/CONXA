@@ -39,7 +39,7 @@ def test_every_action_the_lifecycle_can_offer_has_an_entry():
         ({"skill_id": "", "recording_status": "error"}, {}), ({}, {"runtime": {"testing": True}}), ({}, {"clarify": {"open": 1}}),
         ({"last_test_status": "passed"}, {}), ({"last_test_status": "passed", "signed_off": True}, {}),
         ({"last_test_status": "failed"}, {}), ({"compile_steps_with_warnings": 2}, {}), ({}, {}),
-        ({"last_test_status": "failed"}, {"autofix": {"state": "stopped"}}),
+        ({"last_test_status": "failed"}, {"runtime": {"investigating": True}}),
     ]
     for wf, kw in cases:
         seen.update(derive_lifecycle({**base, **wf}, **kw)["allowed_actions"])
@@ -65,10 +65,10 @@ def test_a_phrase_for_an_action_that_is_not_allowed_right_now_is_not_routed():
 
 
 def test_an_ambiguous_phrase_goes_to_the_model_instead_of_guessing():
-    # "fix it" means both autofix and resume_autofix; with both allowed it is not a phrase hit
+    # "try again" means both retry_video and investigate; with both allowed it is not a phrase hit
     calls: list = []
-    r = route_intent("fix it", ["autofix", "resume_autofix"], call=lambda t, p, ms: calls.append(t) or {"action": "autofix"})
-    assert calls == ["chat_route_intent"] and r["action"] == "autofix" and r["source"] == "model"
+    r = route_intent("try again", ["retry_video", "investigate"], call=lambda t, p, ms: calls.append(t) or {"action": "investigate"})
+    assert calls == ["chat_route_intent"] and r["action"] == "investigate" and r["source"] == "model"
 
 
 def test_plain_conversation_never_costs_a_routing_call():

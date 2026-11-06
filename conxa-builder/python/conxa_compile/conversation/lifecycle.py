@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import Any
 
 STAGES = ("describe", "configure", "record", "understand", "compile", "clarify", "edit", "test", "approve")
-MAX_AUTOFIX_ATTEMPTS = 3
 
 # Glyph kinds — identical to the renderer's lib/status.ts vocabulary.
 OK, WARN, FAIL, RUN, NONE = "ok", "warn", "fail", "run", "none"
@@ -34,15 +33,13 @@ def derive_lifecycle(
     auth_missing: bool = False,
     clarify: dict[str, Any] | None = None,
     runtime: dict[str, Any] | None = None,
-    autofix: dict[str, Any] | None = None,
     pending_changes: int = 0,
 ) -> dict[str, Any]:
     """Return ``{stage, substate, glyph, note, allowed_actions, rows}``.
 
     ``clarify`` is ``{"open": n, "answered": m}`` (None = no questions generated yet).
-    ``runtime`` is ``runtime_state.get_flags(...)``. ``autofix`` is the latest auto-fix summary
-    ``{"state": "running"|"stopped"|"passed", "attempt": n}`` or None. ``pending_changes`` is how
-    many proposed chat changes are still waiting for Apply / Dismiss.
+    ``runtime`` is ``runtime_state.get_flags(...)``. ``pending_changes`` is how many proposed chat
+    changes (including a fix proposed after a failed test) are still waiting for Apply / Dismiss.
     """
     rt = runtime or {}
     cl = clarify or {}
@@ -113,12 +110,10 @@ def derive_lifecycle(
             stage, substate, glyph, note, actions = "clarify", "checking", RUN, "Checking it against your description", []
         elif rt.get("testing"):
             stage = "test"
-            attempt = int(rt.get("autofix_attempt") or 0)
-            if attempt:
-                substate, note = "autofix", f"Fixing and re-testing · attempt {attempt} of {MAX_AUTOFIX_ATTEMPTS}"
-            else:
-                substate, note = "running", "Test running"
+            substate, note = "running", "Test running"
             glyph, actions = RUN, ["stop_test"]
+        elif rt.get("investigating"):
+            stage, substate, glyph, note, actions = "test", "investigating", RUN, "Finding why the test failed", ["stop_test"]
         elif rt.get("sign_in_expired"):
             stage, substate, glyph, note, actions = "test", "sign_in_expired", WARN, "Sign-in expired", ["sign_in", "test"]
         elif open_q > 0:
@@ -135,10 +130,7 @@ def derive_lifecycle(
                 stage, substate, glyph, note, actions = "approve", "ready", WARN, "Test passed — not yet approved", ["approve", "test", "edit"]
         elif last_test == "failed":
             stage, glyph = "test", FAIL
-            if autofix and autofix.get("state") == "stopped":
-                substate, note, actions = "autofix_stopped", "Auto-fix stopped", ["resume_autofix", "edit", "test"]
-            else:
-                substate, note, actions = "failed", "Latest test failed", ["autofix", "edit", "test"]
+            substate, note, actions = "failed", "Latest test failed", ["investigate", "edit", "test"]
         elif isinstance(_g(wf, "last_test_outcome"), dict) and _g(wf, "last_test_outcome").get("outcome"):
             # A test that ended partway is not "never tested", and not a pass either.
             where = str(_g(wf, "last_test_outcome").get("title") or "").strip()
@@ -248,7 +240,6 @@ def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
         auth_missing=auth_missing,
         clarify=clarify,
         runtime=runtime_state.get_flags(workflow.id),
-        autofix=_latest_autofix(items),
         pending_changes=_pending_changes(items),
     )
 
@@ -265,10 +256,3 @@ def _thread_items(workflow_id: str) -> list[dict[str, Any]]:
 def _pending_changes(items: list[dict[str, Any]]) -> int:
     """Proposed chat changes still waiting for Apply / Dismiss (thread data, like auto-fix state)."""
     return sum(1 for i in items if i.get("card_type") == "pending_change" and i.get("state") == "open")
-
-
-def _latest_autofix(items: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The newest auto-fix card's state, read from the thread (auto-fix state is thread data, not a
-    second source of truth: the lifecycle only uses it to tell "failed" from "auto-fix stopped")."""
-    cards = [i for i in items if i.get("card_type") == "autofix"]
-    return {"state": cards[-1].get("state")} if cards else None

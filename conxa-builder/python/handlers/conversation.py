@@ -340,7 +340,7 @@ class ConversationMixin:
         from conxa_compile.conversation import harness, runtime_state, thread_store as ts
 
         flags = runtime_state.get_flags(workflow_id)
-        if flags.get("testing") or flags.get("autofix_attempt") or flags.get("watching"):
+        if flags.get("testing") or flags.get("investigating") or flags.get("watching"):
             return
         thread = f"wf:{workflow_id}"
         live = {"test_run": ("running", "waiting_guard", "waiting_confirm", "waiting_fork"), "autofix": ("running",),
@@ -477,9 +477,9 @@ class ConversationMixin:
         if action == "stop_test":
             self.cmd_flow_test_stop(base, rid)
             return {"ok": True, "message": "Stopping the test."}
-        if action in ("autofix", "resume_autofix"):
-            self.cmd_flow_autofix_resume(base, rid)
-            return {"ok": True, "message": "Looking for a fix."}
+        if action == "investigate":
+            self.cmd_flow_investigate(base, rid)
+            return {"ok": True, "message": "Looking for the cause."}
         if action == "approve":
             self.cmd_flow_approve(need("test_run", ("passed",), "passing test"), rid)
             return {"ok": True, "message": "Approved."}
@@ -584,8 +584,10 @@ class ConversationMixin:
                 applied_version=(after.get("meta") or {}).get("version"),
                 actions=["undo"],
             )
-            if source != "auto_fix" and thread_id.startswith("wf:"):
-                self._flow_post_summary(thread_id[len("wf:"):], sink, updated=True)
+            if thread_id.startswith("wf:"):
+                # A fix for a failed test (Studio's proposal or the person's own words) is tested at once.
+                if not self._tf_retest_after_fix(thread_id[len("wf:"):], sink):
+                    self._flow_post_summary(thread_id[len("wf:"):], sink, updated=True)
             return {"ok": True}
 
         if action == "undo":

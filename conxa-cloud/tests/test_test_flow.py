@@ -1,4 +1,4 @@
-"""BUILD-40: the test guard, the person-answered confirmation, the test card, auto-fix and approval
+"""BUILD-40: the test guard, the person-answered confirmation, the test card, find-the-cause and approval
 (fake runtime and no model — the runtime side is covered by runtime/test/unit/test_guard.js)."""
 
 from __future__ import annotations
@@ -412,7 +412,7 @@ def test_the_autofix_switch_defaults_on_and_is_stored_locally(env):
     assert b.cmd_set_studio_settings({"autofix_enabled": "no"}, "r")["settings"]["autofix_enabled"] is False  # wrong type ignored
 
 
-# ── auto-fix ────────────────────────────────────────────────────────────────────────────────
+# ── find the cause (formerly auto-fix) ───────────────────────────────────────────────────────────
 
 
 def _proposal(i=1):
@@ -420,84 +420,159 @@ def _proposal(i=1):
             "patch": {"validation": {"wait_for": {"type": "none"}}}, "preview": {"before": "5 s", "after": "15 s"}}
 
 
-def test_autofix_makes_one_gated_change_at_a_time_retests_with_the_guard_and_stops_at_three(env, monkeypatch):
+def _said(wf_id):
+    return [i["text"] for i in ts.load(f"wf:{wf_id}", limit=200)["items"] if i["kind"] == "assistant_message"]
+
+
+def test_a_failure_explains_the_cause_and_proposes_one_fix_but_applies_nothing(env, monkeypatch):
     b, wf, _out = env
-    runs: list[dict] = []
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: ("The Save button moved into a menu.", [_proposal()]))
+    monkeypatch.setattr(b, "_card_pending_change", lambda *a: pytest.fail("a fix must wait for the person's Apply"))
+    b.cmd_test_workflow = lambda p, r: pytest.fail("nothing re-tests until a fix is applied")
+    b._tf_investigate(wf.id)
+    assert "The Save button moved into a menu." in _said(wf.id)
+    change = _cards(wf.id, "pending_change")[0]
+    assert change["state"] == "open" and change["actions"] == ["apply", "dismiss"] and "auto" not in change
+    assert _cards(wf.id, "autofix")[0]["state"] == "done"
+    assert runtime_state.get_flags(wf.id) == {}
+    # while the proposal waits, no test may be started
+    assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
 
-    def fake_test(payload, rid):
-        runs.append(payload)
-        payload["_phase_hook"]({"phase": "step_0_click_start", "step": 0, "step_total": 1, "intent": "choose_customer", "destructive": False})
-        raise _CommandError("workflow_test_failed", "Still failing.")
 
-    b.cmd_test_workflow = fake_test
-    applied: list[str] = []
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: [_proposal(len(applied) + 1)])
-    def fake_apply(thread, card, action, body, rid, sink):
-        from conxa_compile.conversation import harness
-
-        applied.append(body.get("source"))
-        harness.update_card(thread, card["card_id"], state="applied")  # an applied change no longer holds back a test
-        return {"ok": True}
-
-    monkeypatch.setattr(b, "_card_pending_change", fake_apply)
-    b._tf_autofix(wf.id, {"po_number": "PO-1"}, False)
-    assert applied == ["auto_fix", "auto_fix", "auto_fix"]  # one change per attempt, every one attributed to auto-fix
-    assert all(r["guard"] is True for r in runs) and len(runs) == 3  # re-tests always run with the guard on
+def test_with_no_confident_fix_it_says_so_and_asks_how_the_person_would_fix_it(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: ("It never found the Save button.", []))
+    b._tf_investigate(wf.id)
     af = _cards(wf.id, "autofix")[0]
-    assert af["state"] == "stopped" and af["reason"] == "Three attempts didn’t fix it." and af["actions"] == ["resume", "human_edit"]
-    assert len(af["changes"]) == 3
-    w = get_workflow(wf.id)
-    w.last_test_status = "failed"  # what the real cmd_test_workflow records on a failure
-    save_workflow(w)
-    lc = lifecycle_for_workflow(w)
-    assert lc["substate"] == "autofix_stopped" and lc["allowed_actions"][0] == "resume_autofix"
+    assert af["state"] == "no_fix" and "human_edit" in af["actions"]
+    assert any("Tell me how you’d like it fixed" in t for t in _said(wf.id))
+    assert not _cards(wf.id, "pending_change")
+
+
+def test_an_error_while_investigating_ends_the_round_cleanly(env, monkeypatch):
+    b, wf, _out = env
+
+    def boom(wid):
+        raise RuntimeError("quota used up")
+
+    monkeypatch.setattr(b, "_tf_propose_fix", boom)
+    b._tf_investigate(wf.id)
+    af = _cards(wf.id, "autofix")[0]
+    assert af["state"] == "failed" and af["reason"] == "quota used up"
     assert runtime_state.get_flags(wf.id) == {}
 
 
-def test_autofix_stops_when_the_retest_passes(env, monkeypatch):
-    b, wf, _out = env
-    results = iter(["raise", "ok"])
-
-    def fake_test(payload, rid):
-        payload["_phase_hook"]({"phase": "step_0_click_start", "step": 0, "step_total": 1, "intent": "choose_customer", "destructive": False})
-        if next(results) == "raise":
-            raise _CommandError("workflow_test_failed", "x")
-        return {"status": "passed"}
-
-    b.cmd_test_workflow = fake_test
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: [_proposal()])
-    monkeypatch.setattr(b, "_card_pending_change", lambda *a: {"ok": True})
-    # the first run is the failure that starts auto-fix
-    assert b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False) == "failed"
-    b._tf_autofix(wf.id, {}, False)
-    af = _cards(wf.id, "autofix")[0]
-    assert af["state"] == "passed" and af["attempts"] == 2
-    assert any(c["state"] == "passed" for c in _cards(wf.id, "test_run"))
-
-
-def test_autofix_stops_when_there_is_no_safe_fix_or_the_change_cannot_apply(env, monkeypatch):
-    b, wf, _out = env
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: [])
-    b._tf_autofix(wf.id, {}, False)
-    assert _cards(wf.id, "autofix")[0]["reason"].startswith("I couldn’t find a fix I’m sure about")
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: [_proposal()])
-    monkeypatch.setattr(b, "_card_pending_change", lambda *a: {"ok": False, "message": "The workflow changed."})
-    b._tf_autofix(wf.id, {}, False)
-    assert _cards(wf.id, "autofix")[1]["reason"] == "The workflow changed."
-
-
-def test_the_stop_button_ends_autofix_between_steps(env, monkeypatch):
+def test_the_stop_button_ends_investigating_and_posts_nothing(env, monkeypatch):
     b, wf, _out = env
 
     def propose(wid):
         test_flow._autofix_stop[wid].set()  # the person presses Stop while it is thinking
-        return [_proposal()]
+        return "A diagnosis.", [_proposal()]
 
     monkeypatch.setattr(b, "_tf_propose_fix", propose)
-    monkeypatch.setattr(b, "_card_pending_change", lambda *a: pytest.fail("must not apply after Stop"))
-    b.cmd_test_workflow = lambda p, r: pytest.fail("must not re-test after Stop")
-    b._tf_autofix(wf.id, {}, False)
-    assert _cards(wf.id, "autofix")[0]["reason"] == "You pressed Stop."
+    b._tf_investigate(wf.id)
+    assert _cards(wf.id, "autofix")[0]["state"] == "stopped"
+    assert not _cards(wf.id, "pending_change") and "A diagnosis." not in _said(wf.id)
+
+
+def test_the_lifecycle_says_when_it_is_investigating_and_offers_find_the_cause_after_a_failure(env):
+    b, wf, _out = env
+    runtime_state.set_flags(wf.id, investigating=True)
+    lc = lifecycle_for_workflow(get_workflow(wf.id))
+    assert (lc["stage"], lc["substate"], lc["allowed_actions"]) == ("test", "investigating", ["stop_test"])
+    runtime_state.clear_all()
+    w = get_workflow(wf.id)
+    w.last_test_status = "failed"
+    save_workflow(w)
+    lc = lifecycle_for_workflow(w)
+    assert lc["substate"] == "failed" and lc["allowed_actions"][:2] == ["investigate", "edit"]
+
+
+def _failed_then_inputs(b, wf):
+    """A failed test card in the thread, and the inputs it ran with (an edit resets the status, not the inputs)."""
+    _fake_test(b, steps=[("open_new_invoice", False)], error="Could not find it")
+    assert b._tf_run_test(wf.id, {"po_number": "PO-1"}, guard=True, show_browser=False, attempt=1, auto=False) == "failed"
+    w = get_workflow(wf.id)
+    w.last_test_inputs = {"po_number": "PO-1"}
+    w.last_test_status = "never"  # what any applied edit does
+    save_workflow(w)
+
+
+def _wait_for(calls, n=1):
+    for _ in range(100):
+        if len(calls) >= n:
+            return
+        time.sleep(0.02)
+
+
+def test_applying_a_fix_after_a_failed_test_retests_at_once_with_the_guard_on(env, monkeypatch):
+    b, wf, _out = env
+    _failed_then_inputs(b, wf)
+    calls: list[tuple] = []
+    monkeypatch.setattr(b, "_tf_background", lambda *a: calls.append(a))
+    assert b._tf_retest_after_fix(wf.id, lambda e: None) is True
+    _wait_for(calls)
+    assert calls == [(wf.id, {"po_number": "PO-1"}, True, True)]  # (workflow, inputs, guard, show_browser)
+
+
+def test_no_retest_when_the_last_test_did_not_fail_or_a_change_is_still_waiting(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(b, "_tf_background", lambda *a: pytest.fail("must not re-test"))
+    assert b._tf_retest_after_fix(wf.id, lambda e: None) is False  # never tested
+    _fake_test(b, steps=[("open_new_invoice", False)], outcome="passed")
+    b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False)
+    w = get_workflow(wf.id)
+    w.last_test_inputs = {"po_number": "PO-1"}
+    save_workflow(w)
+    assert b._tf_retest_after_fix(wf.id, lambda e: None) is False  # the newest test passed
+    _failed_then_inputs(b, wf)
+    from conxa_compile.conversation import harness
+
+    harness.post_card(f"wf:{wf.id}", "pending_change", "open", sink=lambda e: None, title="Another change", actions=["apply", "dismiss"])
+    assert b._tf_retest_after_fix(wf.id, lambda e: None) is False  # another unapplied change holds the test back
+
+
+def test_pressing_apply_on_a_change_card_retests_and_otherwise_posts_the_usual_summary(env, monkeypatch):
+    b, wf, _out = env
+    from conxa_compile.conversation import harness
+
+    monkeypatch.setattr(b, "_apply_change_set", lambda *a, **k: None)
+    monkeypatch.setattr(b, "_log_edit", lambda *a, **k: None)
+    summaries: list = []
+    monkeypatch.setattr(b, "_flow_post_summary", lambda *a, **k: summaries.append(a))
+    started: list = []
+    thread = f"wf:{wf.id}"
+
+    def press_apply():
+        card = harness.post_card(thread, "pending_change", "open", sink=lambda e: None, refs={"skill_id": "skill_t1"},
+                                 title="Change “x”", proposal=_proposal(), actions=["apply", "dismiss"])
+        return b._card_pending_change(thread, card, "apply", {}, "r", lambda e: None)
+
+    monkeypatch.setattr(b, "_tf_retest_after_fix", lambda wid, sink: started.append(wid) or True)
+    assert press_apply()["ok"] and started == [wf.id] and summaries == []
+    monkeypatch.setattr(b, "_tf_retest_after_fix", lambda wid, sink: False)
+    assert press_apply()["ok"] and len(summaries) == 1
+
+
+def test_a_second_failure_investigates_again_with_no_attempt_cap(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(studio_settings, "load", lambda: {"autofix_enabled": True})
+    monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: "failed")
+    monkeypatch.setattr(b, "_tf_input_check", lambda *a: False)
+    rounds: list = []
+    monkeypatch.setattr(b, "_tf_investigate", lambda wid: rounds.append(wid))
+    for _ in range(6):
+        b._tf_background(wf.id, {}, True, False)
+    assert len(rounds) == 6
+
+
+def test_the_find_the_cause_switch_off_means_a_failure_is_only_reported(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(studio_settings, "load", lambda: {"autofix_enabled": False})
+    monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: "failed")
+    monkeypatch.setattr(b, "_tf_input_check", lambda *a: False)
+    monkeypatch.setattr(b, "_tf_investigate", lambda wid: pytest.fail("the switch is off"))
+    b._tf_background(wf.id, {}, True, False)
 
 
 # ── a value the person typed is blamed before the workflow is edited ─────────────────────────────
@@ -517,7 +592,7 @@ def _failed_find(env, monkeypatch, tested):
 
 def test_a_changed_input_is_asked_about_before_autofix_edits_any_step(env, monkeypatch):
     b, wf = _failed_find(env, monkeypatch, "PO-1")
-    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
     b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
     q = next(x for x in clarify_store.load(wf.id)["questions"] if x["kind"] == "input_check")
     assert q["status"] == "open" and q["input_ids"] == ["po_number"] and "PO-1" in q["body"] and "PO-44821" in q["body"]
@@ -528,14 +603,14 @@ def test_a_changed_input_is_asked_about_before_autofix_edits_any_step(env, monke
 def test_the_recorded_value_is_not_blamed_so_autofix_runs_as_before(env, monkeypatch):
     b, wf = _failed_find(env, monkeypatch, "PO-44821")
     ran = []
-    monkeypatch.setattr(b, "_tf_autofix", lambda *a: ran.append(a))
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: ran.append(a))
     b._tf_background(wf.id, {"po_number": "PO-44821"}, True, False)
     assert ran and not any(x["kind"] == "input_check" for x in clarify_store.load(wf.id)["questions"])
 
 
 def test_answering_wrong_reopens_the_test_card_with_the_input_flagged(env, monkeypatch):
     b, wf = _failed_find(env, monkeypatch, "PO-1")
-    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
     b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
     card = _cards(wf.id, "clarify_question")[0]
     res = b._card_clarify_question(f"wf:{wf.id}", card, "choose", {"choice": "wrong"}, "r", lambda e: None)
@@ -546,10 +621,10 @@ def test_answering_wrong_reopens_the_test_card_with_the_input_flagged(env, monke
 
 def test_answering_right_hands_the_failure_to_autofix(env, monkeypatch):
     b, wf = _failed_find(env, monkeypatch, "PO-1")
-    monkeypatch.setattr(b, "_tf_autofix", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
     b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
     resumed = []
-    monkeypatch.setattr(b, "cmd_flow_autofix_resume", lambda payload, rid: resumed.append(payload))
+    monkeypatch.setattr(b, "cmd_flow_investigate", lambda payload, rid: resumed.append(payload))
     b._card_clarify_question(f"wf:{wf.id}", _cards(wf.id, "clarify_question")[0], "choose", {"choice": "right"}, "r", lambda e: None)
     assert resumed == [{"workflow_id": wf.id}]
 
@@ -563,7 +638,7 @@ def test_evidence_without_the_new_keys_leaves_autofix_untouched(env, monkeypatch
     monkeypatch.setattr(studio_settings, "load", lambda: {"autofix_enabled": True})
     monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: "failed")
     ran = []
-    monkeypatch.setattr(b, "_tf_autofix", lambda *a: ran.append(a))
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: ran.append(a))
     b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
     assert ran
 
@@ -585,7 +660,7 @@ def test_an_expired_sign_in_pauses_the_test_and_never_starts_auto_fix(env):
     assert lifecycle_for_workflow(get_workflow(wf.id))["substate"] == "sign_in_expired"
     # auto-fix is only ever started by a plain failure
     started = []
-    b._tf_autofix = lambda *a, **k: started.append(1)
+    b._tf_investigate = lambda *a, **k: started.append(1)
     monkeypatched = b._tf_run_test
     b._tf_run_test = lambda *a, **k: "needs_sign_in"
     b._tf_background(wf.id, {}, True, False)

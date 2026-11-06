@@ -1,8 +1,9 @@
 """Local Studio settings the conversation reads (BUILD-40).
 
 ``data/studio_settings.json`` — per-computer, never synced. Today: ``autofix_enabled`` (default
-on), the switch for the auto-fix loop that applies one gated change after a failed test and
-re-tests without a click per change. Fail-silent like the other small local stores.
+on), the switch for "find the cause when a test fails": Studio explains the failure and proposes one
+fix, which only the person's Apply applies. The key keeps its old name so saved files still read.
+Fail-silent like the other small local stores.
 """
 
 from __future__ import annotations

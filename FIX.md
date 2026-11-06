@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**When a test fails, Studio now explains why and waits for your OK before changing anything — 2026-11-06**
+Before, a failed test made Studio quietly change your workflow up to three times, one change after another, and only then tell you. Now it works out what went wrong, tells you the cause in plain words, and suggests one fix. Nothing changes until you press Apply, and you can also just type how you'd fix it yourself. After you approve, it tests again right away, and if it fails again it asks again, with no limit on rounds.
+— 2026-11-06
+
 **The chat helper can now edit steps inside a repeating loop, and its "open the editor" link takes you to the right step — 2026-11-06**
 Before, when you asked the helper to add or remove a step inside a "for each row" loop, it could not, and when it sent you to the editor to point a step at a new element, you landed on the first step and had to hunt. Now it can grow, trim and reorder a loop just like a conditional block. The link also names the step ("step 3") and opens the editor already on it.
 — 2026-11-06
@@ -52,4 +56,8 @@ The engine redesign page still read like a plan, even though four of its six cha
 
 **The helper that acts on a page for the customer's AI assistant can now work like a real browsing assistant — 2026-11-06**
 Before, the "Agent span" step could only click, type, pick from a list or scroll on one website, and it could not even look at the rest of the task, so authors needed a separate "AI review" step to ask a question. Now one step does both: the assistant is told what the whole task is, what has been done and what comes next, and it can press keys, go to other addresses, open and close tabs, read the page, and hand back an answer that later steps can use. It still asks the person first before pressing anything that sends, pays, deletes or publishes, and the old "AI review" step is gone. This matters because jobs that vary from one customer to the next no longer need to be scripted click by click.
+— 2026-11-06
+
+**Updated the workflow engine diagram so questions can come at any time — 2026-11-06**
+The diagram still showed two fixed rounds of questions, one before the build and one after, with a "skip" button. Now it shows one steady stream: the helper asks whenever it is unsure, every question it asks must be answered, and nothing can be tested, approved or published until they are. Like a checklist that grows as you go, but cannot be signed off while any box is empty.
 — 2026-11-06

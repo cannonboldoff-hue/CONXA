@@ -138,9 +138,9 @@ flowchart LR
     TR -- failed to find an element, and an input looks wrong --> IC[Ask: is this value right?<br/>input_check question]
     IC -- value was wrong --> T
     IC -- value is right --> AF
-    TR -- failed --> AF[Auto-fix ≤ 3 attempts<br/>one gated change + Undo]
-    AF --> TR
-    AF -- stops --> E
+    TR -- failed --> AF[Find the cause<br/>explains why, proposes one fix]
+    AF -- you press Apply, or type your own fix --> TR
+    AF -- no fix I am sure about --> E
     TR -- passed --> A[Approve<br/>never publishes]
     A --> P[Publish page]
 ```

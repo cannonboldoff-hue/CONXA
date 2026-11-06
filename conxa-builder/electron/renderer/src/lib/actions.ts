@@ -10,8 +10,7 @@ export const ACTION_INFO: Record<string, ActionInfo> = {
   compile: { label: 'Compile', kind: 'flow', strip: true, primary: true },
   answer_clarify: { label: 'Answer questions', kind: 'flow', strip: true, primary: true },
   test: { label: 'Test it', kind: 'flow', strip: true, primary: true },
-  autofix: { label: 'Fix it', kind: 'flow', strip: true },
-  resume_autofix: { label: 'Keep fixing', kind: 'flow', strip: true },
+  investigate: { label: 'Find the cause', kind: 'flow', strip: true },
   approve: { label: 'Approve', kind: 'flow', strip: true, primary: true },
   edit: { label: 'Open Human Edit', kind: 'nav', target: 'edit' }, // the Human Edit panel is always on screen
   publish: { label: 'Publish', kind: 'nav', target: 'publish', strip: true },

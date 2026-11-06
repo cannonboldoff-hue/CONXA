@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   flowApprove,
-  flowAutofixResume,
+  flowInvestigate,
   flowAutofixStop,
   flowTestDecision,
   flowSignInThenTest,
@@ -409,54 +409,49 @@ export function TestRunCard({ threadId, item }: CardProps) {
   return null
 }
 
-type Change = { card_id: string; title: string }
-
-/** The auto-fix loop: finds the cause, makes one change, re-tests — up to three times, then asks. */
+/** Finds why a test failed and says so; the proposed fix is its own change card, and only Apply on it changes anything. */
 export function AutofixCard({ threadId, item }: CardProps) {
   const wf = workflowIdOf(threadId)
   const { busy, run } = useAction(threadId)
   const openEdit = useOpenEdit(threadId)
   const state = String(item.state)
-  const changes = (Array.isArray(item.changes) ? item.changes : []) as Change[]
-  const max = Number(item.max_attempts ?? 3)
+  const retry = (
+    <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowInvestigate(wf))}>Try again</Button>
+  )
+  const editByHand = openEdit && <Button variant="outline" size="sm" onClick={openEdit}>Fix it myself in Human Edit</Button>
 
   if (state === 'running') {
     return (
       <CardShell
         glyph="run"
-        title="Fixing and re-testing"
-        meta={`Attempt ${String(item.attempt ?? 1)} of ${max}${item.phase ? ` · ${String(item.phase)}` : ''}`}
+        title="Finding why the test failed"
+        meta={item.phase ? String(item.phase) : undefined}
         footer={<Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowAutofixStop(wf))}>Stop</Button>}
       >
-        {changes.length > 0 && (
-          <ul className="list-disc space-y-0.5 pl-5">{changes.map((c) => <li key={c.card_id}>{c.title}</li>)}</ul>
-        )}
+        Nothing is changed until you say so.
+      </CardShell>
+    )
+  }
+  if (state === 'done') {
+    return <CardShell glyph="ok" title="Found the cause">The proposed fix is below. Press Apply to make it and test again, or tell me how you’d fix it instead.</CardShell>
+  }
+  if (state === 'no_fix') {
+    return (
+      <CardShell glyph="warn" title="No fix I’m sure about" footer={<>{retry}{editByHand}</>}>
+        Tell me in the chat how you’d like it fixed, and I’ll turn that into a change for you to approve.
       </CardShell>
     )
   }
   if (state === 'interrupted') {
-    return <CardShell glyph="warn" title="Fixing was interrupted" meta="Studio was closed or restarted">Each change made so far is listed above with Undo.</CardShell>
+    return <CardShell glyph="warn" title="Looking for the cause was interrupted" meta="Studio was closed or restarted" footer={retry}>Nothing was changed.</CardShell>
   }
   if (state === 'passed') {
-    return (
-      <CardShell glyph="ok" title={`Test passed on attempt ${String(item.attempts ?? '')}`}>
-        {changes.length ? `${plural(changes.length, 'change')} made — each is listed above with Undo.` : 'No changes were needed.'} Approving is still up to you.
-      </CardShell>
-    )
+    // Saved before fixes needed your approval: the old loop made changes by itself.
+    return <CardShell glyph="ok" title={`Test passed on attempt ${String(item.attempts ?? '')}`}>Approving is still up to you.</CardShell>
   }
   return (
-    <CardShell
-      glyph="none"
-      title="Auto-fix stopped"
-      footer={
-        <>
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowAutofixResume(wf))}>Resume auto-fix</Button>
-          {openEdit && <Button variant="outline" size="sm" onClick={openEdit}>Fix it myself in Human Edit</Button>}
-        </>
-      }
-    >
-      {item.reason ? <p className="mb-1 text-[var(--text-primary)]">{String(item.reason)}</p> : null}
-      <p>Changes made so far are kept and listed above. The workflow stays marked “needs a fix” until a test passes.</p>
+    <CardShell glyph="none" title={state === 'failed' ? 'Couldn’t look into it' : 'Stopped'} footer={<>{retry}{editByHand}</>}>
+      {item.reason ? <p className="text-[var(--text-primary)]">{String(item.reason)}</p> : <p>Nothing was changed.</p>}
     </CardShell>
   )
 }

@@ -126,7 +126,7 @@ export const flowTestStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_t
 export const flowApprove = (workflowId: string, cardId: string) =>
   cmd<{ ok: boolean; approved: boolean; built: boolean }>('flow_approve', { workflow_id: workflowId, card_id: cardId })
 export const flowAutofixStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_autofix_stop', { workflow_id: workflowId })
-export const flowAutofixResume = (workflowId: string) => cmd<{ ok: boolean }>('flow_autofix_resume', { workflow_id: workflowId })
+export const flowInvestigate = (workflowId: string) => cmd<{ ok: boolean }>('flow_investigate', { workflow_id: workflowId })
 
 export type StudioSettings = { autofix_enabled: boolean }
 export const getStudioSettings = () => cmd<{ settings: StudioSettings }>('get_studio_settings')

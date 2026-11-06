@@ -1,3 +1,6 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+
+
 <title>CONXA Workflow Engine</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -172,7 +175,7 @@ td.k{font-weight:600}
 
 <div class="wrap">
 <header class="top">
-  <span class="eyebrow">Architecture graph · branch feat/understanding-first-pipeline · verified 2026-11-03</span>
+  <span class="eyebrow">Architecture graph · branch feat/understanding-first-pipeline · verified 2026-11-03 · question flow updated 2026-11-06 (feat/clarify-phase-0) · test-failure flow updated 2026-11-06</span>
   <h1>CONXA Workflow Engine</h1>
   <p class="lede">This page traces a task from one recording by a person to a deterministic program that a customer's AI agent runs. Read it top to bottom: each row is a phase, and each column is who acts. Every box is a real component, and every arrow is a real hand-off. Click a box to see its internals and connections, or press <b>Walk through</b> to step through it in order.</p>
 </header>
@@ -224,7 +227,7 @@ td.k{font-weight:600}
   </div>
   <div class="cards">
     <div class="card"><h3>Where Claude's design wins</h3><ul class="small"><li>Nothing to compile or maintain: record, then save.</li><li>It adapts to moved buttons and unforeseen branches without anyone editing it.</li><li>It covers one-off and fuzzy tasks.</li><li>Narration is a cheap, rich channel for intent.</li></ul></div>
-    <div class="card"><h3>Where CONXA's design wins</h3><ul class="small"><li>Every normal run uses zero tokens and the same actions, which a SaaS vendor can promise its customers.</li><li>Declared, typed inputs become an MCP tool schema.</li><li>Compiled assertions check outcomes, not judgement.</li><li>The author settles ambiguity once; it is never improvised during a customer's run.</li><li>It runs under any MCP agent and syncs to many machines.</li></ul></div>
+    <div class="card"><h3>Where CONXA's design wins</h3><ul class="small"><li>Every normal run uses zero tokens and the same actions, which a SaaS vendor can promise its customers.</li><li>Declared, typed inputs become an MCP tool schema.</li><li>Compiled assertions check outcomes, not judgement.</li><li>The author settles ambiguity in Studio, whenever the harness is unsure; it is never improvised during a customer's run.</li><li>It runs under any MCP agent and syncs to many machines.</li></ul></div>
   </div>
   <h2>What CONXA could borrow</h2>
   <div class="cards">
@@ -240,16 +243,16 @@ td.k{font-weight:600}
 <!-- ───────── REFERENCE ───────── -->
 <div class="view" id="v-reference" hidden>
   <div class="card seq"><h3>Sequence · finish recording → understanding → questions</h3><div class="scroll" id="seqA"></div></div>
-  <div class="card seq"><h3>Sequence · last answer → compile → replay → Q2</h3><div class="scroll" id="seqB"></div></div>
+  <div class="card seq"><h3>Sequence · last pre-build answer → compile → replay → later questions</h3><div class="scroll" id="seqB"></div></div>
   <div class="card seq"><h3>Sequence · customer run with Tier B hand-off</h3><div class="scroll" id="seqD"></div></div>
   <div class="card"><h3>Model touchpoints</h3><div class="scroll"><table>
     <thead><tr><th>Call</th><th>When</th><th>Writes</th><th>Held in check by</th></tr></thead><tbody>
     <tr><td class="k">Pegasus 1.6</td><td>Once per new recording or blur change</td><td>Video segments</td><td>Browser wins in the merge; never creates steps; SHA-256 cache</td></tr>
     <tr><td class="k"><code>timeline_understanding</code></td><td>Before compile, 1 call</td><td>Meaning, questions</td><td><code>validate()</code>: five stages, graded, every drop counted in <code>validation_report</code>; one retry on a weak answer</td></tr>
     <tr><td class="k"><code>workflow_review</code></td><td>End of compile, 1 call</td><td>Intent graph, second-opinion findings</td><td><code>_validate_findings</code>, keyed on <code>step_key</code></td></tr>
-    <tr><td class="k"><code>clarify_question_copy</code></td><td>Background after Q2 posts</td><td>Wording only</td><td>Field-by-field check; template kept on failure</td></tr>
+    <tr><td class="k"><code>clarify_question_copy</code></td><td>Background after a post-build question posts</td><td>Wording only</td><td>Field-by-field check; template kept on failure</td></tr>
     <tr><td class="k">Chat harness</td><td>Per message</td><td>Reply, routed action, proposals</td><td>Deterministic routing first; allowed set only; Confirm cards; three gates</td></tr>
-    <tr><td class="k">Auto-fix</td><td>After a failed test</td><td>≤ 1 change per round, 3 rounds</td><td>Same gates, Undo, guard on every re-test</td></tr>
+    <tr><td class="k">Find the cause</td><td>After a failed test</td><td>Root cause in plain words + ≤ 1 proposed change, no round cap</td><td>Same gates; applied only on the person’s Apply; Undo; guard on every re-test</td></tr>
     <tr><td class="k">Re-target</td><td>User-initiated in Human Edit</td><td>Selector strings</td><td>Explicit person action; the documented exception</td></tr>
     <tr><td class="k">Tier B</td><td>Run time, after Tier A</td><td>Candidate nomination</td><td>Fingerprint re-validation, margin gate, parked-page check</td></tr>
   </tbody></table></div></div>
@@ -270,7 +273,7 @@ td.k{font-weight:600}
       <li>Typed-text verdicts do not pre-tick the compile-time <code>values</code> question; <code>phase</code> comes from the second opinion.</li>
       <li><b>BUILD-60:</b> no restore for dropped script events. <b>BUILD-59:</b> nothing reads <code>produces</code>/<code>consumes</code> yet.</li>
       <li>Pegasus is a hard dependency: an outage stops every new workflow before compile.</li>
-      <li>Only the understanding check counts what it drops. The other five model guards (second opinion, question wording, chat, auto-fix, Tier B) drop or refuse silently.</li></ul></div>
+      <li>Only the understanding check counts what it drops. The other five model guards (second opinion, question wording, chat, find-the-cause, Tier B) drop or refuse silently.</li></ul></div>
     <div class="card"><h3>Docs that disagree with the code</h3><ul class="small">
       <li><code>Understanding-First-Harness.md</code>: says nothing is built, video is opt-in, and there is a fallback to the old path.</li>
       <li><code>TRD.md</code> §6.2: says keep-every-action defaults on; <code>config.py</code> has <code>False</code>.</li>
@@ -411,7 +414,7 @@ function panel(n,g){
 
 /* ═════════ CONXA graph data ═════════ */
 var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
- cols:['Record','Prepare','Watch & merge','Understand','Ask (Q1)','Compile','Replay & Q2','Test','Approve & ship','Execute','Recover'],
+ cols:['Record','Prepare','Watch & merge','Understand','Ask','Compile','Replay & ask more','Test','Approve & ship','Execute','Recover'],
  lanes:[['Person',1],['Studio engine',2],['Cloud · video',1],['Models',1],['Customer runtime',1]],
  nodes:[
  {id:'rec_p',c:0,l:0,k:'human',st:'built',t:'Describe & record',sub:'task, sign-in, one run',d:{
@@ -478,14 +481,14 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    does:['Also saved: <code>grade</code>, <code>grade_reasons</code>, <code>validation_report</code>, <code>prompt_version</code>, <code>retried_because</code> when a second answer was asked for, and <code>retried</code> when that answer was the better one.'],
    files:['handlers/understand_flow.py · _flow_understand, _fill_description']}},
  {id:'qb',c:4,l:1,s:0,k:'code',st:'built',t:'Clarifying questions',sub:'build · dedupe · rank',d:{
-   sum:'Turns the checked understanding into at most five open questions about things only the person knows or must approve. The rest are queued, never dropped.',
-   does:['Sources: model questions, must-ask moments (decision popups, files going in), missed file picks (the video shows a file dialog but no upload follows within 20 s), and list picks the model skipped.','<code>_dedupe</code>: one question per recorded value and per (row, effect); a value question yields to a decision popup on its row.','Sort by <code>cost_rank</code> (1 = a wrong guess costs most), then row order.','First <code>MAX_QUESTIONS = 5</code> open, the rest queued under “More questions”.','Posted one at a time after a single chat message: summary, up to 3 points settled with reasons, then the first question.'],
+   sum:'Turns the checked understanding into questions about things only the person knows or must approve. There is one stream, not two fixed rounds: the harness asks whenever it is unsure, before the build or after it. At most five are open at once; the rest are queued and come forward on their own, never dropped.',
+   does:['Sources: model questions, must-ask moments (decision popups, files going in), missed file picks (the video shows a file dialog but no upload follows within 20 s), and list picks the model skipped.','<code>_dedupe</code>: one question per recorded value and per (row, effect); a value question yields to a decision popup on its row.','Sort by <code>cost_rank</code> (1 = a wrong guess costs most), then row order.','First <code>MAX_QUESTIONS = 5</code> open; the rest are <code>queued</code> and post automatically as soon as nothing is open (before the build, or before the summary). Nobody has to ask for them.','When the scoring switch is on (<code>SKILL_CLARIFY_SCORING</code>, shadow first), code decides whether to ask at all, from the chance the default is wrong × the cost. A confident question is <code>assumed</code>: it is not a question, blocks nothing, and stays reachable (“ask me”). A decision popup, a step that cannot be undone and any unsafe guess always ask.','Posted one at a time after a single chat message: summary, up to 3 points settled with reasons, then the first question.'],
    extra:'<section><h4>Question effects</h4><div class="scroll"><table><thead><tr><th>Effect</th><th>Choice ids</th><th>Guess</th></tr></thead><tbody><tr><td class="k">value</td><td><code>varies</code> · <code>fixed</code></td><td>yes</td></tr><tr><td class="k">upload</td><td><code>each_run</code> · <code>fixed_path</code></td><td>yes</td></tr><tr><td class="k">confirm_before</td><td><code>confirm</code> · <code>no_confirm</code></td><td>confirm only</td></tr><tr><td class="k">popup_dismiss</td><td><code>dismiss</code> · <code>keep</code></td><td>yes</td></tr><tr><td class="k">fork</td><td><code>by_input</code> · <code>ask_human</code> · <code>stop</code></td><td>never</td></tr><tr><td class="k">note</td><td>2–3 model-labelled</td><td>never</td></tr></tbody></table></div></section><section><h4>Try it</h4><p class="small muted">Example recording: download “Q3-report.pdf” from a Drive folder, upload it to an expenses portal, submit. The prompts are the code’s own templates.</p><div id="qsim"></div></section>',
-   guard:['Typed text is not asked here; once compiled it is already an input.','Idle time and video/browser drift are logged, never asked.','Every open question removes <code>test</code> from <code>allowed_actions</code>.'],
+   guard:['Typed text is not asked here; once compiled it is already an input.','Idle time and video/browser drift are logged, never asked.','Every unanswered question (open, applying or queued; never <code>assumed</code>) removes <code>test</code> from <code>allowed_actions</code> and makes approve, publish and Build Installer refuse (<code>unanswered_questions</code>).','Each question still carries an internal <code>phase</code> (<code>pre_compile</code> or after), because answers apply differently: before the build they are stored and replayed after it; after the build they edit the steps. The person sees one stream.','A recompile or re-watch closes the old cards; a re-record marks questions about vanished steps <code>superseded</code>.'],
    files:['timeline_understanding.py · must_ask, missed_file_picks, _dedupe, questions_from_understanding','handlers/compile_flow.py · _flow_post_next_question']}},
- {id:'q1',c:4,l:0,k:'human',st:'built',t:'Answer Q1',sub:'choose · skip · own words',d:{
-   sum:'The person answers on a card. A best guess may be pre-selected, but it counts only when they press Confirm.',
-   does:['<b>Choose</b> → stored as a decision; nothing is applied to any step yet.','<b>Skip</b> → stored as skipped, “Left as recorded”.','<b>Own words</b> → kept as text; for a <code>note</code> it becomes compile context.','The pencil re-opens an answer (questions archived to <code>pre_questions.json</code>).','Last shown question answered → <code>_flow_after_understand</code> flips the stage <code>understand → building</code> once and starts the compile.'],
+ {id:'q1',c:4,l:0,k:'human',st:'built',t:'Answer a question',sub:'choose · own words',d:{
+   sum:'The person answers on a card. A best guess may be pre-selected, but it counts only when they press Confirm. There is no skip: every question that is asked must be answered. An unanswered one is re-asked when the conversation opens and pinned above the composer.',
+   does:['<b>Choose</b> → stored as a decision; nothing is applied to any step yet.','<b>Own words</b> → counts as the answer and is kept as text. For a <code>note</code> it becomes compile context; otherwise the chat then proposes any change.','The pencil re-opens an answer (questions archived to <code>pre_questions.json</code>).','Last question asked before the build answered → <code>_flow_after_understand</code> flips the stage <code>understand → building</code> once and starts the compile. Questions raised after the build do not hold the compile; they hold testing.'],
    extra:'<div id="qsim"></div>',
    files:['handlers/understand_flow.py · _pre_compile_answer, _flow_after_understand']}},
  {id:'dec',c:4,l:1,s:1,k:'data',st:'built',t:'decisions.json',sub:'keyed by recorded event',d:{
@@ -519,12 +522,12 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    does:['Match each decision to the step its recorded event became (<code>step.source_event</code>).','value “varies” → <code>parameterize_literal</code> (URL, row id) or <code>parameterize_click_text</code> (label → <code>{{name}}</code> in text signals, fingerprint and selectors), input declared with the recorded default.','upload → upload question (input/fixed); confirm_before → confirm (inserts a confirm-only <code>ai_review</code>); popup_dismiss → <code>try_dismiss</code>; fork → only the popup its own event became.','Each group applied all-or-nothing; edit-logged.'],
    fail:'An answer that matches nothing or cannot be applied is said once in chat. Never dropped quietly.',
    files:['conversation/replay.py · plan','handlers/understand_flow.py · _flow_replay_decisions','editor/workflow_mutations.py']}},
- {id:'q2b',c:6,l:1,s:1,k:'code',st:'built',t:'Q2 questions',sub:'found in the compiled doc',d:{
-   sum:'<code>clarify.generate_questions</code> looks at the compiled document. For a recording that went through Q1, only <code>fork</code>, <code>known_popup</code>, <code>popup</code> and <code>confirm</code> are still asked.',
-   does:['Questions post in template wording at once; a background <code>clarify_question_copy</code> call rewords them in place, checked field by field.','No open question → summary card; counts add up (compiled + added by answers = now).'],
+ {id:'q2b',c:6,l:1,s:1,k:'code',st:'built',t:'Later questions',sub:'found in the compiled doc',d:{
+   sum:'<code>clarify.generate_questions</code> looks at the compiled document. For a recording whose understanding already asked, only <code>fork</code>, <code>known_popup</code>, <code>popup</code> and <code>confirm</code> are still asked. They join the same stream and hold testing until answered.',
+   does:['Questions post in template wording at once; a background <code>clarify_question_copy</code> call rewords them in place, checked field by field.','Held-back questions come forward before the summary. Nothing unanswered → summary card; counts add up (compiled + added by answers = now).'],
    files:['conversation/clarify.py · generate_questions','handlers/compile_flow.py · _flow_after_compile (_ASKED_AFTER_UNDERSTANDING)']}},
- {id:'q2',c:6,l:0,k:'human',st:'built',t:'Answer Q2 · edit',sub:'cards, chat, Human Edit',d:{
-   sum:'The person answers the questions that only exist after compile, and can change anything by chat or in Human Edit.',
+ {id:'q2',c:6,l:0,k:'human',st:'built',t:'Answer · edit',sub:'cards, chat, Human Edit',d:{
+   sum:'The person answers the questions that only exist after compile (same cards, same rules: no skip), and can change anything by chat or in Human Edit.',
    does:['Chat routes free text only to actions in <code>lifecycle.allowed_actions</code>; side effects wait for a Confirm card.','Copilot proposals pass three gates before becoming a pending-change card with Apply and Undo.','<code>patch_gate</code> refuses edits such as removing a consequential step’s only required assertion.'],
    files:['conversation/harness.py · intent_router.py · actions.py','editor/patch_gate.py','editor/edit_log.py']}},
  {id:'cop',c:6,l:3,k:'model',st:'built',t:'Chat copilot',sub:'proposes, never applies',v:{
@@ -535,24 +538,24 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    files:['conversation/context_pack.py','llm/copilot.py']}},
  {id:'test',c:7,l:1,s:0,k:'code',st:'built',t:'Sandbox test',sub:'real runtime, ceiling 2',d:{
    sum:'Runs the real customer engine staged under <code>sandbox/.conxa/</code>, with recovery capped at Tier A so the pack is judged on its own merits.',
-   does:['Inputs pre-filled with recorded values; a test build skips approval.','<code>_pause_before_irreversible</code> parks before the first <code>destructive</code> step.','An engine without the <code>test_guard</code> capability only previews (dry run, never a pass).','Expired sign-in → <code>needs_sign_in</code>: not a failure, no auto-fix.'],
+   does:['Offered only when no question is unanswered: <code>lifecycle</code> leaves <code>test</code> out, and <code>_require_allowed</code> enforces it for every entry point.','Inputs pre-filled with recorded values; a test build skips approval.','<code>_pause_before_irreversible</code> parks before the first <code>destructive</code> step.','An engine without the <code>test_guard</code> capability only previews (dry run, never a pass).','Expired sign-in → <code>needs_sign_in</code>: not a failure, nothing investigated.'],
    files:['handlers/test_flow.py','conxa_compile/conxa_runtime.py','runtime/app/run.js · executeOneStep']}},
  {id:'guard',c:7,l:0,k:'human',st:'built',t:'Guard decision',sub:'run for real or stop here',d:{
    sum:'Before anything irreversible the test stops and asks: <b>Run the last N for real</b>, or <b>End the test here</b> (“passed up to X”, which is not a pass). A confirm-only <code>ai_review</code> is answered by the person, never the sandbox model.'}},
- {id:'fix',c:7,l:3,k:'model',st:'built',t:'Auto-fix',sub:'≤ 3 rounds, gated',v:{
+ {id:'fix',c:7,l:3,k:'model',st:'built',t:'Find the cause',sub:'explains · you approve',v:{
    shape:'same gates as the copilot',reference:'same gates as the copilot',override:'—',backfill:'—',
-   safety:'at most one change per round, three rounds, Undo, the guard stays on for every re-test',lg:'Not counted.'},d:{
-   sum:'After a failed test (Settings switch, default on): diagnose → at most one proposal → same gates → apply with Undo → rebuild → re-test with the guard on. It stops after three failures, on Stop, or when no proposal passes the gates.',
-   guard:['Outside the recovery cascade; Tier A stays zero-token.','Every change listed with Undo; edit-logged as <code>auto_fix</code>.'],
-   files:['handlers/test_flow.py · _tf_autofix, _tf_propose_fix']}},
+   safety:'at most one change per failure, applied only when the person presses Apply, Undo, the guard stays on for every re-test',lg:'Not counted.'},d:{
+   sum:'After a failed test (Settings switch, default on): diagnose → say the root cause in plain words → at most one proposal → same gates → a change card. Nothing is applied until the person presses Apply (or types their own fix in chat, which becomes the same kind of card). Apply rebuilds and re-tests at once with the guard on; a new failure starts a new round, with no cap. It also ends on Stop, or when no proposal passes the gates (then it asks how the person would fix it).',
+   guard:['Outside the recovery cascade; Tier A stays zero-token.','Nothing changes without the person’s Apply; every change is listed with Undo and edit-logged like any reviewer Apply.'],
+   files:['handlers/test_flow.py · _tf_investigate, _tf_propose_fix, _tf_retest_after_fix']}},
  {id:'appr',c:8,l:0,k:'human',st:'built',t:'Approve',sub:'signed_off',d:{
-   sum:'A separate human act after a pass. <code>Workflow.signed_off</code> is the only approval truth; any later write to the skill clears it.',
+   sum:'A separate human act after a pass. <code>Workflow.signed_off</code> is the only approval truth; any later write to the skill clears it. Refused while any question is unanswered.',
    files:['handlers/test_flow.py · cmd_flow_approve']}},
  {id:'pack',c:8,l:1,s:0,k:'code',st:'built',t:'Package',sub:'data-only output',d:{
    sum:'Emits execution, recovery, inputs, manifest and validation JSON. Auth files and storage state never enter the output.',
    files:['conxa_compile/skill_package_builder.py']}},
  {id:'pub',c:8,l:2,k:'code',st:'built',t:'Publish & sync',sub:'versioned release, delta',d:{
-   sum:'Publish is the versioned release. The installer stages only <code>pack.json</code>; <code>runtime/sync.js</code> pulls every skill by SHA-256 delta with atomic writes. Recovery artifacts come in a second, non-blocking pass.',
+   sum:'Publish is the versioned release (refused, like Build Installer, while any question is unanswered). The installer stages only <code>pack.json</code>; <code>runtime/sync.js</code> pulls every skill by SHA-256 delta with atomic writes. Recovery artifacts come in a second, non-blocking pass.',
    files:['conxa-cloud/backend/app/api/publish*.py','runtime/sync.js','runtime/app/artifact_store.js']}},
  {id:'cust',c:9,l:0,k:'human',st:'built',t:'Customer asks',sub:'chat or schedule',d:{
    sum:'An end user asks their agent to do the task, or a local schedule fires (<code>scheduler_daemon.js</code>, no cloud queue).'}},
@@ -581,13 +584,13 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
  {f:'merge',t:'und',k:'model',lb:'rows + candidates'},{f:'und',t:'proxy',k:'model'},
  {f:'und',t:'val',k:'model',lb:'raw answer'},{f:'val',t:'undj',k:'data'},{f:'val',t:'qb',k:'flow'},
  {f:'qb',t:'q1',k:'gate'},{f:'q1',t:'dec',k:'data',lb:'stored by event'},
- {f:'dec',t:'comp',k:'gate',lb:'last answer → build'},{f:'credit',t:'comp',k:'flow',lb:'credit'},
+ {f:'dec',t:'comp',k:'gate',lb:'last pre-build answer'},{f:'credit',t:'comp',k:'flow',lb:'credit'},
  {f:'comp',t:'rev',k:'model',lb:'steps as text'},{f:'rev',t:'pkg',k:'model',o:26,lb:'intent + findings'},{f:'comp',t:'pkg',k:'data'},
  {f:'pkg',t:'rep',k:'data'},{f:'dec',t:'rep',k:'data',lb:'replay'},
  {f:'rep',t:'q2b',k:'flow'},{f:'q2b',t:'q2',k:'gate'},{f:'cop',t:'q2',k:'model',o:30,lb:'proposal'},
- {f:'q2',t:'test',k:'gate',lb:'no open question'},
+ {f:'q2',t:'test',k:'gate',lb:'nothing unanswered'},
  {f:'test',t:'guard',k:'gate',o:-12},{f:'guard',t:'test',k:'flow',o:12},
- {f:'test',t:'fix',k:'model',lb:'on failure'},{f:'fix',t:'test',k:'model',lb:'re-test'},
+ {f:'test',t:'fix',k:'model',lb:'on failure'},{f:'fix',t:'test',k:'gate',lb:'you Apply → re-test'},
  {f:'test',t:'appr',k:'gate',lb:'pass'},{f:'appr',t:'pack',k:'flow'},{f:'pack',t:'pub',k:'data',lb:'release'},
  {f:'pub',t:'loop',k:'data',lb:'delta sync'},{f:'cust',t:'agent',k:'flow',lb:'asks'},
  {f:'agent',t:'loop',k:'flow'},
@@ -629,16 +632,16 @@ var CLAUDE={id:'cl',label:'Claude in Chrome Record workflow graph',panel:panel,s
 var PH=[
  ['Capture','Screen, clicks, typing and voice; capture format not documented.','Instrumented events with element context, ms timing, tab/iframe chain, provenance; per-tab video; typed chat; “changes each run?” hints. No voice.','CONXA keeps far more structure; Claude keeps the person’s spoken intent.'],
  ['Make sense of it','The model writes a prompt describing what you did.','Video model + browser log merged on one clock; one text call writes meaning and questions; code validates every field.','CONXA treats the model as advisory and checks its output; Claude trusts the generated prompt, which the person can edit.'],
- ['Settle ambiguity','At run time, by the agent, or by approving a plan.','Once, by the author, before compile: ≤ 5 questions, decisions keyed by event.','A customer’s run never has to guess in CONXA; Claude adapts per run instead.'],
+ ['Settle ambiguity','At run time, by the agent, or by approving a plan.','By the author in Studio, whenever the harness is unsure: every question asked must be answered, and unanswered ones block test, approve and publish. Decisions keyed by event.','A customer’s run never has to guess in CONXA; Claude adapts per run instead.'],
  ['What is saved','Name + prompt + start URL.','SkillPackage: IdentityBundle per step, assertions, typed inputs, recovery, outcome forks, destructive flags.','A prompt is portable and editable; a program is checkable and cheap to run.'],
- ['Check before use','None required; schedule once it “runs reliably”.','Sandbox replay in the customer engine, guard before irreversible steps, auto-fix, human approval.','CONXA ships nothing untested; Claude leaves reliability to the user.'],
+ ['Check before use','None required; schedule once it “runs reliably”.','Sandbox replay in the customer engine, guard before irreversible steps, find-the-cause with your approval, human approval.','CONXA ships nothing untested; Claude leaves reliability to the user.'],
  ['Run','The model drives every action (inferred).','Deterministic engine; zero tokens on the happy path; margin-gated resolver; VERIFY assertions.','The trade is predictable cost and behaviour against flexibility.'],
  ['Page changed','The agent re-reads the page and adapts.','Tier A reflex (0 tokens), then Tier B: the caller’s agent nominates, the runtime re-validates.','Both end in model reasoning; CONXA reaches it only after cheap fixes fail, and still verifies the answer.']];
 var CMP={id:'cp',label:'Side-by-side phase graph',slotW:340,nodeW:290,rowH:150,labelW:150,maxZ:1.15,
  cols:PH.map(function(p){return p[0]}),lanes:[['Claude in Chrome',1],['CONXA',1]],nodes:[],edges:[],
  panel:function(n){var p=PH[n.c];return '<div class="hd"><div class="chips"><span class="chip c-data">Phase '+(n.c+1)+'</span></div><h2>'+esc(p[0])+'</h2></div><section><h4>Claude in Chrome</h4><p class="small">'+p[1]+'</p></section><section><h4>CONXA</h4><p class="small">'+p[2]+'</p></section><div class="callout h"><b>Difference.</b> '+p[3]+'</div>'}};
 var CL=['Watch & listen','Model writes a prompt','Agent decides at run time','Prompt + start URL','Not required','Model drives every step','Agent adapts'];
-var CX=['Events + per-tab video','Merge → 1 call → validate','Author answers ≤ 5 questions','Compiled SkillPackage','Sandbox · guard · approve','Deterministic, 0 tokens','Tier A → Tier B'];
+var CX=['Events + per-tab video','Merge → 1 call → validate','Author answers every question asked','Compiled SkillPackage','Sandbox · guard · approve','Deterministic, 0 tokens','Tier A → Tier B'];
 var KA=['code','model','model','data','code','model','model'],KB=['code','model','human','data','human','code','code'];
 PH.forEach(function(p,i){
   CMP.nodes.push({id:'a'+i,c:i,l:0,k:KA[i],t:CL[i],sub:'Claude in Chrome',st:i===5?'inf':null});
@@ -681,7 +684,7 @@ function mountSim(host){
   Q.forEach(function(q,i){var b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.textContent=q.kind;b.addEventListener('click',function(){show(i)});tabs.appendChild(b)});
   show(0);
 }
-/* the sixth model call has no node of its own: it runs in the background after Q2 posts */
+/* the sixth model call has no node of its own: it runs in the background after a post-build question posts */
 var QCOPY={t:'Question wording',sub:'clarify_question_copy',v:{
   shape:'title, body, label and detail must be non-empty and within 200 / 500 / 90 / 220 characters',reference:'an unknown card or choice id is skipped',
   override:'—',backfill:'—',safety:'no <code>{{</code>; every “quoted” item of the original is kept; the template wording stands on any failure',lg:'Not counted.'}};
@@ -747,7 +750,7 @@ seq('seqB',['Person','Studio UI','understand_flow','compile_flow','Compiler','Te
  {f:0,t:1,l:'Confirm last answer',k:'human'},{f:1,t:2,l:'_pre_compile_answer'},{f:2,t:2,l:'decisions.record'},{f:2,t:3,l:'_flow_after_understand'},
  {f:3,t:4,l:'cmd_compile'},{f:4,t:4,l:'IdentityBundle · assertions'},{f:4,t:5,l:'workflow_review',k:'model'},{f:5,t:4,l:'intent + findings',k:'model',r:1},
  {f:4,t:3,l:'SkillPackage',r:1},{f:3,t:6,l:'generate_questions + plan'},{f:6,t:3,l:'ops per decision',r:1},{f:3,t:3,l:'_run_clarify_ops'},
- {f:3,t:1,l:'Q2: fork/popup/confirm'},{f:1,t:0,l:'question or summary',k:'human'}]);
+ {f:3,t:1,l:'later: fork/popup/confirm'},{f:1,t:0,l:'question or summary',k:'human'}]);
 seq('seqD',['Agent host','server.js','run.js','resolver','cascade','Page'],[
  {f:0,t:1,l:'execute_skill(inputs)',k:'model'},{f:1,t:2,l:'runPlan'},{f:2,t:3,l:'resolveStep(bundle)'},{f:3,t:5,l:'gather candidates'},
  {f:3,t:2,l:'no winner ≥ 0.15',r:1},{f:2,t:4,l:'recoverStep'},{f:4,t:5,l:'scroll·dismiss·wait·a11y'},{f:4,t:2,l:'exhausted (0 tokens)',r:1},
@@ -755,3 +758,5 @@ seq('seqD',['Agent host','server.js','run.js','resolver','cascade','Page'],[
  {f:2,t:5,l:'act → VERIFY'},{f:1,t:0,l:'Done + outputs',r:1}]);
 })();
 </script>
+
+</body></html>

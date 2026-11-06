@@ -954,7 +954,7 @@ class CompileFlowMixin:
             if choice == "wrong":
                 self.cmd_flow_test_prepare({"workflow_id": workflow_id, "suspect_inputs": question.get("input_ids") or []}, rid)
             else:
-                self.cmd_flow_autofix_resume({"workflow_id": workflow_id}, rid)
+                self.cmd_flow_investigate({"workflow_id": workflow_id}, rid)
         except _CommandError:
             pass  # the card is answered; the person can still press Test or Fix from the lifecycle actions
 
