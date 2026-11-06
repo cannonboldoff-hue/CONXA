@@ -23,7 +23,12 @@ export function useOpenEdit(threadId: string) {
   const { workflowsById } = useShellData()
   const wf = workflowIdOf(threadId)
   const skillId = workflowsById.get(wf)?.workflow.skill_id
-  return skillId ? () => navigate(`/edit/${skillId}?from=${encodeURIComponent(`/w/${wf}`)}`) : null
+  // `step` (optional) opens the editor on that step. Several callers pass this straight to onClick, so a
+  // click event arrives as the argument: anything that is not a number means "no particular step".
+  return skillId
+    ? (step?: unknown) =>
+        navigate(`/edit/${skillId}?from=${encodeURIComponent(`/w/${wf}`)}${typeof step === 'number' ? `&step=${step}` : ''}`)
+    : null
 }
 
 type StageRow = { key: string; label: string; status: 'pending' | 'running' | 'done' | 'failed'; detail: string }

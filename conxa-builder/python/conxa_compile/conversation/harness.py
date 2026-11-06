@@ -146,7 +146,10 @@ def pinned_facts(digest: dict[str, Any] | None, clarify: dict[str, Any] | None, 
 
 _CHANGE_WORDS = re.compile(
     r"\b(fix|change|edit|make|set|add|remove|delete|rename|wait|retry|update|replace|instead|"
-    r"wrong|doesn'?t|isn'?t|fails?|failed|should|shouldn'?t|skip|insert|move|reorder|input)\b", re.I,
+    r"wrong|doesn'?t|isn'?t|fails?|failed|should|shouldn'?t|skip|insert|move|reorder|input|"
+    r"click|press|tap|type|fill|enter|select|choose|pick|scroll|navigate|go to|open|download|upload|"
+    r"then|after|before|only|unless|when|if|condition|agent|span|prompt|popup|dialog|branch|loop|"
+    r"retarget|re-target|date|always|never|every)\b", re.I,
 )
 
 
@@ -342,16 +345,21 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     # 2b ─ proposals, gated, never applied here — and made BEFORE the reply, so the reply describes
     # exactly the changes that are on offer instead of promising ones no card carries.
     proposals: list[dict[str, Any]] = []
+    editor_hints: list[dict[str, Any]] = []
     if kind == "wf" and skill_id and gate_proposals is not None and wants_proposals(
         message, has_skill=True, anchor=anchor, last_test_failed=last_test_failed
     ):
         from conxa_compile.editor.copilot_proposals import proposal_summary
 
         proposals = _propose(message=message, base_pack=pack, digest=digest, skill_id=skill_id,
-                             gate_proposals=gate_proposals, cancel=cancel, with_failure_image=last_test_failed)
+                             gate_proposals=gate_proposals, cancel=cancel, with_failure_image=last_test_failed,
+                             editor_hints=editor_hints)
         if cancel.is_set():
             return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
-        offered = "\n".join(f"- {proposal_summary(p)}" for p in proposals) or "(none could be prepared)"
+        offered = "\n".join(f"- {proposal_summary(p)}" for p in proposals)
+        if editor_hints:
+            offered += ("\n" if offered else "") + "- (a link to Human Edit, where the person points a step at a new element)"
+        offered = offered or "(none could be prepared)"
         extra.append(("Changes you are offering — each takes effect only when the person presses Apply", offered))
         pack = make_pack()
 
@@ -403,6 +411,18 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
             summaries=[proposal_summary(p) for p in proposals],
             preview=(single or {}).get("preview"), actions=["apply", "dismiss"],
         ))
+    if editor_hints:
+        # Re-pointing a step at an element nobody has used yet is drawn by a person in the re-target wizard.
+        hint = editor_hints[0]
+        reason = " ".join(str(hint.get("reason") or "").split())[:120]
+        # The step the model named, found in the digest by its key, so the editor opens on it.
+        row = next((s for s in (digest or {}).get("steps") or []
+                    if isinstance(s, dict) and s.get("step_key") == hint.get("step_key")), None)
+        step_index = row.get("step_index") if row and isinstance(row.get("step_index"), int) else None
+        where = f"step {step_index + 1}" if step_index is not None else "a step"
+        push(post_card(thread_id, "action_link", "open", sink=sink, action="edit", target="edit",
+                       title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason else ""),
+                       step_index=step_index, actions=["open"]))
     if draft:
         push(post_card(thread_id, "draft_workflow", "open", sink=sink, draft=draft, actions=["create_and_record", "edit_details", "dismiss"]))
 
@@ -517,7 +537,8 @@ def map_free_text_to_choice(card: dict[str, Any], text: str) -> str | None:
 
 
 def _propose(*, message: str, base_pack: Any, digest: dict[str, Any] | None, skill_id: str,
-             gate_proposals: Any, cancel: threading.Event, with_failure_image: bool = False) -> list[dict[str, Any]]:
+             gate_proposals: Any, cancel: threading.Event, with_failure_image: bool = False,
+             editor_hints: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """One ``copilot_diagnose`` call (with the existing bounded need[] retrieval), then every
     proposal through the gates. The reply it also returns is ignored — the streamed one is shown."""
     from conxa_compile.llm.copilot import _capability_manifest_text, copilot_turn
@@ -535,6 +556,8 @@ def _propose(*, message: str, base_pack: Any, digest: dict[str, Any] | None, ski
         screenshot_path=shot,
     )
     raw = [p for p in result.get("proposals") or [] if isinstance(p, dict)]
+    if editor_hints is not None:
+        editor_hints.extend(n for n in result.get("needs_editor") or [] if isinstance(n, dict))
     return gate_proposals(raw)
 
 

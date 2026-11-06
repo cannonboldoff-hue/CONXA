@@ -2,6 +2,14 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The chat helper can now edit steps inside a repeating loop, and its "open the editor" link takes you to the right step — 2026-11-06**
+Before, when you asked the helper to add or remove a step inside a "for each row" loop, it could not, and when it sent you to the editor to point a step at a new element, you landed on the first step and had to hunt. Now it can grow, trim and reorder a loop just like a conditional block. The link also names the step ("step 3") and opens the editor already on it.
+— 2026-11-06
+
+**The chat helper can now change almost anything in a workflow when you ask in plain words — 2026-11-06**
+Before, it could only tweak a short list of settings, so a request like "after I open this page, read it, and click Download if it says verified or Cancel if it says not verified" was ignored. Now it can add a step where an AI agent reads the page and follows those instructions, set conditions, choose how a popup is answered, edit steps inside a branch, and more. Every change still shows up as a card you press Apply on, and Undo takes it all back in one go. The helper still never invents where on the page to click: it copies that from a step that already exists, or sends you to the editor to point at it yourself.
+— 2026-11-06
+
 **Every question the tool asks you must now be answered, and it keeps asking until you do — 2026-11-06**
 Before, a question could quietly go away: you could skip it, some were hidden until a test failed, and the ones past the first five were sometimes never shown. Now there is no skip button. If you would rather type your own answer, that counts. An unanswered question stays pinned just above the message box, comes back if you close and reopen the workflow, and stops you from testing, approving or publishing until it is answered. Things the tool is truly sure about are no longer treated as questions at all.
 — 2026-11-06

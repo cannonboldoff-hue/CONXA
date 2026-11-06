@@ -1,10 +1,11 @@
 """Gates a Human Review Copilot proposal against the editor's own patch gate before it is ever
 shown, and resolves it back to a live step at accept time (BUILD-26 stages c1/c2/c3).
 
-The copilot never writes a selector: `_ALLOWED_FIELDS` excludes `target`, `identity_bundle`,
-`compiled_selectors`, and every selector-bearing field — the same category as the two sanctioned
-re-compile exceptions in CLAUDE.md, deliberately narrower (it never touches an element address
-at all, only meaning fields already writable through `cmd_patch_step`).
+The copilot never writes a selector: `capability_manifest.editable_fields` is the set of fields the
+patch gate accepts for a step's kind, minus `target`, `identity_bundle`, `compiled_selectors` and every
+other selector-bearing key — the same category as the two sanctioned re-compile exceptions in
+CLAUDE.md, deliberately narrower (it never touches an element address at all, only meaning fields
+already writable through `cmd_patch_step`).
 
 A proposal stores `step_key` (`compiler/step_key.py`), never a baked `step_index` — an insert,
 delete, or reorder between when the proposal was shown and when it is accepted renumbers every
@@ -17,39 +18,33 @@ gate result computed against a document that may no longer exist.
 
 from __future__ import annotations
 
+import copy
 import uuid
 from typing import Any
 
+from conxa_compile.compiler.action_semantics import action_name
 from conxa_compile.compiler.second_opinion import build_try_dismiss_from_hint
 from conxa_compile.compiler.step_key import step_keys
 from conxa_compile.editor.action_registry import SELECTOR_ACTIONS, action_spec, is_supported_action
+from conxa_compile.editor.capability_manifest import editable_fields
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.overlay_identity import bundle_from_descriptor
 from conxa_compile.editor.patch_gate import validate_editor_patch
+from conxa_compile.editor.step_path import StepPathError, get_nested_step, parse_nested_step_path
 from conxa_compile.editor.workflow_mutations import (
     _new_manual_step,
+    delete_branch_step,
+    flatten_fork_to_recorded_option,
+    insert_branch_step,
     merge_skill_inputs,
     parameterize_click_text,
     parameterize_literal,
+    reorder_branch_steps,
     replace_string_literals_in_skill_document,
+    set_date_offset,
+    set_fork_policy,
 )
 from conxa_compile.policy.bundle import get_policy_bundle
-
-# BUILD-26 stage g: widened from the original five to every field that actually changes
-# execution behaviour without ever touching an element address — see CLAUDE.md's correction that
-# recovery.max_attempts/no_recovery_block are NOT here because the runtime never reads them.
-# agent_span_*/handover_* aren't listed here since they're only meaningful on those two kinds —
-# `gate_proposals` below intersects this set against what `validate_editor_patch` accepts for the
-# step's actual kind, so an agent_span_* field proposed against a click step is dropped there.
-_ALLOWED_FIELDS = frozenset({
-    "value", "input_binding", "intent", "semantic_description", "validation.assertions",
-    "consequence", "entity_binding.confirmed", "branch.timeout_ms",
-    "for_each.max_iterations", "for_each.on_row_error", "handler_hints.hover_chain",
-    "agent_span_until", "agent_span_budget", "agent_span_allowed", "agent_span_answer_schema",
-    "agent_span_output_name", "agent_span_on_failure", "agent_span_default_value",
-    "handover_on_failure", "handover_resume_when", "handover_resume_when_timeout_ms",
-})
-
 
 class ProposalError(Exception):
     def __init__(self, code: str, message: str) -> None:
@@ -105,17 +100,34 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
             continue
         step_key = str(raw.get("step_key") or "").strip()
         field = str(raw.get("field") or "").strip()
-        if not step_key or field not in _ALLOWED_FIELDS:
+        if not step_key or not field:
             continue
         resolved = _resolve_step(doc, step_key)
         if resolved is None:
             continue
         step_index, step = resolved
+        # An optional `branch.steps[N]` / `for_each.steps[N]` addresses a step inside this one's body —
+        # parsed and resolved by the same helpers cmd_patch_step uses, so the gate and the apply agree.
+        path = str(raw.get("path") or "").strip() or None
+        target_step, in_branch_body = step, False
+        if path:
+            try:
+                nested_path = parse_nested_step_path(path)
+                target_step = get_nested_step(step, nested_path) if nested_path else step
+            except StepPathError:
+                continue
+            in_branch_body = bool(nested_path) and nested_path[0] == "branch"
+        kind = action_name(target_step).lower()
         value = raw.get("patch")
+        if field not in editable_fields(kind) or _value_holds_address(kind, target_step, field, value):
+            continue
         patch = _patch_for(field, value)
-        previous_step = steps[step_index - 1] if step_index > 0 else None
+        previous_step = steps[step_index - 1] if step_index > 0 and not path else None
         try:
-            validate_editor_patch(step, patch, policy, previous_step=previous_step, earlier_steps=steps[:step_index])
+            validate_editor_patch(
+                target_step, patch, policy, in_branch_body=in_branch_body, previous_step=previous_step,
+                earlier_steps=None if path else steps[:step_index],
+            )
         except ValueError:
             continue
         out.append({
@@ -124,11 +136,22 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
             "command": "patch_step",
             "field": field,
             "patch": patch,
+            "path": path,
+            "step_label": _step_label(doc, step_key),
+            "is_agent_goal": kind == "agent_span",
             "why": str(raw.get("why") or "").strip(),
             "evidence_refs": _evidence_refs(raw),
-            "preview": {"before": _current_value(step, field), "after": value},
+            "preview": {"before": _current_value(target_step, field), "after": value},
         })
     return out
+
+
+def _value_holds_address(kind: str, step: dict[str, Any], field: str, value: Any) -> bool:
+    """True when a `value` edit would write a page selector: a wait-until that waits on an element keeps
+    its selector in `value`. (A drag-drop's `value` is already removed by `editable_fields`.)"""
+    if field != "value" or kind != "wait_until":
+        return False
+    return str(step.get("wait_until_kind") or "load_state") in ("element_visible", "element_hidden")
 
 
 def gate_all(
@@ -307,11 +330,92 @@ def resolve_step_index(doc: dict[str, Any], step_key: str) -> int:
     return resolved[0]
 
 
-_STRUCTURAL_OPS = frozenset({"insert_step", "delete_step", "move_step", "update_inputs", "replace_literals", "parameterize"})
+_STRUCTURAL_OPS = frozenset({
+    "insert_step", "delete_step", "move_step", "update_inputs", "replace_literals", "parameterize",
+    "body_insert_step", "body_delete_step", "body_move_step", "set_popup_decision", "flatten_popup",
+    "set_date_offset", "retarget_from_step", "rename_workflow",
+})
+
+# Kinds that cannot be put inside an if-present body: they pause the run, or hold a body of their own
+# (the step path addresses one level only).
+_NOT_IN_BODY = frozenset({
+    "agent_span", "handover", "call_workflow", "for_each", "if_present", "try_dismiss", "wait_for_one_of",
+    "outcome_fork",
+})
+# Branch kinds refuse a root identity (their element lives in the branch body), so re-pointing one is a
+# job for the editor, not a copy.
+_NO_RETARGET = frozenset({"if_present", "try_dismiss", "wait_for_one_of", "outcome_fork"})
+_FORK_MODES = frozenset({"auto", "by_input", "ask_human", "stop"})
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _step_label(doc: dict[str, Any], step_key: str | None) -> str:
+    """"step 6" for a step_key (1-based, as the person counts), computed when the proposal is gated so
+    the card never shows a hash."""
+    resolved = _resolve_step(doc, step_key) if step_key else None
+    return f"step {resolved[0] + 1}" if resolved else "the start"
+
+
+def _merge_nested(into: dict[str, Any], patch: dict[str, Any]) -> None:
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(into.get(key), dict):
+            _merge_nested(into[key], value)
+        else:
+            into[key] = value
+
+
+def _fields_patch(fields: dict[str, Any]) -> dict[str, Any]:
+    patch: dict[str, Any] = {}
+    for field, value in fields.items():
+        _merge_nested(patch, _patch_for(field, value))
+    return patch
+
+
+def _fork_state(step: dict[str, Any], state_id: str) -> dict[str, Any] | None:
+    states = (step.get("outcome_fork") or {}).get("states") or []
+    return next((s for s in states if isinstance(s, dict) and s.get("id") == state_id), None)
 
 # The two code-owned rewrites behind `parameterize`, in the order they are applied. The model only
 # names the recorded value and the input; these decide which places change.
 _PARAMETERIZERS = (("click", parameterize_click_text), ("value", parameterize_literal))
+
+
+_RUN_IF_WORDS = {"not_empty": "is filled in", "equals": "is", "not_equals": "is not"}
+
+
+def _clip(text: Any, limit: int = 160) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _patch_summary(p: dict[str, Any]) -> str:
+    where = p.get("step_label") or f"step {p.get('step_key')}"
+    field, value = p.get("field"), (p.get("preview") or {}).get("after")
+    if p.get("path"):
+        where = f"an item inside {where}"
+    if field == "run_if":
+        if not isinstance(value, dict) or not value:
+            return f"Run {where} every time (remove its condition)"
+        word = _RUN_IF_WORDS.get(str(value.get("op") or "not_empty"), "is")
+        tail = f" “{value.get('value')}”" if value.get("op") in ("equals", "not_equals") else ""
+        return f"Run {where} only when the input {value.get('input')} {word}{tail}"
+    if field == "value" and p.get("is_agent_goal"):
+        return f"Change what the agent does in {where} to: {_clip(value)}"
+    return f"Change “{field}” on {where}"
+
+
+def _insert_summary(p: dict[str, Any]) -> str:
+    kind, after = p.get("action_kind"), p.get("after_label") or "the end"
+    where = after if after.startswith("the ") else f"after {after}"
+    if kind == "agent_span":
+        fields = p.get("fields") or {}
+        acts = ", ".join(fields.get("agent_span_allowed") or ()) or "any browser action"
+        return (f"Add an agent step {where}: “{_clip(fields.get('value'))}” (may {acts}). "
+                "A workflow with an agent step can't run on a schedule")
+    return f"Add a {kind} step {where}"
 
 
 def proposal_summary(p: dict[str, Any]) -> str:
@@ -321,7 +425,41 @@ def proposal_summary(p: dict[str, Any]) -> str:
     if cmd == "insert_overlay_branch":
         return str((p.get("preview") or {}).get("after") or "Add a step to dismiss a popup")
     if cmd == "patch_step":
-        return f"Change “{p.get('field')}” on step {p.get('step_key')}"
+        return _patch_summary(p)
+    label = p.get("step_label") or "that step"
+    if op == "insert_step":
+        return _insert_summary(p)
+    if op == "delete_step":
+        return f"Remove {label}"
+    if op == "move_step":
+        return f"Move {label} to after {p.get('after_label') or 'the start'}"
+    if op == "body_insert_step":
+        return f"Add a {p.get('action_kind')} step inside {label}"
+    if op == "body_delete_step":
+        return f"Remove item {int(p.get('nested_index') or 0) + 1} inside {label}"
+    if op == "body_move_step":
+        return f"Reorder the steps inside {label}"
+    if op == "set_popup_decision":
+        policy, title = p.get("policy") or {}, p.get("popup_title") or "popup"
+        mode = policy.get("mode")
+        if mode == "auto":
+            tail = " This can't be undone; pressing Apply is your approval." if p.get("option_role") == "consequential" else ""
+            return f"On the “{title}” popup, always press “{p.get('option_label')}” ({label}).{tail}"
+        if mode == "ask_human":
+            return f"On the “{title}” popup, ask a person each time ({label})"
+        if mode == "by_input":
+            return f"On the “{title}” popup, let the person running it choose ({label})"
+        if mode == "stop":
+            return f"On the “{title}” popup, stop the run ({label})"
+        return f"Change what happens after a choice on the “{title}” popup ({label})"
+    if op == "flatten_popup":
+        return f"Make the “{p.get('popup_title')}” popup an ordinary recorded step ({label}); it must show up every run"
+    if op == "set_date_offset":
+        return f"Make the date in {label} today {int(p.get('days') or 0):+d} days"
+    if op == "retarget_from_step":
+        return f"Point {label} at the same element as {p.get('source_label')}"
+    if op == "rename_workflow":
+        return f"Rename the workflow to “{p.get('name')}”"
     if op == "parameterize":
         return (f"Make “{p.get('literal')}” a run input called {p.get('name')} "
                 f"({p.get('changed')} place{'s' if p.get('changed') != 1 else ''}); the recorded value stays its default")
@@ -380,7 +518,10 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
                 continue  # a non-selector kind carries no target — a source here is a model error
             raw_fields = raw.get("fields")
             fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
-            allowed_fields = {f: v for f, v in fields.items() if f in _ALLOWED_FIELDS}
+            allowed_fields = {f: v for f, v in fields.items() if f in editable_fields(action_kind)}
+            # An agent step with no goal would ship nothing (the packager drops it): refuse it here.
+            if action_kind == "agent_span" and not str(allowed_fields.get("value") or "").strip():
+                continue
             # Best-effort pre-check against a scaffold of the right kind — the definitive check
             # re-runs at accept time against the real inserted step, same as every other kind here.
             try:
@@ -391,9 +532,10 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
                 continue
             out.append({
                 **base, "action_kind": action_kind, "after_step_key": after_step_key,
+                "after_label": _step_label(doc, after_step_key) if after_step_key else "the end",
                 "fields": allowed_fields, "identity_from_step_key": identity_from_step_key,
                 "preview": {"before": None, "after": f"Insert {action_kind} after "
-                            f"{'step ' + after_step_key if after_step_key else 'the last step'}"},
+                            f"{_step_label(doc, after_step_key) if after_step_key else 'the last step'}"},
             })
 
         elif op == "delete_step":
@@ -401,7 +543,8 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             resolved = _resolve_step(doc, step_key)
             if not step_key or resolved is None:
                 continue
-            out.append({**base, "step_key": step_key, "preview": {"before": describe_step(resolved[1], resolved[0]), "after": None}})
+            out.append({**base, "step_key": step_key, "step_label": _step_label(doc, step_key),
+                        "preview": {"before": describe_step(resolved[1], resolved[0]), "after": None}})
 
         elif op == "move_step":
             step_key = str(raw.get("step_key") or "").strip()
@@ -414,8 +557,10 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             if after_step_key == step_key:
                 continue
             out.append({**base, "step_key": step_key, "after_step_key": after_step_key,
+                        "step_label": _step_label(doc, step_key),
+                        "after_label": _step_label(doc, after_step_key) if after_step_key else "the start",
                         "preview": {"before": None, "after": f"Move to after "
-                                    f"{'step ' + after_step_key if after_step_key else 'the start'}"}})
+                                    f"{_step_label(doc, after_step_key) if after_step_key else 'the start'}"}})
 
         elif op == "update_inputs":
             inputs = raw.get("inputs")
@@ -462,4 +607,120 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             out.append({**base, "literal": literal, "name": name, "kinds": kinds, "changed": changed,
                         "preview": {"before": literal, "after": "{{%s}}" % name}})
 
+        elif op in _STEP_SCOPED_OPS:
+            built = _gate_step_scoped_op(doc, raw, op, base, policy)
+            if built is not None:
+                out.append(built)
+
+        elif op == "rename_workflow":
+            name = str(raw.get("name") or "").strip()
+            current = str((doc.get("meta") or {}).get("title") or "")
+            if not name or len(name) > 120 or name == current:
+                continue
+            out.append({**base, "name": name, "preview": {"before": current or None, "after": name}})
+
     return out
+
+
+_STEP_SCOPED_OPS = frozenset({
+    "body_insert_step", "body_delete_step", "body_move_step", "set_popup_decision", "flatten_popup",
+    "set_date_offset", "retarget_from_step",
+})
+
+
+def _gate_step_scoped_op(
+    doc: dict[str, Any], raw: dict[str, Any], op: str, base: dict[str, Any], policy: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The ops that act on one existing step (named by `step_key`). Each is dry-run on a copy with the
+    SAME mutation the accept calls, so a card that is shown can be applied; any ValueError drops it.
+    Returns the proposal, or None when it fails a check."""
+    step_key = str(raw.get("step_key") or "").strip()
+    resolved = _resolve_step(doc, step_key) if step_key else None
+    if resolved is None:
+        return None
+    index, step = resolved
+    kind = action_name(step).lower()
+    # The body a body_* op edits follows the step it names: a loop's steps for a for_each, else an if-present's.
+    container = "for_each" if kind == "for_each" else "branch"
+    scoped = {**base, "step_key": step_key, "step_label": _step_label(doc, step_key)}
+    try:
+        if op == "body_delete_step":
+            nested_index = raw.get("nested_index")
+            if not _is_int(nested_index):
+                return None
+            delete_branch_step(copy.deepcopy(doc), index, nested_index, container)
+            return {**scoped, "nested_index": nested_index, "preview": {"before": f"item {nested_index + 1} inside", "after": None}}
+
+        if op == "body_move_step":
+            new_order = raw.get("new_order")
+            if not isinstance(new_order, list) or not all(_is_int(i) for i in new_order):
+                return None
+            reorder_branch_steps(copy.deepcopy(doc), index, new_order, container)
+            return {**scoped, "new_order": new_order, "preview": {"before": None, "after": f"Reorder inside to {new_order}"}}
+
+        if op == "body_insert_step":
+            action_kind = str(raw.get("action_kind") or "").strip().lower().replace("-", "_")
+            if not is_supported_action(action_kind) or not action_spec(action_kind).insertable or action_kind in _NOT_IN_BODY:
+                return None
+            after_nested = raw.get("after_nested_index")
+            if after_nested is not None and not _is_int(after_nested):
+                return None
+            identity_from = str(raw.get("identity_from_step_key") or "").strip() or None
+            patch: dict[str, Any] = {}
+            if action_kind in SELECTOR_ACTIONS:
+                source = _resolve_step(doc, identity_from) if identity_from else None
+                if source is None or not (source[1].get("identity_bundle") or {}):
+                    return None
+                patch.update(identity_patch_from_source(action_kind, source[1]))
+            elif identity_from:
+                return None
+            raw_fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
+            fields = {f: v for f, v in raw_fields.items() if f in editable_fields(action_kind)}
+            insert_branch_step(copy.deepcopy(doc), index, action_kind, after_nested, container)
+            _merge_nested(patch, _fields_patch(fields))
+            validate_editor_patch(_new_manual_step(action_kind, ""), patch, policy, in_branch_body=container == "branch")
+            return {**scoped, "action_kind": action_kind, "after_nested_index": after_nested, "fields": fields,
+                    "identity_from_step_key": identity_from,
+                    "preview": {"before": None, "after": f"Insert {action_kind} inside {_step_label(doc, step_key)}"}}
+
+        if op in ("set_popup_decision", "flatten_popup"):
+            state_id = str(raw.get("state_id") or "").strip()
+            state = _fork_state(step, state_id) if kind == "outcome_fork" else None
+            if state is None:
+                return None
+            title = str((state.get("signature") or {}).get("title") or "popup")
+            if op == "flatten_popup":
+                flatten_fork_to_recorded_option(copy.deepcopy(doc), index, state_id)
+                return {**scoped, "state_id": state_id, "popup_title": title,
+                        "preview": {"before": "Popup decision", "after": "The recorded steps, every time"}}
+            decision = raw.get("policy")
+            if not isinstance(decision, dict) or (decision.get("mode") and decision.get("mode") not in _FORK_MODES):
+                return None
+            set_fork_policy(copy.deepcopy(doc), index, state_id, decision)
+            option = next((o for o in state.get("options") or [] if isinstance(o, dict) and o.get("id") == decision.get("option_id")), None)
+            return {**scoped, "state_id": state_id, "policy": decision, "popup_title": title,
+                    # Worded from the fork itself, never from the model: what the card says is what Apply writes.
+                    "option_label": str((option or {}).get("label") or ""),
+                    "option_role": str((option or {}).get("role") or ""),
+                    "preview": {"before": (state.get("policy") or {}).get("mode"), "after": decision.get("mode") or "then"}}
+
+        if op == "set_date_offset":
+            days = raw.get("days")
+            if not _is_int(days):
+                return None
+            set_date_offset(copy.deepcopy(doc), index, days)
+            return {**scoped, "days": days, "preview": {"before": None, "after": f"today {days:+d} days"}}
+
+        if op == "retarget_from_step":
+            identity_from = str(raw.get("identity_from_step_key") or "").strip()
+            source = _resolve_step(doc, identity_from) if identity_from else None
+            if source is None or identity_from == step_key or not (source[1].get("identity_bundle") or {}):
+                return None
+            if kind not in SELECTOR_ACTIONS or kind in _NO_RETARGET:
+                return None
+            validate_editor_patch(step, identity_patch_from_source(kind, source[1]), policy)
+            return {**scoped, "identity_from_step_key": identity_from, "source_label": _step_label(doc, identity_from),
+                    "preview": {"before": None, "after": f"Point at the same element as {_step_label(doc, identity_from)}"}}
+    except ValueError:
+        return None
+    return None

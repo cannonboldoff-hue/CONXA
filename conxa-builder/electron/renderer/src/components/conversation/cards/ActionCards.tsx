@@ -49,7 +49,7 @@ export function ActionLinkCard({ threadId, item }: CardProps) {
   const target = String(item.target ?? '')
   const go = () => {
     void act(threadId, String(item.card_id), 'open')
-    if (target === 'edit') openEdit?.()
+    if (target === 'edit') openEdit?.(typeof item.step_index === 'number' ? item.step_index : undefined)
     else if (target === 'publish') navigate('/publish')
     else if (target === 'workflow' && item.workflow_id) navigate(`/w/${String(item.workflow_id)}`)
     else toast.error('That isn’t available yet.')

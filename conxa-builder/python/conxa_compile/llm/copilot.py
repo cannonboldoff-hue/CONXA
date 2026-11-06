@@ -245,9 +245,13 @@ def copilot_turn(
         diagnose_payload["user_text"] = str(payload.get("user_text") or "") + "\n\n" + "\n\n".join(fetched_blocks)
 
     if not isinstance(data, dict):
-        return {"reply": streamed_reply, "proposals": []}
+        return {"reply": streamed_reply, "proposals": [], "needs_editor": []}
 
     reply = streamed_reply or _llm_reply_text(data)
     raw_proposals = data.get("proposals")
     proposals = [p for p in raw_proposals if isinstance(p, dict)] if isinstance(raw_proposals, list) else []
-    return {"reply": reply, "proposals": proposals}
+    # A change only a person can make in Human Edit (drawing a new element): the model says which step
+    # and why, never a selector. The conversation turns it into a link card.
+    raw_editor = data.get("needs_editor")
+    needs_editor = [n for n in raw_editor if isinstance(n, dict)] if isinstance(raw_editor, list) else []
+    return {"reply": reply, "proposals": proposals, "needs_editor": needs_editor}

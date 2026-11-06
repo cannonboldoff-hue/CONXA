@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 39 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70 |
+| BUILD — Build Studio | 41 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **100** | |
+| **Total** | **102** | |
 
 ---
 
-## BUILD — Build Studio (39 done)
+## BUILD — Build Studio (41 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -752,6 +752,16 @@ inferred from `outer_html`, not read directly.
 **Resolved:** 2026-11-06
 - **Category:** Builder
 - **Resolution:** No question can end unanswered any more. The skip action is gone (the card has no skip arrow; `skip` is refused), typing your own words counts as the answer (the chat still proposes any change), `defer` is ignored (the question stays open) and a question the harness was sure about is `assumed`, not a question. Questions held back past `MAX_QUESTIONS` come forward on their own before the build / the summary. `clarify_store.summary()["unanswered"]` blocks `test`/`approve`/`publish` in `lifecycle` and in `cmd_flow_compile`, `cmd_flow_approve`, `cmd_publish_skill_pack`, `cmd_build_installer`. An unanswered question is re-asked when the conversation opens (`_reask_unanswered`, never a second card), named after a typed message, and pinned above the composer by `Conversation.tsx`. A recompile or re-watch closes the old round's open cards (`reverted`). The pre/post-compile split stays internal (`phase`); the person sees one stream. Also fixes pre-compile questions past the 5th never being asked.
+
+### BUILD-76 — chat cannot insert a step inside a `for_each` body, only inside an `if_present` body
+**Resolved:** 2026-11-06
+- **Category:** Builder
+- **Resolution:** The body mutations (`insert_branch_step`, `delete_branch_step`, `reorder_branch_steps`) and their three RPCs take a `container` (`branch` default, or `for_each`). The chat `body_insert_step` / `body_delete_step` / `body_move_step` ops pick the container from the step they name, gate and apply through the same calls, and a step inserted into a loop is patched at `for_each.steps[N]`. Tests in `test_copilot_chat_edits.py` and `test_copilot_structural_accept.py`.
+
+### BUILD-77 — the "open Human Edit" link chat posts for a new element does not jump to the step
+**Resolved:** 2026-11-06
+- **Category:** Builder
+- **Resolution:** The `needs_editor` card now carries the step's current `step_index` (found in the digest by its key) and names it ("point step 3 at a new element"). `useOpenEdit` takes an optional step, the card calls it, and `HumanEditPage` selects `?step=N` once on load. It selects the step; it does not auto-open the Pick Element phase. Test in `test_conversation.py`.
 
 ## EXEC — Execution & Recovery (28 done)
 

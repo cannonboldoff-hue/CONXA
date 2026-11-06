@@ -46,9 +46,10 @@ def test_manifest_never_claims_a_key_the_gate_rejects():
             if field in ("action", "target", "frame", "signals"):
                 continue
             probe = copy.deepcopy(scaffold)
-            value = probe.get(field, "x")
+            top = field.split(".")[0]  # a dotted field (validation.assertions) is patched through its top-level key
+            value = probe.get(top, "x")
             try:
-                validate_editor_patch(probe, {field: value}, policy)
+                validate_editor_patch(probe, {top: value}, policy)
             except ValueError as exc:
                 assert not any(m in str(exc) for m in unsupported_key_markers), (
                     f"manifest claims {kind}.{field} is patchable but the gate rejects the KEY itself: {exc}"

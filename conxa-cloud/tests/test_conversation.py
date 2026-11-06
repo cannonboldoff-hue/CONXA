@@ -439,3 +439,15 @@ def test_free_text_never_answers_a_tick_list_question(monkeypatch):
     applied: list = []
     out = harness.run_turn(thread_id="wf:w5", message="po number", sink=None, card_executor=lambda c, a, b: applied.append(b) or {})
     assert applied == [] and "tick the ones you want" in out["reply"]
+
+
+def test_a_new_element_request_posts_a_link_card_that_names_the_step(monkeypatch):
+    _fake_stream(monkeypatch)
+    monkeypatch.setattr("conxa_compile.llm.copilot.copilot_turn", lambda **k: {
+        "reply": "", "proposals": [], "needs_editor": [{"step_key": "k2", "reason": "nothing else uses the Submit button"}]})
+    digest = {"steps": [{"step_key": "k1", "step_index": 0}, {"step_key": "k2", "step_index": 1}]}
+    harness.run_turn(thread_id="wf:w12", message="click Submit instead", sink=None, skill_id="skill_1",
+                     gate_proposals=lambda raw: [], load_digest=lambda: digest, lifecycle={"stage": "test"})
+    cards = [i for i in ts.load("wf:w12")["items"] if i["kind"] == "card"]
+    assert len(cards) == 1 and cards[0]["card_type"] == "action_link" and cards[0]["target"] == "edit"
+    assert cards[0]["step_index"] == 1 and "step 2" in cards[0]["title"]

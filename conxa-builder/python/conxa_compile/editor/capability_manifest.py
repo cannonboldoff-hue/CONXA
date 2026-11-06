@@ -145,9 +145,42 @@ ASSERTION_TYPES = (
 )
 
 
+# Keys that name WHERE on the page a step acts, or its structure. Chat never writes these: an element
+# address comes from a person (Human Edit / the re-target wizard) or is copied by code from an existing
+# step, and a branch / loop body is edited through its own ops, never as a raw array.
+ADDRESS_KEYS = frozenset({
+    "target", "identity_bundle", "compiled_selectors", "check_selector", "signals", "frame", "action",
+    "recovery", "branch", "for_each",
+})
+# Fields the patch gate accepts through a dotted path (or outside the per-kind key lists) that change
+# meaning, not an address. Offered only to the kinds that own the parent object.
+_DEFAULT_DOTTED = ("consequence", "entity_binding.confirmed", "handler_hints.hover_chain")
+_LOOP_FIELDS = ("for_each.max_iterations", "for_each.on_row_error")
+# Kinds whose generic `value` holds CSS / a selector rather than words, so chat must not write it.
+VALUE_IS_ADDRESS_KINDS = frozenset({"drag_drop"})
+
+
+def editable_fields(kind: str) -> frozenset[str]:
+    """The fields the copilot may propose for a step of ``kind``: exactly what the patch gate accepts
+    for that kind (the same `*_ALLOWED_KEYS` sets), minus the address keys above. The manifest the model
+    reads and the gate that drops proposals both call this, so they cannot disagree."""
+    keys = _PER_KIND_ALLOWED_KEYS.get(kind, DEFAULT_ALLOWED_KEYS)
+    out = {k for k in keys if k not in ADDRESS_KEYS and k != "validation"}
+    if "validation" in keys:
+        out.add("validation.assertions")
+    if "branch" in keys:
+        out.add("branch.timeout_ms")
+    if "for_each" in keys:
+        out.update(_LOOP_FIELDS)
+    if keys is DEFAULT_ALLOWED_KEYS:
+        out.update(_DEFAULT_DOTTED)
+    if kind in VALUE_IS_ADDRESS_KINDS:
+        out.discard("value")
+    return frozenset(out)
+
+
 def _kind_row(kind: str) -> dict[str, Any]:
     spec = action_spec(kind)
-    allowed_keys = _PER_KIND_ALLOWED_KEYS.get(kind, DEFAULT_ALLOWED_KEYS)
     return {
         "kind": kind,
         "category": spec.category,
@@ -155,7 +188,7 @@ def _kind_row(kind: str) -> dict[str, Any]:
         "needs_target": spec.selectors,
         "takes_value": spec.value,
         "value_label": VALUE_LABELS.get(kind) if spec.value else None,
-        "patchable_fields": sorted(allowed_keys),
+        "patchable_fields": sorted(editable_fields(kind)),
         "runtime_note": RUNTIME_NOTES.get(kind, ""),
     }
 

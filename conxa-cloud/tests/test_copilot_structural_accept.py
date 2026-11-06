@@ -120,3 +120,79 @@ def test_a_batch_with_a_stale_op_aborts_entirely_and_pushes_no_undo(backend, mon
     untouched = read_skill("skill_struct_2")
     assert len(untouched["skills"][0]["steps"]) == 1
     assert b._undo_stacks.get("skill_struct_2", []) == []
+
+
+def test_chat_ops_apply_through_the_editor_calls_as_one_undo(backend, monkeypatch, tmp_path):
+    """A popup decision, an agent step and a step inside an if-present body land together, the popup
+    decision writes author_approved through set_fork_policy, and one Undo reverts all of it."""
+    from conxa_core.config import settings
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.editor.workflow_mutations import _new_manual_step
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    b, out = backend
+    click = {"action": {"action": "click"}, "url": "https://x", "intent": "click_submit", "value": "",
+             "identity_bundle": {"signals": [{"engine": "testid", "selector": "#submit", "durability": 0.9}]},
+             "target": {"primary_selector": "#submit", "fallback_selectors": []},
+             "validation": {"wait_for": {"type": "none"}, "success_conditions": {}}}
+    fork = {"action": {"action": "outcome_fork"}, "intent": "popup_decision", "url": "https://x", "value": None,
+            "outcome_fork": {"states": [{"id": "s1", "signature": {"title": "File exists"}, "policy": {"mode": "ask_human"},
+                                         "options": [{"id": "o1", "label": "Replace", "role": "consequential", "recorded": True, "steps": [click]},
+                                                     {"id": "o2", "label": "Keep both", "role": "safe", "steps": []}]}]}}
+    guard = _new_manual_step("if_present", "https://x")
+    guard["target"] = {"primary_selector": "#banner", "fallback_selectors": []}
+    guard["branch"] = {"steps": []}
+    write_skill("skill_chat_ops", {"meta": {"id": "skill_chat_ops", "title": "t", "version": 1},
+                                   "skills": [{"id": "skill_chat_ops", "steps": [click, fork, guard]}]})
+    keys = step_keys(read_skill("skill_chat_ops")["skills"][0]["steps"])
+
+    b.dispatch({"id": "1", "type": "accept_copilot_proposal", "payload": {
+        "skill_id": "skill_chat_ops", "command": "structural_op", "ops": [
+            {"op": "set_popup_decision", "step_key": keys[1], "state_id": "s1", "policy": {"mode": "auto", "option_id": "o2"}},
+            {"op": "insert_step", "action_kind": "agent_span", "after_step_key": keys[0],
+             "fields": {"value": "If it says verified click Download.", "agent_span_allowed": ["click"]}},
+            {"op": "body_insert_step", "step_key": keys[2], "action_kind": "wait"},
+        ]}})
+    assert _last(out)["type"] == "result", _last(out)
+    doc = read_skill("skill_chat_ops")
+    steps = doc["skills"][0]["steps"]
+    assert steps[1]["action"]["action"] == "agent_span" and steps[1]["value"].startswith("If it says verified")
+    policy = steps[2]["outcome_fork"]["states"][0]["policy"]
+    assert policy["mode"] == "auto" and policy["option_id"] == "o2" and policy["author_approved"] is True
+    assert len(steps[3]["branch"]["steps"]) == 1
+    assert len(b._undo_stacks.get("skill_chat_ops", [])) == 1
+
+    b.dispatch({"id": "2", "type": "undo_workflow", "payload": {"skill_id": "skill_chat_ops"}})
+    assert len(read_skill("skill_chat_ops")["skills"][0]["steps"]) == 3
+
+
+def test_loop_body_ops_apply_and_the_editor_link_card_carries_the_step(backend, monkeypatch, tmp_path):
+    from conxa_core.config import settings
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.editor.workflow_mutations import _new_manual_step
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    b, out = backend
+    click = {"action": {"action": "click"}, "url": "https://x", "intent": "click_submit", "value": "",
+             "identity_bundle": {"signals": [{"engine": "testid", "selector": "#submit", "durability": 0.9}]},
+             "target": {"primary_selector": "#submit", "fallback_selectors": []},
+             "validation": {"wait_for": {"type": "none"}, "success_conditions": {}}}
+    loop = _new_manual_step("for_each", "https://x")
+    loop["for_each"] = {"rows": {"container_selector": "tr"}, "as": "row", "max_iterations": 5, "on_row_error": "stop", "steps": [click]}
+    write_skill("skill_loop_ops", {"meta": {"id": "skill_loop_ops", "title": "t", "version": 1},
+                                   "skills": [{"id": "skill_loop_ops", "steps": [loop]}]})
+    key = step_keys(read_skill("skill_loop_ops")["skills"][0]["steps"])[0]
+
+    b.dispatch({"id": "1", "type": "accept_copilot_proposal", "payload": {
+        "skill_id": "skill_loop_ops", "command": "structural_op", "ops": [
+            {"op": "body_insert_step", "step_key": key, "action_kind": "wait", "after_nested_index": 0,
+             "fields": {"intent": "pause_between_rows"}},
+        ]}})
+    assert _last(out)["type"] == "result", _last(out)
+    body = read_skill("skill_loop_ops")["skills"][0]["steps"][0]["for_each"]["steps"]
+    assert len(body) == 2 and body[1]["intent"] == "pause_between_rows"
+    assert len(b._undo_stacks.get("skill_loop_ops", [])) == 1

@@ -121,10 +121,18 @@ def delete_step_at(document: dict[str, Any], step_index: int) -> dict[str, Any]:
     return doc
 
 
-def _branch_body_steps(document: dict[str, Any], step_index: int) -> tuple[dict[str, Any], list[Any]]:
-    """Resolve `steps[step_index]["branch"]["steps"]` — the only branch body currently editable
-    (if_present's nested body; try_dismiss/wait_for_one_of have no editable nested body — see
+# The step kind that owns each editable body: an if_present step's `branch.steps` and a for_each step's
+# `for_each.steps` (a loop body runs through the full recovery cascade, a branch body does not).
+_BODY_OWNER = {"branch": "if_present", "for_each": "for_each"}
+
+
+def _body_steps(document: dict[str, Any], step_index: int, container: str = "branch") -> tuple[dict[str, Any], list[Any]]:
+    """Resolve `steps[step_index][container]["steps"]` — an if_present step's `branch` body or a for_each
+    step's loop body (try_dismiss/wait_for_one_of have no editable nested body — see
     patch_gate.py::_validate_branch_patch). Returns (parent_step_dict, nested_steps_list)."""
+    owner = _BODY_OWNER.get(container)
+    if owner is None:
+        raise ValueError("unknown_body_container")
     skills = list(document.get("skills") or [])
     if not skills:
         raise ValueError("no_skills_block")
@@ -135,24 +143,23 @@ def _branch_body_steps(document: dict[str, Any], step_index: int) -> tuple[dict[
     parent = dict(steps[step_index])
     action = parent.get("action") if isinstance(parent.get("action"), dict) else {}
     kind = str(action.get("action") or "").strip().lower()
-    if kind != "if_present":
-        raise ValueError("branch_body_only_editable_for_if_present")
-    branch = dict(parent.get("branch") or {})
-    nested = list(branch.get("steps") or [])
+    if kind != owner:
+        raise ValueError("branch_body_only_editable_for_if_present" if container == "branch" else "loop_body_only_editable_for_for_each")
+    nested = list((parent.get(container) or {}).get("steps") or [])
     return parent, nested
 
 
-def _save_branch_body_steps(
-    document: dict[str, Any], step_index: int, nested: list[Any]
+def _save_body_steps(
+    document: dict[str, Any], step_index: int, nested: list[Any], container: str = "branch"
 ) -> dict[str, Any]:
     doc = dict(document)
     skills = list(doc.get("skills") or [])
     block = dict(skills[0])
     steps = list(block.get("steps") or [])
     parent = dict(steps[step_index])
-    branch = dict(parent.get("branch") or {})
-    branch["steps"] = nested
-    parent["branch"] = branch
+    body = dict(parent.get(container) or {})
+    body["steps"] = nested
+    parent[container] = body
     steps[step_index] = parent
     block["steps"] = steps
     skills[0] = block
@@ -164,13 +171,15 @@ def _save_branch_body_steps(
 
 
 def insert_branch_step(
-    document: dict[str, Any], step_index: int, action_kind: str, insert_after: int | None = None
+    document: dict[str, Any], step_index: int, action_kind: str, insert_after: int | None = None,
+    container: str = "branch",
 ) -> dict[str, Any]:
-    """Insert a new leaf step into an if_present step's nested body — mirrors insert_step_after
-    but scoped to `steps[step_index]["branch"]["steps"]`. Branch bodies are best-effort (never
-    enter Tier 1-4 recovery), but the scaffolded step itself is an ordinary leaf step shape —
-    only its own recovery/validation are meaningless there (enforced at patch time, not here)."""
-    _, nested = _branch_body_steps(document, step_index)
+    """Insert a new leaf step into an if_present step's body (`container="branch"`) or a for_each step's
+    loop body (`"for_each"`) — mirrors insert_step_after but scoped to that body. Branch bodies are
+    best-effort (never enter Tier 1-4 recovery); loop bodies run the full cascade. Either way the scaffold
+    is an ordinary leaf step; what is meaningless for a branch body (its own recovery/validation) is
+    enforced at patch time, not here."""
+    _, nested = _body_steps(document, step_index, container)
     if insert_after is None:
         insert_at = len(nested)
         anchor_index = len(nested) - 1
@@ -180,24 +189,28 @@ def insert_branch_step(
         insert_at = insert_after + 1
         anchor_index = insert_after
     nested.insert(insert_at, _new_manual_step(action_kind, _last_known_page_url(nested, anchor_index)))
-    return _save_branch_body_steps(document, step_index, nested)
+    return _save_body_steps(document, step_index, nested, container)
 
 
-def delete_branch_step(document: dict[str, Any], step_index: int, nested_index: int) -> dict[str, Any]:
-    _, nested = _branch_body_steps(document, step_index)
+def delete_branch_step(
+    document: dict[str, Any], step_index: int, nested_index: int, container: str = "branch"
+) -> dict[str, Any]:
+    _, nested = _body_steps(document, step_index, container)
     if nested_index < 0 or nested_index >= len(nested):
         raise ValueError("branch_step_index_out_of_range")
     del nested[nested_index]
-    return _save_branch_body_steps(document, step_index, nested)
+    return _save_body_steps(document, step_index, nested, container)
 
 
-def reorder_branch_steps(document: dict[str, Any], step_index: int, new_order: list[int]) -> dict[str, Any]:
-    _, nested = _branch_body_steps(document, step_index)
+def reorder_branch_steps(
+    document: dict[str, Any], step_index: int, new_order: list[int], container: str = "branch"
+) -> dict[str, Any]:
+    _, nested = _body_steps(document, step_index, container)
     n = len(nested)
     if sorted(new_order) != list(range(n)):
         raise ValueError("invalid_reorder_permutation")
     reordered = [dict(nested[i]) for i in new_order]
-    return _save_branch_body_steps(document, step_index, reordered)
+    return _save_body_steps(document, step_index, reordered, container)
 
 
 def set_fork_policy(

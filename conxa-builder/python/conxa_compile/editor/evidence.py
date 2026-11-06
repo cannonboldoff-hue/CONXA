@@ -234,6 +234,39 @@ def _prior_decisions(skill_id: str) -> list[dict[str, Any]]:
     return out[-_PRIOR_DECISIONS_CAP:]
 
 
+def _editable_detail(step: dict[str, Any]) -> dict[str, Any]:
+    """The compact facts chat needs to edit a step without asking: its condition, an agent step's goal
+    and allowed actions, a popup fork's states/options/policy (ids to copy), and what sits inside a branch
+    or loop body. Empty keys are left out so an ordinary step's row stays small."""
+    out: dict[str, Any] = {}
+    if step.get("run_if"):
+        out["run_if"] = step["run_if"]
+    act = step.get("action")
+    kind = str((act.get("action") if isinstance(act, dict) else act) or "").lower()
+    if kind == "agent_span":
+        out["agent_goal"] = str(step.get("value") or "")[:300]
+        out["agent_span_allowed"] = step.get("agent_span_allowed")
+    if kind == "outcome_fork":
+        out["fork_states"] = [
+            {
+                "state_id": s.get("id"),
+                "popup": (s.get("signature") or {}).get("title"),
+                "policy": (s.get("policy") or {}).get("mode"),
+                "options": [{"option_id": o.get("id"), "label": o.get("label"), "role": o.get("role")}
+                            for o in s.get("options") or [] if isinstance(o, dict)],
+            }
+            for s in (step.get("outcome_fork") or {}).get("states") or [] if isinstance(s, dict)
+        ]
+    for container in ("branch", "for_each"):
+        nested = (step.get(container) or {}).get("steps") if isinstance(step.get(container), dict) else None
+        if nested:
+            out[f"{container}_body"] = [
+                {"path": f"{container}.steps[{j}]", "description": describe_step(n, j)}
+                for j, n in enumerate(nested) if isinstance(n, dict)
+            ]
+    return out
+
+
 def expand_step(skill_id: str, step_key: str) -> dict[str, Any]:
     """BUILD-26 stage g: the `expand_step` reader behind the copilot's `need[]` retrieval loop —
     the full-detail slice for ONE step, on demand, rather than pushed for every step every turn.
@@ -351,6 +384,7 @@ def build_evidence_bundle(
             "has_assertions": bool((step.get("validation") or {}).get("assertions")),
             "has_branch": bool(step.get("branch")),
             "has_for_each": bool(step.get("for_each")),
+            **_editable_detail(step),
             "compile_report": _compile_report_for_step(compile_report, i, steps),
             "edit_history": edit_history,
         }

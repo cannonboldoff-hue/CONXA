@@ -126,8 +126,9 @@ class CopilotMixin:
         # undo entry, its own edits.jsonl lines. dispatch()'s edit-log hook attributes the write
         # to THIS command (accept_copilot_proposal, in _EDIT_COMMANDS), not "patch_step", so the
         # accepted line in edits.jsonl carries source="copilot" (backend.py's dispatch()).
+        # `path` (optional) addresses a step inside this one's branch / loop body; cmd_patch_step parses it.
         return self.cmd_patch_step(
-            {"skill_id": skill_id, "step_index": step_index, "patch": patch}, rid
+            {"skill_id": skill_id, "step_index": step_index, "patch": patch, "path": payload.get("path")}, rid
         )
 
     def _apply_change_set(self, skill_id: str, proposals: list[dict[str, Any]], rid: str) -> None:
@@ -262,7 +263,7 @@ class CopilotMixin:
         return result
 
     def _apply_one_structural_op(self, skill_id: str, op: dict[str, Any], rid: str) -> dict[str, Any]:
-        from conxa_compile.editor.copilot_proposals import identity_patch_from_source, resolve_step_index
+        from conxa_compile.editor.copilot_proposals import _STEP_SCOPED_OPS, identity_patch_from_source, resolve_step_index
         from conxa_core.storage.json_store import read_skill
 
         kind = str(op.get("op") or "").strip()
@@ -338,6 +339,59 @@ class CopilotMixin:
             find = str(op.get("find") or "")
             replace = str(op.get("replace") or "")
             return self.cmd_replace_literals({"skill_id": skill_id, "find": find, "replace_with": replace}, rid)
+
+        if kind == "rename_workflow":
+            return self.cmd_rename_skill({"skill_id": skill_id, "title": op.get("name")}, rid)
+
+        # Every op below acts on one existing step; step_key is re-resolved against the CURRENT document.
+        if kind in _STEP_SCOPED_OPS:
+            return self._apply_step_scoped_op(skill_id, doc, op, kind, resolve_step_index(doc, str(op.get("step_key") or "").strip()), rid)
+
+        raise _CommandError("unsupported_structural_op", f"Unknown structural op: {kind!r}")
+
+    def _apply_step_scoped_op(
+        self, skill_id: str, doc: dict[str, Any], op: dict[str, Any], kind: str, step_index: int, rid: str
+    ) -> dict[str, Any]:
+        from conxa_compile.compiler.action_semantics import action_name
+        from conxa_compile.editor.copilot_proposals import identity_patch_from_source, resolve_step_index, _fields_patch, _merge_nested
+
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        # body_* ops edit the body of the step they name: a loop's steps for a for_each, else an if-present's.
+        container = "for_each" if action_name(steps[step_index]).lower() == "for_each" else "branch"
+        base = {"skill_id": skill_id, "step_index": step_index}
+
+        if kind == "body_delete_step":
+            return self.cmd_delete_branch_step({**base, "nested_index": op.get("nested_index"), "container": container}, rid)
+        if kind == "body_move_step":
+            return self.cmd_reorder_branch_steps({**base, "new_order": op.get("new_order"), "container": container}, rid)
+        if kind == "set_popup_decision":
+            return self.cmd_set_fork_policy({**base, "state_id": op.get("state_id"), "policy": op.get("policy")}, rid)
+        if kind == "flatten_popup":
+            return self.cmd_flatten_fork({**base, "state_id": op.get("state_id")}, rid)
+        if kind == "set_date_offset":
+            return self.cmd_set_date_offset({**base, "days": op.get("days")}, rid)
+
+        if kind == "retarget_from_step":
+            # The model named a source; code copies its identity (the only way chat points a step elsewhere).
+            source = steps[resolve_step_index(doc, str(op.get("identity_from_step_key") or "").strip())]
+            patch = identity_patch_from_source(action_name(steps[step_index]).lower(), source)
+            return self.cmd_patch_step({**base, "patch": patch}, rid)
+
+        if kind == "body_insert_step":
+            action_kind = str(op.get("action_kind") or "").strip()
+            nested_before = len(((steps[step_index].get(container) or {}).get("steps")) or [])
+            after_nested = op.get("after_nested_index")
+            result = self.cmd_insert_branch_step({**base, "action_kind": action_kind, "insert_after": after_nested, "container": container}, rid)
+            new_nested = nested_before if after_nested is None else after_nested + 1
+            patch: dict[str, Any] = {}
+            if op.get("identity_from_step_key"):
+                source = steps[resolve_step_index(doc, str(op["identity_from_step_key"]).strip())]
+                patch.update(identity_patch_from_source(action_kind, source))
+            fields = op.get("fields") if isinstance(op.get("fields"), dict) else {}
+            _merge_nested(patch, _fields_patch(fields))
+            if patch:
+                result = self.cmd_patch_step({**base, "path": f"{container}.steps[{new_nested}]", "patch": patch}, rid)
+            return result
 
         raise _CommandError("unsupported_structural_op", f"Unknown structural op: {kind!r}")
 

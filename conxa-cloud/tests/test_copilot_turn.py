@@ -38,13 +38,13 @@ def test_drops_non_dict_proposals_and_missing_reply():
 def test_returns_empty_turn_when_call_llm_returns_none():
     with patch("conxa_compile.llm.copilot.call_llm", return_value=None):
         result = copilot_turn(evidence={}, transcript=[], message="hi")
-    assert result == {"reply": "", "proposals": []}
+    assert result == {"reply": "", "proposals": [], "needs_editor": []}
 
 
 def test_returns_empty_turn_on_an_ordinary_exception():
     with patch("conxa_compile.llm.copilot.call_llm", side_effect=RuntimeError("router unset")):
         result = copilot_turn(evidence={}, transcript=[], message="hi")
-    assert result == {"reply": "", "proposals": []}
+    assert result == {"reply": "", "proposals": [], "needs_editor": []}
 
 
 def test_infra_exceptions_propagate_instead_of_degrading():

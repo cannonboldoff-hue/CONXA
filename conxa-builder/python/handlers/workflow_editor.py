@@ -13,6 +13,11 @@ from conxa_compile.editor.step_path import (
 )
 
 
+def _body_container(payload: dict[str, Any]) -> str:
+    """Which nested body a body-step RPC edits: an if_present step's `branch` (default) or a for_each loop."""
+    return "for_each" if payload.get("container") == "for_each" else "branch"
+
+
 class WorkflowEditorMixin:
     def _apply_step_patch(
         self,
@@ -161,7 +166,8 @@ class WorkflowEditorMixin:
 
     def cmd_insert_branch_step(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """Insert a leaf step into an if_present step's nested body (structural — mirrors
-        cmd_insert_step, scoped to `steps[step_index]["branch"]["steps"]`)."""
+        cmd_insert_step, scoped to `steps[step_index]["branch"]["steps"]`), or, with
+        `container: "for_each"`, into a for_each step's loop body."""
         import copy
         from conxa_core.storage.json_store import read_skill, write_skill
         from conxa_compile.editor.workflow_mutations import insert_branch_step
@@ -175,7 +181,7 @@ class WorkflowEditorMixin:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         self._push_undo(skill_id, copy.deepcopy(doc))
         try:
-            doc = insert_branch_step(doc, step_index, action_kind, insert_after)
+            doc = insert_branch_step(doc, step_index, action_kind, insert_after, _body_container(payload))
         except ValueError as exc:
             raise _CommandError(str(exc), f"Could not insert branch step: {exc}") from exc
         write_skill(skill_id, doc)
@@ -196,7 +202,7 @@ class WorkflowEditorMixin:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         self._push_undo(skill_id, copy.deepcopy(doc))
         try:
-            doc = delete_branch_step(doc, step_index, nested_index)
+            doc = delete_branch_step(doc, step_index, nested_index, _body_container(payload))
         except ValueError as exc:
             raise _CommandError(str(exc), f"Could not delete branch step: {exc}") from exc
         write_skill(skill_id, doc)
@@ -217,7 +223,7 @@ class WorkflowEditorMixin:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
         self._push_undo(skill_id, copy.deepcopy(doc))
         try:
-            doc = reorder_branch_steps(doc, step_index, new_order)
+            doc = reorder_branch_steps(doc, step_index, new_order, _body_container(payload))
         except ValueError as exc:
             raise _CommandError(str(exc), f"Could not reorder branch steps: {exc}") from exc
         write_skill(skill_id, doc)

@@ -125,6 +125,7 @@ export function HumanEditPage() {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const splitPaneRef = useRef<HTMLDivElement | null>(null)
   const stepEditorRef = useRef<InlineRetargetFlowHandle>(null)
+  const openedStepRef = useRef(false)
   const selected = useEditorStore((s) => s.selectedStepIndex)
   const focusedBranchIndex = useEditorStore((s) => s.focusedBranchIndex)
   const setValidationReport = useEditorStore((s) => s.setValidationReport)
@@ -209,10 +210,17 @@ export function HumanEditPage() {
       setSelectedStepIndex(null)
       return
     }
+    // A chat link can ask for a step (?step=N): honour it once per page load, before the default pick.
+    const wanted = Number(searchParams.get('step'))
+    if (!openedStepRef.current && searchParams.get('step') !== null && q.data.steps.some((s) => s.step_index === wanted)) {
+      openedStepRef.current = true
+      setSelectedStepIndex(wanted)
+      return
+    }
     if (selected === null || !q.data.steps.some((step) => step.step_index === selected)) {
       setSelectedStepIndex(q.data.steps[0].step_index)
     }
-  }, [q.data, selected, setSelectedStepIndex])
+  }, [q.data, selected, setSelectedStepIndex, searchParams])
 
   useEffect(() => {
     const stored = window.localStorage.getItem(EDITOR_SIDEBAR_WIDTH_KEY)
