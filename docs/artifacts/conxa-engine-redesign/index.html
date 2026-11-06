@@ -103,6 +103,10 @@ ol.order,ol.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column
 .two>*{min-width:0}
 .fix{background:var(--model-bg);border:1px solid var(--model);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .fix b.lbl{font:600 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--model)}
+.done{background:var(--sunk);border:1px solid var(--new);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.done b.lbl{font:600 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--new)}
+.open{background:var(--sunk);border:1px dashed var(--muted);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.open b.lbl{font:600 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .refs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .refs li{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:10px;align-items:baseline}
 .refs li>code:first-child{font-size:12px;background:none;padding:0;color:var(--code)}
@@ -126,11 +130,27 @@ ol.order,ol.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column
 
 <div class="wrap">
 <header>
-  <span class="eyebrow">Proposal · checked line by line against the code, 2026-11-06</span>
+  <span class="eyebrow">C1 to C4 built · C5 and C6 still proposals · checked against the code, 2026-11-06</span>
   <h1>Conxa Engine v2</h1>
   <p class="lede">The engine is strong in the middle and open at both ends. Recording and compiling are careful and deterministic. But what the customer's runs learn stops at a dashboard and never reaches the compiler, most model answers are checked without a record of what was dropped, and nothing checks that every kind of action is handled all the way through. v2 keeps the spine and adds six changes that close those gaps.</p>
   <p class="lede small muted">This version goes one level deeper. Each change now has its own section: what the code does today, with file and line; the exact data it adds; the order it runs in; what can go wrong; and how to build and test it. Reading the code also showed that four claims in the first version were wrong. Those are marked <b>Correction</b> where they appear.</p>
 </header>
+
+<section id="status">
+  <h2>Where it stands</h2>
+  <p class="lead small">C1 to C4 are built, tested and committed (<code>c8e87f7</code>, branch <code>feat/clarify-phase-0</code>). C5 and C6 are still proposals. The sections below keep the reasoning each change started from. A green <b>As built</b> box at the top of C1 to C4 says what shipped and where it differs from the proposal.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Change</th><th>State</th><th>Tests that pin it</th><th>Differs from the proposal</th></tr></thead>
+    <tbody>
+    <tr><td class="n">C1</td><td class="y">Built</td><td>11 in <code>test_model_ledger.py</code>; the understanding check's golden cases pass unchanged</td><td>Module is <code>model_ledger.py</code>. Switch is <code>observe</code> or <code>off</code>, with no <code>retry</code>. Tier B's rule names are not mapped yet.</td></tr>
+    <tr><td class="n">C2</td><td class="y">Built</td><td>7 job and client tests, 5 flow tests (<code>test_video_signals.py</code>, <code>test_understand_flow.py</code>)</td><td>No "Retry now" button during the wait. Cloud video jobs are still held in memory.</td></tr>
+    <tr><td class="n">C3</td><td class="y">Built</td><td>89 cases in <code>test_action_contract.py</code>, 3 in <code>test_action_contract.js</code></td><td>The file also has a <code>step_only</code> section and a <code>via</code> field. Nothing is generated from it.</td></tr>
+    <tr><td class="n">C4</td><td class="y">Built</td><td>20 in <code>test_agent_span.js</code>, 32 in <code>test_agent_span_build.py</code></td><td>Step fields are <code>agent_span_*</code>. Actions run through Playwright locators, not <code>HANDLERS</code>. The Studio test needs "let AI answer" on.</td></tr>
+    <tr><td class="n">C5</td><td class="pt">Not built</td><td>None yet</td><td>Still the proposal below.</td></tr>
+    <tr><td class="n">C6</td><td class="pt">Not built</td><td>None yet</td><td>Still the proposal below.</td></tr>
+    </tbody></table></div>
+  <p class="small muted">The full runtime suite passes (1,174 of 1,175, none failing). The Python suite passes except two tests that already fail on a clean <code>HEAD</code>, <code>test_prepare_prefills_recorded_values_and_names_what_cant_be_undone</code> and <code>test_waits_for_soonest_cooldown_then_succeeds</code>. <code>CLAUDE.md</code> now carries the <code>agent_span</code> invariant, and <code>docs/TRD.md</code> §11.7 describes it.</p>
+</section>
 
 <section>
   <h2>What stays, what changes</h2>
@@ -229,11 +249,12 @@ ol.order,ol.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column
     <a href="#c1">C1 Model ledger</a><a href="#c2">C2 Video job</a><a href="#c3">C3 Action contract</a>
     <a href="#c4">C4 Agent span</a><a href="#c5">C5 Heal loop</a><a href="#c6">C6 Proof and rings</a>
   </nav>
-  <p class="small muted lead">File and line numbers are from branch <code>feat/clarify-phase-0</code> at <code>cf22c16</code> plus uncommitted work. Data shapes are proposals: field names may change when built.</p>
+  <p class="small muted lead">File and line numbers are from branch <code>feat/clarify-phase-0</code> at <code>cf22c16</code> plus uncommitted work, as read before the build. Data shapes for C1 to C4 are as proposed; the <b>As built</b> box in each says where the shipped version differs. C5 and C6 shapes are still proposals.</p>
 
   <!-- C1 -->
   <article class="deep" id="c1">
     <div class="hd"><span class="pill c">C1</span><h3>One ledger for every model call</h3><span class="eff">S–M</span></div>
+    <div class="done"><b class="lbl">As built</b><span>The counter is <code>conxa_compile/llm/model_ledger.py</code> (<code>log</code>, <code>count</code>, <code>summary</code>, <code>flat</code>, <code>entry</code>, <code>append</code>). The understanding check re-imports it, so its report is byte-identical. Counted now: the second opinion (the ten rules below, plus <code>malformed_item</code> and <code>unreadable_reply</code>), question wording, the chat intent router, chat change cards (one count per kind of proposal, because the three gates read the same list), re-target, and the Studio agent-span answers. Each call appends a line to <code>model_ledger.jsonl</code> in the session folder (a chat-level call: the workflow folder). The second opinion also writes <code>compile_report.model_ledger</code>, only when something was dropped. It shows in the Diagnostics panel and as one sentence in the chat after a build. The switch is <code>SKILL_MODEL_LEDGER=observe|off</code>: there is no <code>retry</code> mode, since only the understanding check is graded and it already retries. Tier B's reasons are not mapped to these rule names yet; that belongs with C5.</span></div>
 
     <div class="sub">
       <h4>What the code does today</h4>
@@ -275,7 +296,7 @@ ol.order,ol.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column
       <div class="sub">
         <h4>The shared helper</h4>
         <p class="small">Lift <code>_log</code>, <code>_count</code> and <code>STAGES</code> out of the understanding check into one small module. Each guard keeps its own rules and only adds a <code>_log</code> call next to each drop. No guard changes what it keeps.</p>
-<pre><code># conxa_compile/llm/ledger.py  (new, ~40 lines)
+<pre><code># conxa_compile/llm/model_ledger.py  (built)
 STAGES = ("shape", "reference", "override",
           "backfill", "safety")
 
@@ -291,7 +312,7 @@ def entry(task, prompt_version, report,
       </div>
       <div class="sub">
         <h4>One ledger line per call</h4>
-        <p class="small">Appended to a <code>model_ledger.jsonl</code> beside the workflow's clarify state. Human Review reads the last line per task.</p>
+        <p class="small">Appended to <code>model_ledger.jsonl</code> in the recording's session folder. The Diagnostics panel reads the last line per task.</p>
 <pre><code>{"ts": "2026-11-06T10:14:02Z",
  "task": "workflow_semantics",
  "prompt_version": 7,
@@ -318,10 +339,10 @@ def entry(task, prompt_version, report,
         <h4>Build order</h4>
         <ol class="steps small">
           <li>Move the helper out of the understanding check. Its tests must pass unchanged: the report is byte-identical.</li>
-          <li>Add <code>log</code> calls to the second opinion and write <code>compile_report["second_opinion"]["dropped"]</code>.</li>
+          <li>Add <code>log</code> calls to the second opinion and write <code>compile_report["model_ledger"]</code> (the second-opinion list there is a plain list, so the counts could not live inside it).</li>
           <li>Same for wording, intent router, change cards and re-target.</li>
-          <li>Show the counts on Human Review: one line, rules on expand.</li>
-          <li>Switch <code>SKILL_MODEL_LEDGER=observe</code> to <code>retry</code> only for calls that have a grade. Today that is the understanding check alone.</li>
+          <li>Show the counts: a Diagnostics row per call and one sentence in the post-compile chat.</li>
+          <li><s>Switch to <code>retry</code></s> Not built: only the understanding check has a grade and it already retries. The switch is <code>observe</code> or <code>off</code>.</li>
         </ol>
       </div>
       <div class="sub">
@@ -329,7 +350,7 @@ def entry(task, prompt_version, report,
         <ul class="holds">
           <li>No guard changes what it keeps, so a compile stays byte-identical when the pass applies nothing.</li>
           <li>The example is always an id, never model or page text, so the ledger holds no customer data.</li>
-          <li>Tier B needs no runtime change: its <code>override_rejected</code> reasons are mapped to the same rule names in the cloud summary.</li>
+          <li>Tier B needs no runtime change: it already sends <code>override_rejected</code> with a reason. Mapping those reasons to the same rule names is left for C5's cloud summary.</li>
           <li>Watch cost: a retry doubles tokens for that call. One retry only, and only where a grade exists. See <code>docs/cost_model.md</code>.</li>
         </ul>
         <p class="small"><span class="tag">Tests</span> One test per guard: feed a crafted bad answer, assert the rule counts.</p>
@@ -340,6 +361,7 @@ def entry(task, prompt_version, report,
   <!-- C2 -->
   <article class="deep" id="c2">
     <div class="hd"><span class="pill c">C2</span><h3>Video analysis that survives a restart</h3><span class="eff">S</span></div>
+        <div class="done"><b class="lbl">As built</b><span><code>video/job.py</code> writes <code>video_job.json</code> with the fields shown below. <code>VideoAnalysisClient.analyze</code> takes <code>resume_job_id</code> and <code>on_job_id</code>. After one 600 s budget, <code>_flow_understand</code> waits 1, 2, 5, 10, then 30 minutes for up to 24 hours. <code>_resume_video_jobs</code> runs at Studio start, and a card with a live record is no longer marked failed when Studio reopens. Left out: the "Retry now" button (the lifecycle only offers retry after a failure), and the cloud job store, which is still in memory.</span></div>
     <div class="fix"><b class="lbl">Correction</b><span>The first version said the video call was "one request". It is a submit-and-poll job with backoff and a cache. C2 is smaller than proposed, and <code>signals.py</code> needs no change: the cache already lives there.</span></div>
 
     <div class="sub">
@@ -380,7 +402,7 @@ def entry(task, prompt_version, report,
           <li>Poll as today. On success write <code>done</code> and go on to understanding.</li>
           <li>When the 600 s budget runs out, write <code>waiting_cloud</code> and a <code>next_try</code>: 1, 2, 5, 10, then every 30 minutes, for up to 24 hours. Then <code>failed</code>.</li>
           <li>On Studio start, look for records in <code>polling</code> or <code>waiting_cloud</code>. Poll the saved job id first. Upload again only if the cloud says the job is gone.</li>
-          <li>The card reads "Waiting for the video service. Next try 10:14. You can close Studio." Retry now stays on it.</li>
+          <li>The card reads "Waiting for the video service. Next try 10:14. You can close Studio." A "Retry now" button was planned and is not built; reopening Studio tries at once.</li>
         </ol>
       </div>
     </div>
@@ -405,6 +427,7 @@ def entry(task, prompt_version, report,
   <!-- C3 -->
   <article class="deep" id="c3">
     <div class="hd"><span class="pill c">C3</span><h3>An action contract</h3><span class="eff">S, then optional L</span></div>
+        <div class="done"><b class="lbl">As built</b><span><code>packages/conxa-core/conxa_core/models/action_contract.json</code> has <code>kinds</code> (all 42), a <code>step_only</code> section for the editor-authored types that are not recorder kinds (<code>ai_review</code>, <code>handover</code>, <code>agent_span</code>, <code>for_each</code>, <code>call_workflow</code>, <code>wait_until</code>, <code>clipboard_write</code>, <code>clipboard_read</code>), and a <code>via</code> field saying which builder makes the step. Both tests passed on their first run: every kind lines up today. <code>handlers.js</code> now exports <code>PRE_DISPATCH_STEP_TYPES</code> so the Node test can read it. Nothing is generated from the file.</span></div>
     <div class="fix"><b class="lbl">Change of plan</b><span>The first version proposed one registry that both languages read, sized L. Most of the value comes from a contract test, which is small. Generating code from the registry can come later, or never.</span></div>
 
     <div class="sub">
@@ -465,6 +488,7 @@ def entry(task, prompt_version, report,
   <!-- C4 -->
   <article class="deep" id="c4">
     <div class="hd"><span class="pill c">C4</span><h3>A typed agent span</h3><span class="eff">M</span></div>
+    <div class="done"><b class="lbl">As built</b><span>The saved step keeps the goal in <code>value</code> and the rest in top-level <code>agent_span_allowed</code>, <code>agent_span_until</code>, <code>agent_span_budget</code> and <code>agent_span_on_budget</code>, the same convention as <code>ai_review_*</code>. The step the runtime reads has <code>goal</code>, <code>allowed</code>, <code>until</code>, <code>budget</code> and <code>on_budget</code>, as shown below. The runtime numbers the page's visible interactive elements each round and the agent picks a number, so it never types a selector. Actions run through Playwright locators, not <code>HANDLERS</code>. A refused nomination costs no budget, and the fourth refusal ends the span. A span is also refused inside a called workflow. In a Studio test, the Studio's own model answers each round when "let AI answer" is on; with it off the test ends at the span. The manifest carries <code>uses_agent: true</code> and <code>create_schedule</code> refuses such a skill. The invariant is in <code>CLAUDE.md</code>, the behaviour in <code>docs/TRD.md</code> §11.7.</span></div>
 
     <div class="sub">
       <h4>What the code does today</h4>
@@ -527,6 +551,7 @@ def entry(task, prompt_version, report,
   <!-- C5 -->
   <article class="deep" id="c5">
     <div class="hd"><span class="pill c">C5</span><h3>The heal loop</h3><span class="eff">M</span></div>
+        <div class="open"><b class="lbl">Not built</b><span>Still the proposal. C1 to C4 did not need it. The read-only Health tab can ship on its own; the patch proposals wait on C6 rings.</span></div>
     <div class="fix"><b class="lbl">Correction</b><span>The first version said telemetry "stops in the cloud" and the runtime must add tier and margin. It already sends both. C5 drops from L to M because the runtime needs no change.</span></div>
 
     <div class="sub">
@@ -593,6 +618,7 @@ def entry(task, prompt_version, report,
   <!-- C6 -->
   <article class="deep" id="c6">
     <div class="hd"><span class="pill c">C6</span><h3>Prove it, then release in rings</h3><span class="eff">M</span></div>
+        <div class="open"><b class="lbl">Not built</b><span>Still the proposal. Both halves are independent of C1 to C4.</span></div>
     <div class="fix"><b class="lbl">Correction</b><span>The first version said C6 "needs an install id". It exists in <code>install_identity.js</code>. Percentage rollout exists too, for runtime updates in <code>manifest_manager.js</code>. Skill releases can reuse both.</span></div>
 
     <div class="sub">
@@ -660,25 +686,25 @@ def entry(task, prompt_version, report,
 <section>
   <h2>Order to build</h2>
   <ol class="order">
-    <li><b>C1 in observe mode, and C3's contract test.</b> Both are small and change no behaviour. C1 shows what the models do. C3 lists any kind the runtime cannot run today.</li>
-    <li><b>C2.</b> Small and independent. It removes the restart-and-upload-again failure.</li>
-    <li><b>C5's read-only Health tab.</b> The data already exists, so this is a cloud route and one Studio view.</li>
-    <li><b>C6.</b> Repeat replays first, then rings. Rings make every later release safer, including heal patches.</li>
-    <li><b>C5's patch proposals,</b> once rings exist.</li>
-    <li><b>C4 last.</b> It is a new product promise and needs a decision on zero-token marking.</li>
+    <li><b>C1 in observe mode, and C3's contract test.</b> <span class="tag">Built</span> Both are small and change no behaviour. C1 shows what the models do. C3 lists any kind the runtime cannot run today.</li>
+    <li><b>C2.</b> <span class="tag">Built</span> Small and independent. It removes the restart-and-upload-again failure.</li>
+    <li><b>C5's read-only Health tab.</b> <span class="tag">Next</span> The data already exists, so this is a cloud route and one Studio view.</li>
+    <li><b>C6.</b> <span class="tag">Not built</span> Repeat replays first, then rings. Rings make every later release safer, including heal patches.</li>
+    <li><b>C5's patch proposals,</b> <span class="tag">Not built</span> once rings exist.</li>
+    <li><b>C4 last.</b> <span class="tag">Built</span> It is a new product promise and needs a decision on zero-token marking.</li>
   </ol>
   <div class="sizes" aria-label="Revised effort sizes"><span>C1 <b>S–M</b></span><span>C2 <b>S</b></span><span>C3 <b>S</b> (+ optional L)</span><span>C4 <b>M</b></span><span>C5 <b>M</b> (was L)</span><span>C6 <b>M</b> (was M–L)</span></div>
 </section>
 
 <section>
-  <h2>Decisions for you</h2>
+  <h2>Decisions</h2>
   <ul class="asks">
-    <li><b>C4 changes the zero-token promise</b> for any skill with a span. Mark such skills <code>uses_agent: true</code> in the manifest?</li>
-    <li><b>C4 in the Studio test.</b> Should a span be tested by the Studio's own model through the metered proxy, as <code>ai_review</code> is, or only with a person driving?</li>
-    <li><b>C5 heal patches reorder identity signals by code, from field data.</b> No model writes a selector, but compiled selectors change without a new recording. Is a person's Confirm enough, or should this be written into the invariants first?</li>
-    <li><b>C5 tier.</b> The drift queue is Pro and Enterprise only. Should the Health tab follow the same rule?</li>
-    <li><b>C6 second input value.</b> Ask for an optional second value on the test card, or always replay the recorded inputs?</li>
-    <li><b>C2 cloud job store.</b> Keep cloud video jobs in memory, or store them so a resume never uploads again?</li>
+    <li><span class="tag">Decided, built</span> <b>C4 changes the zero-token promise</b> for any skill with a span. Such skills carry <code>uses_agent: true</code> in the manifest, and <code>create_schedule</code> refuses them.</li>
+    <li><span class="tag">Decided, built</span> <b>C4 in the Studio test.</b> The Studio's own model answers each round through the metered proxy when "let AI answer" is on, as <code>ai_review</code> does. With it off the test ends at the span.</li>
+    <li><span class="tag">Open</span> <b>C5 heal patches reorder identity signals by code, from field data.</b> No model writes a selector, but compiled selectors change without a new recording. Is a person's Confirm enough, or should this be written into the invariants first?</li>
+    <li><span class="tag">Open</span> <b>C5 tier.</b> The drift queue is Pro and Enterprise only. Should the Health tab follow the same rule?</li>
+    <li><span class="tag">Open</span> <b>C6 second input value.</b> Ask for an optional second value on the test card, or always replay the recorded inputs?</li>
+    <li><span class="tag">Left open</span> <b>C2 cloud job store.</b> Cloud video jobs are still held in memory, so a resume after a cloud restart uploads again. Store them if cloud restarts turn out to be frequent.</li>
   </ul>
   <p class="small muted">Every file and line on this page was read in the code on 2026-11-06. Data shapes, thresholds and effort sizes are proposals and estimates. A saved copy is in <code>docs/artifacts/conxa-engine-redesign/</code>.</p>
 </section>
@@ -729,7 +755,7 @@ def entry(task, prompt_version, report,
 <path d="M170 149 L270 50" class="ed-bad" marker-end="url(#f4b)"/><path d="M170 149 L270 120" class="ed-bad" marker-end="url(#f4b)"/>
 <path d="M170 149 L270 190" class="ed-bad" marker-end="url(#f4b)"/><path d="M170 149 L270 260" class="ed-bad" marker-end="url(#f4b)"/>
 <text x="20" y="312" class="el-bad">4 edits, nothing checks they agree</text>
-<rect x="510" y="119" width="170" height="60" rx="7" class="bx bx-data bx-new"/><text x="522" y="145" class="t">action_kinds.json</text><text x="522" y="165" class="s">kind → step, run, recovery</text>
+<rect x="510" y="119" width="170" height="60" rx="7" class="bx bx-data bx-new"/><text x="522" y="145" class="t">action_contract.json</text><text x="522" y="165" class="s">kind → step, run, recovery</text>
 <rect x="730" y="26" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="55" class="t">ActionKind</text>
 <rect x="730" y="96" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="125" class="t">compile rule</text>
 <rect x="730" y="166" width="170" height="48" rx="7" class="bx bx-code"/><text x="742" y="195" class="t">HANDLERS / NOOP</text>

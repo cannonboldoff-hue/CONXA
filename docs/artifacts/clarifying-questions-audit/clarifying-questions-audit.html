@@ -153,19 +153,19 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 <div class="wrap">
 
 <header style="display:flex;flex-direction:column;gap:12px">
-  <span class="eyebrow">Build Studio · investigation · 2026-11-05</span>
+  <span class="eyebrow">Build Studio · built 2026-11-06 · branch feat/clarify-phase-0</span>
   <h1>Clarifying Questions Audit</h1>
-  <p class="lede">Before Build Studio makes a workflow it asks the person a few questions. This page shows what it asks today, where it goes silent, and a way to decide what to ask that does not depend on someone having thought of the situation first.</p>
+  <p class="lede">Before Build Studio makes a workflow it asks the person a few questions. This page shows what it asked, where it went silent, and what was built so the choice of what to ask no longer depends on someone having thought of the situation first. Everything new starts switched off or in report-only mode.</p>
   <div class="stats" role="list">
-    <div class="stat" role="listitem"><span class="n bad">8 of 15</span><span>question kinds are never asked for a recording that went through the new flow.</span></div>
-    <div class="stat" role="listitem"><span class="n">1</span><span>model call per recording. Nothing is re-checked after an answer.</span></div>
-    <div class="stat" role="listitem"><span class="n bad">7 of 12</span><span>things a finished workflow needs are not asked about at all (my reading of the code).</span></div>
+    <div class="stat" role="listitem"><span class="n bad">8 of 15</span><span>question kinds were never asked for a recording that went through the new flow. All eight are asked again.</span></div>
+    <div class="stat" role="listitem"><span class="n">1</span><span>model call per recording, and nothing re-checked after an answer. Now an answer that changes the workflow raises the questions it newly makes possible.</span></div>
+    <div class="stat" role="listitem"><span class="n bad">7 of 12</span><span>things a finished workflow needs were not asked about at all before this work (my reading of the code).</span></div>
   </div>
 </header>
 
 <!-- ───── 1 ───── -->
 <section>
-  <h2>How a question gets made today</h2>
+  <h2>How a question got made</h2>
   <p class="claim">There are two question generators, one before the compile and one after. Both are <b>catalogues</b>: a fixed list of question types, each fired by a pattern someone wrote. A situation nobody listed produces no question.</p>
   <figure>
     <div class="scroll">
@@ -225,18 +225,18 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
       <span><i class="k-code"></i>code</span><span><i class="k-bad"></i>defect</span>
     </div>
     <ol class="pins">
-      <li><span class="p">1</span><span>The model never receives what the person said in chat (the <code>chat</code> field is never passed). It sees at most 250 rows and a capped set of candidate values (8 addresses, 6 clicks, 6 typed). Anything past that is cut without a message.</span></li>
-      <li><span class="p">2</span><span>A free-text answer is kept as text and handed to the compile as context. It changes no step.</span></li>
-      <li><span class="p">3</span><span>When <code>understanding.json</code> exists, the filter drops 10 of the 15 kinds on the belief that Q1 already asked them. Q1 asked two of them.</span></li>
+      <li><span class="p">1</span><span>The model never received what the person said in chat (the <code>chat</code> field was never passed). Fixed in Phase 0: it is passed now, and what the caps still cut (rows past 250, candidate values past 8 addresses, 6 clicks, 6 typed) is counted and said in chat.</span></li>
+      <li><span class="p">2</span><span>A free-text answer was kept as text and handed to the compile as context. It changed no step. Since Phase 3 it is also handed to the chat once the summary shows, where it can become a change you Apply or Undo.</span></li>
+      <li><span class="p">3</span><span>When <code>understanding.json</code> existed, the filter dropped 10 of the 15 kinds on the belief that Q1 already asked them. Q1 asked two. Fixed in Phase 0: the filter now drops only those two (<code>upload</code>, <code>chosen_values</code>).</span></li>
     </ol>
-    <figcaption><b>Reading it:</b> answers are stored on the way down and applied by the compile step on the second row. No arrow goes back to the model, so no answer can change what else gets asked.</figcaption>
+    <figcaption><b>Reading it:</b> answers are stored on the way down and applied by the compile step on the second row. As first built, no arrow went back, so no answer could change what else got asked. Now, after an answer edits the workflow, the compile-time detectors run again and add any question the change newly makes possible (once).</figcaption>
   </figure>
 </section>
 
 <!-- ───── 2 ───── -->
 <section>
-  <h2>Eight kinds of question are switched off</h2>
-  <p class="claim">The filter in <code>compile_flow.py</code> keeps five kinds and its comment says "every gap was asked before the build". Only two of the other ten were. <b>Dropdowns, dates, optional fields, missing records, outputs and "how do we know it worked" are never asked.</b></p>
+  <h2>Eight kinds of question were switched off. They are asked again.</h2>
+  <p class="claim">The filter in <code>compile_flow.py</code> kept five kinds and its comment said "every gap was asked before the build". Only two of the other ten were. <b>Dropdowns, dates, optional fields, missing records, outputs and "how do we know it worked" were never asked.</b> Phase 0 replaced the filter; the table shows the state before.</p>
   <figure>
     <div>
       <div class="bar" role="img" aria-label="Of 15 question kinds, 7 are asked somewhere and 8 are never asked."><div class="a" style="flex:7">7</div><div class="l" style="flex:8">8</div></div>
@@ -244,7 +244,7 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
     </div>
     <div class="tw">
     <table>
-      <thead><tr><th>Kind</th><th>What it asks, in plain words</th><th>For a new recording</th></tr></thead>
+      <thead><tr><th>Kind</th><th>What it asks, in plain words</th><th>Before Phase 0</th></tr></thead>
       <tbody>
         <tr><td class="k"><code>fork</code></td><td>A popup wants a decision. What should happen?</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
         <tr><td class="k"><code>fork_then</code></td><td>The popup's other choices, which the recording never took.</td><td><span class="chip c-good"><b>✓</b>Asked after the compile</span></td></tr>
@@ -264,7 +264,7 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
       </tbody>
     </table>
     </div>
-    <figcaption>Counted from <code>generate_questions</code> and the filter at <code>compile_flow.py:31</code> and <code>:218-233</code>. <code>test_followup</code> is built elsewhere and not counted. A recording with a date picker, a dropdown, an extracted value and an optional field can get zero questions about any of them, then be told "nothing needs deciding".</figcaption>
+    <figcaption>Now: the eight are built after replay from the document replay left, so their bindings and step keys are current; dropdowns, radios and dates are also asked before the build (Phase 3), and the coverage question comes back from the compile review. Counted from <code>generate_questions</code> and the filter at <code>compile_flow.py:31</code> and <code>:218-233</code>. <code>test_followup</code> is built elsewhere and not counted. A recording with a date picker, a dropdown, an extracted value and an optional field can get zero questions about any of them, then be told "nothing needs deciding".</figcaption>
   </figure>
 </section>
 
@@ -287,7 +287,7 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
       <div class="tile none"><h3>Scope</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>Which recorded actions belong in this workflow.</p><span class="slot">decides: step inclusion</span></div>
       <div class="tile none"><h3>Timing</h3><span class="chip c-none"><b>✕</b>Not asked</span><p>What to wait for before the next step.</p><span class="slot">decides: waits, success conditions</span></div>
     </div>
-    <figcaption>1 asked and applied, 3 partly, 1 text only, 7 not asked. The twelve slots are the proposed taxonomy, and the status of each is my judgement from reading the code for the new flow. It is not measured on real recordings.</figcaption>
+    <figcaption>Status before this work: 1 asked and applied, 3 partly, 1 text only, 7 not asked. Since then: dropdown, radio and date values, coverage and notes reach the person or the chat, and the ledger names the facet of every question. The twelve slots are the taxonomy, and the status of each is my judgement from reading the code for the new flow. It is not measured on real recordings.</figcaption>
   </figure>
 </section>
 
@@ -366,7 +366,7 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
     </div>
     <div class="key">
       <span><i class="k-model"></i>a model proposes</span><span><i class="k-person"></i>a person answers</span>
-      <span><i class="k-code"></i>code decides</span><span><i class="k-new"></i>new, not built today</span>
+      <span><i class="k-code"></i>code decides</span><span><i class="k-new"></i>new, built in Phases 1 to 3 behind settings</span>
     </div>
     <figcaption><b>Why the loop matters:</b> an answer can unlock new unknowns ("this value varies" opens its format and its empty case), retire others, or contradict earlier evidence. Today none of that happens. The loop stops when every required slot is told, inferred above its threshold, or deferred to a named test, and the best remaining question is worth less than the interruption.</figcaption>
   </figure>
@@ -385,7 +385,7 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
       <span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" style="fill:var(--blue)"/></svg> unknown, action from the formula</span>
       <span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><polygon points="7,1 13,7 7,13 1,7" style="fill:var(--ink)"/></svg> safety case, always asks</span>
     </div>
-    <figcaption>Zone edges are curves where chance wrong × cost = 0.08, 0.2 and 0.4. These are starting values to tune against real answers. Placement of the six examples is illustrative judgement, not measured. The two diamonds sit in cheap zones on purpose: the formula alone would not ask, and the safety floor overrides it.</figcaption>
+    <figcaption>Built as <code>scoring.py</code> (off by default; shadow mode records the decision and asks everything). Zone edges are curves where chance wrong × cost = 0.08, 0.2 and 0.4. These are starting values to tune against real answers. Placement of the six examples is illustrative judgement, not measured. The two diamonds sit in cheap zones on purpose: the formula alone would not ask, and the safety floor overrides it.</figcaption>
     <details>
       <summary>Table view</summary>
       <div class="tw" style="margin-top:8px"><table id="maptable"></table></div>
@@ -393,10 +393,29 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
   </figure>
 </section>
 
+<section>
+  <h2>What shipped, and how to switch it on</h2>
+  <p class="claim">Phase 0 is live. Phases 1 to 4 are in, each behind a setting that defaults to report-only or off. Nothing has run on a real recording yet, so the next step is to read the numbers before turning anything on.</p>
+  <figure>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k"><code>SKILL_CLARIFY_LEDGER</code></td><td><span class="chip c-none"><b>◐</b>report</span></td><td><code>report</code> counts the questions the vacuity check and slot dedupe would drop. <code>enforce</code> drops them. <code>off</code> skips both.</td></tr>
+        <tr><td class="k"><code>SKILL_CLARIFY_SCORING</code></td><td><span class="chip c-none"><b>✕</b>off</span></td><td><code>shadow</code> stores the decision on each question and asks everything. <code>on</code> leaves cheap questions at the compiler default and defers ones a test will show.</td></tr>
+        <tr><td class="k"><code>SKILL_CLARIFY_AUDIT</code></td><td><span class="chip c-none"><b>✕</b>off</span></td><td>A second model read asks at most two more questions. <code>shadow</code> saves what it would ask. One extra metered call per recording.</td></tr>
+        <tr><td class="k"><code>SKILL_CLARIFY_NOTES_TO_CHAT</code></td><td><span class="chip c-good"><b>✓</b>on</span></td><td>Words typed to a question before the build go to the chat once, after the summary.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figcaption>Always on, because they fix defects rather than add behaviour: the eight re-opened kinds, chat reaching the model, counted cuts, dropdown / radio / date questions before the build, re-evaluation after an answer, the event log. Read the numbers with <code>scripts/eval_clarify.py rates</code>.</figcaption>
+  </figure>
+</section>
+
 <!-- ───── 6 ───── -->
 <section>
   <h2>How to know it is working</h2>
-  <p class="claim">Today the eval script counts how often the validator dropped something and says it "judges nothing". These measure whether the questions were useful and whether needed ones were missing.</p>
+  <p class="claim">The older eval script counts validator drops and says it "judges nothing". <code>eval_clarify.py</code> reads the new event log and measures whether the questions were useful and whether needed ones were missing.</p>
   <div class="cards">
     <div class="card">
       <h3>Too many questions?</h3>
@@ -423,16 +442,16 @@ summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 <section>
   <h2>Order of work</h2>
   <div class="phases">
-    <div class="ph zero"><span class="no">PHASE 0</span><h3>Fix defects</h3><p>Pass chat in. Keep notes without a task description. Re-open the eight dropped kinds. Count silent cuts.</p></div>
-    <div class="ph"><span class="no">PHASE 1</span><h3>One ledger</h3><p>Express today's kinds as unknowns. Add the vacuity check and slot-keyed dedupe.</p></div>
-    <div class="ph"><span class="no">PHASE 2</span><h3>Decide by value</h3><p>Scoring, assume and defer, the assumptions list, the readiness report.</p></div>
-    <div class="ph"><span class="no">PHASE 3</span><h3>Close the loop</h3><p>Re-evaluate after answers, auditor pass, answer memory, sandbox replay as evidence.</p></div>
-    <div class="ph"><span class="no">PHASE 4</span><h3>Measure</h3><p>Gold-slot corpus, selection fixtures, miss log wired to test and run failures.</p></div>
+    <div class="ph zero"><span class="no">PHASE 0 · LIVE</span><h3>Fix defects</h3><p>Pass chat in. Keep notes without a task description. Re-open the eight dropped kinds. Count silent cuts.</p></div>
+    <div class="ph"><span class="no">PHASE 1 · BUILT</span><h3>One ledger</h3><p>Express today's kinds as unknowns. Add the vacuity check and slot-keyed dedupe.</p></div>
+    <div class="ph"><span class="no">PHASE 2 · BUILT</span><h3>Decide by value</h3><p>Scoring, assume and defer, the assumptions list, the readiness report.</p></div>
+    <div class="ph"><span class="no">PHASE 3 · BUILT</span><h3>Close the loop</h3><p>Re-evaluate after answers, notes to chat, controls before the build, auditor pass, answer memory, coverage back. Sandbox replay is not built.</p></div>
+    <div class="ph"><span class="no">PHASE 4 · BUILT</span><h3>Measure</h3><p>Gold-slot corpus, selection fixtures, miss log wired to test and run failures.</p></div>
   </div>
-  <p class="claim"><b>Decisions needed:</b> whether the filter was intended or drift. How many interruptions are acceptable. Whether a sandbox replay before asking is allowed, since it touches the rule that testing waits for answers. Who labels the gold recordings.</p>
+  <p class="claim"><b>Still open:</b> read the logs from real recordings, then move the ledger to <code>enforce</code> and scoring and the audit from <code>shadow</code> to <code>on</code>. Replace the synthetic gold cases with labelled real recordings. Check an answer against what the task text says varies. Decide on a sandbox replay before asking, since it touches the rule that testing waits for answers.</p>
 </section>
 
-<p class="src">Source: full report in <code>docs/reports/Clarifying-Questions-Architecture-Investigation.md</code>. Read from code on branch <code>fix/audit-2026-11-05</code>; nothing here was run on real recordings. Not read: the old coverage check, <code>plan_answer</code>, the question-rewording code, the renderer cards.</p>
+<p class="src">Source: full report in <code>docs/reports/Clarifying-Questions-Architecture-Investigation.md</code>; built in commit <code>5ee908c</code> on <code>feat/clarify-phase-0</code> (BUILD-65). The "before" figures were read from code; nothing here was run on real recordings. The full cloud suite passes except one router timing test and one test-flow test that fail without these changes too.</p>
 </div>
 
 <script>
