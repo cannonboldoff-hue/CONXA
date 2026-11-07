@@ -21,6 +21,12 @@ class FakeWebContents {
     this.url = "";
     this.calls = [];
     this.handlers = {};
+    this.emulations = []; // Emulation.setDeviceMetricsOverride params, in order
+    this.debugger = {
+      isAttached: () => true,
+      attach() {},
+      sendCommand: (m, p) => { if (m === "Emulation.setDeviceMetricsOverride") this.emulations.push(p); return Promise.resolve({}); },
+    };
     this.navigationHistory = {
       canGoBack: () => true,
       canGoForward: () => false,
@@ -74,6 +80,30 @@ test("newView returns the tabId and carries the label into the tab descriptor", 
   assert.strictEqual(last.tabs.length, 1);
   assert.strictEqual(last.tabs[0].label, "GitHub");
   assert.strictEqual(last.tabs[0].url, "", "the internal marker URL must never reach the address bar");
+});
+
+test("a fixed-viewport run letterboxes into a small panel and every tab, new ones too, sees the full page size", () => {
+  const vp = { width: 1280, height: 720 };
+  const { tabId } = panel.newView("run-vp", { viewport: vp });
+  const first = added[added.length - 1];
+  panel.setActiveBounds("run-vp", tabId, { x: 10, y: 20, width: 640, height: 600 });
+  // 640/1280 = 0.5 fits width; 360px tall, centred in the 600px rect
+  assert.deepStrictEqual(first.bounds, { x: 10, y: 20 + 120, width: 640, height: 360 });
+  assert.deepStrictEqual(first.webContents.emulations.pop(), { ...vp, deviceScaleFactor: 1, mobile: false, scale: 0.5 });
+  const tab2 = panel.newTab("run-vp", { label: "second" });
+  const second = added[added.length - 1];
+  assert.deepStrictEqual(second.webContents.emulations[0], { ...vp, deviceScaleFactor: 1, mobile: false, scale: 0.5 });
+  // a panel bigger than the viewport never enlarges it
+  panel.setActiveBounds("run-vp", tab2.tabId, { x: 0, y: 0, width: 2000, height: 1500 });
+  assert.deepStrictEqual(second.bounds, { x: 360, y: 390, width: 1280, height: 720 });
+});
+
+test("a run without a viewport fills the panel rect as before", () => {
+  const { tabId } = panel.newView("run-free");
+  const view = added[added.length - 1];
+  panel.setActiveBounds("run-free", tabId, { x: 1, y: 2, width: 300, height: 400 });
+  assert.deepStrictEqual(view.bounds, { x: 1, y: 2, width: 300, height: 400 });
+  assert.deepStrictEqual(view.webContents.emulations, []);
 });
 
 test("closeTab on a two-tab run closes only that view and promotes the survivor", async () => {

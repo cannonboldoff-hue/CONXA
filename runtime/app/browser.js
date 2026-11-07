@@ -86,9 +86,14 @@ function _checkHumanOverride(key) {
 // Shared context options for any Chromium instance that talks to a real target site
 // (interactive login, session validation) — matches a normal desktop browser closely
 // enough that bot-protected sites (Render, Google OAuth) don't reject it outright.
+// The one page size every run sees, matching what the recorder records at (host_view.py's
+// RECORD_VIEWPORT; a pytest keeps them equal). Host panels hold the page at this size whatever
+// size their window is, so a responsive site lays out exactly as it did when recorded.
+const RUN_VIEWPORT = { width: 1280, height: 720 };
+
 const STEALTH_CONTEXT_OPTIONS = {
   userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  viewport: { width: 1280, height: 720 },
+  viewport: RUN_VIEWPORT,
   locale: "en-US",
   timezoneId: "America/New_York",
 };
@@ -1052,7 +1057,7 @@ async function _probeAccountName(page) {
 async function _buildExecContext(stored, headless = false, opts = {}) {
   if (!headless && opts.runId && hostBrowser.endpoint()) {
     try {
-      return await hostBrowser.acquire({ runId: opts.runId, storageState: stored, label: opts.label });
+      return await hostBrowser.acquire({ runId: opts.runId, storageState: stored, label: opts.label, viewport: RUN_VIEWPORT });
     } catch (e) {
       if (opts.logFn) opts.logFn("warn", "host_browser_fallback", { run_id: opts.runId, error: e.message });
     }
@@ -1061,7 +1066,7 @@ async function _buildExecContext(stored, headless = false, opts = {}) {
     headless,
     args: ["--disable-blink-features=AutomationControlled"],
   });
-  const context = await browser.newContext({ storageState: stored, acceptDownloads: true });
+  const context = await browser.newContext({ storageState: stored, acceptDownloads: true, viewport: RUN_VIEWPORT });
   return { browser, context };
 }
 
@@ -1101,7 +1106,7 @@ async function _openInteractiveAuthWindow(workspace_id, targetUrl, opts = {}) {
   if (runId && hostBrowser.endpoint()) {
     try {
       const { browser: loginBrowser, context: loginCtx, page: loginPage, hostTabId } =
-        await hostBrowser.acquire({ runId, storageState: storedState, label, focus: true, loginKey: workspace_id });
+        await hostBrowser.acquire({ runId, storageState: storedState, label, focus: true, loginKey: workspace_id, viewport: RUN_VIEWPORT });
       await _maskAutomation(loginPage);
       await loginPage.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       return { loginBrowser, loginCtx, loginPage, hostOwned: true, hostRunId: runId, hostTabId };
@@ -1789,6 +1794,7 @@ module.exports = {
   _writeLanding,
   _protectedUrlOf,
   _buildExecContext,
+  RUN_VIEWPORT,
   _sessionKey,
   _openInteractiveAuthWindow,
   _waitForInteractiveAuth,

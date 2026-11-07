@@ -238,7 +238,7 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "whose recorded browser task was just turned into a repeatable workflow. The user message is a "
         "JSON object of facts: step_count, goal, has_description, input_names, left_out (list of "
         "{kind, count, reason}), unsure_steps, similar_not_asked, assumed, coverage_gap, question_count, "
-        "question_titles. Write 3 to 6 short sentences of plain prose, in this order: what was built "
+        "question_titles, checked_against_description, and sometimes previous_answer_rejected_because (your last answer was unusable for that reason: fix it). Write 3 to 6 short sentences of plain prose, in this order: what was built "
         "(say the step count and, if given, what it does); what was left out of the recording and why "
         "(only if left_out is not empty; say the reason in simple words, never quote page text); what "
         "needs their attention (only for facts that are present: unsure_steps, assumed, coverage_gap "

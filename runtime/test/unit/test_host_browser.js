@@ -6,7 +6,7 @@
 const test   = require("node:test");
 const assert = require("node:assert");
 
-const { _buildExecContext } = require("../../app/browser");
+const { _buildExecContext, RUN_VIEWPORT } = require("../../app/browser");
 
 test("with CONXA_HOST_BROWSER_CDP unset, _buildExecContext takes the launch path", async () => {
   delete process.env.CONXA_HOST_BROWSER_CDP;
@@ -14,6 +14,18 @@ test("with CONXA_HOST_BROWSER_CDP unset, _buildExecContext takes the launch path
   try {
     assert.ok(!hostOwned, "a launched browser must not be reported as hostOwned");
     assert.ok(context, "a launched browser still gets a real context");
+  } finally {
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
+});
+
+test("a launched context holds the page at RUN_VIEWPORT", async () => {
+  delete process.env.CONXA_HOST_BROWSER_CDP;
+  const { browser, context } = await _buildExecContext(undefined, true, {});
+  try {
+    const page = await context.newPage();
+    assert.deepStrictEqual(page.viewportSize(), RUN_VIEWPORT);
   } finally {
     await context.close().catch(() => {});
     await browser.close().catch(() => {});

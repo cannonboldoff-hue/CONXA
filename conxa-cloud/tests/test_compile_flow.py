@@ -116,8 +116,10 @@ def _texts(wf_id, kind):
     return [i["text"] for i in ts.load(f"wf:{wf_id}", limit=200)["items"] if i["kind"] == kind]
 
 
-def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(env):
+def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(env, monkeypatch):
     b, wf, _out = env
+    monkeypatch.setattr("conxa_compile.llm.compile_recap.call_llm", lambda t, p, ms, **k: {
+        "message": "Your workflow has 4 steps. I'm not sure about " + " and ".join(json.loads(p["user_text"])["unsure_steps"]) + ". I have a few quick questions."})
     _fake_compile(b, wf)
     res = b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
     assert res["ok"] and res["step_count"] == 4
@@ -126,7 +128,7 @@ def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(
     assert [(r["key"], r["status"]) for r in card["rows"]] == [("clean", "done"), ("find", "done"), ("meaning", "done"), ("save", "done")]
     assert card["rows"][0]["detail"] == "14 recorded actions" and card["rows"][1]["detail"] == "4 of 4"
     assert "Compiled" not in _texts(wf.id, "event")  # the card carries it
-    assert "Your workflow is ready: 4 steps." in _texts(wf.id, "assistant_message")[0]
+    assert "Your workflow has 4 steps." in _texts(wf.id, "assistant_message")[0]
     assert "send invoice" in _texts(wf.id, "assistant_message")[0].lower()  # the uncertain step is named, not numbered
     # lifecycle follows: clarify questions are open
     from conxa_core.storage.workflow_store import get_workflow
@@ -913,13 +915,29 @@ def test_the_ready_message_uses_the_models_wording_when_it_checks_out(env, monke
     assert "target" not in json.dumps(seen["left_out"])  # kinds and counts only, never page text
 
 
-def test_a_recap_that_drops_a_fact_falls_back_to_the_template(env, monkeypatch):
-    text = _first_message(env, monkeypatch, lambda *a, **k: {"message": "All done, everything looks great and is ready for you to use now."})
-    assert text.startswith("Your workflow is ready: 4 steps.")
+def test_a_recap_that_drops_a_fact_is_retried_with_the_reason(env, monkeypatch):
+    calls = []
+
+    def fake(task, payload, timeout_ms, **k):
+        facts = json.loads(payload["user_text"])
+        calls.append(facts.get("previous_answer_rejected_because"))
+        if len(calls) == 1:
+            return {"message": "All done, everything looks great and is ready for you to use now."}
+        return {"message": f"Your workflow has {facts['step_count']} steps. " + " ".join(facts["unsure_steps"]) + " needs a check."}
+
+    assert _first_message(env, monkeypatch, fake).startswith("Your workflow has 4 steps.")
+    assert calls[0] is None and "number of steps" in calls[1]
 
 
-def test_a_failed_recap_call_falls_back_to_the_template(env, monkeypatch):
+def test_when_the_recap_never_works_no_stand_in_is_posted_and_a_warning_shows(env, monkeypatch):
+    b, wf, _out = env
+
     def boom(*a, **k):
         raise RuntimeError("cloud down")
 
-    assert _first_message(env, monkeypatch, boom).startswith("Your workflow is ready: 4 steps.")
+    monkeypatch.setattr("conxa_compile.llm.compile_recap.call_llm", boom)
+    _fake_compile(b, wf)
+    assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
+    assert not any("ready" in t for t in _texts(wf.id, "assistant_message"))
+    assert "Couldn’t write the summary of what was built" in _texts(wf.id, "event")
+    assert _cards(wf.id, "clarify_question")  # the questions still follow

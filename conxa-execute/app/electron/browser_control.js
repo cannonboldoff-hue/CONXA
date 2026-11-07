@@ -7,7 +7,8 @@
  * drive it blind, JSON in and out.
  *
  * Four ops, each mapping straight onto a browser_panel.js function:
- *   new_view   { runId, label?, focus?, loginKey? } -> { markerUrl, tabId }   first tab of a run
+ *   new_view   { runId, label?, focus?, loginKey?, viewport? } -> { markerUrl, tabId }   first tab of a run
+ *                       (viewport { width, height } fixes the page size; the panel shrinks it to fit)
  *                       (focus: a login — bring this run to the foreground even if another is selected)
  *   new_tab    { runId, label?, loginKey? }  -> { markerUrl, tabId }   a tab_open step's later tab,
  *                       or a sign-in tab of a session that already has a panel open
@@ -65,10 +66,10 @@ function start() {
   });
 }
 
-async function _dispatch({ op, runId, tabId, label, focus, loginKey, url, dest, timeoutMs }) {
+async function _dispatch({ op, runId, tabId, label, focus, loginKey, viewport, url, dest, timeoutMs }) {
   if (!runId) throw new Error("missing runId");
   switch (op) {
-    case "new_view":   return panel.newView(runId, { label, focus, loginKey });
+    case "new_view":   return panel.newView(runId, { label, focus, loginKey, viewport });
     case "new_tab":    return panel.newTab(runId, { label, focus, loginKey });
     case "close_view":
       if (!tabId) throw new Error("missing tabId");

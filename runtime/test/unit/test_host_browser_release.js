@@ -27,6 +27,19 @@ function startControlStub() {
   });
 }
 
+test("acquire asks the panel for a view at the given fixed viewport", async () => {
+  const stub = await startControlStub();
+  process.env.CONXA_HOST_BROWSER_CDP = "http://127.0.0.1:1"; // nothing listens: only the new_view call matters
+  try {
+    await assert.rejects(hostBrowser.acquire({ runId: "r1", viewport: { width: 1280, height: 720 } }));
+    assert.strictEqual(stub.calls[0].op, "new_view");
+    assert.deepStrictEqual(stub.calls[0].viewport, { width: 1280, height: 720 });
+  } finally {
+    delete process.env.CONXA_HOST_BROWSER_CDP;
+    stub.close();
+  }
+});
+
 test("release with a tabId posts close_view for that one tab only", async () => {
   const stub = await startControlStub();
   try {

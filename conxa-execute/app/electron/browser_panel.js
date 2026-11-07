@@ -90,6 +90,38 @@ function _emitTabsChanged(runId, meta) {
   _onTabsChanged(runId, run.tabs.map((t) => _describeTab(run, t)), meta);
 }
 
+// Fixed-viewport runs: the page always sees viewport.width x height at DPR 1, drawn at `run.scale`
+// (see setActiveBounds), so a site lays out as it did when recorded however big the panel is. Same CDP
+// call as Build Studio's panel (conxa-builder/electron/browser_panel.js), issued through Electron's
+// debugger so it survives navigation.
+function _debugger(tab) {
+  if (tab.view.webContents.isDestroyed()) return null;
+  const dbg = tab.view.webContents.debugger;
+  try {
+    if (!dbg.isAttached()) dbg.attach("1.3");
+    return dbg;
+  } catch (err) {
+    console.error("browser_panel: debugger attach failed", err);
+    return null;
+  }
+}
+
+function _emulate(run, tab) {
+  if (!run.viewport) return;
+  const dbg = _debugger(tab);
+  if (!dbg) return;
+  dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
+    width: run.viewport.width, height: run.viewport.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
+  }).catch((err) => console.error("browser_panel: setDeviceMetricsOverride failed", err));
+}
+
+function _viewport(v) {
+  if (!v) return null;
+  const width = Math.round(Number(v.width)), height = Math.round(Number(v.height));
+  if (!(width > 0 && height > 0)) throw new Error("viewport needs a positive width and height");
+  return { width, height };
+}
+
 // Create a view, wire its popup handler, and register it as a tab on `run`. The new tab
 // becomes the active one and the renderer is told — this is the only place that happens, so a
 // window.open() popup (an OAuth "Sign in with Google" leg) is shown exactly like a tab the
@@ -114,6 +146,7 @@ function _createTab(run, runId, label, meta, loginKey, background = false) {
   }
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // hidden until the renderer reports a rect
   view.webContents.loadURL(_markerUrl(runId, tabId)).catch(() => {});
+  _emulate(run, { view }); // after loadURL: attaching the debugger to a never-navigated view crashes Electron
   run.tabs.push({ id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null });
   if (_win) _win.contentView.addChildView(view);
   // A background tab (a judge/prover probe, focus:false) must not steal the shown view from the
@@ -173,10 +206,10 @@ async function saveDownload(runId, url, dest, timeoutMs = 120000) {
 // Control-channel op: "new_view" — first tab of a run. Returns the marker URL the
 // runtime waits for (host_browser.js::_findPageByMarker). `loginKey` (AUTH-6) is set only for an
 // actual sign-in tab, never a judge/prover probe tab — see browser_control.js's op doc.
-function newView(runId, { label, focus, loginKey } = {}) {
+function newView(runId, { label, focus, loginKey, viewport } = {}) {
   let run = _runs.get(runId);
   if (!run) {
-    run = { partition: _partitionFor(runId), tabs: [], activeTabId: null, downloads: [] };
+    run = { partition: _partitionFor(runId), tabs: [], activeTabId: null, downloads: [], viewport: _viewport(viewport), scale: 1 };
     _runs.set(runId, run);
     _hookDownloads(runId, run.partition);
   }
@@ -301,8 +334,21 @@ function setActiveBounds(runId, tabId, rect) {
   for (const [id, r] of _runs) {
     if (id !== runId) for (const t of r.tabs) t.view.setBounds(_HIDDEN); // a native view never goes away on its own
   }
+  let shown = rect;
+  if (run.viewport) {
+    // Letterboxed: the view keeps the viewport's aspect ratio, shrunk (never enlarged) to fit the rect
+    // and centred; every tab of the run shares one scale so none shows at a stale size.
+    const { width: W, height: H } = run.viewport;
+    const s = Math.min(rect.width / W, rect.height / H, 1);
+    const width = Math.round(W * s), height = Math.round(H * s);
+    shown = { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y + Math.floor((rect.height - height) / 2), width, height };
+    if (s > 0 && Math.abs(s - run.scale) > 1e-4) {
+      run.scale = s;
+      for (const t of run.tabs) _emulate(run, t);
+    }
+  }
   for (const t of run.tabs) {
-    t.view.setBounds(t.id === tabId ? rect : _HIDDEN);
+    t.view.setBounds(t.id === tabId ? shown : _HIDDEN);
   }
   run.activeTabId = tabId;
   _shown = { runId, tabId };
