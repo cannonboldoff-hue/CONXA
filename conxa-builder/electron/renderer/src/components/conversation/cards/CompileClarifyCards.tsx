@@ -375,6 +375,16 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
       }
     >
       {s.goal && <p className="mb-2 text-[var(--text-primary)]">{s.goal}</p>}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
+          {s.input_names && s.input_names.length ? 'Inputs you’ll provide:' : 'No inputs — runs the same every time.'}
+        </span>
+        {(s.input_names ?? []).map((n) => (
+          <span key={n} title={n} className="rounded-full border border-[var(--border-default)] px-2.5 py-0.5 text-sm font-medium text-[var(--text-primary)]">
+            {n.replace(/_/g, ' ')}
+          </span>
+        ))}
+      </div>
       <ol className="space-y-1">
         {shown.map((n, i) => (
           <li key={i} className="flex gap-2">
@@ -392,9 +402,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         )}
       </ol>
       <p className="mt-3 text-xs text-[var(--text-meta)]">
-        {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''} · {s.inputs} input{s.inputs === 1 ? '' : 's'}
-        {s.input_names && s.input_names.length ? ` (${s.input_names.join(', ')})` : ''}
-        {s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
+        {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''}{s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
         {s.queued ? ` · ${s.queued} thing${s.queued === 1 ? '' : 's'} I was sure about (say “ask me” to check)` : ''}
       </p>
       {s.assumptions && s.assumptions.length > 0 && (

@@ -216,7 +216,8 @@ def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] 
             # ``recorded`` / ``literal`` stay raw (matching and replay use them); ``label`` is what a person reads.
             groups[key] = {"ref": f"{kind}:{row.get('event_id')}", "kind": kind, "event_ids": [], "row_refs": [],
                            "recorded": recorded[:200], "literal": literal[:200],
-                           "label": display_label(recorded if kind == "control" else (row.get("shown") or row.get("target") or ""), 200),
+                           # Last-resort name only (the model writes the words a person reads): the page's own name, tidied.
+                           "label": display_label(recorded if kind == "control" else (row.get("target") or ""), 200),
                            "in_set": False,
                            "app_button": kind == "click"}
         if in_set:
@@ -374,7 +375,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
             value = r.get("value")
             row = {
                 "ref": r["row_ref"], "action": r.get("action"),
-                "target": scrub_email(r.get("shown") or r["target"]) if (r.get("shown") or r.get("target")) else None,
+                "target": scrub_email(r["target"]) if r.get("target") else None,
                 "role": r.get("role") or None,
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:VALUE_CHARS] if value else None),
                 "url": r.get("url") if r.get("url") != prev_url else None,
@@ -399,7 +400,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
         "task": (task or "").strip()[:300], "chat": (chat or "").strip()[:600], "rows": rows,
         **({"rows_omitted": len(merged) - len(rows)} if len(merged) > len(rows) else {}),
         "candidates": [{"ref": c["ref"], "kind": c["kind"],
-                        "recorded": c["label"] if c["kind"] == "click" else c["recorded"], "rows": c["row_refs"],
+                        "recorded": c["recorded"], "rows": c["row_refs"],
                         **({"in_set": True} if c.get("in_set") else {}),
                         **({"app_button": True} if c.get("app_button") else {})}
                        for c in candidates if not c["unsent"]],
@@ -460,8 +461,8 @@ def _fallback_question(effect: str, row_ref: str, row: dict[str, Any]) -> dict[s
             "choices": _fork_choices(row, None) if effect == "fork" else _choices_for(effect, None), "best_guess": "", "cost_rank": 1}
 
 
-# What a value question says, by the kind of thing recorded. Code writes it (the model's label would repeat the
-# raw name); the label inside is already the cleaned one.
+# LAST RESORT: what a value question says when the model wrote none (a question code adds back, or a model
+# sentence that quoted a name not in the recording). The model's own sentence is always preferred.
 _VALUE_PROMPT = {
     "url": "You opened “{label}”. Next time, is it always this page, or a different one each time?",
     "control": "You chose “{label}”. Next time, is it always this, or a different choice each time?",
@@ -474,19 +475,41 @@ def _value_question(cand: dict[str, Any], row: dict[str, Any], guess: str) -> di
     label = _short_label(cand)
     return {"kind": "value", "row": row["row_ref"], "event_id": row.get("event_id"), "ref": cand["ref"],
             "prompt": _VALUE_PROMPT.get(cand["kind"], _VALUE_PROMPT["click"]).format(label=label), "why": "",
-            "choices": _value_choices(label), "best_guess": guess, "cost_rank": 3}
+            "choices": _choices_for("value", None), "best_guess": guess, "cost_rank": 3}
 
 
-def _value_choices(label: str) -> list[dict[str, Any]]:
-    """Both answers named for this item, by code. Ids are code's, so the saved answer and replay are unchanged."""
-    words = {"varies": "A different one each time", "fixed": f"Always “{label}”"}
-    return [{"id": cid, "label": words[cid], "detail": detail} for cid, _stock, detail in RULES["value"]["choices"]]
+_QUOTED = re.compile(r"“([^”]{2,80})”|\"([^\"]{2,80})\"")
+
+
+def _norm(text: object) -> str:
+    return " ".join(str(text or "").replace("“", '"').replace("”", '"').split()).casefold()
+
+
+def _recording_text(merged: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> str:
+    """Everything the recording says, as one casefolded string: the haystack a quoted name must come from."""
+    parts: list[str] = []
+    for r in merged:
+        parts += [str(r.get(k) or "") for k in ("target", "value", "url", "title")]
+        parts += [str(v) for v in (r.get("segment") or {}).values() if isinstance(v, (str, int, float))]
+        parts += [str(b) for b in r.get("dialog_buttons") or []]
+        parts.append(str((r.get("control") or {}).get("recorded") or ""))
+    for c in candidates:
+        parts += [c.get("recorded") or "", c.get("label") or "", c.get("literal") or ""]
+    return _norm(" ".join(parts))
+
+
+def ungrounded_names(text: object, haystack: str) -> list[str]:
+    """The names in “quotes” that the recording never shows. A tidied name passes ("New folder" is inside the page's
+    "New folder Alt+C then F"); an invented one does not. The model words the sentence; this only checks it."""
+    if not haystack:
+        return []
+    return [n for m in _QUOTED.finditer(str(text or "")) if (n := _norm(m.group(1) or m.group(2))) and n not in haystack]
 
 
 def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
                        values: dict[str, dict[str, Any]], taken: set[str],
                        no_upload_question: frozenset[str] = frozenset(),
-                       report: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+                       report: dict[str, Any] | None = None, haystack: str = "") -> list[dict[str, Any]]:
     report = {} if report is None else report
     out: list[dict[str, Any]] = []
     for q in raw_questions or []:
@@ -536,17 +559,27 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             elif effect == "fork":
                 _log(report, "override", "fork_without_decision_popup", row_ref)
                 continue
-        if effect == "value":
-            # Code words a value question: the model's sentence and labels would repeat the raw name.
-            made = _value_question(by_ref[ref], row, "")
-            prompt, choices = made["prompt"], made["choices"]
-        else:
-            if has_machine_words(prompt):
-                _log(report, "override", "machine_words", f"{effect}:prompt")
-                if effect not in _FALLBACK_PROMPT:       # a free-form note has no stock sentence to fall back on
-                    continue
+        choices = _fork_choices(row, q.get("choices")) if effect == "fork" else _choices_for(effect, q.get("choices"))
+        why = _text(q.get("why"), 200)
+        # The model words the question; code only checks it. A web address or code word, or a quoted name the
+        # recording never shows, is counted (the retry tells the model) and, as the last resort, replaced here.
+        words = [prompt, why, *(c["label"] for c in choices)]
+        machine = any(has_machine_words(w) for w in words)
+        invented = [n for w in words for n in ungrounded_names(w, haystack)]
+        if machine:
+            _log(report, "override", "machine_words", f"{effect}:prompt")
+        if invented:
+            _log(report, "override", "ungrounded_name", invented[0])
+        if machine or invented:
+            why = ""
+            if effect == "value":
+                made = _value_question(by_ref[ref], row, "")
+                prompt, choices = made["prompt"], made["choices"]
+            elif effect in _FALLBACK_PROMPT:
                 prompt = _FALLBACK_PROMPT[effect]
-            choices = _fork_choices(row, q.get("choices")) if effect == "fork" else _choices_for(effect, q.get("choices"))
+                choices = _fork_choices(row, None) if effect == "fork" else _choices_for(effect, None)
+            else:                                    # a free-form note has no stock sentence to fall back on
+                continue
         if not choices:
             _log(report, "shape", "no_choices", row_ref)
             continue
@@ -562,7 +595,7 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             guess = "varies"
         rank = q.get("cost_rank")
         out.append({"kind": effect, "row": row["row_ref"], "event_id": row.get("event_id"), "prompt": prompt,
-                    "why": _text(q.get("why"), 200), "choices": choices, "best_guess": guess,
+                    "why": why, "choices": choices, "best_guess": guess,
                     "cost_rank": rank if isinstance(rank, int) and not isinstance(rank, bool) else 99,
                     **({"ref": ref} if ref else {})})
     return out
@@ -665,10 +698,19 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     gaps = _row_items(raw.get("gaps"), rows, "note", 200, report)
     detailed = _row_items(raw.get("detailed_summary"), rows, "text", 240, report)
     decided = _row_items(raw.get("decided"), rows, "text", 160, report, reason_limit=160)
-    for d in decided:
-        if has_machine_words(d["text"]):
-            _log(report, "override", "machine_words", f"decided:{d['row']}")
-    decided = [d for d in decided if not has_machine_words(d["text"])]
+    haystack = _recording_text(merged, candidates)
+
+    def readable(text: str, where: str) -> bool:
+        """Text the person reads: no web address or code word, and no quoted name the recording never shows. The
+        model words it; a failure is counted (the retry tells the model) and the text is dropped only as a last resort."""
+        machine, invented = has_machine_words(text), ungrounded_names(text, haystack)
+        if machine:
+            _log(report, "override", "machine_words", where)
+        if invented:
+            _log(report, "override", "ungrounded_name", invented[0])
+        return not (machine or invented)
+
+    decided = [d for d in decided if readable(d["text"], f"decided:{d['row']}")]
     for d in decided[MAX_DECIDED:]:
         _log(report, "shape", "decided_over_cap", d["row"])
     decided = decided[:MAX_DECIDED]
@@ -677,7 +719,7 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     # An upload of a file the workflow downloaded itself has no question (see must_ask), whoever asks.
     no_upload = frozenset(r["row_ref"] for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS) \
         - {m["row"] for m in must if m["effect"] == "upload"}
-    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload, report)
+    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload, report, haystack)
     # The prompt tells the model never to ask about a gap; code enforces it. A free-form note on a
     # row the model itself called a gap is that same question. Only notes: a value, fork or upload
     # question on such a row is about the action, not about the gap.
@@ -713,12 +755,8 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     questions.sort(key=lambda q: (q["cost_rank"], order[q["row"]]))
 
     goal, summary = _text(raw.get("goal"), 200), _text(raw.get("short_summary"), 300)
-    if has_machine_words(summary):
-        _log(report, "override", "machine_words", "short_summary")
-        summary = ""
-    if has_machine_words(goal):
-        _log(report, "override", "machine_words", "goal")
-        goal = ""
+    summary = summary if readable(summary, "short_summary") else ""
+    goal = goal if readable(goal, "goal") else ""
     return {
         "goal": goal, "values": values, "gaps": gaps,
         "short_summary": summary, "detailed_summary": detailed,
@@ -823,6 +861,11 @@ def _grade(out: dict[str, Any], candidates: list[dict[str, Any]], told: Any) -> 
         reasons.append(f"{invented} refs or rows that are not in the recording")
     if _count(report, "shape", "no_reason"):
         reasons.append("points in `decided` with no reason")
+    # The model is told what it got wrong and writes it again once; code wording is only the backstop after that.
+    if _count(report, "override", "machine_words"):
+        reasons.append("you wrote a web address or a code word in text meant for the person; say it in plain words")
+    if _count(report, "override", "ungrounded_name"):
+        reasons.append("you put a name in quotes that the recording never shows; quote only names that appear in it")
     return ("weak" if reasons else "ok"), reasons
 
 

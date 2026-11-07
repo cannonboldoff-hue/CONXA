@@ -4,6 +4,7 @@ the real editor commands (no model, no network)."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import threading
@@ -125,7 +126,7 @@ def test_the_compile_card_mirrors_the_compilers_own_events_then_questions_begin(
     assert [(r["key"], r["status"]) for r in card["rows"]] == [("clean", "done"), ("find", "done"), ("meaning", "done"), ("save", "done")]
     assert card["rows"][0]["detail"] == "14 recorded actions" and card["rows"][1]["detail"] == "4 of 4"
     assert "Compiled" not in _texts(wf.id, "event")  # the card carries it
-    assert "Compiled into 4 steps." in _texts(wf.id, "assistant_message")[0]
+    assert "Your workflow is ready: 4 steps." in _texts(wf.id, "assistant_message")[0]
     assert "send invoice" in _texts(wf.id, "assistant_message")[0].lower()  # the uncertain step is named, not numbered
     # lifecycle follows: clarify questions are open
     from conxa_core.storage.workflow_store import get_workflow
@@ -885,3 +886,40 @@ def test_a_defer_decision_leaves_the_question_open(env, monkeypatch):
     monkeypatch.setattr("conxa_compile.conversation.scoring.decide", lambda q, doc: {"action": "defer"})
     out, _ = question_plan.apply_scoring(qs, {"skills": [{"steps": []}]}, "post_compile")
     assert out[0]["status"] == "open"
+
+
+# ── the "workflow ready" message is written by a model over code-built facts ──────────────────
+
+
+def _first_message(env, monkeypatch, fake):
+    b, wf, _out = env
+    monkeypatch.setattr("conxa_compile.llm.compile_recap.call_llm", fake)
+    _fake_compile(b, wf)
+    assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
+    return _texts(wf.id, "assistant_message")[0]
+
+
+def test_the_ready_message_uses_the_models_wording_when_it_checks_out(env, monkeypatch):
+    seen = {}
+
+    def fake(task, payload, timeout_ms, **k):
+        seen.update(json.loads(payload["user_text"]))
+        names = " and ".join(seen["unsure_steps"])
+        return {"message": f"Your workflow has {seen['step_count']} steps. I'm not sure about {names}, so please check it. I have a few quick questions first."}
+
+    text = _first_message(env, monkeypatch, fake)
+    assert text.startswith("Your workflow has 4 steps.")
+    assert seen["step_count"] == 4 and seen["unsure_steps"]
+    assert "target" not in json.dumps(seen["left_out"])  # kinds and counts only, never page text
+
+
+def test_a_recap_that_drops_a_fact_falls_back_to_the_template(env, monkeypatch):
+    text = _first_message(env, monkeypatch, lambda *a, **k: {"message": "All done, everything looks great and is ready for you to use now."})
+    assert text.startswith("Your workflow is ready: 4 steps.")
+
+
+def test_a_failed_recap_call_falls_back_to_the_template(env, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("cloud down")
+
+    assert _first_message(env, monkeypatch, boom).startswith("Your workflow is ready: 4 steps.")

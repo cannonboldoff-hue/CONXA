@@ -54,12 +54,30 @@ header.top{display:flex;flex-direction:column;gap:10px}
 .c-inf{color:var(--model);border:1px dashed currentColor}
 .c-built::before,.c-partial::before,.c-prop::before,.c-doc::before,.c-inf::before{display:none}
 
-/* tabs */
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tabs a{padding:9px 14px;text-decoration:none;color:var(--muted);font:600 15px var(--f-display);letter-spacing:.02em;border-bottom:2px solid transparent;white-space:nowrap}
-.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--code)}
-.tabs a:focus-visible{outline:2px solid var(--code);outline-offset:-2px}
 .view{display:flex;flex-direction:column;gap:14px}
+
+/* summary strip */
+.stats{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.stat{display:flex;flex-direction:column;gap:2px;padding:10px 16px;border-right:1px solid var(--line);min-width:0;flex:1 1 130px}
+.stat:last-child{border-right:0}
+.stat b{font:700 26px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font:500 11px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat.k-code b{color:var(--code)} .stat.k-model b{color:var(--model)} .stat.k-human b{color:var(--human)}
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font:12.5px var(--f-mono);color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{display:block;overflow:visible}
+.lg-flow{stroke:var(--code);stroke-width:2} .lg-data{stroke:var(--data);stroke-width:2} .lg-gate{stroke:var(--human);stroke-width:2;stroke-dasharray:6 4}
+.lg-model{stroke:var(--model);stroke-width:2;stroke-dasharray:3 3} .lg-video{stroke:var(--video);stroke-width:2;stroke-dasharray:3 3}
+.lg-new{display:inline-block;font:600 10px/1 var(--f-mono);letter-spacing:.08em;padding:3px 7px;border-radius:9px;background:var(--ink);color:var(--panel)}
+/* search + trace */
+.find{display:flex;align-items:center;gap:6px}
+.find input{font:500 13px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 10px;width:200px;max-width:52vw}
+.find input:focus-visible{outline:2px solid var(--code);outline-offset:1px}
+.find output{font:12px var(--f-mono);color:var(--muted);min-width:7ch}
+#trace[aria-pressed="false"]{opacity:1}
+#trace[aria-pressed="true"]{border-color:var(--code);color:var(--code);background:var(--code-bg)}
+.where{font:12px var(--f-mono);color:var(--muted)}
 
 /* toolbar */
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding-block:8px}
@@ -73,7 +91,7 @@ button.f i{width:10px;height:10px;border-radius:2px;display:block}
 .walk{display:flex;gap:6px;align-items:center;font:13px var(--f-mono);color:var(--muted)}
 
 /* graph + inspector */
-.stage{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.stage{display:block}
 .canvas{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow-x:auto;overflow-y:hidden;cursor:grab;min-width:0}
 .canvas.drag{cursor:grabbing}
 .canvas svg{display:block;margin:0 auto}
@@ -100,6 +118,17 @@ button.f i{width:10px;height:10px;border-radius:2px;display:block}
 .node.sel rect.ring{stroke:var(--ink);stroke-width:1.5;fill:none;stroke-dasharray:3 3}
 .dim{opacity:.16}
 .edge path.l{fill:none;stroke-width:1.9}
+.edge .pl{fill:none;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:1 16;opacity:0}
+.edge.hot .pl{opacity:.9;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-17}}
+.e-data .pl{stroke:var(--data)} .e-flow .pl{stroke:var(--code)} .e-gate .pl{stroke:var(--human)} .e-model .pl{stroke:var(--model)} .e-video .pl{stroke:var(--video)} .e-same .pl{stroke:var(--muted)}
+.edge.quiet:not(.hot):not(.dim){opacity:.32}
+.e-gate .lbg{fill:var(--human-bg);stroke:var(--human)} .e-gate .lb{fill:var(--human)}
+.g-cust{fill:var(--sunk);fill-opacity:.6}
+.g-bound{stroke:var(--ink);stroke-width:1.5}
+.g-bpill{fill:var(--ink)} .g-btext{font:600 12px var(--f-mono);letter-spacing:.04em;fill:var(--panel)}
+.newp{fill:var(--ink)} .newt{font:600 10.5px var(--f-mono);letter-spacing:.08em;fill:var(--panel)}
+.node.hit rect.b{stroke-width:3.5}
 .e-data path.l{stroke:var(--data)} .e-flow path.l{stroke:var(--code)} .e-gate path.l{stroke:var(--human);stroke-dasharray:8 5}
 .e-model path.l{stroke:var(--model);stroke-dasharray:4 4} .e-video path.l{stroke:var(--video);stroke-dasharray:4 4}
 .e-same path.l{stroke:var(--muted);stroke-dasharray:1 5;stroke-width:2.4}
@@ -109,7 +138,10 @@ button.f i{width:10px;height:10px;border-radius:2px;display:block}
 .edge.hot .lb{fill:var(--ink)}
 .m-data{fill:var(--data)} .m-flow{fill:var(--code)} .m-gate{fill:var(--human)} .m-model{fill:var(--model)} .m-video{fill:var(--video)} .m-same{fill:var(--muted)}
 
-.insp{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 80px);overflow:auto;position:sticky;top:64px;min-width:0}
+dialog.insp{width:min(780px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);box-shadow:0 24px 64px rgba(0,0,0,.35);overflow:auto}
+dialog.insp::backdrop{background:rgba(8,12,10,.55)}
+.insp .body{padding:22px 26px 26px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.insp .top{position:sticky;top:0;z-index:1;display:flex;justify-content:flex-end;padding:10px 12px 0;background:var(--panel)}
 .insp .hd{display:flex;flex-direction:column;gap:8px}
 .insp .chips{display:flex;flex-wrap:wrap;gap:6px}
 .insp .sum{font-size:14.5px}
@@ -150,42 +182,20 @@ td.k{font-weight:600}
 .qtabs button{font:500 12px var(--f-mono);padding:4px 7px}
 .qtabs button[aria-selected="true"]{border-color:var(--human);color:var(--human)}
 
-/* reference + compare */
-.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.card.prop{border-style:dashed}
-.seq text{font-family:var(--f-mono);font-size:11.5px;fill:var(--ink)}
-.seq .lane-box{fill:var(--sunk);stroke:var(--line)} .seq .lane-t{font-family:var(--f-body);font-weight:600;font-size:12.5px}
-.seq .life{stroke:var(--line);stroke-dasharray:3 4} .seq .note{fill:var(--panel);stroke:var(--line);stroke-dasharray:4 3} .seq .note-t{fill:var(--muted)}
-.k-code{stroke:var(--code);fill:var(--code)} .k-model{stroke:var(--model);fill:var(--model)} .k-human{stroke:var(--human);fill:var(--human)} .k-video{stroke:var(--video);fill:var(--video)}
-.seq .msg{fill:none;stroke-width:1.5} .seq .ret{stroke-dasharray:5 4}
 
-.insp .close{display:none;align-self:flex-end}
-/* below 1500px the graph takes the full width and the inspector slides in as a drawer */
-@media (max-width:1500px){
-  .stage{grid-template-columns:minmax(0,1fr)}
-  .insp{position:fixed;z-index:20;top:calc(env(safe-area-inset-top,0px) + 12px);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);right:max(12px,env(safe-area-inset-right,0px));width:min(420px,calc(100vw - 24px));max-height:none;box-shadow:0 12px 40px rgba(0,0,0,.28);transform:translateX(calc(100% + 40px));transition:transform .22s ease}
-  .insp.open{transform:none}
-  .insp .close{display:inline-flex}
+.insp .close{font:500 13px var(--f-mono)}
 }
-@media (max-width:1100px){ .cards{grid-template-columns:minmax(0,1fr)} }
 @media (max-width:520px){ .io{grid-template-columns:minmax(0,1fr)} }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 </style>
 
 <div class="wrap">
 <header class="top">
-  <span class="eyebrow">Architecture graph · branch feat/understanding-first-pipeline · verified 2026-11-03 · question flow updated 2026-11-06 (feat/clarify-phase-0) · test-failure flow updated 2026-11-06</span>
+  <span class="eyebrow">Architecture graph · branch feat/understanding-first-pipeline · verified 2026-11-03 · updated 2026-11-06 (feat/clarify-phase-0): one question stream, chat change cards, agent spans, model ledger, resumable video job, fault check</span>
   <h1>CONXA Workflow Engine</h1>
-  <p class="lede">This page traces a task from one recording by a person to a deterministic program that a customer's AI agent runs. Read it top to bottom: each row is a phase, and each column is who acts. Every box is a real component, and every arrow is a real hand-off. Click a box to see its internals and connections, or press <b>Walk through</b> to step through it in order.</p>
+  <p class="lede">This page traces a task from one recording by a person to a deterministic program that a customer's AI agent runs. Read it top to bottom: each row is a phase, and each column is who acts. Every box is a real component, and every arrow is a real hand-off. Click a box to light up its connections; double-click it (or press Enter on it) to open its details. Press <b>Walk through</b> (or the arrow keys) to step through it in order. <b>Full path</b> lights up everything upstream and downstream of the box you pick.</p>
+  <div class="stats" id="stats" aria-label="Summary"></div>
 </header>
-
-<nav class="tabs" aria-label="Views">
-  <a href="#graph" data-tab="graph">CONXA workflow graph</a>
-  <a href="#claude" data-tab="claude">Claude Record workflow graph</a>
-  <a href="#compare" data-tab="compare">Side by side</a>
-  <a href="#reference" data-tab="reference">Reference</a>
-</nav>
 
 <!-- ───────── CONXA GRAPH ───────── -->
 <div class="view" id="v-graph">
@@ -198,90 +208,27 @@ td.k{font-weight:600}
       <button class="f" type="button" data-k="data" aria-pressed="true"><i style="background:var(--data)"></i>Data on disk</button>
     </div>
     <div class="grp">
+      <span class="find"><input id="q" type="search" placeholder="Find a box, file or term" aria-label="Find a box"><output id="qn" for="q"></output></span>
+      <button type="button" id="trace" aria-pressed="false">Full path</button>
       <span class="walk"><button type="button" id="wPrev" aria-label="Previous step">◀</button><button type="button" id="wPlay">Walk through</button><button type="button" id="wNext" aria-label="Next step">▶</button><span id="wPos">—</span></span>
       <button type="button" id="zOut" aria-label="Zoom out">−</button><button type="button" id="zFit">Fit width</button><button type="button" id="zIn" aria-label="Zoom in">+</button>
     </div>
   </div>
-  <div class="small muted">Arrows: <span style="color:var(--code)">━ control</span> · <span style="color:var(--data)">━ data</span> · <span style="color:var(--human)">╍ waits for a person</span> · <span style="color:var(--model)">┄ model call</span> · <span style="color:var(--video)">┄ video</span></div>
+  <div class="legend" aria-label="Legend">
+    <span><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" class="lg-flow"/></svg>control</span>
+    <span><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" class="lg-data"/></svg>data</span>
+    <span><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" class="lg-gate"/></svg>waits for a person</span>
+    <span><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" class="lg-model"/></svg>model call</span>
+    <span><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" class="lg-video"/></svg>video</span>
+    <span>faint arrow = side channel</span>
+    <span><i class="lg-new">NEW</i>added 2026-11-06</span>
+  </div>
   <div class="stage">
     <div class="canvas" id="cv-graph"></div>
-    <aside class="insp" id="in-graph" aria-live="polite"></aside>
+    <dialog class="insp" id="in-graph" aria-labelledby="pop-title"></dialog>
   </div>
 </div>
 
-<!-- ───────── CLAUDE GRAPH ───────── -->
-<div class="view" id="v-claude" hidden>
-  <p class="small muted" style="max-width:92ch">Claude in Chrome's <b>Record workflow</b>, drawn with the same rules. Every box carries an evidence label: <span class="chip c-doc">Anthropic docs</span> for what Anthropic's help pages and Academy tutorial state, <span class="chip c-inf">Inferred</span> for what follows from them but is not stated.</p>
-  <div class="stage">
-    <div class="canvas" id="cv-claude"></div>
-    <aside class="insp" id="in-claude" aria-live="polite"></aside>
-  </div>
-</div>
-
-<!-- ───────── COMPARE ───────── -->
-<div class="view" id="v-compare" hidden>
-  <p class="small muted" style="max-width:92ch">The same seven phases, one column each. Dotted links join the boxes that do the same job. Click a box to compare that phase.</p>
-  <div class="stage">
-    <div class="canvas" id="cv-compare"></div>
-    <aside class="insp" id="in-compare" aria-live="polite"></aside>
-  </div>
-  <div class="cards">
-    <div class="card"><h3>Where Claude's design wins</h3><ul class="small"><li>Nothing to compile or maintain: record, then save.</li><li>It adapts to moved buttons and unforeseen branches without anyone editing it.</li><li>It covers one-off and fuzzy tasks.</li><li>Narration is a cheap, rich channel for intent.</li></ul></div>
-    <div class="card"><h3>Where CONXA's design wins</h3><ul class="small"><li>Every normal run uses zero tokens and the same actions, which a SaaS vendor can promise its customers.</li><li>Declared, typed inputs become an MCP tool schema.</li><li>Compiled assertions check outcomes, not judgement.</li><li>The author settles ambiguity in Studio, whenever the harness is unsure; it is never improvised during a customer's run.</li><li>It runs under any MCP agent and syncs to many machines.</li></ul></div>
-  </div>
-  <h2>What CONXA could borrow</h2>
-  <div class="cards">
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>Narration as a timed intent track</h3><p class="small">Record audio, transcribe locally, align utterances on the event clock, pass them to <code>build_input</code> as timed <code>chat</code>. "This changes every month" then lands on its row instead of becoming a question.</p></div>
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>A prompt twin for every skill</h3><p class="small">Export the intent graph goal and per-step prose as a readable prompt next to the compiled steps. Tier B and <code>ai_review</code> get a stable statement of intent; authors get an editable summary.</p></div>
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>Compile from a successful agent run</h3><p class="small">Claude turns a finished chat into a shortcut. CONXA could turn a Tier B recovery that worked into a re-target, or an exploratory agent session into a segment, via <code>cmd_splice_segment</code>.</p></div>
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>Plan approval before the first real run</h3><p class="small">Show the compiled plan with irreversible steps marked and let the person approve it once, like "Approve plan". Complements the per-step guard.</p></div>
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>Schedule from Studio</h3><p class="small">The runtime already has a local scheduler (<code>scheduler_daemon.js</code>, <code>create_schedule</code>); Studio has no screen for it.</p></div>
-    <div class="card prop"><span class="chip c-prop">Proposed</span><h3>An agent span for fuzzy middles</h3><p class="small">Let an author mark one span "let the agent do this part" while the rest stays deterministic, under the same guard and invariants as <code>ai_review</code>.</p></div>
-  </div>
-</div>
-
-<!-- ───────── REFERENCE ───────── -->
-<div class="view" id="v-reference" hidden>
-  <div class="card seq"><h3>Sequence · finish recording → understanding → questions</h3><div class="scroll" id="seqA"></div></div>
-  <div class="card seq"><h3>Sequence · last pre-build answer → compile → replay → later questions</h3><div class="scroll" id="seqB"></div></div>
-  <div class="card seq"><h3>Sequence · customer run with Tier B hand-off</h3><div class="scroll" id="seqD"></div></div>
-  <div class="card"><h3>Model touchpoints</h3><div class="scroll"><table>
-    <thead><tr><th>Call</th><th>When</th><th>Writes</th><th>Held in check by</th></tr></thead><tbody>
-    <tr><td class="k">Pegasus 1.6</td><td>Once per new recording or blur change</td><td>Video segments</td><td>Browser wins in the merge; never creates steps; SHA-256 cache</td></tr>
-    <tr><td class="k"><code>timeline_understanding</code></td><td>Before compile, 1 call</td><td>Meaning, questions</td><td><code>validate()</code>: five stages, graded, every drop counted in <code>validation_report</code>; one retry on a weak answer</td></tr>
-    <tr><td class="k"><code>workflow_review</code></td><td>End of compile, 1 call</td><td>Intent graph, second-opinion findings</td><td><code>_validate_findings</code>, keyed on <code>step_key</code></td></tr>
-    <tr><td class="k"><code>clarify_question_copy</code></td><td>Background after a post-build question posts</td><td>Wording only</td><td>Field-by-field check; template kept on failure</td></tr>
-    <tr><td class="k">Chat harness</td><td>Per message</td><td>Reply, routed action, proposals</td><td>Deterministic routing first; allowed set only; Confirm cards; three gates</td></tr>
-    <tr><td class="k">Find the cause</td><td>After a failed test</td><td>Root cause in plain words + ≤ 1 proposed change, no round cap</td><td>Same gates; applied only on the person’s Apply; Undo; guard on every re-test</td></tr>
-    <tr><td class="k">Re-target</td><td>User-initiated in Human Edit</td><td>Selector strings</td><td>Explicit person action; the documented exception</td></tr>
-    <tr><td class="k">Tier B</td><td>Run time, after Tier A</td><td>Candidate nomination</td><td>Fingerprint re-validation, margin gate, parked-page check</td></tr>
-  </tbody></table></div></div>
-  <div class="card"><h3>Files between stages</h3><div class="scroll"><table>
-    <thead><tr><th>File</th><th>Written by</th><th>Read by</th></tr></thead><tbody>
-    <tr><td class="k"><code>sessions/&lt;id&gt;/events.jsonl</code>, <code>videos.json</code></td><td>Recorder</td><td>Track A/B, compiler</td></tr>
-    <tr><td class="k"><code>prepared.mp4</code>, <code>splice_map.json</code></td><td><code>prepare.py</code></td><td>Pegasus, merge</td></tr>
-    <tr><td class="k"><code>merged_timeline.json</code></td><td><code>track_b.py</code></td><td>Understanding, <code>video_context</code></td></tr>
-    <tr><td class="k"><code>understanding.json</code></td><td><code>understand_flow.py</code></td><td>Q2, description fill</td></tr>
-    <tr><td class="k"><code>decisions.json</code></td><td><code>decisions.py</code></td><td><code>replay.py</code></td></tr>
-    <tr><td class="k"><code>second_opinion.json</code></td><td><code>workflow_review.py</code></td><td>Recompile (pinned answer)</td></tr>
-    <tr><td class="k"><code>workflows/&lt;id&gt;/thread.jsonl</code>, <code>clarify.json</code></td><td>Harness, clarify store</td><td>Renderer, lifecycle</td></tr>
-    <tr><td class="k"><code>skills/&lt;id&gt;/…</code>, <code>edits.jsonl</code></td><td>Compiler, editor</td><td>Test, packager</td></tr>
-  </tbody></table></div></div>
-  <div class="cards">
-    <div class="card"><h3>Still open</h3><ul class="small">
-      <li><b>BUILD-58:</b> Human Edit's screenshot pane and re-target anchors still read stored frames that new recordings lack; renderer cards for the <code>understand</code> stage; blur toggle; runtime app-layer rebuild for <code>video_context</code>; live 5-recording trial.</li>
-      <li>Typed-text verdicts do not pre-tick the compile-time <code>values</code> question; <code>phase</code> comes from the second opinion.</li>
-      <li><b>BUILD-60:</b> no restore for dropped script events. <b>BUILD-59:</b> nothing reads <code>produces</code>/<code>consumes</code> yet.</li>
-      <li>Pegasus is a hard dependency: an outage stops every new workflow before compile.</li>
-      <li>Only the understanding check counts what it drops. The other five model guards (second opinion, question wording, chat, find-the-cause, Tier B) drop or refuse silently.</li></ul></div>
-    <div class="card"><h3>Docs that disagree with the code</h3><ul class="small">
-      <li><code>Understanding-First-Harness.md</code>: says nothing is built, video is opt-in, and there is a fallback to the old path.</li>
-      <li><code>TRD.md</code> §6.2: says keep-every-action defaults on; <code>config.py</code> has <code>False</code>.</li>
-      <li><code>TRD.md</code> §7.1: still shows frame extraction and vision anchors in the compile.</li>
-      <li><code>TRD.md</code> §6.6: says recording runs in its own window; <code>record_in_panel</code> defaults to <code>True</code>.</li></ul></div>
-  </div>
-  <p class="small muted">Sources: CONXA repository at <code>c0234b5</code> plus working tree; <a href="https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome">Get started with Claude in Chrome</a>; <a href="https://academy.claude.com/tutorials/simplify-your-browsing-experience-with-claude-for-chrome">Claude Academy tutorial</a>; <a href="https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide">permissions guide</a>; <a href="https://support.claude.com/en/articles/12138966-release-notes">release notes</a> (shortcuts 2025-09-16, scheduled tasks 2025-11-24, Record a workflow 2025-12-18).</p>
-</div>
 </div>
 
 <script>
@@ -298,7 +245,7 @@ function wrapText(s,max,lines){
 var TAG={code:'CODE',model:'MODEL',human:'PERSON',video:'VIDEO MODEL',data:'DATA'};
 var KCH={code:'c-code',model:'c-model',human:'c-human',video:'c-video',data:'c-data'};
 var KNAME={code:'Deterministic code',model:'Model · advisory',human:'Person · decides',video:'Video model · low trust',data:'Data on disk'};
-var ST={built:['c-built','Built'],partial:['c-partial','Built, unfinished'],prop:['c-prop','Proposed'],doc:['c-doc','Anthropic docs'],inf:['c-inf','Inferred']};
+var ST={off:['c-partial','Built · off by default'],built:['c-built','Built'],partial:['c-partial','Built, unfinished'],prop:['c-prop','Proposed'],doc:['c-doc','Anthropic docs'],inf:['c-inf','Inferred']};
 
 /* ═════════ vertical graph renderer: rows = phases (n.c), columns = lanes (n.l, slot n.s) ═════════ */
 function Graph(host,insp,spec){
@@ -317,6 +264,13 @@ function Graph(host,insp,spec){
     svg.appendChild(mk('text',{x:laneX[i]+w/2,y:30,'text-anchor':'middle','class':'g-lane'},l[0]));
     svg.appendChild(mk('text',{x:laneX[i]+w/2,y:H-16,'text-anchor':'middle','class':'g-lane'},l[0]));
   });
+  /* the customer boundary: everything below it runs on the customer's machine */
+  if(spec.boundary!=null){var by=HH+spec.boundary*RH,bt=spec.boundaryLabel,bw=bt.length*7.4+26;
+    svg.appendChild(mk('rect',{x:0,y:by,width:W,height:H-by-30,'class':'g-cust'}));
+    svg.appendChild(mk('line',{x1:0,y1:by,x2:W,y2:by,'class':'g-bound'}));
+    /* the label pill goes on top of every arrow, added after the nodes */
+    var pill=mk('g');pill.appendChild(mk('rect',{x:8,y:by-12,width:bw,height:24,rx:12,'class':'g-bpill'}));
+    pill.appendChild(mk('text',{x:21,y:by+4,'class':'g-btext'},bt));}
   /* phase rows */
   spec.cols.forEach(function(c,i){var y=HH+i*RH;
     svg.appendChild(mk('line',{x1:0,y1:y,x2:W,y2:y,'class':'g-row'}));
@@ -347,8 +301,9 @@ function Graph(host,insp,spec){
     }else{ /* upward: bulge out to the left */
       var xl=Math.min(a.x,b.x)-50-o;d='M'+a.x+' '+acy+' C'+xl+' '+acy+' '+xl+' '+bcy+' '+b.x+' '+bcy;lx=xl+18;ly=(acy+bcy)/2;
     }
-    var grp=mk('g',{'class':'edge e-'+e.k});
+    var grp=mk('g',{'class':'edge e-'+e.k+(e.q?' quiet':'')});
     grp.appendChild(mk('path',{d:d,'class':'l','marker-end':'url(#'+spec.id+'-m-'+e.k+')'}));
+    grp.appendChild(mk('path',{d:d,'class':'pl'}));
     if(lab){var w=lab.length*7.4+12;grp.appendChild(mk('rect',{x:lx-w/2,y:ly-10,width:w,height:19,rx:4,'class':'lbg'}));
       grp.appendChild(mk('text',{x:lx,y:ly+4,'text-anchor':'middle','class':'lb'},lab));}
     eg.appendChild(grp);g.edges.push({e:e,el:grp});
@@ -360,34 +315,52 @@ function Graph(host,insp,spec){
     grp.appendChild(mk('text',{x:p.x+11,y:p.y+19,'class':'tag'},n.tag||TAG[n.k]));
     if(n.st==='inf'||n.st==='prop')grp.appendChild(mk('text',{x:p.x+p.w-10,y:p.y+19,'text-anchor':'end','class':'tag'},n.st==='inf'?'INFERRED':'PROPOSED'));
     else if(n.v)grp.appendChild(mk('text',{x:p.x+p.w-10,y:p.y+19,'text-anchor':'end','class':'tag'},'VALIDATED'));
+    if(n.nw){grp.appendChild(mk('rect',{x:p.x+p.w-48,y:p.y-10,width:42,height:18,rx:9,'class':'newp'}));
+      grp.appendChild(mk('text',{x:p.x+p.w-27,y:p.y+3,'text-anchor':'middle','class':'newt'},'NEW'));}
     var yy=p.y+28+16;p.tl.forEach(function(t){grp.appendChild(mk('text',{x:p.x+11,y:yy,'class':'t'},t));yy+=22});
     yy+=p.sl.length?5:0;p.sl.forEach(function(t){grp.appendChild(mk('text',{x:p.x+11,y:yy-2,'class':'s'},t));yy+=17});
-    grp.addEventListener('click',function(){g.select(n.id,true)});
-    grp.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();g.select(n.id,true)}});
+    grp.addEventListener('click',function(){g.select(n.id,false)});
+    grp.addEventListener('dblclick',function(){g.open(n.id)});
+    grp.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();g.open(n.id)}else if(ev.key===' '){ev.preventDefault();g.select(n.id,false)}});
     svg.appendChild(grp);g.nodeEls[n.id]=grp;
   });
+  if(pill)svg.appendChild(pill);
   host.appendChild(svg);g.zoom(1);
   var dr=null;host.addEventListener('pointerdown',function(ev){if(ev.target.closest('.node')||ev.pointerType!=='mouse')return;dr={x:ev.clientX,l:host.scrollLeft};host.classList.add('drag')});
   window.addEventListener('pointermove',function(ev){if(dr)host.scrollLeft=dr.l-(ev.clientX-dr.x)});
   window.addEventListener('pointerup',function(){dr=null;host.classList.remove('drag')});
 }
-Graph.prototype.zoom=function(z){this.z=Math.max(.6,Math.min(1.5,z));this.svg.setAttribute('width',Math.round(this.W*this.z));this.svg.setAttribute('height',Math.round(this.H*this.z))};
+Graph.prototype.zoom=function(z){this.z=Math.max(.45,Math.min(1.5,z));this.svg.setAttribute('width',Math.round(this.W*this.z));this.svg.setAttribute('height',Math.round(this.H*this.z))};
 Graph.prototype.fit=function(){var w=this.host.clientWidth-2;if(w>50)this.zoom(Math.min(this.spec.maxZ||1.25,w/this.W))};
+Graph.prototype.reach=function(id,dir){ /* every node reachable from id, downstream (dir>0) or upstream */
+  var g=this,seen={},st=[id];while(st.length){var c=st.pop();g.spec.edges.forEach(function(e){var a=dir>0?e.f:e.t,b=dir>0?e.t:e.f;
+    if(a===c&&b!==id&&!seen[b]){seen[b]=1;st.push(b)}})}return seen};
 Graph.prototype.paint=function(){
-  var g=this,id=g.sel,near={};
-  if(id){near[id]=1;g.edges.forEach(function(x){if(x.e.f===id)near[x.e.t]=1;if(x.e.t===id)near[x.e.f]=1})}
-  g.spec.nodes.forEach(function(n){var el=g.nodeEls[n.id];el.classList.toggle('sel',n.id===id);
-    el.classList.toggle('dim',!!g.hidden[n.k]||(id&&!near[n.id]))});
-  g.edges.forEach(function(x){var on=id&&(x.e.f===id||x.e.t===id);x.el.classList.toggle('hot',!!on);
-    var hid=g.hidden[g.byId[x.e.f].k]||g.hidden[g.byId[x.e.t].k];x.el.classList.toggle('dim',!!hid||(id&&!on))});
+  var g=this,id=g.sel,near=null,hot={},hits=g.hits;
+  if(id){near={};near[id]=1;
+    if(g.trace){var up=g.reach(id,-1),dn=g.reach(id,1),on=function(m,k){return k===id||m[k]};
+      Object.keys(up).concat(Object.keys(dn)).forEach(function(k){near[k]=1});
+      g.edges.forEach(function(x,i){var e=x.e;if(e.f!==e.t&&((on(up,e.f)&&on(up,e.t))||(on(dn,e.f)&&on(dn,e.t))))hot[i]=1});}
+    else g.edges.forEach(function(x,i){if(x.e.f===id||x.e.t===id){hot[i]=1;near[x.e.f]=1;near[x.e.t]=1}});}
+  g.spec.nodes.forEach(function(n){var el=g.nodeEls[n.id];el.classList.toggle('sel',n.id===id);el.classList.toggle('hit',!!(hits&&hits[n.id]));
+    el.classList.toggle('dim',!!g.hidden[n.k]||(near?!near[n.id]:(hits?!hits[n.id]:false)))});
+  g.edges.forEach(function(x,i){x.el.classList.toggle('hot',!!hot[i]);
+    var hid=g.hidden[g.byId[x.e.f].k]||g.hidden[g.byId[x.e.t].k];x.el.classList.toggle('dim',!!hid||(near?!hot[i]:!!hits))});
 };
-Graph.prototype.select=function(id,scroll){
-  var g=this;g.sel=id;g.paint();var n=g.byId[id];
-  g.insp.innerHTML='<button type="button" class="close" data-close>Close ✕</button>'+g.spec.panel(n,g);g.insp.scrollTop=0;
-  g.insp.querySelector('[data-close]').addEventListener('click',function(){g.insp.classList.remove('open')});
-  g.insp.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){g.select(b.dataset.go,true)})});
-  if(g.spec.after)g.spec.after(n,g.insp);
-  if(scroll){g.insp.classList.add('open');g.nodeEls[id].scrollIntoView({behavior:'smooth',block:'center',inline:'center'})}
+Graph.prototype.select=function(id,scroll){ /* highlight only; null clears */
+  var g=this;g.sel=id||null;g.paint();
+  if(id&&scroll)g.nodeEls[id].scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+};
+Graph.prototype.open=function(id){ /* details in a modal popup */
+  var g=this,d=g.insp,n=g.byId[id];g.select(id,false);
+  d.innerHTML='<div class="top"><button type="button" class="close" data-close>Close ✕</button></div><div class="body">'+g.spec.panel(n,g)+'</div>';
+  var h=d.querySelector('h2');if(h)h.id='pop-title';
+  d.querySelector('[data-close]').addEventListener('click',function(){d.close()});
+  d.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){g.open(b.dataset.go)})});
+  if(g.spec.after)g.spec.after(n,d);
+  if(!d.open)d.showModal();d.scrollTop=0;
+  if(!g._wired){g._wired=1;d.addEventListener('click',function(ev){if(ev.target===d)d.close()});
+    d.addEventListener('close',function(){if(g.sel&&g.nodeEls[g.sel])g.nodeEls[g.sel].focus({preventScroll:true})});}
 };
 
 /* The validate contract: every model answer is held to these five stages, in this order. */
@@ -397,7 +370,8 @@ function vList(v){return '<ul>'+VSTAGES.map(function(s){return '<li><b>'+s[1]+'<
 function panel(n,g){
   var d=n.d||{},h='<div class="hd"><div class="chips"><span class="chip '+KCH[n.k]+'">'+KNAME[n.k]+'</span>';
   if(n.st)h+='<span class="chip '+ST[n.st][0]+'">'+ST[n.st][1]+'</span>';
-  h+='</div><h2>'+esc(n.t)+'</h2><p class="sum">'+d.sum+'</p></div>';
+  if(n.nw)h+='<span class="chip c-doc">New 2026-11-06</span>';
+  h+='</div><p class="where">Phase '+String(n.c+1).padStart(2,'0')+' · '+esc(g.spec.cols[n.c])+' · '+esc(g.spec.lanes[n.l][0])+'</p><h2>'+esc(n.t)+'</h2><p class="sum">'+d.sum+'</p></div>';
   if(d.does)h+='<section><h4>What happens inside</h4><ol>'+d.does.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ol></section>';
   if(d.inp||d.out)h+='<div class="io"><div><b>In</b>'+(d.inp||'—')+'</div><div><b>Out</b>'+(d.out||'—')+'</div></div>';
   if(d.extra)h+=d.extra;
@@ -413,9 +387,10 @@ function panel(n,g){
 }
 
 /* ═════════ CONXA graph data ═════════ */
-var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
+var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,slotW:212,nodeW:186,
+ boundary:9,boundaryLabel:'Below this line: the customer’s machine · 0 tokens on a normal run',
  cols:['Record','Prepare','Watch & merge','Understand','Ask','Compile','Replay & ask more','Test','Approve & ship','Execute','Recover'],
- lanes:[['Person',1],['Studio engine',2],['Cloud · video',1],['Models',1],['Customer runtime',1]],
+ lanes:[['Person',1],['Studio engine',3],['Cloud · video',1],['Models',2],['Customer runtime',2]],
  nodes:[
  {id:'rec_p',c:0,l:0,k:'human',st:'built',t:'Describe & record',sub:'task, sign-in, one run',d:{
    sum:'The person names the task, signs into its apps once (saved per group), and does it once in Studio’s browser panel. While recording they can pause, type in the chat, and mark any value “Changes each run?”.',
@@ -462,7 +437,7 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    shape:'types, lengths and enums; input names snake-cased and unique',reference:'an unknown candidate ref, row or effect is dropped',
    override:'a decision popup is always a fork; typed text is never asked about; the person’s recording-time answer wins',
    backfill:'must-ask moments and skipped list picks are put back, unticked',safety:'<code>no_confirm</code> is never pre-filled; a fork never carries a guess',
-   lg:'Counted: <code>validation_report</code> in understanding.json, with a grade and one retry.'},d:{
+   lg:'Counted: <code>validation_report</code> in understanding.json, with a grade and one retry; the model ledger holds a copy.'},d:{
    sum:'One text call reads the merged timeline and writes the meaning of the task, which values vary, and the questions worth asking. It never sees or writes a selector.',
    does:['Input: up to 250 rows (values cut to 80 chars, passwords <code>(hidden)</code>, emails scrubbed), <code>task</code>, <code>chat</code>, <code>candidates</code>, <code>must_ask</code>.','Candidates: page addresses (≤ 8), clicked labels (≤ 6), typed text (≤ 6), plus a separate allowance for items picked from a list (<code>peers ≥ 3</code>).','The prompt tells it to settle what it can and list each point in <code>decided</code> with a reason. Most recordings need 0–3 questions. It must never answer a fork or confirm itself, and never ask about gaps.','A reply that arrives but grades <code>weak</code> or <code>unusable</code> is asked for once more, with the reasons; the better answer is kept.'],
    extra:'<section><h4>Output schema</h4><pre>{ goal, short_summary,\n  values:[{ref, verdict: fixed|varies|unsure,\n           name, literal}],\n  gaps:[{row, note}],\n  detailed_summary:[{row, text}],\n  decided:[{row, text, reason}],\n  questions:[{effect, row, ref, prompt, why,\n              choices, best_guess, cost_rank}] }</pre></section>',
@@ -508,7 +483,7 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    shape:'finding kind, placeholder name, phase and assertion type are checked',reference:'an unknown <code>step_key</code> is dropped',
    override:'<code>suggest_optional</code> only on a step the recorder flagged; <code>flag_noise</code> only with the recorder’s own evidence',
    backfill:'—',safety:'about one finding per two steps at most; never touches the selector fields; assertions are <code>required=False</code>',
-   lg:'Not counted: it drops silently (see Still open).'},d:{
+   lg:'Counted: <code>second_opinion</code> lines in <code>model_ledger.jsonl</code>.'},d:{
    sum:'One text call over the whole compiled workflow. It writes meaning into the program and never touches element addresses.',
    does:['Intent graph: goal, per-step intent token and prose (backfills <code>semantic_description</code>).','Findings: <code>rename_binding</code>, <code>parameterize_literal</code>, <code>label_phase</code>, <code>suggest_optional</code> (only on recorder-flagged steps), <code>suggest_assertion</code> (text/URL/state types, <code>required=False</code>), <code>flag_noise</code> (archived, not deleted).','The answer is pinned in <code>second_opinion.json</code> by input hash, so a recompile replays it without a call.'],
    guard:['Never touches <code>target</code>, <code>identity_bundle</code>, <code>compiled_selectors</code>, waits, frames or tabs.','Validated by <code>_validate_findings</code>; keyed on <code>step_key</code>; at most about 1 finding per 2 steps.','Human Review is the gate.'],
@@ -519,7 +494,7 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    files:['conxa_core/models/skill_spec.py','compiler/video_context.py']}},
  {id:'rep',c:6,l:1,s:0,k:'code',st:'built',t:'Replay decisions',sub:'same edits a button uses',d:{
    sum:'Applies the stored answers to the freshly compiled workflow, through the very same <code>clarify.plan_answer</code> a card uses. There is no second editing path.',
-   does:['Match each decision to the step its recorded event became (<code>step.source_event</code>).','value “varies” → <code>parameterize_literal</code> (URL, row id) or <code>parameterize_click_text</code> (label → <code>{{name}}</code> in text signals, fingerprint and selectors), input declared with the recorded default.','upload → upload question (input/fixed); confirm_before → confirm (inserts a confirm-only <code>ai_review</code>); popup_dismiss → <code>try_dismiss</code>; fork → only the popup its own event became.','Each group applied all-or-nothing; edit-logged.'],
+   does:['Match each decision to the step its recorded event became (<code>step.source_event</code>).','value “varies” → <code>parameterize_literal</code> (URL, row id) or <code>parameterize_click_text</code> (label → <code>{{name}}</code> in text signals, fingerprint and selectors), input declared with the recorded default.','upload → upload question (input/fixed); confirm_before → confirm (inserts a confirm-only question span: an <code>agent_span</code> with no actions and an answer <code>{confirmed}</code>); popup_dismiss → <code>try_dismiss</code>; fork → only the popup its own event became.','Each group applied all-or-nothing; edit-logged.'],
    fail:'An answer that matches nothing or cannot be applied is said once in chat. Never dropped quietly.',
    files:['conversation/replay.py · plan','handlers/understand_flow.py · _flow_replay_decisions','editor/workflow_mutations.py']}},
  {id:'q2b',c:6,l:1,s:1,k:'code',st:'built',t:'Later questions',sub:'found in the compiled doc',d:{
@@ -533,7 +508,7 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
  {id:'cop',c:6,l:3,k:'model',st:'built',t:'Chat copilot',sub:'proposes, never applies',v:{
    shape:'—',reference:'a chosen answer must be on the card, else “unclear”; an action must be in <code>allowed_actions</code>',
    override:'routing is deterministic first; the model only sees what is left',backfill:'—',
-   safety:'three gates, <code>patch_gate</code>, a Confirm card for side effects, Undo on every applied change',lg:'Not counted.'},d:{
+   safety:'three gates, <code>patch_gate</code>, a Confirm card for side effects, Undo on every applied change',lg:'Counted: <code>chat_route_intent</code> and <code>chat_change_cards</code> in the model ledger.'},d:{
    sum:'<code>copilot_diagnose</code> reads a 12k-token context pack and proposes edits. The reviewer disposes.',
    files:['conversation/context_pack.py','llm/copilot.py']}},
  {id:'test',c:7,l:1,s:0,k:'code',st:'built',t:'Sandbox test',sub:'real runtime, ceiling 2',d:{
@@ -541,10 +516,10 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    does:['Offered only when no question is unanswered: <code>lifecycle</code> leaves <code>test</code> out, and <code>_require_allowed</code> enforces it for every entry point.','Inputs pre-filled with recorded values; a test build skips approval.','<code>_pause_before_irreversible</code> parks before the first <code>destructive</code> step.','An engine without the <code>test_guard</code> capability only previews (dry run, never a pass).','Expired sign-in → <code>needs_sign_in</code>: not a failure, nothing investigated.'],
    files:['handlers/test_flow.py','conxa_compile/conxa_runtime.py','runtime/app/run.js · executeOneStep']}},
  {id:'guard',c:7,l:0,k:'human',st:'built',t:'Guard decision',sub:'run for real or stop here',d:{
-   sum:'Before anything irreversible the test stops and asks: <b>Run the last N for real</b>, or <b>End the test here</b> (“passed up to X”, which is not a pass). A confirm-only <code>ai_review</code> is answered by the person, never the sandbox model.'}},
+   sum:'Before anything irreversible the test stops and asks: <b>Run the last N for real</b>, or <b>End the test here</b> (“passed up to X”, which is not a pass). A confirm-only question span is answered by the person, never the sandbox model.'}},
  {id:'fix',c:7,l:3,k:'model',st:'built',t:'Find the cause',sub:'explains · you approve',v:{
    shape:'same gates as the copilot',reference:'same gates as the copilot',override:'—',backfill:'—',
-   safety:'at most one change per failure, applied only when the person presses Apply, Undo, the guard stays on for every re-test',lg:'Not counted.'},d:{
+   safety:'at most one change per failure, applied only when the person presses Apply, Undo, the guard stays on for every re-test',lg:'Its proposals pass the same change-card gates as chat.'},d:{
    sum:'After a failed test (Settings switch, default on): diagnose → say the root cause in plain words → at most one proposal → same gates → a change card. Nothing is applied until the person presses Apply (or types their own fix in chat, which becomes the same kind of card). Apply rebuilds and re-tests at once with the guard on; a new failure starts a new round, with no cap. It also ends on Stop, or when no proposal passes the gates (then it asks how the person would fix it).',
    guard:['Outside the recovery cascade; Tier A stays zero-token.','Nothing changes without the person’s Apply; every change is listed with Undo and edit-logged like any reviewer Apply.'],
    files:['handlers/test_flow.py · _tf_investigate, _tf_propose_fix, _tf_retest_after_fix']}},
@@ -552,21 +527,64 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
    sum:'A separate human act after a pass. <code>Workflow.signed_off</code> is the only approval truth; any later write to the skill clears it. Refused while any question is unanswered.',
    files:['handlers/test_flow.py · cmd_flow_approve']}},
  {id:'pack',c:8,l:1,s:0,k:'code',st:'built',t:'Package',sub:'data-only output',d:{
-   sum:'Emits execution, recovery, inputs, manifest and validation JSON. Auth files and storage state never enter the output.',
+   sum:'Emits execution, recovery, inputs, manifest and validation JSON. Auth files and storage state never enter the output. A skill with an agent span says <code>uses_agent: true</code> and requires the <code>agent_span_v2</code> capability.',
    files:['conxa_compile/skill_package_builder.py']}},
  {id:'pub',c:8,l:2,k:'code',st:'built',t:'Publish & sync',sub:'versioned release, delta',d:{
    sum:'Publish is the versioned release (refused, like Build Installer, while any question is unanswered). The installer stages only <code>pack.json</code>; <code>runtime/sync.js</code> pulls every skill by SHA-256 delta with atomic writes. Recovery artifacts come in a second, non-blocking pass.',
    files:['conxa-cloud/backend/app/api/publish*.py','runtime/sync.js','runtime/app/artifact_store.js']}},
  {id:'cust',c:9,l:0,k:'human',st:'built',t:'Customer asks',sub:'chat or schedule',d:{
-   sum:'An end user asks their agent to do the task, or a local schedule fires (<code>scheduler_daemon.js</code>, no cloud queue).'}},
+   sum:'An end user asks their agent to do the task, or a local schedule fires (<code>scheduler_daemon.js</code>, no cloud queue). <code>create_schedule</code> refuses a skill with an agent span, because it is not zero-token.'}},
  {id:'agent',c:9,l:3,k:'model',st:'built',t:'Agent host',sub:'Claude Desktop · any MCP',d:{
-   sum:'Calls <code>execute_skill</code> with typed inputs from the skill’s schema. It does not drive the browser; the runtime does.'}},
+   sum:'Calls <code>execute_skill</code> with typed inputs from the skill’s schema. Outside an agent span it never drives the browser; the runtime does. Inside a span it is the brain: each round it sends one action on an element number the runtime listed, never a selector.',
+   does:['Tier B: receives the armed payload and nominates a <code>candidate_index</code>.','Agent span: reads the numbered elements, screenshot and tabs; asks the person in chat before an irreversible-looking click.','An unrecorded decision popup may be put to it: it picks one of the popup’s own buttons, asking the person when unsure.']}},
  {id:'loop',c:9,l:4,k:'code',st:'built',t:'Step loop',sub:'resolve → GATE → act → VERIFY',d:{
    sum:'Deterministic replay, bounded at 210 s per run.',
-   does:['Wait for page load after navigation; URL gate.','<code>resolveStepPage</code>: the step’s own recorded tab, or fail.','Interpolate <code>{{inputs}}</code>; <code>resolveStep</code> walks signals by durability. A multi-match is accepted only if the winner clears a <b>0.15</b> margin over the runner-up.','GATE: attached → visible → RAF-stable → enabled. Act.','VERIFY assertions independently (250 ms polling; negatives must hold 500 ms).','Checkpoint and telemetry per step.'],
+   does:['Wait for page load after navigation; URL gate.','<code>resolveStepPage</code>: the step’s own recorded tab, or fail.','Interpolate <code>{{inputs}}</code>; <code>resolveStep</code> walks signals by durability. A multi-match is accepted only if the winner clears a <b>0.15</b> margin over the runner-up.','GATE: attached → visible → RAF-stable → enabled. Act.','VERIFY assertions independently (250 ms polling; negatives must hold 500 ms).','Checkpoint and telemetry per step.','Several runs may be active at once (default up to 5); two runs on the same external site still take turns (<code>host_lock.js</code>).'],
    guard:['Never blindly takes <code>candidate[0]</code>.','Never answers a decision popup on anyone’s behalf.'],
    files:['runtime/app/run.js','runtime/resolver.js · resolve_adapter.js','runtime/app/tabs.js · assertions.js']}},
- {id:'tierA',c:10,l:4,k:'code',st:'built',t:'Tier A reflex',sub:'0 tokens',d:{
+ {id:'vjob',c:2,l:1,s:2,k:'data',st:'built',nw:1,t:'video_job.json',sub:'resumable cloud wait',d:{
+   sum:'Pegasus is required, so the wait on it must outlive one request and one Studio session. This record keeps the cloud job id, the tries so far and when the next try is due.',
+   does:['States: <code>polling</code> (a cloud job exists), <code>waiting_cloud</code> (the budget ran out; next try scheduled), <code>done</code>, <code>blocked</code> (quota, trial, signed out: only a person can fix it), <code>failed</code> (the cloud could not read the video, or the 24-hour wait ended).','At Studio start a background thread polls every active job again instead of uploading the video a second time.','The video cache, keyed by the prepared video’s fingerprint, is still checked first.'],
+   files:['conxa_compile/video/job.py · VideoJob','handlers/understand_flow.py · _resume_video_jobs','backend.py (startup thread)']}},
+ {id:'ledger',c:4,l:3,s:1,k:'data',st:'built',nw:1,t:'model_ledger.jsonl',sub:'every guard counts its drops',d:{
+   sum:'One counter for what a guard does to a model answer. The understanding check always counted each rule it applied; the same five-stage counter now runs behind the other Studio guards, so a bad prompt shows up as a number instead of a silence.',
+   does:['One line per call: the task, a count and an example for each rule in each stage (shape, reference, override, backfill, safety), the prompt version and the grade.','Tasks counted today: <code>timeline_understanding</code>, <code>second_opinion</code>, <code>clarify_question_copy</code>, <code>chat_route_intent</code>, <code>chat_change_cards</code>, <code>agent_span</code>.','An example is always an id (a step key, a question id, a candidate ref), never model text or page text, so a line holds no customer data.','Human Review shows the newest line per task. <code>SKILL_MODEL_LEDGER=observe</code> by default; <code>off</code> stops the file.'],
+   guard:['A guard still decides what it keeps; the ledger only records what it did.','Tier B does not write to it yet.'],
+   files:['conxa_compile/llm/model_ledger.py · entry, append, last_per_task','conxa_core/config.py · model_ledger']}},
+ {id:'score',c:4,l:1,s:2,k:'code',st:'off',nw:1,t:'Ask or assume',sub:'chance wrong × cost',d:{
+   sum:'Decides for each question whether to ask, confirm, assume, or assume and show it, from the chance the default is wrong times the cost of being wrong. The switch <code>SKILL_CLARIFY_SCORING</code> is <code>off</code> by default; <code>shadow</code> computes the decision and changes nothing.',
+   does:['<code>unknowns.py</code> labels every question with a facet and an event-id slot; <code>scoring.py</code> picks the action.','An assumed question has status <code>assumed</code>: it is not a question, blocks nothing, and stays reachable (“ask me”).','A <code>defer</code> decision is ignored: a question that is asked stays open until answered.','<code>answer_memory</code> and the second-read audit may raise or lower confidence or add a <code>note</code>; neither answers anything.'],
+   guard:['A decision popup, a step that cannot be undone and any unsafe guess always ask.','A question asked before the build is never assumed, because a guess counts only on Confirm.'],
+   files:['conversation/unknowns.py','conversation/scoring.py','conversation/answer_memory.py']}},
+ {id:'cards',c:6,l:1,s:2,k:'code',st:'built',nw:1,t:'Change cards',sub:'patch gate · one undo',d:{
+   sum:'Turns a chat proposal into a pending change card; only the person’s Apply writes it. Chat can edit any field Human Edit can for that kind of step, inside loop bodies too, except the element-address keys.',
+   does:['Editable fields come from <code>capability_manifest.editable_fields</code>, minus <code>ADDRESS_KEYS</code> (<code>target</code>, <code>identity_bundle</code>, <code>compiled_selectors</code>, <code>check_selector</code>, <code>signals</code>, <code>frame</code>, <code>action</code>, <code>recovery</code>, <code>branch</code>, <code>for_each</code>).','Structural ops: insert, delete and move steps (also in a loop body), <code>set_popup_decision</code>, <code>flatten_popup</code>, <code>set_date_offset</code>, <code>retarget_from_step</code>, <code>rename_workflow</code>, and adding an <code>agent_span</code> whose goal the model writes.','<code>retarget_from_step</code>: the model names an existing step and code copies that step’s identity. An element no step uses goes to the re-target wizard through a <code>needs_editor</code> link card.','A popup-answer card takes its button label from the fork, never from the model; pressing Apply is the author’s approval.','Each op is dry-run through the patch gate before its card appears; applied changes land in one undo batch.'],
+   guard:['The model never writes or sees a selector here.','While a card is unapplied, <code>test</code> is not allowed.'],
+   files:['editor/copilot_proposals.py','editor/capability_manifest.py · editable_fields','editor/patch_gate.py · workflow_mutations.py']}},
+ {id:'rtv',c:6,l:3,s:1,k:'model',st:'built',nw:1,t:'Re-target wizard',sub:'region_selector · vision',d:{
+   sum:'The one place a model proposes an element address, and only when the person asks. In Human Edit the person draws a box on a frame; a vision call reads that frame with the region highlighted, plus the recorded DOM.',
+   does:['<code>video/frame_at.py</code> cuts the one frame on demand; no recording stores per-element geometry a text prompt could use.','<code>editor/retarget.py</code> → <code>llm/region_selector_vision.py</code> (task <code>region_selector</code>).','The other user-started exception is the 1-click fix, which re-runs selector generation against the original DOM snapshot (<code>compiler/patch.py</code>).'],
+   guard:['User-started only; never on the primary compile path.'],
+   files:['editor/retarget.py','llm/region_selector_vision.py','video/frame_at.py']}},
+ {id:'spanT',c:7,l:3,s:1,k:'model',st:'built',nw:1,t:'Sandbox agent',sub:'drives spans in a test',d:{
+   sum:'A Studio test has no Claude Desktop, so a Studio model stands in for the caller’s agent on each <code>agent_span</code>, one action per call. Its answer is held to what the runtime would accept.',
+   does:['Text route first, one fallback to the vision route on a provider failure. Metered as <code>ai_credits</code>.','<code>check_span_answer</code> refuses what the runtime would refuse; each refusal is counted in the model ledger as <code>agent_span</code>.','A model that cannot answer gives the span up with a reason.'],
+   guard:['A confirm-only question span and an irreversible-looking click go to the person, never to this model.'],
+   files:['handlers/workflows.py · _answer_agent_span, check_span_answer','handlers/test_flow.py · _is_confirm_only_span']}},
+ {id:'spanR',c:9,l:4,s:1,k:'code',st:'built',nw:1,t:'Agent span',sub:'one agent action a round',d:{
+   sum:'An author-placed span the caller’s agent carries out one action at a time, Browser-Use style. Each round the runtime lists the elements it can see, numbered, with the workflow’s context, a screenshot and the tabs. The agent nominates one action; the runtime checks it and does it through Playwright.',
+   does:['Actions: <code>click</code>, <code>fill</code>, <code>select</code>, <code>scroll</code>, <code>send_keys</code>, <code>navigate</code>, <code>go_back</code>, <code>open_tab</code>, <code>switch_tab</code>, <code>close_tab</code>, <code>wait</code>, <code>read_text</code>, <code>done</code>, <code>give_up</code>.','Checks: an action the author allowed; an element number from the list just sent, still on the page; not disabled, a password, a file or hidden field; an http(s) address (any site).','Ends on <code>done</code>, the author’s <code>until</code> check, or the budget. A refused nomination spends no budget.','A span with no actions and an <code>answer</code> schema is a question; the answer is bound into <code>inputs</code>. This replaced <code>ai_review</code>.'],
+   guard:['Never reaches the selector resolver or the recovery cascade.','Page text is untrusted data; SG-24 tracks the prompt-injection risk.','Fails closed on a schedule, in a dry run, in a loop or option, and inside a called workflow.'],
+   files:['runtime/app/agent_span.js','runtime/app/fork.js · isIrreversibleLabel']}},
+ {id:'conf',c:10,l:0,k:'human',st:'built',nw:1,t:'Confirm in chat',sub:'irreversible-looking click',d:{
+   sum:'Inside a span, a click whose label looks irreversible is refused until the agent has asked the person in chat and repeats the action with <code>user_confirmed: true</code>. A decision popup inside a span is answered by the agent from its own visible buttons, asking the person when unsure, under the same rule.',
+   files:['runtime/app/agent_span.js','runtime/app/fork.js · isIrreversibleLabel']}},
+ {id:'fault',c:10,l:4,s:0,k:'code',st:'built',nw:1,t:'Fault check',sub:'did the app say no?',d:{
+   sum:'Before any recovery, a failed step is checked for the app refusing: offline, a 401/403/404/429/5xx the page got after the step started, or an alert or invalid-field message on a step that already acted. Then the run stops with a typed reason; no Tier A remedy and no Tier B round is spent.',
+   does:['A response status after the step started, or the browser being offline, counts for any step: the page did not write it.','The app’s own alert text counts only when the step may already have acted, so a stale alert is not blamed on it.','A popup that offers a choice is never a fault.'],
+   guard:['Evidence is narrow on purpose: a wrong “fault” ends a run that recovery could have healed.'],
+   files:['runtime/app/fault_classify.js','runtime/app/page_status.js','runtime/app/run.js · detectFault']}},
+ {id:'tierA',c:10,l:4,s:1,k:'code',st:'built',t:'Tier A reflex',sub:'0 tokens',d:{
    sum:'Fixes <i>when</i>, never <i>which</i>: exception ladder (re-resolve, scroll, dismiss known overlays, wait stable/enabled/navigation), a11y re-probe (skipped on destructive steps), re-hover, dialog scope.',
    files:['runtime/app/cascade.js','runtime/recovery.js']}},
  {id:'tierB',c:10,l:3,k:'model',st:'built',t:'Tier B nomination',sub:'via the caller’s agent',v:{
@@ -580,75 +598,24 @@ var CONXA={id:'cx',label:'CONXA workflow graph',panel:panel,
  {f:'rec_p',t:'rec',k:'flow'},{f:'rec',t:'evt',k:'data'},
  {f:'evt',t:'trB',k:'data'},{f:'evt',t:'trA',k:'data'},
  {f:'trA',t:'peg',k:'video',lb:'prepared.mp4'},{f:'peg',t:'merge',k:'video',lb:'segments'},
- {f:'trB',t:'merge',k:'data',lb:'timed events'},
+ {f:'trB',t:'merge',k:'data',lb:'timed events'},{f:'peg',t:'vjob',k:'data'},
  {f:'merge',t:'und',k:'model',lb:'rows + candidates'},{f:'und',t:'proxy',k:'model'},
  {f:'und',t:'val',k:'model',lb:'raw answer'},{f:'val',t:'undj',k:'data'},{f:'val',t:'qb',k:'flow'},
- {f:'qb',t:'q1',k:'gate'},{f:'q1',t:'dec',k:'data',lb:'stored by event'},
+ {f:'qb',t:'q1',k:'gate'},{f:'qb',t:'score',k:'flow',q:1},{f:'score',t:'q1',k:'gate',q:1,lb:'ask'},{f:'val',t:'ledger',k:'data',q:1,lb:'counts'},{f:'q1',t:'dec',k:'data',lb:'stored by event'},
  {f:'dec',t:'comp',k:'gate',lb:'last pre-build answer'},{f:'credit',t:'comp',k:'flow',lb:'credit'},
  {f:'comp',t:'rev',k:'model',lb:'steps as text'},{f:'rev',t:'pkg',k:'model',o:26,lb:'intent + findings'},{f:'comp',t:'pkg',k:'data'},
  {f:'pkg',t:'rep',k:'data'},{f:'dec',t:'rep',k:'data',lb:'replay'},
- {f:'rep',t:'q2b',k:'flow'},{f:'q2b',t:'q2',k:'gate'},{f:'cop',t:'q2',k:'model',o:30,lb:'proposal'},
+ {f:'rep',t:'q2b',k:'flow'},{f:'q2b',t:'q2',k:'gate'},{f:'cop',t:'cards',k:'model',lb:'proposal'},{f:'cards',t:'q2',k:'gate',lb:'Apply'},{f:'cop',t:'ledger',k:'data',q:1},{f:'rev',t:'ledger',k:'data',q:1},{f:'q2',t:'rtv',k:'gate',lb:'draw a region'},{f:'rtv',t:'pkg',k:'model',q:1,lb:'new address'},
  {f:'q2',t:'test',k:'gate',lb:'nothing unanswered'},
  {f:'test',t:'guard',k:'gate',o:-12},{f:'guard',t:'test',k:'flow',o:12},
- {f:'test',t:'fix',k:'model',lb:'on failure'},{f:'fix',t:'test',k:'gate',lb:'you Apply → re-test'},
+ {f:'test',t:'fix',k:'model',lb:'on failure'},{f:'test',t:'spanT',k:'model',o:26,lb:'span round'},{f:'spanT',t:'ledger',k:'data',q:1},{f:'fix',t:'test',k:'gate',lb:'you Apply → re-test'},
  {f:'test',t:'appr',k:'gate',lb:'pass'},{f:'appr',t:'pack',k:'flow'},{f:'pack',t:'pub',k:'data',lb:'release'},
  {f:'pub',t:'loop',k:'data',lb:'delta sync'},{f:'cust',t:'agent',k:'flow',lb:'asks'},
- {f:'agent',t:'loop',k:'flow'},
- {f:'loop',t:'tierA',k:'flow',lb:'no unique match'},{f:'tierA',t:'tierB',k:'model'},
+ {f:'agent',t:'loop',k:'flow'},{f:'loop',t:'spanR',k:'flow'},{f:'spanR',t:'agent',k:'model',lb:'numbered elements'},{f:'agent',t:'spanR',k:'model',q:1,o:22,lb:'one action'},{f:'agent',t:'conf',k:'gate',lb:'asks first'},
+ {f:'loop',t:'fault',k:'flow',lb:'step failed'},{f:'fault',t:'tierA',k:'flow'},{f:'tierA',t:'tierB',k:'model'},
  {f:'tierB',t:'agent',k:'model',lb:'armed payload'}
  ]};
-var WALK=['rec_p','rec','evt','trB','trA','peg','merge','und','val','qb','q1','dec','comp','rev','pkg','rep','q2b','q2','test','guard','fix','appr','pub','agent','loop','tierA','tierB'];
-
-/* ═════════ Claude graph data ═════════ */
-var CLAUDE={id:'cl',label:'Claude in Chrome Record workflow graph',panel:panel,slotW:250,nodeW:212,
- cols:['Capture','Generalise','Artifact','Trigger','Guardrails','Run','Finish'],
- lanes:[['Person',1],['Chrome extension',1],['Claude model',1],['Web page',1]],
- nodes:[
- {id:'c_rec',c:0,l:0,k:'human',st:'doc',t:'Start recording',sub:'record icon or / menu',d:{sum:'Click the record icon in the extension panel, or type <code>/</code> and pick “Record workflow”. Available in the classic side panel only; not when the side panel runs as a Cowork session.'}},
- {id:'c_cap',c:0,l:1,k:'code',st:'doc',t:'Watch and listen',sub:'clicks · typing · voice',d:{sum:'The Academy tutorial says you do the task “clicking, typing, and narrating, while Claude watches your screen and listens to your voice”. The Help Center says only “perform the steps”. No element-level capture format is described anywhere.'}},
- {id:'c_sum',c:1,l:2,k:'model',st:'doc',t:'Write the shortcut',sub:'summarise what you did',d:{sum:'“Claude generates a shortcut.” How it turns the recording into words (which frames, which model) is not documented.',guard:['No validation step is documented between what the model writes and what is saved.']}},
- {id:'c_sc',c:2,l:1,k:'data',st:'doc',t:'Shortcut',sub:'name · prompt · start URL',d:{sum:'“A name, a prompt describing what you did, and the starting URL.” This is a natural-language prompt, not a script: no selectors, assertions or input schema are mentioned. Sample shortcuts read like “Fill out this vendor application… Pause before submitting for my review”.'}},
- {id:'c_edit',c:2,l:0,k:'human',st:'doc',t:'Edit or delete',sub:'extension settings',d:{sum:'Shortcuts can be edited or deleted in the extension settings. Whether the generated prompt can be reviewed before the first save is not stated.'}},
- {id:'c_run',c:3,l:0,k:'human',st:'doc',t:'Type /name',sub:'run on demand',d:{sum:'Typing <code>/</code> lists saved shortcuts; picking one runs it. In this Claude Code session the extension also exposes <code>shortcuts_list</code> and <code>shortcuts_execute</code> as agent tools.'}},
- {id:'c_sched',c:3,l:1,k:'code',st:'doc',t:'Schedule',sub:'clock icon',d:{sum:'Daily, weekly, monthly or annually, with a chosen model and time. Claude notifies you when it finishes or needs input. Background work continues while Chrome is open. Anthropic advises scheduling only once a workflow “runs reliably”.'}},
- {id:'c_mode',c:4,l:1,k:'code',st:'doc',t:'Permission mode',sub:'manual · auto · skip',d:{sum:'<b>Manually approve</b>: in the classic panel Claude first shows a plan (sites, approach) to approve. <b>Automatically approve</b>: each action is safety-reviewed; repeated blocks fall back to asking. <b>Skip all approvals</b>: nothing checks automatically.'}},
- {id:'c_plan',c:4,l:0,k:'human',st:'doc',t:'Approve plan',sub:'classic manual mode',d:{sum:'The person clicks “Approve plan” or “Make changes”. Claude then stays inside the plan and still asks before downloads or sensitive input.'}},
- {id:'c_block',c:5,l:1,k:'code',st:'doc',t:'Hard prohibitions',sub:'in every mode',d:{sum:'Never: purchases or financial transactions, creating accounts, handling card or ID data, permanent deletions, following instructions found in emails or web content, modifying system files. Org admins can add allow and block lists.'}},
- {id:'c_loop',c:5,l:2,k:'model',st:'inf',t:'Agent loop',sub:'observe → reason → act',d:{sum:'Because the artifact is a prompt, the browser agent reads the live page and decides each action again on every run. Anthropic’s pages do not say this outright; it follows from the shortcut being a prompt and from the docs saying Claude recognises buttons and forms “the same way you do”.',guard:['Cost and behaviour scale with the model’s reasoning on each run (inferred).']}},
- {id:'c_page',c:5,l:3,k:'data',t:'Live page',sub:'screenshots · DOM reads',d:{sum:'Observed through screenshots and page reads; acted on with clicks and typing (extension permissions <code>debugger</code>, <code>webNavigation</code>).'}},
- {id:'c_ask',c:6,l:0,k:'human',st:'doc',t:'Asked when needed',sub:'downloads · sensitive input',d:{sum:'Even with “always allow” on a site, Claude asks before downloading a file, entering potentially sensitive information, or granting authorizations.'}},
- {id:'c_done',c:6,l:1,k:'code',st:'doc',t:'Result',sub:'notification',d:{sum:'The run ends in the conversation; scheduled runs notify. No memory across sessions (Academy).'}}
- ],
- edges:[
- {f:'c_rec',t:'c_cap',k:'flow'},{f:'c_cap',t:'c_sum',k:'model',lb:'recording'},{f:'c_sum',t:'c_sc',k:'model',lb:'writes'},
- {f:'c_edit',t:'c_sc',k:'gate'},{f:'c_sc',t:'c_run',k:'data'},{f:'c_sc',t:'c_sched',k:'data'},
- {f:'c_run',t:'c_mode',k:'flow'},{f:'c_sched',t:'c_mode',k:'flow'},{f:'c_mode',t:'c_plan',k:'gate'},
- {f:'c_plan',t:'c_loop',k:'gate',lb:'approved plan'},{f:'c_mode',t:'c_loop',k:'flow',o:-14},
- {f:'c_loop',t:'c_page',k:'model',o:-12},{f:'c_page',t:'c_loop',k:'data',o:12},{f:'c_loop',t:'c_loop',k:'model',lb:'every step'},
- {f:'c_block',t:'c_loop',k:'gate'},{f:'c_loop',t:'c_ask',k:'gate',lb:'needs input'},{f:'c_loop',t:'c_done',k:'flow'}
- ]};
-
-/* ═════════ Compare graph ═════════ */
-var PH=[
- ['Capture','Screen, clicks, typing and voice; capture format not documented.','Instrumented events with element context, ms timing, tab/iframe chain, provenance; per-tab video; typed chat; “changes each run?” hints. No voice.','CONXA keeps far more structure; Claude keeps the person’s spoken intent.'],
- ['Make sense of it','The model writes a prompt describing what you did.','Video model + browser log merged on one clock; one text call writes meaning and questions; code validates every field.','CONXA treats the model as advisory and checks its output; Claude trusts the generated prompt, which the person can edit.'],
- ['Settle ambiguity','At run time, by the agent, or by approving a plan.','By the author in Studio, whenever the harness is unsure: every question asked must be answered, and unanswered ones block test, approve and publish. Decisions keyed by event.','A customer’s run never has to guess in CONXA; Claude adapts per run instead.'],
- ['What is saved','Name + prompt + start URL.','SkillPackage: IdentityBundle per step, assertions, typed inputs, recovery, outcome forks, destructive flags.','A prompt is portable and editable; a program is checkable and cheap to run.'],
- ['Check before use','None required; schedule once it “runs reliably”.','Sandbox replay in the customer engine, guard before irreversible steps, find-the-cause with your approval, human approval.','CONXA ships nothing untested; Claude leaves reliability to the user.'],
- ['Run','The model drives every action (inferred).','Deterministic engine; zero tokens on the happy path; margin-gated resolver; VERIFY assertions.','The trade is predictable cost and behaviour against flexibility.'],
- ['Page changed','The agent re-reads the page and adapts.','Tier A reflex (0 tokens), then Tier B: the caller’s agent nominates, the runtime re-validates.','Both end in model reasoning; CONXA reaches it only after cheap fixes fail, and still verifies the answer.']];
-var CMP={id:'cp',label:'Side-by-side phase graph',slotW:340,nodeW:290,rowH:150,labelW:150,maxZ:1.15,
- cols:PH.map(function(p){return p[0]}),lanes:[['Claude in Chrome',1],['CONXA',1]],nodes:[],edges:[],
- panel:function(n){var p=PH[n.c];return '<div class="hd"><div class="chips"><span class="chip c-data">Phase '+(n.c+1)+'</span></div><h2>'+esc(p[0])+'</h2></div><section><h4>Claude in Chrome</h4><p class="small">'+p[1]+'</p></section><section><h4>CONXA</h4><p class="small">'+p[2]+'</p></section><div class="callout h"><b>Difference.</b> '+p[3]+'</div>'}};
-var CL=['Watch & listen','Model writes a prompt','Agent decides at run time','Prompt + start URL','Not required','Model drives every step','Agent adapts'];
-var CX=['Events + per-tab video','Merge → 1 call → validate','Author answers every question asked','Compiled SkillPackage','Sandbox · guard · approve','Deterministic, 0 tokens','Tier A → Tier B'];
-var KA=['code','model','model','data','code','model','model'],KB=['code','model','human','data','human','code','code'];
-PH.forEach(function(p,i){
-  CMP.nodes.push({id:'a'+i,c:i,l:0,k:KA[i],t:CL[i],sub:'Claude in Chrome',st:i===5?'inf':null});
-  CMP.nodes.push({id:'b'+i,c:i,l:1,k:KB[i],t:CX[i],sub:'CONXA'});
-  CMP.edges.push({f:'a'+i,t:'b'+i,k:'same'});
-  if(i)CMP.edges.push({f:'a'+(i-1),t:'a'+i,k:'flow'},{f:'b'+(i-1),t:'b'+i,k:'flow'});
-});
+var WALK=['rec_p','rec','evt','trB','trA','peg','vjob','merge','und','val','ledger','qb','score','q1','dec','comp','rev','pkg','rep','q2b','q2','cop','cards','rtv','test','spanT','guard','fix','appr','pack','pub','cust','agent','loop','spanR','conf','fault','tierA','tierB'];
 
 /* ═════════ question simulator ═════════ */
 var Q=[
@@ -663,7 +630,7 @@ var Q=[
  {kind:'confirm_before',rank:1,prompt:'Should it check with someone before this step?',why:'“Submit expense claim” cannot be undone.',guess:'confirm',
   ch:[['confirm','Yes, ask first','A person approves this step each time before it happens.'],['no_confirm','No, just do it','It runs on its own.']],
   st:function(c){return {qid:'confirm_before:r13',kind:'confirm_before',event_ids:[63],skipped:false,choice:c}},
-  af:{confirm:'Mapped to confirm → yes: a confirm-only ai_review {confirmed: boolean} is inserted before Submit.',no_confirm:'Mapped to confirm → no. The step stays destructive, so tests still park before it.'}},
+  af:{confirm:'Mapped to confirm → yes: a confirm-only question span (agent_span, answer {confirmed: boolean}) is inserted before Submit.',no_confirm:'Mapped to confirm → no. The step stays destructive, so tests still park before it.'}},
  {kind:'note',rank:1,prompt:'Here a file was picked in a window outside the browser, and the recording couldn’t see which file. The workflow can’t repeat this step.',why:'The video shows a file dialog, but no upload event follows within 20 s.',guess:'',
   ch:[['c1','I’ll record this part again',''],['c2','No file was needed here','']],
   st:function(c){return {qid:'note:r9',kind:'note',event_ids:[],skipped:false,choice:c}},
@@ -687,7 +654,7 @@ function mountSim(host){
 /* the sixth model call has no node of its own: it runs in the background after a post-build question posts */
 var QCOPY={t:'Question wording',sub:'clarify_question_copy',v:{
   shape:'title, body, label and detail must be non-empty and within 200 / 500 / 90 / 220 characters',reference:'an unknown card or choice id is skipped',
-  override:'—',backfill:'—',safety:'no <code>{{</code>; every “quoted” item of the original is kept; the template wording stands on any failure',lg:'Not counted.'}};
+  override:'—',backfill:'—',safety:'no <code>{{</code>; every “quoted” item of the original is kept; the template wording stands on any failure',lg:'Counted: <code>clarify_question_copy</code> in the model ledger.'}};
 function touchTable(){
   return CONXA.nodes.filter(function(n){return n.v}).concat([QCOPY]).map(function(n){
     return '<details'+(n.id==='und'?' open':'')+'><summary>'+esc(n.t)+' <span class="muted small">'+esc(n.sub)+'</span></summary>'+vList(n.v)+'</details>'}).join('')}
@@ -695,67 +662,39 @@ CONXA.after=function(n,insp){var h=insp.querySelector('#qsim');if(h)mountSim(h);
 
 /* ═════════ wire up ═════════ */
 var G={};
-function build(name,spec,cv,ins,first){var g=new Graph(document.getElementById(cv),document.getElementById(ins),spec);G[name]=g;g.select(first,false);return g}
+function build(name,spec,cv,ins,first){var g=new Graph(document.getElementById(cv),document.getElementById(ins),spec);G[name]=g;return g}
 var gx=build('graph',CONXA,'cv-graph','in-graph','qb');
-build('claude',CLAUDE,'cv-claude','in-claude','c_loop');
-build('compare',CMP,'cv-compare','in-compare','b2');
 
+(function(){var N=CONXA.nodes,c=function(f){return N.filter(f).length};
+  var rows=[['',N.length,'components'],['k-model',c(function(n){return n.k==='model'||n.k==='video'}),'model touchpoints'],
+    ['',c(function(n){return n.v}),'with a validate contract'],['k-human',c(function(n){return n.k==='human'}),'places a person decides'],
+    ['k-code','0','tokens on a normal customer run'],['',c(function(n){return n.nw}),'new on 2026-11-06']];
+  document.getElementById('stats').innerHTML=rows.map(function(r){return '<div class="stat '+r[0]+'"><b>'+r[1]+'</b><span>'+r[2]+'</span></div>'}).join('');})();
+var qi=document.getElementById('q'),qn=document.getElementById('qn');
+qi.addEventListener('input',function(){var s=qi.value.trim().toLowerCase();if(!s){gx.hits=null;qn.textContent='';gx.paint();return}
+  var h={},n=0;CONXA.nodes.forEach(function(x){var d=x.d||{},txt=[x.t,x.sub,d.sum,(d.files||[]).join(' '),(d.does||[]).join(' ')].join(' ').toLowerCase();
+    if(txt.indexOf(s)>=0){h[x.id]=1;n++}});
+  gx.hits=h;gx.sel=null;gx.paint();qn.textContent=n?n+' found':'none found'});
+qi.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&gx.hits){var f=CONXA.nodes.filter(function(x){return gx.hits[x.id]})[0];if(f)gx.select(f.id,true)}
+  if(ev.key==='Escape'){qi.value='';qi.dispatchEvent(new Event('input'))}});
+var tb=document.getElementById('trace');tb.addEventListener('click',function(){gx.trace=!gx.trace;tb.setAttribute('aria-pressed',String(gx.trace));gx.paint()});
 document.querySelectorAll('#filters button').forEach(function(b){b.addEventListener('click',function(){
   var on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(on));gx.hidden[b.dataset.k]=!on;gx.paint()})});
 document.getElementById('zIn').addEventListener('click',function(){gx.zoom(gx.z*1.15)});
 document.getElementById('zOut').addEventListener('click',function(){gx.zoom(gx.z/1.15)});
 document.getElementById('zFit').addEventListener('click',function(){gx.fit()});
 var wi=-1,timer=null,pos=document.getElementById('wPos'),play=document.getElementById('wPlay');
-function walk(i){wi=(i+WALK.length)%WALK.length;gx.select(WALK[wi],true);pos.textContent=(wi+1)+' / '+WALK.length}
+function walk(i){wi=(i+WALK.length)%WALK.length;gx.select(WALK[wi],true);pos.textContent=(wi+1)+' / '+WALK.length+' · '+gx.byId[WALK[wi]].t}
 function stop(){clearInterval(timer);timer=null;play.textContent='Walk through'}
 document.getElementById('wNext').addEventListener('click',function(){stop();walk(wi+1)});
 document.getElementById('wPrev').addEventListener('click',function(){stop();walk(wi<0?0:wi-1)});
+document.addEventListener('keydown',function(ev){var t=ev.target;if(gx.insp.open||(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')))return;
+  if(ev.key==='ArrowRight'){ev.preventDefault();stop();walk(wi+1)}else if(ev.key==='ArrowLeft'){ev.preventDefault();stop();walk(wi<0?0:wi-1)}});
 play.addEventListener('click',function(){if(timer){stop();return}play.textContent='Pause';walk(wi+1);timer=setInterval(function(){if(wi>=WALK.length-1){stop();return}walk(wi+1)},3400)});
 
-/* tabs (hash) + fit to width */
-var TABS=['graph','claude','compare','reference'],cur='graph';
-function route(){var h=location.hash.slice(1);if(TABS.indexOf(h)<0)h='graph';cur=h;
-  TABS.forEach(function(t){document.getElementById('v-'+t).hidden=t!==h});
-  document.querySelectorAll('.tabs a').forEach(function(a){if(a.dataset.tab===h)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
-  if(G[h])G[h].fit()}
-window.addEventListener('hashchange',route);route();
-document.addEventListener('keydown',function(ev){if(ev.key==='Escape')document.querySelectorAll('.insp.open').forEach(function(p){p.classList.remove('open')})});
-var rt=null;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){if(G[cur])G[cur].fit()},150)});
-
-/* sequence diagrams (reference tab) */
-function seq(id,lanes,msgs){
-  var W=156,top=46,row=32,width=lanes.length*W,height=top+24+msgs.length*row+12;
-  var svg=mk('svg',{viewBox:'0 0 '+width+' '+height,width:width,height:height,role:'img','aria-label':'Sequence diagram'});
-  var cx=function(i){return i*W+W/2};
-  lanes.forEach(function(l,i){svg.appendChild(mk('line',{x1:cx(i),y1:top,x2:cx(i),y2:height-6,'class':'life'}));
-    svg.appendChild(mk('rect',{x:i*W+6,y:6,width:W-12,height:30,rx:4,'class':'lane-box'}));svg.appendChild(mk('text',{x:cx(i),y:25,'text-anchor':'middle','class':'lane-t'},l))});
-  msgs.forEach(function(m,i){var y=top+28+i*row,k='k-'+(m.k||'code');
-    if(m.note){var a=Math.min(m.f,m.t),b=Math.max(m.f,m.t);svg.appendChild(mk('rect',{x:a*W+10,y:y-15,width:(b-a+1)*W-20,height:22,rx:3,'class':'note'}));
-      svg.appendChild(mk('text',{x:(a*W+(b+1)*W)/2,y:y,'text-anchor':'middle','class':'note-t'},m.note));return}
-    if(m.f===m.t){var x=cx(m.f);svg.appendChild(mk('path',{d:'M'+x+' '+(y-8)+' h24 v13 h-20','class':'msg '+k}));
-      svg.appendChild(mk('polygon',{points:(x+4)+','+(y+5)+' '+(x+10)+','+(y+1)+' '+(x+10)+','+(y+9),'class':k}));svg.appendChild(mk('text',{x:x+30,y:y+2},m.l));return}
-    var x1=cx(m.f),x2=cx(m.t),dir=x2>x1?1:-1;svg.appendChild(mk('line',{x1:x1,y1:y,x2:x2-dir*7,y2:y,'class':'msg '+k+(m.r?' ret':'')}));
-    svg.appendChild(mk('polygon',{points:x2+','+y+' '+(x2-dir*8)+','+(y-4)+' '+(x2-dir*8)+','+(y+4),'class':k}));
-    svg.appendChild(mk('text',{x:(x1+x2)/2,y:y-6,'text-anchor':'middle'},m.l))});
-  document.getElementById(id).appendChild(svg);
-}
-seq('seqA',['Person','Studio UI','understand_flow','Track A','Cloud /video','Pegasus','Track B','Text model'],[
- {f:0,t:1,l:'Finish recording',k:'human'},{f:1,t:2,l:'_flow_start_understand'},{f:2,t:1,l:'card watching_video',r:1},
- {note:'ThreadPoolExecutor(max_workers=2): both tracks at once',f:3,t:6},{f:2,t:3,l:'run_track_a'},{f:3,t:3,l:'stitch·cut·blur·rings'},
- {f:3,t:4,l:'analyze(prepared.mp4)',k:'video'},{f:4,t:5,l:'ui_action segments',k:'video'},{f:5,t:4,l:'segments',k:'video',r:1},
- {f:4,t:3,l:'asset deleted',k:'video',r:1},{f:2,t:6,l:'run_track_b'},{f:6,t:2,l:'timed events',r:1},{f:2,t:2,l:'merge_timeline'},
- {f:2,t:7,l:'timeline_understanding',k:'model'},{f:7,t:2,l:'meaning + questions',k:'model',r:1},{f:2,t:2,l:'validate · dedupe · rank'},
- {f:2,t:1,l:'summary + question 1'},{f:1,t:0,l:'question card',k:'human'}]);
-seq('seqB',['Person','Studio UI','understand_flow','compile_flow','Compiler','Text model','replay/clarify'],[
- {f:0,t:1,l:'Confirm last answer',k:'human'},{f:1,t:2,l:'_pre_compile_answer'},{f:2,t:2,l:'decisions.record'},{f:2,t:3,l:'_flow_after_understand'},
- {f:3,t:4,l:'cmd_compile'},{f:4,t:4,l:'IdentityBundle · assertions'},{f:4,t:5,l:'workflow_review',k:'model'},{f:5,t:4,l:'intent + findings',k:'model',r:1},
- {f:4,t:3,l:'SkillPackage',r:1},{f:3,t:6,l:'generate_questions + plan'},{f:6,t:3,l:'ops per decision',r:1},{f:3,t:3,l:'_run_clarify_ops'},
- {f:3,t:1,l:'later: fork/popup/confirm'},{f:1,t:0,l:'question or summary',k:'human'}]);
-seq('seqD',['Agent host','server.js','run.js','resolver','cascade','Page'],[
- {f:0,t:1,l:'execute_skill(inputs)',k:'model'},{f:1,t:2,l:'runPlan'},{f:2,t:3,l:'resolveStep(bundle)'},{f:3,t:5,l:'gather candidates'},
- {f:3,t:2,l:'no winner ≥ 0.15',r:1},{f:2,t:4,l:'recoverStep'},{f:4,t:5,l:'scroll·dismiss·wait·a11y'},{f:4,t:2,l:'exhausted (0 tokens)',r:1},
- {f:2,t:1,l:'park page 180 s'},{f:1,t:0,l:'armed payload',r:1},{f:0,t:1,l:'resume: candidate_index',k:'model'},{f:1,t:3,l:'validate vs fingerprint'},
- {f:2,t:5,l:'act → VERIFY'},{f:1,t:0,l:'Done + outputs',r:1}]);
+gx.fit();
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&!gx.insp.open)gx.select(null)});
+var rt=null;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){gx.fit()},150)});
 })();
 </script>
 

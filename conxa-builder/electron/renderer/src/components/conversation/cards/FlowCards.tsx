@@ -240,7 +240,7 @@ export function RecordingCard({ threadId, item }: CardProps) {
               })}
             </ol>
           )}
-          <p className="mt-2 text-xs text-[var(--text-meta)]">Mark a typed value “Changes each run” and Conxa won’t need to ask about it later.</p>
+          <p className="mt-2 text-xs text-[var(--text-meta)]">Tap “Changes each run?” next to a value that is different every time, so Conxa won’t ask about it after you finish.</p>
         </>
       )}
     </CardShell>

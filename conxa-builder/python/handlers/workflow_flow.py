@@ -323,8 +323,7 @@ class WorkflowFlowMixin:
                            "(for example, upload a file that isn’t there yet). Then press Finish — I’ll compare it with your "
                            "first recording; your first recording isn’t touched.", sink)
         else:
-            self._flow_say(workflow_id, f"Do the task in {where}; each action shows up here as it’s captured. "
-                           "Mark a typed value “Changes each run” and I won’t need to ask about it later.", sink)
+            self._flow_say(workflow_id, f"Do the task in {where}. Each step you take appears here as you go. ", sink)
         card = harness.post_card(
             _thread(workflow_id), "recording", "recording", sink=sink,
             refs={"session_id": session_id, "embedded": embedded, **({"variant_of": variant_of} if variant_of else {}),

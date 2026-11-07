@@ -26,7 +26,7 @@ _REQUEST_COUNTER = itertools.count(1)
 
 # Bump on ANY change to the `timeline_understanding` prompt below. conversation/timeline_understanding.py saves
 # it in understanding.json, so the drop/weak/fallback rates (scripts/eval_understanding.py rates) are per prompt.
-TIMELINE_UNDERSTANDING_PROMPT_VERSION = 4
+TIMELINE_UNDERSTANDING_PROMPT_VERSION = 5
 
 # One rule for any text a person reads in the Studio. Appended to every person-facing prompt below so the
 # wording does not drift prompt by prompt; code (display_text.has_machine_words) drops what still slips through.
@@ -230,6 +230,28 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
         "decided, what is still open, names of workflows and steps. Drop pleasantries. Do not "
         "restate facts that appear in a PINNED FACTS block. At most 180 words. Return ONLY a "
         "JSON object: {\"summary\": \"...\"}."
+    ),
+    # JSON: the message posted right after a workflow is built. Code decides every fact (user_text is a
+    # JSON object of them); this only phrases them. conxa_compile/llm/compile_recap.py validates the answer.
+    "compile_recap": (
+        "You write ONE short chat message to someone who is NOT technical (think: an office manager) "
+        "whose recorded browser task was just turned into a repeatable workflow. The user message is a "
+        "JSON object of facts: step_count, goal, has_description, input_names, left_out (list of "
+        "{kind, count, reason}), unsure_steps, similar_not_asked, assumed, coverage_gap, question_count, "
+        "question_titles. Write 3 to 6 short sentences of plain prose, in this order: what was built "
+        "(say the step count and, if given, what it does); what was left out of the recording and why "
+        "(only if left_out is not empty; say the reason in simple words, never quote page text); what "
+        "needs their attention (only for facts that are present: unsure_steps, assumed, coverage_gap "
+        "meaning things they described that the workflow does not do, similar_not_asked); what happens "
+        "next (if question_count > 0 say you have that many quick questions before they test it; "
+        "otherwise say it is ready to test; if input_names is not empty say the test will ask them for "
+        "each of those). Use only facts that are present; never invent steps, buttons, names or values. "
+        "Copy every name in curly quotes exactly, character for character, and include every one of "
+        "unsure_steps. Never use the words input, run, step, selector, assertion, workflow, binding, "
+        "parameter, token, model, compile, report, or second opinion: say 'action' or 'part' for a "
+        "step, 'each time someone uses it' for 'each run', 'the screen' for 'the page'. The only "
+        "exception is writing the number of steps as a digit, e.g. '12 steps'. No lists, no markdown, "
+        "no ids with underscores. Return ONLY a JSON object: {\"message\": \"...\"}."
     ),
     # JSON: in general Chat only — does the conversation call for drafting a workflow?
     "studio_chat_actions": (
@@ -1003,7 +1025,8 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "\n"
                     "WORDS THE PERSON READS (`goal`, `short_summary`, `decided.text`, question `prompt` and `why`, choice `label`)\n"
                     + PLAIN_WORDS + "\n"
-                    "The INPUT below is for you. Do not copy its refs, page addresses or odd names into those fields.\n"
+                    "The INPUT below is for you. Do not copy its refs or page addresses into those fields.\n"
+                    "A row's `target` is the name the page gave the element. It may carry extras: a shortcut hint, a type word like (File), a state. Call it what a person would. If you put a name in quotes, it must appear in the recording (a tidied form of a target is fine).\n"
                     "\n"
                     "INPUT (JSON)\n"
                     "- `rows`: the recording in time order, each with a `ref` (r1, r2...).\n"
@@ -1046,8 +1069,8 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "Output: {\"goal\":\"Download an invoice as a PDF.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the invoices page.\"},{\"row\":\"r2\",\"text\":\"Types the invoice number into the search box.\"},{\"row\":\"r3\",\"text\":\"Clicks Download PDF; a download bar shows the file.\"}],\"values\":[{\"ref\":\"typed:2\",\"verdict\":\"varies\",\"name\":\"invoice_number\"},{\"ref\":\"click:3\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r1\",\"text\":\"You always start on the invoices page.\",\"reason\":\"The task never names another page.\"}],\"questions\":[{\"effect\":\"note\",\"row\":\"r2\",\"prompt\":\"What should happen if no invoice matches the number?\",\"why\":\"The recording only shows a match.\",\"choices\":[{\"label\":\"Stop and report it\"},{\"label\":\"Skip it and finish\"}],\"best_guess\":\"\",\"cost_rank\":1}],\"gaps\":[],\"short_summary\":\"You searched for an invoice by its number and downloaded it as a PDF.\"}\n"
                     "\n"
                     "EXAMPLE 2 (a list pick and a typed name)\n"
-                    "Input: {\"task\":\"add a contact to the Sales group\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://crm.example/contacts\",\"title\":\"Contacts\"},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Priya Nair\",\"role\":\"row\",\"peers\":24,\"seen\":{\"intent\":\"open a contact\"}},{\"ref\":\"r3\",\"action\":\"type\",\"target\":\"Group name\",\"value\":\"Sales\",\"video\":\"confirmed\"},{\"ref\":\"r4\",\"action\":\"click\",\"target\":\"Save\"}],\"candidates\":[{\"ref\":\"click:2\",\"kind\":\"click\",\"recorded\":\"Priya Nair\",\"rows\":[\"r2\"],\"in_set\":true},{\"ref\":\"typed:3\",\"kind\":\"typed\",\"recorded\":\"Sales\",\"rows\":[\"r3\"]},{\"ref\":\"click:4\",\"kind\":\"click\",\"recorded\":\"Save\",\"rows\":[\"r4\"]}],\"must_ask\":[]}\n"
-                    "Output: {\"goal\":\"Add a chosen contact to the Sales group.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the contacts page.\"},{\"row\":\"r2\",\"text\":\"Picks one contact from the list.\"},{\"row\":\"r3\",\"text\":\"Types the group name.\"},{\"row\":\"r4\",\"text\":\"Clicks Save.\"}],\"values\":[{\"ref\":\"click:2\",\"verdict\":\"varies\",\"name\":\"contact\"},{\"ref\":\"typed:3\",\"verdict\":\"fixed\"},{\"ref\":\"click:4\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r3\",\"text\":\"You always add the contact to the Sales group.\",\"reason\":\"The task names the Sales group.\"}],\"questions\":[],\"gaps\":[],\"short_summary\":\"You opened a contact from the list and added it to the Sales group.\"}\n"
+                    "Input: {\"task\":\"add a contact to the Sales group\",\"rows\":[{\"ref\":\"r1\",\"action\":\"navigate\",\"url\":\"https://crm.example/contacts\",\"title\":\"Contacts\"},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Priya Nair, (Contact)\",\"role\":\"row\",\"peers\":24,\"seen\":{\"intent\":\"open a contact\"}},{\"ref\":\"r3\",\"action\":\"type\",\"target\":\"Group name\",\"value\":\"Sales\",\"video\":\"confirmed\"},{\"ref\":\"r4\",\"action\":\"click\",\"target\":\"Save\"}],\"candidates\":[{\"ref\":\"click:2\",\"kind\":\"click\",\"recorded\":\"Priya Nair, (Contact)\",\"rows\":[\"r2\"],\"in_set\":true},{\"ref\":\"typed:3\",\"kind\":\"typed\",\"recorded\":\"Sales\",\"rows\":[\"r3\"]},{\"ref\":\"click:4\",\"kind\":\"click\",\"recorded\":\"Save\",\"rows\":[\"r4\"]}],\"must_ask\":[]}\n"
+                    "Output: {\"goal\":\"Add a chosen contact to the Sales group.\",\"detailed_summary\":[{\"row\":\"r1\",\"text\":\"Opens the contacts page.\"},{\"row\":\"r2\",\"text\":\"Picks one contact from the list.\"},{\"row\":\"r3\",\"text\":\"Types the group name.\"},{\"row\":\"r4\",\"text\":\"Clicks Save.\"}],\"values\":[{\"ref\":\"click:2\",\"verdict\":\"varies\",\"name\":\"contact\"},{\"ref\":\"typed:3\",\"verdict\":\"fixed\"},{\"ref\":\"click:4\",\"verdict\":\"fixed\"}],\"decided\":[{\"row\":\"r2\",\"text\":\"You pick a contact such as “Priya Nair” from the list.\",\"reason\":\"The task names no contact.\"},{\"row\":\"r3\",\"text\":\"You always add the contact to the Sales group.\",\"reason\":\"The task names the Sales group.\"}],\"questions\":[],\"gaps\":[],\"short_summary\":\"You opened a contact from the list and added it to the Sales group.\"}\n"
                     "\n"
                     "EXAMPLE 3 (a popup asking for a decision after a step that cannot be undone)\n"
                     "Input: {\"task\":\"remove the old export\",\"rows\":[{\"ref\":\"r1\",\"action\":\"click\",\"target\":\"Delete export\",\"seen\":{\"intent\":\"delete the file\",\"screen_after\":\"a box asks to confirm\"}},{\"ref\":\"r2\",\"action\":\"click\",\"target\":\"Delete\",\"dialog\":\"decision\",\"buttons\":[\"Delete\",\"Cancel\"]}],\"candidates\":[],\"must_ask\":[{\"row\":\"r1\",\"effect\":\"confirm_before\"},{\"row\":\"r2\",\"effect\":\"fork\"}]}\n"
@@ -1107,6 +1130,7 @@ TASK_OUTPUT_BUDGET: dict[str, int] = {
     "chat_route_intent": 1024,
     "workflow_understanding": 2048,
     "thread_summarize": 2048,
+    "compile_recap": 1024,
 }
 
 

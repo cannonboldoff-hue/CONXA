@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Map as MapIcon,
@@ -140,7 +140,6 @@ export function Sidebar({ rail }: { rail: boolean }) {
   const setSearchOpen = useShellStore((s) => s.setSearchOpen)
   const setSettingsOpen = useShellStore((s) => s.setSettingsOpen)
   const offline = useConnectionStore((s) => s.cloud === 'offline')
-  const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const { pathname } = useLocation()
   const chatsQ = useQuery({ queryKey: ['chats'], queryFn: chatList, retry: false })
@@ -165,12 +164,12 @@ export function Sidebar({ rail }: { rail: boolean }) {
         <NavItem to="/chat" icon={MessageSquare} label="Chat" rail={rail} />
         <button
           type="button"
-          title={rail ? 'New workflow (Ctrl N)' : undefined}
-          onClick={() => navigate('/new')}
+          title={rail ? 'New group' : undefined}
+          onClick={() => setCreating(true)}
           className={cn(ROW, FOCUS, REST, 'w-full', rail && 'justify-center px-0')}
         >
           <Plus className="size-4 shrink-0" />
-          {!rail && (<><span>New workflow</span><Kbd>Ctrl N</Kbd></>)}
+          {!rail && <span>New group</span>}
         </button>
         <NavItem
           to="/publish"

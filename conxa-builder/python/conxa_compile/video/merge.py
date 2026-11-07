@@ -16,7 +16,6 @@ from typing import Any
 from conxa_compile.compiler.choice import derive_choice
 from conxa_compile.compiler.entity_binding import repeating_peers
 from conxa_compile.compiler.outcome_fork import classify_dialog, classify_surface
-from conxa_compile.display_text import clean_name, display_label
 from conxa_compile.video import splice as splice_mod
 from conxa_compile.video.prepare import IDLE_KEEP_MS
 
@@ -125,15 +124,6 @@ def _event_text(ev: dict[str, Any]) -> str:
     return ""
 
 
-def _event_shown(ev: dict[str, Any]) -> str:
-    """The target as a person reads it: the text printed on the page first, the hidden accessible name only
-    when nothing is printed or the printed text is a whole row's worth. Display only; ``target`` stays raw."""
-    t = ev.get("target") or {}
-    names = [clean_name(t.get(k)) for k in ("inner_text", "label_text", "aria_label", "placeholder", "name", "title", "alt")]
-    names = [n for n in names if n]
-    return display_label(next((n for n in names if len(n) <= 60), names[0] if names else ""))
-
-
 def _segment_text(row: dict[str, Any]) -> str:
     return " ".join(str(row.get(k) or "") for k in ("visible_target", "intent", "purpose", "screen_before", "screen_after")).lower()
 
@@ -180,7 +170,6 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
             "tab": e["tab"],
             "action": action,
             "target": _event_text(ev),
-            "shown": _event_shown(ev),
             "role": str((ev.get("semantic") or {}).get("role") or (ev.get("target") or {}).get("role") or ""),
             "value": (ev.get("action") or {}).get("value"),
             "url": str((ev.get("page") or {}).get("url") or ""),

@@ -174,9 +174,7 @@ def test_one_question_per_value_and_per_row_and_a_note_needs_choices():
                       MERGED, TU.candidates_from_timeline(MERGED))
     assert [(q["kind"], q["row"]) for q in out["questions"]] == [("note", "r5"), ("value", "r2")]
     assert [c["id"] for c in out["questions"][0]["choices"]] == ["c1", "c2"]
-    # A value question is worded by code (the model's sentence repeats the raw recorded name).
-    assert out["questions"][1]["prompt"] == "You opened “settings”. Next time, is it always this page, or a different one each time?"
-    assert [c["label"] for c in out["questions"][1]["choices"]] == ["A different one each time", "Always “settings”"]
+    assert out["questions"][1]["prompt"] == "Same repo every time?"      # the model's own sentence is kept
 
 
 def test_a_value_question_names_an_address_by_its_last_part_and_hides_emails():
@@ -682,17 +680,18 @@ def test_the_second_read_drops_what_cannot_be_acted_on_and_counts_it(monkeypatch
 # ── plain-language display ─────────────────────────────────────────────────────────────────────
 
 def _app_button_timeline():
-    button = {**event(1, "click", "New folder Alt+C then F"), "shown": "New folder", "role": "button"}
-    item = {**event(2, "click", "Report.pdf, (File)"), "shown": "Report.pdf", "role": "row", "peers": 9}
+    button = {**event(1, "click", "New folder Alt+C then F"), "role": "button"}
+    item = {**event(2, "click", "Report.pdf, (File)"), "role": "row", "peers": 9}
     return [button, item]
 
 
-def test_labels_are_the_cleaned_name_but_the_raw_value_is_kept_for_replay():
+def test_the_model_sees_the_raw_name_and_code_keeps_a_tidied_one_only_as_a_last_resort():
     cands = {c["ref"]: c for c in TU.candidates_from_timeline(_app_button_timeline())}
     assert cands["click:1"]["label"] == "New folder" and cands["click:1"]["literal"] == "New folder Alt+C then F"
     assert cands["click:2"]["label"] == "Report.pdf" and cands["click:2"]["literal"] == "Report.pdf, (File)"
     payload = TU.build_input(_app_button_timeline(), "", "", list(cands.values()))
-    assert [c["recorded"] for c in payload["candidates"]] == ["New folder", "Report.pdf"]
+    assert [c["recorded"] for c in payload["candidates"]] == ["New folder Alt+C then F", "Report.pdf, (File)"]
+    assert [r["target"] for r in payload["rows"]] == ["New folder Alt+C then F", "Report.pdf, (File)"]
 
 
 def test_only_an_apps_own_button_is_flagged_not_a_list_pick():
@@ -712,10 +711,10 @@ def test_a_button_the_model_called_fixed_is_not_asked_but_a_list_pick_still_is()
     assert out["validation_report"]["override"]["fixed_app_button_not_asked"]["count"] == 1
 
 
-def test_a_button_the_model_is_unsure_about_is_still_asked_in_plain_words():
+def test_a_button_the_model_is_unsure_about_is_still_asked():
     merged = _app_button_timeline()
     out = TU.validate({"goal": "g", "values": [{"ref": "click:1", "verdict": "unsure"}]}, merged, TU.candidates_from_timeline(merged))
-    q = next(q for q in out["questions"] if q["ref"] == "click:1")
+    q = next(q for q in out["questions"] if q["ref"] == "click:1")       # the model wrote none: code's last-resort wording
     assert q["prompt"] == "You picked “New folder”. Next time, is it always this one, or a different one each time?"
 
 
@@ -729,3 +728,53 @@ def test_text_a_person_reads_is_dropped_when_it_carries_machine_words():
     assert out["short_summary"] == ""
     assert [d["text"] for d in out["decided"]] == ["You always start on the home page."]
     assert out["questions"][0]["prompt"] == TU._FALLBACK_PROMPT["confirm_before"]
+
+
+# ── the model words it, code checks it ─────────────────────────────────────────────────────────
+
+def _ask_value(prompt, labels=("A different one each time", "Always this one")):
+    return {"effect": "value", "row": "r1", "ref": "click:1", "prompt": prompt, "cost_rank": 2,
+            "choices": [{"id": "varies", "label": labels[0]}, {"id": "fixed", "label": labels[1]}]}
+
+
+def _validate_button_question(prompt, labels=("A different one each time", "Always this one")):
+    merged = _app_button_timeline()
+    return TU.validate({"goal": "g", "values": [{"ref": "click:1", "verdict": "unsure"}],
+                        "questions": [_ask_value(prompt, labels)]}, merged, TU.candidates_from_timeline(merged))
+
+
+def test_the_models_own_question_and_labels_are_kept_when_every_name_is_in_the_recording():
+    out = _validate_button_question("Is “New folder” always the button you use?", ("Always “New folder”", "A different one"))
+    q = out["questions"][0]
+    assert q["prompt"] == "Is “New folder” always the button you use?"          # tidied form of the raw target: grounded
+    assert {c["label"] for c in q["choices"]} == {"Always “New folder”", "A different one"}
+    assert "ungrounded_name" not in out["validation_report"].get("override", {})
+
+
+def test_a_quoted_name_the_recording_never_shows_is_counted_and_replaced_as_the_last_resort():
+    out = _validate_button_question("Is “Create folder” always the button you use?")
+    q = out["questions"][0]
+    assert q["prompt"].startswith("You picked “New folder”.")
+    assert out["validation_report"]["override"]["ungrounded_name"]["count"] == 1
+
+
+def test_a_web_address_in_a_label_is_counted_and_replaced():
+    out = _validate_button_question("Same button?", ("Always https://x.io/a", "A different one"))
+    assert out["questions"][0]["prompt"].startswith("You picked")
+    assert out["validation_report"]["override"]["machine_words"]["count"] == 1
+
+
+def test_a_reply_with_machine_words_or_invented_names_is_graded_weak_so_the_model_is_told_once():
+    merged = _app_button_timeline()
+    cands = TU.candidates_from_timeline(merged)
+    bad = TU.validate({"goal": "g", "short_summary": "Opens https://x.io/a?pli=1", "values": []}, merged, cands)
+    grade, reasons = TU._grade(bad, cands, {})
+    assert grade == "weak" and any("web address" in r for r in reasons)
+    invented = TU.validate({"goal": "g", "decided": [{"row": "r1", "text": "You press “Make folder”.", "reason": "x"}],
+                            "values": []}, merged, cands)
+    assert any("never shows" in r for r in TU._grade(invented, cands, {})[1])
+    assert invented["decided"] == []                                           # last resort after the retry: dropped
+    judged = [{"ref": "click:1", "verdict": "fixed"}, {"ref": "click:2", "verdict": "varies", "name": "file"}]
+    ok = TU.validate({"goal": "g", "decided": [{"row": "r1", "text": "You press “New folder”.", "reason": "x"}],
+                      "values": judged}, merged, cands)
+    assert ok["decided"] and TU._grade(ok, cands, {})[0] == "ok"

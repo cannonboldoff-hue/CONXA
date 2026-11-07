@@ -27,7 +27,7 @@ import { Sidebar } from '@/components/shell/Sidebar'
 import { PanelDivider } from '@/components/shell/PanelDivider'
 import { InspectorPane, InspectorStrip } from '@/components/shell/InspectorPane'
 import { SearchDialog } from '@/components/shell/SearchDialog'
-import { ArrowLeft, Globe, MessageSquare } from 'lucide-react'
+import { ArrowLeft, MessageSquare } from 'lucide-react'
 
 // The workspace header row lines up with the sidebar's brand row. Keep them equal.
 const HEADER_ROW_HEIGHT = 'h-14'
@@ -71,17 +71,15 @@ function HeaderActions() {
 }
 
 /** The workspace header row — omitted unless the page registers a back button, actions or an extra strip, or a test browser is hidden. */
-function HeaderBar({ roomForPanel }: { roomForPanel: boolean }) {
+function HeaderBar() {
   const { header } = usePageHeaderContext()
-  const run = useBrowserStore((b) => b.run)
-  if (!header?.onBack && !header?.actions && !header?.extra && !run) return null
+  if (!header?.onBack && !header?.actions && !header?.extra) return null
   return (
   <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-base)]">
     <div className={cn('relative flex items-center gap-3 px-4 sm:px-6', HEADER_ROW_HEIGHT)}>
       <HeaderBackButton />
       <HeaderSpacer />
       <HeaderActions />
-      <BrowserPill roomForPanel={roomForPanel} />
       <HeaderExtra />
     </div>
   </header>
@@ -126,28 +124,6 @@ function useCompileEventBridge() {
       if (ev.thread_id.startsWith('wf:')) qc.invalidateQueries({ queryKey: ['lifecycle', ev.thread_id.slice(3)] })
     }
   })
-}
-
-/** Hiding the browser never stops a test — the pill keeps it one click away. */
-function BrowserPill({ roomForPanel }: { roomForPanel: boolean }) {
-  const run = useBrowserStore((s) => s.run)
-  const folded = useBrowserStore((s) => s.folded)
-  const setFolded = useBrowserStore((s) => s.setFolded)
-  if (!run || (!folded && roomForPanel)) return null
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="shrink-0 gap-1.5"
-      title={roomForPanel ? 'Show the test browser' : 'Widen the window to show the test browser'}
-      disabled={!roomForPanel}
-      onClick={() => setFolded(false)}
-    >
-      <Globe className="size-3.5" />
-      {run.finished ? 'Show browser' : 'Test running · Show browser'}
-    </Button>
-  )
 }
 
 /** The conversation folded beside a widened browser: what has been captured, the tabs, and the way back. */
@@ -270,7 +246,7 @@ function Shell({ children }: { children: ReactNode }) {
 
       {wide && <ConversationRail />}
       <div className={cn('relative min-h-0 min-w-0 flex-1 flex-col', wide ? 'hidden' : 'flex')}>
-          <HeaderBar roomForPanel={browser?.mode === 'panel'} />
+          <HeaderBar />
           <OfflineBanner />
           <main className="min-h-0 flex-1 overflow-hidden">{engineDown ? <EngineStoppedNotice /> : children}</main>
 
@@ -305,7 +281,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
         </>
       )}
-      {workflowId && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
+      {workflowId && !browserShown && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
         <div className="shrink-0 border-l border-[var(--border-subtle)]" style={{ width: INSPECTOR.strip }}>
           <InspectorStrip workflowId={workflowId} />
         </div>

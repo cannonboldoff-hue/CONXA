@@ -318,45 +318,61 @@ class CompileFlowMixin:
         # the renderer re-reads the lifecycle on each one (the caller's `finally` is only the net).
         from conxa_compile.conversation import runtime_state
 
-        runtime_state.set_flags(workflow_id, understanding=False)
-        lines =[f"Compiled into {len(steps)} steps."]
+        lines =[f"Your workflow is ready: {len(steps)} steps."]
         dropped = report.get("dropped") or []
+        left_out: list[dict[str, Any]] = []  # facts for the model's recap: kinds and counts only, never page text
         if dropped:
-            named = []
-            for d in dropped[:3]:
-                kind = str(d.get("action") or "action").replace("_", " ")
-                named.append(f"{kind} “{d['target']}”" if d.get("target") else kind)
-            more = f" and {len(dropped) - 3} more" if len(dropped) > 3 else ""
+            # Plain kinds with counts; the recorded target text is page noise, so it is not quoted here.
+            words = {"click": ("click", "clicks"), "scroll": ("scroll", "scrolls"), "navigate": ("page visit", "page visits"),
+                     "type": ("typing step", "typing steps"), "fill": ("typing step", "typing steps")}
+            counts: dict[str, int] = {}
+            for d in dropped:
+                k = str(d.get("action") or "")
+                counts[k] = counts.get(k, 0) + 1
+            parts = [f"{n} {words.get(k, ('other action', 'other actions'))[0 if n == 1 else 1]}" for k, n in counts.items()]
             passes = {d.get("pass") for d in dropped}
-            why = {"not_from_user": "the page did them by itself, not you",
-                   "login_page": "they happened on a sign-in page, and signing in is saved separately",
-                   "upstream_dedupe": "they were repeats or noise around another action"}.get(
+            why = {"not_from_user": "the page did them on its own, not you",
+                   "login_page": "they happened on a sign-in page, which is saved separately",
+                   "upstream_dedupe": "they were repeats"}.get(
                 next(iter(passes)) if len(passes) == 1 else None,
-                "repeats, page loads a click caused, or things the page did by itself")
-            lines.append(
-                f"{len(dropped)} recorded action{'s were' if len(dropped) != 1 else ' was'} folded away while tidying up "
-                f"({', '.join(named)}{more}) — {why}. They’re listed in the compile report.")
-        # What the model's second opinion proposed and the checks refused (llm/model_ledger.py). Said only
-        # when something was refused, so a clean compile reads as it always did.
-        so_ledger = (report.get("model_ledger") or {}).get("second_opinion") or {}
-        refused = int(so_ledger.get("dropped") or 0) + int(so_ledger.get("changed") or 0)
-        if refused:
-            lines.append(f"The checks turned down {refused} suggestion{'s' if refused != 1 else ''} "
-                         "from the model’s second opinion.")
+                "they were repeats, or things the page did on its own")
+            lines.append(f"I left out {len(dropped)} thing{'s' if len(dropped) != 1 else ''} from your recording "
+                         f"that weren’t needed ({', '.join(parts)}): {why}. Nothing you did on purpose was lost.")
+            left_out = [{"kind": words.get(k, ("other action",))[0], "count": n, "reason": why} for k, n in counts.items()]
         if uncertain_names:
             quoted = " and ".join(f"“{n}”" for n in uncertain_names)
-            lines.append(f"I’m less sure how to find the element in {quoted} — they’re marked in Human Edit.")
+            lines.append(f"I’m not sure I can find {quoted} again on a later run — check {'it' if len(uncertain_names) == 1 else 'them'} in Human Edit.")
         if limits:
             left = sum(limits.values())
             lines.append(f"{left} similar step{'s' if left != 1 else ''} {'were' if left != 1 else 'was'} not asked about, "
                          "to keep the questions short. Check them in Human Edit.")
         if questions:
-            lines.append("A few questions first, so the test reflects how you’ll really use it.")
+            lines.append("I have a few quick questions before you test it.")
         elif understood["source"] == "model":
             lines.append("I checked it against what you described and nothing needs deciding.")
         else:
             lines.append("Nothing here looked uncertain" + (" — though I couldn’t check it against your description." if workflow.task_description.strip() else ", and there was no description to check it against."))
-        harness_say = ts.append(_thread(workflow_id), "assistant_message", text=" ".join(lines))
+        # The message itself is written by one short model call over code-built facts; any failure keeps the
+        # template above. Done before `understanding` clears so the UI stays busy and nothing can be tested meanwhile.
+        from conxa_compile.llm.compile_recap import write_recap
+
+        open_qs = [q for q in questions if q.get("status") == "open"]
+        coverage = understood.get("coverage") or {}
+        recap = write_recap({
+            "step_count": len(steps),
+            "goal": str(understood.get("goal_summary") or workflow.task_description or "")[:200],
+            "has_description": bool(workflow.task_description.strip()),
+            "input_names": [str(i["id"]).replace("_", " ") for i in doc_now.get("inputs") or [] if isinstance(i, dict) and i.get("id")],
+            "left_out": left_out,
+            "unsure_steps": [f"“{n}”" for n in uncertain_names],
+            "similar_not_asked": sum(limits.values()) if limits else 0,
+            "assumed": [str(a.get("title")) for a in assumptions if isinstance(a, dict) and a.get("title")][:3],
+            "coverage_gap": str(coverage.get("note") or "") if coverage.get("ok") is False else "",
+            "question_count": len(open_qs),
+            "question_titles": [str(q.get("title")) for q in open_qs][:4],
+        })
+        runtime_state.set_flags(workflow_id, understanding=False)
+        harness_say = ts.append(_thread(workflow_id), "assistant_message", text=recap or " ".join(lines))
         from conxa_compile.conversation import harness
 
         harness.emit_item(sink, _thread(workflow_id), harness_say)
