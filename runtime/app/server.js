@@ -111,6 +111,9 @@ const _discardAllParksImpl  = require("./recovery_park").discardAllParks;
 const recoveryStage = require("./recovery_stage");
 const agentSpanMod = require("./agent_span"); // Engine v2 C4: the agent_span step (rounds are driven below)
 const PARK_TTL_MS = Number(process.env.CONXA_RECOVERY_PARK_TTL_MS) || 180000;
+// Proof of Done: a step whose work was still running when its call ran out of time is parked this long (15 min:
+// a big upload is slow) so a later call can check on it. Nothing is repeated on the way back.
+const PROOF_PARK_TTL_MS = Number(process.env.CONXA_PROOF_PARK_TTL_MS) || 900000;
 // RT-3: parks are keyed per skill (`${workspace_id}:${slug}`), not a single process-wide slot —
 // discarding one run's park must never touch a sibling run's parked recovery window.
 // Releases the park's browser lease and host lock (if it held either — see browser.js's
@@ -1424,7 +1427,7 @@ async function _handleTool(name, args, extra) {
     // `failedAt`, the others carry their own step index.
     const _leftPark = _getParkedRecovery(_parkKey);
     const _isOwnPausePark = !!_leftPark && primary.isResume && resolved.length === 1
-      && [_leftPark.forkStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex, _leftPark.spanStepIndex]
+      && [_leftPark.forkStepIndex, _leftPark.handoverStepIndex, _leftPark.guardStepIndex, _leftPark.spanStepIndex, _leftPark.proofStepIndex]
         .some((n) => Number.isInteger(n) && n === primary.resumeFrom);
     if (_leftPark && !_isOwnPausePark) await _discardPark(_parkKey, _resumeOverride ? "replaced" : "superseded");
 
@@ -1649,6 +1652,20 @@ async function _handleTool(name, args, extra) {
       _setParkedRecovery(_parkKey, null);
       _park = guardPark;
       appendRecoveryEvent({ event: "guard_released", slug: primary.entry.slug, step_index: primary.resumeFrom });
+    }
+
+    // Proof of Done: the caller is back to check on a step whose work was still running. Adopt the parked page; run.js
+    // re-checks that step (it never does it again) and carries on from there.
+    if (resolved.length === 1 && primary.isResume) {
+      const proofPark = _getParkedRecovery(_parkKey);
+      if (proofPark && Number.isInteger(proofPark.proofStepIndex) && proofPark.proofStepIndex === primary.resumeFrom) {
+        clearTimeout(proofPark.timer);
+        _setParkedRecovery(_parkKey, null);
+        _park = proofPark;
+        primary.inputs[`__proof_recheck_${primary.resumeFrom}`] = JSON.stringify(proofPark.proofRecheck || null);
+        _runTracker.emit("proof_resumed", { si: primary.resumeFrom });
+        appendRecoveryEvent({ event: "proof_park_resumed", slug: primary.entry.slug, step_index: primary.resumeFrom });
+      }
     }
 
     // PROD-18: every surviving path (fresh run or an adopted park) crosses here exactly
@@ -2184,9 +2201,11 @@ async function _handleTool(name, args, extra) {
 
     } catch (runErr) {
       _phase(`steps_failed:${mapErrorToCode(runErr)}`);
-      log("error", "execute_failed", { run_id: _runId, skill: primary.entry.slug, error: runErr.message });
-      appendRecoveryEvent({ event: "terminal_failure", run_id: _runId, slug: primary.entry.slug, error: runErr.message });
-      _runTracker.emit("wf_fail", {
+      if (!runErr.proofPause) { // a parked wait is not a failure
+        log("error", "execute_failed", { run_id: _runId, skill: primary.entry.slug, error: runErr.message });
+        appendRecoveryEvent({ event: "terminal_failure", run_id: _runId, slug: primary.entry.slug, error: runErr.message });
+      }
+      if (!runErr.proofPause) _runTracker.emit("wf_fail", {
         dur: Date.now() - _wfStartAt,
         fsi: runErr.failedAt ?? null,
         fc:  runErr.couldntConfirm ? "couldnt_confirm" : mapErrorToCode(runErr),
@@ -2327,6 +2346,36 @@ async function _handleTool(name, args, extra) {
           spanResp.content.push({ type: "text", text: `(run_id: ${_runId})` });
         }
         return spanResp;
+      }
+
+      // Proof of Done: the work this step started was still running when the call ran out of time. Park the live page
+      // (same shape as the guard pause) and say so honestly: "Submitted", not "Done", and not a failure. Calling
+      // execute_skill again with the same resume_from re-checks the step; nothing is repeated.
+      if (runErr.proofPause) {
+        const _proofPage = runErr.page || page;
+        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PROOF_PARK_TTL_MS);
+        if (timer.unref) timer.unref();
+        _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
+          page: _proofPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch,
+          proofStepIndex: runErr.stepIndex, proofRecheck: runErr.recheck || null, timer, producedInputs: _producedInputs(primary),
+          pageFingerprint: await capturePageFingerprint(_proofPage),
+          leaseKey: _leaseKey, hostRelease: _hostRelease,
+          attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
+        await closeExtraTabs(_openedTabs, _proofPage);
+        appendRecoveryEvent({ event: "proof_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PROOF_PARK_TTL_MS });
+        log("info", "proof_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
+        _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "proof" });
+        _runTracker.emit("wf_ok", { dur: Date.now() - _wfStartAt, tot: resolved.reduce((n, r) => n + r.steps.length, 0), rec: _totalRecovered, oc: "submitted" });
+        const waitIntent = (runErr.step && (runErr.step.intent || runErr.step.type)) || `step ${runErr.stepIndex + 1}`;
+        const waitSteps = [..._proofSteps, ...((runErr.proof && runErr.proof.steps) || [])].slice(0, 200);
+        return {
+          content: [{ type: "text", text:
+            `${proofMod.leadWord("submitted")} "${waitIntent}" (step ${runErr.stepIndex + 1}) is still running in the app` +
+            `${runErr.evidence ? `: ${runErr.evidence}` : ""}. It has not finished yet, so I can't say it worked. Nothing was repeated. ` +
+            `Call execute_skill again for "${primary.entry.slug}" with resume_from: ${runErr.stepIndex} to check on it. (run_id: ${_runId})` }],
+          structuredContent: { outcome: "submitted", resume_from: runErr.stepIndex, steps: waitSteps },
+          _meta: { "conxa/proof_wait": { run_id: _runId, step_index: runErr.stepIndex } },
+        };
       }
 
       // Outcome fork: the popup needs a person's decision. A PLANNED pause, parked exactly like the

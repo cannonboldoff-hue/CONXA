@@ -1266,7 +1266,7 @@ success. The fixed rules live in `runtime/app/proof.js` (`judge`, `nextMove`, `r
 |---|---|---|
 | `done` | `Done.` | Every step reached the proof it needed |
 | `done_please_check` | `Done, please check.` | Finished, but a low-risk step could not be confirmed (a plain `Please check:` list follows) |
-| `submitted` | `Submitted.` | The app accepted the work and will finish it on its own (produced by long-wait parking, Proof of Done stage 5) |
+| `submitted` | `Submitted.` | The app accepted the work and it was still running when the call ran out of time. The page is parked (15 min); `structuredContent.resume_from` and `_meta["conxa/proof_wait"]` name the step. Call `execute_skill` again with that `resume_from` to re-check it (nothing is repeated). Not an error |
 | `partly_done` | `Partly done.` | Some items of a batch were proven and some were not (stage 5) |
 | `couldnt_confirm` | `Couldn't confirm.` | A step that cannot be repeated (an upload, a destructive step) ran but could not be confirmed, or nobody was watching (a scheduled run): the run stops. Still an error result |
 | failure | anything else | Unchanged |
@@ -1585,6 +1585,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `tier_ok` | A resolution/recovery tier succeeded | `si`, `tier`, `sel` |
 | `verify_fail` | Post-action VERIFY failed | `si`, `ch` (assertion channel) |
 | `verify_result` | Full post-action assertion audit for a step that carries assertions, pass or fail, on every path that verifies (primary, settle re-verify, recovery, after a popup) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions), `ct` (checks that passed only because they could not look: `cant_tell`) |
+| `proof_resumed` | A parked long wait was picked up for a re-check | `si` |
 | `proof` | What a step proved (Proof of Done, `runtime/app/proof.js`), once per step that was judged | `si`, `rung` (highest proved: `performed`/`accepted`/`completed`/`result_exists`, or null), `v` (verdict: `proven`/`still_working`/`failed_nothing_happened`/`failed_may_have_happened`/`blocked`/`partly_done`/`couldnt_confirm`), `w` (witnesses that answered yes) |
 | `completion` | Completion gate ran after a step that can start work (upload, submit, click…); `st` is `done`, `failed`, `timed_out`, `still_working`, `no_sign`, `cant_tell` or `handoff` | `si`, `mode` (`short`/`full`), `st`, `waited` (ms) |
 | `repair_event` | A step was recovered — drift signal for the admin flywheel queue | `step_id`, `tier` (`L1`/`L2` inside Tier A, or agent for B), `method`, `score`, `margin`, `stable_hash_match`, `stable_hash`, `drift_hint`, `app_version_fingerprint` |

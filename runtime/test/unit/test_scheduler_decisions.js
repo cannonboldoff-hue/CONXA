@@ -10,7 +10,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const { computeActions, classifyRunResult } = require("../../app/scheduler_daemon");
+const { computeActions, classifyRunResult, submittedResume } = require("../../app/scheduler_daemon");
 
 const NOW = new Date(2026, 7, 26, 9, 0); // Wed Aug 26 2026 09:00 local
 
@@ -114,4 +114,14 @@ test("classifyRunResult reads engine responses by their stable markers", () => {
   assert.strictEqual(classifyRunResult("Too many workflows are already running (5/5): …"), "busy");
   assert.strictEqual(classifyRunResult("Execution stopped after exceeding the 210s time budget…"), "failed");
   assert.strictEqual(classifyRunResult(""), "failed");
+});
+
+test("submittedResume reads the step to check on from a 'Submitted.' result, and nothing else", () => {
+  const text = 'Submitted. "Upload the file" (step 4) is still running in the app. Call execute_skill again for "x" with resume_from: 3 to check on it. (run_id: r_1)';
+  assert.deepStrictEqual(submittedResume(text), { resumeFrom: 3 });
+  assert.strictEqual(submittedResume("Done. URL: x (run_id: r_1)"), null);
+  assert.strictEqual(submittedResume("Submitted. no step named"), null);
+  assert.strictEqual(submittedResume(""), null);
+  // after the allowed time it is reported as a failure, not as a quiet completion
+  assert.strictEqual(classifyRunResult(`Couldn't confirm in time. ${text}`), "failed");
 });

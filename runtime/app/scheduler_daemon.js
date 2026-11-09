@@ -134,6 +134,23 @@ function classifyRunResult(text) {
   return "failed";
 }
 
+/**
+ * A run that ended "Submitted." (Proof of Done): the app accepted the work and it was still running when the call ran
+ * out of time, so the page was parked. `resume_from: N` in the text is the step to check on. Null for anything else.
+ * Pure.
+ */
+function submittedResume(text) {
+  const t = String(text || "").trim();
+  if (!/^Submitted\./.test(t)) return null;
+  const m = /resume_from:\s*(\d+)/.exec(t);
+  return m ? { resumeFrom: Number(m[1]) } : null;
+}
+
+// How often, and for how long, a scheduled run goes back to check on a step that was still running. The park lasts
+// CONXA_PROOF_PARK_TTL_MS (15 min); 28 checks 30 s apart stay inside it.
+const PROOF_RECHECK_WAIT_MS = Number(process.env.CONXA_PROOF_RECHECK_WAIT_MS) >= 0 ? Number(process.env.CONXA_PROOF_RECHECK_WAIT_MS) : 30_000;
+const PROOF_RECHECK_MAX = Number(process.env.CONXA_PROOF_RECHECK_MAX) >= 0 ? Number(process.env.CONXA_PROOF_RECHECK_MAX) : 28;
+
 function _extractRunId(text) {
   const m = /\(run_id:\s*([^)]+)\)/.exec(String(text || ""));
   return m ? m[1].trim() : null;
@@ -264,13 +281,25 @@ function start(opts = {}) {
     log("info", "scheduled_run_start", { schedule_id: id, slug: schedule.slug, slot: slotIso, ad_hoc: !slotIso });
     writeStateSafe();
     try {
-      const text = await _callExecuteSkill({
+      const baseArgs = {
         skill: schedule.slug,
         ...(schedule.workspace_id ? { workspace_id: schedule.workspace_id } : {}),
         inputs: schedule.inputs || {},
         watch: false, // scheduled runs are always headless — visible windows compete for focus
         _trigger: "scheduled",
-      });
+      };
+      let text = await _callExecuteSkill(baseArgs);
+      // The work was accepted but still running when the call ran out of time. Nobody is here to ask, so go back and
+      // check on it (a re-check: nothing is done again) until it finishes, fails, or the time allowed runs out.
+      for (let n = 0; n < PROOF_RECHECK_MAX; n++) {
+        const wait = submittedResume(text);
+        if (!wait) break;
+        log("info", "scheduled_run_recheck", { schedule_id: id, slug: schedule.slug, attempt: n + 1, resume_from: wait.resumeFrom });
+        await new Promise((resolve) => setTimeout(resolve, PROOF_RECHECK_WAIT_MS));
+        text = await _callExecuteSkill({ ...baseArgs, resume_from: wait.resumeFrom });
+      }
+      // Still not confirmed after all that: an honest failure, never a quiet "done".
+      if (submittedResume(text)) text = `Couldn't confirm in time. ${String(text).trim()}`;
       const status = classifyRunResult(text);
       const runId = _extractRunId(text);
       log(status === "completed" ? "info" : "warn", "scheduled_run_" + status, {
@@ -479,4 +508,4 @@ function start(opts = {}) {
   });
 }
 
-module.exports = { computeActions, resolveEngineCommand, classifyRunResult, start, fileLock };
+module.exports = { computeActions, resolveEngineCommand, classifyRunResult, submittedResume, start, fileLock };

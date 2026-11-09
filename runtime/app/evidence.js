@@ -74,7 +74,7 @@ function bodyShape(value) {
 function endpointKey(method, template) { return `${method} ${template}`; }
 
 /**
- * @param {{pagesOf: () => any[], page: any, sinceMs?: number}} o
+ * @param {{pagesOf: () => any[], page: any, sinceMs?: number, baseline?: {busyCount:number, regions:string[]}}} o
  *   pagesOf: this run's own pages (never the whole browser context). page: the step's page.
  * @returns {Promise<Notebook>}
  */
@@ -256,7 +256,9 @@ async function open(o) {
 
   for (const p of livePages()) initial.add(p);
   nb.refresh();
-  nb.baseline = await nb.sample();
+  // A re-check after a pause measures against what the page showed BEFORE the action, not against the tray
+  // that is on screen now (that would read as "nothing new").
+  nb.baseline = o.baseline || await nb.sample();
   return nb;
 }
 

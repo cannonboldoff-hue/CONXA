@@ -253,10 +253,10 @@ function runPages(ctx) {
   return [...new Set([...(t.pages ? t.pages.values() : []), ...(t.bound || []), ...(t.pendingPages || [])])];
 }
 
-async function openNotebook(ctx, page) {
+async function openNotebook(ctx, page, baseline = null) {
   closeNotebook(ctx);
   try {
-    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx) });
+    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx), ...(baseline ? { baseline } : {}) });
     return ctx.notebook;
   } catch (_) {
     ctx.notebook = null; // the notebook is evidence, never a reason to fail a step: the gate reads the page alone
@@ -308,6 +308,23 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
   }
   const deadlineHit = v.status === "still_working" && v.reason === "deadline";
   if (v.status !== "failed" && v.status !== "timed_out" && !(deadlineHit && full)) return v;
+  if (deadlineHit && full && !state.loopDepth && !state.forkDepth && !ctx.dryRun) {
+    // The work is still going and this call is out of time. Pause instead of failing: the run ends "Submitted.", the
+    // page stays parked, and a later call checks on it without doing anything again (a re-check, never a re-run).
+    // Inside a loop or a conditional there is no cursor to resume from, so those still fail below.
+    state.proof.steps.push({
+      index: i,
+      ...(step.source_step_key ? { source_step_key: step.source_step_key } : {}),
+      intent: step.intent || null, verdict: "still_working", rung: null, required: "completed", checks: [],
+    });
+    ctx.tracker.emit("proof", { si: i, rung: null, v: "still_working", w: [] });
+    throw Object.assign(new Error("proof_pause"), {
+      proofPause: true, completionGate: true, stepIndex: i, step, page,
+      evidence: v.evidence,
+      recheck: completion.baseline,
+      proof: { steps: state.proof.steps.slice(), notes: state.proof.notes.slice() },
+    });
+  }
   ctx.tracker.emit("step_fail", { si: i, fc: v.status === "failed" ? "completion_failed" : "completion_timeout" });
   const cause = Object.assign(new Error(completionMessage(v)), {
     fault: true,
@@ -555,6 +572,25 @@ async function executeOneStep(ctx, state, steps, i) {
       throw stepFailure(step, i, new Error("Can't stop inside a repeated or conditional step: pick the step that starts the loop instead."), null, state.warnings);
     }
     throw Object.assign(new Error("guard_pause"), { guardPause: true, stepIndex: i, step, page, remaining: 0, stopBefore: true });
+  }
+
+  // Proof of Done: this step was parked while its work was still running, and the caller has come back to check.
+  // It is a RE-CHECK, never a re-run: nothing is clicked or uploaded again. The page is measured against what it
+  // showed before the action; the verdict (done, failed, or still working and parked again) follows the same rules.
+  const recheckKey = `__proof_recheck_${i}`;
+  if (Object.prototype.hasOwnProperty.call(state.inputs, recheckKey)) {
+    let baseline = null;
+    try { baseline = JSON.parse(String(state.inputs[recheckKey])); } catch (_) { baseline = null; }
+    delete state.inputs[recheckKey];
+    const notebook = baseline ? await openNotebook(ctx, page, baseline) : null;
+    const completion = { baseline: baseline || null, sinceMs: Date.now(), attempted: true, notebook };
+    const gateV = await confirmCompleted(ctx, state, step, i, page, completion, null);
+    proveStep(ctx, state, step, i, { gate: gateV, notebook });
+    ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_rechecked" });
+    state.hasExecutedStep = true;
+    state.prevStepType = step.type;
+    state.prevPage = page;
+    return;
   }
 
   // EXEC-49 P5: server.js bound an answer for a popup that blocked THIS (non-fork) step on the previous call.
