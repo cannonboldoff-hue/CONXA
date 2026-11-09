@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 48 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 47 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **117** |
+| **Total** | **116** |
 
 ---
 
@@ -375,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (39 remaining)
+## P2 — High Value, Do Soon (38 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1135,21 +1135,13 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
   Found in Phase 5: the failure card can't show the page at the moment of failure (the evidence screenshot lives under the sandbox folder, which the `conxa-asset://` protocol doesn't serve); the compile card's "N compile credits left" assumes the `quota` event's `remaining` key (not confirmed against `/usage/compile/commit`); a confirm-only review can be edited into a free-form one afterwards without the gate re-checking the destructive step after it; the guard cannot pause inside a `for_each` body (it fails the test instead); the stop/decision of a paused test lives only in memory (a Studio restart mid-pause leaves the parked browser to time out).
 - **Complexity:** S each.
 
-### PROOF-1 — Proof of Done, stages 5–6: going to look, later proof, parking long waits, learning per app
+### PROOF-1 — Proof of Done, rest of stage 5 and stage 6: going to look, later proof, per-item and final checks, learning per app
 - **Category:** Runtime / Compiler / Build Studio
-- **Description:** The design is `docs/artifacts/post-action-verification.html`; the plan is the same artifact's rollout. Stages 1–4 are done (a progress tray is no longer a question; every check answers yes/no/not_yet/cant_tell; a run ends `Done.`, `Done, please check.` or `Couldn't confirm.`; an evidence notebook reads every tab and visible frame the run owns plus request/response metadata; a step that starts work carries a checklist mined from the recording, agreed to in chat, calibrated by a clean test and enforced at publish for steps that can't be undone). Still open: **5** going to look (a separate read-only observation tab), later-step proof, final and per-item checks, and parking a long wait so a slow upload ends `Submitted.` then `Done.` on resume (closes RT-13); **6** per-app learned progress/success words so a non-English app is checked correctly.
+- **Description:** The design is `docs/artifacts/post-action-verification.html`; the plan is the same artifact's rollout. Stages 1–4 are done (a progress tray is no longer a question; every check answers yes/no/not_yet/cant_tell; a run ends `Done.`, `Done, please check.` or `Couldn't confirm.`; an evidence notebook reads every tab and visible frame the run owns plus request/response metadata; a step that starts work carries a checklist mined from the recording, agreed to in chat, calibrated by a clean test and enforced at publish for steps that can't be undone). Long waits are now parked and re-checked (closes RT-13). Still open: **5** going to look (a separate read-only observation tab; needs the recorder to keep a route template for the page where the result shows, see below), later-step proof, final and per-item checks (`partly_done`); **6** per-app learned progress/success words so a non-English app is checked correctly.
 - **Why required:** until stage 4, an older step only has what its author had; most steps carry no proof beyond "the action ran".
 - **Dependencies:** none left; stage 5 builds on stage 4's checks.
 - **Also open from stage 4:** the recorder still keeps no request/response summary (`session.py::_response_recorder` only runs for auth probing), so the transport check is the generic "a data-changing request was answered" and not a recorded route template; the per-item `identity` of a result is unused until stage 5.
 - **Complexity:** XL, in stages.
-
-### RT-13 — A slow upload can outlast the run's own deadline
-- **Category:** Runtime
-- **Description:** `completion.js::waitForCompletion` can wait up to `CONXA_COMPLETION_BUDGET_MS` (300 s) and never checks `cancelCheck`, while the run deadline is 210 s and the client's tool timeout is about 240 s. The true result of a slow upload may reach nobody.
-- **Why required:** the wait exists to report the truth about slow work, and slow work is exactly when the answer gets lost.
-- **Partial progress (2026-11-09):** the S half is done. `waitForCompletion` now takes `deadlineAt` and `cancelCheck`, stops 20 s before the run's deadline with `still_working`, and a full-mode step that hits it fails with a plain "ran out of time" message instead of the answer being lost. Still open: parking a long wait and resuming it later (Proof of Done stage 5).
-- **Dependencies:** long waits should park and resume (design: `docs/artifacts/post-action-verification.html`).
-- **Complexity:** M to park (the S half is done).
 
 ### RT-10 — The hand-over banner is installed on the whole host browser, not just the run's pages
 - **Category:** Runtime / Isolation

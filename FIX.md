@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A very slow upload is no longer reported as a failure or lost — 2026-11-09**
+When an upload took longer than the time one run is allowed, the app either gave up with an error or the answer arrived when nobody was listening. Now it says "Submitted": the file is still going, nothing was done twice, and the page is kept open for up to 15 minutes. Asking again checks on the same upload and tells you whether it finished or failed. Scheduled runs check back on their own and say "Couldn't confirm in time" if it never finishes.
+— 2026-11-09
+
 **Each step that starts work now has its own plain "how we know it worked" check — 2026-11-09**
 When a workflow uploads a file, saves, sends or deletes something, the app used to have no clear idea of what "done" looked like, so it could only guess. Now, while you record, the app notes what the website shows when the work really finishes, for example "upload complete". It turns that into a short check for that step and asks you in the chat, in everyday words, whether that is how you know it worked. For steps that can't be undone, like a delete or a send, the workflow can't be published until that check has either been tested or agreed to by you. If the website shows an error instead, the run now stops and says so plainly.
 — 2026-11-09

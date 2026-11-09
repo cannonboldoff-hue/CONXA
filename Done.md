@@ -9,7 +9,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | BUILD — Build Studio | 42 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
-| RT — Runtime | 7 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12 |
+| RT — Runtime | 8 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13 |
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **104** | |
+| **Total** | **105** | |
 
 ---
 
@@ -1287,7 +1287,7 @@ inferred from `outer_html`, not read directly.
 - **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
 - **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
 
-## RT — Runtime (7 done)
+## RT — Runtime (8 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1380,6 +1380,12 @@ Updater.md` §1.3.
 - **Category:** Runtime
 - **What fixed it:** the recorder (`bridge.js`) now keeps watching after an upload or a commit-worded click while a progress window is on screen (up to 15 s, no delay for an ordinary Save) and records what the app said when it ended as value-free words (`post_watch`). `compiler/effects.py` turns that, the status words and the kind of action into a per-step `validation.effect` checklist (a completion-message check, a generic "the app answered the request" check and an always-present failure veto); the "How can we tell it worked?" question offers it in plain words and ticking it agrees to it; `runtime/app/effect_probes.js` reads it as the gate's success signal; a clean test calibrates it and publishing a step that can't be undone requires a tested or agreed check.
 - **Verified:** `test_effects.py`, `test_effect_studio.py`, `test_recorder_bridge_js.py` (post_watch cases), `test_effect_probes.js`.
+
+### RT-13 — A slow upload can outlast the run's own deadline
+**Resolved:** 2026-11-09
+- **Category:** Runtime
+- **What fixed it:** the completion wait takes the run's deadline and stops 20 s short of it, and cancel ends it at once (stage 1). A full step still working then is no longer failed: `run.js` throws `proofPause`, `server.js` parks the page for 15 min (`CONXA_PROOF_PARK_TTL_MS`) and returns `Submitted.` with `resume_from`; calling `execute_skill` again with it re-checks the step without repeating it (`__proof_recheck_<i>`). The scheduler re-checks by itself and reports "Couldn't confirm in time" as a failure.
+- **Verified:** `test_completion.js`, `test_proof_pause.js`, `test_scheduler_decisions.js`.
 
 ### RT-12 — Completion gate gives up on Google Drive's real upload tray
 **Resolved:** 2026-11-09
