@@ -34,7 +34,11 @@ from conxa_core.models.skill_spec import (
 
 # Probe types whose answer the runtime of this version can give (runtime/app/effect_probes.js). The others exist in
 # the model so a pack never has to change shape when they are built; today they answer "cant_tell".
-RUNTIME_PROBES = frozenset({"input_has_files", "request_chain", "failure_signal", "new_text", "download_file"})
+RUNTIME_PROBES = frozenset({"input_has_files", "request_chain", "failure_signal", "new_text", "download_file", "fresh_look"})
+# A probe the runtime can answer but that has not yet been shown to work on THIS site. It is mined into the checklist,
+# but it does not raise required_rung: only a clean test run that saw it answer "yes" does (calibrate_effect). Until then
+# a site that never lists the new item cannot make a working workflow stop with "couldn't confirm".
+_UNTESTED_PROBES = frozenset({"fresh_look"})
 
 _DELETE_RE = re.compile(r"\b(delete|remove|erase|discard|trash|revoke|cancel subscription|unsubscribe|close account)\b", re.I)
 _SEND_RE = re.compile(r"\b(send|publish|pay|purchase|buy|order|checkout|submit|post|share|transfer|invite|email)\b", re.I)
@@ -163,6 +167,11 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
     for words in _final_words(ev):
         add(rung="completed", witness="renderer", probe={"type": "new_text", "words": words},
             plain=f"the app says “{' '.join(words)}”")
+    if kind == "upload":
+        # Go and look: open the same page again in a separate tab and see whether the uploaded file's name is there,
+        # and more times than before the upload. Read-only (a GET of the page already open); needs a single named file.
+        add(rung="result_exists", witness="fresh_look", probe={"type": "fresh_look", "expect": "file_name"},
+            plain="the file shows up when the page is opened again")
     # Always last: the failure signal. A veto, so an error or refusal beats any amount of good news.
     add(rung="completed", witness="renderer", role="veto", probe={"type": "failure_signal", "scope": "new_since_baseline"},
         plain="the app shows no error or refusal")
@@ -184,7 +193,8 @@ def build_effect(
         return None
     checks = _mine_checks(ev, chosen)
     desired_rung, _desired_witnesses = _DESIRED[chosen]
-    supported = [c for c in checks if c.role == "support" and c.probe.get("type") in RUNTIME_PROBES]
+    supported = [c for c in checks if c.role == "support" and c.probe.get("type") in RUNTIME_PROBES
+                 and c.probe.get("type") not in _UNTESTED_PROBES]
     best = max((_RUNG_INDEX[c.rung] for c in supported), default=_RUNG_INDEX["performed"])
     required = EFFECT_RUNGS[min(_RUNG_INDEX[desired_rung], best)]
     long = chosen in {"upload", "long_job", "download"}
@@ -237,6 +247,13 @@ def calibrate_effect(effect: dict[str, Any], observed: dict[str, str]) -> dict[s
     quorum = dict(effect.get("quorum") or {})
     quorum["witnesses"] = max(1, min(desired_witnesses(str(effect.get("kind") or "")), len(live_witnesses) or 1))
     out["quorum"] = quorum
+    # A check at a higher rung that really answered "yes" on this site is now trustworthy: raise what the step requires
+    # to it (never above what the design wants). Until a run proves it, the requirement stays where it was.
+    best = max((_RUNG_INDEX.get(str(c.get("rung")), -1) for c in checks if c.get("calibrated") is True), default=-1)
+    target = _RUNG_INDEX.get(str(effect.get("target_rung")), -1)
+    current = _RUNG_INDEX.get(str(effect.get("required_rung")), -1)
+    if best > current and target >= 0:
+        out["required_rung"] = EFFECT_RUNGS[min(best, target)]
     return out
 
 
@@ -281,6 +298,8 @@ def person_sentence(effect: dict[str, Any] | None) -> str:
             parts.append("the app confirms it received it")
         elif kind == "download_file":
             parts.append("the file arrives on this computer")
+        elif kind == "fresh_look":
+            parts.append("the file shows up when the page is opened again")
         elif c.get("plain"):
             parts.append(str(c["plain"]))
     seen: list[str] = []

@@ -53,8 +53,9 @@ def test_an_upload_gets_separate_witnesses_and_always_a_failure_veto_last():
     assert by_probe["input_has_files"].witness == "target" and by_probe["input_has_files"].rung == "performed"
     assert by_probe["request_chain"].witness == "transport" and by_probe["request_chain"].rung == "completed"
     assert by_probe["new_text"].probe["words"] == ["upload", "complete"] and by_probe["new_text"].witness == "renderer"
+    assert by_probe["fresh_look"].witness == "fresh_look" and by_probe["fresh_look"].rung == "result_exists"
     assert eff.checks[-1].role == "veto" and eff.checks[-1].probe["type"] == "failure_signal"
-    assert [c.id for c in eff.checks] == ["c1", "c2", "c3", "c4"]
+    assert [c.id for c in eff.checks] == ["c1", "c2", "c3", "c4", "c5"]
 
 
 def test_the_required_rung_never_asks_for_more_than_the_runtime_can_prove():
@@ -89,7 +90,7 @@ def test_no_check_carries_a_selector_or_a_value():
 
 def test_plain_sentence_reads_in_everyday_words():
     eff = build_effect({"action": {"action": "upload_intent"}, "post_watch": _watch("upload", "complete")})
-    assert plain_sentence(eff) == "the app accepted the request; the app says “upload complete”"
+    assert plain_sentence(eff) == "the app accepted the request; the app says “upload complete”; the file shows up when the page is opened again"
 
 
 # ── the model ───────────────────────────────────────────────────────────────────────────────────
@@ -118,17 +119,17 @@ def _upload_effect():
 
 def test_calibration_marks_dead_checks_and_raises_the_quorum_to_the_witnesses_that_really_answered():
     eff = _upload_effect()
-    got = calibrate_effect(eff, {"c1": "yes", "c2": "yes", "c3": "no", "c4": "no"})
+    got = calibrate_effect(eff, {"c1": "yes", "c2": "yes", "c3": "no", "c4": "no", "c5": "no"})
     flags = {c["id"]: c["calibrated"] for c in got["checks"]}
-    assert flags["c1"] is True and flags["c2"] is True and flags["c3"] is False
-    assert flags["c4"] is None, "a veto cannot be proven by a run that had no failure"
+    assert flags["c1"] is True and flags["c2"] is True and flags["c3"] is False and flags["c4"] is False
+    assert flags["c5"] is None, "a veto cannot be proven by a run that had no failure"
     assert got["quorum"]["witnesses"] == 2, "the target and transport witnesses really answered"
     assert eff["quorum"]["witnesses"] == 1, "the input is not changed in place"
 
 
 def test_calibration_leaves_a_check_the_run_never_reached_alone_and_never_drops_the_quorum_below_one():
     got = calibrate_effect(_upload_effect(), {})
-    assert [c["calibrated"] for c in got["checks"]] == [None] * 4 and got["quorum"]["witnesses"] == 1
+    assert [c["calibrated"] for c in got["checks"]] == [None] * 5 and got["quorum"]["witnesses"] == 1
 
 
 def test_calibration_never_asks_for_more_witnesses_than_the_design_wants():
@@ -140,8 +141,30 @@ def test_calibration_never_asks_for_more_witnesses_than_the_design_wants():
 def test_real_proof_means_a_live_support_check_at_completed_or_higher():
     eff = _upload_effect()
     assert has_real_proof(eff)
-    dead = calibrate_effect(eff, {"c1": "yes", "c2": "no", "c3": "no", "c4": "no"})
+    dead = calibrate_effect(eff, {"c1": "yes", "c2": "no", "c3": "no", "c4": "no"})  # c4 is the fresh look
     assert not has_real_proof(dead), "only the 'file was chosen' check is alive, and that proves nothing finished"
     assert not has_real_proof(None) and not has_real_proof({})
     only_veto = {"checks": [{"id": "c1", "role": "veto", "rung": "completed", "probe": {"type": "failure_signal"}}]}
     assert not has_real_proof(only_veto), "'no error seen' is not proof that it worked"
+
+
+# ── going to look raises the requirement only once a test run has shown it works ────────────────
+
+
+def test_the_fresh_look_never_raises_what_a_step_requires_until_a_clean_run_saw_it_work():
+    eff = _upload_effect()
+    assert eff["required_rung"] == "completed" and eff["target_rung"] == "result_exists"
+    fresh = next(c for c in eff["checks"] if c["probe"]["type"] == "fresh_look")
+    # a run in which the file was found on a fresh look: this site lists new files, so ask for that from now on
+    seen = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: "yes"})
+    assert seen["required_rung"] == "result_exists"
+    # a run in which it was not (or could not be) found: the requirement stays, and the dead check stops counting
+    for answer in ("no", "cant_tell"):
+        unseen = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: answer})
+        assert unseen["required_rung"] == "completed", answer
+        assert {c["id"]: c["calibrated"] for c in unseen["checks"]}[fresh["id"]] is False
+
+
+def test_only_an_upload_with_a_single_named_file_gets_a_fresh_look():
+    assert not [c for c in build_effect(_click("Delete project"), destructive=True, consequence="irreversible").checks if c.probe["type"] == "fresh_look"]
+    assert not [c for c in build_effect(_click("Save"), is_commit=True).checks if c.probe["type"] == "fresh_look"]

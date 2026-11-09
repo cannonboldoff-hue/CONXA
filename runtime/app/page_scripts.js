@@ -632,7 +632,19 @@ function completionProbe() {
   return { busyCount: busyCount, regions: regions };
 }
 
+// How many times `needle` appears in the page's visible text (case-insensitive). Used to see whether an uploaded
+// file's name is on the page, and more times than before the upload. Closes over nothing (re-parsed in the page).
+function countTextOccurrences(needle) {
+  var hay = String((document.body && document.body.innerText) || "").toLowerCase();
+  var n = String(needle || "").toLowerCase();
+  if (!n) return 0;
+  var count = 0;
+  for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) count++;
+  return count;
+}
+
 module.exports = {
+  countTextOccurrences,
   extractDescriptor,
   rafStable,
   isDisabled,

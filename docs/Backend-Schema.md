@@ -1240,8 +1240,8 @@ validation.effect = {
 
 Probe types: `input_has_files`, `request_chain` (a data-changing request answered 2xx without an error body), `failure_signal`
 (a **veto**: its answer "yes" means the failure was seen), `new_text` (value-free words that must appear, taken from the recorder's
-`post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `value_equals`, `row_with_identity`, `url_stays`,
-`fresh_look`, `later_step` are in the enum and answer `cant_tell` until built. A check a test run showed to be dead
+`post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `fresh_look` (upload only: the file's name appears on a fresh load of the same page, more often than before; lifts `required_rung` only after a clean test saw it work) run today; `value_equals`, `row_with_identity`, `url_stays`,
+`later_step` are in the enum and answer `cant_tell` until built. A check a test run showed to be dead
 (`calibrated: false`) no longer counts. An older runtime ignores `effect` (it is carried to `execution.json` by
 `skill_package_builder_saved_skill.py`), and a pack with no `effect` anywhere behaves exactly as before.
 
@@ -1592,6 +1592,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `tier_ok` | A resolution/recovery tier succeeded | `si`, `tier`, `sel` |
 | `verify_fail` | Post-action VERIFY failed | `si`, `ch` (assertion channel) |
 | `verify_result` | Full post-action assertion audit for a step that carries assertions, pass or fail, on every path that verifies (primary, settle re-verify, recovery, after a popup) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions), `ct` (checks that passed only because they could not look: `cant_tell`) |
+| `fresh_look` | A read-only re-open of the page in a separate tab to see whether an uploaded file's name is there (Proof of Done) | `si`, `a` (`yes` / `no` / `cant_tell`) |
 | `proof_resumed` | A parked long wait was picked up for a re-check | `si` |
 | `proof` | What a step proved (Proof of Done, `runtime/app/proof.js`), once per step that was judged | `si`, `rung` (highest proved: `performed`/`accepted`/`completed`/`result_exists`, or null), `v` (verdict: `proven`/`still_working`/`failed_nothing_happened`/`failed_may_have_happened`/`blocked`/`partly_done`/`couldnt_confirm`), `w` (witnesses that answered yes) |
 | `completion` | Completion gate ran after a step that can start work (upload, submit, click…); `st` is `done`, `failed`, `timed_out`, `still_working`, `no_sign`, `cant_tell` or `handoff` | `si`, `mode` (`short`/`full`), `st`, `waited` (ms) |

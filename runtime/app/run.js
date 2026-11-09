@@ -50,6 +50,7 @@ const { waitForCompletion, captureCompletionBaseline, completionMessage } = requ
 const proof = require("./proof");
 const evidence = require("./evidence");
 const effectProbes = require("./effect_probes");
+const { freshLook } = require("./fresh_look");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -245,6 +246,18 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
   }
 }
 
+// The one file an upload step sends, by name, or null (not an upload, several files, or no readable path). Only the
+// name is ever used, and only to look for it on a page.
+function uploadFileName(step, inputs) {
+  if (!step || step.type !== "upload") return null;
+  try {
+    const paths = resolveUploadPaths(interpolate(String(step.value ?? ""), inputs));
+    return paths.length === 1 ? require("node:path").basename(paths[0]) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // How the app this page belongs to words progress, success and failure (learned from its recordings, shipped in
 // app_knowledge.json). Empty when nothing is known: the English defaults then decide alone.
 function appSignals(ctx, page) {
@@ -263,10 +276,10 @@ function runPages(ctx) {
   return [...new Set([...(t.pages ? t.pages.values() : []), ...(t.bound || []), ...(t.pendingPages || [])])];
 }
 
-async function openNotebook(ctx, page, baseline = null) {
+async function openNotebook(ctx, page, baseline = null, fileName = null) {
   closeNotebook(ctx);
   try {
-    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx), ...(baseline ? { baseline } : {}) });
+    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx), ...(baseline ? { baseline } : {}), ...(fileName ? { fileName } : {}) });
     return ctx.notebook;
   } catch (_) {
     ctx.notebook = null; // the notebook is evidence, never a reason to fail a step: the gate reads the page alone
@@ -375,7 +388,7 @@ function gateAnswer(gate) {
   }
 }
 
-function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null } = {}) {
+async function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null } = {}) {
   const hasReq = hasRequiredAssertion(step);
   const full = (step.type === "upload" || step === ctx.lastActStep) && !!gate;
   // The step's own checklist (compiled from the recording) applies only when the gate ran: with the completion
@@ -395,7 +408,14 @@ function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered 
   }
   const g = gateAnswer(gate);
   if (g) checks.push({ rung: "completed", witness: "renderer", role: "support", answer: g });
-  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
+  // Go and look: the one witness that asks the app afresh. It opens the same page in a separate tab and reads it, so it
+  // runs only when the step carries that check and the check has not been shown to be dead on this site.
+  let fresh = null;
+  if (effect && notebook && effect.checks.some((c) => c && c.calibrated !== false && c.probe && c.probe.type === "fresh_look")) {
+    fresh = await freshLook({ page: notebook.page, registry: ctx.tabs, fileName: uploadFileName(step, state.inputs), countBefore: notebook.nameCountBefore });
+    ctx.tracker.emit("fresh_look", { si: i, a: fresh.answer });
+  }
+  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
 
   const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
   const j = proof.judge(checks, {
@@ -596,7 +616,7 @@ async function executeOneStep(ctx, state, steps, i) {
     const notebook = baseline ? await openNotebook(ctx, page, baseline) : null;
     const completion = { baseline: baseline || null, sinceMs: Date.now(), attempted: true, notebook };
     const gateV = await confirmCompleted(ctx, state, step, i, page, completion, null);
-    proveStep(ctx, state, step, i, { gate: gateV, notebook });
+    await proveStep(ctx, state, step, i, { gate: gateV, notebook });
     ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_rechecked" });
     state.hasExecutedStep = true;
     state.prevStepType = step.type;
@@ -849,7 +869,7 @@ async function executeOneStep(ctx, state, steps, i) {
   // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.
   let completion = { baseline: null, sinceMs: 0 };
   if (COMPLETION_GATE_ENABLED && isNonIdempotent(step)) {
-    const notebook = await openNotebook(ctx, page);
+    const notebook = await openNotebook(ctx, page, null, uploadFileName(step, state.inputs));
     completion = { baseline: await captureCompletionBaseline(page, notebook), sinceMs: Date.now(), attempted: true, notebook };
   }
 
@@ -887,7 +907,7 @@ async function executeOneStep(ctx, state, steps, i) {
       });
     }
     const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-    proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook });
+    await proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook });
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -991,7 +1011,7 @@ async function executeOneStep(ctx, state, steps, i) {
         if (verdict2 && verdict2.pass) {
           emitVerifyResult(ctx, i, verdict2);
           const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-          proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
+          await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
           ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
           state.hasExecutedStep = true;
           state.prevStepType = step.type;
@@ -1006,7 +1026,7 @@ async function executeOneStep(ctx, state, steps, i) {
           emitVerifyResult(ctx, i, verdict2);
           if (verdict2.pass) {
             const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-            proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
+            await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;
@@ -1081,7 +1101,7 @@ async function executeOneStep(ctx, state, steps, i) {
 
   emitVerifyResult(ctx, i, guard.lastVerify);
   const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-  proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot, notebook: completion.notebook });
+  await proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot, notebook: completion.notebook });
   state.recoveredSteps++;
   state.hasExecutedStep = true;
   state.prevStepType = step.type;
@@ -1548,7 +1568,7 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
   const verdict = await verifyStep(page, step, state.inputs, null, ctx.dialogQueue).catch(() => null);
   if (verdict && verdict.pass) {
     emitVerifyResult(ctx, i, verdict);
-    proveStep(ctx, state, step, i, { verify: verdict });
+    await proveStep(ctx, state, step, i, { verify: verdict });
     ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_after_popup" });
     state.hasExecutedStep = true;
     state.prevStepType = step.type;

@@ -193,6 +193,8 @@ export type TrackingDashboardResponse = {
     recovered: number
   }>
   assertion_health_by_step: TrackingAssertionRow[]
+  /** Steps whose proof keeps coming back unconfirmed (Proof of Done). Absent from an older backend. */
+  proof_health_by_step?: TrackingProofRow[]
 
   // ── Operations analytics (composed by app.services.tracking_analytics) ──
   granularity: TrackingGranularity
@@ -207,6 +209,25 @@ export type TrackingDashboardResponse = {
   roi: TrackingRoi
   insights: TrackingInsight[]
   stale_runtimes: number
+}
+
+export type TrackingProofRow = {
+  company: string
+  workflow: string
+  step_index: number | null
+  step_label: string
+  total: number
+  proven: number
+  /** Runs where the step ran but nothing confirmed it finished. */
+  unproven: number
+  failed: number
+  /** Runs where the work was still going when the call ran out of time. */
+  waiting: number
+  /** Share of runs that were unconfirmed or failed, in percent. */
+  unproven_rate: number
+  /** Same step's rate in the previous period; 0 when it had no problem then. */
+  previous_unproven_rate?: number
+  last_seen: number
 }
 
 export type TrackingAssertionRow = {

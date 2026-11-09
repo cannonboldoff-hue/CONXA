@@ -74,7 +74,8 @@ function bodyShape(value) {
 function endpointKey(method, template) { return `${method} ${template}`; }
 
 /**
- * @param {{pagesOf: () => any[], page: any, sinceMs?: number, baseline?: {busyCount:number, regions:string[]}}} o
+ * @param {{pagesOf: () => any[], page: any, sinceMs?: number, baseline?: {busyCount:number, regions:string[]},
+ *   fileName?: string}} o  `fileName`: an upload's single file name, counted on the page before the action so a later look can tell "one more".
  *   pagesOf: this run's own pages (never the whole browser context). page: the step's page.
  * @returns {Promise<Notebook>}
  */
@@ -173,6 +174,8 @@ async function open(o) {
   const nb = {
     sinceMs,
     baseline: null,
+    page: o.page,
+    nameCountBefore: null,
 
     /** Pick up tabs opened since the last call. Cheap; called on every sample. */
     refresh() {
@@ -259,6 +262,12 @@ async function open(o) {
   // A re-check after a pause measures against what the page showed BEFORE the action, not against the tray
   // that is on screen now (that would read as "nothing new").
   nb.baseline = o.baseline || await nb.sample();
+  if (o.fileName) {
+    try {
+      const n = await evalOn(o.page, pageScripts.countTextOccurrences, o.fileName, 2000);
+      nb.nameCountBefore = typeof n === "number" ? n : null;
+    } catch (_) { nb.nameCountBefore = null; }
+  }
   return nb;
 }
 

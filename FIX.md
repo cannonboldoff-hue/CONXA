@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**After an upload, the app now looks again to see the file is really there — 2026-11-10**
+Seeing "upload complete" does not prove the file arrived. After an upload, the app can now open the same page again in a separate tab, read it, and check that the file's name is on it, more times than before. It never clicks or types, closes that tab, and says "couldn't confirm" instead of guessing when it can't look. It only starts insisting on this after a test of your workflow showed it works on your website, so a site that shows no file list never makes a working upload stop. The cloud dashboard now also shows the steps that keep coming back unconfirmed.
+— 2026-11-10
+
 **Websites in other languages are now checked in their own words — 2026-11-09**
 The app used to recognise "uploading" and "failed" only in English, so on a German website it could think an upload had finished while it was still going. Now, when you record, the app notes the words that website really uses for "in progress", "done" and "failed", keeps only plain words (never names, numbers or anything you typed), and uses them when the workflow runs. Websites with no learned words behave as before. The cloud dashboard can also list the steps that keep coming back unconfirmed.
 — 2026-11-09

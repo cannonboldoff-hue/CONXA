@@ -76,9 +76,9 @@ function probeDownloadFile(nb) {
  * @returns {Array<{id:string, rung:string, witness:string, role:string, answer:string, evidence?:string, identity?:boolean}>}
  *   Checks a test run showed to be dead (`calibrated === false`) are left out: they no longer count toward anything.
  */
-function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null } = {}) {
+function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null } = {}) {
   const nb = notebook;
-  const fresh = nb ? nb.seenNew() : [];
+  const freshTexts = nb ? nb.seenNew() : [];
   const out = [];
   for (const check of (effect && effect.checks) || []) {
     if (!check || check.calibrated === false) continue;
@@ -87,9 +87,10 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true,
     switch (type) {
       case "input_has_files": r = { answer: executed ? "yes" : "cant_tell" }; break;
       case "request_chain": r = probeRequestChain(check, nb); break;
-      case "failure_signal": r = probeFailureSignal(nb, gate, fresh, signals && signals.failure); break;
+      case "failure_signal": r = probeFailureSignal(nb, gate, freshTexts, signals && signals.failure); break;
       case "new_text": r = probeNewText(check, nb); break;
       case "download_file": r = probeDownloadFile(nb); break;
+      case "fresh_look": r = fresh || { answer: "cant_tell" }; break; // looked at by run.js (fresh_look.js), which opens a tab
       default: r = { answer: "cant_tell" }; // value_equals / row_with_identity / url_stays / fresh_look / later_step: later
     }
     out.push({

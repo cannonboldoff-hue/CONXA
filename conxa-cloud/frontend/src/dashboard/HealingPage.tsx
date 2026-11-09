@@ -212,6 +212,41 @@ export function HealingPage() {
             </div>
           ) : null}
         </SectionCard>
+
+        <SectionCard
+          question="Are steps coming back unconfirmed?"
+          answer={
+            (data.proof_health_by_step ?? []).length
+              ? 'Some steps ran but could not be confirmed. The page may have changed how it says "done".'
+              : 'Every step that reports proof is being confirmed.'
+          }
+        >
+          {(data.proof_health_by_step ?? []).length ? (
+            <ul className="border-t border-white/8">
+              {(data.proof_health_by_step ?? []).slice(0, 6).map((row) => (
+                <li key={`${row.company}:${row.workflow}:${row.step_index}`} className="space-y-1.5 border-b border-white/8 py-4">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span className="truncate text-sm text-zinc-100">
+                      {row.workflow} · {row.step_label}
+                    </span>
+                    <span className="shrink-0 text-sm tabular-nums text-zinc-100">
+                      {fmtPercent(row.unproven_rate)} of runs
+                      {row.previous_unproven_rate != null && row.previous_unproven_rate > 0 ? (
+                        <span className="text-zinc-400"> · was {fmtPercent(row.previous_unproven_rate)}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    {row.unproven} could not be confirmed
+                    {row.failed > 0 ? ` · ${row.failed} failed` : ''}
+                    {row.waiting > 0 ? ` · ${row.waiting} still running when checked` : ''}
+                    {` · ${row.proven} of ${row.total} confirmed`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </SectionCard>
       </div>
     </DashboardPageBody>
   )

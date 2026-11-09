@@ -108,7 +108,7 @@ def test_a_clean_test_run_calibrates_by_the_documents_own_step_key():
     new, changed = calibrate_effects(doc, {key: {"c1": "yes", "c2": "yes", "c3": "no", "c4": "no"}})
     assert changed == 1
     eff = new["skills"][0]["steps"][0]["validation"]["effect"]
-    assert {c["id"]: c["calibrated"] for c in eff["checks"]} == {"c1": True, "c2": True, "c3": False, "c4": None}
+    assert {c["id"]: c["calibrated"] for c in eff["checks"]} == {"c1": True, "c2": True, "c3": False, "c4": False, "c5": None}
     assert eff["quorum"]["witnesses"] == 2
     # nothing known about a step, nothing changes
     same, none = calibrate_effects(doc, {"nope#1": {"c1": "yes"}})
@@ -183,7 +183,10 @@ def test_strict_proof_needs_a_test_or_the_authors_word():
     eff = UPLOAD().model_dump()
     assert has_real_proof(eff) and not has_real_proof(eff, strict=True)
     assert has_real_proof(confirm_effect(_doc(_step("upload", "x", UPLOAD())), 0)["skills"][0]["steps"][0]["validation"]["effect"], strict=True)
-    assert person_sentence(eff) == "the app confirms it received it and you see “upload complete” on the screen"
+    assert person_sentence(eff) == (
+        "the app confirms it received it and you see “upload complete” on the screen"
+        " and the file shows up when the page is opened again"
+    )
 
 
 # ── the patch gate ──────────────────────────────────────────────────────────────────────────────
