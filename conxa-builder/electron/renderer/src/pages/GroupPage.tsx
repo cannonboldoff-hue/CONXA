@@ -1,3 +1,5 @@
+import { getDemo } from '@/lib/tourScripts'
+import { tourActive, useTourStore } from '@/store/tourStore'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -94,14 +96,19 @@ function AddAppDialog({ groupId }: { groupId: string }) {
 }
 
 /** Opens the full New workflow page with this group preselected. */
-function NewWorkflowButton({ groupName }: { groupName: string }) {
+function NewWorkflowButton({ groupName, ready }: { groupName: string; ready: boolean }) {
   const navigate = useNavigate()
   const setDraft = useShellStore((s) => s.setNewWorkflowDraft)
   return (
     <Button
       variant="brand"
+      data-tour={ready ? 'new-workflow' : undefined}
       onClick={() => {
-        setDraft({ group: groupName })
+        // Tour only: fill in the demo's name and start page so a first-timer has nothing to type.
+        const demo = tourActive(useTourStore.getState()) ? getDemo(useTourStore.getState().demo) : undefined
+        setDraft(demo
+          ? { group: groupName, name: demo.workflowName, starting_page: `${window.conxa.webOrigin}${demo.startPath}` }
+          : { group: groupName })
         navigate('/new')
       }}
     >
@@ -546,7 +553,7 @@ export function GroupPage() {
                 {group.apps.length > 0 && !auth.ready ? 'Finish signing in above first.' : 'Uses the sessions signed in above.'}
               </p>
             </div>
-            <NewWorkflowButton groupName={group.name} />
+            <NewWorkflowButton groupName={group.name} ready={auth.ready || group.apps.length === 0} />
           </div>
         </div>
       </div>

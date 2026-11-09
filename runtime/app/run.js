@@ -49,6 +49,7 @@ const { waitForSettle } = require("./settle");
 const { waitForCompletion, captureCompletionBaseline, completionMessage } = require("./completion");
 const proof = require("./proof");
 const evidence = require("./evidence");
+const effectProbes = require("./effect_probes");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -346,9 +347,13 @@ function gateAnswer(gate) {
   }
 }
 
-function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null } = {}) {
+function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null } = {}) {
   const hasReq = hasRequiredAssertion(step);
   const full = (step.type === "upload" || step === ctx.lastActStep) && !!gate;
+  // The step's own checklist (compiled from the recording) applies only when the gate ran: with the completion
+  // gate off, or on a step it never gated, nothing here may be stricter than before.
+  const effect = gate && step.validation && step.validation.effect && Array.isArray(step.validation.effect.checks)
+    ? step.validation.effect : null;
   const checks = [{ rung: "performed", witness: "target", role: "support", answer: "yes" }];
   if (verify && Array.isArray(verify.results) && verify.results.length) {
     for (const r of verify.results) {
@@ -362,20 +367,26 @@ function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered 
   }
   const g = gateAnswer(gate);
   if (g) checks.push({ rung: "completed", witness: "renderer", role: "support", answer: g });
+  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true }));
 
   const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
-  const j = proof.judge(checks, { requiredRung: required });
+  const j = proof.judge(checks, {
+    requiredRung: required,
+    quorum: effect && effect.quorum ? { witnesses: effect.quorum.witnesses, identityRequired: !!effect.quorum.identity_required } : undefined,
+  });
   const onUnverified = step.validation && step.validation.effect && step.validation.effect.on
     && String(step.validation.effect.on.unverified || "").startsWith("handover") ? "handover" : "fail";
   const move = proof.nextMove(j.verdict, { idempotent: proof.safeToRepeat(step), attended: !ctx.scheduled, onUnverified });
 
   state.proof.steps.push({
     index: i,
+    ...(step.source_step_key ? { source_step_key: step.source_step_key } : {}),
     intent: step.intent || null,
     verdict: j.verdict,
     rung: j.rung,
     required,
-    checks: checks.map(({ rung, witness, answer }) => ({ rung, witness, answer })),
+    ...(effect ? { effect_kind: effect.kind } : {}),
+    checks: checks.map(({ id, rung, witness, role, answer }) => ({ ...(id ? { id } : {}), rung, witness, ...(role === "veto" ? { role } : {}), answer })),
   });
   ctx.tracker.emit("proof", {
     si: i, rung: j.rung, v: j.verdict,
@@ -387,6 +398,15 @@ function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered 
     return;
   }
   if (move.do === "wait") return; // the next step's own checks (or a popup it owns) take over
+  if (String(j.verdict).startsWith("failed_")) {
+    // A failure signal in the step's own checklist (an error or refusal the app showed, a reply that said no): an
+    // ordinary failure, not "couldn't confirm". The action already happened, so it never enters recovery.
+    ctx.tracker.emit("step_fail", { si: i, fc: "proof_failed" });
+    const cause = Object.assign(new Error(`This step didn't finish: ${j.reason || "the app reported a problem"}.`), {
+      fault: true, faultKind: "action_failed", actionMayHaveTakenEffect: true,
+    });
+    throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
+  }
   // Anything else fails closed. Today only "couldn't confirm" on a step that is not safe to do twice
   // (an upload, a destructive step) or on a run nobody is watching gets here.
   state.proof.stopped = { index: i };
@@ -820,7 +840,7 @@ async function executeOneStep(ctx, state, steps, i) {
       });
     }
     const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-    proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot });
+    proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook });
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -924,7 +944,7 @@ async function executeOneStep(ctx, state, steps, i) {
         if (verdict2 && verdict2.pass) {
           emitVerifyResult(ctx, i, verdict2);
           const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-          proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot });
+          proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
           ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
           state.hasExecutedStep = true;
           state.prevStepType = step.type;
@@ -939,7 +959,7 @@ async function executeOneStep(ctx, state, steps, i) {
           emitVerifyResult(ctx, i, verdict2);
           if (verdict2.pass) {
             const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-            proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot });
+            proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;
@@ -1014,7 +1034,7 @@ async function executeOneStep(ctx, state, steps, i) {
 
   emitVerifyResult(ctx, i, guard.lastVerify);
   const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-  proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot });
+  proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot, notebook: completion.notebook });
   state.recoveredSteps++;
   state.hasExecutedStep = true;
   state.prevStepType = step.type;

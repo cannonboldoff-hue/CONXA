@@ -286,3 +286,15 @@ test("the size override is re-applied when a page becomes ready, at the run's cu
   wc.handlers["did-finish-load"]();
   assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
 });
+
+test("tour hint is allowed only in sign-in runs on the Conxa website host", () => {
+  process.env.CONXA_WEB_ORIGIN = "https://www.conxa.in";
+  const wc = (url) => ({ getURL: () => url });
+  panel.setTourHint({ target: "", text: "Sign in here" });
+  assert.strictEqual(panel._tourAllowed({ kind: "signin" }, wc("https://www.conxa.in/sign-in")), true);
+  assert.strictEqual(panel._tourAllowed({ kind: "record" }, wc("https://www.conxa.in/practice")), false);
+  assert.strictEqual(panel._tourAllowed({ kind: "test" }, wc("https://www.conxa.in/practice")), false);
+  assert.strictEqual(panel._tourAllowed({ kind: "signin" }, wc("https://evil.example/sign-in")), false);
+  panel.setTourHint(null);
+  assert.strictEqual(panel._tourAllowed({ kind: "signin" }, wc("https://www.conxa.in/sign-in")), false);
+});

@@ -1020,6 +1020,9 @@ class CompileFlowMixin:
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "popup": op["popup"]}, rid)
                 self._log_edit("add_known_popup_fork", skill_id, before, source="clarify", proposal_id=None)
                 added += 1
+            elif kind == "confirm_effect":
+                self.cmd_confirm_effect({"skill_id": skill_id, "step_index": index_of(op["step_key"])}, rid)
+                self._log_edit("confirm_effect", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "confirm_optional":
                 self.cmd_confirm_optional_interstitial(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "keep_as_step": bool(op.get("keep_as_step"))}, rid)

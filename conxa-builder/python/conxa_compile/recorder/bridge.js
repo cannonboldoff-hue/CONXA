@@ -188,6 +188,14 @@
   const scrollDebounceMs = Number(CAP.scroll_debounce_ms) > 0 ? Number(CAP.scroll_debounce_ms) : 220;
   const clickSettleQuietMs = Number(CAP.click_settle_quiet_ms) > 0 ? Number(CAP.click_settle_quiet_ms) : 20;
   const clickSettleMaxMs = Number(CAP.click_settle_max_ms) > 0 ? Number(CAP.click_settle_max_ms) : 250;
+  // Proof of Done: after an action that starts work (an upload, a Save/Send/Import click) the page may
+  // show a progress window and, much later, "complete". Keep watching only while such progress is on
+  // screen (so an ordinary Save adds no delay), up to this ceiling, so the compiler can see what the app
+  // displayed when the work FINISHED. A tray that matters is already on screen once the ordinary settle
+  // above has passed (it IS a DOM change), so progress is looked for once and not waited for: an
+  // ordinary Save must report as fast as it always did.
+  const postWatchMaxMs = Number(CAP.post_watch_max_ms) > 0 ? Number(CAP.post_watch_max_ms) : 15000;
+  const postWatchQuietMs = Number(CAP.post_watch_quiet_ms) > 0 ? Number(CAP.post_watch_quiet_ms) : 1500;
   function djb2(str) {
     let hash = 5381;
     for (let i = 0; i < str.length; i++) {
@@ -1672,6 +1680,73 @@
     });
   }
 
+  // ── what the app displayed while it finished the work (Proof of Done) ───────────────────────────
+  const _PROGRESS_RE = /\b(uploading|processing|saving|sending|submitting|importing|exporting|converting|preparing|syncing|loading|in progress|please wait)\b|(^|[^\d.])\d{1,2}\s?%/i;
+  const _COMMIT_WORD_RE = /\b(save|submit|send|upload|import|export|create|publish|delete|remove|pay|confirm|apply|add|post|share|finish|done|attach)\b/i;
+
+  // An action that probably starts background work: choosing a file, or pressing a commit-worded button.
+  function _startsWork(payload) {
+    try {
+      const a = payload && payload.action && payload.action.action;
+      if (a === "upload_intent") return true;
+      if (a !== "click") return false;
+      const t = payload.target || {};
+      return _COMMIT_WORD_RE.test([t.inner_text, t.aria_label, t.name, t.label_text].filter(Boolean).join(" "));
+    } catch (_e) { return false; }
+  }
+
+  // Status lines AND progress windows. _surfaceTexts() only reads live regions; an upload tray is usually a
+  // plain (non-modal) dialog, so those are read here too. Never the person's data: the caller reduces
+  // every text to value-free words before it is kept.
+  function _watchTexts() {
+    const out = _surfaceTexts().map((line) => line.slice(line.indexOf("\t") + 1));
+    try {
+      const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      for (const el of document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open]')) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const t = clean(el.innerText || el.textContent);
+        if (t && out.length < 24 && !out.includes(t)) out.push(t);
+      }
+    } catch (_e) {}
+    return out;
+  }
+
+  function _progressVisible() {
+    try {
+      for (const el of document.querySelectorAll('[aria-busy="true"], [role="progressbar"], progress')) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return true;
+      }
+    } catch (_e) {}
+    return _watchTexts().some((t) => _PROGRESS_RE.test(t));
+  }
+
+  const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Keeps watching ONLY while progress is on screen. Records that progress was seen and the value-free
+  // words of what the page said once it ended (e.g. "upload complete"). Adds nothing for an action
+  // that shows no progress. Observation only: it never touches the page.
+  async function _watchPostAction(payload) {
+    const t0 = Date.now();
+    const before = new Set(((payload.state_probe && payload.state_probe.surfaces_before) || []).map((l) => l.slice(l.indexOf("\t") + 1)));
+    if (!_progressVisible()) return;
+    let lastBusy = Date.now();
+    while (Date.now() - t0 < postWatchMaxMs) {
+      await _sleep(250);
+      if (_progressVisible()) lastBusy = Date.now();
+      else if (Date.now() - lastBusy >= postWatchQuietMs) break;
+    }
+    const final = [];
+    for (const text of _watchTexts()) {
+      if (before.has(text) || _PROGRESS_RE.test(text)) continue;
+      const words = _valueFreeWords(text);
+      if (words.length) final.push({ kind: "status", words });
+      if (final.length >= 3) break;
+    }
+    payload.post_watch = { progress_seen: true, waited_ms: Date.now() - t0, final_status: final };
+  }
+
   // Finalizes in submission order (not completion order) so two fast clicks in a row can never
   // have their state_change/dom_diff reported out of sequence.
   // Pending payloads are tracked so beforeunload can force-flush them (see below) — otherwise a
@@ -1681,6 +1756,7 @@
     _pendingClickPayloads.push(payload);
     _finalizeQueue = _finalizeQueue
       .then(() => _waitForDomSettle(quietMs, maxWaitMs))
+      .then(() => (_startsWork(payload) ? _watchPostAction(payload) : null))
       .then(() => {
         _pendingClickPayloads = _pendingClickPayloads.filter((p) => p !== payload);
         if (payload.__flushed) return;
@@ -2138,7 +2214,7 @@
             return { name: f.name, size: f.size, type: f.type };
           });
           const p = serializeTarget(target, "upload_intent", JSON.stringify(files));
-          finalizeState(p);
+          finalizeStateAfterSettle(p, clickSettleQuietMs, clickSettleMaxMs);
           return;
         }
         if (inputType === "checkbox") {

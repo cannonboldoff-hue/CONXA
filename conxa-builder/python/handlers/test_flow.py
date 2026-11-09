@@ -311,6 +311,8 @@ class TestFlowMixin:
         if status == "passed":
             ran_destructive = any(r.get("destructive") and r["status"] == "done" for r in rows)
             outcome = result.get("outcome") or "done"
+            if outcome == "done" and workflow is not None and workflow.skill_id:
+                self._tf_calibrate(workflow.skill_id, result.get("proof_steps") or [])
             notes = [str(n) for n in (result.get("notes") or [])][:10]
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
                  outputs=result.get("outputs") or {}, actions=["approve", "test_again"],
@@ -442,6 +444,34 @@ class TestFlowMixin:
             return True
         except Exception:  # noqa: BLE001
             return False
+
+    @staticmethod
+    def _tf_calibrate(skill_id: str, proof_steps: list[dict[str, Any]]) -> int:
+        """Proof of Done: a clean test run shows which of each step's completion checks really fire on this site.
+        Checks that never answered "yes" are marked dead (they no longer count), and the number of separate witnesses
+        needed rises to the ones that did answer. Only a fully clean pass calibrates; best effort and silent, because a
+        test that passed must never turn into an error over bookkeeping. Returns how many steps changed."""
+        try:
+            from conxa_compile.editor.workflow_mutations import calibrate_effects
+            from conxa_core.storage.json_store import read_skill, write_skill
+
+            observed: dict[str, dict[str, str]] = {}
+            for s in proof_steps:
+                key = str(s.get("source_step_key") or "")
+                checks = {str(c["id"]): str(c["answer"]) for c in (s.get("checks") or []) if c.get("id") and c.get("answer")}
+                if key and checks:
+                    observed[key] = checks
+            if not observed:
+                return 0
+            doc = read_skill(skill_id)
+            if not doc:
+                return 0
+            doc, changed = calibrate_effects(doc, observed)
+            if changed:
+                write_skill(skill_id, doc)
+            return changed
+        except Exception:  # noqa: BLE001
+            return 0
 
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
                    inputs: dict[str, Any] | None = None, outcome: str | None = None) -> str:

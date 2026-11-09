@@ -56,6 +56,33 @@ const _sharedInUse = () => [..._runs.values()].some((r) => r.partition === SHARE
 const _markerUrl = (runId, tabId) => `about:blank?conxa_run=${encodeURIComponent(runId)}&conxa_tab=${encodeURIComponent(tabId)}`;
 // The marker is an internal handle, never an address — it must not reach the URL field or a label.
 const _isMarker = (url) => !url || url.startsWith("about:blank");
+// Guided tour (BUILD-79): a note drawn inside the page. Allowed ONLY in sign-in runs (they install no
+// recorder, so nothing is captured) and ONLY on the Conxa website host. Never in record or test runs.
+let _tourHint = null; // { target, text } | null
+const _tourScript = require("fs").readFileSync(path.join(__dirname, "tour_hint.js"), "utf8");
+function _tourHost() {
+  try { return new URL(process.env.CONXA_WEB_ORIGIN || "https://www.conxa.in").host; } catch (_) { return ""; }
+}
+function _tourAllowed(run, wc) {
+  if (!run || run.kind !== "signin" || !_tourHint) return false;
+  try { return new URL(wc.getURL()).host === _tourHost(); } catch (_) { return false; }
+}
+function _injectTourHint(run, tab) {
+  const wc = tab.view.webContents;
+  if (wc.isDestroyed() || !_tourAllowed(run, wc)) return;
+  const arg = JSON.stringify({ target: String(_tourHint.target || ""), text: String(_tourHint.text || "") });
+  wc.executeJavaScriptInIsolatedWorld(2001, [{ code: `${_tourScript}
+;__conxaTourHint(${arg});` }]).catch(() => {});
+}
+function setTourHint(hint) {
+  _tourHint = hint && hint.text ? { target: hint.target, text: hint.text } : null;
+  for (const run of _runs.values()) for (const tab of run.tabs) {
+    const wc = tab.view.webContents;
+    if (wc.isDestroyed()) continue;
+    if (_tourHint) _injectTourHint(run, tab);
+    else if (run.kind === "signin") wc.executeJavaScriptInIsolatedWorld(2001, [{ code: "window.__conxaTourHintClear && window.__conxaTourHintClear();" }]).catch(() => {});
+  }
+}
 function _hostOf(url) {
   try { return new URL(url).hostname; } catch (_) { return ""; }
 }
@@ -154,7 +181,9 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   // A navigation (the blank marker page -> a real site, which swaps the render process) can drop the
   // override, leaving the page at full size inside a shrunk view: clipped on the right and bottom.
   // So it is re-applied each time a page is ready, not only when the tab is created.
-  for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => _emulate(run, tab));
+  for (const ev of ["dom-ready", "did-finish-load"]) {
+    view.webContents.on(ev, () => { _emulate(run, tab); if (ev === "dom-ready") _injectTourHint(run, tab); });
+  }
   // The recorder sees every page in Electron (Studio's own window, other runs) through one CDP
   // context; a tab's devtools target id is how it tells which pages are its run's (`targets`).
   if (run.kind !== "test") {
@@ -623,4 +652,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };
+module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };

@@ -1,3 +1,4 @@
+import { useTourStore } from '@/store/tourStore'
 import { useEffect, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LogOut, RefreshCw } from 'lucide-react'
@@ -129,6 +130,11 @@ function AboutTab() {
           )}
           {(isAvailable || hasError) && <Button size="sm" onClick={startDownload}>Update now</Button>}
         </div>
+      </Row>
+      <Row label="Practice tour">
+        <Button variant="outline" size="sm" onClick={() => { useShellStore.getState().setSettingsOpen(false); useTourStore.getState().setMode('beginner'); useTourStore.getState().setPicking(true) }}>
+          Replay a demo
+        </Button>
       </Row>
       <p className="px-4 py-3 text-xs text-[var(--text-meta)]">
         Licensed, not sold.{' '}

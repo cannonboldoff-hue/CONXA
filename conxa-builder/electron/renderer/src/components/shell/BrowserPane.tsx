@@ -99,7 +99,7 @@ function FlowButtons({ flow }: { flow: FlowControls }) {
       ) : (
         <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowPauseRecording(flow.workflowId, flow.cardId))}>Pause</Button>
       )}
-      <Button variant="brand" size="sm" disabled={busy || !flow.count} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>Finish and save</Button>
+      <Button variant="brand" size="sm" data-tour="finish-recording" disabled={busy || !flow.count} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>Finish and save</Button>
     </>
   )
 }

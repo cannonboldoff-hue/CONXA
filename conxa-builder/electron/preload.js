@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld("conxa", {
   /** True when running from the packaged installer; false in `npm run dev`. */
   isPackaged: process.env.CONXA_ELECTRON_IS_PACKAGED === "1",
 
+  /** Public website origin; the guided tour's practice site lives under it. */
+  webOrigin: process.env.CONXA_WEB_ORIGIN || "https://www.conxa.in",
+
+  /** Guided tour: show a note on the practice site inside the sign-in browser ({target,text}), or clear it (null). */
+  tourHint: (hint) => ipcRenderer.invoke("tour:hint", hint),
+
   /** Invoke a backend command. Resolves to { ok, result } | { ok:false, code, message }. */
   cmd: (type, payload) => ipcRenderer.invoke("python:cmd", { type, payload }),
 

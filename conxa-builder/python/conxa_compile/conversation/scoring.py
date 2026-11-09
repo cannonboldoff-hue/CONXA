@@ -84,7 +84,8 @@ def decide(q: dict[str, Any], doc: dict[str, Any] | None = None) -> dict[str, An
     p, cost = p_wrong(q), COST.get(kind, 0.5)
     score = round(p * cost, 4)
     out = {"p": p, "cost": cost, "score": score}
-    if kind in unknowns.SAFETY_KINDS:
+    if kind in unknowns.SAFETY_KINDS or q.get("needs_proof"):
+        # needs_proof: a step that can't be undone has no check the author agreed to. Never assumed or deferred.
         return {**out, "action": "ask", "reason": "safety floor"}
     if q.get("phase") == "pre_compile":
         # Never assumed or deferred: only whether it is a quick confirmation (a guess is ticked) or a real ask.

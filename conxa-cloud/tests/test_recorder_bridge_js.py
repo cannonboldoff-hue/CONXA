@@ -1363,3 +1363,71 @@ def test_a_click_that_changes_no_message_records_no_surface_context(page: Page) 
     _install_bridge(page, '<button id="plain">Plain</button>')
 
     assert _click_and_wait(page, "#plain")["surface_context"] is None
+
+
+# ── what the app displayed while it finished the work (Proof of Done) ───────────────────────────
+
+_UPLOAD_TRAY_HTML = """
+<button id="upload" onclick="
+  const tray = document.createElement('div');
+  tray.setAttribute('role', 'dialog');
+  tray.innerHTML = '<p>Uploading 1 item</p><div role=progressbar></div>';
+  document.body.appendChild(tray);
+  setTimeout(() => { tray.innerHTML = '<p>1 upload complete</p>'; }, 900);">Upload</button>
+"""
+
+
+def _wait_for_event(page: Page, action: str, timeout_ms: int = 6000) -> dict:
+    waited = 0
+    while waited < timeout_ms:
+        events = _action_events(page, action)
+        if events:
+            return events[-1]
+        page.wait_for_timeout(100)
+        waited += 100
+    raise AssertionError(f"no {action} event was recorded within {timeout_ms} ms")
+
+
+def test_the_final_message_of_a_long_action_is_recorded_as_value_free_words(page: Page) -> None:
+    _install_bridge(page, _UPLOAD_TRAY_HTML)
+    page.click("#upload")
+    event = _wait_for_event(page, "click")
+
+    watch = event.get("post_watch")
+    assert watch is not None, "an upload that showed a progress window must leave a post_watch"
+    assert watch["progress_seen"] is True
+    words = [w for item in watch["final_status"] for w in item["words"]]
+    assert "upload" in words and "complete" in words, watch
+    assert "uploading" not in words, "the progress text is not the final message"
+    assert not any(ch.isdigit() for w in words for ch in w), f"a value leaked: {words}"
+    assert watch["waited_ms"] >= 800, "it must have waited for the work to finish"
+
+
+def test_a_commit_click_that_shows_no_progress_records_no_post_watch_and_is_not_delayed(page: Page) -> None:
+    _install_bridge(page, '<button id="save">Save</button>')
+    page.click("#save")
+    page.wait_for_timeout(700)
+
+    events = _action_events(page, "click")
+    assert events, "an ordinary Save must still be reported within the usual settle"
+    assert events[-1].get("post_watch") is None
+
+
+def test_a_chosen_file_is_watched_too(page: Page, tmp_path) -> None:
+    f = tmp_path / "report.pdf"
+    f.write_bytes(b"%PDF-1.4 test")
+    _install_bridge(
+        page,
+        """<input id="file" type="file" onchange="
+          const tray = document.createElement('div');
+          tray.setAttribute('role', 'dialog');
+          tray.textContent = 'Uploading 1 item';
+          document.body.appendChild(tray);
+          setTimeout(() => { tray.textContent = '1 upload complete'; }, 700);">""",
+    )
+    page.set_input_files("#file", str(f))
+    event = _wait_for_event(page, "upload_intent")
+
+    watch = event.get("post_watch")
+    assert watch is not None and watch["progress_seen"] is True
+    assert any("complete" in item["words"] for item in watch["final_status"]), watch

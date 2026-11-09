@@ -275,8 +275,17 @@ def runtime_outcome(result: dict[str, Any], message: str) -> tuple[str | None, l
     raw = structured.get("steps") if isinstance(structured.get("steps"), list) else []
     for s in raw[:200]:
         if isinstance(s, dict):
-            steps.append({"index": s.get("index"), "intent": str(s.get("intent") or ""),
-                          "verdict": str(s.get("verdict") or ""), "rung": s.get("rung")})
+            row: dict[str, Any] = {"index": s.get("index"), "intent": str(s.get("intent") or ""),
+                                   "verdict": str(s.get("verdict") or ""), "rung": s.get("rung")}
+            # What a test run needs to calibrate a step's completion checklist (Proof of Done): which document
+            # step it was, and each check's id and answer. Answers only, never contents.
+            if s.get("source_step_key"):
+                row["source_step_key"] = str(s["source_step_key"])
+            if s.get("effect_kind"):
+                row["effect_kind"] = str(s["effect_kind"])
+                row["checks"] = [{"id": str(c.get("id") or ""), "answer": str(c.get("answer") or "")}
+                                 for c in (s.get("checks") or []) if isinstance(c, dict) and c.get("id")]
+            steps.append(row)
     return outcome, steps
 
 
@@ -681,6 +690,33 @@ class WorkflowsMixin:
                     "editor. Confirm the binding before publishing.",
                 )
 
+    def _require_proof_for_irreversible(self, skill_id: str, skill_slug: str) -> None:
+        """Proof of Done publish rule: a step that cannot be undone (a delete, a send, a payment) must have a
+        completion check that was either shown to work in a passing test or agreed to by the author in chat. Without
+        one the run could only ever say "couldn't confirm" at the one moment it matters, so it cannot reach a customer.
+
+        Only a pack that carries completion checks at all is held to this. A pack compiled before they existed has
+        nothing to confirm; recompiling it gives it checks, and from then on the rule applies."""
+        from conxa_compile.conversation import clarify
+        from conxa_core.storage.json_store import read_skill
+
+        skill = read_skill(skill_id)
+        if not skill:
+            return
+        unproven = clarify.irreversible_without_proof(skill)
+        if not unproven:
+            return
+        steps = clarify._steps(skill)
+        keys = clarify.step_keys(steps)
+        names = [clarify.step_name(steps[keys.index(k)]) for k in unproven[:3]]
+        more = f" and {len(unproven) - 3} more" if len(unproven) > 3 else ""
+        raise _CommandError(
+            "irreversible_step_requires_proof",
+            f"Skill {skill_slug!r} can\u2019t be published yet. \u201c{names[0]}\u201d{(', ' + ', '.join(f'“{n}”' for n in names[1:])) if len(names) > 1 else ''}{more} "
+            "can\u2019t be undone, and nothing has shown how to tell it worked. Answer \u201cHow can we tell it worked?\u201d in the "
+            "workflow\u2019s conversation, or test it all the way through, then publish again.",
+        )
+
     def cmd_build_skill_package(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """Build one workflow's compiled skill into the shared local package
         directory. Scoped to that one workflow — a sibling workflow that isn't
@@ -736,6 +772,8 @@ class WorkflowsMixin:
         # release. A destructive step whose compile-time-detected entity binding is still
         # unconfirmed must never reach a real customer's machine.
         self._require_confirmed_entity_bindings(workflow.skill_id, skill_slug)
+        # Proof of Done: a step that can't be undone must have a completion check someone tested or agreed to.
+        self._require_proof_for_irreversible(workflow.skill_id, skill_slug)
 
         company_slug = workspace_dir_slug(workspace_id)
         version = _validate_release_version(payload.get("version"))

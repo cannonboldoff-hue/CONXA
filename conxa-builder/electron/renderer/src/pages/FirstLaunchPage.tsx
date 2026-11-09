@@ -6,6 +6,7 @@ import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { cmd } from '@/lib/ipc'
+import { useTourStore } from '@/store/tourStore'
 import type { StatusKind } from '@/lib/status'
 
 type DepsStatus = {
@@ -47,6 +48,8 @@ export function FirstLaunchPage() {
   const [installError, setInstallError] = useState('')
   const deps = useQuery({ queryKey: ['deps-status'], queryFn: () => cmd<DepsStatus>('deps_status'), retry: false })
   const d = deps.data
+  const tourMode = useTourStore((s) => s.mode)
+  const setTourMode = useTourStore((s) => s.setMode)
 
   const install = async () => {
     setInstalling(true)
@@ -59,6 +62,24 @@ export function FirstLaunchPage() {
       setInstalling(false)
       void qc.invalidateQueries({ queryKey: ['deps-status'] })
     }
+  }
+
+  // First launch only: ask once how much help the person wants. "Done before" changes nothing below.
+  if (tourMode === null) {
+    return (
+      <div className="flex h-full items-center justify-center overflow-y-auto p-10">
+        <div className="flex w-full max-w-[560px] flex-col gap-6">
+          <h1 className="text-2xl font-semibold leading-tight text-[var(--text-primary)]">Welcome to Conxa</h1>
+          <p className="text-[0.9375rem] leading-relaxed text-[var(--text-secondary)]">
+            Is this your first time teaching a computer to do a job for you?
+          </p>
+          <div className="flex flex-wrap gap-2.5">
+            <Button variant="brand" onClick={() => setTourMode('beginner')}>I’m new, show me how</Button>
+            <Button variant="outline" onClick={() => setTourMode('experienced')}>I’ve done this before</Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const runtimeVersion = d?.versions?.['conxa-runtime'] ?? d?.versions?.['conxa-app']

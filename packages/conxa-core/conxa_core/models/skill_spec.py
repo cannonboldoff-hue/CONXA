@@ -13,9 +13,9 @@ docs/Backend-Schema.md §3.0 and docs/TRD.md §7.7 for the full design note.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SkillMeta(BaseModel):
@@ -95,6 +95,75 @@ class Assertion(BaseModel):
     required: bool = True
 
 
+# Proof of Done (docs/Backend-Schema.md section 3.4z). A step's `effect` says what must be true afterwards for
+# the work to count as done, how that can be proven, and what to do when it cannot. Checks are mined from what
+# the recording really showed; no check holds a selector (an element is only ever named through the step's own
+# identity bundle), and the LLM never writes one.
+EFFECT_RUNGS = ("performed", "accepted", "completed", "result_exists")
+EFFECT_WITNESSES = ("target", "renderer", "transport", "filesystem", "fresh_look", "later_step")
+EFFECT_KINDS = ("upload", "download", "delete", "send", "save", "long_job")
+# The probe types a check may name. The runtime evaluates the first five today; the rest answer
+# "cant_tell" until they are built (stage 5), so a compiled pack never claims a proof it cannot make.
+EFFECT_PROBES = (
+    "input_has_files", "request_chain", "failure_signal", "new_text", "download_file",
+    "value_equals", "row_with_identity", "url_stays", "fresh_look", "later_step",
+)
+
+
+class EffectCheck(BaseModel):
+    """One question about whether a step's work happened. [contract]
+
+    ``rung`` is the strongest claim a "yes" proves; ``witness`` is the separate source of evidence it comes from
+    (two checks that read the same screen are one witness). ``role: veto`` is a failure signal: its probe answers
+    "yes" when the failure WAS seen, and that beats any amount of good news."""
+    id: str = ""                                                    # stable within a step: "c1", "c2"
+    rung: Literal["performed", "accepted", "completed", "result_exists"] = "accepted"
+    witness: Literal["target", "renderer", "transport", "filesystem", "fresh_look", "later_step"] = "renderer"
+    role: Literal["support", "veto"] = "support"
+    probe: dict[str, Any] = Field(default_factory=dict)             # {"type": <EFFECT_PROBES>, ...} no selectors
+    plain: str = ""                                                 # the same check in everyday words
+    confirmed: bool = False                                         # the author said "yes, that is how I know"
+    calibrated: bool | None = None                                  # a test run proved it fires: None = not tested yet
+
+    @field_validator("probe")
+    @classmethod
+    def _probe_type_is_known(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if v and str(v.get("type") or "") not in EFFECT_PROBES:
+            raise ValueError(f"unknown probe type: {v.get('type')!r}")
+        return v
+
+
+class EffectQuorum(BaseModel):
+    witnesses: int = 1                                              # distinct witnesses needed at the required rung
+    identity_required: bool = False                                 # one of them must name THIS item, not any item
+
+
+class EffectTime(BaseModel):
+    progress_extends: bool = True                                   # keep waiting while progress keeps moving
+    stall_after_s: int = 45                                         # stop waiting when nothing moves for this long
+    max_s: int = 900
+    long_wait: Literal["park", "fail"] = "park"                     # a wait that outlives the run: pause or fail
+
+
+class EffectOn(BaseModel):
+    unverified: Literal["fail", "handover"] = "fail"                # nobody is asked unless the author said so
+    partial: Literal["stop_and_report"] = "stop_and_report"
+
+
+class Effect(BaseModel):
+    """What "done" means for a step. [contract]"""
+    kind: Literal["upload", "download", "delete", "send", "save", "long_job"]
+    # What the runtime requires today (capped at what its probes can prove) and what the design wants. They differ
+    # until stage 5 can prove "the right item is really there"; recompiling then raises required_rung.
+    required_rung: Literal["performed", "accepted", "completed", "result_exists"] = "completed"
+    target_rung: Literal["performed", "accepted", "completed", "result_exists"] = "completed"
+    identity: dict[str, str] = Field(default_factory=dict)         # {"name": "{{file_name}}"}: which item
+    checks: list[EffectCheck] = Field(default_factory=list)
+    quorum: EffectQuorum = Field(default_factory=EffectQuorum)
+    time: EffectTime = Field(default_factory=EffectTime)
+    on: EffectOn = Field(default_factory=EffectOn)
+
+
 class ValidationBlock(BaseModel):
     """[mixed] — assertions are contract; wait_for/success_conditions are today's
     browser-executor wait-condition detail (legacy, largely superseded by Assertion)."""
@@ -102,6 +171,9 @@ class ValidationBlock(BaseModel):
     success_conditions: dict[str, Any] = Field(default_factory=dict)  # [executor] legacy
     # [contract] Multi-assertion outcome verification — runtime checks all assertions after action.
     assertions: list[Assertion] = Field(default_factory=list)
+    # [contract] Proof of Done: what "done" means for a step that starts work. Absent on older packs and on
+    # steps whose direct effect is already their assertion (a typed value, an opened menu).
+    effect: Effect | None = None
 
 
 class DecisionPolicy(BaseModel):

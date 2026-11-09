@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { tourActive, useTourStore } from '@/store/tourStore'
 import { ArrowLeft, ArrowRight, Loader2, Lock, Plus, Trash2 } from 'lucide-react'
 
-type AppRow = { name: string; url: string }
+type AppRow = { name: string; url: string; successUrl?: string }
 
 // Sign-in pages for the quick-add chips. Plain public login URLs, nothing account-specific.
 const QUICK_ADD: AppRow[] = [
@@ -34,6 +35,15 @@ function withScheme(url: string): string {
 export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const tour = useTourStore()
+  // Tour only: the pretend company. Sign-in goes through the Conxa sign-in page and lands on the practice home.
+  const practice: AppRow | null = tourActive(tour)
+    ? {
+        name: 'Conxa practice',
+        url: `${window.conxa.webOrigin}/sign-in?redirect_url=%2Fpractice`,
+        successUrl: `${window.conxa.webOrigin}/practice`,
+      }
+    : null
   const [step, setStep] = useState<1 | 2>(1)
   const [name, setName] = useState('')
   const [apps, setApps] = useState<AppRow[]>([{ name: '', url: '' }])
@@ -80,7 +90,7 @@ export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       const failed: string[] = []
       for (const a of filled) {
         try {
-          await addGroupApp(group.id, a.name.trim(), withScheme(a.url), '')
+          await addGroupApp(group.id, a.name.trim(), withScheme(a.url), a.successUrl ?? '')
         } catch {
           failed.push(a.name.trim())
         }
@@ -137,6 +147,7 @@ export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <Label htmlFor="new-group-name" className="text-xs font-medium text-[#a3a3a3]">Group name</Label>
               <Input
                 id="new-group-name"
+                data-tour="group-name"
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -147,7 +158,7 @@ export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             </div>
             <div className="flex justify-end gap-2.5 pt-1">
               <Button type="button" variant="outline" className="h-[38px] rounded-[10px] px-4" onClick={() => handleOpenChange(false)}>Cancel</Button>
-              <Button type="button" variant="brand" className="h-[38px] rounded-[10px] px-4" disabled={!name.trim()} onClick={() => setStep(2)}>
+              <Button type="button" data-tour="group-next" variant="brand" className="h-[38px] rounded-[10px] px-4" disabled={!name.trim()} onClick={() => setStep(2)}>
                 Next: sign-ins <ArrowRight className="size-4" />
               </Button>
             </div>
@@ -183,6 +194,16 @@ export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-0.5 text-xs text-[#8e8e8e]">Quick add</span>
+              {practice && (
+                <button
+                  type="button"
+                  data-tour="group-practice"
+                  onClick={() => quickAdd(practice)}
+                  className="inline-flex h-7 items-center gap-1 rounded-full border border-[#22d3ee]/60 px-2.5 text-xs font-medium text-[#22d3ee] outline-none hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-brand/55"
+                >
+                  <Plus className="size-3" /> Conxa practice company
+                </button>
+              )}
               {QUICK_ADD.map((q) => (
                 <button
                   key={q.name}
@@ -210,7 +231,7 @@ export function NewGroupDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </Button>
               <div className="flex gap-2.5">
                 <Button type="button" variant="outline" className="h-[38px] rounded-[10px] px-4" disabled={busy} onClick={() => submit(false)}>Skip for now</Button>
-                <Button type="button" variant="brand" className="h-[38px] rounded-[10px] px-4" disabled={busy || filled.length === 0} onClick={() => submit(true)}>
+                <Button type="button" data-tour="group-create" variant="brand" className="h-[38px] rounded-[10px] px-4" disabled={busy || filled.length === 0} onClick={() => submit(true)}>
                   {busy ? <Loader2 className="size-4 animate-spin" /> : null}Create group &amp; sign in
                 </Button>
               </div>

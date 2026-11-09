@@ -278,6 +278,11 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
     assertions = validation.get("assertions") if isinstance(validation, dict) else None
     if isinstance(assertions, list) and assertions:
         out["validation"] = {"assertions": assertions}
+    # Proof of Done: the step's checklist of what "done" means (runtime/app/proof.js reads
+    # step.validation.effect). Absent on a step that starts no work and on an older compile.
+    effect = validation.get("effect") if isinstance(validation, dict) else None
+    if isinstance(effect, dict) and effect.get("checks"):
+        out.setdefault("validation", {})["effect"] = effect
     # PROD-3: runtime/app/cascade.js reads step.destructive (top-level) directly, and
     # runtime/app/resolution.js reads step.entity_binding (top-level) directly — neither looks
     # inside identity_bundle, even though identity_bundle.destructive is the compiler's own

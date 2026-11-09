@@ -1,3 +1,4 @@
+import { TourLayer } from '@/components/tour/TourLayer'
 import { type ReactNode, useEffect } from 'react'
 import { useMatch } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
@@ -290,6 +291,7 @@ function Shell({ children }: { children: ReactNode }) {
       <SearchDialog />
       <SettingsDialog />
       <RecordingDialogs />
+      <TourLayer />
     </div>
   )
 }

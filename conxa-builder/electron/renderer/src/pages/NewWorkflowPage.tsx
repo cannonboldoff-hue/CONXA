@@ -160,7 +160,7 @@ export function NewWorkflowPage() {
           {create.isError && <p className="text-sm text-status-error">✕ {(create.error as Error).message}</p>}
 
           <div className="flex items-center gap-2">
-            <Button type="submit" variant="brand" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create and start recording'}</Button>
+            <Button type="submit" variant="brand" data-tour="nw-create" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create and start recording'}</Button>
             <Button type="button" variant="ghost" disabled={create.isPending} onClick={() => { setDraft(null); navigate(-1) }}>Cancel</Button>
           </div>
         </form>

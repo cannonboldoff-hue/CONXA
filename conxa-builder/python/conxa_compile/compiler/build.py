@@ -14,6 +14,7 @@ from conxa_compile.editor.action_registry import MARKER_ACTIONS
 from conxa_compile.compiler.decision_layer import rank_merged_anchors
 from conxa_compile.compiler.action_semantics import commit_intent_hit, is_editable_field_click
 from conxa_compile.compiler.destructive_semantics import classify_consequence, destructive_compiler_step
+from conxa_compile.compiler.effects import build_effect
 from conxa_compile.compiler.step_events import events_for_steps
 from conxa_compile.compiler.video_context import apply_video_context
 from conxa_compile.compiler.commit_ordering import lint_commit_ordering
@@ -639,6 +640,10 @@ def _populate_hover_chains(steps: list[SkillStep], events: list[dict[str, Any]],
         hover_signals = generate_deterministic_signals(prev_ev, dom_html=dom_html, a11y_tree=a11y_tree)
         if hover_signals:
             step.handler_hints.hover_chain = hover_signals
+
+
+def action_name_is_click(ev: dict[str, Any]) -> bool:
+    return str((ev.get("action") or {}).get("action") or "").lower() == "click"
 
 
 def _build_assertions(
@@ -1412,11 +1417,20 @@ def _build_step(
         cw = dict(confidence_protocol.get("compile_warnings") or {})
         cw["frame_chain_incomplete"] = True
         confidence_protocol = {**confidence_protocol, "compile_warnings": cw}
-    if assertions:
+    # Proof of Done: a step that starts work (an upload, a send, a delete, a long job) is not done when its button
+    # was pressed. Give it a checklist of what must be true afterwards, built only from what the recording showed.
+    effect = build_effect(
+        ev_with_intent,
+        consequence=consequence,
+        is_commit=action_name_is_click(ev_with_intent) and commit_intent_hit(ev_with_intent, policy),
+        destructive=destructive_compiler_step(ev_with_intent, policy),
+    )
+    if assertions or effect is not None:
         validation = ValidationBlock(
             wait_for=validation.wait_for,
             success_conditions=validation.success_conditions,
             assertions=assertions,
+            effect=effect,
         )
     snapshot = ev.get("snapshot") or {}
     # Conditional-state observation (Priority 2): carry the recorder's optional-interstitial hint

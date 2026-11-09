@@ -1216,6 +1216,45 @@ recovery cascade. `call_workflow` is checked at build (`conxa_compile/call_workf
 workflow exists, no circle, at most 3 levels deep, no pause inside it, inputs and results match) and again at
 run start (`runtime/app/call_workflow.js`).
 
+### 3.4y `validation.effect` — what "done" means for a step (Proof of Done stage 4)
+
+A step that starts work (an upload, a download, a delete, a send, a save, a long job) carries an `effect` beside its
+assertions. It is built by `compiler/effects.py` from what the recording really showed and never by the LLM; no check holds
+a selector, so there is nothing for chat to re-point.
+
+```
+validation.effect = {
+  kind:           upload | download | delete | send | save | long_job
+  required_rung:  performed | accepted | completed | result_exists   # what the runtime requires, capped at what its probes can prove
+  target_rung:    ...                                                # what the design wants; a recompile raises required_rung toward it
+  identity:       { name: "{{file_name}}" }                          # reserved for stage 5 (the right item, not any item)
+  checks: [ { id: "c1", rung, witness: target|renderer|transport|filesystem|fresh_look|later_step,
+              role: support|veto, probe: { type, ... }, plain: "...",
+              confirmed: bool,   # the author agreed in chat ("How can we tell it worked?")
+              calibrated: bool|null } ]   # a clean test run showed it fires (true) or never answered yes (false); null = untested
+  quorum: { witnesses: 1, identity_required: false }   # starts at 1; a passing test raises it to the separate witnesses that answered yes
+  time:   { progress_extends, stall_after_s, max_s, long_wait: park|fail }
+  on:     { unverified: fail|handover, partial: stop_and_report }
+}
+```
+
+Probe types: `input_has_files`, `request_chain` (a data-changing request answered 2xx without an error body), `failure_signal`
+(a **veto**: its answer "yes" means the failure was seen), `new_text` (value-free words that must appear, taken from the recorder's
+`post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `value_equals`, `row_with_identity`, `url_stays`,
+`fresh_look`, `later_step` are in the enum and answer `cant_tell` until built. A check a test run showed to be dead
+(`calibrated: false`) no longer counts. An older runtime ignores `effect` (it is carried to `execution.json` by
+`skill_package_builder_saved_skill.py`), and a pack with no `effect` anywhere behaves exactly as before.
+
+**Recorder `post_watch`** (`RecordedEvent.post_watch`): set only when a progress window or busy indicator was on screen after an
+upload or a commit-worded click. `{progress_seen, waited_ms, final_status: [{kind, words}]}`, value-free words only (digits, quotes,
+e-mail and addresses dropped). The recorder keeps watching only while progress is visible, up to 15 s, so an ordinary Save is not delayed.
+
+**Calibration** (`handlers/test_flow.py::_tf_calibrate` → `workflow_mutations.calibrate_effects`): only a fully clean pass
+(`outcome: done`) calibrates. **Publish rule** (`workflows.py::_require_proof_for_irreversible`): in a pack that carries checklists, a step
+that cannot be undone needs a support check at `completed` or higher that is `calibrated` or `confirmed`
+(`effects.has_real_proof(strict=True)`), otherwise publishing is refused in plain words; the "How can we tell it worked?" question is
+then not skippable (`needs_proof`, scoring safety floor). `patch_gate.py` keeps the floor on hand edits.
+
 ### 3.4z Run outcome (`execute_skill` result, Proof of Done)
 
 A run no longer ends in just "Done" or an error. Every step is judged on a ladder: `performed` (we did it) <

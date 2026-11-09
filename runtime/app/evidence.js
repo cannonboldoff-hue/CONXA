@@ -86,6 +86,7 @@ async function open(o) {
   const openReqs = new Map();  // request -> entry
   const state = { downloads: 0, newPages: 0, started: false, failed: null, mutationStartedAt: 0, closed: false };
   const initial = new Set();
+  const seenNew = new Set();   // every status/progress text that was NOT on screen when the notebook opened
 
   const safeUrl = (p) => { try { return typeof p.url === "function" ? p.url() : null; } catch (_) { return null; } };
   const isClosed = (p) => { try { return typeof p.isClosed === "function" && p.isClosed(); } catch (_) { return false; } };
@@ -211,8 +212,14 @@ async function open(o) {
           for (const t of s.regions || []) if (regions.length < MAX_REGIONS && !regions.includes(t)) regions.push(t);
         }
       }
-      return stepPageAnswered ? { busyCount, regions } : null;
+      if (!stepPageAnswered) return null;
+      const before = new Set((nb.baseline && nb.baseline.regions) || []);
+      for (const t of regions) if (!before.has(t) && seenNew.size < MAX_REGIONS * 4) seenNew.add(t);
+      return { busyCount, regions };
     },
+
+    /** Every text that appeared since the notebook opened, even one that has gone again (a "complete" toast). */
+    seenNew() { return [...seenNew]; },
 
     /** Any sign the app took the work: a data-changing request, a download, a new tab, a new address. */
     sawStart() {

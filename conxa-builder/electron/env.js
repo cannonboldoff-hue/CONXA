@@ -29,6 +29,8 @@ function resolve() {
     dev,
     // Cloud API base for Studio → cloud (publish, proxy, entitlements).
     cloudApi: process.env.CONXA_CLOUD_API || (dev ? "http://127.0.0.1:8000" : "https://apis.conxa.in"),
+    // Public website (Cloud frontend). The guided tour's practice site lives here; hints are injected only on this host.
+    webOrigin: process.env.CONXA_WEB_ORIGIN || (dev ? "http://localhost:3000" : "https://www.conxa.in"),
     // Public base embedded into pack.json at publish time — must match the cloud
     // this Studio publishes to, so dev-built installers never phone home to prod.
     apiBaseUrl: process.env.SKILL_API_BASE_URL || (dev ? "http://127.0.0.1:8000" : "https://apis.conxa.in"),

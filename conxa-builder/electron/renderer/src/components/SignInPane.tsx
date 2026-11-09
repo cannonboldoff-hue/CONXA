@@ -81,7 +81,7 @@ export function SignInPane({
           </span>
         )}
       </header>
-      <div ref={regionRef} className="relative min-h-0 flex-1 bg-[#1a1a1a]">
+      <div ref={regionRef} data-tour="signin-region" className="relative min-h-0 flex-1 bg-[#1a1a1a]">
         <div className="absolute inset-0 flex animate-in flex-col items-center justify-center gap-1.5 px-6 text-center fade-in duration-300 motion-reduce:animate-none">
           <p className="text-sm text-[#a3a3a3]">{connected ? 'Browser closed.' : 'The sign-in page opens here.'}</p>
         </div>

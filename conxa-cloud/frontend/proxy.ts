@@ -14,6 +14,8 @@ const isPublic = createRouteMatcher([
   '/__clerk(.*)',
   '/api/v1/webhooks/(.*)',
 ])
+// The Build Studio tour's practice company needs a Conxa sign-in, but not a workspace.
+const isPractice = createRouteMatcher(['/practice(.*)'])
 const isOnboarding = createRouteMatcher(['/onboarding(.*)'])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -27,7 +29,7 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl)
   }
 
-  if (!orgId && !isOnboarding(req)) {
+  if (!orgId && !isOnboarding(req) && !isPractice(req)) {
     return NextResponse.redirect(new URL('/onboarding', req.url))
   }
 

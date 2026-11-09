@@ -348,6 +348,17 @@ class SurfaceContext(BaseModel):
     items: list[SurfaceItem] = Field(default_factory=list, max_length=3)
 
 
+class PostWatch(BaseModel):
+    """What the page showed while the app finished the work an action started (Proof of Done). Set only when a
+    progress window or busy indicator appeared after an upload / commit click; absent for every ordinary action.
+    ``final_status`` is value-free words (never the text) of what the page said once the progress ended, for
+    example ``["upload", "complete"]``, so the compiler can propose it as the completion check."""
+
+    progress_seen: bool = True
+    waited_ms: int = 0
+    final_status: list[SurfaceItem] = Field(default_factory=list, max_length=3)
+
+
 class RecordedEvent(BaseModel):
     """Single user action with all attached signals (paths, not bytes)."""
 
@@ -393,6 +404,8 @@ class RecordedEvent(BaseModel):
     dialog_context: DialogContext | None = None
     # What the page said in response (a new alert / status line / invalid-field message), as words only.
     surface_context: SurfaceContext | None = None
+    # What the page showed while a long action finished (progress, then the final message), as words only.
+    post_watch: PostWatch | None = None
 
     # Phase 2: compile-time signals for LLM-based selector generation (REQUIRED).
     # Recordings without these cannot validate; must be re-recorded.

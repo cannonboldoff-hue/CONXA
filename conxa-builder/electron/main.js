@@ -40,6 +40,7 @@ const MAX_BACKEND_RESTARTS = 3;
 // for our node-launched dev wrapper. Pass the main-process packaging state
 // explicitly so the renderer can skip packaged-only bootstrap in dev.
 process.env.CONXA_ELECTRON_IS_PACKAGED = app.isPackaged ? "1" : "0";
+process.env.CONXA_WEB_ORIGIN = conxaEnv.resolve().webOrigin;
 
 // BUILD-42: tests run in a browser panel inside this window instead of a separate Chromium. The runtime
 // attaches to this process over CDP (Playwright connectOverCDP), so Electron has to expose a debugging
@@ -287,6 +288,7 @@ ipcMain.handle("panel:bounds", (_e, { runId, tabId, rect }) => {
   browserPanel.setActiveBounds(runId, tabId, { x: _num(rect.x), y: _num(rect.y), width: _num(rect.width), height: _num(rect.height) });
   return true;
 });
+ipcMain.handle("tour:hint", (_e, hint) => { browserPanel.setTourHint(hint); return true; });
 ipcMain.handle("panel:hide", () => { browserPanel.hideAll(); return true; });
 ipcMain.handle("panel:select-tab", (_e, { runId, tabId }) => browserPanel.selectTab(runId, tabId));
 ipcMain.handle("panel:snapshot", (_e, { runId, tabId }) => browserPanel.snapshot(runId, tabId));

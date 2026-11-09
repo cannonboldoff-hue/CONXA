@@ -778,6 +778,24 @@ def validate_editor_patch(
         if eb.get("container_selector") and not eb.get("confirmed"):
             raise ValueError("irreversible_step_requires_confirmed_entity_binding")
 
+    # Proof of Done: a hand edit to a step's completion checklist must still be a valid checklist, and a step that
+    # cannot be undone must not lose the check that proves its work finished. Chat never reaches this: the copilot's
+    # editable fields offer validation.assertions only, so a check is only ever agreed to (confirm_effect), never written.
+    validation_patch = patch.get("validation")
+    if isinstance(validation_patch, dict) and "effect" in validation_patch:
+        from conxa_compile.compiler.effects import has_real_proof
+        from conxa_core.models.skill_spec import Effect
+
+        new_effect = (merged.get("validation") or {}).get("effect")
+        if new_effect is not None:
+            try:
+                Effect.model_validate(new_effect)
+            except Exception as exc:  # noqa: BLE001 -- any shape problem is the same refusal
+                raise ValueError("effect_is_not_a_valid_checklist") from exc
+        old_effect = (step.get("validation") or {}).get("effect")
+        if destructive_compiler_step(view, policy) and has_real_proof(old_effect) and not has_real_proof(new_effect):
+            raise ValueError("irreversible_step_requires_completion_check")
+
     # Any consequential action must retain at least one enforced (required=True) post-condition
     # assertion after the edit — mirrors the destructive wait_for invariant above. Prevents a
     # human edit (e.g. clearing validation.assertions) from silently dropping the check that

@@ -164,6 +164,7 @@ export function Sidebar({ rail }: { rail: boolean }) {
         <NavItem to="/chat" icon={MessageSquare} label="Chat" rail={rail} />
         <button
           type="button"
+          data-tour="new-group"
           title={rail ? 'New group' : undefined}
           onClick={() => setCreating(true)}
           className={cn(ROW, FOCUS, REST, 'w-full', rail && 'justify-center px-0')}

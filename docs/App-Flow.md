@@ -98,6 +98,10 @@ sequenceDiagram
 
 ---
 
+### 1a. Beginner first-run tour (BUILD-79)
+
+On first launch the person chooses "I'm new" or "I've done this before". New people pick one of four practice processes (customer onboarding, support triage, monthly report + invoice, leave request) and a locked spotlight walks them: New group → name → add the practice company → sign in → New workflow → record on the practice site → answer every question → first test. Experienced people see the normal first-launch page. Replay: Settings → About. Progress is stored locally only.
+
 ## 3. Create a Workflow
 
 ```mermaid

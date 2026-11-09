@@ -83,6 +83,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
           <Button
             variant="brand"
             size="sm"
+            data-tour="test-run"
             disabled={busy}
             onClick={() => (missing.length ? setTried(true) : run(() => flowTestRun(wf, String(item.card_id), values, guard, showBrowser, !dryRun)))}
           >

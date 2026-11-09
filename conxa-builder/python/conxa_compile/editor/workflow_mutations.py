@@ -213,6 +213,67 @@ def reorder_branch_steps(
     return _save_body_steps(document, step_index, reordered, container)
 
 
+def confirm_effect(document: dict[str, Any], step_index: int) -> dict[str, Any]:
+    """The author said, in plain words, that the step's completion checks are how they know it worked
+    (Proof of Done). Marks the support checks that prove the work finished as ``confirmed``. Code only: chat
+    never writes a check, it only agrees to the ones the compiler built from the recording."""
+    from conxa_compile.compiler.effects import _finish_checks
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+    step = dict(steps[step_index])
+    validation = dict(step.get("validation") or {})
+    effect = validation.get("effect")
+    if not isinstance(effect, dict):
+        raise ValueError("step_has_no_effect")
+    live = {id(c) for c in _finish_checks(effect)}
+    checks = [dict(c, confirmed=True) if id(c) in live else dict(c) for c in effect.get("checks") or []]
+    validation["effect"] = {**effect, "checks": checks}
+    step["validation"] = validation
+    steps[step_index] = step
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    return doc
+
+
+def calibrate_effects(document: dict[str, Any], observed_by_key: dict[str, dict[str, str]]) -> tuple[dict[str, Any], int]:
+    """Apply what a PASSING test run showed to the steps' effects: ``{step_key: {check_id: answer}}``. Returns the new
+    document and how many steps changed. A step whose key is not found, or that has no effect, is left alone."""
+    from conxa_compile.compiler.effects import calibrate_effect
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        return doc, 0
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    keys = step_keys([s if isinstance(s, dict) else {} for s in steps])
+    changed = 0
+    for i, key in enumerate(keys):
+        observed = observed_by_key.get(key)
+        step = steps[i]
+        effect = (step.get("validation") or {}).get("effect") if isinstance(step, dict) else None
+        if not observed or not isinstance(effect, dict):
+            continue
+        new_effect = calibrate_effect(effect, observed)
+        if new_effect != effect:
+            step = dict(step)
+            step["validation"] = {**(step.get("validation") or {}), "effect": new_effect}
+            steps[i] = step
+            changed += 1
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    return doc, changed
+
+
 def set_fork_policy(
     document: dict[str, Any], step_index: int, state_id: str, policy: dict[str, Any]
 ) -> dict[str, Any]:

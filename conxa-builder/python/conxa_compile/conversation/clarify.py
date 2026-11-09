@@ -322,6 +322,53 @@ def input_check_question(suspects: list[dict[str, Any]], input_defs: list[dict[s
     )
 
 
+def _is_irreversible(step: dict[str, Any]) -> bool:
+    bundle = step.get("identity_bundle") if isinstance(step.get("identity_bundle"), dict) else {}
+    return step.get("consequence") == "irreversible" or bool(step.get("destructive")) or bool(bundle.get("destructive"))
+
+
+def irreversible_without_proof(doc: dict[str, Any]) -> list[str]:
+    """Keys of the steps that cannot be undone and whose completion check nobody has agreed to or tested.
+    The "How can we tell it worked?" question cannot be assumed or deferred while this list is not empty, and
+    publishing is blocked until it is (workflows.py::_require_proof_for_irreversible). Only a pack that carries
+    completion checks at all is held to this: an older compile has nothing to confirm."""
+    from conxa_compile.compiler.effects import has_real_proof
+
+    steps = _steps(doc)
+    if not any(isinstance((s.get("validation") or {}).get("effect"), dict) for s in steps):
+        return []
+    keys = step_keys(steps)
+    return [keys[i] for i, s in enumerate(steps)
+            if _is_irreversible(s) and not has_real_proof((s.get("validation") or {}).get("effect"), strict=True)]
+
+
+def _effect_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    """One tickable "this is how I know it worked" per step that starts work, from the completion checks the
+    compiler built out of the recording (Proof of Done). Ticking agrees to them; it never writes one."""
+    from conxa_compile.compiler.effects import _finish_checks, person_sentence
+
+    steps = _steps(doc)
+    keys = step_keys(steps)
+    choices: list[dict[str, Any]] = []
+    used: list[str] = []
+    for i, s in enumerate(steps):
+        effect = (s.get("validation") or {}).get("effect")
+        live = _finish_checks(effect)
+        if not live or all(c.get("confirmed") for c in live):
+            continue
+        sentence = person_sentence(effect)
+        if not sentence:
+            continue
+        choices.append({
+            "id": f"effect:{keys[i]}",
+            "label": f"After {step_name(s)[:60]}, {sentence}",
+            "detail": "If this is not true afterwards, the run says it couldn\u2019t confirm it worked instead of saying it\u2019s done.",
+            "selected": True,
+        })
+        used.append(keys[i])
+    return choices, used
+
+
 def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
     wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
@@ -346,6 +393,7 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
 
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
                 "selected": c["assertion"].get("type") == "text_present"} for c in checks]
+    effect_choices, effect_keys = _effect_choices(doc)
     if choices:  # offered only beside a real check, so an input-only workflow isn't pestered
         referenced = " ".join(str(a.get("target") or "") for s in steps
                               for a in (s.get("validation") or {}).get("assertions") or [] if isinstance(a, dict))
@@ -356,7 +404,7 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
                     for c in checks):
                 choices.append({"id": f"input:{iid}", "label": f"You see the {_humanize(iid).lower()} on the screen",
                                 "detail": "Makes sure what was typed in appears on the screen at the end.", "selected": False})
-    return choices, sorted({c["step_key"] for c in checks})
+    return effect_choices + choices, sorted({c["step_key"] for c in checks} | set(effect_keys))
 
 
 # Kinds whose body quotes raw typed values, and choice labels that are page text or value names:
@@ -746,7 +794,7 @@ def generate_questions(
             "done_when", "done_when", "How can we tell it worked?",
             "At the end of your recording I noticed these. Tick the ones that should be true when it works. If a ticked one is not true, it counts as failed. "
             "You can also type your own below.",
-            done_choices, multi=True, step_keys_=done_keys,
+            done_choices, multi=True, step_keys_=done_keys, needs_proof=bool(irreversible_without_proof(doc)),
         ))
 
     if kinds is not None:
@@ -921,7 +969,11 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         custom = str(answer.get("custom_text") or "").strip()[:120]
         by_step: dict[str, dict[int, bool]] = {}
         extra: list[dict[str, Any]] = []  # new text checks, added to the last step
-        for cid in selected:
+        for cid in sorted(selected):
+            if cid.startswith("effect:"):
+                # Agreeing to the completion checks the compiler built from the recording (Proof of Done).
+                ops.append({"op": "confirm_effect", "step_key": cid[len("effect:"):]})
+                continue
             if cid.startswith("input:"):
                 extra.append({"type": "text_present", "target": "{{" + cid[len("input:"):] + "}}", "required": True})
                 continue

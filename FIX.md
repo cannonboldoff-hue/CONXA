@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Each step that starts work now has its own plain "how we know it worked" check — 2026-11-09**
+When a workflow uploads a file, saves, sends or deletes something, the app used to have no clear idea of what "done" looked like, so it could only guess. Now, while you record, the app notes what the website shows when the work really finishes, for example "upload complete". It turns that into a short check for that step and asks you in the chat, in everyday words, whether that is how you know it worked. For steps that can't be undone, like a delete or a send, the workflow can't be published until that check has either been tested or agreed to by you. If the website shows an error instead, the run now stops and says so plainly.
+— 2026-11-09
+
 **A run now sees what is happening in every tab and every part of the page — 2026-11-09**
 Before, when a step started an upload, the app only looked at one tab and the main part of the page. Progress shown in a small embedded window, or a refusal that arrived in a second tab, could go unseen, so a run might say "Done" too early. Now the app keeps a short private notebook of what happens on every tab the workflow uses and in every visible part of the page, from just before the step until its result is clear. It also notices when a website says "OK" but its reply says the upload failed, for example because the storage is full. The notebook never keeps page contents, web addresses with personal details, or replies; it stays on your computer.
 — 2026-11-09
@@ -40,4 +44,8 @@ When a workflow had a great many steps, the assistant that describes each step c
 
 **A guided first tour for beginners is now on the to-do list — 2026-11-09**
 New people often open the app and do not know where to start. We wrote down a plan for a practice tour: you pick Beginner, and the app lights up one button at a time, with small notes in the browser telling you what to type. It uses a safe practice website, so nothing real can be broken, and you can pick the practice that matches your job. It is made for people with no technical background.
+— 2026-11-09
+
+**New people now get a hands-on practice tour — 2026-11-09**
+When you open the app for the first time you can say you are new. The app then lights up one button at a time and walks you through making a group, signing in, teaching it a whole job on a pretend company, answering its questions and watching it run. Nothing in it is real, so nothing can break. You can play it again from Settings, under About.
 — 2026-11-09

@@ -151,6 +151,8 @@
       "_note": "server.js and run.js require this directly: remembers the last refusing response status a page saw, read via fault_classify.js." },
     { "name": "proof.js",             "profile": "default",
       "_note": "run.js requires this directly: the fixed rules that turn check answers into a verdict, a next move and a run outcome (Proof of Done)." },
+    { "name": "effect_probes.js",     "profile": "default",
+      "_note": "run.js requires this directly: answers a step's compiled validation.effect checks from the evidence notebook (Proof of Done stage 4)." },
     { "name": "evidence.js",          "profile": "default",
       "_note": "run.js requires this directly: the evidence notebook (what every tab and visible frame of the run shows, plus request/response metadata) read by completion.js." },
     { "name": "route_template.js",    "profile": "default",

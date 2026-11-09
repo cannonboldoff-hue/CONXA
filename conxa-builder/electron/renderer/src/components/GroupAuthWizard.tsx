@@ -464,7 +464,7 @@ export function GroupAuthWizard({
                         Save anyway
                       </Button>
                     )}
-                    <Button size="sm" disabled={finishMut.isPending} onClick={() => finishMut.mutate(undefined)}>
+                    <Button size="sm" data-tour="auth-done" disabled={finishMut.isPending} onClick={() => finishMut.mutate(undefined)}>
                       {finishMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : 'Done'}
                     </Button>
                   </>

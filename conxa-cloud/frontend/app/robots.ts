@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
         '/settings',
         '/team',
         '/test',
+        '/practice',
       ],
     },
     sitemap: absoluteUrl('/sitemap.xml'),

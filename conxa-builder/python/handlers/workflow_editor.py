@@ -256,6 +256,28 @@ class WorkflowEditorMixin:
         result.update(self._history_flags(skill_id))
         return result
 
+    def cmd_confirm_effect(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        """The author agreed, in the "How can we tell it worked?" question, that a step's completion checks are how
+        they know it worked. Structural, code-only mutation: nothing here writes a check."""
+        import copy
+        from conxa_core.storage.json_store import read_skill, write_skill
+        from conxa_compile.editor.workflow_mutations import confirm_effect
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        step_index = int(payload.get("step_index") or 0)
+        doc = read_skill(skill_id)
+        if doc is None:
+            raise _CommandError("skill_not_found", f"No skill {skill_id}")
+        self._push_undo(skill_id, copy.deepcopy(doc))
+        try:
+            doc = confirm_effect(doc, step_index)
+        except ValueError as exc:
+            raise _CommandError(str(exc), f"Could not confirm how this step is known to have worked: {exc}") from exc
+        write_skill(skill_id, doc)
+        result = _skill_response(skill_id, doc)
+        result.update(self._history_flags(skill_id))
+        return result
+
     def cmd_set_fork_policy(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """The author's decision for one popup state of an outcome fork. Structural mutation (the
         fork's policy is not patchable) and the only place a policy gains ``author_approved``."""

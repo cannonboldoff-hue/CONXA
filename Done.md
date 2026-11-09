@@ -6,10 +6,10 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 41 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70 |
+| BUILD — Build Studio | 42 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
-| RT — Runtime | 6 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 12 |
+| RT — Runtime | 7 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12 |
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **103** | |
+| **Total** | **104** | |
 
 ---
 
-## BUILD — Build Studio (41 done)
+## BUILD — Build Studio (42 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -763,6 +763,12 @@ inferred from `outer_html`, not read directly.
 - **Category:** Builder
 - **Resolution:** The `needs_editor` card now carries the step's current `step_index` (found in the digest by its key) and names it ("point step 3 at a new element"). `useOpenEdit` takes an optional step, the card calls it, and `HumanEditPage` selects `?step=N` once on load. It selects the step; it does not auto-open the Pick Element phase. Test in `test_conversation.py`.
 
+### BUILD-79 — Guided first-run tour for Beginners: practice company on Conxa Cloud, locked walkthrough, pick-your-demo
+**Resolved:** 2026-11-09
+- **Category:** Builder (Build Studio) + Cloud
+- **Resolution:** First launch now asks "I'm new" or "I've done this before" (`FirstLaunchPage.tsx`); Beginner picks one of four whole business processes (customer onboarding, support triage, monthly report + invoice, leave request; `lib/tourScripts.ts`). `components/tour/TourLayer.tsx` dims everything but the named controls, blocks other clicks, and advances when the person does the step; record and answer-questions steps are free-roam notes. The tour guides through group creation, sign-in, record, every question, and the first test; it adds no new action and bypasses no gate. Progress is kept in `store/tourStore.ts` (localStorage only, never in a build). Locked, no skip: if a control never appears for 15 s the lock lifts so an outage cannot trap anyone. Replay is in Settings → About. Hints inside the browser are drawn by `electron/tour_hint.js` only in sign-in runs (no recorder) on the Conxa website host (`browser_panel.js::_tourAllowed`, tested); record and test runs never get them. The practice company ("Northwind Practice", `conxa-cloud/frontend/app/practice/`) needs a Conxa sign-in but no workspace (`proxy.ts`), keeps fake data in the browser only, and is excluded from search engines.
+- **Not done / open:** the tour was not walked through end to end in the running app, and the Cloud `npm run build` was not run. A tour closed mid-way through the group dialog resumes with the lock lifted after 15 s rather than re-opening the dialog.
+
 ## EXEC — Execution & Recovery (28 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
@@ -1281,7 +1287,7 @@ inferred from `outer_html`, not read directly.
 - **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
 - **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
 
-## RT — Runtime (6 done)
+## RT — Runtime (7 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1368,6 +1374,12 @@ no-regression on encrypted-only/raw-only/neither). Docs: `docs/TRD.md` §5.3, `d
 Updater.md` §1.3.
 
 ---
+
+### RT-11 — The author cannot yet say "how we know it worked" for an upload or submit
+**Resolved:** 2026-11-09
+- **Category:** Runtime
+- **What fixed it:** the recorder (`bridge.js`) now keeps watching after an upload or a commit-worded click while a progress window is on screen (up to 15 s, no delay for an ordinary Save) and records what the app said when it ended as value-free words (`post_watch`). `compiler/effects.py` turns that, the status words and the kind of action into a per-step `validation.effect` checklist (a completion-message check, a generic "the app answered the request" check and an always-present failure veto); the "How can we tell it worked?" question offers it in plain words and ticking it agrees to it; `runtime/app/effect_probes.js` reads it as the gate's success signal; a clean test calibrates it and publishing a step that can't be undone requires a tested or agreed check.
+- **Verified:** `test_effects.py`, `test_effect_studio.py`, `test_recorder_bridge_js.py` (post_watch cases), `test_effect_probes.js`.
 
 ### RT-12 — Completion gate gives up on Google Drive's real upload tray
 **Resolved:** 2026-11-09
