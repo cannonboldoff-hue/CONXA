@@ -445,6 +445,20 @@ def test_what_the_person_said_while_recording_is_passed_on_and_wins():
     assert "told" not in TU.build_input(MERGED, "", "", TU.candidates_from_timeline(MERGED))
 
 
+def test_a_reply_cut_off_at_the_limit_is_asked_again_shorter():
+    calls = []
+
+    def cut_then_ok(task, payload, ms):
+        calls.append(payload)
+        if len(calls) == 1:
+            TU._router.detail.append("truncated_output: finish_reason=length")     # what the Studio's call adds
+            return {"text": "{\"goal\": \"Download"}
+        return raw_answer()
+
+    out = TU.understand_timeline(MERGED, "download invoices", call=cut_then_ok)
+    assert "cut off" in calls[1]["retry"] and out["source"] == "model"
+
+
 def test_an_unreadable_reply_is_asked_for_once_more_and_a_missing_one_is_not():
     calls = []
 

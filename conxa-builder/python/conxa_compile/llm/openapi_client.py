@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from conxa_core.config import settings
+from conxa_core.llm.client import TRUNCATED_MARKER
 from conxa_compile.llm.client import call_llm
 from services.llm_proxy_client import CloudUnreachable
 
@@ -19,7 +20,10 @@ def _call_llm_or_none(task: str, payload: dict[str, Any], timeout_ms: int, *, er
     degrades to None like every other failure mode these functions document,
     instead of propagating past callers that don't expect an exception here."""
     try:
-        return call_llm(task, payload, timeout_ms, error_detail=error_detail)
+        data = call_llm(task, payload, timeout_ms, error_detail=error_detail)
+        if data and data.pop("_truncated", False) and error_detail is not None:
+            error_detail.append(TRUNCATED_MARKER)
+        return data
     except CloudUnreachable:
         if error_detail is not None:
             error_detail.append("cloud_unreachable")
@@ -169,6 +173,7 @@ def infer_workflow_review(
     loop_candidates: list[dict[str, Any]] | None = None,
     understanding: dict[str, Any] | None = None,
     retry: str = "",
+    window: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Single multimodal whole-workflow LLM call producing BOTH the workflow
     intent graph (goal + per-step intent) AND BUILD-25's compile-time review
@@ -196,6 +201,9 @@ def infer_workflow_review(
             # What the pre-compile check already settled, and (retry) why the last reply was not usable.
             **({"understanding": understanding} if understanding else {}),
             **({"retry": retry} if retry else {}),
+            # A long workflow is sent in windows (see workflow_review.py): this window's place in
+            # it, and what the earlier windows already said, so wording stays consistent.
+            **({"window": window} if window else {}),
         },
     }
     data = _call_llm_or_none(

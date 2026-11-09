@@ -532,6 +532,19 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             text_payload["understanding"] = data["understanding"]
         if (data or {}).get("retry"):
             text_payload["retry"] = str(data["retry"])
+        window = (data or {}).get("window")
+        window_note = ""
+        if window:
+            text_payload["window"] = window
+            window_note = (
+                "\n\nThe input has window: steps holds only one part of a longer workflow (window.start is "
+                "the position of its first step in the whole workflow, window.total the whole length, "
+                "window.earlier the intents already written for the steps before it). Answer for these "
+                "steps only. In steps, index is the 0-based position within THIS steps array. "
+                + ("Also return goal, decision_points" if window.get("first") else "Do not return goal or decision_points")
+                + ("; and expected_end_state" if window.get("last") else "; and do not return expected_end_state")
+                + ". Suggestions are for these steps only."
+            )
         content = json.dumps(text_payload, ensure_ascii=False)
         return [
             {
@@ -643,6 +656,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "Never write or invent a page selector anywhere in this response. No markdown, "
                     "no keys other than the ones described here, no suggestion whose step_key you "
                     "are not certain about."
+                    + window_note
                 ),
             },
             {"role": "user", "content": content},
@@ -1133,6 +1147,25 @@ TASK_OUTPUT_BUDGET: dict[str, int] = {
     "compile_recap": 1024,
 }
 
+# The largest reply the models we route to can give. A task's limit never goes above it.
+OUTPUT_CEILING = 128_000
+# Tasks whose reply grows with the input: (input key that counts the items, tokens each item may use).
+# The limit is the table value above or 4096 + items * tokens, whichever is larger, up to OUTPUT_CEILING.
+# Only an upper bound: the provider bills the tokens actually written, not the limit.
+_OUTPUT_PER_ITEM: dict[str, tuple[str, int]] = {
+    "workflow_review": ("steps", 1000),
+    "timeline_understanding": ("rows", 1200),
+}
+
+
+def _output_budget(task: str, payload: dict[str, Any]) -> int | None:
+    base = TASK_OUTPUT_BUDGET.get(task)
+    if base is None or task not in _OUTPUT_PER_ITEM:
+        return base
+    key, per_item = _OUTPUT_PER_ITEM[task]
+    items = len(((payload.get("input") or {}).get(key)) or [])
+    return min(OUTPUT_CEILING, max(base, 4096 + per_item * items))
+
 
 def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) -> dict[str, Any]:
     resolved_model = _resolved_model(task, payload)
@@ -1142,8 +1175,9 @@ def _openai_body_dict(task: str, payload: dict[str, Any], *, json_mode: bool) ->
         "messages": messages,
         "temperature": 0.0,
     }
-    if task in TASK_OUTPUT_BUDGET:
-        body["max_tokens"] = TASK_OUTPUT_BUDGET[task]
+    budget = _output_budget(task, payload)
+    if budget is not None:
+        body["max_tokens"] = budget
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     # Tool-calling passthrough — only execute_chat's caller-built payload ever
@@ -1245,6 +1279,21 @@ def _normalize_openai_response(data: dict[str, Any]) -> dict[str, Any]:
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
     return {"text": content, "output": content}
+
+
+# Added to a call's error_detail when its reply was stopped at the output limit but still had text.
+TRUNCATED_MARKER = "truncated_output: finish_reason=length"
+
+
+def mark_if_cut_off(data_raw: dict[str, Any], data: Any) -> Any:
+    """Tag a normalized reply `_truncated: True` when the provider stopped it at the output limit
+    (finish_reason "length") but still sent text. Callers that grow with workflow length use it to
+    split their work; the cloud proxy returns this dict to the Build Studio as-is."""
+    choices = data_raw.get("choices")
+    first = choices[0] if isinstance(choices, list) and choices else None
+    if isinstance(first, dict) and first.get("finish_reason") == "length" and isinstance(data, dict):
+        data["_truncated"] = True
+    return data
 
 
 def _sse_content_to_text(raw: Any) -> str:
@@ -1476,7 +1525,7 @@ def _openai_complete_request(
         )
         return None
 
-    data = _normalize_openai_response(data_raw)
+    data = mark_if_cut_off(data_raw, _normalize_openai_response(data_raw))
 
     _debug_log(
         "response_received "

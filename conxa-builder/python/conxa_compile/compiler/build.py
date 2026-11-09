@@ -2200,7 +2200,11 @@ def _apply_second_opinion(
         error_detail.append(f"{type(exc).__name__}: {exc}")
 
     degraded = list(compile_report.get("degraded") or [])
-    if error_detail and not findings and not graph.goal:
+    not_reviewed = next((e for e in error_detail if e.startswith("steps_not_reviewed:")), None)
+    if not_reviewed:
+        # A long workflow is reviewed in windows; some steps got no answer (see llm/workflow_review.py).
+        degraded.append({"pass": "second_opinion", "reason": "steps_not_reviewed", "detail": not_reviewed})
+    elif error_detail and not findings and not graph.goal:
         degraded.append({
             "pass": "second_opinion",
             "reason": "llm_call_failed",

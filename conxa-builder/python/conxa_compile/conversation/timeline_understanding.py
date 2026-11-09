@@ -33,7 +33,7 @@ from conxa_compile.conversation.clarify import _question
 from conxa_compile.display_text import display_label, has_machine_words, person_text
 
 TASK = "timeline_understanding"
-MAX_ROWS = 250
+MAX_ROWS = 1000
 # Rows that say least about what a recording means: dropped first when it is longer than MAX_ROWS.
 _LOW_VALUE_ACTIONS = ("scroll", "hover")
 _LOW_VALUE_OBSERVATIONS = ("idle_wait", "unmatched_segment")
@@ -772,8 +772,13 @@ _router = threading.local()
 def _default_call(task_name: str, payload: dict[str, Any], timeout_ms: int) -> dict[str, Any] | None:
     from conxa_compile.llm.client import call_llm  # noqa: PLC0415 -- Studio-only, imported lazily
 
+    from conxa_core.llm.client import TRUNCATED_MARKER  # noqa: PLC0415
+
     _router.detail = []
-    return call_llm(task_name, {"input": payload}, timeout_ms, error_detail=_router.detail)
+    out = call_llm(task_name, {"input": payload}, timeout_ms, error_detail=_router.detail)
+    if isinstance(out, dict) and out.pop("_truncated", False):
+        _router.detail.append(TRUNCATED_MARKER)      # a recording too long for one reply: say so on the retry
+    return out
 
 
 _ANSWER_KEYS = ("goal", "short_summary", "values", "questions")
@@ -831,6 +836,8 @@ def _ask_about_unmentioned_selections(result: dict[str, Any], candidates: list[d
 
 _RETRY_NOTE = ("Your last reply could not be read. Return ONLY the JSON object described, nothing before "
                "or after it, and keep `decided` and `questions` short.")
+_RETRY_CUT_OFF = ("Your last reply was cut off at the length limit. Return the whole JSON object again, shorter: "
+                  "one short line per row in `detailed_summary`, and keep `decided` and `questions` short.")
 _RETRY_WEAK = ("Your last reply could be read but was not good enough: {reasons}. Return the whole JSON object again "
                "and fix exactly that. Use only refs and rows that are in the input.")
 _GRADE_RANK = {"unusable": 0, "weak": 1, "ok": 2}
@@ -943,7 +950,8 @@ def understand_timeline(
     raw, detail, reason = _attempt(caller, payload, timeout_ms)
     checked, grade, why = _checked(raw, merged, candidates, existing_inputs, told)
     if raw is not None and grade != "ok":
-        note = _RETRY_NOTE if grade == "unusable" else _RETRY_WEAK.format(reasons="; ".join(why))
+        cut_off = any("truncated_output" in str(d) for d in detail)
+        note = (_RETRY_CUT_OFF if cut_off else _RETRY_NOTE) if grade == "unusable" else _RETRY_WEAK.format(reasons="; ".join(why))
         result["retried_because"] = why
         raw2, detail2, reason2 = _attempt(caller, {**payload, "retry": note}, timeout_ms)
         checked2, grade2, why2 = _checked(raw2, merged, candidates, existing_inputs, told)

@@ -46,7 +46,7 @@ from conxa_core.config import settings
 from conxa_core.models.skill_spec import WorkflowIntentGraph
 
 from conxa_compile.llm.llm_cache import cache_key, read_cached, write_cached
-from conxa_compile.llm.openapi_client import infer_workflow_review
+from conxa_compile.llm.openapi_client import TRUNCATED_MARKER, infer_workflow_review
 from conxa_compile.llm.workflow_intent import _graph_from_raw
 from conxa_compile.llm.model_ledger import log as _log
 from conxa_compile.llm.workflow_semantics import _validate_findings
@@ -71,6 +71,83 @@ def _empty(raw: dict[str, Any] | None) -> bool:
 def _infra_failure(error_detail: list[str] | None) -> bool:
     """The router or the cloud could not be reached (marked by ``openapi_client._call_llm_or_none``)."""
     return "cloud_unreachable" in (error_detail or [])
+
+
+# Only when one call's reply is still cut off at the output limit (which grows with the step count, see
+# conxa_core/llm/client.py::_output_budget): the steps go in windows of this size, each halved if cut off.
+WINDOW_STEPS = 100
+_EARLIER_SHOWN = 15  # intents of the steps just before a window, sent so its wording stays consistent
+_FIRST_WINDOW_ONLY = ("review_inputs", "loop_candidates")  # whole-recording answers: asked once
+
+
+def _review_in_windows(
+    steps_context: list[dict[str, Any]],
+    call_kwargs: dict[str, Any],
+    error_detail: list[str] | None,
+) -> tuple[dict[str, Any], int]:
+    """Review a long workflow one window at a time and join the answers into the shape one call gives.
+    A window whose reply was cut off at the output limit is split in half and each half asked again,
+    down to one step. Returns (joined answer, number of steps no call could review)."""
+    total = len(steps_context)
+    merged: dict[str, Any] = {
+        "goal": "", "steps": [], "decision_points": [], "expected_end_state": {},
+        "suggestions": [], "understanding": None, "loop_copy": [],
+    }
+    earlier: list[dict[str, str]] = []
+    state = {"missed": 0, "dead": False}
+
+    def ask(chunk: list[dict[str, Any]], window: dict[str, Any], **extra: Any) -> tuple[dict[str, Any] | None, list[str]]:
+        detail: list[str] = []
+        kwargs = {**call_kwargs, **extra}
+        return infer_workflow_review(steps=chunk, error_detail=detail, window=window, **kwargs), detail
+
+    def run(start: int, chunk: list[dict[str, Any]]) -> None:
+        if state["dead"]:
+            state["missed"] += len(chunk)
+            return
+        first = start == 0
+        window = {
+            "start": start, "total": total, "first": first, "last": start + len(chunk) >= total,
+            "earlier": earlier[-_EARLIER_SHOWN:],
+        }
+        skip = {} if first else {k: None for k in _FIRST_WINDOW_ONLY}
+        raw, detail = ask(chunk, window, **skip)
+        if _empty(raw) and TRUNCATED_MARKER not in detail and not _infra_failure(detail):
+            raw, detail = ask(chunk, window, retry=_RETRY_NOTE, **skip)
+        if TRUNCATED_MARKER in detail and len(chunk) > 1:
+            half = len(chunk) // 2
+            run(start, chunk[:half])
+            run(start + half, chunk[half:])
+            return
+        if _empty(raw):
+            state["missed"] += len(chunk)
+            state["dead"] = _infra_failure(detail)
+            if error_detail is not None:
+                error_detail.extend(detail)
+            return
+        raw = raw or {}
+        for item in raw.get("steps") or []:
+            try:
+                local = int(item["index"])
+            except (KeyError, TypeError, ValueError):
+                continue  # same rule as _graph_from_raw: an entry without a usable index is dropped
+            if 0 <= local < len(chunk):
+                earlier.append({"key": str(chunk[local].get("key") or ""), "intent": str(item.get("intent") or "")})
+            merged["steps"].append({**item, "index": local + start})
+        for point in raw.get("decision_points") or []:
+            if isinstance(point, dict) and isinstance(point.get("step_index"), int):
+                point = {**point, "step_index": point["step_index"] + start}
+            merged["decision_points"].append(point)
+        merged["suggestions"].extend(raw.get("suggestions") or [])
+        if first:
+            merged.update(goal=raw.get("goal") or "", understanding=raw.get("understanding"),
+                          loop_copy=raw.get("loop_copy") or [])
+        if window["last"]:
+            merged["expected_end_state"] = raw.get("expected_end_state") or {}
+
+    for start in range(0, total, WINDOW_STEPS):
+        run(start, steps_context[start:start + WINDOW_STEPS])
+    return merged, state["missed"]
 
 
 def _sidecar_read(sidecar: Path | None, key: str) -> dict[str, Any] | None:
@@ -163,34 +240,28 @@ def build_workflow_review(
     if cached is None:
         cached = _sidecar_read(sidecar, key)
     raw = cached
+    missed = 0  # steps no window could review (see _review_in_windows)
     if raw is None:
-        raw = infer_workflow_review(
-            steps=steps_context,
-            page_urls=page_urls,
-            sibling_bindings=sibling_bindings or {},
-            model=model,
-            error_detail=error_detail,
-            task_description=task,
-            review_inputs=review_inputs,
-            loop_candidates=loop_candidates,
-            understanding=prior_understanding,
+        call_kwargs = dict(
+            page_urls=page_urls, sibling_bindings=sibling_bindings or {}, model=model,
+            task_description=task, review_inputs=review_inputs,
+            loop_candidates=loop_candidates, understanding=prior_understanding,
         )
-        if _empty(raw) and not _infra_failure(error_detail):
+        detail: list[str] = []
+        raw = infer_workflow_review(steps=steps_context, error_detail=detail, **call_kwargs)
+        if TRUNCATED_MARKER in detail and len(steps_context) > 1:
+            # One reply was not big enough even at the largest output limit: ask in windows instead.
+            raw, missed = _review_in_windows(steps_context, call_kwargs, detail)
+            if missed:
+                detail.append(f"steps_not_reviewed: {missed}")
+                _log(ledger, "shape", "steps_not_reviewed")
+        elif _empty(raw) and not _infra_failure(detail):
             # One reply that could not be read (cut off, not JSON): ask once more, saying so. Not when
             # the router itself could not be reached; a second try would only wait the same time again.
             _log(ledger, "shape", "unreadable_reply")
-            raw = infer_workflow_review(
-                steps=steps_context,
-                page_urls=page_urls,
-                sibling_bindings=sibling_bindings or {},
-                model=model,
-                error_detail=error_detail,
-                task_description=task,
-                review_inputs=review_inputs,
-                loop_candidates=loop_candidates,
-                understanding=prior_understanding,
-                retry=_RETRY_NOTE,
-            )
+            raw = infer_workflow_review(steps=steps_context, error_detail=detail, retry=_RETRY_NOTE, **call_kwargs)
+        if error_detail is not None:
+            error_detail.extend(detail)
         if not raw or (
             not str(raw.get("goal") or "").strip()
             and not (raw.get("steps") or [])
@@ -198,7 +269,8 @@ def build_workflow_review(
         ):
             # Empty/failed response — do NOT cache, so the next compile retries.
             return WorkflowIntentGraph(), []
-        write_cached(_NAMESPACE, key, raw, _CACHE_VERSION)
+        if not missed:  # a partly reviewed workflow is not pinned: the next compile tries the missing windows again
+            write_cached(_NAMESPACE, key, raw, _CACHE_VERSION)
     understanding = raw.get("understanding") if isinstance(raw.get("understanding"), dict) else None
     if understanding is not None:
         understanding = {**understanding, "for_task": task}
@@ -207,7 +279,8 @@ def build_workflow_review(
         extras_out.update(understanding=understanding, loop_copy=[r for r in raw.get("loop_copy") or [] if isinstance(r, dict)])
     # Pinned beside the recording, so a recompile replays this exact answer even if the shared
     # cache was cleared or the model has since changed its mind.
-    _sidecar_write(sidecar, key, raw)
+    if not missed:
+        _sidecar_write(sidecar, key, raw)
 
     graph = _graph_from_raw(raw)
     if prior_understanding and prior_understanding.get("goal"):

@@ -25,6 +25,7 @@ from conxa_core.llm.client import (
     _openai_body_dict,
     _provider_top_level_error,
     _safe_error_snippet,
+    mark_if_cut_off,
 )
 from conxa_core.progress import append_current_job_event, has_active_job_sink
 
@@ -774,7 +775,7 @@ class LLMRouter:
                     error_detail.append(msg)
                 raise _DeterministicRejection(msg)
 
-            data = _normalize_openai_response(data_raw)
+            data = mark_if_cut_off(data_raw, _normalize_openai_response(data_raw))
             _debug_log(f"router: response_ok req_id={req_id} provider={entry.provider}")
             if has_active_job_sink():
                 append_current_job_event(
