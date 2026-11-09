@@ -48,6 +48,7 @@ const {
 const { waitForSettle } = require("./settle");
 const { waitForCompletion, captureCompletionBaseline, completionMessage } = require("./completion");
 const proof = require("./proof");
+const evidence = require("./evidence");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -235,6 +236,41 @@ async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
 // "no_sign", "cant_tell" and "still_working" are not failures here: proveStep turns them into a
 // verdict, so they are never a silent pass and never a false failure.
 async function confirmCompleted(ctx, state, step, i, page, completion, preShot) {
+  try {
+    return await confirmCompletedInner(ctx, state, step, i, page, completion, preShot);
+  } finally {
+    // The verdict is in (or the step is failing): stop listening, whatever the outcome.
+    if (completion.notebook) closeNotebook(ctx, completion.notebook);
+  }
+}
+
+// The pages this run owns (never the whole browser context: a borrowed host browser also holds other
+// runs' views, and another run's refusal must not fail this one).
+function runPages(ctx) {
+  const t = ctx.tabs;
+  if (!t) return [];
+  return [...new Set([...(t.pages ? t.pages.values() : []), ...(t.bound || []), ...(t.pendingPages || [])])];
+}
+
+async function openNotebook(ctx, page) {
+  closeNotebook(ctx);
+  try {
+    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx) });
+    return ctx.notebook;
+  } catch (_) {
+    ctx.notebook = null; // the notebook is evidence, never a reason to fail a step: the gate reads the page alone
+    return null;
+  }
+}
+
+function closeNotebook(ctx, only = null) {
+  const nb = only || ctx.notebook;
+  if (!nb) return;
+  try { nb.close(); } catch (_) { /* already closed */ }
+  if (ctx.notebook === nb) ctx.notebook = null;
+}
+
+async function confirmCompletedInner(ctx, state, step, i, page, completion, preShot) {
   const full = step.type === "upload" || step === ctx.lastActStep;
   const mode = full ? "full" : "short";
   const warn = (text) => { if (text && !state.warnings.includes(text)) state.warnings.push(text); };
@@ -252,6 +288,7 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
     budgetMs: full ? COMPLETION_BUDGET_MS : COMPLETION_SHORT_MS,
     pendingBudgetMs: upload ? COMPLETION_BUDGET_MS : NETWORK_GRACE_MS,
     startGraceMs: COMPLETION_START_GRACE_MS,
+    notebook: completion.notebook || null,
     deadlineAt: ctx.deadlineAt,
     cancelCheck: ctx.cancelCheck,
     dialogQueue: ctx.dialogQueue,
@@ -741,9 +778,13 @@ async function executeOneStep(ctx, state, steps, i) {
   // carries one — cheap, but no reason to pay it on every step).
   const stateBaseline = needsStateChangedBaseline(step) ? await capturePreStepSignature(page) : null;
   // Completion gate: what the page shows before the action, so only NEW progress/errors count after.
-  const completion = COMPLETION_GATE_ENABLED && isNonIdempotent(step)
-    ? { baseline: await captureCompletionBaseline(page), sinceMs: Date.now(), attempted: true }
-    : { baseline: null, sinceMs: 0 };
+  // The evidence notebook opens here too: from now until the verdict it writes down what every tab this run
+  // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.
+  let completion = { baseline: null, sinceMs: 0 };
+  if (COMPLETION_GATE_ENABLED && isNonIdempotent(step)) {
+    const notebook = await openNotebook(ctx, page);
+    completion = { baseline: await captureCompletionBaseline(page, notebook), sinceMs: Date.now(), attempted: true, notebook };
+  }
 
   // EXEC-29 — a native dialog blocks the very Playwright call that opens it: click()/fill()/
   // etc. do not resolve until the dialog is answered (this is Chromium/CDP behavior, not
@@ -1857,18 +1898,22 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   };
 
   let endedAt = null;
-  for (let i = startFrom; i < steps.length; i++) {
-    try {
-      await executeOneStep(ctx, state, steps, i);
-    } catch (e) {
-      // A popup option marked "end" finished the run on purpose: not a failure, and nothing after runs.
-      if (e && e.runEnded) {
-        endedAt = e.stepIndex;
-        state.warnings.push(`The run finished at step ${e.stepIndex + 1}: the answer chosen for the popup ends this workflow.`);
-        break;
+  try {
+    for (let i = startFrom; i < steps.length; i++) {
+      try {
+        await executeOneStep(ctx, state, steps, i);
+      } catch (e) {
+        // A popup option marked "end" finished the run on purpose: not a failure, and nothing after runs.
+        if (e && e.runEnded) {
+          endedAt = e.stepIndex;
+          state.warnings.push(`The run finished at step ${e.stepIndex + 1}: the answer chosen for the popup ends this workflow.`);
+          break;
+        }
+        throw e;
       }
-      throw e;
     }
+  } finally {
+    closeNotebook(ctx); // however the plan ends, no listener outlives it
   }
 
   return {

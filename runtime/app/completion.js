@@ -73,12 +73,14 @@ function pageUrl(page) {
  * @param {{baseline: {busyCount:number, regions:string[], url?:string}, sinceMs: number,
  *   mode?: "short"|"full", budgetMs: number, pendingBudgetMs?: number, pollMs?: number, quietMs?: number,
  *   startGraceMs?: number, deadlineAt?: number, deadlineMarginMs?: number, cancelCheck?: () => boolean,
- *   dialogQueue?: any[]}} o
+ *   dialogQueue?: any[], notebook?: object}} o  `notebook` (evidence.js) widens what is read from the one page
+ *   to every tab and visible frame the run owns; without it the wait reads `page` alone, as before.
  * @returns {Promise<{status: "done"|"failed"|"timed_out"|"still_working"|"no_sign"|"cant_tell"|"handoff",
  *   evidence?: string, reason?: string, waitedMs: number, warning?: string, kind?: string}>}
  */
 async function waitForCompletion(page, o) {
   const { baseline, sinceMs, budgetMs, dialogQueue, deadlineAt, cancelCheck } = o;
+  const nb = o.notebook || null;
   const full = o.mode === "full";
   const pollMs = o.pollMs ?? 250;
   const quietMs = o.quietMs ?? 500;
@@ -99,7 +101,7 @@ async function waitForCompletion(page, o) {
 
     let sample;
     try {
-      sample = await evalOn(page, pageScripts.completionProbe, undefined, 2000);
+      sample = nb ? await nb.sample() : await evalOn(page, pageScripts.completionProbe, undefined, 2000);
     } catch (_) { return out("cant_tell", { reason: "probe_unavailable" }); }
     // A page that cannot answer (closed, hung) is not evidence of anything: never fail a run on it,
     // and never call it a success either.
@@ -109,16 +111,17 @@ async function waitForCompletion(page, o) {
     const urlNow = baseUrl ? pageUrl(page) : null;
     // A first sign the app took the work. Silence before this proves nothing: a tray can open late.
     if (c.busy || newTexts(sample, baseline).length || (urlNow && urlNow !== baseUrl)
-        || (full && pageStatus.mutationStarted(page, sinceMs))) started = true;
+        || (nb && nb.sawStart())
+        || (full && (nb ? nb.mutationStarted() : pageStatus.mutationStarted(page, sinceMs)))) started = true;
 
     if (full) {
       if (c.failure) return out("failed", { evidence: `the app said "${c.failure.evidence}"`, kind: c.failure.kind });
-      const refused = pageStatus.mutationFailure(page, sinceMs);
+      const refused = nb ? nb.mutationFailure() : pageStatus.mutationFailure(page, sinceMs);
       if (refused) return out("failed", { evidence: requestFailureEvidence(refused), kind: "action_failed" });
     }
 
     let pending = false;
-    if (full && !c.busy && pageStatus.pendingMutations(page, sinceMs) > 0) {
+    if (full && !c.busy && (nb ? nb.pendingMutations() : pageStatus.pendingMutations(page, sinceMs)) > 0) {
       pendingSince = pendingSince ?? Date.now();
       if (Date.now() - pendingSince <= pendingBudgetMs) pending = true;
       else sawPendingGrace = true;
@@ -166,9 +169,11 @@ async function waitForCompletion(page, o) {
   }
 }
 
-/** One probe, taken just before the action, that later samples are measured against. Never throws. */
-async function captureCompletionBaseline(page) {
+/** One probe, taken just before the action, that later samples are measured against. Never throws.
+ *  With a notebook the probe was already taken (across every tab and visible frame) when it opened. */
+async function captureCompletionBaseline(page, notebook = null) {
   try {
+    if (notebook) return notebook.baseline ? { ...notebook.baseline, url: pageUrl(page) } : null;
     const s = await evalOn(page, pageScripts.completionProbe, undefined, 2000);
     return s && s !== EVAL_TIMED_OUT ? { ...s, url: pageUrl(page) } : null;
   } catch (_) { return null; }

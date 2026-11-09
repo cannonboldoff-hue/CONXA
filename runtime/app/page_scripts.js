@@ -593,8 +593,9 @@ function authDefinitionMarkersProbe() {
 
 // Completion gate (completion.js) — what the page is showing right now that says "still working" or
 // "it failed": visible busy indicators, and the text of status regions (role=status/alert/log, a
-// polite/assertive live region, or a NON-modal dialog such as an upload tray). A modal dialog is a
-// question for the person, not a progress surface, so it is left to dialogProbe. Re-parsed standalone
+// polite/assertive live region, or a dialog such as an upload tray). A modal dialog is a question for the
+// person and is left to dialogProbe, unless it is really a progress window (a progress bar, or text that says
+// it is still working). Re-parsed standalone
 // in the page realm like every function here, so it closes over nothing.
 // Returns { busyCount, regions: string[] } (at most 8 texts of 300 chars each).
 function completionProbe() {
@@ -616,6 +617,17 @@ function completionProbe() {
     if (!visible(els[j])) continue;
     var t = String(els[j].innerText || els[j].textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
     if (t && regions.indexOf(t) === -1) regions.push(t);
+  }
+  // A MODAL dialog is a question for the person (dialogProbe owns it), unless it is really a progress
+  // window: one that holds a progress bar or says it is still working. Those are progress, and leaving
+  // them out hid a modal "Uploading..." window from the gate entirely.
+  var progressWords = /\b(uploading|processing|saving|sending|submitting|importing|exporting|converting|preparing|syncing|loading|in progress|please wait)\b|(^|[^\d.])\d{1,2}\s?%/i;
+  var modals = document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open]');
+  for (var k = 0; k < modals.length && regions.length < 8; k++) {
+    if (!visible(modals[k])) continue;
+    var mt = String(modals[k].innerText || modals[k].textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (!mt || regions.indexOf(mt) !== -1) continue;
+    if (modals[k].querySelector('[role="progressbar"], progress, [aria-busy="true"]') || progressWords.test(mt)) regions.push(mt);
   }
   return { busyCount: busyCount, regions: regions };
 }

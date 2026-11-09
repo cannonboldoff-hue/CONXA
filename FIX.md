@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A run now sees what is happening in every tab and every part of the page — 2026-11-09**
+Before, when a step started an upload, the app only looked at one tab and the main part of the page. Progress shown in a small embedded window, or a refusal that arrived in a second tab, could go unseen, so a run might say "Done" too early. Now the app keeps a short private notebook of what happens on every tab the workflow uses and in every visible part of the page, from just before the step until its result is clear. It also notices when a website says "OK" but its reply says the upload failed, for example because the storage is full. The notebook never keeps page contents, web addresses with personal details, or replies; it stays on your computer.
+— 2026-11-09
+
 **A run now says plainly when it could not be sure a step worked — 2026-11-09**
 Before, a step that the app could not check was quietly counted as a success, so a run could say "Done" when nothing proved the work happened. Now every step is judged on how much was really shown. If a small step could not be confirmed, the run still finishes but says "Done, please check" and lists what to look at. If a step that cannot be undone, like an upload or a delete, could not be confirmed, the run stops and says "Couldn't confirm" instead of pretending, and it never repeats that step by itself. The test screen in the Build Studio shows these in everyday words, with a "What was checked" list one click down.
 — 2026-11-09
