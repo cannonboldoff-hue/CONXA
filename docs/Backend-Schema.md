@@ -1522,6 +1522,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `tier_ok` | A resolution/recovery tier succeeded | `si`, `tier`, `sel` |
 | `verify_fail` | Post-action VERIFY failed | `si`, `ch` (assertion channel) |
 | `verify_result` | Full post-action assertion audit for a step that carries assertions (emitted on the primary execution path, pass or fail — not on recovery re-verification) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions) |
+| `completion` | Completion gate ran after a step that can start work (upload, submit, click…); `st` is `done`, `failed`, `timed_out`, `still_working`, `no_sign`, `cant_tell` or `handoff` | `si`, `mode` (`short`/`full`), `st`, `waited` (ms) |
 | `repair_event` | A step was recovered — drift signal for the admin flywheel queue | `step_id`, `tier` (`L1`/`L2` inside Tier A, or agent for B), `method`, `score`, `margin`, `stable_hash_match`, `stable_hash`, `drift_hint`, `app_version_fingerprint` |
 | `overlay_dismissed` | (EXEC-30) A `step_overrides.dismiss` pick cleared an unrecognized overlay before the resumed step's own action | `si`, `src` (`"agent"`) |
 | `overlay_dismiss_rejected` | (EXEC-30) A `dismiss` pick was refused — no match on the live page, or its label read as a commit action | `si`, `why` (`"no-match"` \| `"unsafe-label"`) |

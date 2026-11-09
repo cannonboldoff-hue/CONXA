@@ -147,6 +147,9 @@ function _createTab(run, runId, label, meta, loginKey, background = false) {
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // hidden until the renderer reports a rect
   view.webContents.loadURL(_markerUrl(runId, tabId)).catch(() => {});
   _emulate(run, { view }); // after loadURL: attaching the debugger to a never-navigated view crashes Electron
+  // A navigation (marker page -> real site, a new render process) can drop the override, leaving the
+  // page at full size inside a shrunk view. Re-apply each time a page is ready.
+  for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => _emulate(run, { view }));
   run.tabs.push({ id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null });
   if (_win) _win.contentView.addChildView(view);
   // A background tab (a judge/prover probe, focus:false) must not steal the shown view from the

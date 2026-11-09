@@ -9,7 +9,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | BUILD — Build Studio | 41 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
-| RT — Runtime | 5 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9 |
+| RT — Runtime | 6 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 12 |
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **102** | |
+| **Total** | **103** | |
 
 ---
 
@@ -1281,7 +1281,7 @@ inferred from `outer_html`, not read directly.
 - **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
 - **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
 
-## RT — Runtime (5 done)
+## RT — Runtime (6 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1368,6 +1368,12 @@ no-regression on encrypted-only/raw-only/neither). Docs: `docs/TRD.md` §5.3, `d
 Updater.md` §1.3.
 
 ---
+
+### RT-12 — Completion gate gives up on Google Drive's real upload tray
+**Resolved:** 2026-11-09
+- **Category:** Runtime
+- **What fixed it:** a progress-surface rule in `runtime/app/fork.js` (`isProgressSurface`: progress wording or a progress flag, with only tray controls such as Minimize, Close, Cancel all, is a notice, never a decision), mirrored in `outcome_fork.py` and pinned by two new cases in `decision_surface_cases.json` (the real Drive tray, and a tray that also offers "Send now", which stays a decision). `completion.js` also no longer calls silence "done" before the app showed a first sign of starting, and `run.js::confirmCompleted` now puts a popup left open by the plan's final step through the unrecorded-popup rules instead of passing it.
+- **Verified:** `test_completion.js` (30 tests, including the real Drive buttons, a tray that opens late and a popup left after the last step), `test_fork.js` and `conxa-cloud/tests/test_outcome_fork.py`.
 
 ### RT-9 — Studio-only `_pause_before_irreversible`: pause a test before the first destructive step, release or end on the person's word
 **Resolved:** 2026-10-18

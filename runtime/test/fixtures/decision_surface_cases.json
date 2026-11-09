@@ -45,6 +45,29 @@
       "progress": true
     },
     {
+      "name": "Drive upload tray: Minimize / Close / Cancel all",
+      "title": "Uploading 1 item",
+      "message": "report.pdf 42%",
+      "buttons": [
+        "Minimize",
+        "Close",
+        "Cancel all"
+      ],
+      "decision": false,
+      "class": "notice"
+    },
+    {
+      "name": "progress tray that also offers Send now is still a decision",
+      "title": "Sending 2 items",
+      "message": "Waiting for network",
+      "buttons": [
+        "Minimize",
+        "Send now"
+      ],
+      "decision": true,
+      "class": "decision_consequential"
+    },
+    {
       "name": "snackbar with one Undo",
       "title": "",
       "message": "Item moved to trash",

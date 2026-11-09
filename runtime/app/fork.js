@@ -193,12 +193,33 @@ function decideUnknown(fork, probe, { loopDepth = 0 } = {}) {
 const PURE_DISMISS = new Set(["close", "cancel", "dismiss", "no thanks", "not now", "skip", "later", "maybe later", "x", "×"]);
 const CONSENT_RE = /\b(cookie|cookies|consent|gdpr|privacy|accept all|reject all|manage preferences|onetrust)\b/i;
 
+// What an app shows while it is still working, in a status region or tray.
+const IN_PROGRESS_RE = /\b(uploading|processing|saving|sending|submitting|importing|exporting|converting|preparing|syncing|loading|in progress|please wait)\b|(^|[^\d.])\d{1,2}\s?%/i;
+// Buttons on a progress tray that only manage the tray. None of them answers a question.
+const PROGRESS_CONTROLS = new Set([
+  "minimize", "minimise", "hide", "close", "cancel", "cancel all", "cancel upload", "cancel uploads",
+  "stop", "dismiss", "x", "×",
+]);
+
+/** A tray showing work in flight (Drive's "Uploading 1 item" with Minimize / Close / Cancel all). It
+ * has several buttons but is a notice, not a question. Every button must be a tray control: a tray
+ * that also offers "Send now" or "Replace" stays a decision. Mirrors outcome_fork.py::is_progress_surface,
+ * pinned by decision_surface_cases.json. */
+function isProgressSurface(probe) {
+  if (!probe || probe.native || probe.hasFields) return false;
+  const labels = probeLabelsRaw(probe);
+  if (!labels.length) return false;
+  const showsWork = !!probe.progress || IN_PROGRESS_RE.test([probe.title, probe.text].join(" "));
+  return showsWork && labels.every((l) => PROGRESS_CONTROLS.has(norm(l)));
+}
+
 function isDecisionDialog(probe) {
   if (!probe || probe.native) return false;
   if (probe.hasFields) return false;
   const labels = probeLabelsRaw(probe);
   if (labels.length < 2) return false;
   if (CONSENT_RE.test([probe.title, probe.text, ...labels].join(" "))) return false;
+  if (isProgressSurface(probe)) return false;
   return !labels.every((l) => PURE_DISMISS.has(norm(l)));
 }
 
@@ -232,7 +253,7 @@ function classifySurface(probe) {
   if (probe.native) return "native";
   if (probe.hasFields) return "info_request";
   const labels = probeLabelsRaw(probe);
-  if (probe.progress || (probe.live && labels.length < 2)) return "notice";
+  if (probe.progress || isProgressSurface(probe) || (probe.live && labels.length < 2)) return "notice";
   if (!isDecisionDialog(probe)) return "obstruction";
   return labels.some((l) => CONSEQUENTIAL_RE.test(l) || isIrreversibleLabel(l)) ? "decision_consequential" : "decision_benign";
 }
@@ -274,6 +295,8 @@ function pauseChoices(state, probe) {
 
 module.exports = {
   isDecisionDialog,
+  isProgressSurface,
+  IN_PROGRESS_RE,
   classifySurface,
   mostCautious,
   isIrreversibleLabel,

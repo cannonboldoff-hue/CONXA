@@ -52,6 +52,19 @@ _PURE_DISMISS = frozenset({
     "close", "cancel", "dismiss", "no thanks", "not now", "skip", "later", "maybe later", "x", "×",
 })
 
+# A tray showing work in flight (Drive's "Uploading 1 item" with Minimize / Close / Cancel all) has
+# several buttons but none of them answers a question. Mirrors runtime/app/fork.js::isProgressSurface,
+# pinned by decision_surface_cases.json.
+_IN_PROGRESS_RE = re.compile(
+    r"\b(uploading|processing|saving|sending|submitting|importing|exporting|converting|preparing|"
+    r"syncing|loading|in progress|please wait)\b|(^|[^\d.])\d{1,2}\s?%",
+    re.IGNORECASE,
+)
+_PROGRESS_CONTROLS = frozenset({
+    "minimize", "minimise", "hide", "close", "cancel", "cancel all", "cancel upload", "cancel uploads",
+    "stop", "dismiss", "x", "×",
+})
+
 DECISION = "decision"
 DISMISSABLE = "dismissable"
 CONSENT = "consent"
@@ -96,6 +109,20 @@ def _button_name(b: dict[str, Any]) -> str:
     return str(b.get("name") or b.get("text") or "").strip()
 
 
+def is_progress_surface(ctx: Any) -> bool:
+    """True for a tray showing work in flight whose every button only manages the tray. A tray that
+    also offers "Send now" or "Replace" is still a decision."""
+    if not isinstance(ctx, dict) or ctx.get("kind") == "native" or ctx.get("native") or ctx.get("has_fields"):
+        return False
+    buttons = [b for b in (ctx.get("buttons") or []) if isinstance(b, dict) and _button_name(b)]
+    if not buttons:
+        return False
+    shows_work = bool(ctx.get("progress")) or bool(
+        _IN_PROGRESS_RE.search(f"{ctx.get('title') or ''} {ctx.get('message') or ''}")
+    )
+    return shows_work and all(_norm(_button_name(b)) in _PROGRESS_CONTROLS for b in buttons)
+
+
 def classify_dialog(ctx: Any) -> str:
     """decision | dismissable | consent | form. Only ``decision`` becomes a fork."""
     if not isinstance(ctx, dict):
@@ -116,6 +143,8 @@ def classify_dialog(ctx: Any) -> str:
     if len(buttons) < 2:
         return DISMISSABLE
     if all(_norm(_button_name(b)) in _PURE_DISMISS for b in buttons):
+        return DISMISSABLE
+    if is_progress_surface(ctx):
         return DISMISSABLE
     return DECISION
 
@@ -165,7 +194,7 @@ def classify_surface(ctx: Any) -> str | None:
     if ctx.get("has_fields"):
         return INFO_REQUEST
     buttons = [b for b in (ctx.get("buttons") or []) if isinstance(b, dict) and _button_name(b)]
-    if ctx.get("progress") or (ctx.get("live") and len(buttons) < 2):
+    if ctx.get("progress") or is_progress_surface(ctx) or (ctx.get("live") and len(buttons) < 2):
         return NOTICE
     if classify_dialog(ctx) != DECISION:
         return OBSTRUCTION

@@ -39,8 +39,15 @@ const {
   SETTLE_BUDGET_MS,
   SETTLE_POLL_MS,
   MAX_LOOP_ITERATIONS,
+  COMPLETION_GATE_ENABLED,
+  COMPLETION_BUDGET_MS,
+  COMPLETION_SHORT_MS,
+  NETWORK_GRACE_MS,
+  COMPLETION_START_GRACE_MS,
 } = require("./run_config");
 const { waitForSettle } = require("./settle");
+const { waitForCompletion, captureCompletionBaseline, completionMessage, completionWarning } = require("./completion");
+const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
   rootCandidates,
@@ -215,6 +222,88 @@ async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
     status: seen ? seen.status : null,
     mayHaveActed,
   });
+}
+
+// Completion gate (completion.js): "the action ran" is not "the action finished". Called once a step
+// has passed its own check, before the run moves on. An upload and the plan's last acting step wait
+// for the work to really finish and fail when the app says it did not; every other acting step only
+// waits (bounded) for visible progress to clear. The action already happened, so a failure here never
+// enters recovery: re-running it could upload or submit twice (callers rethrow `completionGate`).
+//
+// Only a "full" step (an upload, the plan's last acting step) is reported on when the gate can't say it
+// finished: "no_sign", "cant_tell" and "still_working" become a plain warning on the run, never a
+// silent pass. A "short" step stays quiet (the next step's own checks take over) and only leaves the
+// `completion` telemetry event.
+async function confirmCompleted(ctx, state, step, i, page, completion, preShot) {
+  const full = step.type === "upload" || step === ctx.lastActStep;
+  const mode = full ? "full" : "short";
+  const warn = (text) => { if (text && !state.warnings.includes(text)) state.warnings.push(text); };
+  if (!completion.baseline) {
+    // The page could not be read before the action, so nothing after it can be measured.
+    if (completion.attempted) {
+      ctx.tracker.emit("completion", { si: i, mode, st: "cant_tell", waited: 0 });
+      if (full) warn(completionWarning({ status: "cant_tell" }));
+    }
+    return;
+  }
+  const upload = step.type === "upload";
+  const v = await waitForCompletion(page, {
+    baseline: completion.baseline,
+    sinceMs: completion.sinceMs,
+    mode,
+    budgetMs: full ? COMPLETION_BUDGET_MS : COMPLETION_SHORT_MS,
+    pendingBudgetMs: upload ? COMPLETION_BUDGET_MS : NETWORK_GRACE_MS,
+    startGraceMs: COMPLETION_START_GRACE_MS,
+    deadlineAt: ctx.deadlineAt,
+    cancelCheck: ctx.cancelCheck,
+    dialogQueue: ctx.dialogQueue,
+  });
+  ctx.tracker.emit("completion", { si: i, mode, st: v.status, waited: v.waitedMs });
+  warn(v.warning);
+  if (v.status === "handoff") {
+    // A popup left open by the plan's final step has no next step to answer it: put it to the same
+    // rules as any other unrecorded popup. Anywhere else the next step's own popup handling owns it.
+    if (v.reason === "decision_popup" && step === ctx.lastStep) await popupLeftBehind(ctx, state, step, i, page, preShot);
+    return;
+  }
+  if (v.reason === "cancelled") {
+    // Cancelled (or out of time) while waiting: stop here, not "Done". Same error the step loop throws.
+    throw Object.assign(new Error("Execution cancelled"), { cancelled: true, completionGate: true });
+  }
+  const deadlineHit = v.status === "still_working" && v.reason === "deadline";
+  if (v.status !== "failed" && v.status !== "timed_out" && !(deadlineHit && full)) {
+    if (full) warn(completionWarning(v));
+    return;
+  }
+  ctx.tracker.emit("step_fail", { si: i, fc: v.status === "failed" ? "completion_failed" : "completion_timeout" });
+  const cause = Object.assign(new Error(completionMessage(v)), {
+    fault: true,
+    faultKind: v.kind || "unfinished",
+    actionMayHaveTakenEffect: true,
+  });
+  throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
+}
+
+// The plan's final step ended with a popup that asks a question and nothing is left to answer it.
+// Never answered on anyone's behalf: it goes through the same rules as an unrecorded popup anywhere
+// else (put to the MCP client when allowed, otherwise the run stops), and the run is not "Done".
+async function popupLeftBehind(ctx, state, step, i, page, preShot) {
+  const blocking = await observeDialog(page, ctx);
+  if (!blocking || !fork.isDecisionDialog(blocking)) return;
+  try {
+    await askAboutBlockingPopup(ctx, state, step, page, i, { verifyFail: true });
+  } catch (e) {
+    if (e && typeof e === "object") e.completionGate = true; // the action already ran: never recover into a re-run
+    throw e;
+  }
+  const title = blocking.title || "a popup";
+  ctx.tracker.emit("step_fail", { si: i, fc: "fork_decision_needed" });
+  const cause = Object.assign(
+    new Error(`Needs a decision: ${title}. The last step ended with a popup asking a question that this workflow doesn't answer, `
+      + "so the run stopped instead of reporting success. Tell Conxa in the chat how this popup should be handled."),
+    { forkDecisionNeeded: true, actionMayHaveTakenEffect: true },
+  );
+  throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
 }
 
 // Executes ONE step against the given `steps` array at index `i`, mutating `state` in place
@@ -569,6 +658,10 @@ async function executeOneStep(ctx, state, steps, i) {
   // Pre-action baseline for the state_changed assertion (only captured when the step actually
   // carries one — cheap, but no reason to pay it on every step).
   const stateBaseline = needsStateChangedBaseline(step) ? await capturePreStepSignature(page) : null;
+  // Completion gate: what the page shows before the action, so only NEW progress/errors count after.
+  const completion = COMPLETION_GATE_ENABLED && isNonIdempotent(step)
+    ? { baseline: await captureCompletionBaseline(page), sinceMs: Date.now(), attempted: true }
+    : { baseline: null, sinceMs: 0 };
 
   // EXEC-29 — a native dialog blocks the very Playwright call that opens it: click()/fill()/
   // etc. do not resolve until the dialog is answered (this is Chromium/CDP behavior, not
@@ -610,6 +703,7 @@ async function executeOneStep(ctx, state, steps, i) {
         verifyResults: verdict.results,
       });
     }
+    await confirmCompleted(ctx, state, step, i, page, completion, preShot);
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -620,6 +714,7 @@ async function executeOneStep(ctx, state, steps, i) {
     state.prevPage = page;
     return;
   } catch (err) {
+    if (err && err.completionGate) throw err; // the action already happened: never recover into a re-run
     primaryErr = err;
     primaryErr.earlyDomSnapshot = await captureEarlyDomSnapshot(page, step, state.inputs);
     primaryErr.failedPage = page;
@@ -710,6 +805,7 @@ async function executeOneStep(ctx, state, steps, i) {
         ctx.tracker.emit("settle_retry", { si: i, waited: settle.waitedMs, phase: "verify", ok: settle.settled });
         const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue).catch(() => null);
         if (verdict2 && verdict2.pass) {
+          await confirmCompleted(ctx, state, step, i, page, completion, preShot);
           ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
           state.hasExecutedStep = true;
           state.prevStepType = step.type;
@@ -722,6 +818,7 @@ async function executeOneStep(ctx, state, steps, i) {
           await executeStep(page, step, state.inputs, { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue });
           const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
           if (verdict2.pass) {
+            await confirmCompleted(ctx, state, step, i, page, completion, preShot);
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;
@@ -733,6 +830,7 @@ async function executeOneStep(ctx, state, steps, i) {
             verifyResults: verdict2.results,
           });
         } catch (retryErr) {
+          if (retryErr && retryErr.completionGate) throw retryErr;
           primaryErr = retryErr;
           primaryErr.earlyDomSnapshot = await captureEarlyDomSnapshot(page, step, state.inputs);
           primaryErr.failedPage = page;
@@ -793,6 +891,7 @@ async function executeOneStep(ctx, state, steps, i) {
     driftHint: remedyFor(klass),
   }));
 
+  await confirmCompleted(ctx, state, step, i, page, completion, preShot);
   state.recoveredSteps++;
   state.hasExecutedStep = true;
   state.prevStepType = step.type;
@@ -1540,7 +1639,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, deadlineAt, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1649,7 +1748,14 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   // executeOneStep call (top-level steps, and — once EXEC-38's for_each executor calls it too —
   // a loop body's steps, reusing the exact same tab-resolution/GATE/VERIFY/recovery machinery
   // rather than the best-effort, no-recovery path other branch primitives use).
+  // Completion gate: the last step that acts gets the full wait (it is what the run's "Done" rests on).
+  let lastActStep = null;
+  for (let k = steps.length - 1; k >= startFrom && !lastActStep; k--) if (isNonIdempotent(steps[k])) lastActStep = steps[k];
+
   const ctx = {
+    lastActStep,
+    lastStep: steps[steps.length - 1] || null, // a popup left open by this step has no next step to answer it
+    deadlineAt: deadlineAt || null, // the run's own time limit: the completion wait stops short of it
     onStep, onPhase, cancelCheck, tracker: t, downloadQueue, dialogQueue,
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
     guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)

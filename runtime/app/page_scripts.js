@@ -591,6 +591,35 @@ function authDefinitionMarkersProbe() {
   return markers;
 }
 
+// Completion gate (completion.js) — what the page is showing right now that says "still working" or
+// "it failed": visible busy indicators, and the text of status regions (role=status/alert/log, a
+// polite/assertive live region, or a NON-modal dialog such as an upload tray). A modal dialog is a
+// question for the person, not a progress surface, so it is left to dialogProbe. Re-parsed standalone
+// in the page realm like every function here, so it closes over nothing.
+// Returns { busyCount, regions: string[] } (at most 8 texts of 300 chars each).
+function completionProbe() {
+  var busySel = '[aria-busy="true"], [role="progressbar"], progress, .spinner, .loading, .loader, [class*="spinner" i]';
+  var regionSel = '[role="status"], [role="alert"], [role="log"], [aria-live]:not([aria-live="off"]), ' +
+    '[role="dialog"]:not([aria-modal="true"]), [role="alertdialog"]:not([aria-modal="true"])';
+  function visible(el) {
+    var r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    var cs = window.getComputedStyle(el);
+    return cs.visibility !== "hidden" && cs.display !== "none";
+  }
+  var busyCount = 0;
+  var busy = document.querySelectorAll(busySel);
+  for (var i = 0; i < busy.length; i++) if (visible(busy[i])) busyCount++;
+  var regions = [];
+  var els = document.querySelectorAll(regionSel);
+  for (var j = 0; j < els.length && regions.length < 8; j++) {
+    if (!visible(els[j])) continue;
+    var t = String(els[j].innerText || els[j].textContent || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (t && regions.indexOf(t) === -1) regions.push(t);
+  }
+  return { busyCount: busyCount, regions: regions };
+}
+
 module.exports = {
   extractDescriptor,
   rafStable,
@@ -606,6 +635,7 @@ module.exports = {
   overlayProbe,
   dialogProbe,
   faultProbe,
+  completionProbe,
   INVENTORY_SELECTOR,
   scrollVirtualContainerStep,
   scrollDominantScrollableElement,

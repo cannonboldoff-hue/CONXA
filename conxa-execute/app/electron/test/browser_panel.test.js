@@ -231,3 +231,15 @@ test("setVisibleChat parks other chats' views (still alive); untagged runs stay 
   assert.deepStrictEqual(viewA.bounds, rect);
   assert.deepStrictEqual(viewNone.bounds, hidden, "showing one run parks every other run's view");
 });
+
+test("the size override is re-applied when a page becomes ready, at the run's current scale", () => {
+  const { tabId } = panel.newView("run-reapply", { viewport: { width: 1280, height: 720 } });
+  const view = added[added.length - 1];
+  panel.setActiveBounds("run-reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
+  const wc = view.webContents;
+  for (const ev of ["dom-ready", "did-finish-load"]) {
+    wc.emulations.length = 0;
+    wc.handlers[ev]();
+    assert.strictEqual(wc.emulations.pop().scale, 0.5);
+  }
+});

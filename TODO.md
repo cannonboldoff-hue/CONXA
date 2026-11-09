@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 48 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 47 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **117** |
+| **Total** | **116** |
 
 ---
 
@@ -375,7 +375,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (39 remaining)
+## P2 — High Value, Do Soon (38 remaining)
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1134,6 +1134,21 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Items:** `get_step_screenshot` (copilot retrieval) returns a path that is pasted into the prompt but the image is never attached; one `insert_overlay_branch` accept leaves several undo entries (structural ops collapse to one); possible double bounding-box offset for relayed child-frame events (`bridge.js` plus `session.py::_finalize_payload_sync`, **unverified**); `Done.md` reuses ids BUILD-31 and BUILD-33.
   Found in Phase 5: the failure card can't show the page at the moment of failure (the evidence screenshot lives under the sandbox folder, which the `conxa-asset://` protocol doesn't serve); the compile card's "N compile credits left" assumes the `quota` event's `remaining` key (not confirmed against `/usage/compile/commit`); a confirm-only review can be edited into a free-form one afterwards without the gate re-checking the destructive step after it; the guard cannot pause inside a `for_each` body (it fails the test instead); the stop/decision of a paused test lives only in memory (a Studio restart mid-pause leaves the parked browser to time out).
 - **Complexity:** S each.
+
+### RT-13 — A slow upload can outlast the run's own deadline
+- **Category:** Runtime
+- **Description:** `completion.js::waitForCompletion` can wait up to `CONXA_COMPLETION_BUDGET_MS` (300 s) and never checks `cancelCheck`, while the run deadline is 210 s and the client's tool timeout is about 240 s. The true result of a slow upload may reach nobody.
+- **Why required:** the wait exists to report the truth about slow work, and slow work is exactly when the answer gets lost.
+- **Partial progress (2026-11-09):** the S half is done. `waitForCompletion` now takes `deadlineAt` and `cancelCheck`, stops 20 s before the run's deadline with `still_working`, and a full-mode step that hits it fails with a plain "ran out of time" message instead of the answer being lost. Still open: parking a long wait and resuming it later (Proof of Done stage 5).
+- **Dependencies:** long waits should park and resume (design: `docs/artifacts/post-action-verification.html`).
+- **Complexity:** M to park (the S half is done).
+
+### RT-11 — The author cannot yet say "how we know it worked" for an upload or submit
+- **Category:** Runtime
+- **Description:** The runtime now waits for progress to clear and fails on a failure message or a refused request (`completion.js`), but it has no positive success signal ("Upload complete"). The recorder also stops watching ~250 ms after a click and not at all after `upload_intent`, so the author is never shown what the app displayed when the work finished.
+- **Why required:** "progress cleared and nothing failed" cannot tell an upload that finished from one the app silently dropped.
+- **Dependencies:** extends the "Assertions whose real post-condition lives downstream" gap and the post-compile "How can we tell it worked?" question (`conversation/clarify.py`, which today skips an upload's required `state_changed`).
+- **Complexity:** M — recorder keeps watching after an upload/submit, compiler proposes a `text_present` completion check, runtime reads it as the gate's success signal.
 
 ### RT-10 — The hand-over banner is installed on the whole host browser, not just the run's pages
 - **Category:** Runtime / Isolation

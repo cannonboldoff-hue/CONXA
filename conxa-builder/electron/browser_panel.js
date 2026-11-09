@@ -151,6 +151,10 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   if (tab.markerUrl) view.webContents.loadURL(tab.markerUrl).catch(() => {});
   // Both after loadURL: attaching the debugger to a never-navigated view crashes Electron.
   _emulate(run, tab);
+  // A navigation (the blank marker page -> a real site, which swaps the render process) can drop the
+  // override, leaving the page at full size inside a shrunk view: clipped on the right and bottom.
+  // So it is re-applied each time a page is ready, not only when the tab is created.
+  for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => _emulate(run, tab));
   // The recorder sees every page in Electron (Studio's own window, other runs) through one CDP
   // context; a tab's devtools target id is how it tells which pages are its run's (`targets`).
   if (run.kind !== "test") {

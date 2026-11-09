@@ -273,3 +273,16 @@ test("test runs share one persistent partition (warm cache), wiped between runs;
   panel.newView("s4");
   await panel.closeRun("s4");
 });
+
+test("the size override is re-applied when a page becomes ready, at the run's current scale", () => {
+  const { tabId } = panel.newView("reapply", { viewport: { width: 1280, height: 720 } });
+  const view = added[added.length - 1];
+  panel.setActiveBounds("reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
+  const wc = view.webContents;
+  wc.commands.length = 0;
+  wc.handlers["dom-ready"]();
+  assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
+  wc.commands.length = 0;
+  wc.handlers["did-finish-load"]();
+  assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
+});

@@ -2004,6 +2004,7 @@ async function _handleTool(name, args, extra) {
             onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`, { step: i, step_total: steps.length, intent: steps[i]?.intent || null, destructive: steps[i]?.destructive === true, source_step_key: steps[i]?.source_step_key || null }); },
             onPhase:       _phase,
             cancelCheck:   _execCancelled,
+            deadlineAt:    exec.deadlineAt,
             tracker:       _runTracker,
             downloadQueue: _downloadQueue,
             dialogQueue: _dialogQueue,

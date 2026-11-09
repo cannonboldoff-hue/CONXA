@@ -61,6 +61,26 @@ function classifyFault({ alerts = [], offline = false, status = null, mayHaveAct
   return null;
 }
 
+// Completion gate (completion.js): did the app SAY the thing it was asked to do did not work? Narrower
+// than classifyFault on purpose. This reads status regions after a step that already passed its own
+// check, where a wrong "failed" ends a run that actually succeeded, so the loose kinds ("validation",
+// "not_found": "No results found" is a normal live-region message) are left out and a "0 failed" or
+// "no errors" summary is never a failure.
+const COMPLETION_KINDS = new Set(["auth_expired", "no_permission", "rate_limited", "network", "duplicate"]);
+const GENERIC_FAILURE_RE = /\b(failed|couldn'?t|could not|unable to|something went wrong|(was|were|wasn'?t|weren'?t|not) (been )?(uploaded|saved|sent|submitted)|error (uploading|saving|sending|submitting))\b/i;
+const ZERO_FAILURES_RE = /\b(0|no|zero) (failed|failures?|errors?)\b/i;
+
+/** @returns {{kind: string, evidence: string} | null} */
+function classifyCompletionFailure(texts) {
+  for (const t of (Array.isArray(texts) ? texts : []).map(short).filter(Boolean)) {
+    if (ZERO_FAILURES_RE.test(t)) continue;
+    const f = classifyFault({ alerts: [t], mayHaveActed: true });
+    if (f && COMPLETION_KINDS.has(f.kind)) return { kind: f.kind, evidence: t };
+    if (GENERIC_FAILURE_RE.test(t)) return { kind: "action_failed", evidence: t };
+  }
+  return null;
+}
+
 const PLAIN = {
   auth_expired: "Your sign-in to the app ended",
   no_permission: "The app says you don't have access to this",
@@ -76,4 +96,4 @@ function faultMessage(fault) {
   return fault.source === "text" ? `${lead}: "${fault.evidence}"` : `${lead} (${fault.evidence})`;
 }
 
-module.exports = { KINDS, classifyFault, faultMessage, statusKind, NEEDS_ACTED };
+module.exports = { KINDS, classifyFault, classifyCompletionFailure, faultMessage, statusKind, NEEDS_ACTED };

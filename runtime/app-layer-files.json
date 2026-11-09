@@ -149,6 +149,8 @@
       "_note": "run.js requires this directly: detectFault — decides whether a failed step's page shows the app refusing, before any recovery runs." },
     { "name": "page_status.js",       "profile": "default",
       "_note": "server.js and run.js require this directly: remembers the last refusing response status a page saw, read via fault_classify.js." },
+    { "name": "completion.js",        "profile": "default",
+      "_note": "run.js requires this directly: the completion gate (action ran is not action finished); reads page_status.js and fork.js." },
     { "name": "scheduler_cli.js",    "profile": "default",
       "_note": "Schedule subcommand handlers shared by host/cli_schedule.js dispatch (PROD-5)." },
     { "name": "scheduler_daemon.js",  "profile": "default",

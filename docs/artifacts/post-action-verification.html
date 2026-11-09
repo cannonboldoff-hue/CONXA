@@ -1,0 +1,707 @@
+<title>Proof of Done</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an engineering case file. A quiet section index on the left, one reading column, figures at full width.
+   Palette and type come from Build Studio's DESIGN.md: charcoal steps, warm ivory, Conxa clay, Inter. */
+:root {
+  color-scheme: dark;
+  --bg: #1a1a1a; --side: #1e1e1e; --surface: #252525; --raised: #2c2c2c; --line: #3b3a37;
+  --ink: #e8e6e3; --soft: #b0aeaa; --meta: #8e8e8e;
+  --clay: #d97757; --clay-tint: rgba(217,119,87,.14);
+  --good: #4ade80; --good-tint: rgba(74,222,128,.11);
+  --warn: #fbbf24; --warn-tint: rgba(251,191,36,.11);
+  --bad: #f87171; --bad-tint: rgba(248,113,113,.12);
+  --info: #93b4e6;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --h1: rgba(217,119,87,.62); --h2: rgba(217,119,87,.25);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  color-scheme: light;
+  --bg: #f6f5f2; --side: #efede9; --surface: #ffffff; --raised: #f1efeb; --line: #dcd8d0;
+  --ink: #1c1b19; --soft: #55524c; --meta: #6b6760;
+  --clay: #b4532f; --clay-tint: rgba(180,83,47,.10);
+  --good: #15803d; --good-tint: rgba(21,128,61,.10);
+  --warn: #a16207; --warn-tint: rgba(161,98,7,.11);
+  --bad: #b91c1c; --bad-tint: rgba(185,28,28,.09);
+  --info: #2f5fa8;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --h1: rgba(180,83,47,.55); --h2: rgba(180,83,47,.20);
+} }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f5f2; --side: #efede9; --surface: #ffffff; --raised: #f1efeb; --line: #dcd8d0;
+  --ink: #1c1b19; --soft: #55524c; --meta: #6b6760;
+  --clay: #b4532f; --clay-tint: rgba(180,83,47,.10);
+  --good: #15803d; --good-tint: rgba(21,128,61,.10);
+  --warn: #a16207; --warn-tint: rgba(161,98,7,.11);
+  --bad: #b91c1c; --bad-tint: rgba(185,28,28,.09);
+  --info: #2f5fa8;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --h1: rgba(180,83,47,.55); --h2: rgba(180,83,47,.20);
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.62 var(--font); -webkit-font-smoothing: antialiased; }
+.shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; gap: 44px;
+  padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); padding-block: 40px 90px; }
+nav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; }
+nav strong { display: block; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--meta); margin-bottom: 10px; font-weight: 600; }
+nav a { display: block; color: var(--soft); text-decoration: none; padding: 5px 0 5px 12px; border-left: 2px solid var(--line); line-height: 1.35; }
+nav a:hover { color: var(--ink); } nav a.on { color: var(--ink); border-left-color: var(--clay); }
+nav a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+main { min-width: 0; }
+header { margin-bottom: 36px; }
+.eyebrow { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--clay); font-weight: 600; }
+h1 { font-size: clamp(36px, 5vw, 54px); line-height: 1.05; margin: 8px 0 14px; letter-spacing: -.025em; font-weight: 700; text-wrap: balance; }
+.lede { font-size: 18px; line-height: 1.5; color: var(--soft); max-width: 62ch; margin: 0; }
+section { padding-top: 46px; scroll-margin-top: 10px; }
+h2 { font-size: 25px; line-height: 1.2; letter-spacing: -.015em; margin: 0 0 12px; font-weight: 650; text-wrap: balance; }
+h3 { font-size: 15.5px; margin: 28px 0 8px; font-weight: 650; }
+p, ul, ol { max-width: 72ch; }
+p { margin: 0 0 13px; } ul, ol { padding-left: 20px; margin: 0 0 14px; } li { margin-bottom: 6px; }
+code { font: .86em var(--mono); background: var(--raised); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { margin: 0; overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; font: 12.5px/1.6 var(--mono); }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+.short { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 14px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; }
+.short div { min-width: 0; } .short b { display: block; margin-bottom: 3px; font-weight: 650; } .short span { color: var(--soft); font-size: 14px; }
+.alert { background: var(--bad-tint); border: 1px solid var(--bad); border-radius: 10px; padding: 16px 20px; margin: 18px 0; max-width: none; }
+.alert b { color: var(--ink); } .alert p:last-child { margin-bottom: 0; }
+figure { margin: 22px 0; } figcaption { color: var(--meta); font-size: 13px; margin-top: 8px; max-width: 80ch; line-height: 1.5; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; height: auto; color: var(--ink); }
+.b { fill: var(--surface); stroke: var(--line); } .b2 { fill: var(--raised); stroke: var(--line); }
+.bc { fill: var(--clay-tint); stroke: var(--clay); } .bg { fill: var(--good-tint); stroke: var(--good); }
+.by { fill: var(--warn-tint); stroke: var(--warn); } .br { fill: var(--bad-tint); stroke: var(--bad); }
+.zone { fill: none; stroke: var(--line); stroke-dasharray: 4 4; }
+.t { fill: var(--ink); font: 600 12.5px var(--font); } .s { fill: var(--soft); font: 11px var(--font); }
+.l { fill: var(--meta); font: 11px var(--font); } .lb { fill: var(--soft); font: 12px var(--font); }
+.eb { fill: var(--meta); font: 600 10px var(--font); letter-spacing: .08em; }
+.ax { fill: var(--meta); font: 11px var(--font); }
+.w, .wc, .wg, .wr, .wy { fill: none; stroke-width: 1.4; } .w { stroke: var(--meta); } .wc { stroke: var(--clay); } .wg { stroke: var(--good); } .wr { stroke: var(--bad); } .wy { stroke: var(--warn); }
+.dash { stroke-dasharray: 5 4; } .sep { stroke: var(--line); stroke-width: 1; opacity: .6; } .vl { stroke: var(--meta); stroke-dasharray: 3 3; }
+.mw { fill: var(--meta); } .mc { fill: var(--clay); } .mg { fill: var(--good); } .mb { fill: var(--bad); } .my { fill: var(--warn); }
+.grid { stroke: var(--line); stroke-width: 1; } .stem { stroke: var(--line); stroke-width: 2; }
+.dot { fill: var(--info); stroke: var(--surface); stroke-width: 2; } .dotb { fill: var(--bad); stroke: var(--surface); stroke-width: 2; }
+.hit { fill: transparent; cursor: default; } .hit:hover { fill: var(--clay-tint); }
+.table { overflow-x: auto; margin: 16px 0 22px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.45; }
+th { text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--meta); font-weight: 600; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; min-width: 90px; }
+td:first-child { min-width: 170px; }
+.chip { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.ok { color: var(--good); } .no { color: var(--bad); } .hm { color: var(--warn); } .inf { color: var(--info); }
+.rungs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; margin: 20px 0; }
+.rung { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.rung:nth-child(1) { min-height: 200px; } .rung:nth-child(2) { min-height: 232px; } .rung:nth-child(3) { min-height: 264px; }
+.rung:nth-child(4) { min-height: 296px; background: var(--clay-tint); border-color: var(--clay); }
+.rung small { font: 500 11.5px var(--mono); color: var(--clay); } .rung h4 { margin: 2px 0 6px; font-size: 16px; font-weight: 650; }
+.rung p { font-size: 13.5px; color: var(--soft); margin-bottom: 8px; line-height: 1.45; } .rung p:last-child { margin: 0; }
+.rung em { font-style: normal; color: var(--ink); font-weight: 600; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin: 18px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.card h4 { margin: 0 0 4px; font-size: 14px; font-weight: 650; } .card p { font-size: 13px; color: var(--soft); margin: 0 0 12px; line-height: 1.45; }
+.split { display: flex; gap: 2px; height: 34px; margin-bottom: 8px; }
+.split i { display: block; border-radius: 4px; } .pay { background: var(--clay); } .unp { background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--soft); }
+.key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--c); box-shadow: inset 0 0 0 1px var(--line); }
+.units { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.units i { width: 34px; height: 34px; border-radius: 5px; display: block; }
+.num { font-size: 34px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.layers { display: grid; gap: 8px; margin: 16px 0; }
+.layer { display: grid; grid-template-columns: 170px minmax(0,1fr) 150px; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; align-items: baseline; }
+.layer b { font-weight: 650; font-size: 14px; } .layer span { color: var(--soft); font-size: 13.5px; } .layer i { font-style: normal; font: 11.5px var(--mono); color: var(--meta); }
+.heat td, .heat th { text-align: center; padding: 6px 3px; min-width: 62px; border-bottom: none; vertical-align: middle; } .heat th { white-space: normal; text-transform: none; letter-spacing: 0; font-size: 11.5px; vertical-align: bottom; }
+.heat td:first-child, .heat th:first-child { text-align: left; min-width: 150px; padding-right: 10px; }
+.heat .c { font-style: normal; display: block; height: 30px; line-height: 30px; border-radius: 4px; font-weight: 600; font-size: 12px; background: var(--raised); color: var(--meta); }
+.heat .P { background: var(--h1); color: var(--ink); } .heat .S { background: var(--h2); color: var(--ink); } .heat .V { background: var(--warn-tint); box-shadow: inset 0 0 0 1px var(--warn); color: var(--ink); }
+details { margin: 8px 0 18px; font-size: 13.5px; color: var(--soft); } summary { cursor: pointer; color: var(--meta); }
+.sim { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin: 18px 0; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.pick button { font: 500 13px var(--font); color: var(--soft); background: var(--raised); border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+.pick button[aria-pressed="true"] { color: var(--ink); border-color: var(--clay); background: var(--clay-tint); }
+.simgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+.simgrid > div { min-width: 0; }
+.simgrid h4 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--meta); font-weight: 600; }
+.track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 8px 0 12px; }
+.track span { font-size: 11px; text-align: center; padding: 5px 2px; border-radius: 4px; background: var(--raised); color: var(--meta); }
+.track .y { background: var(--good-tint); color: var(--ink); box-shadow: inset 0 0 0 1px var(--good); } .track .x { background: var(--bad-tint); color: var(--ink); box-shadow: inset 0 0 0 1px var(--bad); }
+.ck { list-style: none; padding: 0; margin: 0 0 12px; font-size: 13px; } .ck li { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 8px; padding: 4px 0; margin: 0; border-bottom: 1px solid var(--line); }
+.say { background: var(--raised); border-radius: 6px; padding: 10px 12px; font-size: 14px; }
+.ctl { display: flex; align-items: center; gap: 12px; font-size: 13.5px; color: var(--soft); margin-bottom: 10px; flex-wrap: wrap; }
+.ctl input { width: min(260px, 100%); accent-color: var(--clay); } .ctl output { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 12.5px; max-width: 320px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 14px 0; }
+.two > div { min-width: 0; }
+@media (max-width: 960px) { .shell { grid-template-columns: minmax(0,1fr); gap: 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } nav { display: none; }
+  .rungs { grid-template-columns: repeat(2, minmax(0,1fr)); } .rung { min-height: 0 !important; }
+  .layer { grid-template-columns: minmax(0,1fr); gap: 2px; } }
+@media (max-width: 480px) { .rungs { grid-template-columns: minmax(0,1fr); } }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+.terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px 26px; margin: 14px 0; }
+.terms div { min-width: 0; font-size: 14px; color: var(--soft); } .terms b { color: var(--ink); font-weight: 650; }
+.parcel { font-size: 13px; color: var(--ink); border-top: 1px solid var(--line); padding-top: 8px; }
+details.eng { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 16px 0; }
+details.eng summary { font-weight: 600; font-size: 13px; }
+details.eng[open] summary { margin-bottom: 10px; }
+.note { color: var(--meta); font-size: 13px; }
+.check { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 14px 0; max-width: 72ch; }
+.check dl { display: grid; grid-template-columns: 170px minmax(0,1fr); gap: 6px 14px; margin: 0; font-size: 14px; }
+.check dt { color: var(--meta); } .check dd { margin: 0; }
+@media (max-width: 520px) { .check dl { grid-template-columns: minmax(0,1fr); } .check dd { margin-bottom: 8px; } }
+
+</style>
+<div class="shell">
+<nav aria-label="Sections">
+  <strong>Proof of Done</strong>
+  <a href="#idea">The big idea</a>
+  <a href="#lifecycle">The journey of an action</a>
+  <a href="#today">How it works today</a>
+  <a href="#false">How it can wrongly say success</a>
+  <a href="#rungs">Four levels of proof</a>
+  <a href="#arch">The new design</a>
+  <a href="#generate">Making and placing checks</a>
+  <a href="#quorum">One check or several?</a>
+  <a href="#vary">Working on any website</a>
+  <a href="#signals">Where proof comes from</a>
+  <a href="#classify">Deciding what to do</a>
+  <a href="#async">Pop-ups, delays, half-done work</a>
+  <a href="#breaks">What can still go wrong</a>
+  <a href="#rollout">What to build first</a>
+</nav>
+<main>
+<header>
+  <div class="eyebrow">Plain-language guide · Checking that work really got done</div>
+  <h1>Proof of Done</h1>
+  <p class="lede">Clicking Upload doesn't mean the file arrived. This guide explains how CONXA can make sure every step in a workflow really worked, on any website.</p>
+</header>
+
+<section id="idea" style="padding-top:0">
+  <h2>The big idea</h2>
+  <p>Imagine you hand a parcel in at the post office. Handing it over doesn't mean your friend has it. The clerk still has to accept it, the van has to deliver it, and it has to be the right parcel on the right doorstep.</p>
+  <p>CONXA has the same problem. In your GitHub → Google Drive workflow, the last step was "upload the file". The step can look finished when the button has only been pressed. The file might still be on its way, or it might never arrive.</p>
+  <div class="short">
+    <div><b>The problem</b><span>Today a step passes if the page changed and nothing looked wrong. Neither of those shows the file arrived.</span></div>
+    <div><b>The idea</b><span>Every step gets a short checklist: what should be true afterwards, what would prove it, and what to do if no proof comes.</span></div>
+    <div><b>The biggest change</b><span>"I couldn't tell" becomes its own answer. Today, not being able to check often counts as success.</span></div>
+    <div><b>Fix this first</b><span>The new upload check mistakes Drive's upload window for a question, and stops waiting almost at once.</span></div>
+  </div>
+  <h3>A few words used in this guide</h3>
+  <div class="terms">
+    <div><b>Step or action.</b> One thing the workflow does, such as a click or an upload.</div>
+    <div><b>Check.</b> One small test of whether something is true.</div>
+    <div><b>"Before" photo.</b> A quick note of how things looked just before the action, so we can spot what changed.</div>
+    <div><b>Server.</b> The company's computer behind a website. It's where your file ends up.</div>
+    <div><b>Evidence.</b> Any fact that helps show what really happened.</div>
+    <div><b>Witness.</b> A separate source of evidence, like a person who saw an event for themselves.</div>
+    <div><b>Warning.</b> Evidence that something went wrong, such as an error message.</div>
+    <div><b>Run.</b> One time the whole workflow is carried out.</div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <h2>The journey of an action</h2>
+  <p>Every action goes through the same five stages and ends in one of six next moves. Only the checklist changes from step to step.</p>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 412" role="img" aria-label="The journey of every action: do it, collect proof, run checks, decide what the result means, then continue, wait, retry, recover, hand over to a person, or fail." style="min-width:900px"><defs><marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><rect x="40" y="44" width="170" height="112" rx="6" class="bc"/><text x="125" y="82.75" class="t" text-anchor="middle">Action</text><text x="125" y="98.75" class="s" text-anchor="middle">the step itself;</text><text x="125" y="113.25" class="s" text-anchor="middle">a &quot;before&quot; photo</text><text x="125" y="127.75" class="s" text-anchor="middle">is taken first</text><rect x="320" y="44" width="190" height="112" rx="6" class="b"/><text x="415" y="90" class="t" text-anchor="middle">Evidence Collection</text><text x="415" y="106" class="s" text-anchor="middle">write down everything</text><text x="415" y="120.5" class="s" text-anchor="middle">that happens next</text><rect x="600" y="44" width="190" height="112" rx="6" class="b"/><text x="695" y="90" class="t" text-anchor="middle">Verification Checks</text><text x="695" y="106" class="s" text-anchor="middle">each check says yes, no,</text><text x="695" y="120.5" class="s" text-anchor="middle">not yet, or can't tell</text><rect x="880" y="44" width="200" height="112" rx="6" class="b"/><text x="980" y="90" class="t" text-anchor="middle">Result Classification</text><text x="980" y="106" class="s" text-anchor="middle">put all the answers</text><text x="980" y="120.5" class="s" text-anchor="middle">together into one verdict</text><path d="M210 100 L320 100" class="w" marker-end="url(#ar1)"/><text x="265" y="92" class="l" text-anchor="middle">the app reacts</text><path d="M510 100 L600 100" class="w" marker-end="url(#ar1)"/><text x="555" y="92" class="l" text-anchor="middle">the facts</text><path d="M790 100 L880 100" class="w" marker-end="url(#ar1)"/><text x="835" y="92" class="l" text-anchor="middle">the answers</text><path d="M980 156 L980 205" class="w"/><path d="M120 205 L1000 205" class="w"/><rect x="40" y="235" width="160" height="66" rx="6" class="bg"/><text x="120" y="258" class="t" text-anchor="middle">Continue</text><text x="120" y="274" class="s" text-anchor="middle">it's proven, so</text><text x="120" y="288.5" class="s" text-anchor="middle">go to the next step</text><path d="M120 205 L120 235" class="w" marker-end="url(#ar1)"/><rect x="216" y="235" width="160" height="66" rx="6" class="b"/><text x="296" y="258" class="t" text-anchor="middle">Wait</text><text x="296" y="274" class="s" text-anchor="middle">the app is clearly</text><text x="296" y="288.5" class="s" text-anchor="middle">still working</text><path d="M296 205 L296 235" class="w" marker-end="url(#ar1)"/><rect x="392" y="235" width="160" height="66" rx="6" class="b"/><text x="472" y="258" class="t" text-anchor="middle">Retry</text><text x="472" y="274" class="s" text-anchor="middle">proof that nothing</text><text x="472" y="288.5" class="s" text-anchor="middle">happened the first time</text><path d="M472 205 L472 235" class="w" marker-end="url(#ar1)"/><rect x="568" y="235" width="160" height="66" rx="6" class="b"/><text x="648" y="258" class="t" text-anchor="middle">Recover</text><text x="648" y="274" class="s" text-anchor="middle">the button moved</text><text x="648" y="288.5" class="s" text-anchor="middle">or the page changed</text><path d="M648 205 L648 235" class="w" marker-end="url(#ar1)"/><rect x="744" y="235" width="160" height="66" rx="6" class="by"/><text x="824" y="258" class="t" text-anchor="middle">Handover</text><text x="824" y="274" class="s" text-anchor="middle">only a person</text><text x="824" y="288.5" class="s" text-anchor="middle">can tell</text><path d="M824 205 L824 235" class="w" marker-end="url(#ar1)"/><rect x="920" y="235" width="160" height="66" rx="6" class="br"/><text x="1000" y="258" class="t" text-anchor="middle">Fail</text><text x="1000" y="274" class="s" text-anchor="middle">it clearly went wrong,</text><text x="1000" y="288.5" class="s" text-anchor="middle">or a guess is unsafe</text><path d="M1000 205 L1000 235" class="w" marker-end="url(#ar1)"/><path d="M296 301 L296 335 L24 335 L24 20 L415 20 L415 44" class="w dash" marker-end="url(#ar1)"/><path d="M472 301 L472 375 L10 375 L10 100 L40 100" class="w dash" marker-end="url(#ar1)"/><path d="M648 301 L648 375 L472 375" class="w dash"/><text x="40" y="352" class="l" text-anchor="start">Wait: keep watching, and keep comparing with the same &quot;before&quot; photo</text><text x="40" y="392" class="l" text-anchor="start">Retry or Recover: do it again only when that can't cause harm</text></svg></div><figcaption>Every action goes round this loop. Wait goes back to collecting more proof. Retry and Recover go back to the action, but only when doing it again is safe.</figcaption></figure>
+  <div class="table"><table>
+    <tr><th>Next move</th><th>What it means</th><th>In the parcel story</th></tr>
+    <tr><td><b>Continue</b></td><td>It's proven. Move to the next step.</td><td>Your friend confirms it arrived.</td></tr>
+    <tr><td><b>Wait</b></td><td>The app is clearly still working.</td><td>Tracking shows the van is moving.</td></tr>
+    <tr><td><b>Retry</b></td><td>Do it again, because we know nothing happened the first time.</td><td>The post office confirms they never took it.</td></tr>
+    <tr><td><b>Recover</b></td><td>The button moved or the page changed, so find it and try another way.</td><td>The counter moved to another desk.</td></tr>
+    <tr><td><b>Handover</b></td><td>Ask a person, because only they can tell or decide.</td><td>Call your friend and ask.</td></tr>
+    <tr><td><b>Fail</b></td><td>Stop and say clearly what happened.</td><td>The parcel was returned as refused.</td></tr>
+  </table></div>
+</section>
+
+<section id="today">
+  <h2>How it works today</h2>
+  <p>CONXA already checks its work in four ways. The fourth is new and hasn't been saved into the main code yet.</p>
+  <div class="table"><table>
+    <tr><th>Check</th><th>What it does</th><th>What it can really tell you</th></tr>
+    <tr><td><b>While recording</b></td><td>Notes what each action seemed to do. It watches a click for only a quarter of a second, and doesn't watch at all after a file is chosen.</td><td>The very first reaction</td></tr>
+    <tr><td><b>While building</b></td><td>Picks one main check for each important step. Any others only give advice and can't stop a run.</td><td>One clue per step</td></tr>
+    <tr><td><b>Reaction check</b></td><td>After a step, looks at the page and web address to see if things changed.</td><td>The page reacted</td></tr>
+    <tr><td><b>Finish check (new)</b></td><td>Waits for progress to go away and for the browser to finish sending. Stops the run if it sees an error.</td><td>The app stopped working and nothing obviously failed</td></tr>
+  </table></div>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 462" role="img" aria-label="Today's checking: recording, building, then running. Several amber routes reach Done without proof." style="min-width:900px"><defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><text x="20" y="18" class="eb" text-anchor="start">WHEN THE WORKFLOW IS RECORDED AND BUILT</text><rect x="20" y="26" width="240" height="66" rx="6" class="b"/><text x="140" y="49" class="t" text-anchor="middle">Recording</text><text x="140" y="65" class="s" text-anchor="middle">notes what each click did, but</text><text x="140" y="79.5" class="s" text-anchor="middle">watches for only a quarter second</text><rect x="290" y="26" width="250" height="66" rx="6" class="b"/><text x="415" y="49" class="t" text-anchor="middle">Building</text><text x="415" y="65" class="s" text-anchor="middle">picks one main check per</text><text x="415" y="79.5" class="s" text-anchor="middle">important step; the rest only advise</text><rect x="570" y="26" width="240" height="66" rx="6" class="b"/><text x="690" y="49" class="t" text-anchor="middle">Review</text><text x="690" y="65" class="s" text-anchor="middle">AI may suggest a check, and asks</text><text x="690" y="79.5" class="s" text-anchor="middle">&quot;How can we tell it worked?&quot;</text><rect x="840" y="26" width="260" height="66" rx="6" class="b"/><text x="970" y="49" class="t" text-anchor="middle">Finished workflow</text><text x="970" y="65" class="s" text-anchor="middle">stores the checks, which can only</text><text x="970" y="79.5" class="s" text-anchor="middle">look at the page and web address</text><path d="M260 59 L290 59" class="w" marker-end="url(#ar2)"/><path d="M540 59 L570 59" class="w" marker-end="url(#ar2)"/><path d="M810 59 L840 59" class="w" marker-end="url(#ar2)"/><path d="M970 92 L970 122 L425 122 L425 160" class="w" marker-end="url(#ar2)"/><text x="700" y="116" class="l" text-anchor="middle">the saved checks</text><text x="20" y="150" class="eb" text-anchor="start">WHEN THE WORKFLOW RUNS</text><rect x="20" y="160" width="130" height="66" rx="6" class="b"/><text x="85" y="190.25" class="t" text-anchor="middle">Ready check</text><text x="85" y="206.25" class="s" text-anchor="middle">is the button there?</text><rect x="180" y="160" width="130" height="66" rx="6" class="b"/><text x="245" y="190.25" class="t" text-anchor="middle">Do the step</text><text x="245" y="206.25" class="s" text-anchor="middle">click, type, upload</text><rect x="340" y="160" width="170" height="66" rx="6" class="b"/><text x="425" y="190.25" class="t" text-anchor="middle">Reaction check</text><text x="425" y="206.25" class="s" text-anchor="middle">did the page change?</text><rect x="540" y="160" width="190" height="66" rx="6" class="b"/><text x="635" y="190.25" class="t" text-anchor="middle">Finish check (new)</text><text x="635" y="206.25" class="s" text-anchor="middle">did the app stop working?</text><rect x="760" y="160" width="140" height="66" rx="6" class="b"/><text x="830" y="190.25" class="t" text-anchor="middle">Save point</text><text x="830" y="206.25" class="s" text-anchor="middle">so a run can resume</text><rect x="930" y="160" width="170" height="66" rx="6" class="bc"/><text x="1015" y="197.5" class="t" text-anchor="middle">Run says Done</text><path d="M150 193 L180 193" class="w" marker-end="url(#ar2)"/><path d="M310 193 L340 193" class="w" marker-end="url(#ar2)"/><path d="M510 193 L540 193" class="w" marker-end="url(#ar2)"/><path d="M730 193 L760 193" class="w" marker-end="url(#ar2)"/><path d="M900 193 L930 193" class="w" marker-end="url(#ar2)"/><rect x="20" y="290" width="260" height="66" rx="6" class="b"/><text x="150" y="320.25" class="t" text-anchor="middle">Wait a moment, then auto-repair</text><text x="150" y="336.25" class="s" text-anchor="middle">and check again after each fix</text><path d="M360 226 L360 323 L280 323" class="w" marker-end="url(#ar2)"/><text x="372" y="262" class="l" text-anchor="start">a must-pass check failed</text><path d="M245 290 L245 226" class="w" marker-end="url(#ar2)"/><text x="239" y="262" class="l" text-anchor="end">try again</text><rect x="380" y="290" width="220" height="112" rx="6" class="by"/><text x="490" y="328.75" class="t" text-anchor="middle">Passes with no proof when</text><text x="490" y="344.75" class="s" text-anchor="middle">the step has no checks at all</text><text x="490" y="359.25" class="s" text-anchor="middle">a browser pop-up is open</text><text x="490" y="373.75" class="s" text-anchor="middle">the check can't read the page</text><rect x="620" y="290" width="270" height="112" rx="6" class="by"/><text x="755" y="321.5" class="t" text-anchor="middle">Says done with no proof when</text><text x="755" y="337.5" class="s" text-anchor="middle">the page is quiet for half a second</text><text x="755" y="352" class="s" text-anchor="middle">the check can't read the page</text><text x="755" y="366.5" class="s" text-anchor="middle">something looks like a question</text><text x="755" y="381" class="s" text-anchor="middle">time runs out on a smaller step</text><path d="M490 402 L490 434 L1015 434 L1015 226" class="wy" marker-end="url(#aw2)"/><path d="M755 402 L755 434" class="wy"/><text x="1005" y="452" class="l" text-anchor="end">none of these routes needs proof that the work happened</text></svg></div><figcaption>How checking works today. The amber lines are the ways a run can reach "Done" with no real proof.</figcaption></figure>
+  <h3>What your GitHub → Drive runs show</h3>
+  <p>Your computer has logs from 23 runs of this workflow, all from before the finish check existed.</p>
+  <div class="stats">
+    <div class="card">
+      <h4>Steps with a check result saved</h4>
+      <p>Only 27 of the 164 steps that ran left a record of being checked.</p>
+      <div class="split"><i class="pay" style="flex:27" data-tip="27 steps have a saved check result (16%)"></i><i class="unp" style="flex:137" data-tip="137 steps have no saved check result (84%)"></i></div>
+      <div class="key"><span style="--c:var(--clay)">27 saved</span><span style="--c:var(--raised)">137 none</span></div>
+    </div>
+    <div class="card">
+      <h4>The last step of the 9 "successful" runs</h4>
+      <p>In 7 of them, the last step needed auto-repair and left no check result.</p>
+      <div class="units">
+        <i class="pay" data-tip="Last step has one saved check result"></i><i class="pay" data-tip="Last step has one saved check result"></i>
+        <i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i><i class="unp" data-tip="Last step was auto-repaired, no check result saved"></i>
+      </div>
+      <div class="key"><span style="--c:var(--clay)">2 with one check</span><span style="--c:var(--raised)">7 none saved</span></div>
+    </div>
+    <div class="card">
+      <h4>How fast "success" was declared</h4>
+      <p>The time between the last step's final log entry and the run being called a success.</p>
+      <div class="num">Under ¼ second</div>
+    </div>
+  </div>
+  <p class="note">Auto-repair doesn't save a check result, so "none saved" means there's no record. A check may still have happened.</p>
+  <details class="eng"><summary>For engineers: where this lives</summary>
+    <div class="table"><table>
+      <tr><th>Layer</th><th>Code</th><th>Detail</th></tr>
+      <tr><td>Recorder</td><td><code>bridge.js::buildPostCondition</code></td><td><code>click_settle_max_ms</code> 250; nothing after <code>upload_intent</code></td></tr>
+      <tr><td>Compiler</td><td><code>build.py::_build_assertions</code></td><td>One required assertion per consequential action; uploads fall back to <code>state_changed</code></td></tr>
+      <tr><td>VERIFY</td><td><code>assertions.js::verifyStep</code></td><td>8 assertion types; required failure enters recovery</td></tr>
+      <tr><td>Completion gate</td><td><code>completion.js</code>, <code>page_status.js</code></td><td>Uncommitted. Short and full modes; failure is a <code>fault</code> that skips recovery</td></tr>
+    </table></div>
+    <p>Telemetry: 23 runs over 11 compiled versions, 9 <code>wf_ok</code>, 14 <code>wf_fail</code>. 27 <code>verify_result</code> events, 68 assertions, 17 advisory failures. Last-step-to-<code>wf_ok</code> gap: 84–225 ms. <code>verify_result</code> is not emitted on the recovery path.</p>
+  </details>
+</section>
+
+<section id="false">
+  <h2>How it can wrongly say success</h2>
+  <div class="alert">
+    <p><b>A problem found while writing this guide.</b> Google Drive's upload window has three buttons: Minimize, Close and Cancel all. The new finish check treats any window with several buttons like these as a question for a person. It then stops waiting and lets the step pass. Tested with those exact buttons, it gave up in 3 thousandths of a second, while the upload would still be running. The automatic test missed this because its pretend window had no buttons.</p>
+  </div>
+  <p>We ran the real finish check against 17 made-up situations, including ones chosen to trip it up, so this isn't a measure of how often it fails. The web pages were simulated, not the real Google Drive.</p>
+  <div class="table"><table>
+    <tr><th>Situation</th><th>The truth</th><th>Today's check said</th><th>Why</th><th>With the new design</th></tr>
+    <tr><td>Drive's real upload window</td><td>Still uploading</td><td><span class="chip no">passed at once</span></td><td>Its buttons look like a question</td><td><span class="chip inf">Still working</span></td></tr>
+    <tr><td>Progress appears nearly a second late</td><td>Only just starting</td><td><span class="chip no">done in 0.5 s</span></td><td>Silence before the work starts looks like it's over. This happens when an earlier check already passed</td><td><span class="chip inf">Still working</span> waits for a first sign</td></tr>
+    <tr><td>Progress isn't labelled as progress</td><td>Still uploading</td><td><span class="chip no">done in 0.5 s</span></td><td>It only knows standard kinds of status message</td><td><span class="chip inf">Still working</span></td></tr>
+    <tr><td>Progress is in a page inside the page</td><td>Still uploading</td><td><span class="chip no">done in 0.5 s</span></td><td>It only reads the outer page</td><td><span class="chip inf">Still working</span></td></tr>
+    <tr><td>App ignores the file</td><td>Nothing happened</td><td><span class="chip no">done in 0.5 s</span></td><td>It never needs a positive sign</td><td><span class="chip hm">Couldn't confirm</span></td></tr>
+    <tr><td>Failure is only a red icon</td><td>Failed</td><td><span class="chip no">done in 2 s</span></td><td>It only looks for words</td><td><span class="chip hm">Couldn't confirm</span></td></tr>
+    <tr><td>Server says "OK", but the reply says storage is full</td><td>Failed</td><td><span class="chip no">done in 0.5 s</span></td><td>It only reads the OK</td><td><span class="chip no">Failed</span></td></tr>
+    <tr><td>Error message in German</td><td>Failed</td><td><span class="chip no">done in 0.5 s</span></td><td>It only knows English error words</td><td><span class="chip hm">Couldn't confirm</span></td></tr>
+    <tr><td>Progress message in German</td><td>Still uploading</td><td><span class="chip no">done in 0.5 s</span></td><td>It only knows English progress words</td><td><span class="chip inf">Still working</span></td></tr>
+    <tr><td>"Your export is being prepared"</td><td>Only accepted</td><td><span class="chip no">done in 0.5 s</span></td><td>"Prepared" isn't on its word list</td><td><span class="chip inf">Reported as submitted</span></td></tr>
+    <tr><td>Page stops responding</td><td>Unknown</td><td><span class="chip no">done at once</span></td><td>Not being able to look counts as fine</td><td><span class="chip hm">Couldn't confirm</span></td></tr>
+    <tr><td>"Replace or keep both?" on the last step</td><td>Waiting for an answer</td><td><span class="chip no">moved on</span></td><td>It rightly doesn't answer, but nothing happens next</td><td><span class="chip hm">Blocked</span> asks</td></tr>
+    <tr><td>Upload works normally</td><td>Done</td><td><span class="chip ok">done in 2 s</span></td><td>Correct</td><td><span class="chip ok">Proven</span></td></tr>
+    <tr><td>Window says "Upload failed"</td><td>Failed</td><td><span class="chip ok">failed</span></td><td>Correct</td><td><span class="chip no">Failed</span></td></tr>
+    <tr><td>Server refuses the request</td><td>Failed</td><td><span class="chip ok">failed</span></td><td>Correct</td><td><span class="chip no">Failed</span></td></tr>
+    <tr><td>"2 uploads complete, 1 failed"</td><td>Partly done</td><td><span class="chip ok">failed</span></td><td>Safe, but doesn't say which file</td><td><span class="chip hm">Partly done</span> lists each file</td></tr>
+    <tr><td>Takes longer than the time limit</td><td>Still running</td><td><span class="chip ok">timed out</span></td><td>Correct</td><td><span class="chip inf">Still working</span> then pauses</td></tr>
+  </table></div>
+  <h3>"I couldn't check" often counts as a pass</h3>
+  <p>Ten places in the code let a step pass with no proof. Examples are a step with no checks at all, a page that can't be read, and a window that looks like a question. Each one made sense on its own. Together they mean "I couldn't check" and "it worked" look the same at the end.</p>
+  <details class="eng"><summary>For engineers: every fail-open path</summary>
+    <div class="table"><table>
+      <tr><th>Where</th><th>Condition</th><th>Outcome</th></tr>
+      <tr><td><code>assertions.js:219</code></td><td>No assertions</td><td>Pass, <code>no-assertions</code></td></tr>
+      <tr><td><code>assertions.js:216</code></td><td>Native dialog open</td><td>Pass, <code>dialog_pending</code></td></tr>
+      <tr><td><code>assertions.js:182</code></td><td><code>state_changed</code> without baseline</td><td>Pass</td></tr>
+      <tr><td><code>assertions.js:186</code></td><td>Signature probe null</td><td>Pass</td></tr>
+      <tr><td><code>assertions.js:188</code></td><td>Any URL, interactive-count or 20+ char change</td><td>Pass</td></tr>
+      <tr><td><code>run.js:232</code></td><td>No completion baseline</td><td>Gate skipped</td></tr>
+      <tr><td><code>completion.js:77, 79</code></td><td>Probe failed or timed out</td><td><code>done</code>, <code>probe_unavailable</code></td></tr>
+      <tr><td><code>completion.js:100</code>, <code>run.js:245</code></td><td><code>isDecisionDialog</code> true while busy</td><td><code>handoff</code>, step passes</td></tr>
+      <tr><td><code>completion.js:115</code></td><td>Short mode out of budget</td><td><code>done</code>, <code>still_busy</code></td></tr>
+      <tr><td><code>completion.js:106</code></td><td>Mutation open past grace</td><td><code>done</code> with warning</td></tr>
+    </table></div>
+    <p>Test harness: real <code>waitForCompletion</code>, full mode, 250 ms poll, 500 ms quiet, stubbed <code>page.evaluate</code>.</p>
+  </details>
+  <h3>The time limits don't match each other</h3>
+  <p>The upload wait can last 5 minutes. But the whole run has to end by 3.5 minutes, and Claude Desktop stops listening at about 4 minutes. So on a slow upload, the real answer may arrive when nobody is listening.</p>
+  <figure><div class="scroll"><svg viewBox="0 0 1040 416" role="img" aria-label="Time limits in the product. The 300 second upload wait is longer than the 240 second point when Claude Desktop stops listening and the 210 second limit on the whole run." style="min-width:760px"><defs><marker id="ar9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><line x1="280" x2="280" y1="22" y2="388" class="grid"/><text x="280" y="406" class="ax" text-anchor="middle">0.1 s</text><line x1="455" x2="455" y1="22" y2="388" class="grid"/><text x="455" y="406" class="ax" text-anchor="middle">1 s</text><line x1="630" x2="630" y1="22" y2="388" class="grid"/><text x="630" y="406" class="ax" text-anchor="middle">10 s</text><line x1="805" x2="805" y1="22" y2="388" class="grid"/><text x="805" y="406" class="ax" text-anchor="middle">100 s</text><line x1="980" x2="980" y1="22" y2="388" class="grid"/><text x="980" y="406" class="ax" text-anchor="middle">1000 s</text><text x="264" y="46" class="lb" text-anchor="end">Recording watches a click</text><line x1="280" x2="349.63950151760656" y1="42" y2="42" class="stem"/><circle cx="349.63950151760656" cy="42" r="5.5" class="dot"/><rect x="280" y="27" width="700" height="30" class="hit" data-tip="Recording watches a click: 0.25 seconds. Setting: bridge.js click_settle_max_ms"/><text x="361.63950151760656" y="46" class="lb" text-anchor="start">0.25 s</text><text x="264" y="78" class="lb" text-anchor="end">Quiet this long counts as done</text><line x1="280" x2="402.31975075880325" y1="74" y2="74" class="stem"/><circle cx="402.31975075880325" cy="74" r="5.5" class="dot"/><rect x="280" y="59" width="700" height="30" class="hit" data-tip="Quiet this long counts as done: 0.5 seconds. Setting: completion.js quietMs"/><text x="414.31975075880325" y="78" class="lb" text-anchor="start">0.5 s</text><text x="264" y="110" class="lb" text-anchor="end">Usual wait for a check</text><line x1="280" x2="577.3197507588033" y1="106" y2="106" class="stem"/><circle cx="577.3197507588033" cy="106" r="5.5" class="dot"/><rect x="280" y="91" width="700" height="30" class="hit" data-tip="Usual wait for a check: 5 seconds. Setting: skill_spec.py timeout_ms"/><text x="589.3197507588033" y="110" class="lb" text-anchor="start">5 s</text><text x="264" y="142" class="lb" text-anchor="end">Wait for the page to calm down</text><line x1="280" x2="613.0407477235901" y1="138" y2="138" class="stem"/><circle cx="613.0407477235901" cy="138" r="5.5" class="dot"/><rect x="280" y="123" width="700" height="30" class="hit" data-tip="Wait for the page to calm down: 8 seconds. Setting: CONXA_SETTLE_BUDGET_MS"/><text x="625.0407477235901" y="142" class="lb" text-anchor="start">8 s</text><text x="264" y="174" class="lb" text-anchor="end">Finish check on ordinary steps</text><line x1="280" x2="660.8159703347442" y1="170" y2="170" class="stem"/><circle cx="660.8159703347442" cy="170" r="5.5" class="dot"/><rect x="280" y="155" width="700" height="30" class="hit" data-tip="Finish check on ordinary steps: 15 seconds. Setting: CONXA_COMPLETION_SHORT_MS"/><text x="672.8159703347442" y="174" class="lb" text-anchor="start">15 s</text><text x="264" y="206" class="lb" text-anchor="end">Extra time for an unfinished send</text><line x1="280" x2="713.4962195759409" y1="202" y2="202" class="stem"/><circle cx="713.4962195759409" cy="202" r="5.5" class="dot"/><rect x="280" y="187" width="700" height="30" class="hit" data-tip="Extra time for an unfinished send: 30 seconds. Setting: CONXA_NETWORK_GRACE_MS"/><text x="725.4962195759409" y="206" class="lb" text-anchor="start">30 s</text><text x="264" y="238" class="lb" text-anchor="end">Waiting for a page to load</text><line x1="280" x2="766.1764688171377" y1="234" y2="234" class="stem"/><circle cx="766.1764688171377" cy="234" r="5.5" class="dot"/><rect x="280" y="219" width="700" height="30" class="hit" data-tip="Waiting for a page to load: 60 seconds. Setting: CONXA_PAGE_LOAD_TIMEOUT_MS"/><text x="778.1764688171377" y="238" class="lb" text-anchor="start">60 s</text><text x="264" y="270" class="lb" text-anchor="end">Waiting for a download</text><line x1="280" x2="818.8567180583343" y1="266" y2="266" class="stem"/><circle cx="818.8567180583343" cy="266" r="5.5" class="dot"/><rect x="280" y="251" width="700" height="30" class="hit" data-tip="Waiting for a download: 120 seconds. Setting: CONXA_DOWNLOAD_WAIT_MS"/><text x="830.8567180583343" y="270" class="lb" text-anchor="start">120 s</text><text x="264" y="302" class="lb" text-anchor="end">Whole run must end by</text><line x1="280" x2="861.3883765784359" y1="298" y2="298" class="stem"/><circle cx="861.3883765784359" cy="298" r="5.5" class="dot"/><rect x="280" y="283" width="700" height="30" class="hit" data-tip="Whole run must end by: 210 seconds. Setting: CONXA_EXECUTION_DEADLINE_MS"/><text x="873.3883765784359" y="302" class="lb" text-anchor="start">210 s</text><text x="264" y="334" class="lb" text-anchor="end">Claude Desktop stops listening</text><line x1="280" x2="871.536967299531" y1="330" y2="330" class="stem"/><circle cx="871.536967299531" cy="330" r="5.5" class="dot"/><rect x="280" y="315" width="700" height="30" class="hit" data-tip="Claude Desktop stops listening: 240 seconds. Setting: approximate, from TRD 9.1"/><text x="883.536967299531" y="334" class="lb" text-anchor="start">240 s</text><text x="264" y="366" class="t" text-anchor="end">Finish check on uploads</text><line x1="280" x2="888.4962195759409" y1="362" y2="362" class="stem"/><circle cx="888.4962195759409" cy="362" r="5.5" class="dotb"/><rect x="280" y="347" width="700" height="30" class="hit" data-tip="Finish check on uploads: 300 seconds. Setting: CONXA_COMPLETION_BUDGET_MS"/><text x="900.4962195759409" y="366" class="lb" text-anchor="start">300 s</text></svg></div><figcaption>Real time limits from the product. Each line on the scale is 10 times longer than the one before. The red dot is longer than the two limits above it.</figcaption></figure>
+</section>
+
+<section id="rungs">
+  <h2>Four levels of proof</h2>
+  <p>Today one word, "passed", covers four very different claims. Each needs its own proof, and a higher level can be false even when the lower ones are true.</p>
+  <div class="rungs">
+    <div class="rung"><small>Level 1</small><h4>Performed</h4><p><em>Did we do it?</em></p><p>We clicked the right button or chose the right file.</p><p class="parcel">You handed the parcel over the counter.</p></div>
+    <div class="rung"><small>Level 2</small><h4>Accepted</h4><p><em>Did the app take it?</em></p><p>The app reacted to what we did. A progress window opened or the server replied.</p><p class="parcel">The clerk scanned it and gave you a receipt.</p></div>
+    <div class="rung"><small>Level 3</small><h4>Completed</h4><p><em>Did the work finish?</em></p><p>The app says its work has ended. The last piece was sent or the job finished.</p><p class="parcel">Tracking says "Delivered".</p></div>
+    <div class="rung"><small>Level 4</small><h4>Result exists</h4><p><em>Is the right thing really there?</em></p><p>We can find the actual result, and it's the one we meant. The folder lists this exact file, and it's new.</p><p class="parcel">Your friend has it, and it's your parcel.</p></div>
+  </div>
+  <p>Three simple rules stop us fooling ourselves:</p>
+  <ul>
+    <li><b>It must be new.</b> Only what changed since the "before" photo counts. A file with the same name that was already there proves nothing.</li>
+    <li><b>It must be the right thing.</b> "A file appeared" isn't enough. It has to be the file this run was asked to upload.</li>
+    <li><b>The check must be able to tell the difference.</b> If a check was already true before we acted, it can't prove anything. It counts as "can't tell".</li>
+  </ul>
+  <div class="table"><table>
+    <tr><th>Action</th><th>1. Performed</th><th>2. Accepted</th><th>3. Completed</th><th>4. Result exists</th></tr>
+    <tr><td><b>Upload a file</b></td><td>File chosen</td><td>Progress window opens</td><td>Server has it all</td><td>Listed by name, one more file than before</td></tr>
+    <tr><td><b>Save a form</b></td><td>Save clicked</td><td>Button greys out</td><td>Server confirms, form closes</td><td>Saved values show on the record</td></tr>
+    <tr><td><b>Send a message</b></td><td>Send clicked</td><td>"Sending…"</td><td>"Sent", and undo has passed</td><td>It's in the Sent folder</td></tr>
+    <tr><td><b>Delete a row</b></td><td>Confirm clicked</td><td>Row greys out</td><td>Server confirms</td><td>Still gone after a refresh</td></tr>
+    <tr><td><b>Download a file</b></td><td>Link clicked</td><td>Download starts</td><td>Download ends</td><td>File on the computer, not empty</td></tr>
+    <tr><td><b>Start a long export</b></td><td>Button clicked</td><td>"In the queue"</td><td>Job says finished</td><td>Finished file can be opened</td></tr>
+  </table></div>
+</section>
+
+<section id="arch">
+  <h2>The new design</h2>
+  <p>The design adds two main things and keeps what already works.</p>
+  <ul>
+    <li><b>A proof checklist for each step.</b> It's made once, when the workflow is built.</li>
+    <li><b>An evidence notebook.</b> It opens just before each action and notes everything that happens, on every tab.</li>
+  </ul>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 560" role="img" aria-label="How the new parts fit: Build Studio makes a proof checklist; the customer's computer collects evidence, judges it and decides the next move; the cloud only sees results." style="min-width:900px"><defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><rect x="10" y="10" width="1100" height="150" rx="8" class="zone"/><rect x="10" y="180" width="960" height="370" rx="8" class="zone"/><rect x="985" y="180" width="125" height="370" rx="8" class="zone"/><text x="24" y="32" class="eb" text-anchor="start">BUILD STUDIO: WHEN THE WORKFLOW IS MADE</text><text x="24" y="202" class="eb" text-anchor="start">THE CUSTOMER'S COMPUTER: EVERY TIME IT RUNS</text><text x="995" y="202" class="eb" text-anchor="start">CLOUD</text><rect x="30" y="44" width="190" height="96" rx="6" class="b"/><text x="125" y="82" class="t" text-anchor="middle">Watch longer</text><text x="125" y="98" class="s" text-anchor="middle">keep watching after each</text><text x="125" y="112.5" class="s" text-anchor="middle">action until things calm</text><path d="M220 92 L246 92" class="w" marker-end="url(#ar3)"/><rect x="246" y="44" width="190" height="96" rx="6" class="b"/><text x="341" y="82" class="t" text-anchor="middle">Name the goal</text><text x="341" y="98" class="s" text-anchor="middle">what should be true</text><text x="341" y="112.5" class="s" text-anchor="middle">after this step?</text><path d="M436 92 L462 92" class="w" marker-end="url(#ar3)"/><rect x="462" y="44" width="190" height="96" rx="6" class="b"/><text x="557" y="82" class="t" text-anchor="middle">Find proof options</text><text x="557" y="98" class="s" text-anchor="middle">only from things that</text><text x="557" y="112.5" class="s" text-anchor="middle">really happened</text><path d="M652 92 L678 92" class="w" marker-end="url(#ar3)"/><rect x="678" y="44" width="190" height="96" rx="6" class="b"/><text x="773" y="82" class="t" text-anchor="middle">Fill the gaps</text><text x="773" y="98" class="s" text-anchor="middle">ask the person if proof</text><text x="773" y="112.5" class="s" text-anchor="middle">is missing</text><path d="M868 92 L894 92" class="w" marker-end="url(#ar3)"/><rect x="894" y="44" width="190" height="96" rx="6" class="bc"/><text x="989" y="82" class="t" text-anchor="middle">Proof checklist</text><text x="989" y="98" class="s" text-anchor="middle">what proves it, how long</text><text x="989" y="112.5" class="s" text-anchor="middle">to wait, what to do next</text><rect x="30" y="214" width="150" height="44" rx="6" class="b"/><text x="105" y="240.5" class="t" text-anchor="middle">The page</text><path d="M180 236 L214 236" class="w" marker-end="url(#ar3)"/><rect x="30" y="272" width="150" height="44" rx="6" class="b"/><text x="105" y="298.5" class="t" text-anchor="middle">Browser events</text><path d="M180 294 L214 294" class="w" marker-end="url(#ar3)"/><rect x="30" y="330" width="150" height="44" rx="6" class="b"/><text x="105" y="356.5" class="t" text-anchor="middle">Server messages</text><path d="M180 352 L214 352" class="w" marker-end="url(#ar3)"/><rect x="30" y="388" width="150" height="44" rx="6" class="b"/><text x="105" y="414.5" class="t" text-anchor="middle">Files on computer</text><path d="M180 410 L214 410" class="w" marker-end="url(#ar3)"/><rect x="30" y="446" width="150" height="44" rx="6" class="b"/><text x="105" y="472.5" class="t" text-anchor="middle">Go and look</text><path d="M180 468 L214 468" class="w" marker-end="url(#ar3)"/><rect x="214" y="214" width="132" height="276" rx="6" class="b2"/><text x="280" y="320.25" class="t" text-anchor="middle">Evidence notebook</text><text x="280" y="336.25" class="s" text-anchor="middle">opened before</text><text x="280" y="350.75" class="s" text-anchor="middle">the action;</text><text x="280" y="365.25" class="s" text-anchor="middle">covers every tab;</text><text x="280" y="379.75" class="s" text-anchor="middle">stays on this</text><text x="280" y="394.25" class="s" text-anchor="middle">computer</text><path d="M346 305 L380 305" class="w" marker-end="url(#ar3)"/><rect x="380" y="250" width="170" height="110" rx="6" class="b"/><text x="465" y="287.75" class="t" text-anchor="middle">The checks</text><text x="465" y="303.75" class="s" text-anchor="middle">yes, no, not yet,</text><text x="465" y="318.25" class="s" text-anchor="middle">or can't tell; only new</text><text x="465" y="332.75" class="s" text-anchor="middle">things count</text><path d="M550 305 L590 305" class="w" marker-end="url(#ar3)"/><rect x="590" y="250" width="160" height="110" rx="6" class="b"/><text x="670" y="287.75" class="t" text-anchor="middle">The judge</text><text x="670" y="303.75" class="s" text-anchor="middle">simple fixed rules,</text><text x="670" y="318.25" class="s" text-anchor="middle">no scores,</text><text x="670" y="332.75" class="s" text-anchor="middle">no AI</text><path d="M750 305 L790 305" class="w" marker-end="url(#ar3)"/><rect x="790" y="250" width="160" height="110" rx="6" class="bc"/><text x="870" y="295" class="t" text-anchor="middle">Next-move rules</text><text x="870" y="311" class="s" text-anchor="middle">how risky is it?</text><text x="870" y="325.5" class="s" text-anchor="middle">is someone there?</text><path d="M960 140 L960 225 L465 225 L465 250" class="w" marker-end="url(#ar3)"/><text x="640" y="219" class="l" text-anchor="middle">comes with the workflow</text><path d="M870 225 L870 250" class="w" marker-end="url(#ar3)"/><path d="M870 360 L870 395" class="w"/><path d="M447 395 L888 395" class="w"/><rect x="380" y="425" width="135" height="62" rx="6" class="b"/><text x="447.5" y="453.25" class="t" text-anchor="middle">Auto-repair</text><text x="447.5" y="469.25" class="s" text-anchor="middle">already built</text><path d="M447 395 L447 425" class="w" marker-end="url(#ar3)"/><rect x="527" y="425" width="135" height="62" rx="6" class="b"/><text x="594.5" y="453.25" class="t" text-anchor="middle">Pop-up rules</text><text x="594.5" y="469.25" class="s" text-anchor="middle">already built</text><path d="M594 395 L594 425" class="w" marker-end="url(#ar3)"/><rect x="674" y="425" width="135" height="62" rx="6" class="b"/><text x="741.5" y="453.25" class="t" text-anchor="middle">Ask a person</text><text x="741.5" y="469.25" class="s" text-anchor="middle">already built</text><path d="M741 395 L741 425" class="w" marker-end="url(#ar3)"/><rect x="821" y="425" width="135" height="62" rx="6" class="b"/><text x="888.5" y="453.25" class="t" text-anchor="middle">Save point</text><text x="888.5" y="469.25" class="s" text-anchor="middle">now with proof</text><path d="M888 395 L888 425" class="w" marker-end="url(#ar3)"/><text x="394" y="388" class="l" text-anchor="start">the next move</text><rect x="998" y="250" width="100" height="110" rx="6" class="b"/><text x="1048" y="287.75" class="t" text-anchor="middle">Health view</text><text x="1048" y="303.75" class="s" text-anchor="middle">results only,</text><text x="1048" y="318.25" class="s" text-anchor="middle">no page</text><text x="1048" y="332.75" class="s" text-anchor="middle">contents</text><path d="M950 305 L998 305" class="w" marker-end="url(#ar3)"/><path d="M1048 250 L1048 140" class="w" marker-end="url(#ar3)"/><text x="1042" y="172" class="l" text-anchor="end">this check is getting worse</text></svg></div><figcaption>The checklist is made once, when the workflow is built. It is used on the customer's own computer on every run. Only pass or fail results go to the cloud.</figcaption></figure>
+  <h3>What a checklist looks like</h3>
+  <div class="check"><dl>
+    <dt>Step</dt><dd>Upload the file to Drive</dd>
+    <dt>What should be true</dt><dd>This file is in the folder and it's new</dd>
+    <dt>Level needed</dt><dd>Level 4, Result exists</dd>
+    <dt>Proof</dt><dd>The server says it has the whole file, and the folder lists this file name with one more file than before</dd>
+    <dt>Warnings to watch for</dt><dd>Any new error message or refusal</dd>
+    <dt>How long to wait</dt><dd>As long as progress keeps moving. If it stops for 45 seconds, stop waiting</dd>
+    <dt>If no proof comes</dt><dd>Ask a person. If nobody is there, report "couldn't confirm"</dd>
+  </dl></div>
+  <p>Workflows that are already published keep working. Their existing checks simply count as Level 2.</p>
+  <h3>Rules that never change</h3>
+  <ul>
+    <li>The notebook opens before the action, so nothing gets missed.</li>
+    <li>Every check gives one of four answers: yes, no, not yet, or can't tell.</li>
+    <li>Checking only looks. It never clicks, answers a pop-up or repeats an action.</li>
+    <li>A run succeeds because its steps were proven, never just because it reached the end.</li>
+    <li>What's on the page stays on the customer's computer. Only pass or fail results are sent.</li>
+    <li>AI never decides what to click, and never makes the final decision about success.</li>
+  </ul>
+  <details class="eng"><summary>For engineers: the effect contract</summary>
+  <p>Added beside <code>validation.assertions</code>. An old required assertion reads as one check at <code>accepted</code>. Targets are identity-bundle references, so no LLM-written selectors.</p>
+  <pre><code>"effect": {
+  "kind": "file_arrives",
+  "required_rung": "result_exists",
+  "identity": { "name": "{{file_name}}", "size": "{{file_size}}" },
+  "baseline": ["list_count", "request_cursor", "status_text"],
+  "checks": [
+    { "rung": "performed", "witness": "target",    "role": "support",
+      "probe": { "type": "input_has_files" } },
+    { "rung": "completed", "witness": "transport", "role": "support",
+      "probe": { "type": "request_chain", "template": "PUT /upload/*", "status": "2xx", "shape": ["id"] } },
+    { "rung": "completed", "witness": "generic",   "role": "veto",
+      "probe": { "type": "failure_signal", "scope": "new_since_baseline" } },
+    { "rung": "result_exists", "witness": "renderer", "role": "support",
+      "probe": { "type": "row_with_identity", "list": "bundle:41", "key": "{{file_name}}", "delta": 1 } }
+  ],
+  "quorum": { "result_exists": { "witnesses": 2, "identity_required": true } },
+  "time":   { "progress_extends": true, "stall_after_s": 45, "max_s": 900, "long_wait": "park" },
+  "on":     { "unverified": "handover_else_fail", "partial": "stop_and_report" }
+}</code></pre>
+  <p>Keeps these invariants: no LLM selector strings on the primary path, Tier A costs zero tokens, decision popups are never answered on anyone's behalf, the cloud never records, compiles or executes, and URL templates pass through <code>scrub.py</code>.</p>
+  </details>
+</section>
+
+<section id="generate">
+  <h2>Making and placing checks</h2>
+  <p>Nobody has to write these checks by hand. They come from what happened during the recording.</p>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 396" role="img" aria-label="How checks get made, across three rows: normal code, AI and the person." style="min-width:900px"><defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><text x="12" y="90" class="eb" text-anchor="start">Code</text><line x1="8" x2="1110" y1="145" y2="145" class="sep"/><text x="12" y="210" class="eb" text-anchor="start">AI</text><line x1="8" x2="1110" y1="265" y2="265" class="sep"/><text x="12" y="330" class="eb" text-anchor="start">Person</text><line x1="8" x2="1110" y1="385" y2="385" class="sep"/><rect x="70" y="40" width="132" height="90" rx="6" class="b"/><text x="136" y="67.75" class="t" text-anchor="middle">Watch</text><text x="136" y="83.75" class="s" text-anchor="middle">keep watching after</text><text x="136" y="98.25" class="s" text-anchor="middle">the action and</text><text x="136" y="112.75" class="s" text-anchor="middle">note everything</text><rect x="220" y="40" width="132" height="90" rx="6" class="b"/><text x="286" y="75" class="t" text-anchor="middle">Name the goal</text><text x="286" y="91" class="s" text-anchor="middle">what should this</text><text x="286" y="105.5" class="s" text-anchor="middle">step achieve?</text><rect x="370" y="40" width="132" height="90" rx="6" class="b"/><text x="436" y="67.75" class="t" text-anchor="middle">Find proof</text><text x="436" y="83.75" class="s" text-anchor="middle">turn what happened</text><text x="436" y="98.25" class="s" text-anchor="middle">into possible</text><text x="436" y="112.75" class="s" text-anchor="middle">checks</text><rect x="520" y="40" width="132" height="90" rx="6" class="b"/><text x="586" y="67.75" class="t" text-anchor="middle">Pick checks</text><text x="586" y="83.75" class="s" text-anchor="middle">how much proof</text><text x="586" y="98.25" class="s" text-anchor="middle">does this risk</text><text x="586" y="112.75" class="s" text-anchor="middle">need?</text><rect x="820" y="40" width="132" height="90" rx="6" class="b"/><text x="886" y="67.75" class="t" text-anchor="middle">Test them</text><text x="886" y="83.75" class="s" text-anchor="middle">must be false</text><text x="886" y="98.25" class="s" text-anchor="middle">before the step</text><text x="886" y="112.75" class="s" text-anchor="middle">and true after</text><rect x="970" y="40" width="132" height="90" rx="6" class="bc"/><text x="1036" y="67.75" class="t" text-anchor="middle">Publish rule</text><text x="1036" y="83.75" class="s" text-anchor="middle">no proof on a</text><text x="1036" y="98.25" class="s" text-anchor="middle">risky step: it</text><text x="1036" y="112.75" class="s" text-anchor="middle">can't go out</text><path d="M202 85 L220 85" class="w" marker-end="url(#ar4)"/><path d="M352 85 L370 85" class="w" marker-end="url(#ar4)"/><path d="M502 85 L520 85" class="w" marker-end="url(#ar4)"/><path d="M952 85 L970 85" class="w" marker-end="url(#ar4)"/><rect x="220" y="160" width="132" height="90" rx="6" class="b2"/><text x="286" y="187.75" class="t" text-anchor="middle">Suggest meaning</text><text x="286" y="203.75" class="s" text-anchor="middle">picks from a fixed</text><text x="286" y="218.25" class="s" text-anchor="middle">list; never chooses</text><text x="286" y="232.75" class="s" text-anchor="middle">what to click</text><path d="M286 160 L286 130" class="w" marker-end="url(#ar4)"/><text x="294" y="150" class="l" text-anchor="start">suggests</text><rect x="670" y="160" width="132" height="90" rx="6" class="b2"/><text x="736" y="195" class="t" text-anchor="middle">Explain</text><text x="736" y="211" class="s" text-anchor="middle">says it in</text><text x="736" y="225.5" class="s" text-anchor="middle">plain words</text><path d="M652 85 L736 85 L736 160" class="w" marker-end="url(#ar4)"/><rect x="670" y="280" width="132" height="90" rx="6" class="by"/><text x="736" y="307.75" class="t" text-anchor="middle">Confirm</text><text x="736" y="323.75" class="s" text-anchor="middle">&quot;It's done when</text><text x="736" y="338.25" class="s" text-anchor="middle">the file shows</text><text x="736" y="352.75" class="s" text-anchor="middle">in the folder&quot;</text><path d="M736 250 L736 280" class="w" marker-end="url(#ar4)"/><path d="M802 325 L886 325 L886 130" class="w" marker-end="url(#ar4)"/></svg></div><figcaption>Normal code builds every check from something that really happened. AI only helps with meaning and wording. A person confirms what "done" means, and a test run proves each check works.</figcaption></figure>
+  <ol>
+    <li><b>Watch.</b> The recorder keeps watching after an action until things calm down. If you sat and watched a progress window until it said "complete", that's useful evidence.</li>
+    <li><b>Name the goal.</b> The system works out what kind of action this was, such as uploading a file or deleting something. There are about ten kinds.</li>
+    <li><b>Find proof.</b> Everything it saw becomes a possible check. Things that change every run, such as dates, are generalized. Things that match your input, such as the file name, are linked to it.</li>
+    <li><b>Pick checks.</b> Riskier steps get stronger proof. Every step also watches for warnings.</li>
+    <li><b>Explain and confirm.</b> Chat tells you in plain words: "I'll call this finished when the file name shows in the folder." You can agree or correct it.</li>
+    <li><b>Test.</b> In the Test run, each check must be false before the step and true after. Any that fail are removed.</li>
+    <li><b>Publish rule.</b> A step that can't be undone can't be published without real proof.</li>
+  </ol>
+  <h3>Where checks go</h3>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 356" role="img" aria-label="Checks placed right after a step, proved by a later step, at the end of a group of steps, and at the end of the whole run." style="min-width:900px"><defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><text x="14" y="56" class="eb" text-anchor="start">STEPS</text><text x="14" y="134" class="eb" text-anchor="start">RIGHT AFTER</text><rect x="14" y="64" width="112" height="44" rx="6" class="b"/><text x="70" y="90.5" class="t" text-anchor="middle">Open page</text><line x1="70" x2="70" y1="108" y2="142" class="w"/><rect x="44" y="142" width="52" height="26" rx="6" class="b2"/><text x="70" y="159.5" class="t" text-anchor="middle">L2</text><path d="M126 86 L154 86" class="w" marker-end="url(#ar5)"/><rect x="154" y="64" width="112" height="44" rx="6" class="b"/><text x="210" y="90.5" class="t" text-anchor="middle">Fill name</text><line x1="210" x2="210" y1="108" y2="142" class="w"/><rect x="184" y="142" width="52" height="26" rx="6" class="b2"/><text x="210" y="159.5" class="t" text-anchor="middle">L1</text><path d="M266 86 L294 86" class="w" marker-end="url(#ar5)"/><rect x="294" y="64" width="112" height="44" rx="6" class="bc"/><text x="350" y="90.5" class="t" text-anchor="middle">Click Save</text><line x1="350" x2="350" y1="108" y2="142" class="w"/><rect x="324" y="142" width="52" height="26" rx="6" class="b2"/><text x="350" y="159.5" class="t" text-anchor="middle">L3</text><path d="M406 86 L434 86" class="w" marker-end="url(#ar5)"/><rect x="434" y="64" width="112" height="44" rx="6" class="b"/><text x="490" y="90.5" class="t" text-anchor="middle">Open report</text><line x1="490" x2="490" y1="108" y2="142" class="w"/><rect x="464" y="142" width="52" height="26" rx="6" class="b2"/><text x="490" y="159.5" class="t" text-anchor="middle">L2</text><path d="M546 86 L574 86" class="w" marker-end="url(#ar5)"/><rect x="574" y="64" width="112" height="44" rx="6" class="bc"/><text x="630" y="90.5" class="t" text-anchor="middle">Export file</text><line x1="630" x2="630" y1="108" y2="142" class="w"/><rect x="604" y="142" width="52" height="26" rx="6" class="b2"/><text x="630" y="159.5" class="t" text-anchor="middle">L3</text><path d="M686 86 L714 86" class="w" marker-end="url(#ar5)"/><rect x="714" y="64" width="112" height="44" rx="6" class="b"/><text x="770" y="90.5" class="t" text-anchor="middle">Open storage</text><line x1="770" x2="770" y1="108" y2="142" class="w"/><rect x="744" y="142" width="52" height="26" rx="6" class="b2"/><text x="770" y="159.5" class="t" text-anchor="middle">L2</text><path d="M826 86 L854 86" class="w" marker-end="url(#ar5)"/><rect x="854" y="64" width="112" height="44" rx="6" class="bc"/><text x="910" y="90.5" class="t" text-anchor="middle">Upload file</text><line x1="910" x2="910" y1="108" y2="142" class="w"/><rect x="884" y="142" width="52" height="26" rx="6" class="b2"/><text x="910" y="159.5" class="t" text-anchor="middle">L4</text><path d="M966 86 L994 86" class="w" marker-end="url(#ar5)"/><rect x="994" y="64" width="112" height="44" rx="6" class="b"/><text x="1050" y="90.5" class="t" text-anchor="middle">Close panel</text><line x1="1050" x2="1050" y1="108" y2="142" class="w"/><rect x="1024" y="142" width="52" height="26" rx="6" class="b2"/><text x="1050" y="159.5" class="t" text-anchor="middle">L1</text><text x="14" y="192" class="eb" text-anchor="start">PROVED LATER</text><path d="M490 168 C 490 212, 350 212, 350 174" class="wc" marker-end="url(#ac5)"/><text x="506" y="206" class="l" text-anchor="start">the report only opens if the save really worked</text><text x="14" y="240" class="eb" text-anchor="start">END OF A GROUP</text><path d="M574 244 V 256 H 966 V 244" class="wc"/><text x="770" y="274" class="l" text-anchor="middle">the file that left Export is the same file that arrived at Upload</text><text x="14" y="300" class="eb" text-anchor="start">END OF THE RUN</text><rect x="14" y="308" width="1092" height="36" rx="6" class="bc"/><text x="560" y="331" class="t" text-anchor="middle">Final check: the thing this workflow exists to produce is really there</text></svg></div><figcaption>Four places a check can go, shown on a made-up workflow. L1 to L4 are the four levels of proof explained above.</figcaption></figure>
+  <div class="table"><table>
+    <tr><th>Placement</th><th>When it's used</th></tr>
+    <tr><td><b>Right after</b></td><td>The usual place, straight after the action.</td></tr>
+    <tr><td><b>Proved later</b></td><td>Sometimes a later step is the best proof. If step 13 needs something step 12 made, step 13 working proves step 12.</td></tr>
+    <tr><td><b>End of a group</b></td><td>For work spread over several steps, like downloading a file and then uploading it. In a loop, this runs for each item.</td></tr>
+    <tr><td><b>End of the run</b></td><td>One last look: did the workflow achieve what it's for?</td></tr>
+  </table></div>
+  <details class="eng"><summary>For engineers: what this reuses</summary>
+    <p>Mining reuses <code>generalize_url_pattern</code> and <code>variant_align.py</code>. The confirm step extends the <code>done_when</code> question in <code>clarify.py</code>. The publish rule follows <code>patch_gate.py</code>. Closes RT-11 and the "post-condition lives downstream" gap in <code>TODO.md</code>. The LLM may only label from an enumerated list via <code>second_opinion.py</code>.</p>
+  </details>
+</section>
+
+<section id="quorum">
+  <h2>One check or several?</h2>
+  <p>One check is enough when all three of these are true:</p>
+  <ul>
+    <li>It looks directly at the result.</li>
+    <li>Our action is the only likely cause.</li>
+    <li>Being wrong would be cheap to fix.</li>
+  </ul>
+  <p>Typing in a box and reading the box back passes all three. Anything else needs a second, separate witness.</p>
+  <div class="table"><table>
+    <tr><th>Type of step</th><th>Examples</th><th>Proof needed</th><th>Witnesses</th><th>If there's no proof</th></tr>
+    <tr><td><b>Simple and repeatable</b></td><td>Type in a box, pick an option</td><td>Level 1</td><td>1</td><td>Try once more</td></tr>
+    <tr><td><b>Easy to undo</b></td><td>Open a menu, switch tabs</td><td>Level 2</td><td>1, often the next step</td><td>Carry on. The next step will notice</td></tr>
+    <tr><td><b>Lasting but fixable</b></td><td>Save a draft, rename</td><td>Level 3</td><td>1, plus watching for warnings</td><td>Carry on and leave a note</td></tr>
+    <tr><td><b>Moves something</b></td><td>Upload, import, export</td><td>Level 4</td><td>2 separate, right item</td><td>Ask a person, or fail</td></tr>
+    <tr><td><b>Can't be undone</b></td><td>Send, pay, publish, delete</td><td>Level 4, or the best possible</td><td>2 separate, right item</td><td>Ask a person, or fail. Never repeat by itself</td></tr>
+  </table></div>
+  <h3>Why two checks can still be one witness</h3>
+  <p>Think of two friends telling you the parcel arrived. If both only read the same tracking page, you really have one source. If one read the tracking page and the other is standing next to the parcel, you have two.</p>
+  <p>On a website, a "complete" message and a new row in the list both come from the same screen. Some apps update the screen before the server has really finished, so both could be wrong together.</p>
+  <div class="table"><table>
+    <tr><th>Witness</th><th>Example</th><th>How it can be wrong</th></tr>
+    <tr><td><b>The thing we touched</b></td><td>The box holds our text</td><td>It only shows what we did ourselves</td></tr>
+    <tr><td><b>The screen</b></td><td>A message or a new row</td><td>The app showed success too early</td></tr>
+    <tr><td><b>Server messages</b></td><td>The server's reply</td><td>It said yes, then failed later</td></tr>
+    <tr><td><b>A fresh look</b></td><td>Reload the page or search</td><td>The server is a little behind</td></tr>
+    <tr><td><b>The computer's files</b></td><td>The downloaded file</td><td>Right size, wrong contents</td></tr>
+  </table></div>
+  <div class="card">
+    <h4>Adding similar checks barely helps</h4>
+    <p>This chart shows the chance that every check gets fooled at the same time. Lower is better. Move the slider to see the effect. It's a simple illustration, and the numbers aren't measured from CONXA.</p>
+    <div class="ctl"><label for="p">How often one check is fooled</label><input id="p" type="range" min="1" max="30" value="10"><output id="pv" for="p">10%</output></div>
+    <div class="scroll" id="model"></div>
+    <div class="key" style="margin-top:6px"><span style="--c:var(--s2)">All look at the same thing</span><span style="--c:var(--s1)">Somewhat separate</span><span style="--c:var(--s3)">Completely separate</span></div>
+    <details><summary>Show as a table</summary><div class="table"><table><thead><tr><th>Kind of checks</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead><tbody id="modelt"></tbody></table></div></details>
+  </div>
+  <p style="margin-top:14px">That's why the design counts separate witnesses, not the number of checks. It also uses simple rules instead of a score, because a score could let three weak good signs outvote one clear error.</p>
+</section>
+
+<section id="vary">
+  <h2>Working on any website</h2>
+  <p>Writing special rules for Google Drive would fix one site and break on the next. So the differences are kept in four layers of information, and the program itself never mentions a website by name.</p>
+  <div class="layers">
+    <div class="layer"><b>1. Works everywhere</b><span>Basic signs on any website: was something sent, did it finish, is there a new error.</span><i>From day one</i></div>
+    <div class="layer"><b>2. Kinds of action</b><span>About ten kinds, such as "upload" or "delete". Each one says how much proof it needs.</span><i>Shared list</i></div>
+    <div class="layer"><b>3. What we learned about this app</b><span>How this app shows progress and success, in its own language. Layout only, never your data.</span><i>Learned per app</i></div>
+    <div class="layer"><b>4. This exact step</b><span>This step's buttons, its inputs, and your answer about what "done" means.</span><i>This workflow</i></div>
+  </div>
+  <p>Layer 3 also fixes the language problem. Words like "uploading" and "failed" no longer need to be English, because the system learns the words that app really used.</p>
+  <h3>Which proof suits which action</h3>
+  <div class="table"><table class="heat">
+    <tr><th>Action</th><th>The thing we touched</th><th>The screen</th><th>Browser events</th><th>Server messages</th><th>File on computer</th><th>Already on screen</th><th>Go and look</th><th>A later step</th><th>Level</th></tr>
+    <tr><td>Go to a page</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c V">W</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td>2</td></tr>
+    <tr><td>Fill in a box</td><td><i class="c P">M</i></td><td><i class="c V">W</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td>1</td></tr>
+    <tr><td>Open a menu</td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td>2</td></tr>
+    <tr><td>Create or save</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c S">H</i></td><td><i class="c S">H</i></td><td>3–4</td></tr>
+    <tr><td>Upload a file</td><td><i class="c S">H</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c S">H</i></td><td><i class="c S">H</i></td><td>4</td></tr>
+    <tr><td>Download a file</td><td><i class="c">·</i></td><td><i class="c V">W</i></td><td><i class="c P">M</i></td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td>4</td></tr>
+    <tr><td>Send or publish</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td>4</td></tr>
+    <tr><td>Delete something</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td>4</td></tr>
+    <tr><td>Start a long job</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c">·</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c">·</i></td><td>2, then 3</td></tr>
+    <tr><td>Sign in</td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td><i class="c P">M</i></td><td><i class="c V">W</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c">·</i></td><td><i class="c S">H</i></td><td>3</td></tr>
+  </table></div>
+  <div class="key" style="margin-bottom:6px"><span style="--c:var(--h1)">M: main proof</span><span style="--c:var(--h2)">H: helps</span><span style="--c:var(--warn-tint)">W: can only warn, can't prove success</span></div>
+  <p class="note">This table is our best judgement and should be confirmed against real recordings.</p>
+</section>
+
+<section id="signals">
+  <h2>Where proof comes from</h2>
+  <p>Each source of evidence is good at some things and can mislead in others.</p>
+  <div class="table"><table>
+    <tr><th>Source</th><th>Good for</th><th>How it can mislead</th><th>How we stay safe</th></tr>
+    <tr><td><b>What's on the page</b><br>messages, lists, spinners</td><td>What a person would see and believe.</td><td>Apps can show success too early. Messages can vanish quickly or be in another language.</td><td>Catch brief messages as they appear. Read every part of the page. Compare with the "before" photo.</td></tr>
+    <tr><td><b>Browser events</b><br>a new tab, a download, a page change</td><td>Hard facts, such as a download finishing.</td><td>The browser might pass through the right page and then leave it. A "download" can be an error page.</td><td>Make sure the page stays put. Check the downloaded file too.</td></tr>
+    <tr><td><b>Messages with the server</b></td><td>Seeing what the app is really doing behind the page.</td><td>A reply can say OK and contain an error. Other traffic can get mixed in.</td><td>Link each message to our action. Compare the reply with the recording. Don't save what's inside.</td></tr>
+    <tr><td><b>File on the computer</b></td><td>Proving a download worked.</td><td>It may be incomplete, or left over from an earlier run.</td><td>Wait for the end. Check its size, type and time.</td></tr>
+    <tr><td><b>Already on screen</b></td><td>Free, safe proof when a list updates by itself.</td><td>The list may be out of date, or the item may be further down.</td><td>Look for the exact item, and check the count changed.</td></tr>
+    <tr><td><b>Going to look</b><br>reload or search</td><td>The only way to ask the server afresh.</td><td>It can disturb the app, or the server may be a little behind.</td><td>Only if the author approves. Look, don't touch. Allow a short wait.</td></tr>
+    <tr><td><b>A later step</b></td><td>Free proof that an earlier step worked.</td><td>It may have worked for some other reason.</td><td>Only when the later step really depends on the earlier one.</td></tr>
+    <tr><td><b>AI reading the screen</b></td><td>Explaining a confusing screen.</td><td>It can be confident and wrong.</td><td>It can only say "ask a person". It can never declare a risky step proven.</td></tr>
+  </table></div>
+</section>
+
+<section id="classify">
+  <h2>Deciding what to do</h2>
+  <p>Once the checks have answered, a simple judge decides what it all means. It's a fixed list of questions, so the same facts always get the same answer.</p>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 424" role="img" aria-label="The judge's questions in order, each leading to a verdict and a next move." style="min-width:900px"><defs><marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><rect x="14" y="26" width="160" height="92" rx="6" class="b"/><text x="94" y="62" class="t" text-anchor="middle">Anything in the way?</text><text x="94" y="78" class="s" text-anchor="middle">a question, a login</text><text x="94" y="92.5" class="s" text-anchor="middle">or a robot check</text><path d="M174 72 L196 72" class="w" marker-end="url(#ar6)"/><text x="185" y="64" class="l" text-anchor="middle">no</text><path d="M94 118 L94 164" class="w" marker-end="url(#ar6)"/><text x="102" y="145" class="l" text-anchor="start">yes</text><rect x="14" y="164" width="160" height="44" rx="6" class="by"/><text x="94" y="190.5" class="t" text-anchor="middle">BLOCKED</text><path d="M94 208 L94 250" class="w" marker-end="url(#ar6)"/><rect x="14" y="250" width="160" height="150" rx="6" class="b"/><text x="94" y="300.5" class="t" text-anchor="middle">Follow pop-up rules</text><text x="94" y="316.5" class="s" text-anchor="middle">use the recorded answer</text><text x="94" y="331" class="s" text-anchor="middle">or ask someone;</text><text x="94" y="345.5" class="s" text-anchor="middle">the notebook</text><text x="94" y="360" class="s" text-anchor="middle">stays open</text><rect x="196" y="26" width="160" height="92" rx="6" class="b"/><text x="276" y="62" class="t" text-anchor="middle">Any new warning?</text><text x="276" y="78" class="s" text-anchor="middle">error message, refused</text><text x="276" y="92.5" class="s" text-anchor="middle">by server, item gone</text><path d="M356 72 L378 72" class="w" marker-end="url(#ar6)"/><text x="367" y="64" class="l" text-anchor="middle">no</text><path d="M276 118 L276 164" class="w" marker-end="url(#ar6)"/><text x="284" y="145" class="l" text-anchor="start">yes</text><rect x="196" y="164" width="160" height="44" rx="6" class="br"/><text x="276" y="190.5" class="t" text-anchor="middle">FAILED</text><path d="M276 208 L276 250" class="w" marker-end="url(#ar6)"/><rect x="196" y="250" width="160" height="150" rx="6" class="b"/><text x="276" y="300.5" class="t" text-anchor="middle">Did anything happen?</text><text x="276" y="316.5" class="s" text-anchor="middle">proof nothing did:</text><text x="276" y="331" class="s" text-anchor="middle">try again</text><text x="276" y="345.5" class="s" text-anchor="middle">it might have:</text><text x="276" y="360" class="s" text-anchor="middle">stop, don't repeat</text><rect x="378" y="26" width="160" height="92" rx="6" class="b"/><text x="458" y="62" class="t" text-anchor="middle">Is it proven?</text><text x="458" y="78" class="s" text-anchor="middle">enough separate proof,</text><text x="458" y="92.5" class="s" text-anchor="middle">and it's the right item</text><path d="M538 72 L560 72" class="w" marker-end="url(#ar6)"/><text x="549" y="64" class="l" text-anchor="middle">no</text><path d="M458 118 L458 164" class="w" marker-end="url(#ar6)"/><text x="466" y="145" class="l" text-anchor="start">yes</text><rect x="378" y="164" width="160" height="44" rx="6" class="bg"/><text x="458" y="190.5" class="t" text-anchor="middle">PROVEN</text><path d="M458 208 L458 250" class="w" marker-end="url(#ar6)"/><rect x="378" y="250" width="160" height="150" rx="6" class="b"/><text x="458" y="307.75" class="t" text-anchor="middle">Continue</text><text x="458" y="323.75" class="s" text-anchor="middle">save the step</text><text x="458" y="338.25" class="s" text-anchor="middle">along with</text><text x="458" y="352.75" class="s" text-anchor="middle">its proof</text><rect x="560" y="26" width="160" height="92" rx="6" class="b"/><text x="640" y="62" class="t" text-anchor="middle">Still moving?</text><text x="640" y="78" class="s" text-anchor="middle">progress is changing</text><text x="640" y="92.5" class="s" text-anchor="middle">and time is left</text><path d="M720 72 L742 72" class="w" marker-end="url(#ar6)"/><text x="731" y="64" class="l" text-anchor="middle">no</text><path d="M640 118 L640 164" class="w" marker-end="url(#ar6)"/><text x="648" y="145" class="l" text-anchor="start">yes</text><rect x="560" y="164" width="160" height="44" rx="6" class="b2"/><text x="640" y="190.5" class="t" text-anchor="middle">STILL WORKING</text><path d="M640 208 L640 250" class="w" marker-end="url(#ar6)"/><rect x="560" y="250" width="160" height="150" rx="6" class="b"/><text x="640" y="300.5" class="t" text-anchor="middle">Wait</text><text x="640" y="316.5" class="s" text-anchor="middle">if progress stops,</text><text x="640" y="331" class="s" text-anchor="middle">end the wait;</text><text x="640" y="345.5" class="s" text-anchor="middle">if very long, pause</text><text x="640" y="360" class="s" text-anchor="middle">the run for later</text><rect x="742" y="26" width="160" height="92" rx="6" class="b"/><text x="822" y="62" class="t" text-anchor="middle">Mixed results?</text><text x="822" y="78" class="s" text-anchor="middle">some items proven,</text><text x="822" y="92.5" class="s" text-anchor="middle">some not</text><path d="M902 72 L924 72" class="w" marker-end="url(#ar6)"/><text x="913" y="64" class="l" text-anchor="middle">no</text><path d="M822 118 L822 164" class="w" marker-end="url(#ar6)"/><text x="830" y="145" class="l" text-anchor="start">yes</text><rect x="742" y="164" width="160" height="44" rx="6" class="by"/><text x="822" y="190.5" class="t" text-anchor="middle">PARTLY DONE</text><path d="M822 208 L822 250" class="w" marker-end="url(#ar6)"/><rect x="742" y="250" width="160" height="150" rx="6" class="b"/><text x="822" y="307.75" class="t" text-anchor="middle">Stop and report</text><text x="822" y="323.75" class="s" text-anchor="middle">list each item;</text><text x="822" y="338.25" class="s" text-anchor="middle">next time, redo</text><text x="822" y="352.75" class="s" text-anchor="middle">only what's unproven</text><rect x="924" y="26" width="160" height="92" rx="6" class="b"/><text x="1004" y="62" class="t" text-anchor="middle">Nothing left to ask</text><text x="1004" y="78" class="s" text-anchor="middle">no proof, no warning,</text><text x="1004" y="92.5" class="s" text-anchor="middle">no movement</text><path d="M1004 118 L1004 164" class="w" marker-end="url(#ar6)"/><rect x="924" y="164" width="160" height="44" rx="6" class="by"/><text x="1004" y="190.5" class="t" text-anchor="middle">COULDN'T CONFIRM</text><path d="M1004 208 L1004 250" class="w" marker-end="url(#ar6)"/><rect x="924" y="250" width="160" height="150" rx="6" class="b"/><text x="1004" y="300.5" class="t" text-anchor="middle">Depends on risk</text><text x="1004" y="316.5" class="s" text-anchor="middle">low risk: carry on,</text><text x="1004" y="331" class="s" text-anchor="middle">leave a note</text><text x="1004" y="345.5" class="s" text-anchor="middle">high risk: ask someone,</text><text x="1004" y="360" class="s" text-anchor="middle">or fail if nobody's there</text></svg></div><figcaption>The judge asks these questions from left to right and stops at the first yes. A clear warning beats any amount of good news. If every answer is no, the verdict is "Couldn't confirm", never success.</figcaption></figure>
+  <h3>The next move for each verdict</h3>
+  <div class="table"><table>
+    <tr><th>Verdict</th><th>Safe to do twice</th><th>Not safe to do twice</th><th>Nobody is there (a scheduled run)</th></tr>
+    <tr><td><span class="chip ok">Proven</span></td><td>Continue</td><td>Continue</td><td>Continue</td></tr>
+    <tr><td><span class="chip inf">Still working</span></td><td>Wait</td><td>Wait</td><td>Wait, pause, then fail at the limit</td></tr>
+    <tr><td><span class="chip no">Failed, nothing happened</span></td><td>Recover</td><td>Recover</td><td>Recover without AI</td></tr>
+    <tr><td><span class="chip no">Failed, it may have happened</span></td><td>Try once more</td><td>Go and look first. Retry only if it definitely didn't happen. Otherwise fail</td><td>Fail</td></tr>
+    <tr><td><span class="chip hm">Blocked</span></td><td colspan="2">Use the recorded answer. A new question can be passed on, unless a button looks permanent</td><td>Fail</td></tr>
+    <tr><td><span class="chip hm">Partly done</span></td><td>Redo unproven items</td><td>Stop and list each item</td><td>Stop and list each item</td></tr>
+    <tr><td><span class="chip hm">Couldn't confirm</span></td><td>Carry on and leave a note</td><td>Ask a person</td><td>Fail and say "couldn't confirm"</td></tr>
+  </table></div>
+  <p>The most important rule is about repeating. Doing something twice could send an email twice or upload a file twice. So a step is only repeated when we have proof that the first try did nothing.</p>
+  <h3>Try some situations</h3>
+  <div class="sim">
+    <div class="pick" id="pick" role="group" aria-label="Situation"></div>
+    <div class="simgrid" id="simout"></div>
+  </div>
+  <h3>What a person sees at the end</h3>
+  <div class="table"><table>
+    <tr><th>Result</th><th>Means</th><th>Example message</th></tr>
+    <tr><td><span class="chip ok">Done</span></td><td>Everything was proven</td><td>"Uploaded report.pdf and confirmed it is in the folder."</td></tr>
+    <tr><td><span class="chip inf">Submitted</span></td><td>Accepted, and the app will finish later</td><td>"Your export has started. The site will email you when it's ready."</td></tr>
+    <tr><td><span class="chip hm">Done, please check</span></td><td>Finished, but a low-risk step wasn't proven</td><td>"All steps ran, but I couldn't confirm the rename. Please take a look."</td></tr>
+    <tr><td><span class="chip hm">Partly done</span></td><td>Some items worked</td><td>"Two of three files uploaded. photo.png failed."</td></tr>
+    <tr><td><span class="chip no">Couldn't confirm</span></td><td>A risky step has no proof</td><td>"I sent the file, but couldn't confirm it arrived. Please check before running this again."</td></tr>
+    <tr><td><span class="chip no">Failed</span></td><td>It clearly went wrong</td><td>"Drive refused the upload because your storage is full."</td></tr>
+  </table></div>
+  <p>Technical people can click through to see every check and piece of evidence behind any message.</p>
+</section>
+
+<section id="async">
+  <h2>Pop-ups, delays and half-done work</h2>
+  <p>Real websites don't finish neatly. Here's what an upload looks like over time.</p>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 352" role="img" aria-label="A file upload over time, showing what the page, browser, server messages and a look at the folder each know." style="min-width:900px"><defs><marker id="ar7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><text x="14" y="90" class="t" text-anchor="start">On the page</text><line x1="140" x2="1100" y1="110" y2="110" class="sep"/><text x="14" y="140" class="t" text-anchor="start">Browser</text><line x1="140" x2="1100" y1="160" y2="160" class="sep"/><text x="14" y="190" class="t" text-anchor="start">Server messages</text><line x1="140" x2="1100" y1="210" y2="210" class="sep"/><text x="14" y="240" class="t" text-anchor="start">Look in folder</text><line x1="140" x2="1100" y1="260" y2="260" class="sep"/><text x="14" y="300" class="t" text-anchor="start">Proof so far</text><line x1="160" x2="160" y1="42" y2="320" class="vl"/><line x1="200" x2="200" y1="42" y2="320" class="vl"/><text x="160" y="34" class="l" text-anchor="end">photo</text><text x="204" y="34" class="l" text-anchor="start">action</text><line x1="250" x2="250" y1="20" y2="320" class="wy"/><text x="258" y="20" class="l" text-anchor="start">half a second in: today's check can already say done</text><rect x="300" y="74" width="550" height="30" rx="6" class="b2"/><text x="575" y="93.5" class="t" text-anchor="middle">Window says: Uploading 1 item</text><rect x="850" y="74" width="200" height="30" rx="6" class="bg"/><text x="950" y="93.5" class="t" text-anchor="middle">1 upload complete</text><rect x="200" y="124" width="100" height="30" rx="6" class="b2"/><text x="250" y="143.5" class="t" text-anchor="middle">file chosen</text><rect x="305" y="174" width="90" height="30" rx="6" class="b2"/><text x="350" y="193.5" class="t" text-anchor="middle">&quot;Starting&quot;</text><rect x="400" y="174" width="450" height="30" rx="6" class="b2"/><text x="625" y="193.5" class="t" text-anchor="middle">Pieces of the file still being sent</text><rect x="850" y="174" width="200" height="30" rx="6" class="bg"/><text x="950" y="193.5" class="t" text-anchor="middle">Server: &quot;Got it all&quot;</text><rect x="925" y="224" width="175" height="30" rx="6" class="bg"/><text x="1012.5" y="243.5" class="t" text-anchor="middle">File name is listed</text><rect x="200" y="284" width="100" height="32" rx="6" class="b2"/><text x="250" y="304.5" class="t" text-anchor="middle">L1 Performed</text><rect x="300" y="284" width="550" height="32" rx="6" class="b2"/><text x="575" y="304.5" class="t" text-anchor="middle">L2 Accepted</text><rect x="850" y="284" width="75" height="32" rx="6" class="b2"/><text x="887.5" y="304.5" class="t" text-anchor="middle">L3</text><rect x="925" y="284" width="175" height="32" rx="6" class="bg"/><text x="1012.5" y="304.5" class="t" text-anchor="middle">L4 Result exists</text></svg></div><figcaption>A long upload, as a simplified picture and not to scale. Each source knows something at a different moment. Early on it looks like nothing is happening, which is why "it's quiet" can't mean "it's done".</figcaption></figure>
+  <figure><div class="scroll"><svg viewBox="0 0 1120 246" role="img" aria-label="One step moves through ready, performed, accepted, completed and result exists, with side paths for a pop-up and for stalled progress." style="min-width:900px"><defs><marker id="ar8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mw"/></marker><marker id="ac8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mc"/></marker><marker id="ag8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mg"/></marker><marker id="ab8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mb"/></marker><marker id="aw8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="my"/></marker></defs><rect x="20" y="40" width="130" height="60" rx="6" class="b"/><text x="85" y="74.5" class="t" text-anchor="middle">Ready</text><path d="M150 70 L190 70" class="w" marker-end="url(#ar8)"/><rect x="190" y="40" width="130" height="60" rx="6" class="b2"/><text x="255" y="74.5" class="t" text-anchor="middle">Performed</text><path d="M320 70 L360 70" class="w" marker-end="url(#ar8)"/><rect x="360" y="40" width="130" height="60" rx="6" class="b2"/><text x="425" y="74.5" class="t" text-anchor="middle">Accepted</text><path d="M490 70 L530 70" class="w" marker-end="url(#ar8)"/><rect x="530" y="40" width="130" height="60" rx="6" class="b2"/><text x="595" y="74.5" class="t" text-anchor="middle">Completed</text><path d="M660 70 L700 70" class="w" marker-end="url(#ar8)"/><rect x="700" y="40" width="150" height="60" rx="6" class="b2"/><text x="775" y="74.5" class="t" text-anchor="middle">Result exists</text><path d="M850 70 L890 70" class="w" marker-end="url(#ar8)"/><rect x="890" y="40" width="200" height="60" rx="6" class="bg"/><text x="990" y="74.5" class="t" text-anchor="middle">Continue</text><rect x="330" y="168" width="190" height="62" rx="6" class="by"/><text x="425" y="196.25" class="t" text-anchor="middle">Stopped by a pop-up</text><text x="425" y="212.25" class="s" text-anchor="middle">waits for an answer</text><path d="M400 100 L400 168" class="w" marker-end="url(#ar8)"/><text x="392" y="138" class="l" text-anchor="end">pop-up</text><path d="M455 168 L455 100" class="wc" marker-end="url(#ac8)"/><text x="463" y="138" class="l" text-anchor="start">same photo</text><rect x="590" y="168" width="150" height="62" rx="6" class="by"/><text x="665" y="196.25" class="t" text-anchor="middle">Stuck</text><text x="665" y="212.25" class="s" text-anchor="middle">progress stopped</text><path d="M620 100 L650 168" class="w" marker-end="url(#ar8)"/><text x="646" y="130" class="l" text-anchor="start">no movement</text><rect x="800" y="168" width="170" height="62" rx="6" class="by"/><text x="885" y="196.25" class="t" text-anchor="middle">Couldn't confirm</text><text x="885" y="212.25" class="s" text-anchor="middle">depends on risk</text><path d="M740 199 L800 199" class="w" marker-end="url(#ar8)"/></svg></div><figcaption>A pop-up or new tab pauses the checking but doesn't restart it. The "before" photo stays the same, so what happened before the interruption still counts.</figcaption></figure>
+  <div class="table"><table>
+    <tr><th>Situation</th><th>Why it's tricky</th><th>What the design does</th></tr>
+    <tr><td><b>Pop-up after the action</b></td><td>It might be a question, a notice, a progress window or an advert.</td><td>Adds a new type, "progress window". A window showing progress with only cancel, close or minimize isn't a question. A real question pauses the checking until it's answered.</td></tr>
+    <tr><td><b>Slow start</b></td><td>At first, it looks like nothing happened.</td><td>Silence only counts after the app has shown some sign of taking the work.</td></tr>
+    <tr><td><b>Slow work</b></td><td>A fixed time limit is too short for big files and too long for stuck ones.</td><td>Keep waiting while progress moves, and stop early if it gets stuck. For very long waits, pause the run and pick it up later.</td></tr>
+    <tr><td><b>Redirects</b><br>being sent to another page</td><td>A check might pass on a page the app is about to leave.</td><td>The page must stay put. The notebook follows along.</td></tr>
+    <tr><td><b>New tab or another app</b></td><td>The proof may be somewhere else.</td><td>Evidence is collected across all tabs. Steps still only act on their own tab.</td></tr>
+    <tr><td><b>Background jobs</b></td><td>The app says "we'll finish this later".</td><td>The honest result is "submitted". A follow-up check can look later.</td></tr>
+    <tr><td><b>Server is a little behind</b></td><td>The file exists but doesn't show up for a few seconds.</td><td>Look again for a short time before deciding.</td></tr>
+    <tr><td><b>Half-finished batches</b></td><td>"Mostly worked" isn't a pass or a fail.</td><td>Each item gets its own proof. A re-run redoes only the unproven ones.</td></tr>
+    <tr><td><b>Undo windows</b></td><td>"Sent" can still be cancelled for a few seconds.</td><td>Where the app shows an undo window, wait for it to end.</td></tr>
+  </table></div>
+</section>
+
+<section id="breaks">
+  <h2>What can still go wrong</h2>
+  <p>No checker can be perfect. It can only see what the app shows, and the app can be wrong. The goal is that when something can't be known, the person hears "couldn't confirm" and not a false "done".</p>
+  <div class="table"><table>
+    <tr><th>What could go wrong</th><th>How we'd notice</th><th>What happens</th></tr>
+    <tr><td><b>App says success, then undoes it later</b></td><td>Only a later look can catch this</td><td>An optional follow-up check. Otherwise, a browser simply can't know</td></tr>
+    <tr><td><b>A file with that name already exists</b></td><td>The "before" photo</td><td>Must see one more file, or a newer date</td></tr>
+    <tr><td><b>Someone else makes the same change</b></td><td>The count jumps by more than one</td><td>"Couldn't confirm". Never takes the credit</td></tr>
+    <tr><td><b>The app gets redesigned</b></td><td>The check starts failing more across customers</td><td>The author is asked to re-record. A broken check means "couldn't confirm"</td></tr>
+    <tr><td><b>A check is wrong from the start</b></td><td>The test run</td><td>Removed before publishing</td></tr>
+    <tr><td><b>The result is far down a long list</b></td><td>The row isn't found</td><td>Search or scroll. Otherwise stop at Level 3</td></tr>
+    <tr><td><b>Messages to the server can't be seen</b></td><td>The expected message never shows up</td><td>That witness says "can't tell". Others must prove it</td></tr>
+    <tr><td><b>The server's replies change format</b></td><td>The reply looks different</td><td>"Couldn't confirm", unless it's a known error</td></tr>
+    <tr><td><b>The app is drawn like a picture, with no readable text</b></td><td>Nothing to read on the page</td><td>Use server messages and a fresh look. AI may only advise</td></tr>
+    <tr><td><b>Login expires during the wait</b></td><td>Sent to a login page</td><td>Normal login handling. Progress so far is kept</td></tr>
+    <tr><td><b>The computer crashes during the wait</b></td><td>Saved point shows the action ran, with no proof</td><td>On restart, check first. Never repeat straight away</td></tr>
+    <tr><td><b>Checking takes too long</b></td><td>Timing in the logs</td><td>Low-risk steps do no extra waiting</td></tr>
+    <tr><td><b>Going to look changes something</b></td><td>The author reviews it</td><td>Off unless the author turns it on</td></tr>
+    <tr><td><b>Private data ends up in the evidence</b></td><td>Automatic tests</td><td>Message contents are read and forgotten, never stored</td></tr>
+  </table></div>
+</section>
+
+<section id="rollout">
+  <h2>What to build first</h2>
+  <div class="table"><table>
+    <tr><th>Stage</th><th>What gets done</th><th>It's finished when</th></tr>
+    <tr><td><b>1. Fix the new check</b></td><td>Stop mistaking progress windows for questions. Don't treat silence as done until work has started. Respect the time limits. Look for a question after the last step.</td><td>The real Drive window is handled correctly</td></tr>
+    <tr><td><b>2. Honest answers</b></td><td>Add the four answers, the four levels and the new end messages.</td><td>"Couldn't tell" never shows as Done</td></tr>
+    <tr><td><b>3. The notebook</b></td><td>Collect evidence across all tabs and every part of the page.</td><td>Hidden progress windows are noticed</td></tr>
+    <tr><td><b>4. The checklist</b></td><td>Watch longer while recording, find proof, ask in chat, test checks, add the publish rule.</td><td>A new upload recording is proven at Level 4</td></tr>
+    <tr><td><b>5. Going to look</b></td><td>Fresh looks, later proof, final checks, pausing long runs, per-item lists.</td><td>A retry only happens with proof it's safe</td></tr>
+    <tr><td><b>6. Learning</b></td><td>Remember each app's own words and notice checks going bad.</td><td>An app in German is checked correctly</td></tr>
+  </table></div>
+  <details class="eng"><summary>For engineers: main files by stage</summary>
+    <div class="table"><table>
+      <tr><th>Stage</th><th>Files</th></tr>
+      <tr><td>1</td><td><code>fork.js</code>, <code>completion.js</code>, <code>run.js</code> (RT-12, RT-13)</td></tr>
+      <tr><td>2</td><td><code>assertions.js</code>, <code>server.js</code>, Studio result card</td></tr>
+      <tr><td>3</td><td><code>page_status.js</code>, <code>page_scripts.js</code>, <code>tabs.js</code></td></tr>
+      <tr><td>4</td><td><code>bridge.js</code>, <code>build.py</code>, <code>validation_planner.py</code>, <code>clarify.py</code>, <code>patch_gate.py</code></td></tr>
+      <tr><td>5</td><td><code>handlers.js</code>, <code>run.js</code>, <code>scheduler_*</code></td></tr>
+      <tr><td>6</td><td><code>app_graph/</code>, <code>tracking.py</code></td></tr>
+    </table></div>
+  </details>
+  <h3>Three choices that are yours to make</h3>
+  <ul>
+    <li><b>Should CONXA be allowed to reload or search a page to double-check?</b> We suggest only when the workflow's author has approved it, because even looking can sometimes change things.</li>
+    <li><b>Should recordings keep a summary of the app's server messages?</b> We suggest yes, keeping only the type and general address of each message, and never what's inside. This makes much better checks possible.</li>
+    <li><b>What should happen when an upload takes longer than the time limit?</b> We suggest pausing the run and picking it up later, rather than making the limit longer.</li>
+  </ul>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  var tip = document.createElement("div"); tip.id = "tip"; tip.hidden = true; document.body.appendChild(tip);
+  document.addEventListener("mousemove", function (e) {
+    var t = e.target.closest && e.target.closest("[data-tip]");
+    if (!t) { tip.hidden = true; return; }
+    tip.textContent = t.getAttribute("data-tip"); tip.hidden = false;
+    var w = tip.offsetWidth, x = e.clientX + 14;
+    if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+    tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+  });
+
+  var links = [].slice.call(document.querySelectorAll("nav a"));
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (en) {
+        if (en.isIntersecting) links.forEach(function (a) { a.classList.toggle("on", a.getAttribute("href") === "#" + en.target.id); });
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    document.querySelectorAll("section[id]").forEach(function (s) { io.observe(s); });
+  }
+
+  // Model: chance all n checks are fooled = rho*p + (1-rho)*p^n.
+  var series = [
+    { name: "All look at the same thing", rho: 0.9, c: "--s2", dash: "" },
+    { name: "Somewhat separate", rho: 0.3, c: "--s1", dash: "7 4" },
+    { name: "Completely separate", rho: 0, c: "--s3", dash: "2 4" }
+  ];
+  var slider = document.getElementById("p"), out = document.getElementById("pv"), box = document.getElementById("model"), tb = document.getElementById("modelt");
+  function pct(v) { return v >= 0.01 ? (v * 100).toFixed(v >= 0.1 ? 0 : 1) + "%" : v >= 0.0001 ? (v * 100).toFixed(2) + "%" : "<0.01%"; }
+  function draw() {
+    var p = slider.value / 100; out.textContent = slider.value + "%";
+    var W = 980, H = 360, L = 62, R = 270, T = 16, B = 40;
+    var x = function (n) { return L + (n - 1) / 3 * (W - L - R); };
+    var y = function (v) { var l = Math.max(Math.log10(Math.max(v, 1e-5)), -5); return T + (0 - l) / 5 * (H - T - B); };
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Chance that every check is fooled as more checks are added, for checks that are more or less separate from each other." style="min-width:720px">';
+    [1, 0.1, 0.01, 0.001, 0.0001, 0.00001].forEach(function (t) {
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(t) + '" y2="' + y(t) + '" class="grid"/>';
+      s += '<text x="' + (L - 10) + '" y="' + (y(t) + 4) + '" class="ax" text-anchor="end">' + (t * 100 >= 1 ? t * 100 : +(t * 100).toFixed(3)) + '%</text>';
+    });
+    [1, 2, 3, 4].forEach(function (n) { s += '<text x="' + x(n) + '" y="' + (H - 14) + '" class="ax" text-anchor="middle">' + n + (n === 1 ? " check" : " checks") + '</text>'; });
+    var rows = "", labels = [];
+    series.forEach(function (d) {
+      var pts = [1, 2, 3, 4].map(function (n) { return { n: n, v: d.rho * p + (1 - d.rho) * Math.pow(p, n) }; });
+      s += '<polyline fill="none" stroke="var(' + d.c + ')" stroke-width="2" stroke-dasharray="' + d.dash + '" points="' + pts.map(function (q) { return x(q.n) + "," + y(q.v); }).join(" ") + '"/>';
+      pts.forEach(function (q) {
+        s += '<circle cx="' + x(q.n) + '" cy="' + y(q.v) + '" r="5" fill="var(' + d.c + ')" stroke="var(--surface)" stroke-width="2"/>';
+        s += '<circle cx="' + x(q.n) + '" cy="' + y(q.v) + '" r="14" class="hit" data-tip="' + d.name + ', ' + q.n + ' check(s): ' + pct(q.v) + ' chance all are fooled"/>';
+      });
+      labels.push({ y: y(pts[3].v), t: d.name + ": " + pct(pts[3].v) });
+      rows += "<tr><td>" + d.name + "</td>" + pts.map(function (q) { return "<td>" + pct(q.v) + "</td>"; }).join("") + "</tr>";
+    });
+    labels.sort(function (a, b) { return a.y - b.y; });
+    for (var i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 16) labels[i].y = labels[i - 1].y + 16;
+    labels.forEach(function (l) { s += '<text x="' + (W - R + 14) + '" y="' + (l.y + 4) + '" class="lb">' + l.t + '</text>'; });
+    box.innerHTML = s + "</svg>";
+    tb.innerHTML = rows;
+  }
+  slider.addEventListener("input", draw); draw();
+
+  var S = [
+    { n: "Drive's real upload window", truth: "The file is still uploading. The window has three buttons: Minimize, Close and Cancel all.", today: ["said passed", "no", "In 3 thousandths of a second. It mistook the window for a question, stopped waiting and let the step pass."],
+      r: ["y", "y", "", ""], ck: [["Good sign", "The file was chosen"], ["Good sign", "The browser started sending it"], ["Moving", "The upload window is changing"], ["Window type", "It only offers cancel, close or minimize, so it shows progress and is not a question"]], cls: "Still working", c: "inf", move: "Wait", say: "Uploading your file. I'll carry on when it has finished." },
+    { n: "Upload works", truth: "The file is in the folder.", today: ["said done", "ok", "After 2 seconds. Correct, but only because the progress went away."],
+      r: ["y", "y", "y", "y"], ck: [["Good sign", "The server replied that it has the whole file"], ["Good sign", "A new row with this exact file name appeared"], ["Warning", "No new error messages"]], cls: "Proven", c: "ok", move: "Continue", say: "Uploaded report.pdf and confirmed it is in the folder." },
+    { n: "App ignores the file", truth: "The app did nothing. No progress appeared and nothing was sent.", today: ["said done", "no", "After half a second. Quiet was treated as finished."],
+      r: ["y", "", "", ""], ck: [["Good sign", "The file was chosen"], ["Missing", "The app never showed any sign of taking it"], ["Warning", "No error messages either"]], cls: "Couldn't confirm", c: "hm", move: "Ask a person, or fail if nobody is there", say: "I chose the file, but the site never started uploading it. Nothing was saved." },
+    { n: "\"OK\" but really an error", truth: "The server replied OK, but the reply says the storage is full.", today: ["said done", "no", "After half a second. It only read the OK and not the rest of the reply."],
+      r: ["y", "y", "x", ""], ck: [["Good sign", "The server replied"], ["Warning", "The reply doesn't look like the one from the recording, and it contains an error"], ["Missing", "No new row with this file name"]], cls: "Failed", c: "no", move: "Stop. Only try again after looking and finding no file there.", say: "The site refused the upload. It reported a problem with your storage." },
+    { n: "\"Replace or keep both?\"", truth: "A pop-up asks what to do about a file with the same name. The upload waits for an answer.", today: ["moved on", "hm", "Straight away. It rightly didn't answer, but on the last step the run ends with the question still open."],
+      r: ["y", "", "", ""], ck: [["Pop-up", "A new question has appeared"], ["Level", "Stays at Performed until someone answers"]], cls: "Blocked", c: "hm", move: "Use the recorded answer or ask. Then carry on checking with the same \"before\" photo.", say: "Drive is asking whether to replace the file or keep both. Which do you want?" },
+    { n: "Export takes a while", truth: "The app accepted the job and will email the result later.", today: ["said done", "no", "After half a second. \"Being prepared\" isn't one of the words it knows mean \"busy\"."],
+      r: ["y", "y", "", ""], ck: [["Good sign", "The app replied that the job is queued"], ["Checklist", "\"Accepted\" is the most this app can show right now"], ["Later", "A follow-up check is set for when the job ends"]], cls: "Proven as far as possible", c: "inf", move: "Continue, and tell the person it was submitted", say: "Your export has started. The site will finish it and email you." },
+    { n: "Two of three uploaded", truth: "Two files arrived and one failed.", today: ["said failed", "ok", "After 1.3 seconds. Correct, but it doesn't record which file failed."],
+      r: ["y", "y", "x", ""], ck: [["File 1", "report.pdf: found"], ["File 2", "notes.txt: found"], ["File 3", "photo.png: failed"]], cls: "Partly done", c: "hm", move: "Stop, list each file, and next time redo only the failed one", say: "Two of three files uploaded. photo.png failed. The other two are in the folder." }
+  ];
+  var pick = document.getElementById("pick"), sim = document.getElementById("simout"), rn = ["Performed", "Accepted", "Completed", "Result exists"];
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function show(i) {
+    var d = S[i];
+    [].forEach.call(pick.children, function (b, k) { b.setAttribute("aria-pressed", k === i ? "true" : "false"); });
+    sim.innerHTML =
+      '<div><h4>What is really true</h4><p style="font-size:14px">' + esc(d.truth) + '</p><h4>What today\'s check said</h4><p style="font-size:14px"><span class="chip ' + d.today[1] + '">' + d.today[0] + '</span> ' + esc(d.today[2]) + '</p></div>' +
+      '<div><h4>With the new design</h4><div class="track">' + rn.map(function (t, k) { return '<span class="' + d.r[k] + '">' + t + '</span>'; }).join("") + '</div>' +
+      '<ul class="ck">' + d.ck.map(function (c) { return '<li><b>' + esc(c[0]) + '</b><span>' + esc(c[1]) + '</span></li>'; }).join("") + '</ul>' +
+      '<p style="font-size:14px"><span class="chip ' + d.c + '">' + esc(d.cls) + '</span> ' + esc(d.move) + '</p></div>' +
+      '<div><h4>What the person reads</h4><div class="say">' + esc(d.say) + '</div></div>';
+  }
+  S.forEach(function (d, i) {
+    var b = document.createElement("button"); b.type = "button"; b.textContent = d.n;
+    b.addEventListener("click", function () { show(i); }); pick.appendChild(b);
+  });
+  show(0);
+})();
+
+</script>

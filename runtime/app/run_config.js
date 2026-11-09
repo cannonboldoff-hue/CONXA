@@ -16,12 +16,20 @@ const SECONDARY_ACTION_TIMEOUT_MS  = envNumber("CONXA_SECONDARY_ACTION_TIMEOUT_M
 const RECOVERY_LOCATOR_TIMEOUT_MS  = envNumber("CONXA_RECOVERY_LOCATOR_TIMEOUT_MS", 3000);
 const PAGE_LOAD_TIMEOUT_MS         = envNumber("CONXA_PAGE_LOAD_TIMEOUT_MS", 60000);
 const DOWNLOAD_WAIT_TIMEOUT_MS     = envNumber("CONXA_DOWNLOAD_WAIT_MS", 120000);
-// An upload step's setInputFiles() only resolves once the browser has attached the file to the
-// input — it says nothing about whether the page's own upload request (XHR/fetch to a server)
-// has finished. There's no native Playwright "upload complete" event to queue on (unlike
-// download_observed's real page.on("download", ...)), so networkidle after attaching the file
-// is the best available proxy: best-effort, catches its own timeout, never fails the step.
-const UPLOAD_SETTLE_TIMEOUT_MS     = envNumber("CONXA_UPLOAD_SETTLE_MS", 20000);
+// Completion gate (completion.js): how long to wait for a step that started work (an upload, a
+// submit) to actually finish. "full" is an upload or the last acting step (5 min: a big upload is
+// slow); "short" is every other acting step (visible progress only, then carry on). A data-changing
+// request that stays open with nothing on screen is given NETWORK_GRACE_MS before the step is called
+// done with a warning (some apps hold a long-lived POST open); an upload gets the full budget.
+// CONXA_COMPLETION_GATE=0 restores the old behaviour exactly (no wait after a step).
+const COMPLETION_GATE_ENABLED      = process.env.CONXA_COMPLETION_GATE !== "0";
+const COMPLETION_BUDGET_MS         = envNumber("CONXA_COMPLETION_BUDGET_MS", 300000);
+const COMPLETION_SHORT_MS          = envNumber("CONXA_COMPLETION_SHORT_MS", 15000);
+const NETWORK_GRACE_MS             = envNumber("CONXA_NETWORK_GRACE_MS", 30000);
+// How long a full wait lets the app show a first sign of taking the work (a busy indicator, new status
+// text, a data-changing request, a new address) before it answers "no_sign" instead of "done". A
+// progress tray that opens a second late must not be mistaken for a step that did nothing.
+const COMPLETION_START_GRACE_MS    = envNumber("CONXA_COMPLETION_START_GRACE_MS", 3000);
 // A dialog_accept/dialog_dismiss step isn't guaranteed to find its dialog already queued the
 // instant it runs, same reasoning as DOWNLOAD_WAIT_TIMEOUT_MS above — was ACTION_TIMEOUT_MS
 // (2500ms) until a dialog arriving even slightly late made HANDLERS["dialog_accept"] silently
@@ -71,7 +79,11 @@ module.exports = {
   RECOVERY_LOCATOR_TIMEOUT_MS,
   PAGE_LOAD_TIMEOUT_MS,
   DOWNLOAD_WAIT_TIMEOUT_MS,
-  UPLOAD_SETTLE_TIMEOUT_MS,
+  COMPLETION_GATE_ENABLED,
+  COMPLETION_BUDGET_MS,
+  COMPLETION_SHORT_MS,
+  NETWORK_GRACE_MS,
+  COMPLETION_START_GRACE_MS,
   DIALOG_WAIT_TIMEOUT_MS,
   RUN_RETENTION_MS,
   SETTLE_TIMEOUT_MS,
