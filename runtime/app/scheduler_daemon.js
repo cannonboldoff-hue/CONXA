@@ -120,13 +120,16 @@ function resolveEngineCommand() {
 
 /**
  * Classify an execute_skill response body. The engine returns plain text: success
- * starts "Done." (server.js success path); the RT-3 cap refusal has a stable prefix;
+ * starts "Done." / "Done, please check." / "Submitted." (server.js success path, proof.js); the RT-3 cap refusal has a stable prefix;
  * everything else is a failure (selector failure payload, session expiry, deadline…).
  */
 function classifyRunResult(text) {
   const t = String(text || "");
   const trimmed = t.trim();
-  if (trimmed.startsWith("Done.")) return "completed";
+  // "Done." is a clean run; "Done, please check." finished with a note (a low-risk step could not be
+  // confirmed); "Submitted." was accepted and finishes on its own. "Couldn't confirm." and
+  // "Partly done." are not success: the work may or may not have happened.
+  if (/^(Done\.|Done, please check\.|Submitted\.)/.test(trimmed)) return "completed";
   if (t.includes("Too many workflows are already running")) return "busy";
   return "failed";
 }

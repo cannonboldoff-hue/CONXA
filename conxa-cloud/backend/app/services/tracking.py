@@ -287,6 +287,7 @@ def _run_summary(run_id: str, batches: list[dict]) -> dict:
     failed_step_id = None
     failure_code = None
     started_at = 0
+    outcome = None  # Proof of Done: done | done_please_check | submitted | partly_done | couldnt_confirm
 
     for evt in events:
         code = evt.get("e", "")
@@ -297,11 +298,13 @@ def _run_summary(run_id: str, batches: list[dict]) -> dict:
             duration_ms = evt.get("dur", 0)
             total_steps = evt.get("tot", 0)
             recovered_steps = evt.get("rec", 0)
+            outcome = evt.get("oc") or "done"  # a runtime that predates Proof of Done only ever said "done"
         elif code == "wf_fail":
             status = "fail"
             duration_ms = evt.get("dur", 0)
             failed_step_id = evt.get("fsi")
             failure_code = evt.get("fc")
+            outcome = evt.get("oc")
 
     return {
         "run_id":         meta.get("run_id", run_id),
@@ -316,6 +319,7 @@ def _run_summary(run_id: str, batches: list[dict]) -> dict:
         "recovered_steps": recovered_steps,
         "failed_step_id": failed_step_id,
         "failure_code":   failure_code,
+        "outcome":        outcome,
         "started_at":     started_at,
         "server_ts":      meta.get("server_ts", 0),
         "chain":          _chain_state(batches),
@@ -691,7 +695,7 @@ def _event_step_index(evt: dict[str, Any]) -> int | None:
 def _assertion_health_by_step(records: list[dict[str, Any]], limit: int | None = 12) -> list[dict[str, Any]]:
     """Aggregate runtime `verify_result` events into a per-step assertion pass-rate view.
 
-    `verify_result` carries `{si, ok, n, advFail}` for every step that ran post-condition
+    `verify_result` carries `{si, ok, n, advFail, ct}` for every step that ran post-condition
     assertions (`runtime/run.js::verifyStep`'s full audit, emitted on the primary execution
     path). This is the fleet-wide early-warning signal for assertion decay: an advisory check
     that's starting to fail more often is visible here before it ever becomes a required-
@@ -717,6 +721,7 @@ def _assertion_health_by_step(records: list[dict[str, Any]], limit: int | None =
                     "total": 0,
                     "passed": 0,
                     "advisory_failures": 0,
+                    "cant_tell": 0,
                     "last_seen": 0,
                 }
                 by_key[key] = entry
@@ -724,6 +729,9 @@ def _assertion_health_by_step(records: list[dict[str, Any]], limit: int | None =
             if evt.get("ok"):
                 entry["passed"] += 1
             entry["advisory_failures"] += int(_number(evt.get("advFail")))
+            # Checks that passed only because they could not look (Proof of Done): a step whose proof is
+            # quietly all "couldn't tell" reads healthy by pass rate alone.
+            entry["cant_tell"] += int(_number(evt.get("ct")))
             entry["last_seen"] = max(int(entry["last_seen"]), _epoch_ms(evt.get("ts")))
 
     rows = [

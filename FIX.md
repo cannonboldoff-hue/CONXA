@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A run now says plainly when it could not be sure a step worked — 2026-11-09**
+Before, a step that the app could not check was quietly counted as a success, so a run could say "Done" when nothing proved the work happened. Now every step is judged on how much was really shown. If a small step could not be confirmed, the run still finishes but says "Done, please check" and lists what to look at. If a step that cannot be undone, like an upload or a delete, could not be confirmed, the run stops and says "Couldn't confirm" instead of pretending, and it never repeats that step by itself. The test screen in the Build Studio shows these in everyday words, with a "What was checked" list one click down.
+— 2026-11-09
+
 **Uploading to Google Drive is no longer called finished while the upload is still running — 2026-11-09**
 Drive shows a small upload window with Minimize, Close and Cancel all buttons. The app mistook it for a question and stopped waiting after a few thousandths of a second, so a run could say "Done" while the file was still on its way. It now knows that window is only a progress report and waits for it to finish. It also no longer treats a quiet page as finished until it has seen some sign the work started, stops waiting in time to tell you the upload was still running instead of going silent, and stops the run if a question is left open on the last step.
 — 2026-11-09
@@ -28,4 +32,8 @@ In a test, the second website could show up zoomed in, with its right side and b
 
 **Very long workflows keep their step-by-step descriptions — 2026-11-09**
 When a workflow had a great many steps, the assistant that describes each step could run out of room mid-answer and hand back nothing. The workflow was still built, but the descriptions were silently missing. Now the assistant is given more room the longer the workflow is, and if its answer still gets cut off, the steps are described in smaller groups and put back together. If any step still cannot be described, you are told.
+— 2026-11-09
+
+**A guided first tour for beginners is now on the to-do list — 2026-11-09**
+New people often open the app and do not know where to start. We wrote down a plan for a practice tour: you pick Beginner, and the app lights up one button at a time, with small notes in the browser telling you what to type. It uses a safe practice website, so nothing real can be broken, and you can pick the practice that matches your job. It is made for people with no technical background.
 — 2026-11-09

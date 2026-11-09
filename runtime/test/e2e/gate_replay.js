@@ -179,7 +179,7 @@ function fail(msg) {
     const texts = ((resp.result && resp.result.content) || [])
       .filter(c => c && c.type === "text").map(c => c.text).join("\n");
     if (resp.error) return fail(`tools/call error: ${JSON.stringify(resp.error)}`);
-    if (/^Done\./m.test(texts)) {
+    if (/^(Done\.|Done, please check\.)/m.test(texts)) {
       console.log("[gate] PASS: selector engine resolved the fixture element — replay reached 'Done.'");
       try { child.kill(); } catch (_) {}
       cleanup();

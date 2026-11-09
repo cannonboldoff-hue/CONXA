@@ -249,6 +249,51 @@ def outputs_from_message(message: str) -> dict[str, str]:
     return out
 
 
+_RUNTIME_OUTCOME_LEADS = (
+    ("done_please_check", "Done, please check."),
+    ("submitted", "Submitted."),
+    ("partly_done", "Partly done."),
+    ("couldnt_confirm", "Couldn't confirm."),
+    ("done", "Done."),
+)
+
+
+def runtime_outcome(result: dict[str, Any], message: str) -> tuple[str | None, list[dict[str, Any]]]:
+    """How the runtime says the run ended (Proof of Done) and what each step proved.
+
+    ``structuredContent.outcome`` is read first; an older engine only has the result text, whose first
+    words say the same. ``None`` is any ordinary failure message. The steps are the runtime's own
+    list, trimmed to what the test card shows; an older engine sends none.
+    """
+    known = {o for o, _ in _RUNTIME_OUTCOME_LEADS}
+    structured = result.get("structuredContent") if isinstance(result.get("structuredContent"), dict) else {}
+    outcome = structured.get("outcome") if structured.get("outcome") in known else None
+    if outcome is None:
+        text = str(message or "").lstrip()
+        outcome = next((o for o, lead in _RUNTIME_OUTCOME_LEADS if text.startswith(lead)), None)
+    steps: list[dict[str, Any]] = []
+    raw = structured.get("steps") if isinstance(structured.get("steps"), list) else []
+    for s in raw[:200]:
+        if isinstance(s, dict):
+            steps.append({"index": s.get("index"), "intent": str(s.get("intent") or ""),
+                          "verdict": str(s.get("verdict") or ""), "rung": s.get("rung")})
+    return outcome, steps
+
+
+def notes_from_message(message: str) -> list[str]:
+    """The plain 'Please check:' notes of a run that finished without every proof (``Done, please check.``)."""
+    out: list[str] = []
+    lines = str(message or "").splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == "Please check:":
+            for row in lines[i + 1:]:
+                if not row.startswith("  - "):
+                    break
+                out.append(row[4:].strip())
+            break
+    return out
+
+
 def capabilities_needed(steps: list[Any]) -> set[str]:
     """App-layer capabilities a skill's steps rely on (nested bodies included). An engine that predates
     them would fail loudly on an unknown step type -- or, for ``run_if``, silently ignore the condition and
@@ -1301,7 +1346,8 @@ class WorkflowsMixin:
             # steps, so it must not count as a passing test.
             sink({"kind": "workflow_test", "message": message})
             return {"status": "previewed", "message": message, "company": company, "skill": workflow.slug, "run_id": _test_run_id}
-        if not message.startswith("Done."):
+        outcome, proof_steps = runtime_outcome(result, message)
+        if outcome not in ("done", "done_please_check", "submitted"):
             failure = message or "Runtime test failed without a result message."
             # EXEC-35: a user-initiated cancel (see cmd_cancel_test_workflow) isn't a real
             # pass/fail signal — don't clobber the last real test result with it.
@@ -1316,7 +1362,8 @@ class WorkflowsMixin:
                 inputs=_redact_sensitive_test_inputs(workflow.skill_id, inputs),
                 run_id=_test_run_id,
             )
-            raise _CommandError("workflow_test_failed", failure, run_id=_test_run_id)
+            raise _CommandError("workflow_test_failed", failure, run_id=_test_run_id,
+                                outcome=outcome if outcome in ("couldnt_confirm", "partly_done") else None)
 
         set_workflow_test_result(
             workflow_id, status="passed",
@@ -1328,6 +1375,11 @@ class WorkflowsMixin:
             "status": "passed", "message": message, "company": company,
             "skill": workflow.slug, "run_id": _test_run_id,
             "outputs": outputs_from_message(message),
+            # Proof of Done: "done" | "done_please_check" | "submitted", the plain notes behind a
+            # "please check", and what each step proved (shown one click down on the test card).
+            "outcome": outcome,
+            "notes": notes_from_message(message),
+            "proof_steps": proof_steps,
         }
 
     def cmd_cancel_test_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:

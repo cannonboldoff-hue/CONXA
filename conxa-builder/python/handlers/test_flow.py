@@ -296,7 +296,8 @@ class TestFlowMixin:
                  "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook,
                  "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
-            return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started, inputs)
+            return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started, inputs,
+                                   outcome=getattr(exc, "outcome", None))
         except Exception as exc:  # noqa: BLE001
             return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs)
         finally:
@@ -309,12 +310,21 @@ class TestFlowMixin:
         elapsed = int(time.time() - started)
         if status == "passed":
             ran_destructive = any(r.get("destructive") and r["status"] == "done" for r in rows)
+            outcome = result.get("outcome") or "done"
+            notes = [str(n) for n in (result.get("notes") or [])][:10]
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
-                 outputs=result.get("outputs") or {}, actions=["approve", "test_again"])
-            harness.emit_item(sink, thread, ts.append(
-                thread, "assistant_message",
-                text="It works. Approve it when you’re happy — that adds it to the next skill package release. "
-                     "Approving doesn’t publish anything on its own."))
+                 outputs=result.get("outputs") or {}, actions=["approve", "test_again"],
+                 outcome=outcome, notes=notes, proof_steps=result.get("proof_steps") or [])
+            if outcome == "done_please_check" and notes:
+                text = ("It ran to the end, but I couldn’t confirm everything: " + " ".join(notes)
+                        + " Take a look before you approve it. Approving doesn’t publish anything on its own.")
+            elif outcome == "submitted":
+                text = ("It ran, and the app accepted the work. It finishes on its own, so check the result before "
+                        "you approve it. Approving doesn’t publish anything on its own.")
+            else:
+                text = ("It works. Approve it when you’re happy — that adds it to the next skill package release. "
+                        "Approving doesn’t publish anything on its own.")
+            harness.emit_item(sink, thread, ts.append(thread, "assistant_message", text=text))
             return "passed"
         if status == "needs_sign_in":
             runtime_state.set_flags(workflow_id, sign_in_expired=True)
@@ -434,7 +444,7 @@ class TestFlowMixin:
             return False
 
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
-                   inputs: dict[str, Any] | None = None) -> str:
+                   inputs: dict[str, Any] | None = None, outcome: str | None = None) -> str:
         from conxa_compile.conversation import harness
         from conxa_compile.conversation.failure_summary import summarize
 
@@ -444,9 +454,14 @@ class TestFlowMixin:
         # Only claim "nothing was sent" when no step that can't be undone even started: a failure
         # AT such a step may have half-happened.
         nothing_sent = not any(r.get("destructive") for r in rows)
+        # "Couldn't confirm" / "Partly done" already read in plain words and say something an ordinary
+        # failure summary would flatten: the work may have happened. Keep their own sentences.
+        own = outcome in ("couldnt_confirm", "partly_done")
+        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message)
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:600],
-            summary=summarize(message), failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent, seconds=int(time.time() - started),
+            summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent and not own,
+            seconds=int(time.time() - started), outcome=outcome or "failed",
             failure_image=self._tf_failure_image(workflow_id), actions=[],
         )
         if failing is not None and failing.get("step_key"):

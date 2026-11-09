@@ -106,6 +106,11 @@ test("a legacy/fresh record without next_run_at gets rescheduled, not fired", ()
 
 test("classifyRunResult reads engine responses by their stable markers", () => {
   assert.strictEqual(classifyRunResult("Done. URL: https://x\n(run_id: r_1)"), "completed");
+  assert.strictEqual(classifyRunResult("Done, please check. URL: https://x\n\nPlease check:\n  - note\n(run_id: r_1)"), "completed");
+  assert.strictEqual(classifyRunResult("Submitted. The upload goes on. (run_id: r_1)"), "completed");
+  for (const unsure of ["Couldn't confirm. I couldn't confirm that \"Send\" finished.", "Partly done. 2 of 3."]) {
+    assert.strictEqual(classifyRunResult(unsure), "failed", `${unsure} must not read as success`);
+  }
   assert.strictEqual(classifyRunResult("Too many workflows are already running (5/5): …"), "busy");
   assert.strictEqual(classifyRunResult("Execution stopped after exceeding the 210s time budget…"), "failed");
   assert.strictEqual(classifyRunResult(""), "failed");

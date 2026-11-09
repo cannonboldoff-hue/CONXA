@@ -353,11 +353,47 @@ test("runPlan: Drive's upload tray after the final step is waited out and the ru
   assert.ok(done[1].waited >= 500, `returned before the tray cleared: ${done[1].waited}ms`);
 });
 
-test("runPlan: a final step that shows no sign of starting is reported with a warning, never as a plain pass", async () => {
+test("runPlan: a low-risk final step with no sign of starting finishes with a plain note, never as a plain pass", async () => {
   const events = [];
   const page = runPage([CLEAN, CLEAN]);
   const tracker = { emit: (code, data) => events.push([code, data]) };
   const result = await runPlan(page, ACT, {}, 0, "slug-completion-nosign", { tracker });
-  assert.ok(result.warnings.some((w) => /couldn't confirm this step finished/.test(w)), JSON.stringify(result.warnings));
+  assert.deepStrictEqual(result.proof.notes, [`I couldn't confirm that "Upload the file" finished.`]);
+  assert.deepStrictEqual([result.proof.steps[0].verdict, result.proof.steps[0].required], ["couldnt_confirm", "completed"]);
   assert.strictEqual(events.find(([c]) => c === "completion")[1].st, "no_sign");
+  assert.strictEqual(events.find(([c]) => c === "proof")[1].v, "couldnt_confirm");
+});
+
+test("runPlan: a step that cannot be undone and shows no sign of finishing stops the run as 'couldn't confirm'", async () => {
+  const events = [];
+  const page = runPage([CLEAN, CLEAN]);
+  const tracker = { emit: (code, data) => events.push([code, data]) };
+  const risky = [{ type: "keyboard_shortcut", value: "Enter", intent: "Send the invoice", destructive: true }];
+  await assert.rejects(
+    runPlan(page, risky, {}, 0, "slug-completion-risky", { tracker }),
+    (err) => {
+      assert.strictEqual(err.couldntConfirm, true);
+      assert.strictEqual(err.completionGate, true);
+      assert.match(err.message, /I couldn't confirm that "Send the invoice" finished/);
+      assert.strictEqual(err.proof.steps[0].verdict, "couldnt_confirm");
+      return true;
+    },
+  );
+  assert.deepStrictEqual(page.pressed, ["Enter"], "never repeated");
+  assert.ok(events.some(([c, d]) => c === "step_fail" && d.fc === "couldnt_confirm"));
+  assert.ok(!events.some(([c]) => c === "tier_ok"), "not reported ok");
+});
+
+test("runPlan: a run nobody is watching ends on 'couldn't confirm' even for a low-risk step", async () => {
+  const page = runPage([CLEAN, CLEAN]);
+  const tracker = { emit: () => {} };
+  await assert.rejects(runPlan(page, ACT, {}, 0, "slug-completion-sched", { tracker, scheduled: true }), (e) => e.couldntConfirm === true);
+});
+
+test("runPlan: an upload that finishes is proven at 'completed'", async () => {
+  const page = runPage([CLEAN, TRAY, DONE_TRAY]);
+  const tracker = { emit: () => {} };
+  const result = await runPlan(page, ACT, {}, 0, "slug-completion-proven", { tracker });
+  assert.deepStrictEqual(result.proof.notes, []);
+  assert.deepStrictEqual([result.proof.steps[0].verdict, result.proof.steps[0].rung], ["proven", "completed"]);
 });

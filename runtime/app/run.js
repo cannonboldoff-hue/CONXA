@@ -46,7 +46,8 @@ const {
   COMPLETION_START_GRACE_MS,
 } = require("./run_config");
 const { waitForSettle } = require("./settle");
-const { waitForCompletion, captureCompletionBaseline, completionMessage, completionWarning } = require("./completion");
+const { waitForCompletion, captureCompletionBaseline, completionMessage } = require("./completion");
+const proof = require("./proof");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -230,21 +231,18 @@ async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
 // waits (bounded) for visible progress to clear. The action already happened, so a failure here never
 // enters recovery: re-running it could upload or submit twice (callers rethrow `completionGate`).
 //
-// Only a "full" step (an upload, the plan's last acting step) is reported on when the gate can't say it
-// finished: "no_sign", "cant_tell" and "still_working" become a plain warning on the run, never a
-// silent pass. A "short" step stays quiet (the next step's own checks take over) and only leaves the
-// `completion` telemetry event.
+// Returns what the gate found (so proveStep can count it as a check), or null when it did not run.
+// "no_sign", "cant_tell" and "still_working" are not failures here: proveStep turns them into a
+// verdict, so they are never a silent pass and never a false failure.
 async function confirmCompleted(ctx, state, step, i, page, completion, preShot) {
   const full = step.type === "upload" || step === ctx.lastActStep;
   const mode = full ? "full" : "short";
   const warn = (text) => { if (text && !state.warnings.includes(text)) state.warnings.push(text); };
   if (!completion.baseline) {
     // The page could not be read before the action, so nothing after it can be measured.
-    if (completion.attempted) {
-      ctx.tracker.emit("completion", { si: i, mode, st: "cant_tell", waited: 0 });
-      if (full) warn(completionWarning({ status: "cant_tell" }));
-    }
-    return;
+    if (!completion.attempted) return null;
+    ctx.tracker.emit("completion", { si: i, mode, st: "cant_tell", waited: 0 });
+    return { status: "cant_tell", reason: "no_baseline" };
   }
   const upload = step.type === "upload";
   const v = await waitForCompletion(page, {
@@ -264,17 +262,14 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
     // A popup left open by the plan's final step has no next step to answer it: put it to the same
     // rules as any other unrecorded popup. Anywhere else the next step's own popup handling owns it.
     if (v.reason === "decision_popup" && step === ctx.lastStep) await popupLeftBehind(ctx, state, step, i, page, preShot);
-    return;
+    return v;
   }
   if (v.reason === "cancelled") {
     // Cancelled (or out of time) while waiting: stop here, not "Done". Same error the step loop throws.
     throw Object.assign(new Error("Execution cancelled"), { cancelled: true, completionGate: true });
   }
   const deadlineHit = v.status === "still_working" && v.reason === "deadline";
-  if (v.status !== "failed" && v.status !== "timed_out" && !(deadlineHit && full)) {
-    if (full) warn(completionWarning(v));
-    return;
-  }
+  if (v.status !== "failed" && v.status !== "timed_out" && !(deadlineHit && full)) return v;
   ctx.tracker.emit("step_fail", { si: i, fc: v.status === "failed" ? "completion_failed" : "completion_timeout" });
   const cause = Object.assign(new Error(completionMessage(v)), {
     fault: true,
@@ -282,6 +277,93 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
     actionMayHaveTakenEffect: true,
   });
   throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
+}
+
+// ── Proof of Done ──────────────────────────────────────────────────────────────────────────────────
+// What this step has actually proven, by the fixed rules in proof.js. The step already ran and passed
+// its own check; this decides whether the run may call it proven. It only reads answers already
+// collected (VERIFY, the completion gate): it never touches the page, never retries, never asks.
+
+// One verify_result per step that carries assertions, on every path that verifies, pass or fail, so
+// assertion decay is visible as a drift signal. `ct` counts checks that could not look.
+function emitVerifyResult(ctx, i, verdict) {
+  if (!verdict || !Array.isArray(verdict.results) || !verdict.results.length) return;
+  ctx.tracker.emit("verify_result", {
+    si: i,
+    ok: verdict.pass,
+    n: verdict.results.length,
+    advFail: verdict.results.filter((r) => !r.ok && !r.required).length,
+    ct: verdict.results.filter((r) => r.answer === "cant_tell").length,
+  });
+}
+
+// What the completion gate found, as one check's answer. A popup the next step owns is "not yet", never
+// a failure and never a pass.
+function gateAnswer(gate) {
+  if (!gate) return null;
+  switch (gate.status) {
+    case "done": return "yes";
+    case "no_sign": case "cant_tell": return "cant_tell";
+    case "still_working": case "handoff": return "not_yet";
+    default: return null;
+  }
+}
+
+function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null } = {}) {
+  const hasReq = hasRequiredAssertion(step);
+  const full = (step.type === "upload" || step === ctx.lastActStep) && !!gate;
+  const checks = [{ rung: "performed", witness: "target", role: "support", answer: "yes" }];
+  if (verify && Array.isArray(verify.results) && verify.results.length) {
+    for (const r of verify.results) {
+      checks.push({ rung: "accepted", witness: r.type === "value_equals" ? "target" : "renderer", role: "support", answer: r.answer || (r.ok ? "yes" : "no") });
+    }
+  } else if (verify) {
+    checks.push({ rung: "accepted", witness: "renderer", role: "support", answer: verify.answer || "cant_tell" });
+  } else if (recovered) {
+    // Recovery re-verifies a required assertion before it reports success; without one nothing was read.
+    checks.push({ rung: "accepted", witness: "renderer", role: "support", answer: hasReq ? "yes" : "cant_tell" });
+  }
+  const g = gateAnswer(gate);
+  if (g) checks.push({ rung: "completed", witness: "renderer", role: "support", answer: g });
+
+  const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
+  const j = proof.judge(checks, { requiredRung: required });
+  const onUnverified = step.validation && step.validation.effect && step.validation.effect.on
+    && String(step.validation.effect.on.unverified || "").startsWith("handover") ? "handover" : "fail";
+  const move = proof.nextMove(j.verdict, { idempotent: proof.safeToRepeat(step), attended: !ctx.scheduled, onUnverified });
+
+  state.proof.steps.push({
+    index: i,
+    intent: step.intent || null,
+    verdict: j.verdict,
+    rung: j.rung,
+    required,
+    checks: checks.map(({ rung, witness, answer }) => ({ rung, witness, answer })),
+  });
+  ctx.tracker.emit("proof", {
+    si: i, rung: j.rung, v: j.verdict,
+    w: [...new Set(checks.filter((c) => c.answer === "yes").map((c) => c.witness))],
+  });
+
+  if (move.do === "continue") {
+    if (move.note) state.proof.notes.push(proof.unconfirmedNote(step, i));
+    return;
+  }
+  if (move.do === "wait") return; // the next step's own checks (or a popup it owns) take over
+  // Anything else fails closed. Today only "couldn't confirm" on a step that is not safe to do twice
+  // (an upload, a destructive step) or on a run nobody is watching gets here.
+  state.proof.stopped = { index: i };
+  ctx.tracker.emit("step_fail", { si: i, fc: "couldnt_confirm" });
+  const cause = Object.assign(
+    new Error(`${proof.unconfirmedNote(step, i)} It ran, but nothing confirmed it finished, so the run stopped instead of reporting success. `
+      + "Check it before running this again."),
+    { fault: true, faultKind: "unconfirmed", actionMayHaveTakenEffect: true },
+  );
+  throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), {
+    completionGate: true,
+    couldntConfirm: true,
+    proof: { steps: state.proof.steps.slice(), notes: state.proof.notes.slice() },
+  });
 }
 
 // The plan's final step ended with a popup that asks a question and nothing is left to answer it.
@@ -688,14 +770,7 @@ async function executeOneStep(ctx, state, steps, i) {
     const verdict = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
     // Fleet-visible audit: one event per step that actually carries assertions, pass or fail,
     // so advisory-assertion decay shows up as a drift signal before it becomes a hard failure.
-    if (verdict.results.length) {
-      ctx.tracker.emit("verify_result", {
-        si: i,
-        ok: verdict.pass,
-        n: verdict.results.length,
-        advFail: verdict.results.filter(r => !r.ok && !r.required).length,
-      });
-    }
+    emitVerifyResult(ctx, i, verdict);
     if (!verdict.pass) {
       ctx.tracker.emit("verify_fail", { si: i, ch: verdict.channel });
       throw Object.assign(new Error(`Verification failed: ${verdict.channel}`), {
@@ -703,7 +778,8 @@ async function executeOneStep(ctx, state, steps, i) {
         verifyResults: verdict.results,
       });
     }
-    await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+    const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+    proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot });
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -805,7 +881,9 @@ async function executeOneStep(ctx, state, steps, i) {
         ctx.tracker.emit("settle_retry", { si: i, waited: settle.waitedMs, phase: "verify", ok: settle.settled });
         const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue).catch(() => null);
         if (verdict2 && verdict2.pass) {
-          await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+          emitVerifyResult(ctx, i, verdict2);
+          const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+          proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot });
           ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
           state.hasExecutedStep = true;
           state.prevStepType = step.type;
@@ -817,8 +895,10 @@ async function executeOneStep(ctx, state, steps, i) {
         try {
           await executeStep(page, step, state.inputs, { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue });
           const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
+          emitVerifyResult(ctx, i, verdict2);
           if (verdict2.pass) {
-            await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+            const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+            proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot });
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;
@@ -891,7 +971,9 @@ async function executeOneStep(ctx, state, steps, i) {
     driftHint: remedyFor(klass),
   }));
 
-  await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+  emitVerifyResult(ctx, i, guard.lastVerify);
+  const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
+  proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot });
   state.recoveredSteps++;
   state.hasExecutedStep = true;
   state.prevStepType = step.type;
@@ -1357,6 +1439,8 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
   // The action already ran and the popup was only in the way of seeing its result: check it, never redo it.
   const verdict = await verifyStep(page, step, state.inputs, null, ctx.dialogQueue).catch(() => null);
   if (verdict && verdict.pass) {
+    emitVerifyResult(ctx, i, verdict);
+    proveStep(ctx, state, step, i, { verify: verdict });
     ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_after_popup" });
     state.hasExecutedStep = true;
     state.prevStepType = step.type;
@@ -1639,7 +1723,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
   await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
 }
 
-async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, deadlineAt, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {
+async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, deadlineAt, scheduled, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {
   // BUILD-26 stage (f): threaded into recoverStep -> cascade.js's dismiss-overlay remedy, which
   // is the one place the runtime captures an unexpected overlay's identity even on a run that
   // ultimately passes. Optional — omitted (e.g. a Studio caller that predates this) simply
@@ -1674,6 +1758,9 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     // name exactly what a dry run withheld.
     dryRunSkipped: [],
     skippedByInput: [],
+    // Proof of Done: what each step proved (see proveStep), plain notes for a low-risk step that could
+    // not be confirmed, and where the run stopped because a risky one could not be.
+    proof: { steps: [], notes: [], stopped: null },
   };
 
   // Multi-tab: each step declares which tab it runs on (step.tab — see tabs.js). The registry
@@ -1756,6 +1843,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     lastActStep,
     lastStep: steps[steps.length - 1] || null, // a popup left open by this step has no next step to answer it
     deadlineAt: deadlineAt || null, // the run's own time limit: the completion wait stops short of it
+    scheduled: scheduled === true,  // nobody can be asked: "couldn't confirm" on any step ends the run
     onStep, onPhase, cancelCheck, tracker: t, downloadQueue, dialogQueue,
     tabs, watch, dryRun, slug, runCtx, context, // context: EXEC-21 handover needs it to arm its banner
     guard, // RT-9: Studio-only pause before the first step that can't be undone (see executeOneStep)
@@ -1786,6 +1874,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   return {
     recoveredSteps: state.recoveredSteps, warnings: state.warnings, dryRunSkipped: state.dryRunSkipped,
     skippedByInput: state.skippedByInput, outputs: collectOutputs(steps, state.inputs),
+    proof: { steps: state.proof.steps, notes: state.proof.notes },
     ...(endedAt !== null ? { endedAt } : {}),
   };
 }

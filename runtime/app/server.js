@@ -665,6 +665,7 @@ async function _buildFailureResponse(page, errObj, resolvedEntry, runTracker, st
 // recovery -- and a human (not a model) answers it; see fork_pause.js's header.
 const { validateForkAnswer, buildForkRequest, checkReviewRetry, clearReviewRetry, REVIEW_RETRY_MAX } = require("./fork_pause");
 const appKnowledgeFile = require("./app_knowledge");
+const proofMod = require("./proof");
 
 // EXEC-21 (hand-over shape): the human sibling of the agent span, same reasoning for staying
 // its own module — a hand-over is a planned pause, not a failure, and must never touch
@@ -710,7 +711,11 @@ function _awaitingAuthMessage(names, runId, alreadyOpen) {
 }
 const _textOf = (res) => ((res && res.content) || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
 // Success is the "Done." prefix (Build Studio's Run Test reads it the same way) — err() is just text().
-const _resultStatus = (t) => (/^Done\./.test(t) ? "completed" : /^Execution cancelled/.test(t) ? "cancelled" : "failed");
+const _resultStatus = (t) => {
+  const oc = proofMod.outcomeFromText(t);
+  if (oc === "done" || oc === "done_please_check" || oc === "submitted") return "completed";
+  return /^Execution cancelled/.test(t) ? "cancelled" : "failed";
+};
 
 // -> { runId, names, joined }. `joined` when an identical request was already waiting: the caller
 // is pointed at that run instead of queueing a duplicate that would fire twice on sign-in.
@@ -1301,6 +1306,10 @@ async function _handleTool(name, args, extra) {
     // PROD-3-DRYRUN: every destructive step skipped (resolved but never acted on) across every
     // skill in this run, so a dry-run's response can name exactly what it withheld.
     const _dryRunSkipped = [];
+    // Proof of Done: what each step proved, and plain notes for steps that finished without the proof they
+    // needed (see proof.js / run.js::proveStep). Across every skill in this run.
+    const _proofSteps = [];
+    const _proofNotes = [];
     if (_overrideAppliedCount) _runTracker.emit("override_applied", { n: _overrideAppliedCount });
 
     // Signal agent-mediated recovery retry (Tier 3/4) when resuming mid-plan.
@@ -2005,6 +2014,7 @@ async function _handleTool(name, args, extra) {
             onPhase:       _phase,
             cancelCheck:   _execCancelled,
             deadlineAt:    exec.deadlineAt,
+            scheduled:     trigger === "scheduled",
             tracker:       _runTracker,
             downloadQueue: _downloadQueue,
             dialogQueue: _dialogQueue,
@@ -2034,6 +2044,10 @@ async function _handleTool(name, args, extra) {
           if (result && Array.isArray(result.skippedByInput)) _skippedByInput.push(...result.skippedByInput);
           if (result && Array.isArray(result.warnings)) {
             for (const w of result.warnings) if (!_allWarnings.includes(w)) _allWarnings.push(w);
+          }
+          if (result && result.proof) {
+            _proofSteps.push(...result.proof.steps.map((p) => ({ ...p, skill: entry.slug })));
+            for (const n of result.proof.notes) if (!_proofNotes.includes(n)) _proofNotes.push(n);
           }
           if (result && Array.isArray(result.dryRunSkipped) && result.dryRunSkipped.length) {
             _dryRunSkipped.push(...result.dryRunSkipped.map(s => ({ ...s, slug: entry.slug })));
@@ -2123,10 +2137,13 @@ async function _handleTool(name, args, extra) {
         appendRecoveryEvent({ event: "run_success", slug: r.entry.slug, steps_executed: r.steps.length });
       }
 
+      // The run's outcome from what its steps proved. A dry run withheld its risky steps, so it claims no more.
+      const _outcome = _dryRunSkipped.length ? "done" : proofMod.runOutcome({ notes: _proofNotes.length });
       _runTracker.emit("wf_ok", {
         dur: Date.now() - _wfStartAt,
         tot: resolved.reduce((n, r) => n + r.steps.length, 0),
         rec: _totalRecovered,
+        oc: _outcome,
       });
       // Flush happens once, in `finally`, for every exit path — see there.
 
@@ -2142,7 +2159,10 @@ async function _handleTool(name, args, extra) {
         ? `\n\nDry run: ${_dryRunSkipped.length} committing step(s) skipped (resolved but never acted on):\n` +
           _dryRunSkipped.map(s => `  - ${s.intent || `step ${s.index + 1}`}`).join("\n")
         : "";
-      const doneVerb = _dryRunSkipped.length ? "Dry run complete" : "Done";
+      const leadWord = _dryRunSkipped.length ? "Dry run complete." : proofMod.leadWord(_outcome);
+      const checkNote = _proofNotes.length && !_dryRunSkipped.length
+        ? `\n\nPlease check:\n${_proofNotes.map(n => `  - ${n}`).join("\n")}`
+        : "";
       // What the run found, in the text (every client sees it) and as structured content (a caller that
       // wants to act on it). Absent entirely when no step extracted anything, so a run without outputs
       // returns exactly what it always did.
@@ -2153,9 +2173,14 @@ async function _handleTool(name, args, extra) {
       const skippedNote = _skippedByInput.length
         ? `\n\nSkipped because an input was empty or different:\n${_skippedByInput.map(x => `  - ${x.intent || `step ${x.index + 1}`} (${x.input})`).join("\n")}`
         : "";
-      const content = [{ type: "text", text: `${doneVerb}. URL: ${url}${downloadNote}${outputNote}${skippedNote}${warningNote}${dryRunNote}\n(run_id: ${_runId})` }];
+      const content = [{ type: "text", text: `${leadWord} URL: ${url}${downloadNote}${outputNote}${skippedNote}${checkNote}${warningNote}${dryRunNote}\n(run_id: ${_runId})` }];
       if (shot) content.push({ type: "image", data: shot.toString("base64"), mimeType: "image/png" });
-      return outputNames.length ? { content, structuredContent: { outputs: { ..._outputs } } } : { content };
+      // `outcome` first for any caller that reads structure, the leading words above for everyone else.
+      return { content, structuredContent: {
+        outcome: _outcome,
+        steps: _proofSteps.slice(0, 200),
+        ...(outputNames.length ? { outputs: { ..._outputs } } : {}),
+      } };
 
     } catch (runErr) {
       _phase(`steps_failed:${mapErrorToCode(runErr)}`);
@@ -2164,7 +2189,8 @@ async function _handleTool(name, args, extra) {
       _runTracker.emit("wf_fail", {
         dur: Date.now() - _wfStartAt,
         fsi: runErr.failedAt ?? null,
-        fc:  mapErrorToCode(runErr),
+        fc:  runErr.couldntConfirm ? "couldnt_confirm" : mapErrorToCode(runErr),
+        ...(runErr.couldntConfirm ? { oc: "couldnt_confirm" } : {}),
       });
       // Do NOT flush/destroy the tracker here — the Tier 3/4 recovery-request and
       // park-created events (below, and inside _buildFailureResponse) haven't been emitted
@@ -2447,6 +2473,16 @@ async function _handleTool(name, args, extra) {
             const { summary, detail } = plainCause(runErr);
             return err(`Execution failed: ${summary} (${detail})`);
           })();
+      if (failResp && Array.isArray(failResp.content) && runErr.couldntConfirm) {
+        // The step ran but nothing confirmed it finished, and it can't safely be repeated: say so in the
+        // first words (Proof of Done), not as an ordinary failure. Still an error result: a caller that
+        // only checks success must not read it as one.
+        failResp.content.unshift({ type: "text", text: `${proofMod.leadWord("couldnt_confirm")} ${runErr.rawMessage || runErr.message}` });
+        failResp.structuredContent = {
+          outcome: "couldnt_confirm",
+          steps: [..._proofSteps, ...((runErr.proof && runErr.proof.steps) || [])].slice(0, 200),
+        };
+      }
       if (failResp && Array.isArray(failResp.content)) {
         // EXEC-36/BUILD-28(a) — same warnings a passing run would have surfaced, so a run that
         // failed BECAUSE of a drift/environment mismatch says so instead of reading like an

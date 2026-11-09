@@ -78,6 +78,7 @@ async function guardDecision(page, step, inputs, baseline, guard) {
   if (!guard || !guard.guarded || !guard.acted) return "go";
 
   const verdict = await verifyStep(page, step, inputs, baseline);
+  if (guard) guard.lastVerify = verdict; // run.js reports it (verify_result, proof) once recovery succeeds
   if (verdict.results.length) {
     // Post-conditions exist and ALL hold → the action landed; the earlier failure was a slow
     // render, not a broken step. Deliberately checks `results`, not `verdict.pass`: assertions
@@ -120,6 +121,7 @@ async function recoverWithSelector(page, step, inputs, selector, onSuccess, base
     if (guard) guard.acted = true;
     if (hasRequiredAssertion(step)) {
       const verdict = await verifyStep(page, step, inputs, baseline);
+      if (guard) guard.lastVerify = verdict;
       if (!verdict.pass) return false;
     }
     if (onSuccess) onSuccess();
@@ -171,6 +173,7 @@ async function recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, bas
     if (guard) guard.acted = true;
     if (hasRequiredAssertion(step)) {
       const verdict = await verifyStep(page, step, inputs, baseline);
+      if (guard) guard.lastVerify = verdict;
       if (!verdict.pass) return false;
     }
     appendRecoveryEvent({ event: "tier2_a11y", slug, step_index: stepIndex, recovery_method: method });

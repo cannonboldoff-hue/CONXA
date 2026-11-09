@@ -8,7 +8,9 @@ const CHAT_TOOLS = new Set(["list_skills", "get_skill_inputs", "execute_skill", 
 function classifyRunResult(text) {
   const t = String(text || "");
   const trimmed = t.trim();
-  if (trimmed.startsWith("Done.")) return "completed";
+  // "Done, please check." finished with a note; "Submitted." was accepted and finishes on its own.
+  // "Couldn't confirm." and "Partly done." are not success. Same rule as the runtime scheduler.
+  if (/^(Done\.|Done, please check\.|Submitted\.)/.test(trimmed)) return "completed";
   if (t.includes("Too many workflows are already running")) return "busy";
   // The runtime detached the run: sign-in tabs are open and the workflow starts by itself afterwards.
   if (/^(Authentication required — please sign in|Waiting for authentication to complete)/.test(trimmed)) return "awaiting_auth";

@@ -1216,6 +1216,30 @@ recovery cascade. `call_workflow` is checked at build (`conxa_compile/call_workf
 workflow exists, no circle, at most 3 levels deep, no pause inside it, inputs and results match) and again at
 run start (`runtime/app/call_workflow.js`).
 
+### 3.4z Run outcome (`execute_skill` result, Proof of Done)
+
+A run no longer ends in just "Done" or an error. Every step is judged on a ladder: `performed` (we did it) <
+`accepted` (the app took it) < `completed` (the work finished) < `result_exists` (the right thing is there), from
+checks that each answer `yes`, `no`, `not_yet` or `cant_tell`. "Couldn't tell" is its own answer and never counts as
+success. The fixed rules live in `runtime/app/proof.js` (`judge`, `nextMove`, `runOutcome`); no AI and no scores.
+
+| Outcome | First words of the result text | Means |
+|---|---|---|
+| `done` | `Done.` | Every step reached the proof it needed |
+| `done_please_check` | `Done, please check.` | Finished, but a low-risk step could not be confirmed (a plain `Please check:` list follows) |
+| `submitted` | `Submitted.` | The app accepted the work and will finish it on its own (produced by long-wait parking, Proof of Done stage 5) |
+| `partly_done` | `Partly done.` | Some items of a batch were proven and some were not (stage 5) |
+| `couldnt_confirm` | `Couldn't confirm.` | A step that cannot be repeated (an upload, a destructive step) ran but could not be confirmed, or nobody was watching (a scheduled run): the run stops. Still an error result |
+| failure | anything else | Unchanged |
+
+`structuredContent` is now always present: `{ outcome, steps: [{index, intent, verdict, rung, required, checks: [{rung,
+witness, answer}]}] (at most 200), outputs? }`. A caller reads `structuredContent.outcome` first and the first words as
+the fallback (an older runtime sends only the words). Older step packs have no `validation.effect` block, so a step needs
+`completed` where the completion gate waits for it (an upload, the plan's last acting step), `accepted` where a required
+assertion exists, and otherwise only `performed`. Parsers updated together: `server.js::_resultStatus`,
+`scheduler_daemon.js::classifyRunResult`, `conxa-execute/app/electron/classify.js`, `handlers/workflows.py::runtime_outcome`
+and the CI replay gate (`runtime/test/e2e/gate_replay.js`).
+
 ### 3.5 RecoveryBlock
 
 ```python
@@ -1521,7 +1545,8 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `recovery_tier{N}` | Recovery rung N attempted (legacy numbers; 1–2 = A, 3–4 = B) | `si` |
 | `tier_ok` | A resolution/recovery tier succeeded | `si`, `tier`, `sel` |
 | `verify_fail` | Post-action VERIFY failed | `si`, `ch` (assertion channel) |
-| `verify_result` | Full post-action assertion audit for a step that carries assertions (emitted on the primary execution path, pass or fail — not on recovery re-verification) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions) |
+| `verify_result` | Full post-action assertion audit for a step that carries assertions, pass or fail, on every path that verifies (primary, settle re-verify, recovery, after a popup) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions), `ct` (checks that passed only because they could not look: `cant_tell`) |
+| `proof` | What a step proved (Proof of Done, `runtime/app/proof.js`), once per step that was judged | `si`, `rung` (highest proved: `performed`/`accepted`/`completed`/`result_exists`, or null), `v` (verdict: `proven`/`still_working`/`failed_nothing_happened`/`failed_may_have_happened`/`blocked`/`partly_done`/`couldnt_confirm`), `w` (witnesses that answered yes) |
 | `completion` | Completion gate ran after a step that can start work (upload, submit, click…); `st` is `done`, `failed`, `timed_out`, `still_working`, `no_sign`, `cant_tell` or `handoff` | `si`, `mode` (`short`/`full`), `st`, `waited` (ms) |
 | `repair_event` | A step was recovered — drift signal for the admin flywheel queue | `step_id`, `tier` (`L1`/`L2` inside Tier A, or agent for B), `method`, `score`, `margin`, `stable_hash_match`, `stable_hash`, `drift_hint`, `app_version_fingerprint` |
 | `overlay_dismissed` | (EXEC-30) A `step_overrides.dismiss` pick cleared an unrecognized overlay before the resumed step's own action | `si`, `src` (`"agent"`) |
@@ -1552,8 +1577,8 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `span_done` | A span ended: its check held (`n` actions used) or it failed (`fc` the typed reason) | `si`, `n`, `fc` |
 | `call_start` | A `call_workflow` step began running the called workflow's steps | `si`, `n` (steps in the called workflow) |
 | `call_done` | The called workflow's steps all finished | `si` |
-| `wf_ok` | Workflow completed successfully | `dur` (ms), `tot`, `rec` (recovered steps) |
-| `wf_fail` | Workflow failed | `dur`, `fsi` (failed step index), `fc` (failure code) |
+| `wf_ok` | Workflow completed successfully | `dur` (ms), `tot`, `rec` (recovered steps), `oc` (outcome: `done` or `done_please_check`; absent from a runtime that predates Proof of Done, which the cloud reads as `done`) |
+| `wf_fail` | Workflow failed | `dur`, `fsi` (failed step index), `fc` (failure code; `couldnt_confirm` when a step that cannot be repeated ran but could not be confirmed), `oc` (`couldnt_confirm` only) |
 
 **Scheduled-run identification (PROD-5):** runs fired by the standalone scheduler daemon pass
 `_trigger: "scheduled"` to `execute_skill`; the value lands in the engine's LOCAL

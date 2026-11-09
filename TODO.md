@@ -43,10 +43,10 @@ Counts are of still-open items only. Resolved items live in [`Done.md`](Done.md)
 |---|---|
 | P0 — Critical / Time-Sensitive | 14 |
 | P1 — Blocking / Foundational | 1 |
-| P2 — High Value, Do Soon (incl. Discovered Items) | 47 |
+| P2 — High Value, Do Soon (incl. Discovered Items) | 49 |
 | P3 — Valuable, Sequence Around Other Work (incl. Discovered Items) | 21 |
 | P4 — Low Urgency, Opportunistic | 33 |
-| **Total** | **116** |
+| **Total** | **118** |
 
 ---
 
@@ -375,7 +375,29 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** L — approve/reject is the small half and reuses EXEC-13's machinery almost wholesale; judgement input needs the typed input contract and schema validation; hand-over is the genuinely new part and carries the real risk (yielding and reclaiming a live page mid-run).
 - **Success criteria:** a workflow authored with each of the three review shapes compiles, publishes, and replays on a customer machine; at each review point the run pauses and the person is prompted in the browser the runtime is driving, with the page in the state the run left it; a judgement value supplied by the person is bound as a named input and demonstrably changes a later step's behaviour; a rejected approval aborts cleanly with an audit record; a hand-over returns control to the run with the page re-validated before the next step acts; a review that is never answered times out per its configured `on_failure` policy and leaks no browser; the workflow remains testable in the Build Studio sandbox; and telemetry distinguishes a planned review from a recovery-triggered handoff.
 
-## P2 — High Value, Do Soon (38 remaining)
+## P2 — High Value, Do Soon (40 remaining)
+
+### BUILD-79 — Guided first-run tour for Beginners: practice site on Conxa Cloud, locked step-by-step walkthrough, pick-your-demo
+- **Category:** Builder (Build Studio) + Cloud
+- **Audience (not for developers):** This is for non-technical newcomers only. A technical person picks the experienced path at first launch and never sees the tour; it must not slow them down or add dev-only controls. Every word the tour shows is plain everyday language: no selectors, step IDs, logs or internal names (see "Who we build for" in `CLAUDE.md`). Nothing in the tour removes or hides a power-user control; it only guides a first-timer past them.
+- **Description:** When someone opens Build Studio for the first time and picks **Beginner**, instead of an empty app they get a hands-on tour that teaches by doing. The tour runs on a **practice website hosted on Conxa Cloud**, a safe fake site that exists only for teaching, holds no real data and can be reset at any time.
+  1. **Locked, spotlight walkthrough.** The whole Build Studio screen dims except the one thing the person must click next. They can click only that thing; everything else is blocked. Order: click **New Group** → **Create group** → **add Conxa** to the group → open the practice site's login page → sign in. After each correct click the next control lights up. Each step shows one short sentence in plain words.
+  2. **Hints inside the browser too.** On the practice site, a small floating note appears in the browser window itself (for example "Type your Conxa email here"), then the next one, so the person is led through filling the real fields on Conxa Cloud one at a time. The person cannot click anywhere on the page except the highlighted field or button.
+  3. **Many demos, person picks.** The tour is a list of demos, each a short script of steps. After choosing Beginner the person sees a "pick the one closest to your job" screen (for example log in and add a contact, fill a support form, download a report). Each demo uses its own practice pages.
+  4. **Replay and exit.** A person can replay any demo later from Help. Whether the tour is strictly locked or has a quiet "Skip tour" link is an open question for the founders (locking vs. the "depth is opt-in, never removed" rule).
+- **Why required:** A first-timer does not know what a "group" is or why they need one. Learning it once on a safe fake site is far less scary than a blank app, and nothing real can be broken. This directly serves the rule that record, answer questions, test, publish and install must be finishable without technical knowledge.
+- **Business value:** Higher first-session success and fewer abandoned installs. The person reaches a first working result in minutes. Demos matched to a job make the product feel built for them.
+- **Technical value:** One reusable tour engine (a list of steps, each naming the thing to highlight, the sentence to show, and what counts as "done") that later onboarding or feature tours can reuse. The practice site doubles as a stable target for testing the recorder and runtime.
+- **Parts to build:**
+  - **Practice site (Cloud):** a few static pages per demo (fake login, fake dashboard, fake form). No real accounts or data. Lives under the existing Cloud frontend; any API routes it needs stay under `/api/v1`.
+  - **Tour engine (Build Studio renderer):** step list, dim-everything-else overlay that blocks clicks outside the highlight, "done" detection per step, progress saved so a closed app resumes where it stopped.
+  - **In-browser hint box:** a small floating note injected into the practice site only, driven by the tour engine. It must never be injected into a real customer site or leak into a recording.
+  - **Demo picker + Beginner entry point** on first launch, and a replay entry in Help.
+- **Rules to keep:** the tour must not bypass any safety rule the normal path enforces (unanswered questions still block test/publish). Tour progress and practice-site state must never enter a build or publish output. Anything a person can do in the tour should also be doable by asking chat in plain words.
+- **Open questions:** (1) strictly locked, or a quiet "Skip tour" link? (2) should the practice login accept any fake email, or the person's real Conxa email so they also learn to sign in to Conxa Cloud? (3) which two or three demos first? (4) where does the Help replay entry live?
+- **Dependencies:** none hard. Check first whether an overlay/tour component already exists in `conxa-builder/electron/renderer/src/components/` before building a new one.
+- **Complexity:** M-L. The overlay and engine are small; most of the work is writing good demo scripts and the practice pages.
+- **Success criteria:** A person who has never used Conxa picks Beginner, finishes one demo without leaving the highlighted path, and ends with a first group set up and a first sign-in done. A technical person who skips the tour sees no change. No tour text contains a technical term.
 
 ### PROD-1 — Per-tenant reliability: first-run calibration + persistent repair memory
 - **Category:** Product Strategy & Business-Risk Mitigation
@@ -1134,6 +1156,13 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Items:** `get_step_screenshot` (copilot retrieval) returns a path that is pasted into the prompt but the image is never attached; one `insert_overlay_branch` accept leaves several undo entries (structural ops collapse to one); possible double bounding-box offset for relayed child-frame events (`bridge.js` plus `session.py::_finalize_payload_sync`, **unverified**); `Done.md` reuses ids BUILD-31 and BUILD-33.
   Found in Phase 5: the failure card can't show the page at the moment of failure (the evidence screenshot lives under the sandbox folder, which the `conxa-asset://` protocol doesn't serve); the compile card's "N compile credits left" assumes the `quota` event's `remaining` key (not confirmed against `/usage/compile/commit`); a confirm-only review can be edited into a free-form one afterwards without the gate re-checking the destructive step after it; the guard cannot pause inside a `for_each` body (it fails the test instead); the stop/decision of a paused test lives only in memory (a Studio restart mid-pause leaves the parked browser to time out).
 - **Complexity:** S each.
+
+### PROOF-1 — Proof of Done, stages 3–6: evidence notebook, build-time proof checklist, going to look, learning per app
+- **Category:** Runtime / Compiler / Build Studio
+- **Description:** The design is `docs/artifacts/post-action-verification.html`; the plan is the same artifact's rollout. Stages 1–2 are done (a progress tray is no longer a question; every check answers yes/no/not_yet/cant_tell; a run ends `Done.`, `Done, please check.` or `Couldn't confirm.`). Still open: **3** an evidence notebook opened before each action across all tabs and frames (request and response metadata only, no bodies stored); **4** a per-step `validation.effect` checklist mined from the recording, confirmed in chat ("How can we tell it worked?"), calibrated in the test run, and a publish rule that blocks an irreversible step with no real proof (closes RT-11); **5** going to look (a separate read-only observation tab), later-step proof, final and per-item checks, and parking a long wait so a slow upload ends `Submitted.` then `Done.` on resume (closes RT-13); **6** per-app learned progress/success words so a non-English app is checked correctly.
+- **Why required:** until stage 4, an older step only has what its author had; most steps carry no proof beyond "the action ran".
+- **Dependencies:** stage 4 needs stage 3's notebook for the transport witness; stage 5 needs stage 4's checks.
+- **Complexity:** XL, in stages.
 
 ### RT-13 — A slow upload can outlast the run's own deadline
 - **Category:** Runtime

@@ -7,6 +7,14 @@ describe("classifyRunResult", () => {
   it("marks Done. as completed", () => {
     assert.equal(classifyRunResult("Done. (run_id: abc)"), "completed");
   });
+  it("marks a run that finished with a note, or was accepted, as completed", () => {
+    assert.equal(classifyRunResult("Done, please check. URL: x (run_id: abc)"), "completed");
+    assert.equal(classifyRunResult("Submitted. The upload goes on. (run_id: abc)"), "completed");
+  });
+  it("never reads 'couldn't confirm' or 'partly done' as success", () => {
+    assert.equal(classifyRunResult("Couldn't confirm. I couldn't confirm that the upload finished."), "failed");
+    assert.equal(classifyRunResult("Partly done. 2 of 3 files."), "failed");
+  });
   it("marks cap refusal as busy", () => {
     assert.equal(classifyRunResult("Too many workflows are already running"), "busy");
   });

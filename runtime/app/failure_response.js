@@ -325,6 +325,10 @@ function haltReasonNoteText(err) {
     return `\n\nThe run stopped because an input or a setting is not valid, not because an element ` +
       `moved. Fix the input and re-run; do not attempt a candidate override.`;
   }
+  if (err.couldntConfirm) {
+    return `\n\nThe run stopped because it could not confirm that the step finished. The step may well have worked. ` +
+      `Do not run it again, and do not attempt a candidate override, until someone has checked the result. Tell the user.`;
+  }
   if (err.fault) {
     return `\n\nThe run stopped because the app reported a problem (${err.faultKind || "fault"}). ` +
       `Retrying with a different element will not help. Tell the user what the app said.`;

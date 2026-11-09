@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 
 class _CommandError(Exception):
-    def __init__(self, code: str, message: str, *, run_id: str | None = None) -> None:
+    def __init__(self, code: str, message: str, *, run_id: str | None = None, outcome: str | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
@@ -26,6 +26,9 @@ class _CommandError(Exception):
         # run id the failure was filed under, so cmd_copilot_verify can read the failing step's
         # evidence without re-deriving it from the (deliberately stale) Workflow.last_test_run_id.
         self.run_id = run_id
+        # Proof of Done: how the run ended when it was not a plain pass or an ordinary failure
+        # ("couldnt_confirm" | "partly_done"), so the test card can say so in its own words.
+        self.outcome = outcome
 
 
 def _safe_id(value: object, field: str) -> str:

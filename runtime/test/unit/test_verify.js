@@ -402,3 +402,36 @@ test("pollPositive still resolves true promptly when the check simply succeeds",
   const result = await pollPositive(() => Promise.resolve(true), 1000);
   assert.strictEqual(result, true);
 });
+
+// ── Proof of Done: every check says yes / no / not_yet / cant_tell ─────────────────────────────────
+
+test("answers: a check that held is yes, one that did not is no", async () => {
+  const page = mockPage("https://app.example.com/orders/123/confirmed");
+  const ok = await verifyStep(page, { type: "click", validation: { assertions: [{ type: "url_pattern", target: "/confirmed", required: true }] } }, {});
+  assert.strictEqual(ok.answer, "yes");
+  assert.strictEqual(ok.results[0].answer, "yes");
+});
+
+test("answers: nothing to check, or a baseline that could not be taken, is cant_tell, never yes", async () => {
+  const page = mockPage("https://app.example.com/x");
+  const none = await verifyStep(page, { type: "click" }, {});
+  assert.deepStrictEqual([none.pass, none.answer], [true, "cant_tell"], "still passes as it always did");
+  const noBaseline = await verifyStep(page, { type: "click", validation: { assertions: [{ type: "state_changed", required: true }] } }, {}, null);
+  assert.deepStrictEqual([noBaseline.pass, noBaseline.results[0].answer, noBaseline.answer], [true, "cant_tell", "cant_tell"]);
+});
+
+test("answers: a native dialog in the way is not_yet", async () => {
+  const page = mockPage("https://app.example.com/x");
+  const r = await verifyStep(page, { type: "click", validation: { assertions: [{ type: "url_changed", required: true }] } }, {}, null, [{}]);
+  assert.deepStrictEqual([r.pass, r.answer], [true, "not_yet"]);
+});
+
+test("answers: one real yes outweighs a check that could not look, and a required no is a no", async () => {
+  const page = mockPage("https://app.example.com/orders/1");
+  const mixed = await verifyStep(page, { type: "click", validation: { assertions: [
+    { type: "url_pattern", target: "/orders/", required: true },
+    { type: "state_changed", required: false },
+  ] } }, {}, null);
+  assert.deepStrictEqual(mixed.results.map((r) => r.answer), ["yes", "cant_tell"]);
+  assert.strictEqual(mixed.answer, "yes");
+});

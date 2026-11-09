@@ -255,3 +255,31 @@ def test_run_summary_carries_the_chain_verdict():
     }]
     summary = _run_summary("run1", batches)
     assert summary["chain"]["state"] == "verified"
+
+
+def test_assertion_health_counts_checks_that_could_not_look():
+    # Proof of Done: a step that "passes" only because its checks could not read the page is not healthy.
+    records = [
+        _record("acme", "upload", [{"e": "verify_result", "ts": 1000, "si": 4, "ok": True, "n": 2, "advFail": 0, "ct": 2}]),
+        _record("acme", "upload", [{"e": "verify_result", "ts": 2000, "si": 4, "ok": True, "n": 1, "advFail": 0, "ct": 1}]),
+        # an older runtime sends no `ct`
+        _record("acme", "upload", [{"e": "verify_result", "ts": 3000, "si": 4, "ok": True, "n": 1, "advFail": 0}]),
+    ]
+    row = _assertion_health_by_step(records)[0]
+    assert (row["total"], row["passed"], row["cant_tell"]) == (3, 3, 3)
+
+
+def test_run_summary_carries_the_proof_outcome():
+    from app.services.tracking import _run_summary
+
+    def batch(events):
+        return [{"run_id": "r", "events": events}]
+
+    ok = _run_summary("r", batch([{"e": "wf_start", "ts": 1}, {"e": "wf_ok", "ts": 2, "dur": 5, "tot": 1, "rec": 0, "oc": "done_please_check"}]))
+    assert (ok["status"], ok["outcome"]) == ("ok", "done_please_check")
+    old = _run_summary("r", batch([{"e": "wf_ok", "ts": 2, "dur": 5, "tot": 1, "rec": 0}]))
+    assert old["outcome"] == "done", "a runtime that predates Proof of Done only ever said done"
+    unsure = _run_summary("r", batch([{"e": "wf_fail", "ts": 2, "dur": 5, "fsi": 3, "fc": "couldnt_confirm", "oc": "couldnt_confirm"}]))
+    assert (unsure["status"], unsure["outcome"], unsure["failure_code"]) == ("fail", "couldnt_confirm", "couldnt_confirm")
+    plain_fail = _run_summary("r", batch([{"e": "wf_fail", "ts": 2, "dur": 5, "fsi": 3, "fc": "timeout"}]))
+    assert plain_fail["outcome"] is None

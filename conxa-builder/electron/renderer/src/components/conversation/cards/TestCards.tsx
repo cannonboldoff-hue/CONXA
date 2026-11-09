@@ -165,6 +165,17 @@ export function TestInputsCard({ threadId, item }: CardProps) {
 }
 
 type Row = { index: number; name: string; status: 'running' | 'done' | 'failed'; destructive?: boolean; nested?: boolean }
+// What the runtime proved for each step (Proof of Done), in everyday words. Unknown verdicts show as sent.
+type ProofStep = { index?: number; intent: string; verdict: string; rung?: string | null }
+const PROOF_WORDS: Record<string, string> = {
+  proven: 'confirmed',
+  still_working: 'still working when the test moved on',
+  couldnt_confirm: 'couldn’t confirm it finished',
+  partly_done: 'only partly done',
+  blocked: 'waiting on a question',
+  failed_nothing_happened: 'didn’t work',
+  failed_may_have_happened: 'may or may not have worked',
+}
 const ROW_GLYPH: Record<Row['status'], StatusKind> = { running: 'run', done: 'ok', failed: 'fail' }
 
 /** One test attempt, from start to result. Pauses, failures and passes are all states of this one card. */
@@ -266,10 +277,17 @@ export function TestRunCard({ threadId, item }: CardProps) {
   }
 
   if (state === 'failed') {
+    // "Couldn't confirm" and "Partly done" are not ordinary failures: the work may have happened, so the
+    // card says that instead of "failed", and never claims nothing was saved.
+    const outcome = String(item.outcome ?? '')
+    const unsure = outcome === 'couldnt_confirm' || outcome === 'partly_done'
+    const unsureTitle = outcome === 'partly_done' ? 'Only part of it was done' : 'Couldn’t confirm it worked'
     return (
       <CardShell
-        glyph="fail"
-        title={`${auto ? `Attempt ${attempt}` : 'Test'} failed${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`}
+        glyph={unsure ? 'warn' : 'fail'}
+        title={unsure
+          ? `${unsureTitle}${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`
+          : `${auto ? `Attempt ${attempt}` : 'Test'} failed${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`}
         meta={clock || undefined}
       >
         <p className="leading-[1.6] text-[var(--text-primary)]">{String(item.summary || 'Something went wrong at this step.')}</p>
@@ -289,10 +307,16 @@ export function TestRunCard({ threadId, item }: CardProps) {
 
   if (state === 'passed') {
     const approved = item.approved === true
+    // Proof of Done: a run can finish without proving every step. Say so plainly; the checks behind it
+    // are one click down.
+    const outcome = String(item.outcome ?? 'done')
+    const notes = (Array.isArray(item.notes) ? item.notes : []) as string[]
+    const proofSteps = (Array.isArray(item.proof_steps) ? item.proof_steps : []) as ProofStep[]
+    const careful = outcome === 'done_please_check' || outcome === 'submitted'
     return (
       <CardShell
-        glyph="ok"
-        title={approved ? 'Approved' : 'Test passed'}
+        glyph={careful && !approved ? 'warn' : 'ok'}
+        title={approved ? 'Approved' : outcome === 'done_please_check' ? 'Test finished — please check' : outcome === 'submitted' ? 'Submitted — finishing on its own' : 'Test passed'}
         meta={approved ? `by you${item.approved_version ? ` · version ${String(item.approved_version)}` : ''}` : `${plural(Number(item.steps_ran ?? rows.length), 'step')}${clock ? ` · ${clock}` : ''}`}
         footer={
           <>
@@ -305,6 +329,25 @@ export function TestRunCard({ threadId, item }: CardProps) {
       >
         {item.irreversible_ran === true && (
           <p className="flex items-start gap-2 text-status-warn"><StatusGlyph kind="warn" /><span className="text-[var(--text-secondary)]">Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.</span></p>
+        )}
+        {outcome === 'submitted' && (
+          <p className="text-[var(--text-secondary)]">The app accepted the work and will finish it on its own. Check the result before you approve this.</p>
+        )}
+        {notes.length > 0 && (
+          <ul className="mt-1 space-y-1">
+            {notes.map((n) => (
+              <li key={n} className="flex items-start gap-2"><StatusGlyph kind="warn" /><span className="text-[var(--text-secondary)]">{n}</span></li>
+            ))}
+          </ul>
+        )}
+        {proofSteps.length > 0 && (
+          <Disclosure label="What was checked">
+            <ul className="space-y-0.5">
+              {proofSteps.map((s) => (
+                <li key={`${s.index}-${s.intent}`}>{s.intent || `Step ${Number(s.index ?? 0) + 1}`}: {PROOF_WORDS[s.verdict] ?? s.verdict}</li>
+              ))}
+            </ul>
+          </Disclosure>
         )}
         {typeof item.outputs === 'object' && item.outputs !== null && Object.keys(item.outputs as Record<string, string>).length > 0 && (
           <div className="mt-2">

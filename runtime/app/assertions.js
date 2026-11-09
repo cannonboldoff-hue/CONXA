@@ -138,6 +138,10 @@ async function evaluateAssertion(roots, page, a, inputs, baseline) {
   const startedAt = Date.now();
   let ok = true;
   let recognized = true;
+  // Proof of Done: "yes" | "no" | "not_yet" | "cant_tell". A check that passed only because it could not
+  // look (no baseline, an unreadable page) is "cant_tell", never "yes": the step still passes, as it
+  // always has, but it is not counted as proof.
+  let cantTell = false;
 
   try {
     if (type === "url_changed") {
@@ -180,9 +184,11 @@ async function evaluateAssertion(roots, page, a, inputs, baseline) {
       // no-opping. Only meaningful when a pre-action baseline was captured.
       if (!baseline) {
         ok = true; // no baseline captured (e.g. resumed mid-run) — don't fail on a technicality
+        cantTell = true;
       } else {
         ok = await pollPositive(async () => {
           const after = await capturePreStepSignature(page);
+          if (!after) cantTell = true;
           return !after
             ? true
             : after.url !== baseline.url ||
@@ -201,7 +207,18 @@ async function evaluateAssertion(roots, page, a, inputs, baseline) {
     ok = false;
   }
 
-  return { type, target, required, ok, recognized, elapsed_ms: Date.now() - startedAt };
+  // An unrecognized type could not be checked at all (it still fails a required assertion, as before).
+  const answer = !recognized ? "cant_tell" : !ok ? "no" : cantTell ? "cant_tell" : "yes";
+  return { type, target, required, ok, recognized, answer, elapsed_ms: Date.now() - startedAt };
+}
+
+// What a set of results proves, in the same four answers. Any required "no" is a "no"; otherwise one
+// real "yes" is a "yes"; otherwise nothing could be read, which is "cant_tell". Advisory results still
+// count as proof when they hold, and never as failure.
+function summarizeAnswers(results) {
+  if (results.some((r) => r.required && r.answer === "no")) return "no";
+  if (results.some((r) => r.answer === "yes")) return "yes";
+  return "cant_tell";
 }
 
 async function verifyStep(page, step, inputs, baseline = null, dialogQueue = null) {
@@ -213,10 +230,10 @@ async function verifyStep(page, step, inputs, baseline = null, dialogQueue = nul
   // of before verification starts). This isn't a workaround: the step's real post-condition
   // ("a dialog opened") already happened, so skipping is the correct verdict, not a skipped one.
   if (dialogQueue && dialogQueue.length) {
-    return { pass: true, channel: "dialog_pending", evidence: "a JS dialog is open", results: [] };
+    return { pass: true, channel: "dialog_pending", answer: "not_yet", evidence: "a JS dialog is open", results: [] };
   }
   const assertions = stepAssertions(step);
-  if (!assertions.length) return { pass: true, channel: "none", evidence: "no-assertions", results: [] };
+  if (!assertions.length) return { pass: true, channel: "none", answer: "cant_tell", evidence: "no-assertions", results: [] };
 
   // A post-condition for a step whose action happened inside an iframe is almost always about
   // that same iframe (a confirmation message, a field's new value, ...) — resolve assertions
@@ -239,9 +256,9 @@ async function verifyStep(page, step, inputs, baseline = null, dialogQueue = nul
   }
 
   if (failing) {
-    return { pass: false, channel: failing.type, evidence: failing.target, results };
+    return { pass: false, channel: failing.type, answer: "no", evidence: failing.target, results };
   }
-  return { pass: true, channel: "all", evidence: `${assertions.length} assertion(s)`, results };
+  return { pass: true, channel: "all", answer: summarizeAnswers(results), evidence: `${assertions.length} assertion(s)`, results };
 }
 
 // Whether any assertion on this step is required (enforced) — gates the extra cost of capturing
