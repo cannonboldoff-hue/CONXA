@@ -55,8 +55,9 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(specs.map((s) => [s.id, String(s.value ?? '')])))
   const [guard, setGuard] = useState(item.guard !== false)
   const showBrowser = item.show_browser !== false
-  const [useAi, setUseAi] = useState(item.use_ai === true)
   const aiSteps = Number(item.agent_step_count ?? 0)
+  // Dry Run ON = AI helper off. A workflow with AI steps can't be dry-run, so it starts (and stays) off.
+  const [dryRun, setDryRun] = useState(!(item.use_ai === true || aiSteps > 0))
   const [tried, setTried] = useState(false)
   const state = String(item.state)
   const irreversible = (Array.isArray(item.irreversible) ? item.irreversible : []) as string[]
@@ -83,7 +84,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
             variant="brand"
             size="sm"
             disabled={busy}
-            onClick={() => (missing.length ? setTried(true) : run(() => flowTestRun(wf, String(item.card_id), values, guard, showBrowser, useAi)))}
+            onClick={() => (missing.length ? setTried(true) : run(() => flowTestRun(wf, String(item.card_id), values, guard, showBrowser, !dryRun)))}
           >
             Run test
           </Button>
@@ -125,17 +126,15 @@ export function TestInputsCard({ threadId, item }: CardProps) {
         })}
 
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-          <input type="checkbox" role="switch" className="mt-1 accent-white" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
+          <input type="checkbox" role="switch" className="mt-1 accent-white" checked={dryRun} disabled={aiSteps > 0} onChange={(e) => setDryRun(e.target.checked)} />
           <span>
-            <span className="text-[var(--text-primary)]">Let AI answer agent steps and unexpected popups</span>
+            <span className="text-[var(--text-primary)]">Dry Run</span>
             <span className="block text-xs text-[var(--text-meta)]">
-              {useAi
-                ? aiSteps === 0
-                  ? 'Uses AI credits only if an unexpected popup appears and has to be answered.'
-                  : `Uses AI credits for ${plural(aiSteps, 'agent step')}, and for any unexpected popup.`
-                : aiSteps === 0
-                  ? 'Off: the test stops at an unexpected popup, with no credits used.'
-                  : 'Off: the test stops at the first agent step or unexpected popup, with no credits used.'}
+              {dryRun
+                ? 'Safe test. The AI helper stays off, so no AI credits are used. The test stops if it reaches a step that needs AI, or an unexpected popup.'
+                : aiSteps > 0
+                  ? `Turned off automatically — this workflow has ${plural(aiSteps, 'AI step')}, which need the AI helper. Uses AI credits.`
+                  : 'The AI helper is on. It can answer an unexpected popup, and uses AI credits only if one appears.'}
             </span>
           </span>
         </label>
