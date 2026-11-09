@@ -149,4 +149,27 @@ function observation(url, { title, labels, known, surface }) {
   };
 }
 
-module.exports = { FILE_NAME, SCHEMA_VERSION, load, hostOf, appOfManifest, lookupPopup, roleOf, decideKnown, observation };
+// ── the app's own words (Proof of Done stage 6) ─────────────────────────────────────────────────
+const LEARNED_WORD_RE = /^\p{L}{5,}$/u;
+
+/** A RegExp matching any of `words` as whole words (letters of any language), or null when there are none usable.
+ * Only distinctive words are used (five letters or more, letters only), so a learned word can't make everything match. */
+function wordsRegex(words) {
+  const usable = [...new Set(asArray(words).map((w) => String(w || "").toLowerCase()).filter((w) => LEARNED_WORD_RE.test(w)))].slice(0, 40);
+  if (!usable.length) return null;
+  const alt = usable.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return new RegExp(`(^|[^\\p{L}])(${alt})(?=[^\\p{L}]|$)`, "iu");
+}
+
+/** How this app words progress, success and failure, as RegExps, for the host a page is on. Everything is optional: no
+ * knowledge, no host or no words is `{progress: null, success: null, failure: null}` and the English defaults decide alone. */
+function signalsFor(knowledge, host) {
+  const s = knowledge && knowledge.apps && host && knowledge.apps[host] && knowledge.apps[host].signals;
+  return {
+    progress: wordsRegex(s && s.progress),
+    success: wordsRegex(s && s.success),
+    failure: wordsRegex(s && s.failure),
+  };
+}
+
+module.exports = { FILE_NAME, SCHEMA_VERSION, load, hostOf, appOfManifest, lookupPopup, roleOf, decideKnown, observation, wordsRegex, signalsFor };

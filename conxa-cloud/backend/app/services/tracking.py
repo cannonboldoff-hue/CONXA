@@ -742,6 +742,46 @@ def _assertion_health_by_step(records: list[dict[str, Any]], limit: int | None =
     return rows if limit is None else rows[:limit]
 
 
+def _proof_health_by_step(records: list[dict[str, Any]], limit: int | None = 12) -> list[dict[str, Any]]:
+    """Aggregate runtime `proof` events (Proof of Done) into a per-step view of steps that keep coming back unconfirmed.
+
+    `proof` carries `{si, rung, v, w}`: the verdict for one judged step. Only steps with at least one `couldnt_confirm`
+    or failed verdict are listed, worst unproven rate first: a step whose proof is quietly drifting (the app reworded
+    its completion message, a signal disappeared) shows here before anyone reads a run. Results only, never page contents."""
+    by_key: dict[tuple[str, str, int | None], dict[str, Any]] = {}
+    for record in records:
+        summary = record.get("summary") or {}
+        workflow = str(summary.get("workflow_id") or "Unknown workflow")
+        company = str(record.get("company") or "")
+        for evt in record.get("events") or []:
+            if evt.get("e") != "proof":
+                continue
+            step_index = _event_step_index(evt)
+            key = (company, workflow, step_index)
+            entry = by_key.setdefault(key, {
+                "company": company, "workflow": workflow, "step_index": step_index,
+                "step_label": f"Step {step_index + 1}" if step_index is not None else "Unknown step",
+                "total": 0, "proven": 0, "unproven": 0, "failed": 0, "waiting": 0, "last_seen": 0,
+            })
+            verdict = str(evt.get("v") or "")
+            entry["total"] += 1
+            if verdict == "proven":
+                entry["proven"] += 1
+            elif verdict == "couldnt_confirm":
+                entry["unproven"] += 1
+            elif verdict.startswith("failed_"):
+                entry["failed"] += 1
+            elif verdict == "still_working":
+                entry["waiting"] += 1
+            entry["last_seen"] = max(int(entry["last_seen"]), _epoch_ms(evt.get("ts")))
+    rows = [
+        {**e, "unproven_rate": round(((e["unproven"] + e["failed"]) / e["total"]) * 100, 1)}
+        for e in by_key.values() if e["unproven"] or e["failed"]
+    ]
+    rows.sort(key=lambda r: (-r["unproven_rate"], -r["total"]))
+    return rows if limit is None else rows[:limit]
+
+
 def _dashboard_metrics(
     principal: Principal,
     range_value: str,
@@ -1025,6 +1065,7 @@ def _dashboard_metrics(
         )[:6],
         "execution_trend": list(buckets.values()),
         "assertion_health_by_step": _assertion_health_by_step(range_records),
+        "proof_health_by_step": _proof_health_by_step(range_records),
     }
 
 

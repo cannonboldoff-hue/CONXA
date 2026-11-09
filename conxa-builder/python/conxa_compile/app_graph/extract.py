@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 from conxa_compile.app_graph.scrub import safe_element_name, scrub_label, scrub_tokens
 from conxa_compile.compiler.navigation_effects import route_template
-from conxa_core.models.app_graph import Action, Contribution, Popup, PopupOption, Screen, WorkflowPath
+from conxa_core.models.app_graph import Action, AppSignals, Contribution, Popup, PopupOption, Screen, WorkflowPath
 
 # Navigation markers and branch bodies are not things a person does on a screen.
 _SKIP_ACTIONS = frozenset({"frame_enter", "frame_exit", "try_dismiss"})
@@ -203,5 +203,12 @@ def contributions_from_doc(
             c.actions.append(action)
         c.path.action_ids.append(action.id)
         last_action = action.id
+        # How this app words progress, success and failure around the step (Proof of Done stage 6). Words only.
+        words = ((w.step.get("validation") or {}).get("effect") or {}).get("words")
+        if isinstance(words, dict):
+            merged = {k: set(getattr(c.signals, k)) for k in ("progress", "success", "failure")}
+            for k in merged:
+                merged[k] |= {str(x) for x in (words.get(k) or []) if isinstance(x, str)}
+            c.signals = AppSignals(**{k: sorted(v)[:24] for k, v in merged.items()})
 
     return by_host

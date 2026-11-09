@@ -1431,3 +1431,22 @@ def test_a_chosen_file_is_watched_too(page: Page, tmp_path) -> None:
     watch = event.get("post_watch")
     assert watch is not None and watch["progress_seen"] is True
     assert any("complete" in item["words"] for item in watch["final_status"]), watch
+
+
+def test_the_progress_words_of_a_non_english_app_are_recorded_in_its_own_language(page: Page) -> None:
+    _install_bridge(
+        page,
+        """<button id="upload" onclick="
+          const tray = document.createElement('div');
+          tray.setAttribute('role', 'dialog');
+          tray.innerHTML = '<p>Datei wird hochgeladen</p><div role=progressbar style=width:80px;height:6px></div>';
+          document.body.appendChild(tray);
+          setTimeout(() => { tray.innerHTML = '<p>Upload abgeschlossen</p>'; }, 800);">Upload</button>""",
+    )
+    page.click("#upload")
+    watch = _wait_for_event(page, "click").get("post_watch")
+
+    assert watch is not None
+    assert "hochgeladen" in watch["progress_words"], watch
+    final = [w for item in watch["final_status"] for w in item["words"]]
+    assert "abgeschlossen" in final and "hochgeladen" not in final, "the progress line is not the final message"

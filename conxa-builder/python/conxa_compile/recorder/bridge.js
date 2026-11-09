@@ -1731,20 +1731,32 @@
     const t0 = Date.now();
     const before = new Set(((payload.state_probe && payload.state_probe.surfaces_before) || []).map((l) => l.slice(l.indexOf("\t") + 1)));
     if (!_progressVisible()) return;
+    // What the page said WHILE the work was going on. It tells the progress words of this app in its own language
+    // (a German "wird hochgeladen"), and keeps those lines out of the "what it said when done" list below.
+    const progressTexts = new Set();
+    const progressWords = [];
+    const noteProgress = () => {
+      for (const text of _watchTexts()) {
+        if (before.has(text) || progressTexts.has(text)) continue;
+        progressTexts.add(text);
+        for (const w of _valueFreeWords(text)) if (progressWords.length < 12 && !progressWords.includes(w)) progressWords.push(w);
+      }
+    };
+    noteProgress();
     let lastBusy = Date.now();
     while (Date.now() - t0 < postWatchMaxMs) {
       await _sleep(250);
-      if (_progressVisible()) lastBusy = Date.now();
+      if (_progressVisible()) { lastBusy = Date.now(); noteProgress(); }
       else if (Date.now() - lastBusy >= postWatchQuietMs) break;
     }
     const final = [];
     for (const text of _watchTexts()) {
-      if (before.has(text) || _PROGRESS_RE.test(text)) continue;
+      if (before.has(text) || progressTexts.has(text) || _PROGRESS_RE.test(text)) continue;
       const words = _valueFreeWords(text);
       if (words.length) final.push({ kind: "status", words });
       if (final.length >= 3) break;
     }
-    payload.post_watch = { progress_seen: true, waited_ms: Date.now() - t0, final_status: final };
+    payload.post_watch = { progress_seen: true, waited_ms: Date.now() - t0, final_status: final, progress_words: progressWords };
   }
 
   // Finalizes in submission order (not completion order) so two fast clicks in a row can never
@@ -1850,7 +1862,7 @@
       .replace(/https?:\/\/\S+/g, " ")
       .replace(/\S*\d\S*/g, " ");
     const words = [];
-    for (const w of stripped.toLowerCase().split(/[^a-z]+/)) {
+    for (const w of stripped.toLowerCase().split(/[^\p{L}]+/u)) {
       if (w.length > 2 && !words.includes(w)) words.push(w);
       if (words.length >= 10) break;
     }

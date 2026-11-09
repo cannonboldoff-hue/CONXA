@@ -1,7 +1,8 @@
 """The slice of an app map that ships to a customer's machine: ``app_knowledge.json``.
 
 Only decision POPUPS of the hosts a skill actually visits -- title, button labels, message words,
-dialog container, the buttons' roles and the author's standing policy. No screens, no actions, no
+dialog container, the buttons' roles and the author's standing policy -- and, per host, the value-free
+words the app uses for progress, success and failure (Proof of Done stage 6). No screens, no actions, no
 workflow names or paths (the runtime has no use for them and they are the author's business). Every
 string already went through ``app_graph.scrub``. It is advisory: an old or missing file just means
 the runtime knows nothing extra, and the file only ever changes when the skill is published again
@@ -33,8 +34,8 @@ def build_app_knowledge(
     hosts: list[str],
     graph_for: GraphFor | None = None,
 ) -> dict[str, Any] | None:
-    """{schema_version, apps: {host: {popups: [...]}}} for the given hosts, or None when the map
-    knows no popup on any of them."""
+    """{schema_version, apps: {host: {popups: [...], signals: {progress, success, failure}}}} for the given hosts, or
+    None when the map knows no popup and no word on any of them."""
     lookup = graph_for or (lambda host: app_graph_store.get_graph(workspace_id, host))
     apps: dict[str, Any] = {}
     for raw in hosts:
@@ -58,8 +59,14 @@ def build_app_knowledge(
             "options": [{"label": o.label, "role": o.role, "chosen": o.chosen} for o in p.options],
             "app_policy": p.app_policy,
         } for p in seen[:MAX_POPUPS_PER_HOST]]
+        entry: dict[str, Any] = {}
         if popups:
-            apps[host] = {"popups": popups}
+            entry["popups"] = popups
+        sig = {k: list(getattr(graph.signals, k)) for k in ("progress", "success", "failure") if getattr(graph.signals, k)}
+        if sig:
+            entry["signals"] = sig
+        if entry:
+            apps[host] = entry
     return {"schema_version": SCHEMA_VERSION, "apps": apps} if apps else None
 
 

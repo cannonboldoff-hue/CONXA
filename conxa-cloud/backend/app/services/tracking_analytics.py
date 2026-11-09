@@ -20,6 +20,7 @@ from app.services.saas import Principal
 from app.services.tracking import (
     _DAY_MS,
     _assertion_health_by_step,
+    _proof_health_by_step,
     _dashboard_metrics,
     _drift_review_queue,
     _epoch_ms,
@@ -1219,6 +1220,21 @@ def _with_previous_pass_rate(
     ]
 
 
+def _with_previous_unproven_rate(
+    rows: list[dict[str, Any]],
+    previous_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach last period's unproven rate to each proof row, so a check getting worse reads as a change."""
+    previous = {
+        (r["company"], r["workflow"], r["step_index"]): r["unproven_rate"]
+        for r in _proof_health_by_step(previous_records, limit=None)
+    }
+    return [
+        {**row, "previous_unproven_rate": previous.get((row["company"], row["workflow"], row["step_index"]), 0.0)}
+        for row in rows
+    ]
+
+
 def dashboard(principal: Principal, range_value: str) -> dict[str, Any]:
     """The full Executive Overview payload.
 
@@ -1253,6 +1269,7 @@ def dashboard(principal: Principal, range_value: str) -> dict[str, Any]:
         "generated_at": now_ms,
         "series": series,
         "assertion_health_by_step": assertion_rows,
+        "proof_health_by_step": _with_previous_unproven_rate(base.get("proof_health_by_step") or [], previous),
         "kpis": kpi_strip(current, previous, series),
         "health": health_score(
             current,

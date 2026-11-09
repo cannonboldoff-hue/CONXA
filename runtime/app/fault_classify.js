@@ -70,13 +70,17 @@ const COMPLETION_KINDS = new Set(["auth_expired", "no_permission", "rate_limited
 const GENERIC_FAILURE_RE = /\b(failed|couldn'?t|could not|unable to|something went wrong|(was|were|wasn'?t|weren'?t|not) (been )?(uploaded|saved|sent|submitted)|error (uploading|saving|sending|submitting))\b/i;
 const ZERO_FAILURES_RE = /\b(0|no|zero) (failed|failures?|errors?)\b/i;
 
-/** @returns {{kind: string, evidence: string} | null} */
-function classifyCompletionFailure(texts) {
+/**
+ * `appFailure` (optional) is a RegExp built from the words THIS app uses for failure, learned from its recordings
+ * (app_knowledge.js::signalsFor), so an app that is not in English is judged by its own words as well as the English ones.
+ * @returns {{kind: string, evidence: string} | null}
+ */
+function classifyCompletionFailure(texts, appFailure = null) {
   for (const t of (Array.isArray(texts) ? texts : []).map(short).filter(Boolean)) {
     if (ZERO_FAILURES_RE.test(t)) continue;
     const f = classifyFault({ alerts: [t], mayHaveActed: true });
     if (f && COMPLETION_KINDS.has(f.kind)) return { kind: f.kind, evidence: t };
-    if (GENERIC_FAILURE_RE.test(t)) return { kind: "action_failed", evidence: t };
+    if (GENERIC_FAILURE_RE.test(t) || (appFailure && appFailure.test(t))) return { kind: "action_failed", evidence: t };
   }
   return null;
 }

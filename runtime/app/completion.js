@@ -52,11 +52,12 @@ function newTexts(sample, baseline) {
 }
 
 /** Pure. What one page sample says, measured against the sample taken before the action. */
-function classifySample(sample, baseline) {
+function classifySample(sample, baseline, signals = null) {
   const fresh = newTexts(sample, baseline);
-  const busyText = fresh.find((t) => IN_PROGRESS_RE.test(t)) || null;
+  // The app's own words (app_knowledge.js::signalsFor) count beside the English defaults.
+  const busyText = fresh.find((t) => IN_PROGRESS_RE.test(t) || (signals && signals.progress && signals.progress.test(t))) || null;
   const busy = (sample.busyCount || 0) > ((baseline && baseline.busyCount) || 0) || !!busyText;
-  const failure = classifyCompletionFailure(fresh);
+  const failure = classifyCompletionFailure(fresh, signals && signals.failure);
   return { busy, busyText, failure };
 }
 
@@ -73,7 +74,8 @@ function pageUrl(page) {
  * @param {{baseline: {busyCount:number, regions:string[], url?:string}, sinceMs: number,
  *   mode?: "short"|"full", budgetMs: number, pendingBudgetMs?: number, pollMs?: number, quietMs?: number,
  *   startGraceMs?: number, deadlineAt?: number, deadlineMarginMs?: number, cancelCheck?: () => boolean,
- *   dialogQueue?: any[], notebook?: object}} o  `notebook` (evidence.js) widens what is read from the one page
+ *   dialogQueue?: any[], notebook?: object, signals?: {progress: RegExp|null, failure: RegExp|null}}} o  `signals` are the app's own
+ *   words (app_knowledge.js::signalsFor). `notebook` (evidence.js) widens what is read from the one page
  *   to every tab and visible frame the run owns; without it the wait reads `page` alone, as before.
  * @returns {Promise<{status: "done"|"failed"|"timed_out"|"still_working"|"no_sign"|"cant_tell"|"handoff",
  *   evidence?: string, reason?: string, waitedMs: number, warning?: string, kind?: string}>}
@@ -107,7 +109,7 @@ async function waitForCompletion(page, o) {
     // and never call it a success either.
     if (!sample || sample === EVAL_TIMED_OUT) return out("cant_tell", { reason: "probe_unavailable" });
 
-    const c = classifySample(sample, baseline);
+    const c = classifySample(sample, baseline, o.signals || null);
     const urlNow = baseUrl ? pageUrl(page) : null;
     // A first sign the app took the work. Silence before this proves nothing: a tray can open late.
     if (c.busy || newTexts(sample, baseline).length || (urlNow && urlNow !== baseUrl)

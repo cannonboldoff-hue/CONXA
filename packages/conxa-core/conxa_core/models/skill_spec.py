@@ -162,6 +162,9 @@ class Effect(BaseModel):
     quorum: EffectQuorum = Field(default_factory=EffectQuorum)
     time: EffectTime = Field(default_factory=EffectTime)
     on: EffectOn = Field(default_factory=EffectOn)
+    # The app's own words seen around this step (progress / success / failure), value-free single words in the
+    # app's language. Not enforced by the runtime; the app map learns from them (app_graph/extract.py).
+    words: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ValidationBlock(BaseModel):

@@ -283,3 +283,24 @@ def test_run_summary_carries_the_proof_outcome():
     assert (unsure["status"], unsure["outcome"], unsure["failure_code"]) == ("fail", "couldnt_confirm", "couldnt_confirm")
     plain_fail = _run_summary("r", batch([{"e": "wf_fail", "ts": 2, "dur": 5, "fsi": 3, "fc": "timeout"}]))
     assert plain_fail["outcome"] is None
+
+
+def test_proof_health_lists_only_steps_that_keep_coming_back_unconfirmed_worst_first():
+    from app.services.tracking import _proof_health_by_step
+
+    def proof(si, v, ts=1000):
+        return {"e": "proof", "ts": ts, "si": si, "rung": "accepted", "v": v, "w": ["renderer"]}
+
+    records = [
+        _record("acme", "upload", [proof(3, "proven"), proof(5, "proven")]),
+        _record("acme", "upload", [proof(3, "couldnt_confirm"), proof(5, "proven")]),
+        _record("acme", "upload", [proof(3, "couldnt_confirm"), proof(5, "failed_may_have_happened", 3000)]),
+        _record("acme", "upload", [proof(3, "proven")]),
+    ]
+    rows = _proof_health_by_step(records)
+    assert [r["step_index"] for r in rows] == [3, 5], "step 4 was unconfirmed in 2 of 4 runs (50%), step 6 failed in 1 of 3 (33%)"
+    by = {r["step_index"]: r for r in rows}
+    assert (by[3]["total"], by[3]["proven"], by[3]["unproven"], by[3]["unproven_rate"]) == (4, 2, 2, 50.0)
+    assert (by[5]["total"], by[5]["failed"], by[5]["unproven_rate"]) == (3, 1, 33.3)
+    assert _proof_health_by_step([_record("acme", "x", [proof(0, "proven")])]) == [], "a step that always proves is not a problem"
+    assert _proof_health_by_step([_record("acme", "x", [{"e": "wf_ok", "ts": 1}])]) == []

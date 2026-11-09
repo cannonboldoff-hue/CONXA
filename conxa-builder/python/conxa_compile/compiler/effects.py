@@ -117,6 +117,33 @@ def _final_words(ev: dict[str, Any]) -> list[list[str]]:
     return seen[:2]
 
 
+# Words too common to say anything about an app (and short ones). A learned word must be distinctive to be used.
+_STOP = frozenset({"about", "after", "again", "being", "could", "there", "these", "those", "which", "while", "would", "their", "other"})
+
+
+def _usable_word(w: Any) -> bool:
+    return isinstance(w, str) and len(w) >= 5 and w.isalpha() and w not in _STOP
+
+
+def app_words(ev: dict[str, Any]) -> dict[str, list[str]]:
+    """The app's own progress / success / failure words around this step, as value-free single words (the recorder
+    already dropped digits, quotes, addresses). Kept on the effect so the app map can learn how THIS app words them,
+    in its own language. A word that appears in two groups says nothing and is dropped from both."""
+    watch = ev.get("post_watch") if isinstance(ev.get("post_watch"), dict) else {}
+    ctx = ev.get("surface_context") if isinstance(ev.get("surface_context"), dict) else {}
+    progress = [w for w in (watch.get("progress_words") or []) if _usable_word(w)]
+    success: list[str] = []
+    for words in _final_words(ev):
+        success += [w for w in words if _usable_word(w)]
+    failure: list[str] = []
+    for item in ctx.get("items") or []:
+        if item.get("kind") in {"alert", "invalid"}:
+            failure += [w for w in (item.get("words") or []) if _usable_word(w)]
+    groups = {"progress": progress, "success": success, "failure": failure}
+    clash = {w for g in groups.values() for w in g if sum(w in other for other in groups.values()) > 1}
+    return {k: sorted({w for w in v if w not in clash})[:12] for k, v in groups.items() if any(w not in clash for w in v)}
+
+
 def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
     checks: list[EffectCheck] = []
 
@@ -169,6 +196,7 @@ def build_effect(
         quorum=EffectQuorum(witnesses=1),
         time=EffectTime(stall_after_s=45 if long else 20, max_s=900 if long else 120, long_wait="park" if long else "fail"),
         on=EffectOn(),
+        words=app_words(ev),
     )
 
 

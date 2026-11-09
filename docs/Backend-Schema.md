@@ -1255,6 +1255,13 @@ that cannot be undone needs a support check at `completed` or higher that is `ca
 (`effects.has_real_proof(strict=True)`), otherwise publishing is refused in plain words; the "How can we tell it worked?" question is
 then not skippable (`needs_proof`, scoring safety floor). `patch_gate.py` keeps the floor on hand edits.
 
+**App signals** (`AppGraph.signals`, shipped as `app_knowledge.json` → `apps[host].signals`): `{progress, success, failure}`, each a sorted list of at most 24
+value-free words (five letters or more, letters of any language) that this app's recordings used for progress, completion and failure. They come from
+`Effect.words` (built by `compiler/effects.py::app_words` from `post_watch.progress_words`, the final status and alert/invalid-field words). A word that two groups
+share is dropped. The runtime merges them with its English defaults; an app with none is judged by the defaults alone. The dashboard payload gains
+`proof_health_by_step` (steps with at least one `couldnt_confirm`/failed verdict: `total`, `proven`, `unproven`, `failed`, `waiting`, `unproven_rate`,
+`previous_unproven_rate`).
+
 ### 3.4z Run outcome (`execute_skill` result, Proof of Done)
 
 A run no longer ends in just "Done" or an error. Every step is judged on a ladder: `performed` (we did it) <

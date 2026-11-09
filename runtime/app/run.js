@@ -245,6 +245,16 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
   }
 }
 
+// How the app this page belongs to words progress, success and failure (learned from its recordings, shipped in
+// app_knowledge.json). Empty when nothing is known: the English defaults then decide alone.
+function appSignals(ctx, page) {
+  try {
+    return appKnowledge.signalsFor(ctx.appKnowledge, appKnowledge.hostOf(typeof page.url === "function" ? page.url() : ""));
+  } catch (_) {
+    return { progress: null, success: null, failure: null };
+  }
+}
+
 // The pages this run owns (never the whole browser context: a borrowed host browser also holds other
 // runs' views, and another run's refusal must not fail this one).
 function runPages(ctx) {
@@ -290,6 +300,7 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     pendingBudgetMs: upload ? COMPLETION_BUDGET_MS : NETWORK_GRACE_MS,
     startGraceMs: COMPLETION_START_GRACE_MS,
     notebook: completion.notebook || null,
+    signals: appSignals(ctx, page),
     deadlineAt: ctx.deadlineAt,
     cancelCheck: ctx.cancelCheck,
     dialogQueue: ctx.dialogQueue,
@@ -384,7 +395,7 @@ function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered 
   }
   const g = gateAnswer(gate);
   if (g) checks.push({ rung: "completed", witness: "renderer", role: "support", answer: g });
-  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true }));
+  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
 
   const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
   const j = proof.judge(checks, {

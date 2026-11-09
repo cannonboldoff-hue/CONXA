@@ -357,6 +357,8 @@ class PostWatch(BaseModel):
     progress_seen: bool = True
     waited_ms: int = 0
     final_status: list[SurfaceItem] = Field(default_factory=list, max_length=3)
+    # Value-free words of what the page said WHILE the work was going on, in the app's own language.
+    progress_words: list[str] = Field(default_factory=list, max_length=12)
 
 
 class RecordedEvent(BaseModel):

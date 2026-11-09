@@ -75,6 +75,15 @@ class WorkflowPath(BaseModel):
     action_ids: list[str] = Field(default_factory=list)     # in order, this host only
 
 
+class AppSignals(BaseModel):
+    """How THIS app words progress, success and failure, in its own language: value-free single words learned from the
+    recordings made on it (never page text, a file name or a number). The runtime merges them with its English defaults,
+    so a German or Japanese app is judged by its own words. A fold: re-compiling a workflow replaces its contribution."""
+    progress: list[str] = Field(default_factory=list)
+    success: list[str] = Field(default_factory=list)
+    failure: list[str] = Field(default_factory=list)
+
+
 class Contribution(BaseModel):
     id: str                                   # "skill:<skill_id>"
     app_key: str
@@ -84,6 +93,7 @@ class Contribution(BaseModel):
     actions: list[Action] = Field(default_factory=list)
     popups: list[Popup] = Field(default_factory=list)
     path: WorkflowPath | None = None
+    signals: AppSignals = Field(default_factory=AppSignals)
 
 
 class AppGraph(BaseModel):
@@ -96,6 +106,7 @@ class AppGraph(BaseModel):
     popups: list[Popup] = Field(default_factory=list)
     paths: list[WorkflowPath] = Field(default_factory=list)
     contribution_ids: list[str] = Field(default_factory=list)
+    signals: AppSignals = Field(default_factory=AppSignals)
 
 
 def _union(*lists: list[str], limit: int | None = None) -> list[str]:
@@ -116,6 +127,7 @@ def fold_contributions(
     actions: dict[str, Action] = {}
     popups: dict[str, Popup] = {}
     paths: list[WorkflowPath] = []
+    signal_words: dict[str, set[str]] = {"progress": set(), "success": set(), "failure": set()}
 
     for c in sorted(contributions, key=lambda c: c.id):
         for s in c.screens:
@@ -153,6 +165,8 @@ def fold_contributions(
                     cur.options.append(o.model_copy(deep=True))
         if c.path is not None:
             paths.append(c.path.model_copy(deep=True))
+        for kind in ("progress", "success", "failure"):
+            signal_words[kind] |= set(getattr(c.signals, kind))
 
     return AppGraph(
         app_key=app_key,
@@ -163,6 +177,9 @@ def fold_contributions(
         popups=sorted(popups.values(), key=lambda p: p.id),
         paths=sorted(paths, key=lambda p: p.skill_id),
         contribution_ids=sorted(c.id for c in contributions),
+        # A word two recordings disagree about (progress in one, success in another) says nothing: dropped from all.
+        signals=AppSignals(**{k: sorted(v - {w for w in v if sum(w in s for s in signal_words.values()) > 1})[:24]
+                              for k, v in signal_words.items()}),
     )
 
 

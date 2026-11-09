@@ -25,7 +25,7 @@ function valueFreeWords(text) {
     .replace(/https?:\/\/\S+/g, " ")
     .replace(/\S*\d\S*/g, " ");
   const words = [];
-  for (const w of stripped.toLowerCase().split(/[^a-z]+/)) {
+  for (const w of stripped.toLowerCase().split(/[^\p{L}]+/u)) {
     if (w.length > 2 && !words.includes(w)) words.push(w);
     if (words.length >= 10) break;
   }
@@ -43,12 +43,12 @@ function probeRequestChain(check, nb) {
   return { answer: "cant_tell" }; // nothing was sent that this notebook could see: that proves nothing either way
 }
 
-function probeFailureSignal(nb, gate, freshTexts) {
+function probeFailureSignal(nb, gate, freshTexts, appFailure) {
   if (gate && gate.status === "failed") return { answer: "yes", evidence: gate.evidence };
   if (!nb) return { answer: "cant_tell" };
   const refused = nb.mutationFailure();
   if (refused) return { answer: "yes", evidence: `a request to the app failed (${refused.why})` };
-  const failure = classifyCompletionFailure(freshTexts);
+  const failure = classifyCompletionFailure(freshTexts, appFailure);
   if (failure) return { answer: "yes", evidence: `the app said "${failure.evidence}"` };
   return { answer: "no" };
 }
@@ -76,7 +76,7 @@ function probeDownloadFile(nb) {
  * @returns {Array<{id:string, rung:string, witness:string, role:string, answer:string, evidence?:string, identity?:boolean}>}
  *   Checks a test run showed to be dead (`calibrated === false`) are left out: they no longer count toward anything.
  */
-function evaluateChecks(effect, { notebook = null, gate = null, executed = true } = {}) {
+function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null } = {}) {
   const nb = notebook;
   const fresh = nb ? nb.seenNew() : [];
   const out = [];
@@ -87,7 +87,7 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true 
     switch (type) {
       case "input_has_files": r = { answer: executed ? "yes" : "cant_tell" }; break;
       case "request_chain": r = probeRequestChain(check, nb); break;
-      case "failure_signal": r = probeFailureSignal(nb, gate, fresh); break;
+      case "failure_signal": r = probeFailureSignal(nb, gate, fresh, signals && signals.failure); break;
       case "new_text": r = probeNewText(check, nb); break;
       case "download_file": r = probeDownloadFile(nb); break;
       default: r = { answer: "cant_tell" }; // value_equals / row_with_identity / url_stays / fresh_look / later_step: later

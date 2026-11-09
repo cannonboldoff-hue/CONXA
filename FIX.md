@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Websites in other languages are now checked in their own words — 2026-11-09**
+The app used to recognise "uploading" and "failed" only in English, so on a German website it could think an upload had finished while it was still going. Now, when you record, the app notes the words that website really uses for "in progress", "done" and "failed", keeps only plain words (never names, numbers or anything you typed), and uses them when the workflow runs. Websites with no learned words behave as before. The cloud dashboard can also list the steps that keep coming back unconfirmed.
+— 2026-11-09
+
 **A very slow upload is no longer reported as a failure or lost — 2026-11-09**
 When an upload took longer than the time one run is allowed, the app either gave up with an error or the answer arrived when nobody was listening. Now it says "Submitted": the file is still going, nothing was done twice, and the page is kept open for up to 15 minutes. Asking again checks on the same upload and tells you whether it finished or failed. Scheduled runs check back on their own and say "Couldn't confirm in time" if it never finishes.
 — 2026-11-09
