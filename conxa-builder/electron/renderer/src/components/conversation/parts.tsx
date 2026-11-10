@@ -58,6 +58,7 @@ export function EventRow({ item }: { item: ThreadItem }) {
 /** Frame shared by every card: surface step, hairline border, 10px radius, 16px padding. */
 export function CardShell({
   glyph,
+  lead,
   title,
   meta,
   children,
@@ -65,6 +66,8 @@ export function CardShell({
   className,
 }: {
   glyph?: StatusKind
+  /** Quiet context read before the title, e.g. what Conxa noticed that led to the question. */
+  lead?: ReactNode
   title: ReactNode
   meta?: ReactNode
   children?: ReactNode
@@ -76,6 +79,7 @@ export function CardShell({
       <header className="flex items-start gap-2.5">
         {glyph && <span className="mt-[3px]"><StatusGlyph kind={glyph} /></span>}
         <div className="min-w-0 flex-1">
+          {lead && <div className="mb-3 text-base leading-snug text-[var(--text-secondary)]">{lead}</div>}
           <h3 className="text-base font-semibold leading-snug text-[var(--text-primary)]">{title}</h3>
           {meta && <p className="mt-0.5 text-xs text-[var(--text-meta)]">{meta}</p>}
         </div>

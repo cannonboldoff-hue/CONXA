@@ -290,6 +290,11 @@ class CompileFlowMixin:
                       for k, s in zip(_step_keys(steps_now), steps_now)}
         questions, ledger_report = question_plan.review(questions, doc=doc_now, event_id_of_step_key=seq_by_key.get,
                                                         found_at="post_compile")
+        # What the person already settled before this rebuild (a pencil on an earlier question) is not asked again
+        # while the question is the same one; the answer is replayed onto the new document instead.
+        questions, carried_steps = self._flow_carry_settled(workflow_id, questions, result["skill_id"])
+        replayed_steps += carried_steps
+        doc_now = read_skill(result["skill_id"]) or doc_now
         # Worth a person's attention? Shadow mode only records the decision; "on" lets the compiler's default
         # stand for cheap ones (listed in the summary) and leaves test-revealable ones for a failing test.
         questions, assumptions = question_plan.apply_scoring(questions, doc_now, "post_compile")
@@ -363,6 +368,32 @@ class CompileFlowMixin:
             threading.Thread(target=self._flow_reword_safe, args=(workflow_id, sink), daemon=True).start()
         else:
             self._flow_post_summary(workflow_id, sink)
+
+    def _flow_carry_settled(self, workflow_id: str, questions: list[dict[str, Any]], skill_id: str) -> tuple[list[dict[str, Any]], int]:
+        """Mark as answered each fresh question that asks what an earlier answer already settled: same slot, same
+        situation (``clarify.situation_sig``), answered through the card. The answer is applied to the new
+        document the way a click would; if that fails the question is simply asked again. Safety questions
+        (popups, irreversible steps) are never carried: they always ask. Returns the questions and steps added."""
+        import uuid
+
+        from conxa_compile.conversation import clarify, clarify_store
+        from conxa_core.storage.json_store import read_skill
+
+        ledger = (clarify_store.load(workflow_id) or {}).get("ledger") or {}
+        added = 0
+        for q in questions:
+            unknown = q.get("unknown") or {}
+            prev = ledger.get(unknown.get("slot"))
+            if (not prev or q.get("status") != "open" or unknown.get("safety_floor") or prev.get("phase") != "post_compile"
+                    or prev.get("status") != "answered" or not prev.get("answer") or prev.get("sig") != clarify.situation_sig(q)):
+                continue
+            try:
+                ops, receipt = clarify.plan_answer(q, prev["answer"], read_skill(skill_id) or {})
+                added += self._run_clarify_ops(skill_id, ops, f"carry_{uuid.uuid4().hex[:8]}")
+            except Exception:  # noqa: BLE001 -- not replayable now: it stays open and is asked again
+                continue
+            q.update(status="answered", answer=prev["answer"], receipt=receipt, carried=True)
+        return questions, added
 
     def _flow_reevaluate_safe(self, workflow_id: str) -> None:
         try:
@@ -514,7 +545,7 @@ class CompileFlowMixin:
         live = ts.get_card(_thread(workflow_id), q["card_id"]) if q.get("card_id") else None
         if live and live.get("state") in ("open", "failed", "applying"):
             return  # its card is already on screen: asking again would only stack a second copy
-        asked = [x for x in questions if x.get("status") not in ("queued", "assumed", "superseded")]
+        asked = [x for x in questions if x.get("status") not in ("queued", "assumed", "superseded") and not x.get("carried")]
         number = asked.index(q) + 1
         card = harness.post_card(
             _thread(workflow_id), "clarify_question", "open", sink=sink, refs={"question_id": q["id"]},
@@ -548,8 +579,9 @@ class CompileFlowMixin:
                 return
             clarify_store.mutate(workflow_id, lambda d: d.__setitem__("notes_routed", True))
             message = ("In your answers you asked me to keep in mind: " + " | ".join(f"“{n}”" for n in notes) +
-                       ". Propose the change to the workflow if one applies, or tell me it needs none.")
-            threading.Thread(target=lambda: self.cmd_thread_turn({"thread_id": _thread(workflow_id), "message": message},
+                       ". Propose the change to the workflow if one applies, or tell me it needs none. The person cannot see "
+                       "this message, so start your reply by saying in a few plain words which note you are answering.")
+            threading.Thread(target=lambda: self.cmd_thread_turn({"thread_id": _thread(workflow_id), "message": message, "hidden": True},
                                                                  f"notes_{uuid.uuid4().hex[:10]}"), daemon=True).start()
         except Exception:  # noqa: BLE001 -- a missing follow-up must never break the summary
             import traceback
@@ -740,7 +772,7 @@ class CompileFlowMixin:
                                 error="The workflow changed in Human Edit, so this answer no longer fits." if stale else exc.message)
             return {"ok": False, "code": exc.code, "message": exc.message}
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=added)
-        clarify_store.ledger_set(workflow_id, question, "answered", answer.get("choice") or answer.get("selected"))
+        clarify_store.ledger_set(workflow_id, question, "answered", answer.get("choice") or answer.get("selected"), answer=answer)
         from conxa_compile.conversation import answer_memory
 
         answer_memory.remember(answer_memory.host_of(doc), question, answer)       # next workflow on this app asks less

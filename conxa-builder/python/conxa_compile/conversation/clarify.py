@@ -361,7 +361,7 @@ def _effect_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str
             continue
         choices.append({
             "id": f"effect:{keys[i]}",
-            "label": f"After {step_name(s)[:60]}, {sentence}",
+            "label": f"After the step “{step_name(s)[:60].rstrip(' .,;:')}”, {sentence}",
             "detail": "If this is not true afterwards, the run says it couldn\u2019t confirm it worked instead of saying it\u2019s done.",
             "selected": True,
         })
@@ -411,6 +411,18 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
 # those are never sent to a model, never reworded. Everything else may have its wording rewritten.
 _NO_REWORD_KINDS = {"dropped_value", "test_followup", "input_check"}
 _QUOTED = re.compile(r"“[^”]+”")
+
+
+def situation_sig(q: dict[str, Any]) -> str:
+    """What a question is about, so a settled answer can tell whether it still fits after a rebuild: the kind,
+    its choices and its steps, plus the wording for kinds that quote recorded values (those are never reworded)."""
+    import hashlib
+    import json
+
+    parts: list[Any] = [q.get("kind"), [str(c.get("id")) for c in q.get("choices") or []], list(q.get("step_keys") or [])]
+    if q.get("kind") in _NO_REWORD_KINDS:
+        parts.append(q.get("body"))
+    return hashlib.sha1(json.dumps(parts, default=str).encode("utf-8")).hexdigest()[:16]
 
 
 def reword_payload(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:

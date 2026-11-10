@@ -135,7 +135,6 @@ export function ClarifyQuestionCard(props: CardProps) {
 
 function ClarifyQuestionBody({ threadId, item }: CardProps) {
   const act = useThreadStore((s) => s.act)
-  const openEdit = useOpenEdit(threadId)
   const choices = (Array.isArray(item.choices) ? item.choices : []) as Choice[]
   const multi = item.multi === true
   const state = String(item.state)
@@ -144,7 +143,6 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   const [busy, setBusy] = useState(false)
   const [custom, setCustom] = useState('')
   const [own, setOwn] = useState('')
-  const [confirmBack, setConfirmBack] = useState(false)
   const sendChat = useThreadStore((s) => s.send)
   const items = useThreadStore((s) => s.threads[threadId]?.items)
   const qKind = String(item.question_kind ?? '')
@@ -185,39 +183,22 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
     return <div className="flex items-center gap-2.5 text-sm"><StatusGlyph kind="run" /><span className="text-[var(--text-primary)]">{title}</span><span className="text-[var(--text-meta)]">— applying…</span></div>
   }
   if (state === 'answered' || state === 'skipped') {
-    const keys = Array.isArray(item.step_keys) ? item.step_keys : []
     return (
       <div className="flex items-start gap-2.5 text-sm">
         <span className="mt-[3px]"><StatusGlyph kind={state === 'answered' ? 'ok' : 'none'} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[var(--text-primary)]">{title}</p>
           <p className="text-xs text-[var(--text-meta)]">{receipt || (state === 'skipped' ? 'Left as it was' : '')}</p>        </div>
-        {item.can_reopen === true && !confirmBack && (
+        {item.can_reopen === true && (
           <button
             type="button"
             className="shrink-0 rounded p-1 text-[var(--text-secondary)] hover:bg-white/[0.07] hover:text-[var(--text-primary)]"
-            onClick={() => setConfirmBack(true)}
+            onClick={() => send('reopen')}
+            disabled={busy}
             title="Go back to this question and choose again"
             aria-label="Go back to this question and choose again"
           >
             <Pencil className="size-3.5" />
-          </button>
-        )}
-        {confirmBack && (
-          <span className="flex shrink-0 items-center gap-2 text-xs">
-            <span className="text-[var(--text-meta)]">Go back here? Later answers and changes are discarded.</span>
-            <Button variant="outline" size="sm" disabled={busy} onClick={async () => { await send('reopen'); setConfirmBack(false) }}>Go back</Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmBack(false)}>Cancel</Button>
-          </span>
-        )}
-        {state === 'answered' && keys.length > 0 && openEdit && (
-          <button
-            type="button"
-            className="shrink-0 text-xs text-[var(--text-secondary)] underline-offset-2 hover:underline"
-            onClick={openEdit}
-            title="Open Human Edit to change this"
-          >
-            Change
           </button>
         )}
       </div>
@@ -235,10 +216,21 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   // Every question must be answered: there is no skip. A tick-list is sent by the arrow, a single choice by picking it.
   const next = () => send('choose', { selected: [...picked], ...(customText ? { custom_text: customText } : {}) })
   const canCheck = Array.isArray(item.actions) && item.actions.includes('checked')
+  // Every question reads the same: what Conxa noticed, where this sits in the run of questions, then the question.
+  const body = typeof item.body === 'string' ? item.body : ''
+  const index = Number(item.index) || 0
+  const total = Number(item.total) || 0
+  const lead = body || index ? (
+    <>
+      {body}
+      {index > 0 && total > 0 && <span className={cn('block text-xs text-[var(--text-meta)]', body && 'mt-1')}>Question {index} of {total}</span>}
+    </>
+  ) : undefined
 
   return (
     <CardShell
       glyph="warn"
+      lead={lead}
       title={title}
       footer={
         <>
@@ -281,35 +273,19 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
           )
         })}
       </ul>
-      {qKind === 'done_when' && (
-        <label className="mt-3 block text-xs text-[var(--text-meta)]">
-          Or type words you should see on the screen when it works
-          <input
-            type="text"
-            maxLength={120}
-            value={custom}
-            disabled={busy}
-            onChange={(e) => setCustom(e.target.value)}
-            placeholder="e.g. File uploaded"
-            className="mt-1 w-full rounded-[8px] border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
-          />
-        </label>
-      )}
-      {qKind !== 'done_when' && (
-        <input
-          type="text"
-          maxLength={500}
-          value={own}
-          disabled={busy}
-          onChange={(e) => setOwn(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void sendOwn()
-          }}
-          aria-label="Or type your own answer and press Enter"
-          placeholder="Or type your own answer and press Enter…"
-          className="mt-3 w-full rounded-[8px] border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
-        />
-      )}
+      <input
+        type="text"
+        maxLength={qKind === 'done_when' ? 120 : 500}
+        value={qKind === 'done_when' ? custom : own}
+        disabled={busy}
+        onChange={(e) => (qKind === 'done_when' ? setCustom(e.target.value) : setOwn(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void (qKind === 'done_when' ? next() : sendOwn())
+        }}
+        aria-label={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter' : 'Or type your own answer and press Enter'}
+        placeholder={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter…' : 'Or type your own answer and press Enter…'}
+        className="mt-3 w-full rounded-[8px] border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+      />
     </CardShell>
   )
 }

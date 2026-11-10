@@ -206,6 +206,7 @@ def run_turn(
     flow_executor: FlowExecutor | None = None,
     workflows: list[dict[str, Any]] | None = None,
     context_sections: list[tuple[str, str]] | None = None,
+    hidden: bool = False,
 ) -> dict[str, Any]:
     """Run one turn. Returns ``{"turn_id", "status": "done"|"cancelled", "reply", "items"}``.
 
@@ -233,14 +234,21 @@ def run_turn(
         try:
             if cancel.is_set():
                 return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": []}
-            return _run_locked(
-                thread_id=thread_id, kind=kind, message=message, sink=sink, turn_id=turn_id, cancel=cancel,
-                anchor=anchor, card_id=card_id, choice=choice, action=action, workflow=workflow, skill_id=skill_id,
-                lifecycle=lifecycle, group_names=group_names, card_executor=card_executor,
-                gate_proposals=gate_proposals, load_digest=load_digest, load_clarify=load_clarify,
-                last_test_failed=last_test_failed, push=push, new_items=new_items,
-                flow_executor=flow_executor, workflows=workflows, context_sections=context_sections,
-            )
+            try:
+                return _run_locked(
+                    thread_id=thread_id, kind=kind, message=message, sink=sink, turn_id=turn_id, cancel=cancel,
+                    anchor=anchor, card_id=card_id, choice=choice, action=action, workflow=workflow, skill_id=skill_id,
+                    lifecycle=lifecycle, group_names=group_names, card_executor=card_executor,
+                    gate_proposals=gate_proposals, load_digest=load_digest, load_clarify=load_clarify,
+                    last_test_failed=last_test_failed, push=push, new_items=new_items,
+                    flow_executor=flow_executor, workflows=workflows, context_sections=context_sections,
+                    hidden=hidden,
+                )
+            finally:
+                # Said here, with the turn's own id, so a turn the backend starts by itself (no renderer
+                # call waiting on it) still tells the screen to drop its "replying…" text.
+                if sink is not None:
+                    sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": turn_id, "status": "finished"})
         finally:
             lock.release()
     finally:
@@ -256,7 +264,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
                 last_test_failed: bool, push: Callable[[dict[str, Any]], dict[str, Any]],
                 new_items: list[dict[str, Any]], flow_executor: FlowExecutor | None = None,
                 workflows: list[dict[str, Any]] | None = None,
-                context_sections: list[tuple[str, str]] | None = None) -> dict[str, Any]:
+                context_sections: list[tuple[str, str]] | None = None, hidden: bool = False) -> dict[str, Any]:
     if sink is not None:
         sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": turn_id, "status": "started"})
 
@@ -278,7 +286,8 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
         raise ValueError("message is required")
 
     # The person's own message is on the page the moment it is sent, even if the model fails.
-    user_item = push(emit_item(sink, thread_id, ts.append(thread_id, "user_message", text=message, anchor=anchor)))
+    user_item = push(emit_item(sink, thread_id, ts.append(
+        thread_id, "user_message", text=message, anchor=anchor, **({"hidden": True} if hidden else {}))))
     items = items + [user_item]
 
     open_question = next((c for c in reversed(items) if c.get("kind") == "card" and c.get("state") == "open" and c.get("choices")), None)

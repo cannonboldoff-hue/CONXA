@@ -169,6 +169,7 @@ class ConversationMixin:
                 card_id=str(payload.get("card_id") or "") or None,
                 choice=str(payload.get("choice") or "") or None,
                 action=str(payload.get("action") or "") or None,
+                hidden=bool(payload.get("hidden")),
                 card_executor=execute,
                 flow_executor=run_action,
                 **ctx,
@@ -186,7 +187,6 @@ class ConversationMixin:
         finally:
             if replying:
                 runtime_state.set_flags(ident, replying=False)
-                sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": str(payload.get("turn_id") or ""), "status": "finished"})
 
     def cmd_card_action(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """A button on a card (Apply, Undo, Create, …) — no model involved."""

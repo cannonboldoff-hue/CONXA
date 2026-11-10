@@ -783,6 +783,25 @@ def test_the_pencil_after_the_build_restores_the_workflow_and_asks_the_question_
     assert first["state"] == "open"
 
 
+def test_a_rebuild_does_not_ask_again_what_was_already_settled_unless_it_is_a_safety_question(env):
+    from conxa_compile.conversation import clarify_store
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    for _ in range(6):                                           # answer everything the first build asked
+        open_cards = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"]
+        if not open_cards:
+            break
+        c = open_cards[0]
+        payload = {"selected": [x["id"] for x in c["choices"] if x.get("selected")]} if c.get("multi") else {"choice": c["choices"][0]["id"]}
+        assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": c["card_id"], "action": "choose", "payload": payload}, "r")["ok"]
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid2")           # a rebuild, as after the pencil on an earlier question
+    by_kind = {q["kind"]: q for q in clarify_store.load(wf.id)["questions"]}
+    assert by_kind["values"]["status"] == "answered" and by_kind["values"]["carried"] is True
+    assert by_kind["confirm"]["status"] == "open"                # a safety question is asked every time
+
+
 # ── Phase 2: scoring on ──
 
 

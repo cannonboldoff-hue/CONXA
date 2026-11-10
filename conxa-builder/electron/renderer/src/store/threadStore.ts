@@ -150,7 +150,15 @@ export const useThreadStore = create<Store>((set, get) => ({
 
   onItem: (threadId, item) => patch(set, threadId, (t) => ({ items: upsertItem(t.items, item) })),
   onDelta: (threadId, turnId, text) => patch(set, threadId, (t) => ({ streaming: applyDelta(t.streaming, turnId, text) })),
-  onTurn: (threadId, _turnId, status) => patch(set, threadId, { queued: status === 'queued' }),
+  // A turn the backend starts itself (no send() waiting on it) is only ever ended by this event.
+  onTurn: (threadId, turnId, status) =>
+    patch(set, threadId, (t) => {
+      if (status === 'started') return { queued: false, turnId: t.turnId ?? turnId }
+      if (status === 'finished') {
+        return { queued: false, ...(t.turnId === turnId ? { turnId: null } : {}), ...(t.streaming?.turnId === turnId ? { streaming: null } : {}) }
+      }
+      return { queued: status === 'queued' }
+    }),
   setLifecycle: (threadId, lifecycle) => patch(set, threadId, { lifecycle }),
 }))
 

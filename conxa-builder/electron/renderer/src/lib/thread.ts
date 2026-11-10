@@ -69,7 +69,8 @@ export function openCards(items: ThreadItem[]): ThreadItem[] {
  * words. `summary` and `import_marker` items are bookkeeping and never render.
  */
 export function visibleItems(items: ThreadItem[]): ThreadItem[] {
-  return items.filter((i) => i.kind !== 'summary' && i.kind !== 'import_marker')
+  // `hidden`: an instruction Conxa gave itself in the person's voice; they never typed it, so it is not shown.
+  return items.filter((i) => i.kind !== 'summary' && i.kind !== 'import_marker' && !i.hidden)
 }
 
 export function earlierLabel(items: ThreadItem[]): string {

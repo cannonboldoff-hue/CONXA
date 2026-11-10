@@ -156,10 +156,12 @@ def mark_stale(workflow_id: str, live_keys: set[str]) -> int:
     return count[0]
 
 
-def ledger_set(workflow_id: str, question: dict[str, Any], status: str, choice: Any = None) -> None:
+def ledger_set(workflow_id: str, question: dict[str, Any], status: str, choice: Any = None, answer: Any = None) -> None:
     """Remember which slot an answered/skipped question settled (``clarify.json["ledger"]``, keyed by slot).
     Kept apart from ``questions`` on purpose: the pencil reopens questions and the compile replaces that list,
-    but what was settled before the build must still be known after it. Nothing reads it yet but the report."""
+    but what was settled before the build must still be known after it. ``answer`` and ``sig`` let a rebuild
+    carry a settled answer forward when the question it would ask is the same one (``_flow_carry_settled``)."""
+    from conxa_compile.conversation import clarify
     slot = (question.get("unknown") or {}).get("slot")
     if not slot:
         return
@@ -169,6 +171,7 @@ def ledger_set(workflow_id: str, question: dict[str, Any], status: str, choice: 
             "qid": question.get("id"), "kind": question.get("kind"), "facet": question["unknown"].get("facet"),
             "phase": question.get("phase") or "post_compile", "status": status,
             **({"choice": choice} if choice is not None else {}),
+            **({"answer": answer, "sig": clarify.situation_sig(question)} if answer else {}),
         }
 
     mutate(workflow_id, edit)

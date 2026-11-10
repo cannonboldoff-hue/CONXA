@@ -225,6 +225,17 @@ def test_a_turn_streams_and_appends_user_then_assistant(monkeypatch):
     assert out["status"] == "done" and out["reply"] == "Hello there."
     assert [i["kind"] for i in ts.load("chat:c1")["items"]] == ["user_message", "assistant_message"]
     assert "".join(e["text"] for e in events if e.get("phase") == "thread_delta") == "Hello there."
+    # The screen drops its "replying…" text on this event, so it must carry the turn's own id.
+    turns = [(e["status"], e["turn_id"]) for e in events if e.get("phase") == "thread_turn"]
+    assert [s for s, _ in turns] == ["started", "finished"] and turns[0][1] == turns[1][1] == out["turn_id"]
+
+
+def test_a_hidden_message_is_stored_but_marked_so_the_screen_skips_it(monkeypatch):
+    _fake_stream(monkeypatch)
+    monkeypatch.setattr("conxa_compile.llm.client.call_llm", lambda *a, **k: {"draft_workflow": None})
+    harness.run_turn(thread_id="chat:c1h", message="note", sink=None, group_names=[], hidden=True)
+    first = ts.load("chat:c1h")["items"][0]
+    assert first["kind"] == "user_message" and first["hidden"] is True
 
 
 def test_cancel_appends_nothing_half_finished(monkeypatch):
