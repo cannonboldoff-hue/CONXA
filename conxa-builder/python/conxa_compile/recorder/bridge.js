@@ -1619,7 +1619,20 @@
     };
   }
 
+  // Every recorded step leaves the page the moment the person acts, stamped so Python can tell if one
+  // never arrived: `bridge` names this document's bridge, `seq` counts its steps, `uid` names the step
+  // so later facts about it (what the page did afterwards) can be sent as an amendment.
+  const _bridgeId = Math.random().toString(36).slice(2, 10);
+  let _seq = 0;
+  let _openWatches = 0;
+  let _cutAll = false;
+
   function report(payload) {
+    if (payload && payload.action && !payload._amend && !payload.uid) {
+      payload.bridge = _bridgeId;
+      payload.seq = ++_seq;
+      payload.uid = _bridgeId + "-" + payload.seq;
+    }
     const fn = window["__skillReport"];
     if (typeof fn === "function") {
       return fn(payload);
@@ -1727,10 +1740,26 @@
   // Keeps watching ONLY while progress is on screen. Records that progress was seen and the value-free
   // words of what the page said once it ended (e.g. "upload complete"). Adds nothing for an action
   // that shows no progress. Observation only: it never touches the page.
-  async function _watchPostAction(payload) {
+  // `probe` is the payload's act-time state (the payload itself has already left the page). Resolves to the
+  // post_watch object, or null when the action showed no progress of its own.
+  async function _watchPostAction(probe) {
     const t0 = Date.now();
-    const before = new Set(((payload.state_probe && payload.state_probe.surfaces_before) || []).map((l) => l.slice(l.indexOf("\t") + 1)));
-    if (!_progressVisible()) return;
+    // The texts on screen when the person acted (taken then, see finalizeStateAfterSettle). Falls back to the
+    // live regions alone for a probe that has none.
+    const before = new Set((probe && probe.watch_before) || ((probe && probe.surfaces_before) || []).map((l) => l.slice(l.indexOf("\t") + 1)));
+    if (!_progressVisible()) return null;
+    // Progress already on screen when the person acted belongs to something earlier (another upload's tray).
+    // Only a progress text that is new since the act counts as this action's.
+    if (probe && probe.progress_before && !_watchTexts().some((t) => !before.has(t) && _PROGRESS_RE.test(t))) return null;
+    _openWatches++;
+    try {
+      return await _runWatch(t0, before);
+    } finally {
+      _openWatches--;
+    }
+  }
+
+  async function _runWatch(t0, before) {
     // What the page said WHILE the work was going on. It tells the progress words of this app in its own language
     // (a German "wird hochgeladen"), and keeps those lines out of the "what it said when done" list below.
     const progressTexts = new Set();
@@ -1744,41 +1773,71 @@
     };
     noteProgress();
     let lastBusy = Date.now();
-    while (Date.now() - t0 < postWatchMaxMs) {
+    while (Date.now() - t0 < postWatchMaxMs && !_cutAll) {
       await _sleep(250);
       if (_progressVisible()) { lastBusy = Date.now(); noteProgress(); }
       else if (Date.now() - lastBusy >= postWatchQuietMs) break;
     }
     const final = [];
-    for (const text of _watchTexts()) {
-      if (before.has(text) || progressTexts.has(text) || _PROGRESS_RE.test(text)) continue;
-      const words = _valueFreeWords(text);
-      if (words.length) final.push({ kind: "status", words });
-      if (final.length >= 3) break;
+    // A watch cut short by Stop never saw the work end, so it must not claim any "done" words.
+    if (!_cutAll) {
+      for (const text of _watchTexts()) {
+        if (before.has(text) || progressTexts.has(text) || _PROGRESS_RE.test(text)) continue;
+        const words = _valueFreeWords(text);
+        if (words.length) final.push({ kind: "status", words });
+        if (final.length >= 3) break;
+      }
     }
-    payload.post_watch = { progress_seen: true, waited_ms: Date.now() - t0, final_status: final, progress_words: progressWords };
+    const watch = { progress_seen: true, waited_ms: Date.now() - t0, final_status: final, progress_words: progressWords };
+    if (_cutAll) watch.cut_by_stop = true;
+    return watch;
   }
 
-  // Finalizes in submission order (not completion order) so two fast clicks in a row can never
-  // have their state_change/dom_diff reported out of sequence.
-  // Pending payloads are tracked so beforeunload can force-flush them (see below) — otherwise a
-  // click that triggers fast navigation races the settle wait and the step is silently dropped.
-  let _pendingClickPayloads = [];
+  // The step itself leaves the page at once. What the page did afterwards (state change, DOM diff, post
+  // condition, the app's words, and later the progress watch) follows as amendments keyed by the step's uid, so
+  // nothing the person did can be held back by, or lost with, the waiting. A step whose amendment never arrives
+  // is simply one with an unknown effect. The settle itself is still queued in submission order so two fast
+  // clicks can never have their state_change/dom_diff reported out of sequence; the (long) watch is not.
   function finalizeStateAfterSettle(payload, quietMs, maxWaitMs) {
-    _pendingClickPayloads.push(payload);
+    const probe = payload.state_probe;
+    let watches = false;
+    try {
+      watches = _startsWork(payload);
+      if (watches) { probe.progress_before = _progressVisible(); probe.watch_before = _watchTexts(); }
+    } catch (_e) { watches = false; }
+    const row = Object.assign({}, payload);
+    delete row.state_probe;
+    row.state_change = { before: probe.before, after: "" };
+    report(row);
+    const uid = row.uid;
     _finalizeQueue = _finalizeQueue
       .then(() => _waitForDomSettle(quietMs, maxWaitMs))
-      .then(() => (_startsWork(payload) ? _watchPostAction(payload) : null))
       .then(() => {
-        _pendingClickPayloads = _pendingClickPayloads.filter((p) => p !== payload);
-        if (payload.__flushed) return;
-        finalizeState(payload);
+        _applyAfter(payload, pageFingerprint());
+        const dc = payload.date_context;
+        report({
+          _amend: uid,
+          state_change: payload.state_change,
+          post_condition: payload.post_condition,
+          surface_context: payload.surface_context,
+          date_field_after: dc && dc.field_display_value_after != null ? dc.field_display_value_after : null,
+        });
+        if (watches) {
+          _watchPostAction(probe)
+            .then((watch) => { if (watch) report({ _amend: uid, post_watch: watch }); })
+            .catch(() => {});
+        }
       })
       .catch(() => {});
     return _finalizeQueue;
   }
 
   function finalizeStateWithAfter(payload, after) {
+    _applyAfter(payload, after);
+    return report(payload);
+  }
+
+  function _applyAfter(payload, after) {
     const domAfter = interactiveSignature();
     const domBefore = payload.state_probe && payload.state_probe.dom_before ? payload.state_probe.dom_before : "";
     payload.state_change = {
@@ -1816,7 +1875,6 @@
     if (dc && dc.__fieldEl) {
       try { dc.field_display_value_after = readEditableValue(dc.__fieldEl); } catch (_e) {}
     }
-    return report(payload);
   }
 
   // ── what the app said (EXEC-49 G9) ──────────────────────────────────────────────────────────
@@ -2179,6 +2237,11 @@
         return;
       }
       const resolved = resolveMeaningfulTarget(el);
+      // A real click that matched nothing we know how to record. Say so (tag and role only, no text) so a
+      // step that never became a row is counted instead of vanishing.
+      if (!resolved && ev.isTrusted === true) {
+        try { report({ _gap: { reason: "no_target", tag: (el.tagName || "").toLowerCase(), role: el.getAttribute("role") || "" } }); } catch (_e) {}
+      }
       if (resolved) {
         flushPendingHoverBeforeClick(resolved);
         // ARIA radiogroup/listbox widgets (a <div role="radio">/[role="option"]) never fire a
@@ -2961,13 +3024,25 @@
       clearTimeout(hoverTimer);
       hoverTimer = null;
     }
-    if (_pendingClickPayloads.length) {
-      const toFlush = _pendingClickPayloads;
-      _pendingClickPayloads = [];
-      toFlush.forEach((p) => {
-        p.__flushed = true;
-        finalizeState(p);
-      });
-    }
+    // Steps have already left the page; just end any watch so its amendment goes out before the page dies.
+    _cutAll = true;
   }, true);
+
+  // Stop asks every frame to hand over what it holds. Cuts open watches (their amendment goes out within one
+  // watch tick), sends any typing still waiting on its debounce, and tells Python how many steps this bridge
+  // has issued and how many watches are still open, so it can wait until it has them all.
+  function _state() { return { bridge: _bridgeId, last_seq: _seq, open: _openWatches }; }
+  window.__skillState = _state;
+  window.__skillFlush = function () {
+    _cutAll = true;
+    try {
+      if (inputTimer) {
+        clearTimeout(inputTimer);
+        inputTimer = null;
+        if (lastInputEl) emitEditableChange(lastInputEl, true);
+      }
+      emitPendingHover("flush");
+    } catch (_e) {}
+    return _state();
+  };
 })();

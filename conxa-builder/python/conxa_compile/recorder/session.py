@@ -422,6 +422,12 @@ class RecordingSession:
     _seq: int = 0
     _materialized: list[RecordedEvent] = field(default_factory=list)
     _pending_payloads: SimpleQueue = field(default_factory=SimpleQueue)
+    # BUILD-80: every step the page sends carries (bridge, seq). A number missing from 1..N for a bridge, or a
+    # flush that names a number never received, is a step that was lost on the way; `_capture_gaps` lists them
+    # (value-free) for recorder_diag.json and for the plain-words notice after the recording is saved.
+    _seen_seqs: dict[str, set[int]] = field(default_factory=dict)
+    _flush_last_seq: dict[str, int] = field(default_factory=dict)  # highest step number a bridge said it issued at Stop
+    _capture_gaps: list[dict] = field(default_factory=list)
     # True: attach to the panel run whose id is session_id and which already holds a replayed page
     # (re-record from a step), instead of creating a view. See host_view.adopt.
     adopt: bool = False
@@ -1743,6 +1749,8 @@ class RecordingSession:
             action = str((raw_action or {}).get("action") or "")
             suffix = f":{action}" if action else ""
             self.binding_errors.append(f"event_capture_error{suffix}: {exc!s}")
+            if len(self._capture_gaps) < 200:
+                self._capture_gaps.append({"kind": "capture_error", "action": action})
 
     async def start(self) -> None:
         self._stop_requested.clear()
@@ -1778,6 +1786,12 @@ class RecordingSession:
             if payload_copy.get("_trace"):
                 if len(self._traces) < 5000:
                     self._traces.append(payload_copy)
+                return
+            # A real click the page could not turn into a step: counted, never queued as an event.
+            gap = payload_copy.get("_gap")
+            if isinstance(gap, dict):
+                if len(self._capture_gaps) < 200:
+                    self._capture_gaps.append({"kind": "unrecorded_click", **{k: str(v)[:40] for k, v in gap.items()}})
                 return
             src_page = source.get("page") if isinstance(source, dict) else None
             src_frame = source.get("frame") if isinstance(source, dict) else None
@@ -1852,6 +1866,7 @@ class RecordingSession:
             "frame_lifecycle": self._frame_lifecycle,
             "slowest_frame_probes": self._slow_frame_probes,
             "tabs": self._tab_meta,
+            "capture_gaps": self.capture_gaps(),
         }
         try:
             out.write_text(json.dumps(diag, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1916,6 +1931,16 @@ class RecordingSession:
     def _consume_payload_sync(
         self, payload: dict[str, Any], src_page: Any | None = None, src_frame: Any | None = None
     ) -> None:
+        # BUILD-80: facts about a step that is already saved (what the page did afterwards). Handled before the
+        # pause and login drops below: the step is already in, so its details must never be dropped with a later
+        # state of the recorder.
+        if payload.get("_amend"):
+            self._apply_amend_sync(payload)
+            return
+        # Counted on arrival, before any drop below, so a step dropped on purpose (paused, a login page) is not
+        # mistaken for one that was lost on the way.
+        if payload.get("bridge") and isinstance(payload.get("seq"), int):
+            self._seen_seqs.setdefault(str(payload["bridge"]), set()).add(payload["seq"])
         # BUILD-38: a payload that arrived while paused is dropped, not recorded — and not
         # replayed on resume, which is why the flag is stamped at enqueue time.
         if payload.pop("_paused", False):
@@ -1971,6 +1996,86 @@ class RecordingSession:
                 hook(event)
             except Exception:  # noqa: BLE001 — a UI callback must never break recording
                 pass
+
+    def _apply_amend_sync(self, payload: dict[str, Any]) -> None:
+        """BUILD-80: merge what the page did after a saved step (state change, post condition, the app's words,
+        the progress watch) into that step. A step is found by its uid; one that is gone (merged typing, a dropped
+        login-page step) simply has nothing to amend. Never raises: a bad amendment leaves the step as it was."""
+        uid = str(payload.get("_amend") or "")
+        fields = {
+            k: payload[k]
+            for k in ("state_change", "post_condition", "surface_context", "post_watch")
+            if payload.get(k) is not None
+        }
+        date_after = payload.get("date_field_after")
+        try:
+            with self._lock:
+                idx = next(
+                    (i for i in range(len(self._materialized) - 1, -1, -1)
+                     if self._materialized[i].extras.get("uid") == uid),
+                    None,
+                )
+                if idx is None:
+                    return
+                data = self._materialized[idx].model_dump(mode="json")
+                data.update(fields)
+                if date_after is not None and isinstance(data.get("date_context"), dict):
+                    data["date_context"]["field_display_value_after"] = date_after
+                self._materialized[idx] = RecordedEvent.model_validate(data)
+            self._rewrite_events_jsonl(self.data_root / "sessions" / self.session_id)
+        except Exception as exc:  # noqa: BLE001
+            self.binding_errors.append(f"amend_error: {exc!s}")
+
+    def capture_gaps(self) -> list[dict[str, Any]]:
+        """Steps the person took that did not reach the recording: a number missing from a bridge's 1..N run, or a
+        number the bridge said it issued at Stop that never arrived. Plus the diagnostics-only notes (a click on
+        something that is not a control; a step that failed to save). Value-free."""
+        gaps = list(self._capture_gaps)
+        for bridge in set(self._seen_seqs) | set(self._flush_last_seq):
+            seen = self._seen_seqs.get(bridge, set())
+            top = max(max(seen, default=0), self._flush_last_seq.get(bridge, 0))
+            missing = [n for n in range(1, top + 1) if n not in seen]
+            if missing:
+                gaps.append({"kind": "lost_step", "bridge": bridge, "count": len(missing), "missing": missing[:20]})
+        return gaps
+
+    def capture_gap_count(self) -> int:
+        """How many steps were lost or failed to save. A click on a non-control is not a loss and is not counted."""
+        return sum(int(g.get("count") or 1) for g in self.capture_gaps() if g.get("kind") in ("lost_step", "capture_error"))
+
+    def _bridge_states_sync(self, flush: bool) -> list[dict[str, Any]]:
+        """Ask every frame of every open page where its bridge stands. ``flush`` also cuts open watches and sends
+        pending typing (window.__skillFlush); without it the call only reads (window.__skillState)."""
+        call = "__skillFlush" if flush else "__skillState"
+        out: list[dict[str, Any]] = []
+        for page in self._open_pages_sync():
+            try:
+                frames = list(page.frames)
+            except Exception:  # noqa: BLE001
+                continue
+            for fr in frames:
+                try:
+                    st = fr.evaluate(f"() => (typeof window.{call} === 'function' ? window.{call}() : null)")
+                except Exception:  # noqa: BLE001 — a frame that is gone has nothing to hand over
+                    continue
+                if isinstance(st, dict) and st.get("bridge"):
+                    out.append(st)
+                    last = st.get("last_seq")
+                    if isinstance(last, int):
+                        self._flush_last_seq[str(st["bridge"])] = max(last, self._flush_last_seq.get(str(st["bridge"]), 0))
+        return out
+
+    _STOP_BARRIER_MAX_S = 10.0  # the longest Stop waits for frames to hand over their steps
+
+    def _bridges_settled(self, states: list[dict[str, Any]]) -> bool:
+        """True when no watch is still open and every step number a bridge issued has arrived here."""
+        for st in states:
+            if int(st.get("open") or 0) > 0:
+                return False
+            seen = self._seen_seqs.get(str(st["bridge"]), set())
+            if any(n not in seen for n in range(1, int(st.get("last_seq") or 0) + 1)):
+                return False
+        return True
 
     A11Y_CAPTURE_TIMEOUT_MS = 2000
 
@@ -2133,6 +2238,11 @@ class RecordingSession:
         if action_name == "upload_intent" and self._pending_file_pick:
             extras["file_pick"] = self._pending_file_pick
             self._pending_file_pick = None
+        # BUILD-80: names this step so the page's later amendment (see _apply_amend_sync) finds it.
+        if payload.get("uid"):
+            extras["uid"] = str(payload["uid"])
+            extras["bridge"] = str(payload.get("bridge") or "")
+            extras["seq"] = payload.get("seq")
         body = {
             "action": action,
             "target": payload["target"],
@@ -3201,6 +3311,12 @@ class RecordingSession:
                 # Stop waits for a short "idle queue" condition so delayed
                 # Playwright binding callbacks can still be consumed.
                 shutdown_start = time.monotonic()
+                # BUILD-80: ask every frame to hand over what it holds (open watches are cut, typing is sent) and
+                # keep waiting until every step number a frame issued has arrived and no watch is open, so Stop
+                # can never close the browser on steps that are still on their way.
+                bridge_states = self._bridge_states_sync(flush=True)
+                barrier_ok = self._bridges_settled(bridge_states)
+                barrier_polled_at = time.monotonic()
                 while True:
                     for page in self._open_pages_sync():
                         try:
@@ -3218,8 +3334,11 @@ class RecordingSession:
                     except Empty:
                         pass
                     elapsed = time.monotonic() - shutdown_start
+                    if not barrier_ok and elapsed < self._STOP_BARRIER_MAX_S and time.monotonic() - barrier_polled_at >= 0.25:
+                        barrier_polled_at = time.monotonic()
+                        barrier_ok = self._bridges_settled(self._bridge_states_sync(flush=False))
                     idle_for = time.monotonic() - self._last_enqueue_at if self._last_enqueue_at else elapsed
-                    if elapsed >= 5.0 and idle_for >= 1.0 and drained == 0:
+                    if elapsed >= 5.0 and idle_for >= 1.0 and drained == 0 and (barrier_ok or elapsed >= self._STOP_BARRIER_MAX_S):
                         break
                     time.sleep(0.05)
                 # Final diagnostics snapshot after all events are drained.

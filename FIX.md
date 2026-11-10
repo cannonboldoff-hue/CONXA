@@ -6,58 +6,10 @@
 Seeing "upload complete" does not prove the file arrived. After an upload, the app can now open the same page again in a separate tab, read it, and check that the file's name is on it, more times than before. It never clicks or types, closes that tab, and says "couldn't confirm" instead of guessing when it can't look. It only starts insisting on this after a test of your workflow showed it works on your website, so a site that shows no file list never makes a working upload stop. The cloud dashboard now also shows the steps that keep coming back unconfirmed.
 — 2026-11-10
 
-**Websites in other languages are now checked in their own words — 2026-11-09**
-The app used to recognise "uploading" and "failed" only in English, so on a German website it could think an upload had finished while it was still going. Now, when you record, the app notes the words that website really uses for "in progress", "done" and "failed", keeps only plain words (never names, numbers or anything you typed), and uses them when the workflow runs. Websites with no learned words behave as before. The cloud dashboard can also list the steps that keep coming back unconfirmed.
-— 2026-11-09
+**A recording no longer loses the last few things you did — 2026-11-10**
+Each thing you do in the browser is now saved the moment you do it. Before, it was held back while the app watched the page finish its work, so the last steps could be thrown away when you pressed Stop, for example choosing "File upload" and picking a file in Google Drive. The "did it finish" details now arrive afterwards and are added to the step. When you press Stop, the app first collects everything still on its way. If it still cannot account for something you did, it tells you in the chat so you can record that part again.
+— 2026-11-10
 
-**A very slow upload is no longer reported as a failure or lost — 2026-11-09**
-When an upload took longer than the time one run is allowed, the app either gave up with an error or the answer arrived when nobody was listening. Now it says "Submitted": the file is still going, nothing was done twice, and the page is kept open for up to 15 minutes. Asking again checks on the same upload and tells you whether it finished or failed. Scheduled runs check back on their own and say "Couldn't confirm in time" if it never finishes.
-— 2026-11-09
-
-**Each step that starts work now has its own plain "how we know it worked" check — 2026-11-09**
-When a workflow uploads a file, saves, sends or deletes something, the app used to have no clear idea of what "done" looked like, so it could only guess. Now, while you record, the app notes what the website shows when the work really finishes, for example "upload complete". It turns that into a short check for that step and asks you in the chat, in everyday words, whether that is how you know it worked. For steps that can't be undone, like a delete or a send, the workflow can't be published until that check has either been tested or agreed to by you. If the website shows an error instead, the run now stops and says so plainly.
-— 2026-11-09
-
-**A run now sees what is happening in every tab and every part of the page — 2026-11-09**
-Before, when a step started an upload, the app only looked at one tab and the main part of the page. Progress shown in a small embedded window, or a refusal that arrived in a second tab, could go unseen, so a run might say "Done" too early. Now the app keeps a short private notebook of what happens on every tab the workflow uses and in every visible part of the page, from just before the step until its result is clear. It also notices when a website says "OK" but its reply says the upload failed, for example because the storage is full. The notebook never keeps page contents, web addresses with personal details, or replies; it stays on your computer.
-— 2026-11-09
-
-**A run now says plainly when it could not be sure a step worked — 2026-11-09**
-Before, a step that the app could not check was quietly counted as a success, so a run could say "Done" when nothing proved the work happened. Now every step is judged on how much was really shown. If a small step could not be confirmed, the run still finishes but says "Done, please check" and lists what to look at. If a step that cannot be undone, like an upload or a delete, could not be confirmed, the run stops and says "Couldn't confirm" instead of pretending, and it never repeats that step by itself. The test screen in the Build Studio shows these in everyday words, with a "What was checked" list one click down.
-— 2026-11-09
-
-**Uploading to Google Drive is no longer called finished while the upload is still running — 2026-11-09**
-Drive shows a small upload window with Minimize, Close and Cancel all buttons. The app mistook it for a question and stopped waiting after a few thousandths of a second, so a run could say "Done" while the file was still on its way. It now knows that window is only a progress report and waits for it to finish. It also no longer treats a quiet page as finished until it has seen some sign the work started, stops waiting in time to tell you the upload was still running instead of going silent, and stops the run if a question is left open on the last step.
-— 2026-11-09
-
-**The plan for proving steps really worked is now in everyday language — 2026-11-09**
-The design document was written for engineers, so it was hard for anyone else to follow. It now explains everything in plain words, using the example of sending a parcel. The technical details are still there, tucked behind sections that engineers can open.
-— 2026-11-09
-
-**A written plan for proving that every step really worked — 2026-11-09**
-Clicking a button does not prove the work got done, and a file can look uploaded when it never arrived. A new design document explains how the app can check each action properly, what to do when it can't tell, and where those checks can still go wrong. While writing it we found that the new upload wait stops too early on Google Drive's real upload window, so that is listed to fix first. Nothing about how workflows run has changed yet.
-— 2026-11-09
-
-**A workflow is no longer called finished while its upload is still running — 2026-11-09**
-A workflow that ended by uploading a file to Google Drive was reported as a success the moment the upload started, even if the upload was still in progress or later failed. Now, after any step that starts work, the app waits for the progress to clear and checks the page and the app's own messages. A final upload that fails, or is still not done after a few minutes, now stops the run with a plain message instead of saying it worked. This covers every workflow, not just Drive.
-— 2026-11-09
-
-**Testing now has a simple "Dry Run" switch — 2026-11-09**
-The test screen used to offer "Let AI answer agent steps and unexpected popups", which was hard to understand. It is now called "Dry Run" and is on by default, which means a safe test that uses no AI credits. If the workflow has a step that needs AI, Dry Run turns itself off and stays off, so that step can actually run. Otherwise you can switch it off yourself to let the AI helper answer an unexpected popup.
-— 2026-11-09
-
-**The test browser now keeps the whole page in view after it opens a new website — 2026-11-09**
-In a test, the second website could show up zoomed in, with its right side and bottom cut off, even though recording had shown the whole page. The "shrink to fit" setting was applied once when the tab opened, and it could be lost when the tab moved on to a real website. It is now applied again every time a page finishes loading, in both Build Studio and Conxa Execute. A test should now look the same as the recording.
-— 2026-11-09
-
-**Very long workflows keep their step-by-step descriptions — 2026-11-09**
-When a workflow had a great many steps, the assistant that describes each step could run out of room mid-answer and hand back nothing. The workflow was still built, but the descriptions were silently missing. Now the assistant is given more room the longer the workflow is, and if its answer still gets cut off, the steps are described in smaller groups and put back together. If any step still cannot be described, you are told.
-— 2026-11-09
-
-**A guided first tour for beginners is now on the to-do list — 2026-11-09**
-New people often open the app and do not know where to start. We wrote down a plan for a practice tour: you pick Beginner, and the app lights up one button at a time, with small notes in the browser telling you what to type. It uses a safe practice website, so nothing real can be broken, and you can pick the practice that matches your job. It is made for people with no technical background.
-— 2026-11-09
-
-**New people now get a hands-on practice tour — 2026-11-09**
-When you open the app for the first time you can say you are new. The app then lights up one button at a time and walks you through making a group, signing in, teaching it a whole job on a pretend company, answering its questions and watching it run. Nothing in it is real, so nothing can break. You can play it again from Settings, under About.
-— 2026-11-09
+**Found why a recording can lose its last few steps, and wrote down the fix — 2026-11-10**
+A recording of "download a file from GitHub, then upload it to Google Drive" kept every step up to Drive's "New" button and lost the rest: the "File upload" choice and the file you picked. The recorder held each step back while it watched the page finish its work. On Drive that watch ran for 15 seconds, and every later step waited in line behind it, so pressing Stop threw away everything still waiting. This happens on any website that shows progress, not only Drive. Nothing has changed yet. The plan, now on the to-do list, is to save each step the moment you do it, add the "did it finish" details later, and warn you if anything you did was not saved.
+— 2026-11-10

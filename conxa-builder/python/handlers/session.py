@@ -40,6 +40,15 @@ def _recording_duration_seconds(events: list[dict[str, Any]]) -> float | None:
     return duration if duration > 0 else None
 
 
+def _capture_gap_count(sess: Any) -> int:
+    """How many steps the recording lost on the way (BUILD-80). Tolerates a session object without the counter."""
+    counter = getattr(sess, "capture_gap_count", None)
+    try:
+        return int(counter()) if callable(counter) else 0
+    except Exception:  # noqa: BLE001 — a diagnostic must never fail a save
+        return 0
+
+
 def _refresh_group_app_sessions(workflow_id: str) -> None:
     """After a workflow recording ends, split its merged group session back into
     per-app updates so each app's saved session picks up whatever the site did to
@@ -543,9 +552,12 @@ class SessionMixin:
         # a different thread". Join first; the thread's own final storage_state save
         # (session.py's forced autosave right before its teardown) already wrote
         # the file on the correct thread, so nothing else needs to touch it here.
-        events = sess.snapshot_events()
         is_variant = bool(getattr(sess, "variant_of", None))
         self._loop.run(sess.stop())
+        # After the stop, not before: Stop asks every page to hand over steps still on their way, and those arrive
+        # during stop(). A snapshot taken first would miss them in the count, the empty-recording check and the hosts.
+        events = sess.snapshot_events()
+        gaps = _capture_gap_count(sess)
         with self._rec_lock:
             if self._active_recording == session_id:
                 self._active_recording = None
@@ -563,6 +575,7 @@ class SessionMixin:
                 "event_count": len(events),
                 "workflow_id": workflow_id,
                 "status": "variant_recorded",
+                "capture_gaps": gaps,
                 "variant_of": getattr(sess, "variant_of", ""),
                 "workflow_kind": "workflow",
             }
@@ -589,7 +602,8 @@ class SessionMixin:
                 "event_count": len(events),
                 "workflow_id": workflow_id,
                 "status": "recorded",
+                "capture_gaps": gaps,
                 "workflow_kind": "workflow",
             }
-        return {"session_id": session_id, "event_count": len(events)}
+        return {"session_id": session_id, "event_count": len(events), "capture_gaps": gaps}
 

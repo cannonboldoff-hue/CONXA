@@ -1429,3 +1429,121 @@ def test_a_download_waits_for_its_click_report_before_it_is_queued(monkeypatch):
     t0 = time.monotonic()
     session_mod.RecordingSession._pump_until_grace(closed, t0, None)   # a closed page still just waits
     assert time.monotonic() - t0 >= 0.2
+
+
+# ── BUILD-80: a step is saved the moment it happens; what the page did afterwards is merged in later ──────────────
+
+def _stamped(uid_seq: int, bridge: str = "b1", action: str = "click") -> dict:
+    p = _payload(action)
+    p.update({"uid": f"{bridge}-{uid_seq}", "bridge": bridge, "seq": uid_seq})
+    return p
+
+
+def _session_with_page(tmp_path, name: str) -> RecordingSession:
+    sess = RecordingSession(session_id=name, data_root=tmp_path)
+    sess._video_session_start_wall_ms = 1
+
+    class FakePage:
+        def is_closed(self) -> bool:
+            return False
+
+    sess._page = FakePage()
+    return sess
+
+
+def test_an_amendment_is_merged_into_the_step_it_names(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "amend-merge")
+    sess._consume_payload_sync(_stamped(1))
+    sess._consume_payload_sync(_stamped(2))
+
+    sess._consume_payload_sync({
+        "_amend": "b1-1",
+        "state_change": {"before": "a", "after": "b", "dom_diff": {"added": ["dialog"], "removed": []}},
+        "post_watch": {"progress_seen": True, "waited_ms": 900, "final_status": [], "progress_words": ["uploading"], "cut_by_stop": True},
+    })
+
+    first, second = sess.snapshot_events()
+    assert first["state_change"]["after"] == "b"
+    assert first["post_watch"]["cut_by_stop"] is True
+    assert second["state_change"]["after"] == "" and second["post_watch"] is None
+    assert first["extras"]["uid"] == "b1-1" and first["extras"]["seq"] == 1
+    saved = [json.loads(line) for line in (tmp_path / "sessions" / "amend-merge" / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert saved[0]["post_watch"]["progress_words"] == ["uploading"]
+
+
+def test_an_amendment_is_still_applied_after_the_recording_was_paused(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "amend-paused")
+    sess._consume_payload_sync(_stamped(1))
+    sess.pause()
+
+    sess._consume_payload_sync({"_amend": "b1-1", "_paused": True, "state_change": {"before": "a", "after": "b"}})
+
+    assert sess.snapshot_events()[0]["state_change"]["after"] == "b"
+
+
+def test_an_amendment_for_a_step_that_is_gone_is_ignored(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "amend-orphan")
+    sess._consume_payload_sync(_stamped(1))
+
+    sess._consume_payload_sync({"_amend": "nope-9", "state_change": {"before": "a", "after": "b"}})
+
+    assert sess.snapshot_events()[0]["state_change"]["after"] == ""
+    assert not any(e.startswith("amend_error") for e in sess.binding_errors)
+
+
+def test_steps_that_all_arrive_leave_no_gap(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "gaps-none")
+    for n in (1, 2, 3):
+        sess._consume_payload_sync(_stamped(n))
+
+    assert sess.capture_gaps() == [] and sess.capture_gap_count() == 0
+
+
+def test_a_missing_step_number_is_reported_as_a_lost_step(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "gaps-hole")
+    sess._consume_payload_sync(_stamped(1))
+    sess._consume_payload_sync(_stamped(3))
+
+    gaps = sess.capture_gaps()
+    assert gaps == [{"kind": "lost_step", "bridge": "b1", "count": 1, "missing": [2]}]
+    assert sess.capture_gap_count() == 1
+
+
+def test_a_step_the_page_says_it_issued_at_stop_but_never_arrived_is_a_lost_step(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "gaps-tail")
+    sess._consume_payload_sync(_stamped(1))
+    sess._flush_last_seq["b1"] = 3     # what __skillFlush() answered at Stop
+
+    assert sess.capture_gap_count() == 2
+
+
+def test_a_step_dropped_on_purpose_is_not_a_lost_step(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "gaps-paused")
+    sess._consume_payload_sync(_stamped(1))
+    paused = _stamped(2)
+    paused["_paused"] = True
+    sess._consume_payload_sync(paused)
+
+    assert len(sess.snapshot_events()) == 1 and sess.capture_gap_count() == 0
+
+
+def test_a_click_on_something_that_is_not_a_control_is_diagnostic_only(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "gaps-click")
+
+    sess._binding_sink_sync({"page": None, "frame": None}, {"_gap": {"reason": "no_target", "tag": "p", "role": ""}})
+
+    assert [g["kind"] for g in sess.capture_gaps()] == ["unrecorded_click"]
+    assert sess.capture_gap_count() == 0
+    assert sess._pending_payloads.empty()
+
+
+def test_the_stop_barrier_waits_for_every_step_number_and_every_open_watch(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "barrier")
+    sess._consume_payload_sync(_stamped(1))
+    state = {"bridge": "b1", "last_seq": 2, "open": 0}
+
+    assert sess._bridges_settled([state]) is False                      # step 2 has not arrived
+    sess._consume_payload_sync(_stamped(2))
+    assert sess._bridges_settled([state]) is True
+    assert sess._bridges_settled([{**state, "open": 1}]) is False       # a watch is still open
+    assert sess._bridges_settled([]) is True                            # no page left to ask

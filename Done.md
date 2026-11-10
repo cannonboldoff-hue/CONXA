@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 42 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79 |
+| BUILD — Build Studio | 43 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
 | EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
 | CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
 | RT — Runtime | 8 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **105** | |
+| **Total** | **106** | |
 
 ---
 
-## BUILD — Build Studio (42 done)
+## BUILD — Build Studio (43 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -768,6 +768,12 @@ inferred from `outer_html`, not read directly.
 - **Category:** Builder (Build Studio) + Cloud
 - **Resolution:** First launch now asks "I'm new" or "I've done this before" (`FirstLaunchPage.tsx`); Beginner picks one of four whole business processes (customer onboarding, support triage, monthly report + invoice, leave request; `lib/tourScripts.ts`). `components/tour/TourLayer.tsx` dims everything but the named controls, blocks other clicks, and advances when the person does the step; record and answer-questions steps are free-roam notes. The tour guides through group creation, sign-in, record, every question, and the first test; it adds no new action and bypasses no gate. Progress is kept in `store/tourStore.ts` (localStorage only, never in a build). Locked, no skip: if a control never appears for 15 s the lock lifts so an outage cannot trap anyone. Replay is in Settings → About. Hints inside the browser are drawn by `electron/tour_hint.js` only in sign-in runs (no recorder) on the Conxa website host (`browser_panel.js::_tourAllowed`, tested); record and test runs never get them. The practice company ("Northwind Practice", `conxa-cloud/frontend/app/practice/`) needs a Conxa sign-in but no workspace (`proxy.ts`), keeps fake data in the browser only, and is excluded from search engines.
 - **Not done / open:** the tour was not walked through end to end in the running app, and the Cloud `npm run build` was not run. A tour closed mid-way through the group dialog resumes with the lock lifted after 15 s rather than re-opening the dialog.
+
+### BUILD-80 — Recorder loses real steps: capture gated behind effect-watching (record-on-act + amend + stop barrier)
+**Resolved:** 2026-11-10
+- **Category:** Builder (recorder)
+- **Resolution:** Found from a "GitHub to Drive Handoff" recording that kept 9 of ~12 steps (sessions `59dea81a`, `b6ac8844`, `67178545`): `bridge.js` chained every click's report behind one promise that also held the Proof-of-Done progress watch (up to 15 s), and Stop never asked the page to release what it held. Now `finalizeStateAfterSettle` reports the step at once (`uid`/`bridge`/`seq`) and sends state change / post condition / the app's words as `{_amend}` after the settle; the progress watch runs concurrently and arrives as a second amendment, starting only when progress is new since the act. `RecordingSession._apply_amend_sync` merges by `extras.uid` (before the pause and login drops). Stop calls `window.__skillFlush()` in every frame (open watches cut, `post_watch.cut_by_stop`) and drains until every `seq` has arrived (`_STOP_BARRIER_MAX_S` 10 s); `cmd_stop_recording` now snapshots events after the stop. `capture_gaps` (lost step numbers, failed saves; clicks on non-controls diagnostics-only) go to `recorder_diag.json`, and the Studio adds a plain sentence to "Got it" when steps were lost. Tests: 5 new bridge tests, 9 new session tests, 3 handler tests; docs in `TRD.md` and `Backend-Schema.md`.
+- **Not done / open:** not yet re-recorded in the running Studio against Drive (the real-run check in the plan). A frame destroyed before Stop can still lose its very last step without a trace, because a hole in step numbers cannot show a missing final one. The plan's "trusted click matched no control counts as a gap" was narrowed to diagnostics only, since clicks on plain text are normal.
 
 ## EXEC — Execution & Recovery (28 done)
 

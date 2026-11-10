@@ -359,6 +359,8 @@ class PostWatch(BaseModel):
     final_status: list[SurfaceItem] = Field(default_factory=list, max_length=3)
     # Value-free words of what the page said WHILE the work was going on, in the app's own language.
     progress_words: list[str] = Field(default_factory=list, max_length=12)
+    # Recording was stopped while the work was still going: the end was never seen, so no "done" words exist.
+    cut_by_stop: bool = False
 
 
 class RecordedEvent(BaseModel):

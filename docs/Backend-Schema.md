@@ -1247,7 +1247,12 @@ Probe types: `input_has_files`, `request_chain` (a data-changing request answere
 
 **Recorder `post_watch`** (`RecordedEvent.post_watch`): set only when a progress window or busy indicator was on screen after an
 upload or a commit-worded click. `{progress_seen, waited_ms, final_status: [{kind, words}]}`, value-free words only (digits, quotes,
-e-mail and addresses dropped). The recorder keeps watching only while progress is visible, up to 15 s, so an ordinary Save is not delayed.
+e-mail and addresses dropped). The recorder keeps watching only while progress is visible, up to 15 s, so an ordinary Save is not delayed. `cut_by_stop: true` when
+Stop ended the watch while the work was still going: the end was never seen, so `final_status` is empty. It reaches the saved step as an
+amendment after the step itself (see TRD "A step is saved the moment the person acts"). **Recorded-step identity (BUILD-80):**
+`extras.uid` / `extras.bridge` / `extras.seq` name a step so later amendments find it and the recorder can tell a step was lost;
+`recorder_diag.json` carries `capture_gaps: [{kind: lost_step | capture_error | unrecorded_click, ...}]`, value-free; the stop result
+carries `capture_gaps` (a count of lost steps).
 
 **Calibration** (`handlers/test_flow.py::_tf_calibrate` → `workflow_mutations.calibrate_effects`): only a fully clean pass
 (`outcome: done`) calibrates. **Publish rule** (`workflows.py::_require_proof_for_irreversible`): in a pack that carries checklists, a step

@@ -153,3 +153,38 @@ def test_cancelling_a_normal_recording_still_clears_it(wf, monkeypatch):
     _Harness().cmd_cancel_recording({"session_id": "primary", "workflow_id": wf.id}, "rid")
 
     assert get_workflow(wf.id).session_id is None
+
+
+# ── BUILD-80: Stop hands over steps still on their way, and says when some were lost ─────────────────────────────
+
+def test_stop_counts_steps_that_arrive_during_the_stop_and_reports_lost_ones(wf, monkeypatch):
+    class _LateSess(_FakeSess):
+        def stop(self):
+            # Stop's flush delivers the steps the page was still holding.
+            self._events.append({"action": {"action": "upload_intent", "timestamp": "2026-01-01T00:00:09.000Z"}})
+
+        def capture_gap_count(self):
+            return 2
+
+    sess = _LateSess("primary", events=[{"action": {"action": "click", "timestamp": "2026-01-01T00:00:00.000Z"}}])
+    monkeypatch.setattr(session_module._recorder_registry, "get", lambda _sid: sess)
+
+    result = _Harness().cmd_stop_recording({"session_id": "primary", "workflow_id": wf.id}, "rid")
+
+    assert result["event_count"] == 2 and result["capture_gaps"] == 2
+
+
+def test_stop_reports_no_gaps_for_a_session_without_the_counter(wf, monkeypatch):
+    sess = _FakeSess("primary")
+    monkeypatch.setattr(session_module._recorder_registry, "get", lambda _sid: sess)
+
+    assert _Harness().cmd_stop_recording({"session_id": "primary", "workflow_id": wf.id}, "rid")["capture_gaps"] == 0
+
+
+def test_the_lost_steps_notice_is_plain_words_and_only_when_something_was_lost():
+    from handlers.workflow_flow import capture_gap_note
+
+    assert capture_gap_note({"capture_gaps": 0}) == "" and capture_gap_note({}) == ""
+    note = capture_gap_note({"capture_gaps": 1})
+    assert "missed" in note and "record that part again" in note
+    assert not any(word in note.lower() for word in ("bridge", "seq", "selector", "uid"))

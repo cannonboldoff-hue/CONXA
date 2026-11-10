@@ -77,7 +77,26 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
             window.__ready = [];
             window.__SKILL_CAPTURE_PROFILE__ = args.profile;
             // Like the recorder's sink: a "bridge ready" announcement is bookkeeping, not an event.
-            window.__skillReport = (payload) => (payload && payload._bridge_ready ? window.__ready : window.__events).push(payload);
+            window.__raw = [];       // everything, in arrival order, before any folding
+            window.__gaps = [];
+            // Mirrors RecordingSession._apply_amend_sync: facts about a step that already left the page are merged
+            // into that step by its uid, so tests keep reading one finished row per action.
+            window.__skillReport = (payload) => {
+                if (!payload) return;
+                window.__raw.push(JSON.parse(JSON.stringify(payload)));
+                if (payload._bridge_ready) { window.__ready.push(payload); return; }
+                if (payload._gap) { window.__gaps.push(payload); return; }
+                if (payload._amend) {
+                    const row = window.__events.find((e) => e.uid === payload._amend);
+                    if (!row) return;
+                    for (const k of ["state_change", "post_condition", "surface_context", "post_watch"]) {
+                        if (k in payload) row[k] = payload[k];
+                    }
+                    if (payload.date_field_after != null && row.date_context) row.date_context.field_display_value_after = payload.date_field_after;
+                    return;
+                }
+                window.__events.push(payload);
+            };
         }""",
         {"profile": capture_profile},
     )
@@ -342,7 +361,7 @@ def test_iframe_sidebar_form_records_when_bridge_runs_as_init_script(browser: Br
     init_script = (
         "window.__SKILL_CAPTURE_PROFILE__ = { input_debounce_ms: 20, hover_dwell_ms: 35 };"
         "window.__skillReport = payload => {"
-        "  if (payload && payload._bridge_ready) return;"
+        "  if (payload && (payload._bridge_ready || payload._amend || payload._gap)) return;"
         "  window.top.__events = window.top.__events || [];"
         "  window.top.__events.push(payload);"
         "};\n"
@@ -1377,21 +1396,25 @@ _UPLOAD_TRAY_HTML = """
 """
 
 
-def _wait_for_event(page: Page, action: str, timeout_ms: int = 6000) -> dict:
+def _wait_for_event(page: Page, action: str, timeout_ms: int = 6000, *, watch: bool = False) -> dict:
+    """The newest ``action`` row. A row leaves the page the moment the person acts and its details follow as
+    amendments, so ``watch=True`` also waits for the progress watch's amendment (``post_watch``)."""
     waited = 0
     while waited < timeout_ms:
         events = _action_events(page, action)
-        if events:
+        if events and (not watch or events[-1].get("post_watch")):
             return events[-1]
         page.wait_for_timeout(100)
         waited += 100
+    if watch and _action_events(page, action):
+        return _action_events(page, action)[-1]  # no watch amendment ever came: the caller asserts on that
     raise AssertionError(f"no {action} event was recorded within {timeout_ms} ms")
 
 
 def test_the_final_message_of_a_long_action_is_recorded_as_value_free_words(page: Page) -> None:
     _install_bridge(page, _UPLOAD_TRAY_HTML)
     page.click("#upload")
-    event = _wait_for_event(page, "click")
+    event = _wait_for_event(page, "click", watch=True)
 
     watch = event.get("post_watch")
     assert watch is not None, "an upload that showed a progress window must leave a post_watch"
@@ -1426,7 +1449,7 @@ def test_a_chosen_file_is_watched_too(page: Page, tmp_path) -> None:
           setTimeout(() => { tray.textContent = '1 upload complete'; }, 700);">""",
     )
     page.set_input_files("#file", str(f))
-    event = _wait_for_event(page, "upload_intent")
+    event = _wait_for_event(page, "upload_intent", watch=True)
 
     watch = event.get("post_watch")
     assert watch is not None and watch["progress_seen"] is True
@@ -1444,9 +1467,90 @@ def test_the_progress_words_of_a_non_english_app_are_recorded_in_its_own_languag
           setTimeout(() => { tray.innerHTML = '<p>Upload abgeschlossen</p>'; }, 800);">Upload</button>""",
     )
     page.click("#upload")
-    watch = _wait_for_event(page, "click").get("post_watch")
+    watch = _wait_for_event(page, "click", watch=True).get("post_watch")
 
     assert watch is not None
     assert "hochgeladen" in watch["progress_words"], watch
     final = [w for item in watch["final_status"] for w in item["words"]]
     assert "abgeschlossen" in final and "hochgeladen" not in final, "the progress line is not the final message"
+
+
+# ── BUILD-80: a step leaves the page the moment the person acts ─────────────────────────────────
+
+# An Upload button whose tray never finishes (the page keeps showing progress), and a second button to press
+# straight afterwards. Before BUILD-80 the second press waited behind the first one's watch for ~15 s.
+_NEVER_ENDING_TRAY_HTML = """
+<button id="upload" onclick="
+  const tray = document.createElement('div');
+  tray.setAttribute('role', 'dialog');
+  tray.innerHTML = '<p>Uploading 1 item</p><div role=progressbar style=width:80px;height:6px></div>';
+  document.body.appendChild(tray);">Upload</button>
+<button id="save">Save</button>
+<button id="next">Next</button>
+<p id="plain">just some text</p>
+"""
+
+
+def _click_rows(page: Page) -> list[dict]:
+    return [e for e in _events(page) if e["action"]["action"] == "click"]
+
+
+def test_a_step_is_not_held_back_by_the_watch_of_an_earlier_one(page: Page) -> None:
+    _install_bridge(page, _NEVER_ENDING_TRAY_HTML)
+    page.click("#upload")
+    page.click("#next")
+    page.wait_for_timeout(500)   # far less than the 15 s watch cap
+
+    rows = _click_rows(page)
+    assert [r["target"]["id"] for r in rows] == ["upload", "next"]
+    assert rows[0]["seq"] < rows[1]["seq"] and rows[0]["bridge"] == rows[1]["bridge"]
+    assert page.evaluate("() => window.__skillState().open") == 1   # the Upload watch is still running, concurrently
+    # The row itself carries no after-the-fact details: those arrive as amendments.
+    first_raw = next(r for r in page.evaluate("() => window.__raw") if r.get("target", {}).get("id") == "upload")
+    assert "post_watch" not in first_raw and first_raw["state_change"]["after"] == ""
+
+
+def test_a_click_made_while_a_tray_is_already_showing_is_not_blamed_for_it(page: Page) -> None:
+    _install_bridge(page, _NEVER_ENDING_TRAY_HTML)
+    page.click("#upload")
+    page.click("#save")           # a commit word, but the tray was already there when it was pressed
+    page.wait_for_timeout(500)
+    page.evaluate("() => window.__skillFlush()")
+    page.wait_for_function("() => window.__skillState().open === 0", timeout=3000)
+
+    upload, save = _click_rows(page)
+    assert upload["post_watch"]["progress_seen"] is True
+    assert "post_watch" not in save
+
+
+def test_stop_cuts_an_open_watch_and_it_claims_no_done_words(page: Page) -> None:
+    _install_bridge(page, _NEVER_ENDING_TRAY_HTML)
+    page.click("#upload")
+    page.wait_for_timeout(400)
+
+    state = page.evaluate("() => window.__skillFlush()")
+    assert state["open"] == 1 and state["last_seq"] >= 1
+    page.wait_for_function("() => window.__skillState().open === 0", timeout=3000)
+
+    watch = _click_rows(page)[0]["post_watch"]
+    assert watch["cut_by_stop"] is True and watch["final_status"] == [] and watch["progress_seen"] is True
+
+
+def test_a_real_click_on_something_that_is_not_a_control_is_counted_not_recorded(page: Page) -> None:
+    _install_bridge(page, _NEVER_ENDING_TRAY_HTML)
+    page.click("#plain")
+    page.wait_for_timeout(200)
+
+    assert _click_rows(page) == []
+    assert [g["_gap"]["reason"] for g in page.evaluate("() => window.__gaps")] == ["no_target"]
+
+
+def test_flush_sends_typing_that_was_still_waiting(page: Page) -> None:
+    _install_bridge(page, '<input id="email" aria-label="Email" />', profile={"input_debounce_ms": 5000})
+    page.click("#email")
+    page.keyboard.type("a@b.co")
+
+    assert _type_events(page) == []
+    page.evaluate("() => window.__skillFlush()")
+    page.wait_for_timeout(100)
+    assert [e["action"]["value"] for e in _type_events(page)] == ["a@b.co"]
