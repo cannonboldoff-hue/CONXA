@@ -135,9 +135,43 @@ function _emulate(run, tab) {
   if (!run.viewport) return;
   const dbg = _debugger(tab);
   if (!dbg) return;
-  dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
+  return dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
     width: run.viewport.width, height: run.viewport.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
   }).catch((err) => console.error("browser_panel: setDeviceMetricsOverride failed", err));
+}
+
+// The page's real size, read back, and put right if it drifted. Chromium ignores a repeat of the override
+// it already holds, so a page whose size another CDP client rewrote (Playwright's clipped screenshot
+// does) is only fixed by clearing first. This panel is the ONLY place that sets or clears the size;
+// the runtime measures and asks (control op "ensure_geometry"), it never writes it
+// (conxa-cloud/tests/test_page_geometry_single_owner.py keeps that true).
+async function _ensureGeometry(run, tab) {
+  if (!run.viewport) return { ok: true, live: null };
+  const dbg = _debugger(tab);
+  if (!dbg) return { ok: false, live: null };
+  const read = async () => {
+    try {
+      const r = await dbg.sendCommand("Runtime.evaluate", { expression: "[innerWidth, innerHeight, devicePixelRatio]", returnByValue: true });
+      const v = r && r.result && r.result.value;
+      return Array.isArray(v) ? v : null;
+    } catch (_) { return null; }
+  };
+  const fits = (v) => !!v && v[0] === run.viewport.width && v[1] === run.viewport.height && Math.abs(v[2] - 1) < 0.01;
+  let live = await read();
+  if (fits(live)) return { ok: true, live };
+  try { await dbg.sendCommand("Emulation.clearDeviceMetricsOverride"); } catch (_) { /* the set below still runs */ }
+  await _emulate(run, tab);
+  live = await read();
+  return { ok: fits(live), live };
+}
+
+// Control-channel op "ensure_geometry": every tab of the run, not just the shown one, because a step
+// runs on the tab it was recorded on and that tab may be hidden.
+async function ensureGeometry(runId) {
+  const run = _runs.get(runId);
+  if (!run) throw new Error(`browser_panel: no run ${runId}`);
+  const results = await Promise.all(run.tabs.map((t) => _ensureGeometry(run, t)));
+  return { ok: results.every((r) => r.ok), tabs: results.length };
 }
 
 // Wires a view (ours, or one Chromium created for a popup) into the run as a tab.
@@ -180,9 +214,9 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   _emulate(run, tab);
   // A navigation (the blank marker page -> a real site, which swaps the render process) can drop the
   // override, leaving the page at full size inside a shrunk view: clipped on the right and bottom.
-  // So it is re-applied each time a page is ready, not only when the tab is created.
+  // So the size is checked (and put right) each time a page is ready, not only when the tab is created.
   for (const ev of ["dom-ready", "did-finish-load"]) {
-    view.webContents.on(ev, () => { _emulate(run, tab); if (ev === "dom-ready") _injectTourHint(run, tab); });
+    view.webContents.on(ev, () => { _ensureGeometry(run, tab).catch(() => {}); if (ev === "dom-ready") _injectTourHint(run, tab); });
   }
   // The recorder sees every page in Electron (Studio's own window, other runs) through one CDP
   // context; a tab's devtools target id is how it tells which pages are its run's (`targets`).
@@ -652,4 +686,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf };
+module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry };

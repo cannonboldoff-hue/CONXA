@@ -16,6 +16,7 @@
 //   run.js::runForkAnswer looks at the page again and copes with that.
 
 const { STOP_CHOICE } = require("./fork");
+const { capture } = require("./page_geometry");
 
 // Bounded re-ask for an unusable popup answer. Its own small piece of state, apart from recovery's budget.
 const REVIEW_RETRY_MAX = 2;
@@ -88,7 +89,7 @@ async function buildForkRequest(page, stepIndex, info, opts = {}) {
     `  review_results: { "${stepIndex}": { "choice": "<id from the list above>" } }${retryNote}`;
 
   const content = [{ type: "text", text: header }];
-  const shot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+  const shot = await capture(page, { type: "jpeg", quality: 80 });
   if (shot) {
     content.push(
       { type: "text", text: "Current page:" },
@@ -139,7 +140,7 @@ async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, li
     `  review_results: { "${stepIndex}": { "choice": "<id from the list above>" } }${retryNote}`;
 
   const content = [{ type: "text", text: header }];
-  const shot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+  const shot = await capture(page, { type: "jpeg", quality: 80 });
   if (shot) {
     content.push(
       { type: "text", text: "Current page:" },

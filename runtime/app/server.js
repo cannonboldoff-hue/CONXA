@@ -15,6 +15,7 @@ const { plainCause } = require("./errors");
 const hostBrowser = require("./host_browser");
 const { inputsFailingPattern } = require("./interpolate");
 const { DOWNLOAD_WAIT_TIMEOUT_MS } = require("./run_config");
+const { capture } = require("./page_geometry");
 
 // ─── 1. Resolve CONXA_DIR (install, read-only) and CONXA_DATA_DIR (user-writable) ─
 // env.js is the single source of truth for dev/prod path roots. Under the host exe,
@@ -2135,7 +2136,7 @@ async function _handleTool(name, args, extra) {
       // by beginInteractiveAuth's sign-in and refreshed by getGroupAuthContext's per-app pre-flight.
       const url  = page.url();
       const shot = process.env.CONXA_CAPTURE_SUCCESS_SCREENSHOT === "1"
-        ? await page.screenshot({ type: "png" }).catch(() => null)
+        ? await capture(page, { type: "png" })
         : null;
       await Promise.allSettled(_downloadSaves);
       await page.close().catch(() => {});

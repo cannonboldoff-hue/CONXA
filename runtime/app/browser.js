@@ -86,10 +86,8 @@ function _checkHumanOverride(key) {
 // Shared context options for any Chromium instance that talks to a real target site
 // (interactive login, session validation) — matches a normal desktop browser closely
 // enough that bot-protected sites (Render, Google OAuth) don't reject it outright.
-// The one page size every run sees, matching what the recorder records at (host_view.py's
-// RECORD_VIEWPORT; a pytest keeps them equal). Host panels hold the page at this size whatever
-// size their window is, so a responsive site lays out exactly as it did when recorded.
-const RUN_VIEWPORT = { width: 1280, height: 720 };
+// The one page size every run sees now lives in page_geometry.js (RUN_VIEWPORT).
+const { RUN_VIEWPORT } = require("./page_geometry");
 
 const STEALTH_CONTEXT_OPTIONS = {
   userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

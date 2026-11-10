@@ -30,6 +30,7 @@ const os = require("os");
 const { probePresent } = require("./handlers");
 const { resolveStepPage } = require("./tabs");
 const { evalOn } = require("./page_eval");
+const { capture } = require("./page_geometry");
 
 const CONXA_DIR = process.env.CONXA_DATA_DIR || path.join(os.homedir(), ".conxa");
 const RESUME_DIR = path.join(CONXA_DIR, "resume");
@@ -223,7 +224,7 @@ async function buildHandoverRequest(page, step, stepIndex, opts = {}) {
     `they do; no further action is needed from you here.`;
 
   const content = [{ type: "text", text: header }];
-  const shot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+  const shot = await capture(page, { type: "jpeg", quality: 80 });
   if (shot) {
     content.push(
       { type: "text", text: "Current page:" },

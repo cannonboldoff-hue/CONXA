@@ -27,6 +27,7 @@ const { verifyStep, hasRequiredAssertion, capturePreStepSignature, signatureChan
 const { dismissKnownOverlay } = require("./dismiss_patterns");
 const learnedDismissals = require("./learned_dismissals");
 const { evalOn } = require("./page_eval");
+const { capture } = require("./page_geometry");
 const pageScripts = require("./page_scripts");
 const { recordOverlayObservation } = require("./overlay_capture");
 const { isDecisionDialog } = require("./fork");
@@ -416,7 +417,7 @@ async function recoverStep(page, step, inputs, slug, stepIndex, primarySelector,
 
 async function maybeCapturePreStep(page, step) {
   if (!INTERACTIVE_STEP_TYPES.has(step.type) || !CAPTURE_PRESTEP) return null;
-  return page.screenshot({ type: "jpeg", quality: 70, timeout: 1000 }).catch(() => null);
+  return capture(page, { type: "jpeg", quality: 70, timeout: 1000 });
 }
 
 module.exports = {

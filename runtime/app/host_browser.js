@@ -170,6 +170,12 @@ async function newTab(args) {
   return (await openTab(args)).page;
 }
 
+// Ask the host panel — the one owner of the page size — to measure the run's page and put it back at
+// the recorded size if it drifted (page_geometry.js's checkGeometry calls this).
+function ensureGeometry({ runId }) {
+  return _controlPost("ensure_geometry", { runId });
+}
+
 // Tell Execute a view (or the whole run) is done. With `tabId` only that one view goes — a
 // login that finished must not take its sibling logins' views down with it (a group pack opens
 // one login per missing app, all under the same runId). Without it the run is over and Execute
@@ -184,4 +190,4 @@ function release({ runId, tabId }) {
   // idle cleanup (or app restart) reclaims it; never worth failing a run over.
 }
 
-module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, pageCookies, setPageCookies, saveDownload };
+module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, pageCookies, setPageCookies, saveDownload };

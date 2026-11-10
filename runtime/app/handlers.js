@@ -5,6 +5,7 @@
 const pageScripts = require("./page_scripts");
 const { interpolate } = require("./interpolate");
 const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { capture } = require("./page_geometry");
 const {
   PAGE_LOAD_TIMEOUT_MS,
   ACTION_TIMEOUT_MS,
@@ -693,7 +694,7 @@ const HANDLERS = {
   assert: (page, step, inputs) => _evaluateCheckLikeStep(page, step, inputs),
 
   screenshot: async (page) => {
-    await page.screenshot({ type: "png", timeout: SECONDARY_ACTION_TIMEOUT_MS }).catch(() => null);
+    await capture(page, { type: "png", timeout: SECONDARY_ACTION_TIMEOUT_MS });
   },
 
   upload: async (page, step, inputs) => {

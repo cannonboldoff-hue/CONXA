@@ -79,6 +79,7 @@ async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, d
     case "run_end": await panel.runEnd(runId); return { ok: true };
     case "close_run": await panel.closeRun(runId); return { ok: true };
     case "scale": return panel.scaleOf(runId);
+    case "ensure_geometry": return panel.ensureGeometry(runId);
     case "targets": return panel.targetsOf(runId);
     case "save_download":
       if (!url || !dest) throw new Error("missing url or dest");

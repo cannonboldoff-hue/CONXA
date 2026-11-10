@@ -76,6 +76,7 @@ async function _dispatch({ op, runId, tabId, label, focus, loginKey, viewport, u
       await panel.closeTab(runId, tabId);
       return { ok: true };
     case "run_end":    await panel.runEnd(runId); return { ok: true };
+    case "ensure_geometry": return panel.ensureGeometry(runId);
     case "save_download":
       if (!url || !dest) throw new Error("missing url or dest");
       return panel.saveDownload(runId, url, dest, timeoutMs);

@@ -90,6 +90,7 @@ const {
   createActionGuard,
   maybeCapturePreStep,
 } = require("./cascade");
+const { checkGeometry } = require("./page_geometry");
 const {
   resolveUploadPaths,
   extractZipOnce,
@@ -146,6 +147,8 @@ function sweepOldRuns(runsBaseDir, maxAgeMs = RUN_RETENTION_MS, excludeRunId = n
     } catch (_) { /* retried on next run */ }
   }
 }
+
+const PAGE_SIZE_MESSAGE = "The test browser changed size partway through the run, so this step could not be trusted. Run the test again.";
 
 function stepFailure(step, stepIndex, cause, preShot, warnings) {
   // Shaped once here (the single funnel every step failure passes through) rather than at each
@@ -859,6 +862,21 @@ async function executeOneStep(ctx, state, steps, i) {
     await page.waitForTimeout(150).catch(() => {}); // let the DOM settle before the real attempt
   }
 
+  // The page must still be the size the workflow was recorded at: a step on a drifted page (zoomed,
+  // clipped) would click the wrong place or find nothing. The host panel repairs it; if it can't, stop.
+  const geometry = await checkGeometry(page, ctx);
+  if (!geometry.ok) {
+    if (geometry.unsupported) {
+      if (!ctx.geometryWarned) {
+        ctx.geometryWarned = true;
+        state.warnings.push("The test browser is not at its normal size and this version of Conxa can't reset it. Buttons may look zoomed or cut off.");
+      }
+    } else {
+      ctx.tracker.emit("step_fail", { si: i, fc: "fault_page_size" });
+      appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "page_size", source: "geometry" });
+      throw stepFailure(step, i, Object.assign(new Error(PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
+    }
+  }
   const preShot = await maybeCapturePreStep(page, step);
   const primarySelector = baseSelector(step, state.inputs);
   // Pre-action baseline for the state_changed assertion (only captured when the step actually
@@ -1982,6 +2000,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     callStack: [slug],
     answerPopups: answerPopups === true, // EXEC-49: an MCP client may be asked about an unrecorded question popup
     agentSpans: agentSpans !== false,   // Engine v2 C4: false (a scheduled run) = an agent_span step fails closed
+    hostOwned: hostOwned === true, hostRunId: hostRunId ?? runId, // page_geometry.js: who to ask to repair the page size
   };
 
   let endedAt = null;

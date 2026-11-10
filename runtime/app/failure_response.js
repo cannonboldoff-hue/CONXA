@@ -29,6 +29,7 @@ const fs   = require("fs");
 const path = require("path");
 const pageScripts = require("./page_scripts");
 const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { capture } = require("./page_geometry");
 const { capturePageFingerprint, parkKey } = require("./recovery_park");
 const recoveryStage = require("./recovery_stage");
 const { buildIndexedDigest } = require("./candidate_digest");
@@ -329,6 +330,10 @@ function haltReasonNoteText(err) {
     return `\n\nThe run stopped because it could not confirm that the step finished. The step may well have worked. ` +
       `Do not run it again, and do not attempt a candidate override, until someone has checked the result. Tell the user.`;
   }
+  if (err.fault && err.faultKind === "page_size") {
+    return `\n\nThe run stopped because the browser window is no longer the size the workflow was recorded at, ` +
+      `not because the app or an element is wrong. Do not attempt a candidate override. Tell the user to run it again.`;
+  }
   if (err.fault) {
     return `\n\nThe run stopped because the app reported a problem (${err.faultKind || "fault"}). ` +
       `Retrying with a different element will not help. Tell the user what the app said.`;
@@ -443,7 +448,7 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
     // Live capture at the failure moment — NOT err.preShot, which is captured BEFORE the action
     // (run.js) and is null outright for non-interactive step types (navigate/wait/verify), where
     // the page-after-the-fact is exactly the evidence a verify failure needs.
-    const failShot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+    const failShot = await capture(page, { type: "jpeg", quality: 80 });
     if (failShot) fs.writeFileSync(path.join(dir, "failure.jpg"), failShot);
     if (err.preShot) fs.writeFileSync(path.join(dir, "pre_step.jpg"), err.preShot);
 
@@ -628,7 +633,7 @@ async function buildFailureResponse(page, err, resolvedEntry, runTracker, steps,
 
   // ── The armed agent round: ranked digest + CUA-style visual grounding ──
   // P7: capture as JPEG (lossless PNG is 3-8× larger; Claude token cost is dimension-based either way)
-  const failShot = await page.screenshot({ type: "jpeg", quality: 80 }).catch(() => null);
+  const failShot = await capture(page, { type: "jpeg", quality: 80 });
 
   // P5: skip visual reference if already sent for this (slug, step) in this execution
   const visualRefKey = resolvedEntry && failedAt !== null ? `${resolvedEntry.slug}:${failedAt}` : null;

@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The test browser no longer zooms in and cuts off the page — 2026-11-10**
+While a test was running, the browser next to the chat would suddenly show the page too big, with the right side and the bottom cut off. Recording looked fine, which made it confusing. Conxa was taking a picture of the page before each step, and that picture quietly changed the page's size. Now the pictures are taken in a way that leaves the size alone, and before every step Conxa checks the page is still the right size, puts it back if not, and stops with a clear message if it can't. The same fix covers the browser customers see in Conxa Execute.
+— 2026-11-10
+
 **After an upload, the app now looks again to see the file is really there — 2026-11-10**
 Seeing "upload complete" does not prove the file arrived. After an upload, the app can now open the same page again in a separate tab, read it, and check that the file's name is on it, more times than before. It never clicks or types, closes that tab, and says "couldn't confirm" instead of guessing when it can't look. It only starts insisting on this after a test of your workflow showed it works on your website, so a site that shows no file list never makes a working upload stop. The cloud dashboard now also shows the steps that keep coming back unconfirmed.
 — 2026-11-10

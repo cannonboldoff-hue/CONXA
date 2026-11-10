@@ -16,12 +16,14 @@ class FakeWebContents {
     this.openHandler = null;
     this.destroyed = false;
     this.commands = [];
+    this.live = null; // what the page reports as [innerWidth, innerHeight, devicePixelRatio]; null = unreadable
     this.attached = false;
     this.debugger = {
       isAttached: () => this.attached,
       attach: () => { this.attached = true; },
       sendCommand: (method, params) => {
         this.commands.push({ method, params });
+        if (method === "Runtime.evaluate") return Promise.resolve({ result: { value: this.live } });
         return Promise.resolve(method === "Target.getTargetInfo" ? { targetInfo: { targetId: this.targetId } } : {});
       },
     };
@@ -274,17 +276,52 @@ test("test runs share one persistent partition (warm cache), wiped between runs;
   await panel.closeRun("s4");
 });
 
-test("the size override is re-applied when a page becomes ready, at the run's current scale", () => {
+const settle = () => new Promise((r) => setImmediate(r));
+const has = (wc, method) => wc.commands.some((c) => c.method === method);
+
+test("a page that becomes ready at the wrong size is cleared and set again, at the run's current scale", async () => {
   const { tabId } = panel.newView("reapply", { viewport: { width: 1280, height: 720 } });
   const view = added[added.length - 1];
   panel.setActiveBounds("reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
   const wc = view.webContents;
+  for (const ev of ["dom-ready", "did-finish-load"]) {
+    for (const live of [[1280, 720, 1.25], [1024, 576, 1], null]) { // drifted DPR, drifted size, unreadable
+      wc.live = live;
+      wc.commands.length = 0;
+      wc.handlers[ev]();
+      await settle();
+      const methods = wc.commands.map((c) => c.method);
+      assert.ok(methods.indexOf("Emulation.clearDeviceMetricsOverride") < methods.indexOf("Emulation.setDeviceMetricsOverride"), "clears before it sets: a repeat of the same override is a no-op to Chromium");
+      assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
+    }
+  }
+});
+
+test("a page that is already at the recorded size is left alone", async () => {
+  const { tabId } = panel.newView("reapply-ok", { viewport: { width: 1280, height: 720 } });
+  const wc = added[added.length - 1].webContents;
+  panel.setActiveBounds("reapply-ok", tabId, { x: 0, y: 0, width: 640, height: 600 });
+  wc.live = [1280, 720, 1];
   wc.commands.length = 0;
   wc.handlers["dom-ready"]();
-  assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
-  wc.commands.length = 0;
-  wc.handlers["did-finish-load"]();
-  assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
+  await settle();
+  assert.ok(!has(wc, "Emulation.clearDeviceMetricsOverride") && !has(wc, "Emulation.setDeviceMetricsOverride"));
+});
+
+test("ensure_geometry repairs every tab of the run, hidden ones too, and says whether it held", async () => {
+  panel.newView("ensure", { viewport: { width: 1280, height: 720 } });
+  const first = added[added.length - 1].webContents;
+  panel.newTab("ensure", {});
+  const second = added[added.length - 1].webContents;
+  first.live = [1280, 720, 1.25];
+  second.live = [1280, 720, 1];
+  first.commands.length = 0; second.commands.length = 0;
+  const r = await panel.ensureGeometry("ensure");
+  assert.strictEqual(r.tabs, 2);
+  assert.ok(has(first, "Emulation.clearDeviceMetricsOverride"), "the drifted tab was repaired");
+  assert.ok(!has(second, "Emulation.clearDeviceMetricsOverride"), "the healthy tab was not touched");
+  assert.strictEqual(r.ok, false, "the fake still reports the old size after the repair, so it did not hold");
+  await assert.rejects(() => panel.ensureGeometry("no-such-run"), /no run/);
 });
 
 test("tour hint is allowed only in sign-in runs on the Conxa website host", () => {
