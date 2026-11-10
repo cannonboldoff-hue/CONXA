@@ -496,6 +496,21 @@ async function popupLeftBehind(ctx, state, step, i, page, preShot) {
   throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
 }
 
+// Stop clicks must land now, not after the current step's waits finish: poll the cancel flag while a
+// step runs and reject the moment it trips. The abandoned step is left to die when the run's
+// browser is torn down; its late rejection is swallowed so it can't surface as an unhandled error.
+function raceCancel(stepPromise, cancelCheck) {
+  if (!cancelCheck) return stepPromise;
+  stepPromise.catch(() => {});
+  let timer;
+  const cancelled = new Promise((_, reject) => {
+    timer = setInterval(() => {
+      if (cancelCheck()) reject(Object.assign(new Error("Execution cancelled"), { cancelled: true }));
+    }, 100);
+  });
+  return Promise.race([stepPromise, cancelled]).finally(() => clearInterval(timer));
+}
+
 // Executes ONE step against the given `steps` array at index `i`, mutating `state` in place
 // (recoveredSteps/hasExecutedStep/prevStepType/prevPage/warnings/dryRunSkipped) and throwing on
 // an unrecoverable failure — exactly the per-iteration body the top-level step loop used to
@@ -2007,7 +2022,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   try {
     for (let i = startFrom; i < steps.length; i++) {
       try {
-        await executeOneStep(ctx, state, steps, i);
+        await raceCancel(executeOneStep(ctx, state, steps, i), ctx.cancelCheck);
       } catch (e) {
         // A popup option marked "end" finished the run on purpose: not a failure, and nothing after runs.
         if (e && e.runEnded) {
