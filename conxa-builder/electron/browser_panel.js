@@ -29,11 +29,16 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-// runId -> { partition, kind, viewport, scale, rect, tabs: [{ id, view, markerUrl, label, opener }],
+// runId -> { partition, kind, viewport, height, scale, rect, tabs: [{ id, view, markerUrl, label, opener }],
 //            activeTabId, downloads: [], finished }
+// `height` is the page's live CSS height: viewport.height, except a viewport with fit "width" lets it
+// follow the pane (the page stays viewport.width wide, so its layout never changes).
 const _runs = new Map();
 const KINDS = new Set(["test", "record", "signin"]);
 const _HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
+// The page height a fit-to-width pane may ask for. runtime/app/page_geometry.js mirrors MIN_H
+// (a pytest keeps them equal).
+const MIN_H = 480, MAX_H = 1440;
 
 let _win = null;
 let _onTabsChanged = null; // (runId, tabs, meta) => void — wired by main.js to push to the renderer
@@ -136,7 +141,7 @@ function _emulate(run, tab) {
   const dbg = _debugger(tab);
   if (!dbg) return;
   return dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
-    width: run.viewport.width, height: run.viewport.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
+    width: run.viewport.width, height: run.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
   }).catch((err) => console.error("browser_panel: setDeviceMetricsOverride failed", err));
 }
 
@@ -156,7 +161,7 @@ async function _ensureGeometry(run, tab) {
       return Array.isArray(v) ? v : null;
     } catch (_) { return null; }
   };
-  const fits = (v) => !!v && v[0] === run.viewport.width && v[1] === run.viewport.height && Math.abs(v[2] - 1) < 0.01;
+  const fits = (v) => !!v && v[0] === run.viewport.width && v[1] === run.height && Math.abs(v[2] - 1) < 0.01;
   let live = await read();
   if (fits(live)) return { ok: true, live };
   try { await dbg.sendCommand("Emulation.clearDeviceMetricsOverride"); } catch (_) { /* the set below still runs */ }
@@ -491,7 +496,7 @@ function _viewport(v) {
   if (!v) return null;
   const width = Math.round(Number(v.width)), height = Math.round(Number(v.height));
   if (!(width > 0 && height > 0)) throw new Error("viewport needs a positive width and height");
-  return { width, height };
+  return v.fit === "width" ? { width, height, fit: "width" } : { width, height };
 }
 
 // Control-channel op "new_view" for a test run calls this first (and awaits it): drop the finished test
@@ -513,6 +518,7 @@ function newView(runId, { label, kind = "test", viewport } = {}) {
       partition: kind === "test" && !_sharedInUse() ? SHARED_PARTITION : _partitionFor(runId), kind, viewport: _viewport(viewport), scale: 1, rect: null,
       tabs: [], activeTabId: null, downloads: [], finished: false,
     };
+    run.height = run.viewport ? run.viewport.height : null;
     _runs.set(runId, run);
     _hookDownloads(run.partition);
     void _dropFinishedRuns(runId);
@@ -600,7 +606,11 @@ async function adoptRun(runId, { kind = "record", viewport } = {}) {
   run.finished = false;
   if (viewport) {
     run.viewport = _viewport(viewport);
+    run.height = run.viewport.height;
     for (const t of run.tabs) _emulate(run, t);
+    // The renderer only reports a rect when it changes, and an adopt changes none: lay the pages out
+    // for the new viewport from the rect it last reported.
+    if (run.rect && run.activeTabId) setActiveBounds(runId, run.activeTabId, run.rect);
   }
   await Promise.all(run.tabs.map((t) => {
     const dbg = _debugger(t);
@@ -636,6 +646,26 @@ async function closeRun(runId) {
 // is shown there; every other view is parked at 0x0, never destroyed, so switching tabs is instant.
 // A fixed-viewport run is letterboxed: the view keeps the viewport's aspect ratio, shrunk (never
 // enlarged) to fit the rect and centred in it, and the page is drawn at that scale.
+// A viewport with fit "width" fills the rect instead: the page stays viewport.width CSS pixels wide,
+// is drawn at rect.width / viewport.width, and its height is whatever then fills the rect (kept
+// between MIN_H and MAX_H, so a short or tall pane gets a centred or top-anchored page).
+function _fitBox(run, rect) {
+  const { width: W } = run.viewport;
+  let s = rect.width / W;
+  let H = Math.round(rect.height / s);
+  if (H < MIN_H) {
+    H = MIN_H;
+    s = rect.height / MIN_H;
+    const width = Math.round(W * s);
+    return { s, H, shown: { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y, width, height: rect.height } };
+  }
+  if (H > MAX_H) {
+    H = MAX_H;
+    return { s, H, shown: { x: rect.x, y: rect.y, width: rect.width, height: Math.round(MAX_H * s) } };
+  }
+  return { s, H, shown: rect };
+}
+
 function setActiveBounds(runId, tabId, rect) {
   const run = _runs.get(runId);
   if (!run) return;
@@ -643,13 +673,21 @@ function setActiveBounds(runId, tabId, rect) {
   for (const [id, r] of _runs) if (id !== runId) for (const t of r.tabs) t.view.setBounds(_HIDDEN);
   let shown = rect;
   if (run.viewport) {
-    const { width: W, height: H } = run.viewport;
-    const s = Math.min(rect.width / W, rect.height / H, 1);
-    const width = Math.round(W * s), height = Math.round(H * s);
-    shown = { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y + Math.floor((rect.height - height) / 2), width, height };
-    // Every tab of the run shares one scale (hidden ones too), so a tab never shows at a stale size.
-    if (s > 0 && Math.abs(s - run.scale) > 1e-4) {
+    let s, H = run.height;
+    if (run.viewport.fit === "width") {
+      // A folded or zero-size rect leaves the geometry as it was.
+      if (rect.width > 0 && rect.height > 0) ({ s, H, shown } = _fitBox(run, rect));
+      else { s = run.scale; shown = rect; }
+    } else {
+      const { width: W, height: VH } = run.viewport;
+      s = Math.min(rect.width / W, rect.height / VH, 1);
+      const width = Math.round(W * s), height = Math.round(VH * s);
+      shown = { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y + Math.floor((rect.height - height) / 2), width, height };
+    }
+    // Every tab of the run shares one scale and height (hidden ones too), so a tab never shows at a stale size.
+    if (s > 0 && (Math.abs(s - run.scale) > 1e-4 || H !== run.height)) {
       run.scale = s;
+      run.height = H;
       for (const t of run.tabs) _emulate(run, t);
     }
   }
@@ -657,13 +695,13 @@ function setActiveBounds(runId, tabId, rect) {
   run.activeTabId = tabId;
 }
 
-// Control-channel op "scale": how much a fixed-viewport run's pages are shrunk right now. Screencast
-// frames are the view's full size with the page drawn into their top-left at this scale, and nothing
-// in a frame says so — the recorder's video needs it to cut the page back out.
+// Control-channel op "scale": how much a fixed-viewport run's pages are drawn at right now, and the
+// page's CSS size. Screencast frames are the view's full size with the page drawn into their top-left
+// at this scale, and nothing in a frame says so — the recorder's video needs it to cut the page back out.
 function scaleOf(runId) {
   const run = _runs.get(runId);
   if (!run) throw new Error(`browser_panel: no run ${runId}`);
-  return { scale: run.scale };
+  return { scale: run.scale, width: run.viewport ? run.viewport.width : null, height: run.height };
 }
 
 // Control-channel op "targets": the devtools target ids of a record/sign-in run's tabs. Every tab

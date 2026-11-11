@@ -21,6 +21,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 RECORD_VIEWPORT = {"width": 1280, "height": 720}
+# What a record run asks the panel for: the page is always 1280 wide (layout breakpoints hang on it)
+# and drawn to fill the pane, so its height is whatever the pane gives (the 720 is only the start).
+RECORD_VIEWPORT_FIT = {**RECORD_VIEWPORT, "fit": "width"}
 
 
 def cdp_endpoint() -> str:

@@ -19,8 +19,9 @@ def crop_element_from_frame(
     """
     Crop the element region from a video frame PNG and write a JPEG element snapshot.
 
-    Video frames are captured at the recording viewport resolution (1280×720, DPR=1),
-    so bbox x/y/w/h from bridge.js can be used directly without DPR scaling.
+    Video frames are captured at the recording viewport resolution (1280 wide, DPR=1, and as tall
+    as the pane the page was drawn in), so bbox x/y/w/h from bridge.js can be used directly
+    without DPR scaling. The crop is clamped to the frame below.
 
     Returns the relative path from the session_dir (posix-style), or None when the
     bbox is too small or the crop would be empty.

@@ -837,13 +837,16 @@ class RecordingSession:
         errors: list[str] = []
         for key, rec in list(self._screencasts.items()):
             try:
-                rec.stop()
+                info = rec.stop() or {}
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{rec.out_path.name}: {exc!s}")
                 continue
             tab_id = self._tab_ids.get(key) or ("tab_0" if rec.out_path.name == "recording.webm" else None)
             if tab_id and rec.out_path.is_file():
                 videos[tab_id] = {"file": rec.out_path.name, "start_wall_ms": rec.start_wall_ms}
+                # The video's own pixel size: the page's height follows the pane, so compile can't assume 720.
+                if info.get("width") and info.get("height"):
+                    videos[tab_id].update(width=int(info["width"]), height=int(info["height"]))
         self._screencasts.clear()
         if videos:
             (session_dir / "videos.json").write_text(json.dumps(videos, indent=2), encoding="utf-8")
@@ -933,14 +936,14 @@ class RecordingSession:
             # Re-recording from a step: the panel run already holds the replayed page (session_id is
             # that run's id), so attach to it as it stands instead of opening a fresh view.
             browser, context, page, _tab = host_view.adopt(
-                self._playwright, self.session_id, viewport=host_view.RECORD_VIEWPORT)
+                self._playwright, self.session_id, viewport=host_view.RECORD_VIEWPORT_FIT)
         else:
             browser, context, page, _tab = host_view.acquire(
                 self._playwright,
                 self.session_id,
                 kind="signin" if self.auth_mode else "record",
                 label=self.label,
-                viewport=None if self.auth_mode else host_view.RECORD_VIEWPORT,
+                viewport=None if self.auth_mode else host_view.RECORD_VIEWPORT_FIT,
             )
         self._browser, self._context, self._page = browser, context, page
         self._browser.on("disconnected", lambda _: self._on_browser_disconnected())
@@ -1892,6 +1895,8 @@ class RecordingSession:
                 "    locale: navigator.language || '',"
                 "    timezone: d.timeZone || '',"
                 "    utc_offset_minutes: -new Date().getTimezoneOffset(),"
+                # shortcut: the page height at session start. The pane may be resized later, which this
+                # does not follow; a replay gets this height (runtime viewportHeight), upgrade if it matters.
                 "    viewport: { w: window.innerWidth, h: window.innerHeight },"
                 "    device_pixel_ratio: window.devicePixelRatio || 1,"
                 "    date_format_sample: new Date(2026, 0, 31).toLocaleDateString(),"

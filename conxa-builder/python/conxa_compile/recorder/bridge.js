@@ -2368,10 +2368,15 @@
     true
   );
 
+  // The pane the page is drawn in can be resized (the page's height follows it). A shorter page can
+  // clamp the scroll position, and the browser fires a scroll the person never made: not a step.
+  let lastResizeAt = 0;
+  window.addEventListener("resize", () => { lastResizeAt = Date.now(); }, { passive: true });
   let scrollTimer = null;
   window.addEventListener(
     "scroll",
     () => {
+      if (Date.now() - lastResizeAt < 400) return;
       if (scrollTimer) clearTimeout(scrollTimer);
       scrollTimer = setTimeout(() => {
         scrollTimer = null;

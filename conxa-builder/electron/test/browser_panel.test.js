@@ -86,7 +86,7 @@ test("a fixed-viewport run emulates 1280x720 at DPR 1 from its first tab", () =>
   const wc = added[added.length - 1].webContents;
   assert.strictEqual(last.meta.kind, "record");
   assert.deepStrictEqual(lastMetrics(wc).params, { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, scale: 1 });
-  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 1 });
+  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 1, width: 1280, height: 720 });
 });
 
 test("a narrow panel letterboxes the view, centres it and shrinks the page by the same scale", () => {
@@ -96,10 +96,10 @@ test("a narrow panel letterboxes the view, centres it and shrinks the page by th
   // s = min(640/1280, 600/720, 1) = 0.5 -> 640x360, centred vertically in the 600px rect.
   assert.deepStrictEqual(view.bounds, { x: 100, y: 170, width: 640, height: 360 });
   assert.strictEqual(lastMetrics(view.webContents).params.scale, 0.5);
-  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 0.5 });
+  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 0.5, width: 1280, height: 720 });
   // A panel larger than the page never enlarges it.
   panel.setActiveBounds("rec", tabId, { x: 0, y: 0, width: 2000, height: 1200 });
-  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 1 });
+  assert.deepStrictEqual(panel.scaleOf("rec"), { scale: 1, width: 1280, height: 720 });
   assert.deepStrictEqual(view.bounds, { x: 360, y: 240, width: 1280, height: 720 });
 });
 
@@ -322,6 +322,78 @@ test("ensure_geometry repairs every tab of the run, hidden ones too, and says wh
   assert.ok(!has(second, "Emulation.clearDeviceMetricsOverride"), "the healthy tab was not touched");
   assert.strictEqual(r.ok, false, "the fake still reports the old size after the repair, so it did not hold");
   await assert.rejects(() => panel.ensureGeometry("no-such-run"), /no run/);
+});
+
+const FIT = { width: 1280, height: 720, fit: "width" };
+
+test("a fit-to-width run fills the rect: the page stays 1280 wide and its height follows the pane", () => {
+  const { tabId } = panel.newView("fit1", { kind: "record", viewport: FIT });
+  const view = added[added.length - 1];
+  const rect = { x: 30, y: 40, width: 920, height: 800 };
+  panel.setActiveBounds("fit1", tabId, rect);
+  assert.deepStrictEqual(view.bounds, rect, "no bars: the view is the whole rect");
+  const m = lastMetrics(view.webContents).params;
+  assert.strictEqual(m.width, 1280);
+  assert.strictEqual(m.height, 1113); // 800 / (920 / 1280)
+  assert.ok(Math.abs(m.scale - 0.71875) < 1e-9);
+  assert.deepStrictEqual(panel.scaleOf("fit1"), { scale: m.scale, width: 1280, height: 1113 });
+  // The pane is dragged wider: the same page, drawn larger, a little shorter. Above 1 is allowed.
+  panel.setActiveBounds("fit1", tabId, { x: 0, y: 0, width: 1600, height: 900 });
+  assert.strictEqual(lastMetrics(view.webContents).params.height, 720);
+  assert.strictEqual(lastMetrics(view.webContents).params.scale, 1.25);
+});
+
+test("a fit-to-width run keeps its page between 480 and 1440 tall", () => {
+  const { tabId } = panel.newView("fit2", { kind: "record", viewport: FIT });
+  const view = added[added.length - 1];
+  // Short and wide: height pinned to 480, the page shrinks to fit and is centred sideways.
+  panel.setActiveBounds("fit2", tabId, { x: 0, y: 0, width: 1280, height: 240 });
+  assert.strictEqual(lastMetrics(view.webContents).params.height, 480);
+  assert.strictEqual(lastMetrics(view.webContents).params.scale, 0.5);
+  assert.deepStrictEqual(view.bounds, { x: 320, y: 0, width: 640, height: 240 });
+  // Tall and narrow: height capped at 1440, page top-anchored, a bar only at the bottom.
+  panel.setActiveBounds("fit2", tabId, { x: 0, y: 0, width: 400, height: 1200 });
+  assert.strictEqual(lastMetrics(view.webContents).params.height, 1440);
+  assert.deepStrictEqual(view.bounds, { x: 0, y: 0, width: 400, height: Math.round(1440 * (400 / 1280)) });
+});
+
+test("a folded (zero-size) rect leaves a fit-to-width run's geometry alone", () => {
+  const { tabId } = panel.newView("fit3", { kind: "record", viewport: FIT });
+  const wc = added[added.length - 1].webContents;
+  panel.setActiveBounds("fit3", tabId, { x: 0, y: 0, width: 640, height: 600 });
+  wc.commands.length = 0;
+  panel.setActiveBounds("fit3", tabId, { x: 0, y: 0, width: 0, height: 0 });
+  assert.strictEqual(wc.commands.length, 0);
+  assert.strictEqual(panel.scaleOf("fit3").scale, 0.5);
+});
+
+test("a viewport without fit still letterboxes, and an unknown fit value is ignored", () => {
+  const { tabId } = panel.newView("fit4", { kind: "record", viewport: { width: 1280, height: 720, fit: "stretch" } });
+  const view = added[added.length - 1];
+  panel.setActiveBounds("fit4", tabId, { x: 0, y: 0, width: 640, height: 600 });
+  assert.deepStrictEqual(view.bounds, { x: 0, y: 120, width: 640, height: 360 });
+});
+
+test("adopting a parked run into a fit-to-width viewport lays its page out from the last rect", async () => {
+  const { tabId } = panel.newView("fit5");
+  const view = added[added.length - 1];
+  panel.setActiveBounds("fit5", tabId, { x: 0, y: 0, width: 640, height: 600 }); // a test run: full rect, no emulation
+  assert.deepStrictEqual(view.bounds, { x: 0, y: 0, width: 640, height: 600 });
+  await panel.adoptRun("fit5", { kind: "record", viewport: FIT });
+  assert.deepStrictEqual(view.bounds, { x: 0, y: 0, width: 640, height: 600 });
+  assert.strictEqual(lastMetrics(view.webContents).params.height, 1200); // 600 / 0.5
+  assert.strictEqual(lastMetrics(view.webContents).params.scale, 0.5);
+});
+
+test("ensure_geometry compares against the run's live height, not the base one", async () => {
+  const { tabId } = panel.newView("fit6", { kind: "record", viewport: FIT });
+  const wc = added[added.length - 1].webContents;
+  panel.setActiveBounds("fit6", tabId, { x: 0, y: 0, width: 920, height: 800 });
+  wc.live = [1280, 1113, 1];
+  wc.commands.length = 0;
+  const r = await panel.ensureGeometry("fit6");
+  assert.strictEqual(r.ok, true);
+  assert.ok(!has(wc, "Emulation.clearDeviceMetricsOverride"), "a page at its live height is left alone");
 });
 
 test("tour hint is allowed only in sign-in runs on the Conxa website host", () => {

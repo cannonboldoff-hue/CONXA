@@ -183,13 +183,17 @@ def _scroll(ev: dict[str, Any]) -> tuple[float, float]:
         return 0.0, 0.0
 
 
-def output_rect(ev: dict[str, Any], pad: int = 0) -> tuple[int, int, int, int] | None:
-    """The event's bbox in the prepared video's pixels (page -> viewport -> letterboxed frame), clamped."""
+def output_rect(ev: dict[str, Any], pad: int = 0, video: dict[str, Any] | None = None) -> tuple[int, int, int, int] | None:
+    """The event's bbox in the prepared video's pixels (page -> viewport -> letterboxed frame), clamped.
+    `video` is the tab's videos.json entry: the page's height follows the pane, so the video's own size
+    (1 px per CSS px, top-anchored) is the frame the bbox lands in; without it the event's viewport is used."""
     bbox = (ev.get("visual") or {}).get("bbox") or {}
     w, h = float(bbox.get("w") or 0), float(bbox.get("h") or 0)
     if w <= 0 or h <= 0:
         return None
     vw, vh = _viewport(ev)
+    if video and video.get("width") and video.get("height"):
+        vw, vh = float(video["width"]), float(video["height"])
     sx, sy = _scroll(ev)
     scale = min(OUT_W / vw, OUT_H / vh)
     off_x, off_y = (OUT_W - vw * scale) / 2, (OUT_H - vh * scale) / 2
@@ -209,7 +213,8 @@ def _is_sensitive(ev: dict[str, Any]) -> bool:
     return (ev.get("action") or {}).get("value") == "{{REDACTED}}"
 
 
-def blur_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]], *, blur_all: bool, end_wall: int) -> list[dict[str, Any]]:
+def blur_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]], *, blur_all: bool, end_wall: int,
+                 videos: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Blur boxes in prepared-video ms. A typed value is covered from the previous event (typing
     starts after it) until the page changes, plus a short tail. Passwords always; every typed
     field when blur_all."""
@@ -220,7 +225,7 @@ def blur_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]], *, blu
             continue
         if not (blur_all or _is_sensitive(ev)):
             continue
-        rect = output_rect(ev, BLUR_PAD_PX)
+        rect = output_rect(ev, BLUR_PAD_PX, (videos or {}).get(e["tab"]))
         if rect is None:
             continue
         url = str((ev.get("page") or {}).get("url") or "")
@@ -235,13 +240,14 @@ def blur_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]], *, blu
     return out
 
 
-def ring_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def ring_windows(evs: list[dict[str, Any]], splice: list[dict[str, Any]],
+                 videos: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for e in evs:
         ev = e["ev"]
         if str((ev.get("action") or {}).get("action") or "") not in CLICK_ACTIONS:
             continue
-        rect = output_rect(ev)
+        rect = output_rect(ev, video=(videos or {}).get(e["tab"]))
         if rect is None:
             continue
         x, y, w, h = rect
@@ -365,8 +371,8 @@ def prepare_video(
     splice = build_splice_map(kept, cuts, videos)
     total_ms = splice[-1]["out_end_ms"] if splice else 0
     pad_ms = max(0, MIN_TOTAL_MS - total_ms)
-    blurs = blur_windows(evs, splice, blur_all=blur_all, end_wall=pieces[-1].wall_end)
-    rings = ring_windows(evs, splice)
+    blurs = blur_windows(evs, splice, blur_all=blur_all, end_wall=pieces[-1].wall_end, videos=videos)
+    rings = ring_windows(evs, splice, videos)
 
     graph = build_filter_graph(kept, {t: i for i, t in enumerate(used)}, videos, blurs, rings, pad_ms)
     script = session_dir / "prepared.filter.txt"

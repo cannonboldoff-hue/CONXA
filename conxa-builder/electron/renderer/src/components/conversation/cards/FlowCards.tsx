@@ -168,7 +168,7 @@ export function RecordingCard({ threadId, item }: CardProps) {
       footer={
         live ? (
           <>
-            <Button variant="brand" size="sm" disabled={busy || count === 0} onClick={() => run(() => flowFinishRecording(wf, cardId))}>
+            <Button variant="brand" size="sm" data-tour="finish-recording" disabled={busy || count === 0} onClick={() => run(() => flowFinishRecording(wf, cardId))}>
               Finish and save
             </Button>
             {state === 'recording' && (

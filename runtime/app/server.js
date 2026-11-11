@@ -1855,6 +1855,8 @@ async function _handleTool(name, args, extra) {
           logFn: log,
           groupId: primary.entry.manifest && primary.entry.manifest.group_id,
           runId: _runId,
+          // The page height the workflow was recorded at, so a run sees the same page it was built on.
+          viewportHeight: primary.entry.manifest?.environment?.viewport?.h,
           noPrompt: trigger === "scheduled", // nobody is there to sign in — report it, never open a window
         });
         const _authResult = await _getBrowser();

@@ -6,14 +6,15 @@
  * drive it blind, JSON in and out.
  *
  *   new_view      { runId, label?, kind?, viewport? } -> { markerUrl, tabId }   first tab of a run;
- *                 kind "test" (default) | "record" | "signin", viewport { width, height } fixes the page size
+ *                 kind "test" (default) | "record" | "signin", viewport { width, height, fit? } fixes the page size;
+ *                 fit "width" keeps the width but lets the height follow the pane (no bars); an older panel ignores it
  *   new_tab       { runId, label?, focus? }  -> { markerUrl, tabId }   a tab_open step's later tab
  *   adopt_view    { runId, kind?, viewport? } -> { tabId, targetId }   hand a parked test run to a recorder
  *                 (re-record from a step): same views and partition, now a record run
  *   close_view    { runId, tabId }           -> { ok: true }           destroy ONE view
  *   run_end       { runId }                  -> { ok: true }           the run finished — the view stays
  *   close_run     { runId }                  -> { ok: true }           destroy every view, wipe the partition
- *   scale         { runId }                  -> { scale }              how much the page is shrunk to fit
+ *   scale         { runId }                  -> { scale, width, height }  how big the page is drawn, and its CSS size
  *   targets       { runId }                  -> { targets: [{ tabId, targetId, opener }] }  record/signin runs
  *   save_download { runId, url, dest, timeoutMs? } -> { ok: true }
  *

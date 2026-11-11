@@ -1,26 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Download, ExternalLink, FileText, FolderOpen, Globe, Loader2, Lock, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
-import { flowDiscardRecording, flowFinishRecording, flowPauseRecording, flowResumeRecording, flowSignInCancel, flowSignInDone } from '@/api/conversationApi'
+import { ArrowLeft, ArrowRight, Download, ExternalLink, FileText, FolderOpen, Globe, Loader2, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
+import { flowFinishRecording, flowSignInDone } from '@/api/conversationApi'
 import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
 import { PanelDivider } from '@/components/shell/PanelDivider'
-import { StatusGlyph } from '@/components/shell/StatusGlyph'
 import { useNativeViewRegion } from '@/components/shell/useNativeViewRegion'
 import { Button } from '@/components/ui/button'
 import { activeTab, useBrowserStore, type FlowControls, type PanelDownload, type PanelRun, type PanelTab } from '@/store/browserStore'
 import { BROWSER } from '@/lib/panels'
 import { cn } from '@/lib/utils'
-
-/** mm:ss since `startedAt` (epoch seconds), ticking while `running`. */
-export function useElapsed(startedAt: number | undefined, running: boolean) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    if (!running) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [running])
-  const s = startedAt ? Math.max(0, Math.floor((now - startedAt * 1000) / 1000)) : 0
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-}
 
 type Phase = 'test' | 'ready' | 'signin' | 'recording' | 'paused'
 
@@ -32,75 +19,18 @@ function phaseOf(run: PanelRun, flow: FlowControls | null): Phase {
   return flow?.state === 'paused' ? 'paused' : 'recording'
 }
 
-const EDGE: Record<Phase, string> = {
-  test: 'transparent',
-  ready: '#93b4e6',
-  signin: '#fbbf24',
-  recording: '#f87171',
-  paused: '#8e8e8e',
-}
-
-function PhaseTitle({ phase, run, flow }: { phase: Phase; run: PanelRun; flow: FlowControls | null }) {
-  const elapsed = useElapsed(flow?.startedAt, phase === 'recording')
-  if (phase === 'test') {
-    const live = !run.finished
-    return (
-      <>
-        <span className="text-sm font-medium text-[var(--text-primary)]">Test browser</span>
-        <span className="flex items-center gap-1 text-xs text-[var(--text-meta)]">
-          <StatusGlyph kind={live ? 'run' : 'ok'} /> {live ? 'live' : 'finished'}
-        </span>
-      </>
-    )
-  }
-  if (phase === 'ready') {
-    return <span className="text-sm font-medium text-[#93b4e6]">Getting ready…</span>
-  }
-  if (phase === 'signin') {
-    return (
-      <>
-        <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-[var(--text-primary)]">
-          <StatusGlyph kind="warn" /> Sign in to {flow?.appName ?? 'the app'}
-        </span>
-        <span className="shrink-0 rounded-[4px] border border-[var(--border-default)] px-1.5 py-px text-[0.6875rem] text-[var(--text-meta)]">Not recorded</span>
-      </>
-    )
-  }
-  return (
-    <span className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]" role="status">
-      <span
-        aria-hidden
-        className={cn('size-2 rounded-full', phase === 'recording' ? 'animate-pulse bg-[#f87171] motion-reduce:animate-none' : 'bg-[#8e8e8e]')}
-      />
-      {phase === 'recording' ? 'Recording' : 'Paused'}
-      {flow?.startedAt != null && <span className="tabular-nums text-[var(--text-meta)]">· {elapsed}</span>}
-    </span>
-  )
-}
-
-function FlowButtons({ flow }: { flow: FlowControls }) {
+/** The conversation card carries every control. When the browser is widened the conversation is folded
+ *  to a rail, so the one button a person still must be able to press lives in the tab row. */
+function WidePrimary({ flow }: { flow: FlowControls }) {
   const { busy, run } = useFlowAction(flow.workflowId)
+  const cls = 'mb-1 mr-1 h-7 shrink-0 self-end'
   if (flow.kind === 'signin') {
-    return (
-      <>
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(() => flowSignInCancel(flow.workflowId, flow.cardId))}>Cancel</Button>
-        {flow.canForce && (
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowSignInDone(flow.workflowId, flow.cardId, true))}>Save anyway</Button>
-        )}
-        <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowSignInDone(flow.workflowId, flow.cardId))}>I’m signed in</Button>
-      </>
-    )
+    return <Button variant="brand" size="sm" className={cls} disabled={busy} onClick={() => run(() => flowSignInDone(flow.workflowId, flow.cardId))}>I’m signed in</Button>
   }
   return (
-    <>
-      <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(() => flowDiscardRecording(flow.workflowId, flow.cardId))}>Discard</Button>
-      {flow.state === 'paused' ? (
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowResumeRecording(flow.workflowId, flow.cardId))}>Resume</Button>
-      ) : (
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowPauseRecording(flow.workflowId, flow.cardId))}>Pause</Button>
-      )}
-      <Button variant="brand" size="sm" data-tour="finish-recording" disabled={busy || !flow.count} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>Finish and save</Button>
-    </>
+    <Button variant="brand" size="sm" className={cls} disabled={busy || !flow.count} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>
+      Finish and save
+    </Button>
   )
 }
 
@@ -113,10 +43,24 @@ function TabIcon({ tab }: { tab: PanelTab }) {
   return <Globe className="size-3.5 shrink-0 text-[var(--text-meta)]" aria-hidden />
 }
 
-/** Chrome's tab strip: every tab with its icon, title and close button, then + for a new tab. */
-function TabStrip({ run, seen }: { run: PanelRun; seen: Set<string> }) {
+/** The top row, as in Claude's browser: every tab with its icon, title and close button, then + for a new
+ *  tab; at the right, widen and close. Nothing else sits in the pane: the run's state and its controls live
+ *  on the conversation's card. */
+function TabStrip({ run, seen, wide, flow, onToggleWide, onClose }: {
+  run: PanelRun
+  seen: Set<string>
+  wide: boolean
+  flow: FlowControls | null
+  onToggleWide: () => void
+  onClose: () => void
+}) {
+  // Closing a finished test frees the browser; closing anything else only hides it, and it keeps going.
+  const frees = run.kind === 'test' && run.finished
+  const closeLabel = frees ? 'Close browser' : run.kind === 'test' ? 'Hide browser — a running test keeps going' : 'Hide browser — it keeps going'
+  const iconBtn = 'text-[var(--text-meta)]'
   return (
-    <div className="flex h-9 shrink-0 items-end gap-0.5 overflow-x-auto bg-[#1f1f1f] px-1.5 pt-1.5" role="tablist" aria-label="Browser tabs">
+    <div className="flex h-10 shrink-0 items-stretch bg-[#1f1f1f] pl-1.5 pr-1">
+    <div className="flex h-full min-w-0 flex-1 items-end gap-0.5 overflow-x-auto pt-1.5" role="tablist" aria-label="Browser tabs">
       {run.tabs.map((t) => (
         <div
           key={t.id}
@@ -168,6 +112,24 @@ function TabStrip({ run, seen }: { run: PanelRun; seen: Set<string> }) {
       >
         <Plus className="size-4" />
       </button>
+    </div>
+    <div className="flex shrink-0 items-center gap-0.5 pl-1">
+      {wide && flow && <WidePrimary flow={flow} />}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className={iconBtn}
+        aria-label={wide ? 'Show the conversation' : 'Widen the browser'}
+        title={wide ? 'Show the conversation' : 'Widen the browser'}
+        onClick={onToggleWide}
+      >
+        {wide ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+      </Button>
+      <Button type="button" variant="ghost" size="icon-sm" className={iconBtn} aria-label={closeLabel} title={closeLabel} onClick={onClose}>
+        {frees ? <X className="size-4" /> : <PanelRightClose className="size-4" />}
+      </Button>
+    </div>
     </div>
   )
 }
@@ -229,6 +191,15 @@ function DownloadsPopover({ run, onClose }: { run: PanelRun; onClose: () => void
   )
 }
 
+/** What the address bar shows at rest, as in Claude's browser: just the site ("github.com"). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '') || url
+  } catch {
+    return url
+  }
+}
+
 /** Back / forward / reload-or-stop and an address bar you can type a site or a search into. */
 function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: PanelTab; dlOpen: boolean; onToggleDownloads: () => void }) {
   const active = run.downloads.filter((d) => d.state === 'progressing')
@@ -262,8 +233,7 @@ function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: 
     }
   }, [run.runId])
 
-  const secure = tab.url.startsWith('https://')
-  const shown = draft ?? tab.url
+  const shown = draft ?? hostOf(tab.url) // the full address only while it is being edited
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-0.5 bg-[#262626] px-1.5">
@@ -285,11 +255,6 @@ function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: 
           input.current?.blur()
         }}
       >
-        {secure && draft === null ? (
-          <Lock className="size-3 shrink-0 text-[var(--text-meta)]" aria-label="Secure connection" />
-        ) : (
-          <Globe className="size-3 shrink-0 text-[var(--text-meta)]" aria-hidden />
-        )}
         <input
           ref={input}
           value={shown}
@@ -309,38 +274,37 @@ function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: 
               e.currentTarget.blur()
             }
           }}
-          className="min-w-0 flex-1 bg-transparent text-[0.8125rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-meta)]"
+          className={cn('min-w-0 flex-1 bg-transparent text-[0.8125rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-meta)]', draft === null && 'text-center')}
         />
+        {run.downloads.length > 0 && (
+          <button
+            type="button"
+            className={cn('relative -mr-2 flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand/55', dlOpen && 'bg-[#3c4b66] text-[#8ab4f8]')}
+            aria-label="Downloads"
+            aria-expanded={dlOpen}
+            title="Downloads"
+            onClick={onToggleDownloads}
+          >
+            {active.length > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Download className="size-4" />}
+            {active.length === 0 && (
+              <span aria-hidden className={cn('absolute right-0.5 top-0.5 size-1.5 rounded-full', failed ? 'bg-status-warn' : 'bg-[#93b4e6]')} />
+            )}
+          </button>
+        )}
       </form>
-      {run.downloads.length > 0 && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={cn('relative ml-1 rounded-full text-[var(--text-secondary)]', dlOpen && 'bg-[#3c4b66] text-[#8ab4f8]')}
-          aria-label="Downloads"
-          aria-expanded={dlOpen}
-          title="Downloads"
-          onClick={onToggleDownloads}
-        >
-          {active.length > 0 ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Download className="size-4" />}
-          {active.length === 0 && (
-            <span aria-hidden className={cn('absolute right-1 top-1 size-1.5 rounded-full', failed ? 'bg-status-warn' : 'bg-[#93b4e6]')} />
-          )}
-        </Button>
-      )}
     </div>
   )
 }
 
 /**
- * Studio's embedded browser — a test run, a sign-in or a recording — built like Chrome: a tab strip
- * with + and ×, back / forward / reload, an address bar that takes a site or a search, the usual
- * keys (browser_panel.js catches them inside the page) and a right-click menu. The page itself is a
+ * Studio's embedded browser — a test run, a sign-in or a recording — built like Claude's: two thin rows (a tab
+ * strip with + and widen / close, then back / forward / reload and an address bar that takes a site or a
+ * search), the usual keys (browser_panel.js catches them inside the page) and a right-click menu. The page itself is a
  * native WebContentsView owned by the main process, drawn into the region below
  * (useNativeViewRegion). A native view floats above every element, so nothing is drawn over the
- * page: the run's state lives in the coloured top edge, the status row and the footer. Closing a
- * finished test frees the browser; hiding never stops a run.
+ * page, and the pane's height must change only when the person resizes it (the page's height follows
+ * it): the run's state and controls live on the conversation's card, and only in widen mode does the
+ * tab row carry the one button needed. Closing a finished test frees the browser; hiding never stops a run.
  */
 export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth: number; wide: boolean }) {
   const run = useBrowserStore((s) => s.run)
@@ -390,7 +354,6 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
   if (!run || !tab) return null
   const flow = storeFlow?.runId === run.runId ? storeFlow : null
   const phase = phaseOf(run, flow)
-  const blankTab = !tab.url && phase !== 'ready'
 
   return (
     <>
@@ -408,8 +371,8 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
       )}
       <section
         aria-label={run.kind === 'test' ? 'Test browser' : run.kind === 'signin' ? 'Sign-in browser' : 'Recording browser'}
-        className={cn('flex min-h-0 flex-col border-t-2 bg-[#262626]', wide ? 'min-w-0 flex-1' : 'shrink-0')}
-        style={{ width: wide ? undefined : width, borderTopColor: EDGE[phase] }}
+        className={cn('flex min-h-0 flex-col bg-[#262626]', wide ? 'min-w-0 flex-1' : 'shrink-0')}
+        style={{ width: wide ? undefined : width }}
         // The same browser keys browser_panel.js catches inside the page, for when the keyboard is in
         // the browser's own bar (the address field, a tab) rather than the page.
         onKeyDown={(e) => {
@@ -427,37 +390,15 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
           }
         }}
       >
-        <header className="flex h-10 shrink-0 items-center gap-2 bg-[#1f1f1f] px-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <PhaseTitle phase={phase} run={run} flow={flow} />
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-[var(--text-meta)]"
-            aria-label={wide ? 'Show the conversation' : 'Widen the browser'}
-            title={wide ? 'Show the conversation' : 'Widen the browser'}
-            onClick={() => setWide(!wide)}
-          >
-            {wide ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-[var(--text-meta)]"
-            aria-label="Hide browser"
-            title={run.kind === 'test' ? 'Hide browser — a running test keeps going' : 'Hide browser — it keeps going'}
-            onClick={() => setFolded(true)}
-          >
-            <PanelRightClose className="size-4" />
-          </Button>
-        </header>
-
-        <TabStrip run={run} seen={seen} />
+        <TabStrip
+          run={run}
+          seen={seen}
+          wide={wide}
+          flow={flow}
+          onToggleWide={() => setWide(!wide)}
+          onClose={() => (run.kind === 'test' && run.finished ? void window.conxa.panel.closeRun({ runId: run.runId }) : setFolded(true))}
+        />
         <Toolbar run={run} tab={tab} dlOpen={dlOpen} onToggleDownloads={() => (dlOpen ? closeDownloads() : void openDownloads())} />
-        <div aria-hidden className={cn('h-0.5 shrink-0', (phase === 'ready' || tab.loading) && 'animate-pulse bg-[#93b4e6]/60 motion-reduce:animate-none')} />
 
         {/* The native view is drawn into this region. */}
         <div ref={region} className="relative min-h-0 flex-1 bg-[#1a1a1a]" onClick={dlOpen ? closeDownloads : undefined}>
@@ -469,50 +410,7 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[var(--text-meta)]">Opening {run.kind === 'signin' ? 'the sign-in page' : 'the site'}…</p>
           ) : null}
         </div>
-
-        <footer className="flex shrink-0 items-center gap-1.5 border-t border-[var(--border-subtle)] px-3 py-2">
-          <div className="min-w-0 flex-1">
-            <FooterNote phase={phase} run={run} flow={flow} blankTab={blankTab} />
-          </div>
-          {run.kind === 'test' && run.finished && (
-            <Button type="button" variant="outline" size="sm" onClick={() => window.conxa.panel.closeRun({ runId: run.runId })}>
-              <X className="size-3.5" /> Close browser
-            </Button>
-          )}
-          {flow && phase !== 'ready' && <FlowButtons flow={flow} />}
-        </footer>
       </section>
     </>
   )
-}
-
-function FooterNote({ phase, run, flow, blankTab }: { phase: Phase; run: PanelRun; flow: FlowControls | null; blankTab: boolean }) {
-  const cls = 'flex min-w-0 items-start gap-1.5 text-xs text-[var(--text-meta)]'
-  if (blankTab && phase !== 'test') return <p className={cls}>New tab — type a site or a search in the address bar.</p>
-  switch (phase) {
-    case 'test':
-      return run.finished ? (
-        <p className={cls}>Stays on the final page so you can check the result yourself. You can click around now — the run is over.</p>
-      ) : (
-        <p className={cls}><StatusGlyph kind="warn" /> Clicking in the page while it runs can throw the test off.</p>
-      )
-    case 'ready':
-      return <p className={cls}>{run.kind === 'signin' ? 'Nothing here is recorded.' : 'Recording starts once the page has loaded.'}</p>
-    case 'signin':
-      return (
-        <div className="min-w-0">
-          <p className={cls}>Sign in as you normally do, including any two-step code — Studio notices when you’re in and carries on. Nothing here is recorded.</p>
-          {flow?.note && <p className="text-xs text-status-warn">▲ {flow.note}</p>}
-        </div>
-      )
-    case 'paused':
-      return <p className={cls}>Paused — nothing you do in the browser is recorded.</p>
-    default:
-      return (
-        <p className={cls}>
-          <span className="shrink-0">{flow?.count ?? 0} captured</span>
-          {flow?.last && <span className="min-w-0 truncate text-[var(--text-secondary)]">· Last: {flow.last}</span>}
-        </p>
-      )
-  }
 }

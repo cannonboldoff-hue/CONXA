@@ -87,7 +87,7 @@ function _checkHumanOverride(key) {
 // (interactive login, session validation) — matches a normal desktop browser closely
 // enough that bot-protected sites (Render, Google OAuth) don't reject it outright.
 // The one page size every run sees now lives in page_geometry.js (RUN_VIEWPORT).
-const { RUN_VIEWPORT } = require("./page_geometry");
+const { RUN_VIEWPORT, runViewport } = require("./page_geometry");
 
 const STEALTH_CONTEXT_OPTIONS = {
   userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1053,9 +1053,13 @@ async function _probeAccountName(page) {
 // normal launch below and logs why — a run must never hard-fail over Execute's
 // panel being unavailable.
 async function _buildExecContext(stored, headless = false, opts = {}) {
+  // The recording's width and the height it was made at (opts.viewportHeight, from the manifest). A
+  // host panel that lets the height follow its pane (Studio) reads `fit`; one that doesn't (an older
+  // Execute) drops it and shows the page at this size.
+  const viewport = runViewport(opts.viewportHeight);
   if (!headless && opts.runId && hostBrowser.endpoint()) {
     try {
-      return await hostBrowser.acquire({ runId: opts.runId, storageState: stored, label: opts.label, viewport: RUN_VIEWPORT });
+      return await hostBrowser.acquire({ runId: opts.runId, storageState: stored, label: opts.label, viewport: { ...viewport, fit: "width" } });
     } catch (e) {
       if (opts.logFn) opts.logFn("warn", "host_browser_fallback", { run_id: opts.runId, error: e.message });
     }
@@ -1064,7 +1068,7 @@ async function _buildExecContext(stored, headless = false, opts = {}) {
     headless,
     args: ["--disable-blink-features=AutomationControlled"],
   });
-  const context = await browser.newContext({ storageState: stored, acceptDownloads: true, viewport: RUN_VIEWPORT });
+  const context = await browser.newContext({ storageState: stored, acceptDownloads: true, viewport });
   return { browser, context };
 }
 
@@ -1104,7 +1108,7 @@ async function _openInteractiveAuthWindow(workspace_id, targetUrl, opts = {}) {
   if (runId && hostBrowser.endpoint()) {
     try {
       const { browser: loginBrowser, context: loginCtx, page: loginPage, hostTabId } =
-        await hostBrowser.acquire({ runId, storageState: storedState, label, focus: true, loginKey: workspace_id, viewport: RUN_VIEWPORT });
+        await hostBrowser.acquire({ runId, storageState: storedState, label, focus: true, loginKey: workspace_id, viewport: { ...RUN_VIEWPORT, fit: "width" } });
       await _maskAutomation(loginPage);
       await loginPage.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       return { loginBrowser, loginCtx, loginPage, hostOwned: true, hostRunId: runId, hostTabId };

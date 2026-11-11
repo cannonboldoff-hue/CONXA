@@ -2,42 +2,6 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**The test browser no longer zooms in and cuts off the page — 2026-11-10**
-While a test was running, the browser next to the chat would suddenly show the page too big, with the right side and the bottom cut off. Recording looked fine, which made it confusing. Conxa was taking a picture of the page before each step, and that picture quietly changed the page's size. Now the pictures are taken in a way that leaves the size alone, and before every step Conxa checks the page is still the right size, puts it back if not, and stops with a clear message if it can't. The same fix covers the browser customers see in Conxa Execute.
-— 2026-11-10
-
-**The pencil on an answered question now goes straight back — 2026-11-10**
-Pressing the pencil used to ask "Go back here?" and make you confirm before it did anything. Now it takes you back to the question right away.
-— 2026-11-10
-
-**Removed the extra "Change" button from answered questions — 2026-11-10**
-Once you answered a question, a "Change" link sat next to the pencil and opened the detailed editor. It made the answered question look cluttered. The link is gone, and the pencil is still there if you want to go back and choose again.
-— 2026-11-10
-
-**Going back to one question no longer asks the others again — 2026-11-10**
-When you pressed the pencil on an early question and answered it again, the app rebuilt the workflow and then asked you the later questions all over again, even though you had already answered them. Now it remembers those answers and puts them back in place. It only asks again if the question itself has changed, and it still always asks about anything risky, such as pop-ups or steps that can't be undone.
-— 2026-11-10
-
-**Every question now looks the same, and replies no longer appear twice — 2026-11-10**
-The question about how to tell the workflow worked looked different from the others: it had no short explanation above it, no "Question 1 of 2" line, and its answer box worked differently. It now looks and behaves like the rest. Its first line also read oddly ("After Pick the file…"), so it now names the step properly. Separately, when the app wrote a reply on its own, the same reply could show up twice, one copy stuck on "replying…". That is fixed too, and that reply now says which of your notes it is about.
-— 2026-11-10
-
-**The app no longer talks to itself in your voice — 2026-11-10**
-After your answers, the app sometimes passed your notes back to itself as a long message that looked like you had typed it. It showed up in the chat as a box from you, which was confusing because you never wrote it. That message is now kept out of sight, and only the app's plain reply is shown.
-— 2026-11-10
-
-**After an upload, the app now looks again to see the file is really there — 2026-11-10**
-Seeing "upload complete" does not prove the file arrived. After an upload, the app can now open the same page again in a separate tab, read it, and check that the file's name is on it, more times than before. It never clicks or types, closes that tab, and says "couldn't confirm" instead of guessing when it can't look. It only starts insisting on this after a test of your workflow showed it works on your website, so a site that shows no file list never makes a working upload stop. The cloud dashboard now also shows the steps that keep coming back unconfirmed.
-— 2026-11-10
-
-**A recording no longer loses the last few things you did — 2026-11-10**
-Each thing you do in the browser is now saved the moment you do it. Before, it was held back while the app watched the page finish its work, so the last steps could be thrown away when you pressed Stop, for example choosing "File upload" and picking a file in Google Drive. The "did it finish" details now arrive afterwards and are added to the step. When you press Stop, the app first collects everything still on its way. If it still cannot account for something you did, it tells you in the chat so you can record that part again.
-— 2026-11-10
-
-**Found why a recording can lose its last few steps, and wrote down the fix — 2026-11-10**
-A recording of "download a file from GitHub, then upload it to Google Drive" kept every step up to Drive's "New" button and lost the rest: the "File upload" choice and the file you picked. The recorder held each step back while it watched the page finish its work. On Drive that watch ran for 15 seconds, and every later step waited in line behind it, so pressing Stop threw away everything still waiting. This happens on any website that shows progress, not only Drive. Nothing has changed yet. The plan, now on the to-do list, is to save each step the moment you do it, add the "did it finish" details later, and warn you if anything you did was not saved.
-— 2026-11-10
-
-**Stop on a test now stops right away — 2026-11-10**
-Clicking Stop while a test was running could take a long time to take effect, because the test only noticed the click between steps. Now it notices within a fraction of a second, even in the middle of a step, and ends the test straight away. A Stop click during the first moments of setup, before the test has really started, is still not caught.
-— 2026-11-10
+**The browser next to the chat now fills its whole space, like Claude's browser — 2026-11-11**
+While recording or testing, the website sat in a fixed box with big black bands above and below it, and the browser had extra bars and buttons around it. Now the website fills the whole space, grows and shrinks as you drag the divider, and the browser is just two slim rows: your tabs, then the back, forward, reload and address bar. The address shows only the site name until you click it. The Finish, Pause and Discard buttons stay on the chat card, and when you widen the browser, Finish and save (or "I'm signed in") shows up in the tab row so you are never stuck. Websites still show their normal desktop layout, so a recording and its test see the same page.
+— 2026-11-11

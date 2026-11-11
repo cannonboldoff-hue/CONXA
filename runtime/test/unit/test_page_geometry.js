@@ -12,7 +12,7 @@ Module._load = function (request, ...rest) {
   if (request === "./host_browser") return { ensureGeometry: async (a) => { hostCalls.push(a); return hostReply(); } };
   return realLoad.call(this, request, ...rest);
 };
-const { RUN_VIEWPORT, capture, checkGeometry } = require("../../app/page_geometry");
+const { RUN_VIEWPORT, MIN_H, MAX_H, runViewport, capture, checkGeometry } = require("../../app/page_geometry");
 
 function cdpPage({ send } = {}) {
   const sent = [];
@@ -51,6 +51,25 @@ test("checkGeometry: right size asks nothing of the host", async () => {
   hostCalls.length = 0;
   assert.deepStrictEqual(await checkGeometry(sizedPage([RUN_VIEWPORT.width, RUN_VIEWPORT.height, 1]), HOST), { ok: true });
   assert.strictEqual(hostCalls.length, 0);
+});
+
+test("checkGeometry: the width is the contract, the height follows the pane", async () => {
+  hostCalls.length = 0;
+  for (const h of [MIN_H, 720, 900, 1113, MAX_H]) {
+    assert.deepStrictEqual(await checkGeometry(sizedPage([1280, h, 1]), HOST), { ok: true }, `height ${h}`);
+  }
+  assert.strictEqual(hostCalls.length, 0, "a page at any pane height is not repaired");
+  const r = await checkGeometry(sizedPage([1100, 900, 1]), HOST); // wrong width: still repaired, still caught
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(hostCalls, [{ runId: "r1" }]);
+  assert.strictEqual((await checkGeometry(sizedPage([1280, 300, 1]), HOST)).ok, false, "a sliver is not a page");
+});
+
+test("runViewport: the contract width and the recorded height, kept to what a panel can show", () => {
+  assert.deepStrictEqual(runViewport(1113), { width: 1280, height: 1113 });
+  assert.deepStrictEqual(runViewport(100), { width: 1280, height: MIN_H });
+  assert.deepStrictEqual(runViewport(5000), { width: 1280, height: MAX_H });
+  for (const none of [undefined, null, 0, -5, "x", NaN]) assert.deepStrictEqual(runViewport(none), RUN_VIEWPORT, String(none));
 });
 
 test("checkGeometry: a wrong DPR is repaired by the host and measured again", async () => {

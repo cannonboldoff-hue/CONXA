@@ -112,6 +112,10 @@ def test_output_rect_subtracts_scroll_pads_and_letterboxes():
     # 1920x1080 viewport scales by 2/3
     assert P.output_rect(ev("tab_0", 0, bbox=(300, 150, 150, 60), viewport="1920x1080")) == (200, 100, 100, 40)
     assert P.output_rect(ev("tab_0", 0, bbox=(0, 0, 0, 0))) is None
+    # The page's height follows the pane: a 1280x1440 video (1 px per CSS px) is shrunk to 640x720 and centred,
+    # whatever the event's own viewport string says.
+    tall = {"width": 1280, "height": 1440}
+    assert P.output_rect(ev("tab_0", 0, bbox=(300, 150, 150, 60), viewport="1280x720"), video=tall) == (470, 75, 75, 30)
 
 
 def test_ring_windows_for_clicks_only():

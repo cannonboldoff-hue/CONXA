@@ -96,6 +96,48 @@ def test_frames_off_the_starting_scale_are_reshaped() -> None:
     assert pipe.frames[0] != frame
 
 
+def test_a_page_that_fills_the_frame_gets_its_height_from_the_frame() -> None:
+    video, _ = _video()
+    video._scale = 0.71875  # a 920x800 view: 1280 * 0.71875 = 920
+    assert video._geometry({"deviceWidth": 920, "deviceHeight": 800}) == (1.0, 1112)  # 1113 rounded down to even
+    # Enlarged past 1280 (a 1600x900 pane): the scale is no longer capped at 1, so the page still fills it.
+    video._scale = 1.25
+    assert video._geometry({"deviceWidth": 1600, "deviceHeight": 900}) == (1.0, 720)
+    # A frame much bigger than the page (a corner layout) keeps the legacy fraction and height.
+    video._scale = 0.5
+    assert video._geometry({"deviceWidth": 1600, "deviceHeight": 900}) == (pytest.approx(0.4), 720)
+
+
+def test_ffmpeg_args_take_the_page_height() -> None:
+    vf = sv.ffmpeg_args(1.0, 1112)[-1]
+    assert "scale=1280:1112" in vf and vf.endswith("crop=1280:1112:0:0")
+
+
+def test_reshape_to_a_different_height_is_top_anchored() -> None:
+    # A frame whose page is 1280x900 (frame = page box, 640x450 px), redrawn for a video made at 1280x720.
+    frame = _jpeg((640, 450), (640, 450), (255, 0, 0))
+    out = Image.open(io.BytesIO(sv.reshape(frame, 1.0, 1.0, 900, 720))).convert("RGB")
+    assert out.size == (640, 450)
+    # 720 of its 900 rows are kept (ffmpeg then cuts the region 640x450 -> 1280x720): the top rows are red.
+    assert out.getpixel((300, 10))[0] > 200 and out.getpixel((300, 10))[1] < 60
+    # A shorter page (600 tall) is padded grey below.
+    short = Image.open(io.BytesIO(sv.reshape(_jpeg((640, 300), (640, 300)), 1.0, 1.0, 600, 720))).convert("RGB")
+    assert short.getpixel((300, 10))[0] > 200
+    assert short.getpixel((300, 290)) == pytest.approx((128, 128, 128), abs=6)
+
+
+def test_frames_of_another_height_are_reshaped_and_the_first_one_fixes_the_size() -> None:
+    video, pipe = _video()
+    frame = _jpeg((640, 450), (640, 450))
+    video._base_h = 720
+    video._write(frame, 1.0, 10.000, 900)
+    video._write(frame, 1.0, 10.080, 900)  # a frame is written when the next one arrives: the first, 900 vs 720 -> reshaped
+    assert video.frames_reshaped == 1
+    video._write(frame, 1.0, 10.160, 721)  # writes the second 900 one -> reshaped
+    video._write(frame, 1.0, 10.240, 721)  # writes the 721 one: within HEIGHT_SLACK of the base, left alone
+    assert video.frames_reshaped == 2
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
