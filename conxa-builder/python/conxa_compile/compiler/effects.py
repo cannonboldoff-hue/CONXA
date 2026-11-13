@@ -34,11 +34,13 @@ from conxa_core.models.skill_spec import (
 
 # Probe types whose answer the runtime of this version can give (runtime/app/effect_probes.js). The others exist in
 # the model so a pack never has to change shape when they are built; today they answer "cant_tell".
-RUNTIME_PROBES = frozenset({"input_has_files", "request_chain", "failure_signal", "new_text", "download_file", "fresh_look"})
+RUNTIME_PROBES = frozenset({"input_has_files", "request_chain", "failure_signal", "new_text", "download_file", "fresh_look",
+                             "url_stays", "row_with_identity", "value_equals", "later_step"})
 # A probe the runtime can answer but that has not yet been shown to work on THIS site. It is mined into the checklist,
 # but it does not raise required_rung: only a clean test run that saw it answer "yes" does (calibrate_effect). Until then
 # a site that never lists the new item cannot make a working workflow stop with "couldn't confirm".
-_UNTESTED_PROBES = frozenset({"fresh_look"})
+# The four the proof picker may add (compiler/proof_gates.py) are untested on every site until a clean run saw them answer "yes".
+_UNTESTED_PROBES = frozenset({"fresh_look", "url_stays", "row_with_identity", "value_equals", "later_step"})
 
 _DELETE_RE = re.compile(r"\b(delete|remove|erase|discard|trash|revoke|cancel subscription|unsubscribe|close account)\b", re.I)
 _SEND_RE = re.compile(r"\b(send|publish|pay|purchase|buy|order|checkout|submit|post|share|transfer|invite|email)\b", re.I)
@@ -241,27 +243,55 @@ def plain_sentence(effect: dict[str, Any] | Effect) -> str:
     return "; ".join(parts[:3])
 
 
+def _from_recording(check: dict[str, Any]) -> bool:
+    """A check only the author can retire: the author agreed to it, or it is the words the recording itself saw
+    (a ``new_text`` check is built from nothing else)."""
+    return check.get("confirmed") is True or (check.get("probe") or {}).get("type") == "new_text"
+
+
+def _dead(check: dict[str, Any]) -> bool:
+    """Shown to be dead by a run that really proved the step. A bare ``calibrated: false`` (no basis) is ignored."""
+    return check.get("calibrated") is False and bool(check.get("calibration_basis"))
+
+
 def calibrate_effect(effect: dict[str, Any], observed: dict[str, str]) -> dict[str, Any]:
     """Apply what a PASSING test run showed to a step's effect dict and return the new dict.
 
-    ``observed`` maps a check id to its answer in that run ("yes" / "no" / "not_yet" / "cant_tell"). A support check
-    that never answered "yes" in a run that otherwise worked is dead weight (the site does not expose that signal):
-    it is marked ``calibrated: false`` and no longer counts toward the publish rule or the quorum. One that did is
-    ``calibrated: true``. A veto check cannot be proven by a run that had no failure, so it stays as it is. The quorum
-    rises to the number of separate witnesses that really answered "yes", up to what the design wants, and never above
-    the witnesses available. Pure: the caller stores the result."""
+    ``observed`` maps a check id to its answer in that run ("yes" / "no" / "not_yet" / "cant_tell").
+
+    A run teaches nothing unless a check that proves the work FINISHED (rung ``completed`` or higher) answered "yes"
+    in it: a pass that rested on nothing but "the step ran" may be a false pass, and learning from it would retire the
+    very checks that would have caught it. Such a run changes nothing. Otherwise a support check that answered "yes"
+    is ``calibrated: true``; one that answered "no" is ``calibrated: false`` (the site does not show that signal) and
+    no longer counts, unless the recording itself saw that result or the author confirmed it (those are retired only
+    by the author). "I could not tell" and "not yet" never retire anything. Every mark carries ``calibration_basis``,
+    the checks that proved the run; a mark without one is ignored. The quorum rises to the number of separate
+    witnesses that really answered "yes", up to what the design wants. A veto check cannot be proven by a run that had
+    no failure, so it stays as it is. Pure: the caller stores the result."""
     out = dict(effect)
     checks = [dict(c) for c in effect.get("checks") or []]
+    basis = [
+        str(c.get("id") or "") for c in checks
+        if c.get("role") != "veto" and observed.get(str(c.get("id") or "")) == "yes"
+        and _RUNG_INDEX.get(str(c.get("rung")), -1) >= _RUNG_INDEX["completed"]
+        # A later step working is the weakest finish witness (it may only prove the file existed), so it never
+        # teaches the checklist: it must not be what retires the checks that answered "no".
+        and c.get("witness") != "later_step"
+    ]
+    if not basis:
+        return out
     live_witnesses: set[str] = set()
     for c in checks:
         if c.get("role") == "veto":
             continue
         answer = observed.get(str(c.get("id") or ""))
-        if answer is None:
-            continue  # not exercised (the run took another path): leave it as it was
-        c["calibrated"] = answer == "yes"
         if answer == "yes":
+            c["calibrated"] = True
+            c["calibration_basis"] = basis
             live_witnesses.add(str(c.get("witness") or "renderer"))
+        elif answer == "no" and not _from_recording(c):
+            c["calibrated"] = False
+            c["calibration_basis"] = basis
     out["checks"] = checks
     quorum = dict(effect.get("quorum") or {})
     quorum["witnesses"] = max(1, min(desired_witnesses(str(effect.get("kind") or "")), len(live_witnesses) or 1))
@@ -283,7 +313,7 @@ def _finish_checks(effect: dict[str, Any] | None) -> list[dict[str, Any]]:
         return []
     out = []
     for c in effect.get("checks") or []:
-        if c.get("role") == "veto" or c.get("calibrated") is False:
+        if c.get("role") == "veto" or _dead(c):
             continue
         probe = (c.get("probe") or {}).get("type")
         if probe in RUNTIME_PROBES and _RUNG_INDEX.get(str(c.get("rung")), -1) >= _RUNG_INDEX["completed"]:
@@ -298,7 +328,7 @@ def has_real_proof(effect: dict[str, Any] | None, *, strict: bool = False) -> bo
     either fired in a passing test run (``calibrated``) or accepted by the author in chat (``confirmed``). A check
     nobody has tested or agreed to is a guess, and a guess is not enough for a delete or a send."""
     for c in _finish_checks(effect):
-        if not strict or c.get("calibrated") is True or c.get("confirmed") is True:
+        if not strict or (c.get("calibrated") is True and c.get("calibration_basis")) or c.get("confirmed") is True:
             return True
     return False
 

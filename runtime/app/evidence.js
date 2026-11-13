@@ -73,6 +73,40 @@ function bodyShape(value) {
 
 function endpointKey(method, template) { return `${method} ${template}`; }
 
+const MAX_AMBIENT = 500;
+
+/**
+ * The run's own background noise: the data-changing endpoints (method + host + route template, never a value) the
+ * run's pages were already calling before an action. A page's analytics, autosave and heartbeat calls answer 2xx
+ * whether or not the action did anything, so a request to one of them is no proof of the action. `refresh()` is
+ * called at the start of every step (it picks up tabs opened since); an action's notebook gets `keys` as they stood
+ * just before it, so an endpoint first called BY the action is never ambient.
+ * Limit: an app that sends everything through one endpoint (one /graphql) is all ambient, so its requests prove
+ * nothing and the other witnesses must; the step is then unconfirmed rather than wrongly proven.
+ */
+function ambientWatcher({ pagesOf }) {
+  const keys = new Set();
+  const watched = new WeakSet();
+  return {
+    keys,
+    refresh() {
+      let pages = [];
+      try { pages = (pagesOf && pagesOf()) || []; } catch (_) { pages = []; }
+      for (const p of pages) {
+        if (!p || watched.has(p) || typeof p.on !== "function") continue;
+        watched.add(p);
+        p.on("request", (req) => {
+          try {
+            const rt = req.resourceType();
+            if ((rt !== "xhr" && rt !== "fetch") || !MUTATING.has(req.method()) || keys.size >= MAX_AMBIENT) return;
+            keys.add(endpointKey(req.method(), routeTemplate(req.url())));
+          } catch (_) { /* not evidence */ }
+        });
+      }
+    },
+  };
+}
+
 /**
  * @param {{pagesOf: () => any[], page: any, sinceMs?: number, baseline?: {busyCount:number, regions:string[]},
  *   fileName?: string}} o  `fileName`: an upload's single file name, counted on the page before the action so a later look can tell "one more".
@@ -87,6 +121,8 @@ async function open(o) {
   const openReqs = new Map();  // request -> entry
   const state = { downloads: 0, newPages: 0, started: false, failed: null, mutationStartedAt: 0, closed: false };
   const initial = new Set();
+  // The run's background endpoints as they stood when the action began (see ambientWatcher).
+  const ambient = o.ambientKeys instanceof Set ? new Set(o.ambientKeys) : new Set();
   const seenNew = new Set();   // every status/progress text that was NOT on screen when the notebook opened
 
   const safeUrl = (p) => { try { return typeof p.url === "function" ? p.url() : null; } catch (_) { return null; } };
@@ -123,9 +159,11 @@ async function open(o) {
         if (rt !== "xhr" && rt !== "fetch" && !nav) return;
         const template = routeTemplate(req.url());
         const mutation = (rt === "xhr" || rt === "fetch") && MUTATING.has(method);
-        const entry = addEntry({ m: method, t: template, rt: nav ? "document" : rt, pg: pageIndex, at: Date.now(), s: null, sz: null, open: true, mutation, shape: null });
+        const amb = mutation && ambient.has(endpointKey(method, template));
+        const entry = addEntry({ m: method, t: template, rt: nav ? "document" : rt, pg: pageIndex, at: Date.now(), s: null, sz: null, open: true, mutation, amb, shape: null });
         openReqs.set(req, entry);
-        if (mutation) { state.started = true; state.mutationStartedAt = entry.at; }
+        // Background traffic is not a sign that the action took the work.
+        if (mutation && !amb) { state.started = true; state.mutationStartedAt = entry.at; }
       } catch (_) { /* not evidence */ }
     });
 
@@ -176,6 +214,9 @@ async function open(o) {
     baseline: null,
     page: o.page,
     nameCountBefore: null,
+
+    /** The address the step's own page was on when the notebook opened, i.e. before the action. Null when unknown. */
+    urlBefore() { return urlAtOpen.get(o.page) || null; },
 
     /** Pick up tabs opened since the last call. Cheap; called on every sample. */
     refresh() {
@@ -285,4 +326,4 @@ async function peekShape(resp, size) {
   } catch (_) { return null; }
 }
 
-module.exports = { open, bodyShape, MAX_ENTRIES };
+module.exports = { open, ambientWatcher, bodyShape, MAX_ENTRIES };

@@ -1,5 +1,7 @@
 """Proof of Done at build time: what "done" means for a step that starts work (compiler/effects.py)."""
 
+import copy
+
 from conxa_compile.compiler.effects import (
     RUNTIME_PROBES,
     build_effect,
@@ -121,10 +123,33 @@ def test_calibration_marks_dead_checks_and_raises_the_quorum_to_the_witnesses_th
     eff = _upload_effect()
     got = calibrate_effect(eff, {"c1": "yes", "c2": "yes", "c3": "no", "c4": "no", "c5": "no"})
     flags = {c["id"]: c["calibrated"] for c in got["checks"]}
-    assert flags["c1"] is True and flags["c2"] is True and flags["c3"] is False and flags["c4"] is False
+    assert flags["c1"] is True and flags["c2"] is True and flags["c4"] is False
+    assert flags["c3"] is None, "the words the recording itself saw are never retired by a run; only the author can"
     assert flags["c5"] is None, "a veto cannot be proven by a run that had no failure"
     assert got["quorum"]["witnesses"] == 2, "the target and transport witnesses really answered"
     assert eff["quorum"]["witnesses"] == 1, "the input is not changed in place"
+    assert all(c["calibration_basis"] == ["c2"] for c in got["checks"] if c["calibrated"] is not None), "a mark names the check that proved the run"
+
+
+def test_a_run_that_rested_on_nothing_but_the_step_running_teaches_nothing():
+    # The exact answers of a false pass: the step ran, nothing the app did was seen. It must not retire a single check.
+    eff = _upload_effect()
+    got = calibrate_effect(eff, {"c1": "yes", "c2": "cant_tell", "c3": "no", "c4": "cant_tell", "c5": "no"})
+    assert got == eff
+
+
+def test_could_not_tell_never_retires_a_check():
+    got = calibrate_effect(_upload_effect(), {"c1": "yes", "c2": "yes", "c3": "cant_tell", "c4": "cant_tell"})
+    assert {c["id"]: c["calibrated"] for c in got["checks"]}["c4"] is None
+
+
+def test_a_check_the_author_agreed_to_is_never_retired_by_a_run():
+    eff = _upload_effect()
+    for c in eff["checks"]:
+        if c["probe"]["type"] == "fresh_look":
+            c["confirmed"] = True
+    got = calibrate_effect(eff, {"c1": "yes", "c2": "yes", "c4": "no"})
+    assert {c["id"]: c["calibrated"] for c in got["checks"]}["c4"] is None
 
 
 def test_calibration_leaves_a_check_the_run_never_reached_alone_and_never_drops_the_quorum_below_one():
@@ -141,8 +166,19 @@ def test_calibration_never_asks_for_more_witnesses_than_the_design_wants():
 def test_real_proof_means_a_live_support_check_at_completed_or_higher():
     eff = _upload_effect()
     assert has_real_proof(eff)
-    dead = calibrate_effect(eff, {"c1": "yes", "c2": "no", "c3": "no", "c4": "no"})  # c4 is the fresh look
+    dead = copy.deepcopy(eff)
+    for c in dead["checks"]:
+        if c["role"] != "veto" and c["rung"] != "performed":
+            c["calibrated"], c["calibration_basis"] = False, ["c9"]  # shown dead by a run that really proved the step
     assert not has_real_proof(dead), "only the 'file was chosen' check is alive, and that proves nothing finished"
+    bare = copy.deepcopy(dead)
+    for c in bare["checks"]:
+        c["calibration_basis"] = []  # a mark no proven run wrote (it may come from a false pass) is ignored
+    assert has_real_proof(bare)
+    unproven = copy.deepcopy(eff)
+    for c in unproven["checks"]:
+        c["calibrated"] = True
+    assert not has_real_proof(unproven, strict=True), "'calibrated' without a basis is not shown to work"
     assert not has_real_proof(None) and not has_real_proof({})
     only_veto = {"checks": [{"id": "c1", "role": "veto", "rung": "completed", "probe": {"type": "failure_signal"}}]}
     assert not has_real_proof(only_veto), "'no error seen' is not proof that it worked"
@@ -158,11 +194,14 @@ def test_the_fresh_look_never_raises_what_a_step_requires_until_a_clean_run_saw_
     # a run in which the file was found on a fresh look: this site lists new files, so ask for that from now on
     seen = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: "yes"})
     assert seen["required_rung"] == "result_exists"
-    # a run in which it was not (or could not be) found: the requirement stays, and the dead check stops counting
-    for answer in ("no", "cant_tell"):
-        unseen = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: answer})
-        assert unseen["required_rung"] == "completed", answer
-        assert {c["id"]: c["calibrated"] for c in unseen["checks"]}[fresh["id"]] is False
+    # a run in which it was not found: the requirement stays, and the dead check stops counting
+    unseen = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: "no"})
+    assert unseen["required_rung"] == "completed"
+    assert {c["id"]: c["calibrated"] for c in unseen["checks"]}[fresh["id"]] is False
+    # a run that could not tell: the requirement stays, and nothing is retired
+    unsure = calibrate_effect(eff, {"c1": "yes", "c2": "yes", fresh["id"]: "cant_tell"})
+    assert unsure["required_rung"] == "completed"
+    assert {c["id"]: c["calibrated"] for c in unsure["checks"]}[fresh["id"]] is None
 
 
 def test_only_an_upload_with_a_single_named_file_gets_a_fresh_look():
@@ -185,3 +224,18 @@ def test_app_words_never_learn_a_result_as_progress_or_keep_the_persons_file_nam
     assert "complete" not in words.get("progress", [])
     assert not ({"gitignore", "maven"} & {w for g in words.values() for w in g})
     assert words["success"] == ["complete"]
+
+
+def test_a_later_step_working_never_teaches_the_checklist():
+    """The later step is the weakest finish witness (it may only prove the file existed), so a run whose only
+    "completed" yes is later_step changes nothing: it must not retire the checks that answered "no"."""
+    eff = {
+        "kind": "download", "required_rung": "completed", "target_rung": "completed", "quorum": {"witnesses": 1},
+        "checks": [
+            {"id": "c1", "rung": "completed", "witness": "filesystem", "role": "support", "probe": {"type": "download_file"}},
+            {"id": "c2", "rung": "completed", "witness": "later_step", "role": "support", "probe": {"type": "later_step", "step": "k"}},
+        ],
+    }
+    assert calibrate_effect(copy.deepcopy(eff), {"c1": "no", "c2": "yes"}) == eff
+    taught = calibrate_effect(copy.deepcopy(eff), {"c1": "yes", "c2": "yes"})
+    assert [c.get("calibrated") for c in taught["checks"]] == [True, True]

@@ -1231,7 +1231,8 @@ validation.effect = {
   checks: [ { id: "c1", rung, witness: target|renderer|transport|filesystem|fresh_look|later_step,
               role: support|veto, probe: { type, ... }, plain: "...",
               confirmed: bool,   # the author agreed in chat ("How can we tell it worked?")
-              calibrated: bool|null } ]   # a clean test run showed it fires (true) or never answered yes (false); null = untested
+              calibrated: bool|null,   # a proven test run showed it fires (true) or answered no (false); null = untested
+              calibration_basis: [id] } ]   # the checks that proved that run; a mark without it is ignored
   quorum: { witnesses: 1, identity_required: false }   # starts at 1; a passing test raises it to the separate witnesses that answered yes
   time:   { progress_extends, stall_after_s, max_s, long_wait: park|fail }
   on:     { unverified: fail|handover, partial: stop_and_report }
@@ -1240,8 +1241,7 @@ validation.effect = {
 
 Probe types: `input_has_files`, `request_chain` (a data-changing request answered 2xx without an error body), `failure_signal`
 (a **veto**: its answer "yes" means the failure was seen), `new_text` (value-free words that must appear, taken from the recorder's
-`post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `fresh_look` (upload only: the file's name appears on a fresh load of the same page, more often than before; lifts `required_rung` only after a clean test saw it work) run today; `value_equals`, `row_with_identity`, `url_stays`,
-`later_step` are in the enum and answer `cant_tell` until built. A check a test run showed to be dead
+`post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `fresh_look` (upload only: the file's name appears on a fresh load of the same page, more often than before; lifts `required_rung` only after a clean test saw it work) run today; `url_stays` (`{pattern}`: the page now matches it, did not before the action, and still does), `row_with_identity` (`{key: "{{input}}", delta}`: the value is on the page `delta` more times than before), `value_equals` (`{field_step, value}`: a fresh tab re-reads that earlier step's field) and `later_step` (`{step}`: a later step that consumes what this one made ran) run today and are added only by the proof picker's gates (TRD, compile section); none answers `not_yet`. A check a test run showed to be dead
 (`calibrated: false`) no longer counts. An older runtime ignores `effect` (it is carried to `execution.json` by
 `skill_package_builder_saved_skill.py`), and a pack with no `effect` anywhere behaves exactly as before.
 
@@ -1255,7 +1255,11 @@ amendment after the step itself (see TRD "A step is saved the moment the person 
 carries `capture_gaps` (a count of lost steps).
 
 **Calibration** (`handlers/test_flow.py::_tf_calibrate` → `workflow_mutations.calibrate_effects`): only a fully clean pass
-(`outcome: done`) calibrates. **Publish rule** (`workflows.py::_require_proof_for_irreversible`): in a pack that carries checklists, a step
+(`outcome: done`) calibrates, and only when a check at `completed` or higher answered "yes" in it (otherwise nothing changes). Each mark carries
+`calibration_basis` (the ids of the checks that proved the run); a `calibrated`/quorum mark without a basis is ignored by the runtime and by
+`has_real_proof`. "cant_tell" and "not_yet" never retire a check, and a `new_text` check (the recording's own words) or a `confirmed` check is
+never retired by a run. `new_text` is also the *expected outcome*: when all of a step's `new_text` checks answer "no", only a `result_exists` witness proves the step.
+A `request_chain` "yes" counts only requests that are not background traffic (`amb`, see TRD "A witness must be able to say no"). **Publish rule** (`workflows.py::_require_proof_for_irreversible`): in a pack that carries checklists, a step
 that cannot be undone needs a support check at `completed` or higher that is `calibrated` or `confirmed`
 (`effects.has_real_proof(strict=True)`), otherwise publishing is refused in plain words; the "How can we tell it worked?" question is
 then not skippable (`needs_proof`, scoring safety floor). `patch_gate.py` keeps the floor on hand edits.
@@ -2353,6 +2357,17 @@ Cashfree webhook endpoint. When `cashfree_webhook_secret` is configured, the sig
 ```
 
 Allowed `usage_class` values are `compile`, `ai_credits` (canonical; also covers every Studio chat, Clarify, auto-fix and Human Edit call), `human_edit` (legacy alias of `ai_credits`) and `execute_chat`. Missing `usage_class` defaults to `compile`.
+
+**`POST /api/v1/llm/proxy/decide`** (Proof-of-Done picker) — same envelope and the same entitlement, quota and
+concurrency gates, but the call goes to the decision model, not the text/vision pool (`app/llm/decisions.py`; an
+Enterprise BYOK deployment never applies to it). `payload` is `{input: "<value-free step facts>", questions: [{name,
+instructions}]}`; every question is sent upstream as a `predicate` (at most 40; names, instructions and input are
+length-capped). Response: `{"probabilities": {"<name>": 0.0-1.0}}`, only for questions the model answered with a valid
+probability. Status: `501 decide_unavailable` when `SKILL_LLM_DECISIONS_API_KEY` is empty (not 503: Studio retries
+502/503/504 with backoff, and an off feature must cost nothing); `502 llm_all_providers_failed` when the provider
+call failed. The upstream request is OpenAI's Decisions API shape (`model`, `input`, `questions`; answers come back as
+`{type: "predicate", name, probability}`); settings `llm_decisions_endpoint`, `llm_decisions_path` (the path
+OpenRouter serves it on is not confirmed), `llm_decisions_model`, `llm_decisions_api_key`.
 
 **`POST /api/v1/llm/proxy/text/stream` and `/vision/stream`** (BUILD-26 stage c) — same request
 body as above, for a task that wants its reply streamed (currently only `copilot_reply`). Response

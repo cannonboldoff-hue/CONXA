@@ -20,12 +20,11 @@ const { evalOn } = require("./page_eval");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * @param {{page: any, registry?: {pendingPages?: any[]}, fileName: string|null, countBefore: number|null,
- *   maxMs?: number, pollMs?: number}} o
- * @returns {Promise<{answer: "yes"|"no"|"cant_tell", evidence?: string}>}
+ * Run `fn(tab)` on a separate tab that has loaded the page's current address, then close it again. "cant_tell" when
+ * the address is not an ordinary web page or no tab can be opened; whatever `fn` returns otherwise. Shared by every
+ * "go and look" witness so none of them can leave a tab behind or mistake it for one the site opened.
  */
-async function freshLook({ page, registry = null, fileName, countBefore, maxMs = 12000, pollMs = 500 }) {
-  if (!fileName || typeof countBefore !== "number") return { answer: "cant_tell" };
+async function withFreshTab(page, registry, fn) {
   let url = "";
   try { url = String(page.url()); } catch (_) { return { answer: "cant_tell" }; }
   if (!/^https?:\/\//i.test(url)) return { answer: "cant_tell" };
@@ -38,13 +37,7 @@ async function freshLook({ page, registry = null, fileName, countBefore, maxMs =
   }
   try {
     await tab.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-    const deadline = Date.now() + maxMs;
-    for (;;) {
-      const n = await evalOn(tab, pageScripts.countTextOccurrences, fileName, 3000);
-      if (typeof n === "number" && n > countBefore) return { answer: "yes" };
-      if (Date.now() >= deadline) return { answer: "no" };
-      await sleep(pollMs);
-    }
+    return await fn(tab);
   } catch (_) {
     return { answer: "cant_tell" };
   } finally {
@@ -57,4 +50,22 @@ async function freshLook({ page, registry = null, fileName, countBefore, maxMs =
   }
 }
 
-module.exports = { freshLook };
+/**
+ * @param {{page: any, registry?: {pendingPages?: any[]}, fileName: string|null, countBefore: number|null,
+ *   maxMs?: number, pollMs?: number}} o
+ * @returns {Promise<{answer: "yes"|"no"|"cant_tell", evidence?: string}>}
+ */
+async function freshLook({ page, registry = null, fileName, countBefore, maxMs = 12000, pollMs = 500 }) {
+  if (!fileName || typeof countBefore !== "number") return { answer: "cant_tell" };
+  return withFreshTab(page, registry, async (tab) => {
+    const deadline = Date.now() + maxMs;
+    for (;;) {
+      const n = await evalOn(tab, pageScripts.countTextOccurrences, fileName, 3000);
+      if (typeof n === "number" && n > countBefore) return { answer: "yes" };
+      if (Date.now() >= deadline) return { answer: "no" };
+      await sleep(pollMs);
+    }
+  });
+}
+
+module.exports = { freshLook, withFreshTab };

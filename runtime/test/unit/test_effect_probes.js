@@ -132,6 +132,7 @@ test("a check a test run showed to be dead is left out, and an unknown probe can
   const nb = await evidence.open({ page, pagesOf: () => [page] });
   const eff = effect();
   eff.checks[2].calibrated = false;
+  eff.checks[2].calibration_basis = ["c2"];
   eff.checks.push({ id: "c5", rung: "result_exists", witness: "fresh_look", role: "support", probe: { type: "row_with_identity" } });
   const got = evaluateChecks(eff, { notebook: nb, gate: { status: "done" } });
   assert.ok(!got.some((c) => c.id === "c3"), "the dead check no longer counts");
@@ -180,6 +181,7 @@ test("runPlan: a calibrated quorum of two separate witnesses that is not met end
   const page = livePage([CLEAN, TRAY, DONE]);
   const eff = effect({ quorum: { witnesses: 2, identity_required: false } });
   eff.checks[2].calibrated = false; // the 'words' check is dead, so the screen is only the gate's single witness
+  eff.checks[2].calibration_basis = ["c2"]; // shown dead by a run that really proved the step
   await assert.rejects(
     runPlan(page, stepWith(eff, { destructive: true }), {}, 0, "slug-effect-quorum", { tracker: tracker() }),
     (err) => err.couldntConfirm === true,
@@ -193,6 +195,7 @@ test("runPlan: with the same quorum met by the transport witness the step is pro
     await settle();
   });
   const eff = effect({ quorum: { witnesses: 2, identity_required: false } });
+  eff.checks[0].calibrated = true; eff.checks[0].calibration_basis = ["c2"]; // a proven test run raised the quorum
   const result = await runPlan(page, stepWith(eff, { destructive: true }), {}, 0, "slug-effect-quorum-ok", { tracker: tracker() });
   assert.strictEqual(result.proof.steps[0].verdict, "proven");
 });
@@ -202,4 +205,129 @@ test("runPlan: a step with no checklist behaves exactly as it did in stage 2", a
   const result = await runPlan(page, [{ type: "keyboard_shortcut", value: "Enter", intent: "Upload the file" }], {}, 0, "slug-effect-none", { tracker: tracker() });
   const s = result.proof.steps[0];
   assert.deepStrictEqual([s.verdict, s.effect_kind], ["proven", undefined]);
+});
+
+// ── a witness must be able to say no ───────────────────────────────────────────────────────────
+
+test("a request to an endpoint the run already saw talking is background noise: it proves nothing and starts nothing", async () => {
+  const page = livePage([CLEAN]);
+  const nb = await evidence.open({ page, pagesOf: () => [page], ambientKeys: new Set(["POST https://drive.test/log"]) });
+  const noise = req("POST", "https://drive.test/log");
+  page.emit("request", noise); page.emit("response", resp(noise, 200, null)); page.emit("requestfinished", noise);
+  await settle();
+  assert.strictEqual(nb.mutationStarted(), false, "background traffic is no sign that the action took the work");
+  assert.strictEqual(nb.sawStart(), false);
+  assert.strictEqual(answers(evaluateChecks(effect(), { notebook: nb, gate: null })).c2, "cant_tell");
+  const own = req("POST", "https://drive.test/upload/abc123");
+  page.emit("request", own); page.emit("response", resp(own, 200, { id: "f1" })); page.emit("requestfinished", own);
+  await settle();
+  assert.strictEqual(answers(evaluateChecks(effect(), { notebook: nb, gate: null })).c2, "yes", "a request the action itself caused still counts");
+  nb.close();
+});
+
+test("the run's background endpoints are learned from the pages, and an action's own first request is not among them", async () => {
+  const page = livePage([CLEAN]);
+  const watcher = evidence.ambientWatcher({ pagesOf: () => [page] });
+  watcher.refresh();
+  watcher.refresh(); // one listener per page, however often it is refreshed
+  const r = req("POST", "https://drive.test/log?token=abc");
+  page.emit("request", r);
+  page.emit("request", req("GET", "https://drive.test/list"));
+  assert.deepStrictEqual([...watcher.keys], ["POST https://drive.test/log"]);
+});
+
+test("runPlan: an upload whose only 'accepted' request was background traffic is not proven", async () => {
+  const page = livePage([CLEAN, TRAY, CLEAN, CLEAN, CLEAN], async (p) => {
+    const r = req("POST", "https://drive.test/log");
+    p.emit("request", r); p.emit("response", resp(r, 200, null)); p.emit("requestfinished", r);
+    await settle();
+  });
+  // The page was already calling /log before the action (an earlier step), so it is background noise.
+  const step = stepWith(effect(), { destructive: true })[0];
+  const ctxPrime = { type: "keyboard_shortcut", value: "Shift", intent: "Look around" };
+  const ping = () => { const r = req("POST", "https://drive.test/log"); page.emit("request", r); };
+  const origPress = page.keyboard.press;
+  page.keyboard.press = async (k) => { if (k === "Shift") { ping(); return; } return origPress(k); };
+  await assert.rejects(
+    runPlan(page, [ctxPrime, step], {}, 0, "slug-effect-background", { tracker: tracker() }),
+    (err) => err.couldntConfirm === true || err.completionGate === true,
+  );
+});
+
+// ── the picker's look probes, through the run loop ─────────────────────────────────────────────
+
+function savePage({ works }) {
+  let moved = false;
+  const page = livePage([CLEAN, CLEAN, CLEAN], async (p) => {
+    if (!works) return;
+    moved = true;
+    const r = req("POST", "https://drive.test/api/items");
+    p.emit("request", r); p.emit("response", resp(r, 200, { id: "i1" })); p.emit("requestfinished", r);
+    await settle();
+  });
+  const base = page.evaluate;
+  page.evaluate = async (script, arg) => (script === pageScripts.countTextOccurrences ? (moved ? 2 : 1) : base(script, arg));
+  page.url = () => (moved ? "https://drive.test/item/9" : "https://drive.test/form");
+  return page;
+}
+const saveEffect = () => ({
+  kind: "save", required_rung: "completed", target_rung: "completed", quorum: { witnesses: 1, identity_required: false },
+  checks: [
+    { id: "c1", rung: "completed", witness: "transport", role: "support", probe: { type: "request_chain", method: "mutating", status: "2xx" } },
+    { id: "c2", rung: "accepted", witness: "renderer", role: "support", probe: { type: "url_stays", pattern: "^https:\/\/drive\.test\/item\/[^/?#]+" } },
+    { id: "c3", rung: "result_exists", witness: "renderer", role: "support", probe: { type: "row_with_identity", key: "{{item_title}}", delta: 1 } },
+    { id: "c4", rung: "completed", witness: "renderer", role: "veto", probe: { type: "failure_signal", scope: "new_since_baseline" } },
+  ],
+});
+const saveStep = () => stepWith(saveEffect(), { destructive: true, intent: "Save the item" });
+
+test("runPlan: url_stays and row_with_identity are looked at after the action and shown in the step's proof", async () => {
+  const result = await runPlan(savePage({ works: true }), saveStep(), { item_title: "Quarterly plan" }, 0, "slug-look-ok", { tracker: tracker() });
+  const s = result.proof.steps[0];
+  assert.strictEqual(s.verdict, "proven");
+  assert.deepStrictEqual(Object.fromEntries(s.checks.filter((c) => c.id).map((c) => [c.id, c.answer])), { c1: "yes", c2: "yes", c3: "yes", c4: "no" });
+});
+
+test("runPlan must not pass: a save that did nothing leaves the looks at 'no' and the step unconfirmed", async () => {
+  await assert.rejects(
+    runPlan(savePage({ works: false }), saveStep(), { item_title: "Quarterly plan" }, 0, "slug-look-nothing", { tracker: tracker() }),
+    (err) => err.couldntConfirm === true && err.proof.steps[0].checks.filter((c) => c.id === "c2" || c.id === "c3").every((c) => c.answer === "no"),
+  );
+});
+
+test("runPlan: a value too short to look for is 'cant_tell', so the look cannot prove anything", async () => {
+  const result = await runPlan(savePage({ works: true }), saveStep(), { item_title: "ab" }, 0, "slug-look-short", { tracker: tracker() });
+  const row = result.proof.steps[0].checks.find((c) => c.id === "c3");
+  assert.strictEqual(row.answer, "cant_tell");
+});
+
+// ── later_step, through the run loop ──────────────────────────────────────────────────────────
+
+function downloadThenUpload(laterKey) {
+  const eff = {
+    kind: "download", required_rung: "completed", target_rung: "completed", quorum: { witnesses: 2, identity_required: false },
+    checks: [
+      // calibrated by an earlier proven run, so the quorum of two counts; the page shows one witness (the gate), no request is seen
+      { id: "c1", rung: "completed", witness: "transport", role: "support", calibrated: true, calibration_basis: ["c1"], probe: { type: "request_chain", method: "mutating", status: "2xx" } },
+      { id: "c2", rung: "completed", witness: "later_step", role: "support", probe: { type: "later_step", step: laterKey } },
+    ],
+  };
+  return [
+    { type: "keyboard_shortcut", value: "Enter", intent: "Download the report", source_step_key: "k-download", validation: { effect: eff } },
+    { type: "keyboard_shortcut", value: "Tab", intent: "Upload it again", source_step_key: "k-upload" },
+  ];
+}
+
+test("runPlan: a download nothing could confirm is proven afterwards by the later step that needs its file", async () => {
+  const result = await runPlan(livePage([CLEAN, CLEAN, TRAY, DONE]), downloadThenUpload("k-upload"), {}, 0, "slug-later-ok", { tracker: tracker() });
+  const s = result.proof.steps[0];
+  assert.strictEqual(s.verdict, "proven", "judged again with the later step's yes: the gate's witness and the later step make the two it needs");
+  assert.strictEqual(s.checks.find((c) => c.id === "c2").answer, "yes");
+  assert.ok(!result.proof.notes.some((n) => /Download the report/.test(n)), "the download's own 'couldn't confirm' note is withdrawn");
+});
+
+test("runPlan must not pass: when the named later step does not exist, the download stays unconfirmed and the run says so", async () => {
+  const result = await runPlan(livePage([CLEAN, CLEAN, TRAY, DONE]), downloadThenUpload("k-deleted"), {}, 0, "slug-later-gone", { tracker: tracker() });
+  assert.strictEqual(result.proof.steps[0].verdict, "couldnt_confirm");
+  assert.ok(result.proof.notes.some((n) => /Download the report/.test(n)), "the run still says it could not confirm the download");
 });

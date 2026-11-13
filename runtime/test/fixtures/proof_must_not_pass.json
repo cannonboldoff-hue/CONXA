@@ -1,0 +1,58 @@
+{
+  "$comment": "Check answers that must never be judged 'proven'. Read by runtime/test/unit/test_proof.js. `observed` marks a result the recording itself saw. Add a case here for every false success found in the field.",
+  "cases": [
+    {
+      "name": "2026-11-13 Drive upload: the step ran, the app's background request was answered, the recorded 'upload complete' never appeared, the fresh look could not tell",
+      "options": { "requiredRung": "completed", "quorum": { "witnesses": 1 } },
+      "verdict": "couldnt_confirm",
+      "checks": [
+        { "rung": "performed", "witness": "target", "role": "support", "answer": "yes" },
+        { "rung": "completed", "witness": "renderer", "role": "support", "answer": "no", "observed": true },
+        { "rung": "completed", "witness": "renderer", "role": "support", "answer": "no", "observed": true },
+        { "rung": "result_exists", "witness": "fresh_look", "role": "support", "answer": "cant_tell" },
+        { "rung": "completed", "witness": "renderer", "role": "veto", "answer": "no" },
+        { "rung": "completed", "witness": "renderer", "role": "support", "answer": "yes" },
+        { "rung": "completed", "witness": "transport", "role": "support", "answer": "yes" }
+      ]
+    },
+    {
+      "name": "the same run when the fresh look said the file is not there",
+      "options": { "requiredRung": "completed", "quorum": { "witnesses": 1 } },
+      "verdict": "couldnt_confirm",
+      "checks": [
+        { "rung": "completed", "witness": "transport", "role": "support", "answer": "yes" },
+        { "rung": "completed", "witness": "renderer", "role": "support", "answer": "no", "observed": true },
+        { "rung": "result_exists", "witness": "fresh_look", "role": "support", "answer": "no" }
+      ]
+    },
+    {
+      "name": "url_stays alone: the page moved on, but a move only proves the app took the request (accepted), never that the work finished",
+      "options": { "requiredRung": "completed", "quorum": { "witnesses": 1 } },
+      "verdict": "couldnt_confirm",
+      "checks": [
+        { "rung": "performed", "witness": "target", "role": "support", "answer": "yes" },
+        { "rung": "accepted", "witness": "renderer", "role": "support", "answer": "yes" }
+      ]
+    },
+    {
+      "name": "value_equals after a reload cannot stand in for the recorded result: a form that restores a draft shows the value although nothing was saved",
+      "options": { "requiredRung": "completed", "quorum": { "witnesses": 1 } },
+      "verdict": "couldnt_confirm",
+      "checks": [
+        { "rung": "completed", "witness": "renderer", "role": "support", "answer": "no", "observed": true },
+        { "rung": "completed", "witness": "fresh_look", "role": "support", "answer": "yes" }
+      ]
+    },
+    {
+      "name": "row_with_identity and later_step that could not look or said no add nothing to a step nothing else proved",
+      "options": { "requiredRung": "completed", "quorum": { "witnesses": 1 } },
+      "verdict": "couldnt_confirm",
+      "checks": [
+        { "rung": "performed", "witness": "target", "role": "support", "answer": "yes" },
+        { "rung": "result_exists", "witness": "renderer", "role": "support", "answer": "no" },
+        { "rung": "completed", "witness": "later_step", "role": "support", "answer": "cant_tell" },
+        { "rung": "completed", "witness": "fresh_look", "role": "support", "answer": "cant_tell" }
+      ]
+    }
+  ]
+}

@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-26](#sg-26-step-facts-are-sent-to-a-decision-model-through-the-conxa-cloud) | Step facts are sent to a decision model through the Conxa Cloud | Studio / Cloud API | Low (mitigated) | `conxa_compile/compiler/proof_picker.py`, `app/llm/decisions.py`, `app/api/llm_proxy_routes.py` |
 | [SG-25](#sg-25-the-recording-persons-account-text-in-a-shipped-package) | The recording person's account name/email can end up in a shipped package | Studio compiler | Medium (mitigated) | `conxa_compile/compiler/selector_filters.py`, `conxa_compile/compiler/build.py`, `conxa_compile/skill_package_builder.py` |
 | [SG-23](#sg-23-an-unrecorded-popup-can-be-answered-by-the-mcp-client) | An unrecorded question popup can be answered by the MCP client | Runtime | Low (mitigated) | `runtime/app/run.js`, `runtime/app/fork.js`, `runtime/app/fork_pause.js` |
 | [SG-24](#sg-24-an-agent-span-can-go-anywhere-with-the-signed-in-browser) | An agent span can go to any site with the signed-in browser | Runtime | Medium | `runtime/app/agent_span.js` |
@@ -777,6 +778,35 @@ in the run report so the owner sees them without reading the log.
 **Fix.** `selector_filters.py::drop_personal_target_text` runs once at the start of `build.py::prepare_compile_events` and blanks any target text (`label_text`, `aria_label`, `inner_text`, `name`, `title`, `placeholder`, `text`) that contains an email address, and any `label_text` over 60 characters (a label that long wrapped several elements). Nothing built later can carry what is not there. `skill_package_builder.py::_assert_no_account_text` stops a build whose saved skill still has an email in `target`, `identity_bundle`, `signals` or `compiled_selectors` (a workflow compiled before the fix) and tells the person to compile again.
 
 **Residual.** A name without an email is not detected; only the length cap guards that. Typed values are not scanned.
+
+## SG-26 — Step Facts Are Sent To A Decision Model Through The Conxa Cloud
+
+**Severity:** Low (mitigated)
+**Component:** Studio / Cloud API — `conxa_compile/compiler/proof_picker.py`, `app/llm/decisions.py`, `POST /api/v1/llm/proxy/decide`
+
+### Description
+
+At compile time the proof picker sends each step that starts work (an upload, send, save, delete) to a decision
+model (`openai/gpt-6-luna-decisions`, reached through OpenRouter) and gets back a probability per kind of proof.
+That is one more outside processor of workflow data, beside the text/vision pool and TwelveLabs (SG-21).
+
+Mitigations in place: the key lives only in the cloud (`SKILL_LLM_DECISIONS_API_KEY`); the route has the same
+Clerk token, known-client, trial and quota gates as the LLM proxy; what is sent is value-free step facts only
+(the step's kind and intent, the button's label, the video's one-line "screen after", the app's own progress/success
+words, input *names*), every text going through `app_graph/scrub.py` (quoted spans, emails, file-like words and any
+word with a digit are dropped); no typed value, file name, address or screenshot is sent; the model returns only
+numbers and can never write a check, selector or rung. With no key the feature is off.
+
+### Residual risk
+
+The intent, screen-after and purpose lines are model-written text about the recording and are only as clean as the
+scrub: a name written as plain words with no digit or quote can pass it. The decision model's own retention terms
+have not been reviewed.
+
+### Recommended Fix
+
+Add the processor to customer terms and the DPA; review the provider's retention and training terms before the key is
+set in production; consider sending the button label and kind only.
 
 ## Cross-Reference: TRD §17 (Known Gaps & Tech Debt)
 

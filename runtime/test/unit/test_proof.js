@@ -131,3 +131,59 @@ test("unconfirmedNote speaks in plain words", () => {
   assert.strictEqual(proof.unconfirmedNote({ intent: "Upload the report" }, 4), `I couldn't confirm that "Upload the report" finished.`);
   assert.strictEqual(proof.unconfirmedNote({}, 4), "I couldn't confirm that step 5 finished.");
 });
+
+// ── the recording is the expected outcome ──────────────────────────────────────────────────────────
+// A real false pass (a Drive upload that never happened, 2026-11-13): the app's background request was answered and the
+// run ended quietly, but the "upload complete" the recording saw never appeared and the fresh look could not tell.
+// This shape of evidence must never be "proven". Keep these cases failing if a gate is ever loosened again.
+const fixture = require("../fixtures/proof_must_not_pass.json");
+
+for (const c of fixture.cases) {
+  test(`judge must not prove: ${c.name}`, () => {
+    const r = proof.judge(c.checks, c.options);
+    assert.notStrictEqual(r.verdict, "proven");
+    assert.strictEqual(r.verdict, c.verdict);
+  });
+}
+
+test("judge: when the recording's results are absent, a witness that found the result itself still proves the step", () => {
+  const r = proof.judge([
+    sup("completed", "transport", "yes"),
+    sup("completed", "renderer", "no", { observed: true }),
+    sup("result_exists", "fresh_look", "yes"),
+  ], { requiredRung: "completed" });
+  assert.strictEqual(r.verdict, "proven");
+});
+
+test("judge: one of the recording's results appearing is enough, the other may be a stray word", () => {
+  const r = proof.judge([
+    sup("completed", "renderer", "no", { observed: true }),
+    sup("completed", "renderer", "yes", { observed: true }),
+  ], { requiredRung: "completed" });
+  assert.strictEqual(r.verdict, "proven");
+});
+
+test("judge: not being able to tell about the recording's results is not the same as them being absent", () => {
+  const r = proof.judge([sup("completed", "transport", "yes"), sup("completed", "renderer", "cant_tell", { observed: true })], { requiredRung: "completed" });
+  assert.strictEqual(r.verdict, "proven");
+});
+
+// A check the proof picker adds can only add: whatever it answers, a step that was proven without it stays proven, and a
+// step that was not proven is never made "still working" by it (the new probes never say "not_yet").
+test("judge: an added check answering no, cant_tell or not_yet never changes a proven verdict", () => {
+  const base = [sup("completed", "transport", "yes")];
+  for (const answer of ["no", "cant_tell", "not_yet", "yes"]) {
+    for (const witness of ["renderer", "fresh_look", "later_step"]) {
+      const r = proof.judge([...base, sup("completed", witness, answer)], { requiredRung: "completed" });
+      assert.strictEqual(r.verdict, "proven", `${witness}:${answer}`);
+    }
+  }
+});
+
+test("judge: added checks that cannot look never turn 'couldn't confirm' into 'still working'", () => {
+  const base = [sup("performed", "target", "yes")];
+  for (const answer of ["no", "cant_tell"]) {
+    const r = proof.judge([...base, sup("result_exists", "renderer", answer), sup("completed", "later_step", answer)], { requiredRung: "completed" });
+    assert.strictEqual(r.verdict, "couldnt_confirm", answer);
+  }
+});

@@ -102,8 +102,8 @@ class Assertion(BaseModel):
 EFFECT_RUNGS = ("performed", "accepted", "completed", "result_exists")
 EFFECT_WITNESSES = ("target", "renderer", "transport", "filesystem", "fresh_look", "later_step")
 EFFECT_KINDS = ("upload", "download", "delete", "send", "save", "long_job")
-# The probe types a check may name. The runtime evaluates the first five today; the rest answer
-# "cant_tell" until they are built (stage 5), so a compiled pack never claims a proof it cannot make.
+# The probe types a check may name. The runtime evaluates all of them (effects.py::RUNTIME_PROBES); an older runtime
+# answers "cant_tell" for one it does not know, so a compiled pack never claims a proof it cannot make.
 EFFECT_PROBES = (
     "input_has_files", "request_chain", "failure_signal", "new_text", "download_file",
     "value_equals", "row_with_identity", "url_stays", "fresh_look", "later_step",
@@ -124,6 +124,9 @@ class EffectCheck(BaseModel):
     plain: str = ""                                                 # the same check in everyday words
     confirmed: bool = False                                         # the author said "yes, that is how I know"
     calibrated: bool | None = None                                  # a test run proved it fires: None = not tested yet
+    # The ids of the checks that really proved the run that wrote ``calibrated``. A mark without a basis is ignored:
+    # it may come from a false pass.
+    calibration_basis: list[str] = Field(default_factory=list)
 
     @field_validator("probe")
     @classmethod

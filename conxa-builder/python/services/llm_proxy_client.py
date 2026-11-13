@@ -136,6 +136,18 @@ class LLMProxyClient:
     ) -> dict[str, Any] | None:
         return self._post("vision", task, payload, timeout_ms, error_detail=error_detail, on_delta=on_delta)
 
+    def route_decision(
+        self,
+        task: str,
+        payload: dict[str, Any],
+        timeout_ms: int,
+        *,
+        error_detail: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        """Yes/no questions scored by the cloud's decision model: ``{"probabilities": {name: p}}``, or None
+        when the picker is not configured (HTTP 501). Not part of ``RouterProtocol``: callers use ``getattr``."""
+        return self._post("decide", task, payload, timeout_ms, error_detail=error_detail)
+
     # -- internals -----------------------------------------------------------
 
     def _post(

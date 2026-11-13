@@ -16,6 +16,7 @@ from conxa_compile.compiler.decision_layer import rank_merged_anchors
 from conxa_compile.compiler.action_semantics import commit_intent_hit, is_editable_field_click
 from conxa_compile.compiler.destructive_semantics import classify_consequence, destructive_compiler_step
 from conxa_compile.compiler.effects import build_effect
+from conxa_compile.compiler.proof_picker import run_proof_picker
 from conxa_compile.compiler.step_events import events_for_steps
 from conxa_compile.compiler.video_context import apply_video_context
 from conxa_compile.compiler.commit_ordering import lint_commit_ordering
@@ -1888,6 +1889,13 @@ def compile_skill_package(
             "applied": len(compile_report.get("second_opinion") or []),
         },
     )
+    # Proof of Done picker: a decision model ranks which proof fits each step that starts work. It only adds
+    # checks code can build from the recording, and its picks are recorded in proof_picks.json; a failure here
+    # leaves every step exactly as it is (compiler/proof_picker.py).
+    try:
+        run_proof_picker(steps, session_root)
+    except Exception:  # noqa: BLE001 -- advisory pass: never fail a compile
+        pass
 
     # PROD-3-DRYRUN layer 4: advisory stage-then-commit lint — never blocks compile/save/publish.
     commit_ordering_warnings = lint_commit_ordering(steps)

@@ -16,7 +16,7 @@ import json
 import logging
 import queue
 import threading
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from conxa_core.config import settings
 from app.api.deps import current_principal, entitlement_http_error
 from app.api.machine_binding import register_request_machine
+from app.llm import decisions
 from app.llm.router import get_router
 from app.services import llm_metering
 from app.services.byok import byok_pool_entry_for
@@ -123,7 +124,11 @@ def _resolve_execute_chat_workspace(principal, body: ProxyBody) -> str:
     return target
 
 
-def _meter_and_call(request: Request, body: ProxyBody, *, vision: bool) -> dict[str, Any]:
+def _meter_and_call(
+    request: Request, body: ProxyBody, *, vision: bool, invoke: Callable[[], dict[str, Any] | None] | None = None
+) -> dict[str, Any]:
+    """``invoke`` replaces the provider-pool call (the decision model is not a pooled text model, and an
+    Enterprise BYOK deployment never applies to it); every gate before and the metering after are shared."""
     client = _require_known_client(request)
     principal = current_principal(request)
     usage_class = str(body.usage_class or "compile").strip()
@@ -168,12 +173,14 @@ def _meter_and_call(request: Request, body: ProxyBody, *, vision: bool) -> dict[
             headers={"Retry-After": "3"},
         ) from None
 
-    router_impl = get_router()
+    router_impl = get_router() if invoke is None else None
     error_detail: list[str] = []
     pool = compile_pool_for(principal)
     try:
-        byok_entry = byok_pool_entry_for(principal)
-        if byok_entry is not None:
+        byok_entry = byok_pool_entry_for(principal) if invoke is None else None
+        if invoke is not None:
+            result = invoke()
+        elif byok_entry is not None:
             # Enterprise BYOK: exactly one deployment, no pool selection.
             result = router_impl.call_entry_directly(
                 byok_entry, body.task, body.payload, body.timeout_ms, error_detail=error_detail
@@ -227,6 +234,19 @@ def proxy_text(body: ProxyBody, request: Request) -> dict[str, Any]:
 @router.post("/vision")
 def proxy_vision(body: ProxyBody, request: Request) -> dict[str, Any]:
     return _meter_and_call(request, body, vision=True)
+
+
+@router.post("/decide")
+def proxy_decide(body: ProxyBody, request: Request) -> dict[str, Any]:
+    """Proof-of-Done picker: yes/no questions in, ``{"probabilities": {name: p}}`` out. With no key it answers
+    501 (not 503, which Studio would retry): the caller just builds its checks from code alone."""
+    def _invoke() -> dict[str, Any] | None:
+        try:
+            return decisions.decide(body.payload, timeout_s=body.timeout_ms / 1000)
+        except decisions.DecisionsUnavailable as exc:
+            raise HTTPException(status_code=501, detail="decide_unavailable") from exc
+
+    return _meter_and_call(request, body, vision=False, invoke=_invoke)
 
 
 def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> StreamingResponse:

@@ -78,6 +78,8 @@ Selector strings are generated deterministically by `IdentityBundle` + `selector
 
 **Why this mix:** Free/Starter move to OpenRouter's cheapest usable text + vision models — this trades the old free-tier rate-limit ceiling for a small but real per-compile COGS, which is the deliberate tradeoff (no more burst queuing, no more "Flash-only or it fails" constraint). Pro moves to top-of-market models on both sides (Sonnet 5 for text, Opus 5.5 for vision and Execute chat) because Pro is the highest self-serve tier and where distribution-quality compiles matter most — this is also the most expensive pool by a wide margin (see below), so it's the tier to watch for margin compression.
 
+**Proof picker (decision model).** `openai/gpt-6-luna-decisions` via OpenRouter scores the proof types for each step that starts work, once per such step per compile (cached by the step's facts, so a recompile of an unchanged step costs nothing). Listed at $0.10 per million input tokens and nothing for output, an estimated 500-600 input tokens per step (not measured), so well under a cent per workflow; the Decisions API is in public beta and its price is not final (+5.5% OpenRouter fee). It runs under the compile usage class like any other compile LLM call: its tokens count against the monthly token quota, and there is no separate credit.
+
 **OpenRouter platform fee:** OpenRouter's pay-as-you-go plan adds a 5.5% fee on top of list price. All Free/Starter figures below already include it. Direct Anthropic calls (Pro) carry no such fee.
 
 **How it routes in the existing code:**

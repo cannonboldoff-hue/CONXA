@@ -36,7 +36,9 @@ function probeRequestChain(check, nb) {
   if (!nb) return { answer: "cant_tell" };
   if (nb.mutationFailure()) return { answer: "no" };
   const template = String((check.probe && check.probe.template) || "");
-  const answered = nb.entries().some((e) => e.mutation && e.s != null && OK_STATUS(e.s)
+  // Only a request this action could have caused: one to an endpoint the run had already seen talking before the
+  // action (a page's own background traffic) would be answered 2xx whether or not the action did anything.
+  const answered = nb.entries().some((e) => e.mutation && !e.amb && e.s != null && OK_STATUS(e.s)
     && !(e.shape && e.shape.error_flag) && (!template || e.t === template));
   if (answered) return { answer: "yes" };
   if (nb.pendingMutations() > 0) return { answer: "not_yet" };
@@ -70,18 +72,22 @@ function probeDownloadFile(nb) {
   return nb.downloads() > 0 ? { answer: "yes" } : { answer: "cant_tell" };
 }
 
+const hasBasis = (check) => Array.isArray(check.calibration_basis) && check.calibration_basis.length > 0;
+
 /**
  * @param {object} effect  the step's validation.effect
  * @param {{notebook: object|null, gate: object|null, executed: boolean}} ctx
  * @returns {Array<{id:string, rung:string, witness:string, role:string, answer:string, evidence?:string, identity?:boolean}>}
  *   Checks a test run showed to be dead (`calibrated === false`) are left out: they no longer count toward anything.
  */
-function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null } = {}) {
+function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null, looks = null } = {}) {
   const nb = notebook;
   const freshTexts = nb ? nb.seenNew() : [];
   const out = [];
   for (const check of (effect && effect.checks) || []) {
-    if (!check || check.calibrated === false) continue;
+    // A "dead" mark only counts when a run that really proved the step wrote it (`calibration_basis`). Older or
+    // unproven marks may come from a false pass that retired the checks which would have caught it.
+    if (!check || (check.calibrated === false && hasBasis(check))) continue;
     const type = check.probe && check.probe.type;
     let r;
     switch (type) {
@@ -91,13 +97,19 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true,
       case "new_text": r = probeNewText(check, nb); break;
       case "download_file": r = probeDownloadFile(nb); break;
       case "fresh_look": r = fresh || { answer: "cant_tell" }; break; // looked at by run.js (fresh_look.js), which opens a tab
-      default: r = { answer: "cant_tell" }; // value_equals / row_with_identity / url_stays / fresh_look / later_step: later
+      // Answered by result_probes.js (they need time or a second page), looked at by run.js before this runs.
+      case "url_stays": case "row_with_identity": case "value_equals": r = (looks && looks[check.id]) || { answer: "cant_tell" }; break;
+      // later_step is answered only after the later step ran (run.js): never "not_yet" here, because a "not_yet" would turn
+      // "couldn't confirm" (the run stops) into "still working" (the run goes on).
+      default: r = { answer: "cant_tell" };
     }
     out.push({
       id: String(check.id || ""),
       rung: check.rung,
       witness: check.witness,
       role: check.role === "veto" ? "veto" : "support",
+      // A new_text check is only ever built from words the recording itself saw (effects.py::_mine_checks).
+      ...(type === "new_text" ? { observed: true } : {}),
       answer: r.answer,
       ...(r.evidence ? { evidence: r.evidence } : {}),
     });
@@ -105,4 +117,4 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true,
   return out;
 }
 
-module.exports = { evaluateChecks, valueFreeWords };
+module.exports = { evaluateChecks, valueFreeWords, hasBasis };

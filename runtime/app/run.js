@@ -52,6 +52,7 @@ const proof = require("./proof");
 const evidence = require("./evidence");
 const effectProbes = require("./effect_probes");
 const { freshLook } = require("./fresh_look");
+const { runLooks, wantedValue } = require("./result_probes");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -263,6 +264,15 @@ function uploadFileName(step, inputs) {
   }
 }
 
+// The value a step's row_with_identity check wants to find on the page more often than before, or null. Counted on the
+// page before the action (the notebook's `nameCountBefore`), so only the same needle can be looked for afterwards.
+function identityNeedle(step, inputs) {
+  const effect = step && step.validation && step.validation.effect;
+  const check = effect && Array.isArray(effect.checks) && effect.checks.find((c) => c && c.probe
+    && c.probe.type === "row_with_identity" && !(c.calibrated === false && effectProbes.hasBasis(c)));
+  return check ? wantedValue(check.probe.key, inputs) : null;
+}
+
 // How the app this page belongs to words progress, success and failure (learned from its recordings, shipped in
 // app_knowledge.json). Empty when nothing is known: the English defaults then decide alone.
 function appSignals(ctx, page) {
@@ -281,10 +291,21 @@ function runPages(ctx) {
   return [...new Set([...(t.pages ? t.pages.values() : []), ...(t.bound || []), ...(t.pendingPages || [])])];
 }
 
+// Called at the start of every step: the run's background endpoints are learned from the steps that came before.
+function noteBackground(ctx) {
+  try {
+    if (!ctx.ambient) ctx.ambient = evidence.ambientWatcher({ pagesOf: () => runPages(ctx) });
+    ctx.ambient.refresh();
+  } catch (_) { /* evidence, never a reason to fail a step */ }
+}
+
 async function openNotebook(ctx, page, baseline = null, fileName = null) {
   closeNotebook(ctx);
   try {
-    ctx.notebook = await evidence.open({ page, pagesOf: () => runPages(ctx), ...(baseline ? { baseline } : {}), ...(fileName ? { fileName } : {}) });
+    ctx.notebook = await evidence.open({
+      page, pagesOf: () => runPages(ctx), ...(baseline ? { baseline } : {}), ...(fileName ? { fileName } : {}),
+      ...(ctx.ambient ? { ambientKeys: ctx.ambient.keys } : {}),
+    });
     return ctx.notebook;
   } catch (_) {
     ctx.notebook = null; // the notebook is evidence, never a reason to fail a step: the gate reads the page alone
@@ -432,17 +453,22 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   // Go and look: the one witness that asks the app afresh. It opens the same page in a separate tab and reads it, so it
   // runs only when the step carries that check and the check has not been shown to be dead on this site.
   let fresh = null;
-  if (effect && notebook && effect.checks.some((c) => c && c.calibrated !== false && c.probe && c.probe.type === "fresh_look")) {
+  if (effect && notebook && effect.checks.some((c) => c && !(c.calibrated === false && effectProbes.hasBasis(c)) && c.probe && c.probe.type === "fresh_look")) {
     fresh = await freshLook({ page: notebook.page, registry: ctx.tabs, fileName: uploadFileName(step, state.inputs), countBefore: notebook.nameCountBefore });
     ctx.tracker.emit("fresh_look", { si: i, a: fresh.answer });
   }
-  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
+  // The checks that need time or a second page (url_stays, row_with_identity, value_equals), looked at only when asked for.
+  const looks = effect && notebook
+    ? await runLooks(effect, { notebook, steps: ctx.steps, inputs: state.inputs, registry: ctx.tabs, resolve: resolveStep })
+    : null;
+  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, looks, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
 
   const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
-  const j = proof.judge(checks, {
-    requiredRung: required,
-    quorum: effect && effect.quorum ? { witnesses: effect.quorum.witnesses, identityRequired: !!effect.quorum.identity_required } : undefined,
-  });
+  // A raised quorum only counts when a proven test run raised it (a check carries its `calibration_basis`).
+  const quorum = effect && effect.quorum
+    ? { witnesses: effect.checks.some(effectProbes.hasBasis) ? effect.quorum.witnesses : 1, identityRequired: !!effect.quorum.identity_required }
+    : undefined;
+  const j = proof.judge(checks, { requiredRung: required, quorum });
   const onUnverified = step.validation && step.validation.effect && step.validation.effect.on
     && String(step.validation.effect.on.unverified || "").startsWith("handover") ? "handover" : "fail";
   const move = proof.nextMove(j.verdict, { idempotent: proof.safeToRepeat(step), attended: !ctx.scheduled, onUnverified });
@@ -472,7 +498,14 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   });
 
   if (move.do === "continue") {
-    if (move.note) state.proof.notes.push(proof.unconfirmedNote(step, i));
+    if (move.note) {
+      const note = proof.unconfirmedNote(step, i);
+      state.proof.notes.push(note);
+      // A later step that needs what this one made can still prove it once it has run (resolveLaterProofs).
+      const later = effect && effect.checks.find((c) => c && c.id && c.probe && c.probe.type === "later_step" && c.probe.step
+        && !(c.calibrated === false && effectProbes.hasBasis(c)));
+      if (later) state.proof.later.push({ at: state.proof.steps.length - 1, key: String(later.probe.step), checkId: later.id, note, checks, required, quorum });
+    }
     return;
   }
   if (move.do === "wait") return; // the next step's own checks (or a popup it owns) take over
@@ -499,6 +532,30 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     couldntConfirm: true,
     proof: { steps: state.proof.steps.slice(), notes: state.proof.notes.slice() },
   });
+}
+
+// A step the run could not confirm (and may safely repeat) can still be proven afterwards by a later step that only works
+// if it succeeded (a download whose file a later step uploads). Called once the plan has run to its end: `ran` holds the
+// keys of the steps that really executed and passed (never a step a dry run or an input condition skipped). The step is
+// judged again by the same rules with that one answer changed to "yes" (so its quorum and the recording's expected
+// results still apply); only when that makes it proven is the "I couldn't confirm" note withdrawn.
+function resolveLaterProofs(state, ran) {
+  const kept = [];
+  for (const p of state.proof.later) {
+    const entry = state.proof.steps[p.at];
+    const check = p.checks && p.checks.find((c) => c.id === p.checkId);
+    if (!entry || !check || !ran.has(p.key)) { kept.push(p); continue; }
+    check.answer = "yes";
+    const j = proof.judge(p.checks, { requiredRung: p.required, quorum: p.quorum });
+    if (j.verdict !== "proven") { check.answer = "cant_tell"; continue; }
+    const row = entry.checks.find((c) => c.id === p.checkId);
+    if (row) row.answer = "yes";
+    entry.verdict = j.verdict;
+    entry.rung = j.rung;
+    const at = state.proof.notes.indexOf(p.note);
+    if (at >= 0) state.proof.notes.splice(at, 1);
+  }
+  state.proof.later = kept;
 }
 
 // The plan's final step ended with a popup that asks a question and nothing is left to answer it.
@@ -946,6 +1003,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       throw stepFailure(step, i, Object.assign(new Error(PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
     }
   }
+  noteBackground(ctx);
   const preShot = await maybeCapturePreStep(page, step);
   const primarySelector = baseSelector(step, state.inputs);
   // Pre-action baseline for the state_changed assertion (only captured when the step actually
@@ -956,7 +1014,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.
   let completion = { baseline: null, sinceMs: 0 };
   if (COMPLETION_GATE_ENABLED && isNonIdempotent(step)) {
-    const notebook = await openNotebook(ctx, page, null, uploadFileName(step, state.inputs));
+    const notebook = await openNotebook(ctx, page, null, uploadFileName(step, state.inputs) || identityNeedle(step, state.inputs));
     completion = { baseline: await captureCompletionBaseline(page, notebook), sinceMs: Date.now(), attempted: true, notebook };
   }
 
@@ -1986,7 +2044,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     skippedByInput: [],
     // Proof of Done: what each step proved (see proveStep), plain notes for a low-risk step that could
     // not be confirmed, and where the run stopped because a risky one could not be.
-    proof: { steps: [], notes: [], stopped: null },
+    proof: { steps: [], notes: [], stopped: null, later: [] },
   };
 
   // Multi-tab: each step declares which tab it runs on (step.tab — see tabs.js). The registry
@@ -2067,6 +2125,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
 
   const ctx = {
     lastActStep,
+    steps, // the plan's own steps: a value_equals check finds the earlier field it re-reads here
     lastStep: steps[steps.length - 1] || null, // a popup left open by this step has no next step to answer it
     deadlineAt: deadlineAt || null, // the run's own time limit: the completion wait stops short of it
     scheduled: scheduled === true,  // nobody can be asked: "couldn't confirm" on any step ends the run
@@ -2084,10 +2143,13 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   };
 
   let endedAt = null;
+  const ran = new Set(); // source_step_key of every step that executed and passed (feeds resolveLaterProofs)
   try {
     for (let i = startFrom; i < steps.length; i++) {
       try {
         await raceCancel(executeOneStep(ctx, state, steps, i), ctx.cancelCheck);
+        const skipped = [...state.dryRunSkipped, ...state.skippedByInput].some((s) => s.index === i);
+        if (steps[i] && steps[i].source_step_key && !skipped) ran.add(steps[i].source_step_key);
       } catch (e) {
         // A popup option marked "end" finished the run on purpose: not a failure, and nothing after runs.
         if (e && e.runEnded) {
@@ -2101,6 +2163,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   } finally {
     closeNotebook(ctx); // however the plan ends, no listener outlives it
   }
+  resolveLaterProofs(state, ran);
 
   return {
     recoveredSteps: state.recoveredSteps, warnings: state.warnings, dryRunSkipped: state.dryRunSkipped,
@@ -2203,6 +2266,7 @@ async function isAuthFailure(page, steps) {
 module.exports = {
   NOOP_STEP_TYPES,
   NAVIGATION_STEP_TYPES,
+  resolveLaterProofs,
   appendRecoveryEvent,
   interpolate,
   resolveUploadPaths,
