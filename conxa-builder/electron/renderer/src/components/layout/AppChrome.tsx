@@ -18,7 +18,7 @@ import type { ThreadItem } from '@/lib/thread'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { BROWSER, INSPECTOR, NAV, resolveBrowserLayout, resolveLayout } from '@/lib/panels'
+import { INSPECTOR, NAV, resolveBrowserLayout, resolveLayout } from '@/lib/panels'
 import { paneRun, useBrowserStore } from '@/store/browserStore'
 import { BrowserPane } from '@/components/shell/BrowserPane'
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar'
@@ -201,9 +201,7 @@ function Shell({ children }: { children: ReactNode }) {
   const s = useShellStore()
   const browserRun = useBrowserStore((b) => paneRun(b))
   const browserFolded = useBrowserStore((b) => b.folded)
-  const browserWidth = useBrowserStore((b) => b.width)
   const browserWide = useBrowserStore((b) => b.wide)
-  const navShownByPerson = useBrowserStore((b) => b.navShown)
   const layout = resolveLayout({
     windowWidth: s.windowWidth,
     navWidth: s.navWidth,
@@ -212,27 +210,24 @@ function Shell({ children }: { children: ReactNode }) {
     inspectorAvailable: workflowId != null,
     inspectorOpen: s.inspectorOpen && !(browserRun && !browserFolded),
   })
-  const browser = browserRun ? resolveBrowserLayout({ windowWidth: s.windowWidth, navShown: navShownByPerson, preferredWidth: browserWidth }) : null
-  const browserShown = Boolean(browser && browser.mode === 'panel' && !browserFolded)
+  const browser = browserRun ? resolveBrowserLayout({ windowWidth: s.windowWidth }) : null
+  const browserShown = Boolean(browser && !browserFolded)
   // Wide: the browser takes the room and the conversation folds to a 64 px rail (kept mounted).
   const wide = browserShown && browserWide
-  // While the browser is shown it takes the inspector's place (the inspector is its strip) and
-  // navigation steps aside entirely, unless the person brought it back (then it is the rail). Hiding
-  // or closing the browser brings navigation back exactly as it was.
-  const navHidden = browserShown && browser?.navMode === 'hidden'
-  const rail = layout.navMode === 'rail' || (browserShown && browser?.navMode === 'rail')
+  // While the browser is shown navigation is the rail and the inspector its strip: nothing is hidden.
+  // Hiding or closing the browser brings both back exactly as they were.
+  const rail = layout.navMode === 'rail' || browserShown
 
   return (
     <div className="flex min-h-0 flex-1">
       <div
-        // `invisible` (visibility: hidden) also keeps a stepped-aside sidebar out of the tab order.
-        className={cn('shrink-0 overflow-hidden transition-[width] duration-200', engineDown && 'pointer-events-none opacity-60', navHidden && 'invisible')}
+        className={cn('shrink-0 overflow-hidden transition-[width] duration-200', engineDown && 'pointer-events-none opacity-60')}
         aria-disabled={engineDown || undefined}
-        style={{ width: navHidden ? 0 : rail ? NAV.rail : layout.navWidth }}
+        style={{ width: rail ? NAV.rail : layout.navWidth }}
       >
-        <Sidebar rail={rail || navHidden} />
+        <Sidebar rail={rail} />
       </div>
-      {!rail && !navHidden && (
+      {!rail && (
         <PanelDivider
           label="Resize navigation"
           value={s.navWidth}
@@ -262,7 +257,7 @@ function Shell({ children }: { children: ReactNode }) {
       </div>
 
       {browserShown && browser && (
-        <BrowserPane width={browser.width} maxWidth={Math.max(BROWSER.min, Math.round(s.windowWidth * BROWSER.maxFraction))} wide={wide} />
+        <BrowserPane width={browser.width} wide={wide} />
       )}
 
       {workflowId && layout.inspectorMode === 'panel' && (
@@ -282,7 +277,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
         </>
       )}
-      {workflowId && !browserShown && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
+      {workflowId && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
         <div className="shrink-0 border-l border-[var(--border-subtle)]" style={{ width: INSPECTOR.strip }}>
           <InspectorStrip workflowId={workflowId} />
         </div>

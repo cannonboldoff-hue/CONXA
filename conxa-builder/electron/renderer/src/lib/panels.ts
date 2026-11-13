@@ -95,33 +95,17 @@ export const PANELS_STORAGE_KEY = 'conxa-shell-panels'
 
 // ── the embedded test browser (BUILD-42) ────────────────────────────────────────────────────
 
-/** Browser panel: 60 % of the window by default, never under 480 px, never over 75 %. */
-export const BROWSER = { min: 480, defFraction: 0.6, maxFraction: 0.75 } as const
+/** Browser panel: 75 % of the window, never resized. Only when the window is too small to leave the
+ *  conversation CONVERSATION_MIN beside it does it give up the difference; nothing is ever hidden. */
+export const BROWSER = { fraction: 0.75, conversationMin: 320 } as const
 
-export type BrowserLayout = {
-  /** 'panel' = shown beside the conversation; 'hidden' = no room (the header pill offers it back). */
-  mode: 'panel' | 'hidden'
-  width: number
-  /** Navigation steps aside while the browser is shown ('hidden'); 'rail' when the person brought
-   *  it back. The browser also takes the inspector's place (the inspector is its 44 px strip). */
-  navMode: 'rail' | 'hidden'
-}
+export type BrowserLayout = { width: number }
 
 /**
- * Where the browser goes. Opening it hides navigation entirely and the browser takes that room too
- * (the person's own navigation setting is untouched, so hiding the browser brings navigation back as
- * it was). `navShown` = the person asked for navigation while the browser is open: it comes back as
- * the 56 px rail. The workspace never drops below WORKSPACE_MIN, and if the browser can't have its
- * 480 px even then it is hidden rather than squeezing the conversation.
+ * Where the browser goes. While it is open navigation stays as the 56 px rail and the inspector as
+ * its 44 px strip (nothing is hidden); the conversation gets what is left of the window.
  */
-export function resolveBrowserLayout(i: {
-  windowWidth: number
-  navShown?: boolean
-  preferredWidth?: number | null
-}): BrowserLayout {
-  const want = clamp(i.preferredWidth ?? i.windowWidth * BROWSER.defFraction, BROWSER.min, Math.max(BROWSER.min, i.windowWidth * BROWSER.maxFraction))
-  const navMode: BrowserLayout['navMode'] = i.navShown ? 'rail' : 'hidden'
-  const available = i.windowWidth - (navMode === 'rail' ? NAV.rail : 0) - INSPECTOR.strip - WORKSPACE_MIN
-  if (available < BROWSER.min) return { mode: 'hidden', width: 0, navMode }
-  return { mode: 'panel', width: Math.round(Math.min(want, available)), navMode }
+export function resolveBrowserLayout(i: { windowWidth: number }): BrowserLayout {
+  const room = i.windowWidth - NAV.rail - INSPECTOR.strip - BROWSER.conversationMin
+  return { width: Math.round(Math.min(i.windowWidth * BROWSER.fraction, room)) }
 }

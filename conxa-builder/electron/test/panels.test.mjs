@@ -78,46 +78,16 @@ test("parsePanels falls back on garbage and clamps stored widths", () => {
 
 import { BROWSER, resolveBrowserLayout } from "../renderer/src/lib/panels.ts";
 
-test("browser: opening it hides navigation and takes 60 percent of the window, in the inspector's place", () => {
-  const l = resolveBrowserLayout({ windowWidth: 1920 });
-  assert.equal(l.mode, "panel");
-  assert.equal(l.width, 1152);
-  assert.equal(l.navMode, "hidden");
+test("browser: a roomy window gives it 75 percent", () => {
+  assert.equal(resolveBrowserLayout({ windowWidth: 1920 }).width, 1440);
+  assert.equal(resolveBrowserLayout({ windowWidth: 2400 }).width, 1800);
 });
 
-test("browser: at 1440 the room navigation gave up goes to the browser", () => {
-  const l = resolveBrowserLayout({ windowWidth: 1440 });
-  assert.equal(l.navMode, "hidden");
-  assert.equal(l.width, 864);
-  assert.ok(l.width > 1440 - NAV.def - INSPECTOR.strip - WORKSPACE_MIN, "bigger than with navigation open");
-});
-
-test("browser: navigation brought back while it is open comes back as the rail", () => {
-  const l = resolveBrowserLayout({ windowWidth: 1200, navShown: true });
-  assert.equal(l.navMode, "rail");
-  assert.equal(l.width, 1200 - NAV.rail - INSPECTOR.strip - WORKSPACE_MIN);
-});
-
-test("browser: the workspace never drops below its minimum", () => {
-  for (const navShown of [false, true]) {
-    for (let w = 960; w <= 2200; w += 20) {
-      const l = resolveBrowserLayout({ windowWidth: w, navShown });
-      if (l.mode === "panel") {
-        const nav = l.navMode === "rail" ? NAV.rail : 0;
-        assert.ok(w - nav - INSPECTOR.strip - l.width >= WORKSPACE_MIN, `width ${w}`);
-        assert.ok(l.width >= BROWSER.min, `width ${w}`);
-      }
-    }
+test("browser: a smaller window keeps the conversation at its minimum beside the rail and strip", () => {
+  for (let w = 960; w <= 2400; w += 20) {
+    const l = resolveBrowserLayout({ windowWidth: w });
+    assert.ok(w - NAV.rail - INSPECTOR.strip - l.width >= BROWSER.conversationMin, `width ${w}`);
+    assert.ok(l.width <= w * BROWSER.fraction, `width ${w}`);
+    assert.ok(l.width > 0, `width ${w}`);
   }
-});
-
-test("browser: the minimum window has no room, so it is hidden instead of squeezing the conversation", () => {
-  const l = resolveBrowserLayout({ windowWidth: 960 });
-  assert.equal(l.mode, "hidden");
-});
-
-test("browser: a dragged width is honoured within the 480 to 75 percent range", () => {
-  assert.equal(resolveBrowserLayout({ windowWidth: 1920, preferredWidth: 300 }).width, 480);
-  assert.equal(resolveBrowserLayout({ windowWidth: 1920, preferredWidth: 9999 }).width <= 1920 * 0.75, true);
-  assert.equal(resolveBrowserLayout({ windowWidth: 1920, preferredWidth: 900 }).width, 900);
 });

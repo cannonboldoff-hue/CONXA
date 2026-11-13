@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Download, ExternalLink, FileText, FolderOpen, Globe, Loader2, Maximize2, Minimize2, PanelRightClose, Plus, RotateCw, X } from 'lucide-react'
 import { flowFinishRecording, flowSignInDone } from '@/api/conversationApi'
 import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
-import { PanelDivider } from '@/components/shell/PanelDivider'
 import { useNativeViewRegion } from '@/components/shell/useNativeViewRegion'
 import { Button } from '@/components/ui/button'
 import { activeTab, useBrowserStore, type FlowControls, type PanelDownload, type PanelRun, type PanelTab } from '@/store/browserStore'
-import { BROWSER } from '@/lib/panels'
 import { cn } from '@/lib/utils'
 
 type Phase = 'test' | 'ready' | 'signin' | 'recording' | 'paused'
@@ -306,11 +304,10 @@ function Toolbar({ run, tab, dlOpen, onToggleDownloads }: { run: PanelRun; tab: 
  * it): the run's state and controls live on the conversation's card, and only in widen mode does the
  * tab row carry the one button needed. Closing a finished test frees the browser; hiding never stops a run.
  */
-export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth: number; wide: boolean }) {
+export function BrowserPane({ width, wide }: { width: number; wide: boolean }) {
   const run = useBrowserStore((s) => s.run)
   const storeFlow = useBrowserStore((s) => s.flow)
   const setFolded = useBrowserStore((s) => s.setFolded)
-  const setWidth = useBrowserStore((s) => s.setWidth)
   const setWide = useBrowserStore((s) => s.setWide)
   const region = useRef<HTMLDivElement>(null)
   const tab = activeTab(run)
@@ -357,18 +354,6 @@ export function BrowserPane({ width, maxWidth, wide }: { width: number; maxWidth
 
   return (
     <>
-      {!wide && (
-        <PanelDivider
-          label="Resize browser"
-          value={width}
-          min={BROWSER.min}
-          max={maxWidth}
-          grow={-1}
-          onChange={(w) => setWidth(Math.min(maxWidth, Math.max(BROWSER.min, w)))}
-          onNudge={(d) => setWidth(Math.min(maxWidth, Math.max(BROWSER.min, width + d * -16)))}
-          onReset={() => setWidth(null)}
-        />
-      )}
       <section
         aria-label={run.kind === 'test' ? 'Test browser' : run.kind === 'signin' ? 'Sign-in browser' : 'Recording browser'}
         className={cn('flex min-h-0 flex-col bg-[#262626]', wide ? 'min-w-0 flex-1' : 'shrink-0')}

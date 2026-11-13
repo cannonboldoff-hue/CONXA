@@ -52,8 +52,6 @@ type Store = {
   run: PanelRun | null
   /** The person folded the panel (hiding never stops the run; the header pill brings it back). */
   folded: boolean
-  /** The width the person dragged to, if they did. */
-  width: number | null
   /** The browser takes the room and the conversation folds to a rail. */
   wide: boolean
   /** Navigation hides while the browser is on screen; true = the person brought it back (as the
@@ -67,7 +65,6 @@ type Store = {
   setAvailable: (a: boolean) => void
   onTabs: (msg: { runId: string; tabs: PanelTab[]; finished?: boolean; closed?: boolean; kind?: PanelRunKind; downloads?: PanelDownload[] }) => void
   setFolded: (f: boolean) => void
-  setWidth: (w: number | null) => void
   setWide: (w: boolean) => void
   setNavShown: (v: boolean) => void
   setFlow: (f: FlowControls) => void
@@ -81,7 +78,6 @@ export const useBrowserStore = create<Store>((set) => ({
   available: false,
   run: null,
   folded: false,
-  width: null,
   wide: false,
   navShown: false,
   flow: null,
@@ -99,7 +95,6 @@ export const useBrowserStore = create<Store>((set) => ({
       return { run: { runId, tabs, finished: Boolean(finished), kind: kind ?? 'test', downloads: downloads ?? [] }, folded: isNewRun ? false : s.folded, wide: isNewRun ? false : s.wide, navShown: isNewRun ? false : s.navShown }
     }),
   setFolded: (folded) => set(folded ? { folded, wide: false, navShown: false } : { folded }),
-  setWidth: (width) => set({ width }),
   setWide: (wide) => set({ wide }),
   setNavShown: (navShown) => set({ navShown }),
   setFlow: (flow) => set({ flow }),
