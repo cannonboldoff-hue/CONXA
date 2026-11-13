@@ -139,6 +139,9 @@ def test_dialog_context_survives_finalization() -> None:
     assert event.dialog_context is not None, "dialog_context was dropped at finalization"
     assert [b.name for b in event.dialog_context.buttons] == ["Replace", "Keep both", "Cancel"]
     assert [b.name for b in event.dialog_context.buttons if b.chosen] == ["Replace"]
+    # `modal` is what lets the compiler tell a notice panel from a question; it must survive too.
+    assert _finalize(_bridge_payload(dialog_context={**DIALOG_CONTEXT, "modal": False})).dialog_context.modal is False
+    assert event.dialog_context.modal is None
 
 
 def test_dialog_context_survives_the_pipeline_round_trip() -> None:

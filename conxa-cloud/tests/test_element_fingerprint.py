@@ -410,6 +410,22 @@ def test_structural_fingerprint_skips_navigate_and_scroll():
     assert fp["landmark_count"] == 1
 
 
+def test_structural_fingerprint_only_covers_the_page_the_run_starts_on():
+    def on(step, url, tab_id="tab_0"):
+        step.tab = {"id": tab_id, "url": url}
+        return step
+
+    start = on(_make_step("click_first", "a.first", "first-link", "First", "a"), "https://a.test/home")
+    moved = on(_make_step("click_second", "a.second", "second-link", "Second", "a"), "https://a.test/file")
+    later = on(_make_step("click_third", "button.third", "third-btn", "Third", "button"), "https://a.test/file")
+    other_tab = on(_make_step("click_other", "button.o", "other-btn", "Other", "button"), "https://b.test/", "tab_1")
+    fp = _build_structural_fingerprint([start, moved, later])
+    # The click that moved the page acted on the start page; nothing after it did.
+    assert [lm["data_testid"] for lm in fp["landmarks"]] == ["first-link", "second-link"]
+    fp = _build_structural_fingerprint([start, other_tab])
+    assert [lm["data_testid"] for lm in fp["landmarks"]] == ["first-link"]
+
+
 # ─── Phase 1: Selector durability scoring ────────────────────────────────────
 
 def test_durability_testid_beats_xpath():
@@ -975,3 +991,16 @@ def test_handler_hints_model():
     hints = HandlerHints(hover_chain=[sig], virtualized_container="", allow_forced_action=False)
     assert len(hints.hover_chain) == 1
     assert hints.hover_chain[0].engine == "role"
+
+
+def test_account_text_never_reaches_a_selector_or_fingerprint():
+    from conxa_compile.compiler.selector_filters import drop_personal_target_text
+
+    chip = "Google AccountCannon Boldcannonboldoff@gmail.com"
+    ev = {"action": {"action": "upload_intent"}, "target": {"tag": "input", "label_text": chip, "aria_label": "Upload", "inner_text": ""}}
+    out = drop_personal_target_text([ev])[0]
+    assert out["target"]["label_text"] == "" and out["target"]["aria_label"] == "Upload"
+    assert ev["target"]["label_text"] == chip, "the recording itself is not changed"
+    long_label = drop_personal_target_text([{"target": {"label_text": "x" * 61}}])[0]
+    assert long_label["target"]["label_text"] == ""
+    assert drop_personal_target_text([{"target": {"label_text": "First name"}}])[0]["target"]["label_text"] == "First name"

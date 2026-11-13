@@ -1693,3 +1693,14 @@ class TestUploadInputDeclaration:
         declared = [{"id": "borrower_name", "label": "Borrower Name"}]
         inputs = _merge_saved_inputs_with_execution_placeholders(declared, [], {})
         assert inputs[0]["description"] == "Borrower Name"
+
+
+def test_a_package_never_ships_the_recording_persons_account_details():
+    import pytest
+    from conxa_compile.skill_package_builder import _assert_no_account_text
+
+    clean = {"skills": [{"steps": [{"target": {"fallback_selectors": ['label:has-text("First name") + input']}, "value": "me@x.com"}]}]}
+    _assert_no_account_text(clean, "Fine")  # a typed value is not looked at
+    leaky = {"skills": [{"steps": [{"target": {"fallback_selectors": ['label:has-text("Google AccountCannon Boldcannonboldoff@gmail.com") + input']}}]}]}
+    with pytest.raises(ValueError, match="account details"):
+        _assert_no_account_text(leaky, "Drive upload")

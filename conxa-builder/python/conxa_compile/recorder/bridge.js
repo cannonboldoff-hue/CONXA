@@ -608,7 +608,7 @@
       if (t === "checkbox") return "checkbox";
       if (t === "radio") return "radio";
       if (t === "range") return "slider";
-      if (t === "submit" || t === "button" || t === "reset") return "button";
+      if (t === "submit" || t === "button" || t === "reset" || t === "file") return "button"; // a file input is a button, not a text box
       if (t === "search") return "searchbox";
       if (t === "number") return "spinbutton";
       return "textbox";
@@ -1762,13 +1762,13 @@
   async function _runWatch(t0, before) {
     // What the page said WHILE the work was going on. It tells the progress words of this app in its own language
     // (a German "wird hochgeladen"), and keeps those lines out of the "what it said when done" list below.
+    // A text is progress only if it WENT AWAY by the time the work ended. A text seen while a progress bar was up
+    // but still on screen at the end is the result ("1 upload complete"), whatever else was showing beside it.
     const progressTexts = new Set();
-    const progressWords = [];
     const noteProgress = () => {
       for (const text of _watchTexts()) {
-        if (before.has(text) || progressTexts.has(text)) continue;
+        if (before.has(text)) continue;
         progressTexts.add(text);
-        for (const w of _valueFreeWords(text)) if (progressWords.length < 12 && !progressWords.includes(w)) progressWords.push(w);
       }
     };
     noteProgress();
@@ -1779,10 +1779,17 @@
       else if (Date.now() - lastBusy >= postWatchQuietMs) break;
     }
     const final = [];
+    const endTexts = _watchTexts();
+    const stillShown = new Set(endTexts);
+    const progressWords = [];
+    for (const text of progressTexts) {
+      if (!_cutAll && stillShown.has(text)) continue; // still there when the work ended: the result, not progress
+      for (const w of _valueFreeWords(text)) if (progressWords.length < 12 && !progressWords.includes(w)) progressWords.push(w);
+    }
     // A watch cut short by Stop never saw the work end, so it must not claim any "done" words.
     if (!_cutAll) {
-      for (const text of _watchTexts()) {
-        if (before.has(text) || progressTexts.has(text) || _PROGRESS_RE.test(text)) continue;
+      for (const text of endTexts) {
+        if (before.has(text) || _PROGRESS_RE.test(text)) continue;
         const words = _valueFreeWords(text);
         if (words.length) final.push({ kind: "status", words });
         if (final.length >= 3) break;
@@ -2109,6 +2116,10 @@
     const hasFields = !!container.querySelector(
       "input:not([type=button]):not([type=submit]):not([type=hidden]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable=true]"
     );
+    // Does it block the page behind it? Only a modal dialog does. The compiler needs this to tell a question
+    // from a notice panel built as a dialog (an upload tray), which the person can ignore.
+    let modal = container.getAttribute("aria-modal") === "true";
+    try { if (container.tagName === "DIALOG" && container.matches(":modal")) modal = true; } catch (_) { /* old engine */ }
     return {
       kind: "dom",
       container_signal: buildDialogSignal(container) || "",
@@ -2116,6 +2127,7 @@
       title: title.slice(0, 120),
       message,
       has_fields: hasFields,
+      modal,
       buttons,
     };
   }

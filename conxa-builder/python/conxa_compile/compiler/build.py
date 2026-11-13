@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ from conxa_compile.compiler.recovery_policy import (
     merge_recovery_strategies_for_wait_shape,
 )
 from conxa_compile.compiler.selector_filters import (
+    drop_personal_target_text,
     scrub_email,
     filter_selectors_dict,
     is_dynamic_id,
@@ -813,14 +815,36 @@ def _build_assertions(
     return assertions
 
 
+def _page_key(url: Any) -> str:
+    """origin + path of a page address (no query or fragment), or "" when unknown."""
+    try:
+        u = urlsplit(str(url or ""))
+    except ValueError:
+        return ""
+    return f"{u.scheme}://{u.netloc}{u.path}".rstrip("/") if u.scheme and u.netloc else ""
+
+
 def _build_structural_fingerprint(steps: list[SkillStep]) -> dict[str, Any]:
-    """Fingerprint the first 3 interactive steps for pre-execution drift detection."""
+    """Fingerprint the first 3 interactive steps for pre-execution drift detection.
+
+    The runtime checks these against the page the run STARTS on, before any step runs. A step on a later page
+    (after a click that navigated, or in another tab) cannot be on that page yet, so it is never a landmark:
+    its element being "missing" at start would be a false "the app was redesigned" warning."""
     landmarks: list[dict[str, Any]] = []
+    first_tab = (getattr(steps[0], "tab", None) or {}) if steps else {}
+    start_key = _page_key(first_tab.get("url") or getattr(steps[0], "url", "") if steps else "")
+    left_start_page = False
     for step in steps[:5]:
+        tab = getattr(step, "tab", None) or {}
+        if left_start_page or (tab.get("id") and first_tab.get("id") and tab["id"] != first_tab["id"]):
+            break  # a later page or another tab: not on screen when the run starts
         action = step.action if isinstance(step.action, str) else (step.action or {}).get("action", "")
         if action in {"navigate", "scroll", "browser_back", "browser_forward"}:
             # History navigations are non-interactive landmarks too — never fingerprinted.
             continue
+        step_key = _page_key(tab.get("url") or getattr(step, "url", ""))
+        # The step whose click moved the page still acted on the start page, so it is kept; the next one is not.
+        left_start_page = bool(start_key and step_key and step_key != start_key)
         fp = step.identity_bundle.fingerprint
         primary = step.target.get("primary_selector", "")
         if primary or fp.data_testid or fp.aria_label or fp.inner_text:
@@ -1638,7 +1662,9 @@ def prepare_compile_events(
     # itself. Ledgered, never silently lost.
     human = [e for e in events if e.get("origin") != "script" or _studio_file_pick(e)]
     _record_drops(ledger, events, human, "not_from_user")
-    events = human
+    # The signed-in person's own name/email shown on an account chip must not become a selector or fingerprint in a
+    # package other people run. Taken out here, once, so nothing built later can carry it.
+    events = drop_personal_target_text(human)
     cleaned_events = list(events)
     if settings.compile_pass("cleanup"):
         cleaned_events = fix_step_order(clean_steps(events, pol), pol)

@@ -42,6 +42,26 @@ from conxa_core.storage.json_store import read_skill
 # Main build entry point
 # ─────────────────────────────────────────────────
 
+_ACCOUNT_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
+def _assert_no_account_text(saved_skill: dict[str, Any], workflow_name: str) -> None:
+    """A package is run by other people. If how a step finds its element carries an email address (the recording
+    person's own account, read off an account chip), stop the build: it would ship that person's details. The
+    compiler no longer produces this; this catches a workflow compiled before that fix. Typed values are not
+    looked at: only the target, identity, signal and selector fields."""
+    for block in saved_skill.get("skills") or []:
+        for step in (block or {}).get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            text = json.dumps({k: step.get(k) for k in ("target", "identity_bundle", "signals", "compiled_selectors")}, default=str)
+            if _ACCOUNT_EMAIL_RE.search(text):
+                raise ValueError(
+                    f"“{workflow_name}” contains someone’s account details (an email address) in how it finds a button. "
+                    "Compile the workflow again, then build."
+                )
+
+
 def build_skill_package(
     workspace_id: str,
     *,
@@ -112,6 +132,7 @@ def build_skill_package(
     for wf in workflows:
         saved_skill = read_skill(wf.skill_id) if wf.skill_id else None
         if saved_skill is not None:
+            _assert_no_account_text(saved_skill, wf.name)
             _log("Building workflow from saved skill JSON", workflow=wf.name, workflow_id=wf.id)
             _build_workflow_from_saved_skill(
                 bundle_root=bundle_root,

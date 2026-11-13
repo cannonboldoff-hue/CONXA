@@ -267,6 +267,7 @@ class DialogContext(BaseModel):
     title: str = ""
     message: str = Field(default="", max_length=300)
     has_fields: bool = False     # editable inputs inside -> a form, not a decision
+    modal: bool | None = None    # blocks the page behind it; None = not recorded (older recordings)
     buttons: list[DialogButton] = Field(default_factory=list, max_length=8)
 
 

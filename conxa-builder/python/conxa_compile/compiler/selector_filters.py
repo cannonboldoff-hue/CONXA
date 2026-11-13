@@ -230,6 +230,30 @@ def scrub_email(text: str) -> str:
     """Text a person reads in chat, with any email address cut out (an account button's label
     carries the signed-in address)."""
     return " ".join(_EMAIL_RE.sub(" ", str(text or "")).split())
+
+
+# Text an element carries that the recorder copies into the step's identity, selectors and fingerprint.
+_TARGET_TEXT_KEYS = ("label_text", "aria_label", "inner_text", "name", "title", "placeholder", "text")
+# A form label longer than this wrapped several elements (an account chip: "Google Account" + a name + an email).
+_MAX_LABEL_TEXT = 60
+
+
+def drop_personal_target_text(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Events with the text the person's own account put on the page taken out of every target, once, before any
+    selector, fingerprint or binding is built from it. Whatever is built later cannot carry what is not there.
+    A text with an email address in it, or a label too long to be one label, is blanked; nothing else changes.
+    The input events are not modified."""
+    out: list[dict[str, Any]] = []
+    for ev in events:
+        target = ev.get("target") if isinstance(ev, dict) else None
+        if not isinstance(target, dict):
+            out.append(ev)
+            continue
+        bad = [k for k in _TARGET_TEXT_KEYS
+               if isinstance(target.get(k), str) and (_EMAIL_RE.search(target[k])
+                                                      or (k == "label_text" and len(target[k]) > _MAX_LABEL_TEXT))]
+        out.append({**ev, "target": {**target, **{k: "" for k in bad}}} if bad else ev)
+    return out
 _METACHAR_RE = re.compile(r"[>+~|^$]")  # CSS combinators / unsanitisable metacharacters
 
 

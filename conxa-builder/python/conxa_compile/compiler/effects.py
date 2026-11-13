@@ -129,20 +129,35 @@ def _usable_word(w: Any) -> bool:
     return isinstance(w, str) and len(w) >= 5 and w.isalpha() and w not in _STOP
 
 
+def _own_data_words(ev: dict[str, Any]) -> set[str]:
+    """Words that came from the person's own data in this step (a typed value, a chosen file's name). The app's
+    screens echo them back ("Maven.gitignore" in an upload tray); they say nothing about how the app words things and
+    must never be kept in a shipped package or an app map."""
+    action = ev.get("action") if isinstance(ev.get("action"), dict) else {}
+    parts = [str(action.get("value") or "")]
+    extras = ev.get("extras") if isinstance(ev.get("extras"), dict) else {}
+    pick = extras.get("file_pick") if isinstance(extras.get("file_pick"), dict) else {}
+    parts += [str(n) for n in (pick.get("names") or [])]
+    parts.append(str(pick.get("download_filename") or ""))
+    return {w for w in re.findall(r"[a-z]+", " ".join(parts).lower()) if len(w) >= 3}
+
+
 def app_words(ev: dict[str, Any]) -> dict[str, list[str]]:
     """The app's own progress / success / failure words around this step, as value-free single words (the recorder
     already dropped digits, quotes, addresses). Kept on the effect so the app map can learn how THIS app words them,
-    in its own language. A word that appears in two groups says nothing and is dropped from both."""
+    in its own language. A word that appears in two groups says nothing and is dropped from both. A word that says
+    work is finished is never a progress word, and a word from the person's own data is never kept."""
     watch = ev.get("post_watch") if isinstance(ev.get("post_watch"), dict) else {}
     ctx = ev.get("surface_context") if isinstance(ev.get("surface_context"), dict) else {}
-    progress = [w for w in (watch.get("progress_words") or []) if _usable_word(w)]
+    mine = _own_data_words(ev)
+    progress = [w for w in (watch.get("progress_words") or []) if _usable_word(w) and w not in _DONE_WORDS and w not in mine]
     success: list[str] = []
     for words in _final_words(ev):
-        success += [w for w in words if _usable_word(w)]
+        success += [w for w in words if _usable_word(w) and w not in mine]
     failure: list[str] = []
     for item in ctx.get("items") or []:
         if item.get("kind") in {"alert", "invalid"}:
-            failure += [w for w in (item.get("words") or []) if _usable_word(w)]
+            failure += [w for w in (item.get("words") or []) if _usable_word(w) and w not in mine]
     groups = {"progress": progress, "success": success, "failure": failure}
     clash = {w for g in groups.values() for w in g if sum(w in other for other in groups.values()) > 1}
     return {k: sorted({w for w in v if w not in clash})[:12] for k, v in groups.items() if any(w not in clash for w in v)}
@@ -164,7 +179,11 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
         # Layer 1 of the design, true on any website: the app was sent a data-changing request and answered it.
         add(rung="completed", witness="transport", probe={"type": "request_chain", "method": "mutating", "status": "2xx"},
             plain="the app accepted the request")
+    mine = _own_data_words(ev)
     for words in _final_words(ev):
+        words = [w for w in words if w not in mine]  # a chosen file's name is the person's data, not the app's wording
+        if not words:
+            continue
         add(rung="completed", witness="renderer", probe={"type": "new_text", "words": words},
             plain=f"the app says “{' '.join(words)}”")
     if kind == "upload":

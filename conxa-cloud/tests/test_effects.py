@@ -168,3 +168,20 @@ def test_the_fresh_look_never_raises_what_a_step_requires_until_a_clean_run_saw_
 def test_only_an_upload_with_a_single_named_file_gets_a_fresh_look():
     assert not [c for c in build_effect(_click("Delete project"), destructive=True, consequence="irreversible").checks if c.probe["type"] == "fresh_look"]
     assert not [c for c in build_effect(_click("Save"), is_commit=True).checks if c.probe["type"] == "fresh_look"]
+
+
+def test_app_words_never_learn_a_result_as_progress_or_keep_the_persons_file_name():
+    from conxa_compile.compiler.effects import app_words
+
+    ev = {
+        "action": {"action": "upload_intent", "value": '[{"name":"Maven.gitignore","size":1,"type":""}]'},
+        "post_watch": {
+            "progress_seen": True,
+            "progress_words": ["uploading", "complete", "gitignore", "maven", "starting", "cancel"],
+            "final_status": [{"kind": "status", "words": ["complete", "gitignore", "maven"]}],
+        },
+    }
+    words = app_words(ev)
+    assert "complete" not in words.get("progress", [])
+    assert not ({"gitignore", "maven"} & {w for g in words.values() for w in g})
+    assert words["success"] == ["complete"]

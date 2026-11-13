@@ -125,6 +125,8 @@ def _annotate_scroll_amounts(events: list[dict[str, Any]]) -> list[dict[str, Any
         extras = dict(row.get("extras") or {})
         if str((row.get("action") or {}).get("action") or "").strip().lower() == "scroll":
             extras["scroll_amount"] = current_y - last_y
+            if extras["scroll_amount"] == 0:
+                continue  # a scroll that moved nothing is not a step
         row["extras"] = extras
         out.append(row)
         last_y = current_y
