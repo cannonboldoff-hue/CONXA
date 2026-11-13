@@ -746,7 +746,7 @@ const HANDLERS = {
       if (filePaths.length > 1) {
         // Unknown (detached, cross-origin, evaluate blocked) stays permissive: let
         // setInputFiles have its say rather than blocking an upload on a failed probe.
-        const _acceptsResult = await evalOn(locator, el => el.multiple === true).catch(() => true);
+        const _acceptsResult = await evalOn(locator, pageScripts.acceptsMultiple).catch(() => true);
         const acceptsMultiple = _acceptsResult === EVAL_TIMED_OUT ? true : _acceptsResult;
         if (!acceptsMultiple) {
           throw Object.assign(new Error(
@@ -881,7 +881,7 @@ const HANDLERS = {
     const text = interpolate(String(step.value ?? ""), inputs);
     if (!text.trim()) throw clipboardError("there is no text to copy");
     await grantClipboard(page);
-    const wrote = await evalOn(page, (t) => navigator.clipboard.writeText(t), text, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
+    const wrote = await evalOn(page, pageScripts.clipboardWrite, text, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
     if (wrote === EVAL_TIMED_OUT) throw clipboardNoAnswer();
   },
 
@@ -889,7 +889,7 @@ const HANDLERS = {
     const name = String(step.output_name || "");
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) throw clipboardError("no valid name was given to keep the text under");
     await grantClipboard(page);
-    const text = await evalOn(page, () => navigator.clipboard.readText(), undefined, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
+    const text = await evalOn(page, pageScripts.clipboardRead, undefined, CLIPBOARD_DEADLINE_MS).catch(clipboardBlocked);
     if (text === EVAL_TIMED_OUT) throw clipboardNoAnswer();
     if (!text) throw clipboardError("the clipboard is empty");
     inputs[name] = text;

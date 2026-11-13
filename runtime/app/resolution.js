@@ -4,7 +4,7 @@
 // uniqueness gate, and the frame-scoped DOM inventory used by failure payloads.
 const pageScripts = require("./page_scripts");
 const { resolve: resolveSignals, scoreCandidate, DEFAULT_UNIQUE_MARGIN, DEFAULT_CONFIDENCE_THRESHOLD } = require("./resolver");
-const { gatherCandidates, bundleFingerprint, _extractDescriptor, toLocator } = require("./resolve_adapter");
+const { gatherCandidates, bundleFingerprint, toLocator } = require("./resolve_adapter");
 const { STALE_RE } = require("./recovery");
 const { interpolate } = require("./interpolate");
 const {
@@ -140,7 +140,7 @@ async function enumerateRows(page, spec, cap) {
     if (out.length >= cap) break;
     let text = "";
     try {
-      const t = await evalOn(row, (el) => (el.innerText || el.textContent || "").trim());
+      const t = await evalOn(row, pageScripts.elementText);
       text = t === EVAL_TIMED_OUT ? "" : String(t || "").trim();
     } catch (_) {
       text = "";
@@ -383,7 +383,7 @@ async function validateOverrideSelector(page, step, inputs) {
     try { all = await root.locator(selector).all(); } catch (_) { continue; }
     for (const item of all) {
       let d;
-      try { d = await evalOn(item, _extractDescriptor); } catch (_) { continue; }
+      try { d = await evalOn(item, pageScripts.extractDescriptor); } catch (_) { continue; }
       if (!d || d === EVAL_TIMED_OUT) continue;
       d._loc = item;
       descriptors.push(d);

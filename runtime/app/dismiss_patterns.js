@@ -1,5 +1,6 @@
 "use strict";
 const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
+const pageScripts = require("./page_scripts");
 
 // Known-pattern overlay dismissal — EXEC-5's "dismiss-known-pattern library", Tier 1 slice.
 //
@@ -120,10 +121,7 @@ async function dismissAgentNominated(page, selector, { timeoutMs = DISMISS_PROBE
   if (n === EVAL_TIMED_OUT || n < 1) return { ok: false, reason: "no-match" };
   const first = locator.first();
 
-  const info = await evalOn(first, (el, dialogSel) => ({
-    label: (el.getAttribute("aria-label") || el.innerText || el.getAttribute("title") || "").trim().slice(0, 120),
-    inDialogChrome: !!el.closest(dialogSel),
-  }), DIALOG_CHROME_SEL, timeoutMs).catch(() => ({ label: "", inDialogChrome: false }));
+  const info = await evalOn(first, pageScripts.dismissLabelInfo, DIALOG_CHROME_SEL, timeoutMs).catch(() => ({ label: "", inDialogChrome: false }));
   const safeInfo = info === EVAL_TIMED_OUT ? { label: "", inDialogChrome: false } : info;
 
   if (!isSafeDismissLabel(safeInfo.label, { inDialogChrome: safeInfo.inDialogChrome })) {

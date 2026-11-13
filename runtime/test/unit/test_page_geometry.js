@@ -105,7 +105,7 @@ test("checkGeometry: a page that cannot be measured, or has no host owner, passe
 
 // A page whose reported size is fine but whose input lands where `map` says it does.
 const mousePage = (map, size = [1280, 720, 1]) => ({
-  evaluate: async (fn) => (fn && fn.name === "_firstMove" ? new Promise((r) => setTimeout(() => r(page.__moved), 5)) : size),
+  evaluate: async (fn) => (fn && fn.name === "firstMouseMove" ? new Promise((r) => setTimeout(() => r(page.__moved), 5)) : size),
   mouse: { move: async (x, y) => { page.__moved = map(x, y); } },
 });
 let page;

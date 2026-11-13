@@ -1,0 +1,356 @@
+<title>False Done Investigation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one calm reading column, a sticky chapter list on wide screens, tables and the ladder as the only wide pieces. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1c2330;
+  --muted: #5a6577;
+  --line: #dde1e8;
+  --accent: #0b6e69;
+  --accent-soft: #dcefed;
+  --bad: #b3261e;
+  --bad-soft: #fbe4e2;
+  --warn: #8a5a00;
+  --warn-soft: #fbefd2;
+  --good: #1e6b3a;
+  --good-soft: #dff1e5;
+  --code-bg: #eef0f4;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #19202a; --fg: #e6e9ef; --muted: #9aa5b7; --line: #2b3441;
+    --accent: #4fc3bb; --accent-soft: #15322f;
+    --bad: #ff8a80; --bad-soft: #3a1f1d; --warn: #f2c14e; --warn-soft: #3a2f12;
+    --good: #7fd69b; --good-soft: #17301f; --code-bg: #212a36;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #19202a; --fg: #e6e9ef; --muted: #9aa5b7; --line: #2b3441;
+  --accent: #4fc3bb; --accent-soft: #15322f;
+  --bad: #ff8a80; --bad-soft: #3a1f1d; --warn: #f2c14e; --warn-soft: #3a2f12;
+  --good: #7fd69b; --good-soft: #17301f; --code-bg: #212a36;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
+nav { position: sticky; top: 16px; align-self: start; font-size: 14px; }
+nav b { display: block; font-family: var(--font-head); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+nav a { display: block; color: var(--muted); text-decoration: none; padding: 5px 0; border-left: 2px solid var(--line); padding-left: 12px; }
+nav a:hover, nav a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+main { min-width: 0; max-width: 720px; }
+h1, h2, h3 { font-family: var(--font-head); line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(30px, 5vw, 44px); margin: 0 0 12px; letter-spacing: -.01em; }
+h2 { font-size: 26px; margin: 56px 0 12px; padding-top: 8px; }
+h3 { font-size: 18px; margin: 28px 0 6px; }
+p { margin: 0 0 14px; }
+.lede { font-size: 19px; color: var(--muted); margin-bottom: 20px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 18px 0; }
+.box > :last-child { margin-bottom: 0; }
+.box.good { background: var(--good-soft); border-color: transparent; }
+.box.bad { background: var(--bad-soft); border-color: transparent; }
+.box.warn { background: var(--warn-soft); border-color: transparent; }
+.box.idea { background: var(--accent-soft); border-color: transparent; }
+.box .tag { display: block; font-family: var(--font-head); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; color: var(--muted); }
+.scroll { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-head); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.yes { background: var(--good-soft); color: var(--good); }
+.pill.no { background: var(--bad-soft); color: var(--bad); }
+.pill.cant { background: var(--warn-soft); color: var(--warn); }
+.ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0; align-items: end; }
+.rung { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 14px; }
+.rung b { display: block; font-family: var(--font-head); font-size: 15px; margin-bottom: 2px; }
+.rung:nth-child(1) { min-height: 96px; } .rung:nth-child(2) { min-height: 120px; } .rung:nth-child(3) { min-height: 144px; } .rung:nth-child(4) { min-height: 168px; border-color: var(--accent); }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 6px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; font-size: 14.5px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.steps li::before { content: counter(s); font-family: var(--font-mono); color: var(--muted); }
+.steps li.hot { border-color: var(--bad); background: var(--bad-soft); }
+.flow { display: grid; gap: 8px; margin: 16px 0; }
+.flow div { padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 14.5px; }
+.flow div.arrow { background: none; border: 0; text-align: center; color: var(--muted); padding: 0; }
+.flow div.bad { border-color: var(--bad); background: var(--bad-soft); }
+.flow div.good { border-color: var(--good); background: var(--good-soft); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+dl { margin: 0; } dt { font-weight: 600; margin-top: 12px; } dd { margin: 2px 0 0; color: var(--muted); }
+ul, ol { padding-left: 22px; margin: 0 0 14px; } li { margin-bottom: 6px; }
+footer { margin-top: 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  nav { display: none; }
+  .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rung { min-height: 0 !important; }
+}
+@media (prefers-reduced-motion: no-preference) { nav a { transition: color .15s, border-color .15s; } }
+</style>
+
+<div class="wrap">
+<nav aria-label="Chapters">
+  <b>Chapters</b>
+  <a href="#problem">1. What went wrong</a>
+  <a href="#how">2. How a test works</a>
+  <a href="#evidence">3. The evidence</a>
+  <a href="#checks">4. The six checks</a>
+  <a href="#why">5. Why it said Done</a>
+  <a href="#poison">6. The damage afterwards</a>
+  <a href="#side">7. A hidden second bug</a>
+  <a href="#plan">8. The plan</a>
+  <a href="#built">9. What I built</a>
+  <a href="#proof">10. Proof it works</a>
+  <a href="#left">11. What is not done</a>
+  <a href="#next">12. What you do next</a>
+  <a href="#words">13. Word list</a>
+</nav>
+
+<main>
+<h1>Why the test said “It works” when nothing reached Drive</h1>
+<p class="lede">A full walk through this chat, from your first message to the last change, in plain words. Date of the work: 13 November 2026.</p>
+
+<section id="problem">
+<h2>1. What went wrong</h2>
+<p>You recorded a workflow called <b>Github to Drive Handoff</b>. It does this: open GitHub, pick a <code>.gitignore</code> file, download it, then open Google Drive and upload that file.</p>
+<p>You tested it in the Build Studio. The chat said <b>“It works. Approve it when you’re happy.”</b> But when you opened Drive yourself, <b>the file was not there</b>.</p>
+<div class="box bad"><span class="tag">The core problem</span><p>The test <b>lied</b>. It reported success for something that did not happen. That is worse than a test that fails, because you would have approved and shipped a workflow that does not work.</p></div>
+<p>You asked for three things: look into it deeply, start from first principles, and give <b>one general fix for the whole system</b>, not a patch that only helps this one GitHub-to-Drive recording.</p>
+<p>That last rule shaped everything I did. Every change below is a rule that applies to any workflow on any website.</p>
+</section>
+
+<section id="how">
+<h2>2. How a test works</h2>
+<p>When Conxa runs a workflow, it does not just click and hope. After each step it asks: <i>“Did that really work?”</i> It answers by collecting small pieces of evidence. I will call them <b>checks</b>.</p>
+<div class="box idea"><span class="tag">Think of it like this</span><p>You post a parcel. A good courier does not only say “I handed it over.” They also check: was it signed for? Did the tracking update? Is it in the right house? Each is a separate piece of proof. The more separate, trustworthy proof, the more sure you can be.</p></div>
+<h3>The proof ladder</h3>
+<p>Conxa grades every step on four rungs. Each rung is a stronger claim than the one below it.</p>
+<div class="ladder">
+  <div class="rung"><b>1. Performed</b>We did the action. (We clicked or we set the file.)</div>
+  <div class="rung"><b>2. Accepted</b>The app took it. (The page reacted.)</div>
+  <div class="rung"><b>3. Completed</b>The work finished. (The upload bar ended.)</div>
+  <div class="rung"><b>4. Result exists</b>The right thing is really there. (The file is in the list.)</div>
+</div>
+<p>Each check answers one of four things:</p>
+<ul>
+  <li><span class="pill yes">yes</span> the evidence says it worked</li>
+  <li><span class="pill no">no</span> the evidence says it did not</li>
+  <li><span class="pill cant">can’t tell</span> I could not read this evidence</li>
+  <li><b>not yet</b> it is still working</li>
+</ul>
+<p>A step counts as <b>“proven”</b> when enough separate checks say yes at a high enough rung. For an upload, the rule asked for the third rung, <b>completed</b>.</p>
+</section>
+
+<section id="evidence">
+<h2>3. The evidence I found</h2>
+<p>I did not guess. I went looking for the actual files Conxa saved from your test run. They live in a folder called <code>.conxa-build-studio-dev</code> in your user folder.</p>
+<h3>What I opened</h3>
+<ul>
+  <li>The <b>chat thread</b> of the workflow, which has the test result card (this showed every step as “done” and the final “It works”).</li>
+  <li>The <b>compiled workflow file</b> (<code>execution.json</code>), the list of steps Conxa runs.</li>
+  <li>The <b>runtime log</b>, which records what the engine did during the run.</li>
+  <li>The <b>saved skill</b>, which holds the checks and what the test later changed.</li>
+</ul>
+<h3>The 12 steps of your workflow</h3>
+<ol class="steps">
+  <li>Open the GitHub page that lists .gitignore files</li>
+  <li>Scroll down the list</li>
+  <li>Click a .gitignore file to open it</li>
+  <li>Scroll through the file page</li>
+  <li>Click “Download raw file”</li>
+  <li>Wait for the browser to finish saving</li>
+  <li>Open a new browser tab</li>
+  <li>Open Google Drive in the new tab</li>
+  <li>Click the “New” button in Drive</li>
+  <li>Choose “File upload” from the menu</li>
+  <li class="hot"><span><b>Pick the downloaded file so Drive uploads it</b>: the step in question</span></li>
+  <li>Click “Show file location” in the small pop-up</li>
+</ol>
+<p>All twelve showed as done. The test even said it ran in about 50 seconds. A real upload to Drive plus the tray that follows is slower than that.</p>
+</section>
+
+<section id="checks">
+<h2>4. The six checks on the upload step</h2>
+<p>Step 11 (the upload) carried six checks, written when you recorded. Here is what each one asked and what it answered in your test:</p>
+<div class="scroll"><table>
+<tr><th>#</th><th>Question in plain words</th><th>Answer</th><th>What that really means</th></tr>
+<tr><td>c1</td><td>Was a file chosen?</td><td><span class="pill yes">yes</span></td><td>Only says “the step ran.” It would say yes even if nothing was uploaded.</td></tr>
+<tr><td>c2</td><td>Did the app accept a request?</td><td><span class="pill yes">yes</span></td><td>Some data-sending request got a success reply. But Drive sends such requests <b>all the time in the background</b>. It did not have to be the upload.</td></tr>
+<tr><td>c3</td><td>Does the page say “maximized”?</td><td><span class="pill no">no</span></td><td>A stray word from the upload tray that was learned during recording.</td></tr>
+<tr><td>c4</td><td>Does the page say “upload complete”?</td><td><span class="pill no">no</span></td><td><b>You saw this message while recording.</b> It never appeared in the test.</td></tr>
+<tr><td>c5</td><td>When the page is opened again, is the file there?</td><td><span class="pill cant">can’t tell</span></td><td>The “go and look” check could not give an answer.</td></tr>
+<tr><td>c6</td><td>Did the app show an error?</td><td><span class="pill no">no</span></td><td>This is a safety check, and “no” is the good answer here. No error was seen.</td></tr>
+</table></div>
+<p>Look at c4 again. The recording said: <i>when the upload really happens, Drive shows “upload complete”.</i> The test did not see it. That is a loud warning sign. But the engine ignored it.</p>
+</section>
+
+<section id="why">
+<h2>5. Why it said “Done”: four mistakes</h2>
+<h3>Mistake 1. A witness that could never say “no”</h3>
+<p>The check c2 counted <i>any</i> success reply to <i>any</i> data-sending request. Drive and most big apps send small requests constantly: analytics, auto-save, “I’m still here” pings. They get a success reply whether or not your upload happened.</p>
+<div class="box idea"><span class="tag">Analogy</span><p>A shop camera sees a customer walk in and you say “they bought something.” They might only have walked in. The camera would show the same thing either way, so it proves nothing about buying.</p></div>
+<p>The “is the work running?” gate used the same background traffic as its sign that the upload had started. So that gate also said “done” for the wrong reason.</p>
+
+<h3>Mistake 2. Ignoring the thing the recording already told us</h3>
+<p>Your recording is the <b>expected outcome</b>: “after a real upload, you see <i>upload complete</i>.” When that message never shows up, that is evidence <i>against</i> the step. The engine treated it as <i>nothing</i>. A “no” from a check counted for no weight at all.</p>
+
+<h3>Mistake 3. A pop-up that was never seen was treated as fine</h3>
+<p>The step after the upload watches for pop-ups. Your recording only ever saw one version: the “1 upload complete” tray. In the test, that tray did not show. The engine found “no pop-up” and moved on as if that was a normal, healthy path. Nothing recorded such a path as normal.</p>
+
+<h3>Mistake 4. Missing the bigger pattern</h3>
+<p>In recent days, the fixes in this project went toward <b>stopping false failures</b> (tests that fail when they should pass). That is understandable, because failures are visible and annoying. But nothing pushed the other way against <b>false successes</b>, because a false success is quiet. Nobody notices it until the customer does.</p>
+
+<div class="flow">
+  <div>The upload step runs. A file is “chosen.”</div><div class="arrow">↓</div>
+  <div>Drive sends a background request. It gets a success reply.</div><div class="arrow">↓</div>
+  <div class="bad">The engine takes that as proof. It ignores the missing “upload complete.”</div><div class="arrow">↓</div>
+  <div class="bad">Step marked <b>proven</b>. The test says <b>“It works.”</b> No file is in Drive.</div>
+</div>
+</section>
+
+<section id="poison">
+<h2>6. The damage it did afterwards</h2>
+<p>This was the part that worried me most. After a test <i>passes</i>, Conxa <b>learns from it</b>. It looks at which checks said yes and which said no, and then it “calibrates” the skill. A check that never said yes is marked <b>dead</b> and stops counting. This is a clever feature when the test is honest.</p>
+<p>But this test was a <b>false pass</b>. So the learning went wrong. I read your saved skill and found:</p>
+<ul>
+  <li>c3, c4 and c5 were marked <b>dead</b>. c4 and c5 were checks <b>you had confirmed in the chat</b>.</li>
+  <li>c1 and c2 were marked <b>trusted</b>.</li>
+  <li>The number of witnesses needed was raised to 2, but the two trusted ones are the weakest checks.</li>
+</ul>
+<div class="box bad"><span class="tag">The trap</span><p>The false pass turned off the very checks that would have caught the false pass. From then on, c1 plus c2 would always pass, however broken the upload was. The skill was blind to this failure for good. The test certified the checks that certified the test.</p></div>
+</section>
+
+<section id="side">
+<h2>7. A second bug I found on the way</h2>
+<p>While reading the runtime log, I saw the same error <b>59 times</b>: <code>a0l is not defined</code>.</p>
+<h3>What it means</h3>
+<p>Some small pieces of code have to run <i>inside the web page</i>, not inside Conxa. When the app is built for customers, most of its code is scrambled on purpose to protect it. The scrambling replaces words with codes, and it adds a small decoder (named like <code>a0l</code>) that lives <i>in Conxa</i>. A function that runs inside the web page cannot see that decoder. So it crashes.</p>
+<p>I confirmed it in the built app: the check that makes sure the page is the right size and that clicks land where aimed started with <code>const s=a0l</code>. That check was crashing at the start of every step. Worse, the code that called it caught the error and treated it as <i>“all fine.”</i></p>
+<div class="box warn"><span class="tag">Same pattern again</span><p>A broken measuring tool that reports “fine” is another kind of false success. It did not cause your Drive problem, but it is the same disease: when an instrument breaks, it must not read as a pass.</p></div>
+<p>The same flaw also hid in clipboard steps, in some page reads used by AI-driven spans, in a check that decides which pop-up button is safe to click, and in a check that asks if an upload field accepts many files. I fixed all of them the same way.</p>
+</section>
+
+<section id="plan">
+<h2>8. The plan I made before touching any code</h2>
+<p>I was in plan mode first, so I wrote a plan and you approved it. Before that I got a second opinion from a stronger reviewer model. Its main point, which I agreed with, was to <b>split this into two separate problems</b>:</p>
+<div class="scroll"><table>
+<tr><th>Problem</th><th>What it is</th><th>Status of the cause</th></tr>
+<tr><td><b>A. False success</b></td><td>The test said “It works” on weak evidence, then damaged the skill.</td><td><b>Proven</b> from files on disk.</td></tr>
+<tr><td><b>B. Missed action</b></td><td>The file was never actually uploaded to Drive.</td><td><b>Not proven.</b> I have a likely guess, but no evidence yet.</td></tr>
+</table></div>
+<p>You reported A (“it said success”), so A came first. I did not want to “fix” B on a hunch and then wrongly claim it was solved.</p>
+<p>The likely guess for B: when you click “File upload” in Drive, Drive opens its own file picker window. Conxa’s engine throws that window away, then pushes the file into a hidden file box that it finds by guesswork. That would explain a missing upload. It is a guess until a live run shows it.</p>
+</section>
+
+<section id="built">
+<h2>9. What I built</h2>
+<p>Five general rules. None of them mention GitHub, Drive or any website.</p>
+
+<h3>Change 1. A witness must be able to say “no”</h3>
+<p>Conxa now learns which background endpoints a page is already calling during the <b>earlier</b> steps of the same run. When the upload step runs, requests to those known background endpoints are marked as <b>background noise</b>. They no longer count as proof, and they no longer count as “the work started.”</p>
+<div class="box idea"><span class="tag">Analogy</span><p>Before the parcel is posted, you note down the background noises in the room: the clock, the fridge, traffic. After you post, only a <i>new</i> sound counts as evidence of the parcel.</p></div>
+
+<h3>Change 2. The recording is the expected outcome</h3>
+<p>If every “the app says…” result from your recording is absent in the test, the step can no longer be proven by weaker evidence. Only something that <b>looks for the result itself</b> (like reopening the page and finding the file) can prove it. If that cannot, the step ends as <b>“Couldn’t confirm.”</b></p>
+<ul>
+  <li>“Can’t tell” is <b>not</b> the same as absent. Only a real “no” counts.</li>
+  <li>If even <i>one</i> recorded result appears, the step is allowed. This avoids punishing a stray junk word, such as “maximized”.</li>
+  <li>Nothing pauses to ask a person, and no AI guesses. It is a fixed rule.</li>
+</ul>
+
+<h3>Change 3. A test cannot “learn” from a false pass</h3>
+<ul>
+  <li>A test only teaches the skill when a check at the <b>completed</b> level or higher really said yes. A pass that rested on “the step ran” teaches nothing.</li>
+  <li>“Can’t tell” never turns a check off.</li>
+  <li>Checks from your recording, and checks you confirmed in chat, are only turned off by <b>you</b>, never by a test.</li>
+  <li>Every mark a test writes also records <b>which checks proved it</b>. A mark with no such record is ignored.</li>
+</ul>
+<p>This last point fixes damage that already happened. Your skill had marks with no record, so it is repaired <b>automatically</b>, along with any other skill in the same state. I did not edit your skill by hand.</p>
+
+<h3>Change 4. A broken measuring tool cannot read as a pass</h3>
+<p>I moved every in-page function into one file, <code>page_scripts.js</code>, which is built in a way that keeps it working inside the page. I also added a <b>guard script</b> (<code>check_page_eval_seam.js</code>). It now fails the build if anyone adds an in-page function anywhere else. I tested the guard by planting a deliberate violation and checking that it complained. At first it did <b>not</b> complain because of a typing slip in my own code, which I then fixed. That is why that test was worth doing.</p>
+
+<h3>Change 5. “Must never pass” tests</h3>
+<p>I saved this run’s exact answers in a file (<code>proof_must_not_pass.json</code>) and wrote tests that demand: <i>this evidence must never be judged proven</i>. If someone loosens the rules again to stop false failures, these tests will fail first. Python and runtime tests were also added for the new rules.</p>
+
+<details>
+<summary>Where the changes live (for technical readers)</summary>
+<dl>
+<dt><code>runtime/app/proof.js</code></dt><dd>The judge. New rule: if all “recording saw it” checks say no, the bar rises to “result exists.”</dd>
+<dt><code>runtime/app/evidence.js</code></dt><dd>New <code>ambientWatcher</code> learns background endpoints. Background requests no longer start the gate.</dd>
+<dt><code>runtime/app/effect_probes.js</code>, <code>run.js</code></dt><dd>Request check ignores background requests. A “dead” mark or a raised quorum only counts with a calibration basis.</dd>
+<dt><code>conxa-builder/python/conxa_compile/compiler/effects.py</code></dt><dd>Calibration rewritten: needs a real completed-level yes, never retires “can’t tell,” recording checks or confirmed checks.</dd>
+<dt><code>packages/conxa-core/conxa_core/models/skill_spec.py</code></dt><dd>New field <code>calibration_basis</code> on a check.</dd>
+<dt><code>runtime/app/page_scripts.js</code> and 7 callers</dt><dd>In-page functions moved here; <code>check_page_eval_seam.js</code> enforces it.</dd>
+<dt>Docs</dt><dd><code>docs/TRD.md</code>, <code>docs/Backend-Schema.md</code>, <code>CLAUDE.md</code> (one new runtime rule), <code>FIX.md</code>, <code>TODO.md</code> (EXEC-56, EXEC-57).</dd>
+</dl>
+</details>
+</section>
+
+<section id="proof">
+<h2>10. How I checked it</h2>
+<ul>
+  <li><b>Replay on your real data.</b> I took the real saved skill from your disk (already damaged) and fed it the exact answers of that run. Before: <span class="pill yes">proven</span>. After: <b>“couldn’t confirm,”</b> and the step fails.</li>
+  <li><b>Runtime tests:</b> all 1,301 pass.</li>
+  <li><b>Python tests:</b> 2,941 pass. One fails. It fails on the original, untouched code too, so it is not mine.</li>
+  <li><b>Guard script</b> was shown to fail on a planted mistake, then pass on the real code.</li>
+</ul>
+<p>I also had to update six older tests. They had been written to expect the old behaviour, for example “a check that said no is switched off.” That old behaviour was the bug.</p>
+<div class="box warn"><span class="tag">Honest note on my replay</span><p>My first replay still said “proven.” I had put a stray word into the fake page by mistake. Re-running with the real run’s evidence gave “couldn’t confirm.” I mention it because it shows the stray-word tolerance is real: one recorded result appearing is enough to pass.</p></div>
+</section>
+
+<section id="left">
+<h2>11. What is not done, and the risks</h2>
+<div class="scroll"><table>
+<tr><th>Open item</th><th>Why it matters</th></tr>
+<tr><td><b>Why the file was not uploaded</b> (TODO EXEC-56)</td><td>Problem B is still unsolved. It needs a live run with a trace of what the engine did. I could not do that from here. Also, I could not find the run’s step-by-step tracking events on disk.</td></tr>
+<tr><td><b>Apps that use one single endpoint</b> (TODO EXEC-57)</td><td>Some apps send everything through one address (for example a single <code>/graphql</code>). To my rule, all of its traffic looks like background. Its requests prove nothing, so such steps need the recorded text or the “look again” check. Otherwise they show “couldn’t confirm.” This is the biggest risk of false failures. A known-good workflow on such an app should be re-tested.</td></tr>
+<tr><td><b>Recording which request an action caused</b></td><td>The recorder does not yet save this, which would fix the single-endpoint case at the source.</td></tr>
+<tr><td><b>Pop-up that was never seen</b></td><td>The case “fork matched clean but the recording only ever saw a pop-up” is not recorded against the previous step yet. This run is already caught by Change 2.</td></tr>
+<tr><td><b>One stray word can pass</b></td><td>If one recorded phrase appears and another does not, the step still passes. I chose this to avoid false failures from junk words like “maximized.”</td></tr>
+</table></div>
+</section>
+
+<section id="next">
+<h2>12. What you do next</h2>
+<ol>
+  <li><b>Rebuild the app layer</b> so the fixes reach the test engine. The one running now is from 11 November. Run <code>.\scripts\build-app-local.ps1</code>.</li>
+  <li><b>Re-run the Drive test.</b> With the upload still broken it should now say <b>“Couldn’t confirm”</b> and not “It works.”</li>
+  <li>Check that your saved skill’s checks are no longer shown as dead.</li>
+  <li><b>Re-test one workflow you know works</b>, such as a plain form with a success message, to be sure nothing now fails by mistake.</li>
+  <li>If it still fails to upload, send me the result. Problem B is then next, with a trace.</li>
+</ol>
+</section>
+
+<section id="words">
+<h2>13. Word list</h2>
+<dl>
+<dt>Workflow / skill</dt><dd>The recording turned into steps Conxa can replay.</dd>
+<dt>Check / witness</dt><dd>One piece of evidence about whether a step worked. A “witness” is a separate source of evidence.</dd>
+<dt>Proven</dt><dd>Enough good, separate checks agreed the step really worked.</dd>
+<dt>Couldn’t confirm</dt><dd>Not enough proof either way. The step is not counted as success.</dd>
+<dt>Background traffic</dt><dd>Small requests a web page sends on its own: analytics, auto-save, pings. They happen whether or not you did anything.</dd>
+<dt>Calibration</dt><dd>After a passing test, Conxa notes which checks really fire on this site and turns off those that never do.</dd>
+<dt>False success / false pass</dt><dd>A test says it worked when it did not.</dd>
+<dt>False failure</dt><dd>A test says it failed when the workflow was fine.</dd>
+<dt>Obfuscation</dt><dd>Scrambling code on purpose, to protect it when it ships to customers.</dd>
+<dt>Plan mode</dt><dd>A mode where I read and plan but change nothing until you approve.</dd>
+</dl>
+</section>
+
+<footer>Written from the chat of 13 November 2026. A copy is saved in <code>docs/artifacts/false-done-investigation.html</code>.</footer>
+</main>
+</div>

@@ -672,6 +672,98 @@ function countTextOccurrences(needle) {
   return count;
 }
 
+// (agent_span) Runs inside the page. Numbers every visible interactive element and marks it so the runtime can find
+// the very same element again. Passwords are never read; fields show at most a short current value.
+function gatherCandidates(limit) {
+  const SEL = 'a[href],button,input,select,textarea,[role="button"],[role="link"],[role="menuitem"],' +
+    '[role="tab"],[role="option"],[role="checkbox"],[role="radio"],[onclick]';
+  document.querySelectorAll("[data-conxa-span]").forEach((e) => e.removeAttribute("data-conxa-span"));
+  const out = [];
+  for (const el of document.querySelectorAll(SEL)) {
+    if (out.length >= limit) break;
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    if (!(r.width > 0 && r.height > 0) || st.visibility === "hidden" || st.display === "none") continue;
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute("type") || "").toLowerCase();
+    const role = el.getAttribute("role") ||
+      (tag === "a" ? "link" : tag === "button" ? "button" : tag === "select" ? "select" : tag === "textarea" ? "textbox" : type || "text");
+    const name = (el.getAttribute("aria-label") || el.innerText || el.value || el.getAttribute("placeholder") ||
+      el.getAttribute("title") || el.getAttribute("name") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    let host = "";
+    if (tag === "a") { try { host = new URL(el.href, location.href).host; } catch (_) { host = ""; } }
+    const field = tag === "input" || tag === "textarea" || tag === "select";
+    const i = out.length;
+    el.setAttribute("data-conxa-span", String(i));
+    out.push({
+      i, tag, role, type, name, host,
+      in_dialog: !!el.closest('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"]'),
+      disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true",
+      value: field && type !== "password" && type !== "file" ? String(el.value || "").slice(0, 40) : "",
+    });
+  }
+  return out;
+}
+
+// Runs inside the page. The visible text, for the read_text action.
+function visibleText(limit) {
+  return String((document.body && document.body.innerText) || "").replace(/\n{3,}/g, "\n\n").slice(0, limit);
+}
+
+// Runs inside the page. The label of whatever has keyboard focus, so Enter cannot press a button the click rule
+// would have refused.
+function focusedLabel() {
+  const el = document.activeElement;
+  if (!el || el === document.body) return "";
+  return String(el.getAttribute("aria-label") || el.innerText || el.value || el.getAttribute("title") || "")
+    .replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+// Page size as [width, height, devicePixelRatio].
+function viewportSize() {
+  return [window.innerWidth, window.innerHeight, window.devicePixelRatio];
+}
+
+// Where the page says the mouse arrived, as [x, y], or null. Resolves on the first mousemove.
+function firstMouseMove() {
+  return new Promise((resolve) => {
+    const done = (v) => { removeEventListener("mousemove", on, true); resolve(v); };
+    const on = (e) => done([e.clientX, e.clientY]);
+    addEventListener("mousemove", on, true);
+    setTimeout(() => done(null), 1500);
+  });
+}
+
+// A dismiss candidate's label and whether it sits in dialog chrome. Called via Locator.evaluate(el, dialogSel).
+function dismissLabelInfo(el, dialogSel) {
+  return {
+    label: (el.getAttribute("aria-label") || el.innerText || el.getAttribute("title") || "").trim().slice(0, 120),
+    inDialogChrome: !!el.closest(dialogSel),
+  };
+}
+
+function acceptsMultiple(el) {
+  return el.multiple === true;
+}
+
+function elementText(el) {
+  return (el.innerText || el.textContent || "").trim();
+}
+
+function clipboardWrite(text) {
+  return navigator.clipboard.writeText(text);
+}
+
+function clipboardRead() {
+  return navigator.clipboard.readText();
+}
+
+function seedLocalStorage(entries) {
+  for (const { name, value } of entries) {
+    try { window.localStorage.setItem(name, value); } catch (_) {}
+  }
+}
+
 module.exports = {
   countTextOccurrences,
   extractDescriptor,
@@ -698,4 +790,15 @@ module.exports = {
   originStorage,
   accountNameProbe,
   authDefinitionMarkersProbe,
+  gatherCandidates,
+  visibleText,
+  focusedLabel,
+  viewportSize,
+  firstMouseMove,
+  dismissLabelInfo,
+  acceptsMultiple,
+  elementText,
+  clipboardWrite,
+  clipboardRead,
+  seedLocalStorage,
 };

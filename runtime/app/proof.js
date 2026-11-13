@@ -29,7 +29,8 @@ const OUTCOMES = Object.freeze(["done", "submitted", "done_please_check", "partl
 const rungIndex = (r) => RUNGS.indexOf(r);
 
 /**
- * @param {Array<{rung:string, witness?:string, role?:"support"|"veto", answer:string, identity?:boolean, evidence?:string}>} checks
+ * @param {Array<{rung:string, witness?:string, role?:"support"|"veto", answer:string, identity?:boolean, evidence?:string,
+ *   observed?:boolean}>} checks  `observed`: the recording itself saw this result.
  * @param {{requiredRung?:string, quorum?:{witnesses?:number, identityRequired?:boolean}, blocked?:boolean,
  *   nothingHappened?:boolean, progressing?:boolean, items?:string[]}} [o]
  * @returns {{verdict:string, rung:string|null, reason?:string}} `rung` is the highest rung a supporting check proved.
@@ -51,7 +52,13 @@ function judge(checks, o = {}) {
     return { verdict: o.nothingHappened ? "failed_nothing_happened" : "failed_may_have_happened", rung, reason: veto.evidence };
   }
   // 3. Enough separate witnesses at (or above) the required rung. A higher rung proves the lower ones.
-  const counting = yes.filter((c) => rungIndex(c.rung) >= need);
+  //    The recording is the expected outcome: when every result it saw ("upload complete") is absent, the weaker
+  //    witnesses (a request was answered, the run ended quietly) no longer prove the work. Only a witness that
+  //    found the result itself (`result_exists`) can. "I couldn't tell" about those results is not absence.
+  const seen = support.filter((c) => c.observed);
+  const absent = seen.length > 0 && seen.every((c) => c.answer === "no");
+  const bar = absent ? Math.max(need, rungIndex("result_exists")) : need;
+  const counting = yes.filter((c) => rungIndex(c.rung) >= bar);
   const q = o.quorum || {};
   if (new Set(counting.map((c) => c.witness || "renderer")).size >= Math.max(1, q.witnesses || 1)
       && (!q.identityRequired || counting.some((c) => c.identity))) {

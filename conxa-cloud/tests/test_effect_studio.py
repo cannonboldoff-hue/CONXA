@@ -108,7 +108,8 @@ def test_a_clean_test_run_calibrates_by_the_documents_own_step_key():
     new, changed = calibrate_effects(doc, {key: {"c1": "yes", "c2": "yes", "c3": "no", "c4": "no"}})
     assert changed == 1
     eff = new["skills"][0]["steps"][0]["validation"]["effect"]
-    assert {c["id"]: c["calibrated"] for c in eff["checks"]} == {"c1": True, "c2": True, "c3": False, "c4": False, "c5": None}
+    # c3 is the recording's own words (only the author retires it); c4 is the fresh look, which never answered yes
+    assert {c["id"]: c["calibrated"] for c in eff["checks"]} == {"c1": True, "c2": True, "c3": None, "c4": False, "c5": None}
     assert eff["quorum"]["witnesses"] == 2
     # nothing known about a step, nothing changes
     same, none = calibrate_effects(doc, {"nope#1": {"c1": "yes"}})
@@ -123,9 +124,11 @@ def test_the_mixin_calibrates_a_stored_skill_and_never_raises(monkeypatch, tmp_p
 
     monkeypatch.setattr(js, "read_skill", lambda sid: copy.deepcopy(store["doc"]))
     monkeypatch.setattr(js, "write_skill", lambda sid, d: store.__setitem__("doc", d))
-    n = TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "no"}]}])
+    # a pass that rested on "the step ran" alone is not learned from
+    assert TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "no"}]}]) == 0
+    n = TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "yes"}, {"id": "c4", "answer": "no"}]}])
     assert n == 1
-    assert store["doc"]["skills"][0]["steps"][0]["validation"]["effect"]["checks"][1]["calibrated"] is False
+    assert store["doc"]["skills"][0]["steps"][0]["validation"]["effect"]["checks"][3]["calibrated"] is False
     assert TestFlowMixin._tf_calibrate("sk1", []) == 0
     monkeypatch.setattr(js, "read_skill", lambda sid: (_ for _ in ()).throw(RuntimeError("disk")))
     assert TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}]}]) == 0

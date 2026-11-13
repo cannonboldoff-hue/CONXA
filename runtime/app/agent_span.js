@@ -51,52 +51,9 @@ const SETTLE_MS = 400;
 const MARK = "data-conxa-span";
 const SECRETISH = /pass|secret|token|key|otp|cookie|auth|credential|pin\b/i;
 
-// Runs inside the page. Numbers every visible interactive element and marks it so the runtime can find
-// the very same element again. Passwords are never read; fields show at most a short current value.
-function gatherCandidates(limit) {
-  const SEL = 'a[href],button,input,select,textarea,[role="button"],[role="link"],[role="menuitem"],' +
-    '[role="tab"],[role="option"],[role="checkbox"],[role="radio"],[onclick]';
-  document.querySelectorAll("[data-conxa-span]").forEach((e) => e.removeAttribute("data-conxa-span"));
-  const out = [];
-  for (const el of document.querySelectorAll(SEL)) {
-    if (out.length >= limit) break;
-    const r = el.getBoundingClientRect();
-    const st = getComputedStyle(el);
-    if (!(r.width > 0 && r.height > 0) || st.visibility === "hidden" || st.display === "none") continue;
-    const tag = el.tagName.toLowerCase();
-    const type = (el.getAttribute("type") || "").toLowerCase();
-    const role = el.getAttribute("role") ||
-      (tag === "a" ? "link" : tag === "button" ? "button" : tag === "select" ? "select" : tag === "textarea" ? "textbox" : type || "text");
-    const name = (el.getAttribute("aria-label") || el.innerText || el.value || el.getAttribute("placeholder") ||
-      el.getAttribute("title") || el.getAttribute("name") || "").replace(/\s+/g, " ").trim().slice(0, 80);
-    let host = "";
-    if (tag === "a") { try { host = new URL(el.href, location.href).host; } catch (_) { host = ""; } }
-    const field = tag === "input" || tag === "textarea" || tag === "select";
-    const i = out.length;
-    el.setAttribute("data-conxa-span", String(i));
-    out.push({
-      i, tag, role, type, name, host,
-      in_dialog: !!el.closest('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"]'),
-      disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true",
-      value: field && type !== "password" && type !== "file" ? String(el.value || "").slice(0, 40) : "",
-    });
-  }
-  return out;
-}
-
-// Runs inside the page. The visible text, for the read_text action.
-function visibleText(limit) {
-  return String((document.body && document.body.innerText) || "").replace(/\n{3,}/g, "\n\n").slice(0, limit);
-}
-
-// Runs inside the page. The label of whatever has keyboard focus, so Enter cannot press a button the click rule
-// would have refused.
-function focusedLabel() {
-  const el = document.activeElement;
-  if (!el || el === document.body) return "";
-  return String(el.getAttribute("aria-label") || el.innerText || el.value || el.getAttribute("title") || "")
-    .replace(/\s+/g, " ").trim().slice(0, 80);
-}
+// The in-page functions this module runs (gatherCandidates, visibleText, focusedLabel) live in page_scripts.js:
+// they are re-parsed standalone in the page, so they must stay out of the string-obfuscated app modules.
+const { gatherCandidates, visibleText, focusedLabel } = pageScripts;
 
 function hostOf(page) {
   try { return new URL(page.url()).host; } catch (_) { return ""; }

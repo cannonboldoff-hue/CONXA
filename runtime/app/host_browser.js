@@ -30,6 +30,7 @@
 const httpClient = require("./http_client");
 const { hostRequire } = require("./host_bridge");
 const { evalOn } = require("./page_eval");
+const pageScripts = require("./page_scripts");
 const chromium = hostRequire("playwright").chromium;
 
 function endpoint() {
@@ -108,11 +109,7 @@ async function _seedStorageState(context, page, storageState) {
       await page.goto(o.origin, { waitUntil: "domcontentloaded", timeout: 15000 });
       // Routed through page_eval.js's evalOn (EXEC-34) rather than a bare page.evaluate() —
       // this is a CDP round-trip like any other and gets no timeout of its own.
-      await evalOn(page, (entries) => {
-        for (const { name, value } of entries) {
-          try { window.localStorage.setItem(name, value); } catch (_) {}
-        }
-      }, o.localStorage);
+      await evalOn(page, pageScripts.seedLocalStorage, o.localStorage);
     } catch (_) {
       // A single origin failing to seed (site down, blocked) must not fail the whole
       // run — cookies (the common case) are already in; this only loses that one

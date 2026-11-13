@@ -15,6 +15,7 @@
  */
 
 const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
+const pageScripts = require("./page_scripts");
 
 // The page width every run sees, and its default height, matching what the recorder starts at
 // (host_view.py's RECORD_VIEWPORT; a pytest keeps them equal). The WIDTH is the contract: layout
@@ -69,8 +70,6 @@ async function capture(page, { type = "jpeg", quality, timeout = 30000 } = {}) {
   }
 }
 
-const _measure = () => [window.innerWidth, window.innerHeight, window.devicePixelRatio];
-
 // A page that could not be measured (timed out, or answered with something else) is not a wrong-sized
 // page: the check is advisory then.
 const _unmeasured = (live) => live === EVAL_TIMED_OUT || !Array.isArray(live);
@@ -84,13 +83,6 @@ function _matches(live) {
   return Math.abs(live[0] - RUN_VIEWPORT.width) <= 1 && live[1] >= MIN_H;
 }
 
-// Where the page says the mouse arrived, as [x, y], or null. Resolves on the first mousemove.
-const _firstMove = () => new Promise((resolve) => {
-  const done = (v) => { removeEventListener("mousemove", on, true); resolve(v); };
-  const on = (e) => done([e.clientX, e.clientY]);
-  addEventListener("mousemove", on, true);
-  setTimeout(() => done(null), 1500);
-});
 const PROBE_POINT = { x: 97, y: 61 };
 
 // The invariant that actually matters: a point the runtime aims at is the point the page receives.
@@ -101,7 +93,7 @@ const PROBE_POINT = { x: 97, y: 61 };
 async function inputLands(page) {
   if (!page || !page.mouse || typeof page.mouse.move !== "function") return true;
   try {
-    const seen = evalOn(page, _firstMove, undefined, 3000);
+    const seen = evalOn(page, pageScripts.firstMouseMove, undefined, 3000);
     await page.mouse.move(PROBE_POINT.x, PROBE_POINT.y);
     const at = await seen;
     if (!Array.isArray(at)) return true;
@@ -121,7 +113,7 @@ async function checkGeometry(page, { hostOwned, hostRunId } = {}) {
   // created at its viewport by Playwright and nothing else resizes it.
   if (!hostOwned || !hostRunId) return { ok: true };
   const good = async (live) => (_unmeasured(live) || _matches(live)) && (await inputLands(page));
-  const first = await evalOn(page, _measure).catch(() => EVAL_TIMED_OUT);
+  const first = await evalOn(page, pageScripts.viewportSize).catch(() => EVAL_TIMED_OUT);
   if (await good(first)) return { ok: true };
   try {
     await require("./host_browser").ensureGeometry({ runId: hostRunId });
@@ -129,7 +121,7 @@ async function checkGeometry(page, { hostOwned, hostRunId } = {}) {
     // An older host answers HTTP 500 "unknown op"; a wedged one times out. Either way it cannot repair.
     return { ok: false, live: first, unsupported: true };
   }
-  const again = await evalOn(page, _measure).catch(() => EVAL_TIMED_OUT);
+  const again = await evalOn(page, pageScripts.viewportSize).catch(() => EVAL_TIMED_OUT);
   return (await good(again)) ? { ok: true } : { ok: false, live: again };
 }
 

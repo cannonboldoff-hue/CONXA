@@ -103,5 +103,7 @@ test("the fresh answer reaches the checklist, and without one the check cannot s
   assert.strictEqual(evaluateChecks(effect, { fresh: { answer: "yes" } })[0].answer, "yes");
   assert.strictEqual(evaluateChecks(effect, {})[0].answer, "cant_tell");
   effect.checks[0].calibrated = false;
-  assert.deepStrictEqual(evaluateChecks(effect, { fresh: { answer: "yes" } }), [], "a check shown to be dead no longer counts");
+  assert.strictEqual(evaluateChecks(effect, { fresh: { answer: "yes" } }).length, 1, "a bare dead mark (no proven run behind it) is ignored");
+  effect.checks[0].calibration_basis = ["c2"];
+  assert.deepStrictEqual(evaluateChecks(effect, { fresh: { answer: "yes" } }), [], "a check shown dead by a proven run no longer counts");
 });
