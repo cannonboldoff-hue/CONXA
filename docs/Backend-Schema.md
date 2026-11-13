@@ -69,7 +69,7 @@ Large or time-series data lives in flat files, not the KV store:
 | Skill screenshots | `data/sessions/{id}/screenshots/` | PNG |
 | Step thumbnails | `data/skills/{id}/assets/` | PNG |
 | Reviewer edit log | `data/skills/{id}/edits.jsonl` | JSONL (§3.10) |
-| Human Review Copilot failure evidence (BUILD-26) | `{CONXA_DATA_DIR}/runs/{run_id}/_evidence/{evidence.json, failure.jpg, pre_step.jpg?}` — the Studio test sandbox's own data dir, not `data/` above | JSON + JPEG |
+| Human Review Copilot failure evidence (BUILD-26) | `{CONXA_DATA_DIR}/runs/{run_id}/_evidence/{evidence.json, failure.jpg, pre_step.jpg?}` — the Studio test sandbox's own data dir, not `data/` above. `evidence.json.failure_kind` is `decision_needed` \| `couldnt_confirm` \| `fault:<kind>` \| `bad_input` \| `tab_not_found` \| `ambiguous` \| `entity_not_found` \| `frame_not_found` \| `not_found` \| `verify_fail` \| `other`; `left_open_surface` is `{title, buttons, blocks}` or null; `action_may_have_taken_effect` drives the test card's "nothing was saved or sent" line | JSON + JPEG |
 | Human Review Copilot observed overlays (BUILD-26 stage f) | `{CONXA_DATA_DIR}/runs/{run_id}/_evidence/overlays.jsonl` — written by `runtime/app/overlay_capture.js` on ANY run that intercepted a target, including one that recovered and passed (unlike `evidence.json` above, which is failure-only) | JSONL |
 | App maps (Studio only) | `data/app_graphs/{workspace}/{host}/contrib/{skill_id}.json` (one per workflow per host) and `graph.json` (their fold) — see §3.4l | JSON |
 | Published skill packs | `data/skill-packs/{co}/` | Directory tree |

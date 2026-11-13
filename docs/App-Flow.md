@@ -145,6 +145,8 @@ flowchart LR
     TR -- failed --> AF[Find the cause<br/>explains why, proposes one fix]
     AF -- you press Apply, or type your own fix --> TR
     AF -- no fix I am sure about --> E
+    TR -- stopped on purpose at a popup it has no answer for --> N[One card says so in plain words<br/>no guess, no model call]
+    N -- you tell Conxa in chat, or fix it in Human Edit --> E
     TR -- passed --> A[Approve<br/>never publishes]
     A --> P[Publish page]
 ```

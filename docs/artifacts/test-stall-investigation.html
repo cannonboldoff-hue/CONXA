@@ -1,0 +1,337 @@
+<title>Test Stall Investigation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column, figures break out to a wider measure; evidence first, opinions after. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15191f; --muted: #55606e; --line: #dde2e8;
+  --accent: #1f5fd6; --accent-soft: #e6eefc;
+  --bad: #b3341f; --bad-soft: #fbe9e5; --good: #17724a; --good-soft: #e3f4ec; --warn: #8a5a00; --warn-soft: #fbf1d9;
+  --code-bg: #eef1f5;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1318; --surface: #171c23; --fg: #e8ecf1; --muted: #9aa5b3; --line: #2a323c;
+  --accent: #7fa9ff; --accent-soft: #1a2640;
+  --bad: #ff8f7a; --bad-soft: #3a1d18; --good: #5fd39a; --good-soft: #14301f; --warn: #f0c060; --warn-soft: #34290f;
+  --code-bg: #1d242d; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --fg: #e8ecf1; --muted: #9aa5b3; --line: #2a323c;
+  --accent: #7fa9ff; --accent-soft: #1a2640;
+  --bad: #ff8f7a; --bad-soft: #3a1d18; --good: #5fd39a; --good-soft: #14301f; --warn: #f0c060; --warn-soft: #34290f;
+  --code-bg: #1d242d; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.65 var(--body); padding-block: 32px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.02em; }
+h2 { font-size: 26px; letter-spacing: -0.01em; padding-top: 8px; border-top: 1px solid var(--line); }
+h3 { font-size: 18px; }
+p { margin: 0; max-width: 68ch; }
+ul, ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 13px/1.55 var(--mono); }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 19px; color: var(--fg); max-width: 62ch; }
+.callout { border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+.callout.good { background: var(--good-soft); } .callout.bad { background: var(--bad-soft); }
+.callout.warn { background: var(--warn-soft); } .callout.info { background: var(--accent-soft); }
+.callout strong.t { font-family: var(--display); font-size: 15px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card h3 { font-size: 16px; }
+.tag { display: inline-block; font: 600 11px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; }
+.tag.good { background: var(--good-soft); color: var(--good); } .tag.bad { background: var(--bad-soft); color: var(--bad); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); } .tag.info { background: var(--accent-soft); color: var(--accent); }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+figure svg { width: 100%; height: auto; max-width: 100%; display: block; }
+figcaption { font-size: 14px; color: var(--muted); max-width: 70ch; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 12px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td.num { font-variant-numeric: tabular-nums; }
+.timeline { list-style: none; padding: 0; gap: 0; max-width: none; border-left: 2px solid var(--line); margin-left: 6px; }
+.timeline li { padding: 4px 0 18px 20px; position: relative; display: flex; flex-direction: column; gap: 4px; }
+.timeline li::before { content: ""; position: absolute; left: -7px; top: 9px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
+.timeline li.bad::before { border-color: var(--bad); } .timeline li.good::before { border-color: var(--good); }
+.timeline .when { font: 600 12px/1 var(--mono); color: var(--muted); }
+.principles { counter-reset: p; display: flex; flex-direction: column; gap: 14px; }
+.principle { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+.principle .row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; font-size: 15px; }
+.principle .row b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+@media (max-width: 520px) { .principle .row { grid-template-columns: 1fr; gap: 2px; } }
+svg text { font-family: var(--body); fill: var(--fg); }
+svg .m { fill: var(--muted); } svg .mono { font-family: var(--mono); background: none; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">Conxa Build Studio · test run investigation</span>
+  <h1>Why the Studio test froze for 210 seconds, and how to stop it happening again</h1>
+  <p class="lede">A workflow that recorded fine failed on its test, never tried the AI repair step, and then went silent until a timer killed it. This page explains what we found, in plain words, with the evidence, and then proposes fixes that do not depend on any one website.</p>
+</header>
+
+<section id="short">
+  <h2>The short answer</h2>
+  <div class="grid2">
+    <div class="card"><span class="tag bad">Cause 1 · the click misses</span>
+      <p>The Studio test window shrinks the website to fit a small panel. The robot that clicks does not know about the shrink. It aims at one spot and the click lands about 39% further down and to the right, on the wrong element.</p></div>
+    <div class="card"><span class="tag bad">Cause 2 · the long silence</span>
+      <p>After a missed click, the checker waited the full “page load” time (60 seconds) for a page change that could never happen. It did that for several checks in a row, so the 210-second run timer ran out before anything else could happen.</p></div>
+    <div class="card"><span class="tag warn">Why “Tier B” never ran</span>
+      <p>Studio tests are locked to repair levels 1 and 2 on purpose. Tier B (the AI helper) is only available when an AI agent runs the workflow for a customer. The Dry Run switch does not change this.</p></div>
+    <div class="card"><span class="tag info">What I changed</span>
+      <p>Test runs now shrink the page in a way that keeps clicks exact. The runtime now proves clicks land where aimed. Failure re-checks wait at most 3 seconds. All of this is in your working folder, not committed.</p></div>
+  </div>
+  <div class="callout warn">
+    <strong class="t">Where things stand right now</strong>
+    <p>In my live test the fixed build clicked correctly in a 1400×900 window that used to fail, and ran from step 1 to step 9. You tell me it is still failing for you. I have not seen your failing run, so I cannot yet say whether it is the same cause. <a href="#still">The section “If it is still failing”</a> lists the quickest ways to find out, starting with whether your copy is really running the new code.</p>
+  </div>
+</section>
+
+<section id="story">
+  <h2>What happened in this investigation</h2>
+  <ol class="timeline">
+    <li><span class="when">STEP 1</span><b>Found the recording and its test failure.</b><span>The workflow “Github to Drive Handoff” had 11 compiled steps. The test failed at step 3 (open a file from the list) after “exceeding the 210 s time budget”. The runtime log showed steps 1 and 2 passing, then nothing for four minutes.</span></li>
+    <li class="bad"><span class="when">STEP 2</span><b>Reproduced it in the real app.</b><span>I started Build Studio with the dev login bypass (<code>conxa.ps1</code>), drove it over its debug port, and re-ran the test with Dry Run off. Same freeze, every time.</span></li>
+    <li><span class="when">STEP 3</span><b>Ruled things out.</b><span>The same three steps passed in 25 seconds in a plain headless browser using the same runtime code. So the click logic is fine. The problem lives in how the Studio panel hosts the page. A stale runtime build (made before a recent fix) was a second suspect; rebuilding it did not change the result.</span></li>
+    <li class="bad"><span class="when">STEP 4</span><b>Replayed the failing step on the live panel page.</b><span>The click failed after 4.5 s with “intercepts pointer events”, then the checker (<code>verifyStep</code>) was still waiting when I stopped it at 60 s. That was the freeze.</span></li>
+    <li class="bad"><span class="when">STEP 5</span><b>Found why the click failed.</b><span>I told the browser to move the mouse to (600, 400). The page reported the mouse arriving at (832, 555). The offset changed when I resized the window, and became exactly 1.000 in a large window.</span></li>
+    <li class="good"><span class="when">STEP 6</span><b>Proved the cure by experiment, then changed code.</b><span>Shrinking with a different setting (device scale factor) gave an offset of exactly 1.000 while the page stayed 1280 wide. I changed the panel, the size check and the waits, added tests, rebuilt the runtime, and re-ran: steps 1 to 9 passed in a window that failed before.</span></li>
+    <li class="warn"><span class="when">NOW</span><b>You report it is still failing.</b><span>This page is the full record so you can dig in, and a checklist to find the remaining cause.</span></li>
+  </ol>
+</section>
+
+<section id="cause1">
+  <h2>Root cause 1: clicks land in the wrong place</h2>
+  <p>Think of the test window as a TV showing a 1280×720 website. If the TV is smaller than the picture, Studio shrinks the picture so it fits. When a <em>person</em> clicks on the shrunken picture, the browser works out the right spot. But the test robot does not click with a mouse. It sends the browser typed-in coordinates (“click at 122, 360”), and the browser takes those numbers literally as positions on the TV, not positions inside the shrunken picture.</p>
+  <figure>
+    <svg viewBox="0 0 720 300" role="img" aria-label="The robot aims at 122,360 in page coordinates but the click lands at 169,499 because the page is drawn smaller than the numbers assume.">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g color="var(--fg)">
+        <rect x="20" y="20" width="400" height="225" rx="6" fill="var(--code-bg)" stroke="var(--line)"/>
+        <text x="30" y="40" font-size="12" class="m">Real panel on screen</text>
+        <rect x="20" y="20" width="277" height="156" rx="3" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="30" y="196" font-size="12" fill="var(--accent)" style="fill:var(--accent)">The shrunken website (scale ≈ 0.72)</text>
+        <rect x="50" y="95" width="48" height="12" rx="2" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="53" y="105" font-size="9">the link</text>
+        <circle cx="74" cy="101" r="5" fill="var(--good)"/>
+        <rect x="140" y="95" width="130" height="12" rx="2" fill="var(--bad-soft)" stroke="var(--bad)" stroke-dasharray="3 3"/>
+        <text x="146" y="105" font-size="9">the wrong thing it hits</text>
+        <circle cx="205" cy="101" r="5" fill="var(--bad)"/>
+        <line x1="79" y1="101" x2="198" y2="101" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
+        <text x="100" y="86" font-size="11" class="m">lands ×1.39 too far</text>
+      </g>
+      <g>
+        <text x="450" y="46" font-size="13" font-weight="600">What each side believes</text>
+        <circle cx="462" cy="72" r="5" fill="var(--good)"/><text x="476" y="76" font-size="13">Robot aims at (122, 360)</text>
+        <circle cx="462" cy="100" r="5" fill="var(--bad)"/><text x="476" y="104" font-size="13">Page receives (169, 499)</text>
+        <text x="450" y="140" font-size="13" class="m">169 ÷ 122 = 1.386</text>
+        <text x="450" y="162" font-size="13" class="m">499 ÷ 360 = 1.386</text>
+        <text x="450" y="184" font-size="13" class="m">1 ÷ 1.386 = 0.72 = the shrink</text>
+        <text x="450" y="222" font-size="13" font-weight="600">Aimed at a 94 px wide link,</text>
+        <text x="450" y="242" font-size="13" font-weight="600">hit the empty cell next to it.</text>
+      </g>
+    </svg>
+    <figcaption>Everything the robot does with the mouse (click, hover, drag, scroll wheel) is displaced the same way. The further from the top-left corner, the bigger the miss. That is why some steps succeeded by luck and others never did.</figcaption>
+  </figure>
+
+  <h3>The proof: the miss follows the window size</h3>
+  <p>I sent the same mouse position while changing only the size of the Studio window. The miss grew and shrank with the window and vanished when the panel was big enough that no shrinking was needed.</p>
+  <figure>
+    <svg viewBox="0 0 720 250" role="img" aria-label="Bar chart of click offset factor by window size: 2300 by 1300 is 1.000, 1920 by 1080 is 1.118, the default window is 1.387, and 1400 by 900 is 1.557. A perfect click is 1.0.">
+      <g font-size="13">
+        <text x="0" y="34">2300 × 1300</text><rect x="170" y="18" width="268" height="24" rx="3" fill="var(--good)"/><text x="446" y="35" class="mono" font-size="13">1.000 · exact</text>
+        <text x="0" y="84">1920 × 1080</text><rect x="170" y="68" width="300" height="24" rx="3" fill="var(--accent)"/><text x="478" y="85" class="mono" font-size="13">1.118</text>
+        <text x="0" y="134">Studio default</text><rect x="170" y="118" width="372" height="24" rx="3" fill="var(--accent)"/><text x="550" y="135" class="mono" font-size="13">1.387</text>
+        <text x="0" y="184">1400 × 900</text><rect x="170" y="168" width="417" height="24" rx="3" fill="var(--bad)"/><text x="595" y="185" class="mono" font-size="13">1.557</text>
+        <line x1="438" y1="8" x2="438" y2="204" stroke="var(--muted)" stroke-dasharray="4 4"/>
+        <text x="438" y="224" text-anchor="middle" class="m" font-size="12">1.0 = the click lands exactly where aimed</text>
+      </g>
+    </svg>
+    <figcaption>Measured on the live test panel. Each bar is “where the page received the mouse ÷ where the robot sent it”. The “Studio default” row is the window size at the start of the investigation and my reading, not a size I set.</figcaption>
+  </figure>
+
+  <div class="callout info">
+    <strong class="t">Why it “worked yesterday”</strong>
+    <p>This is my inference, not something I measured on the old runs. A big enough window means no shrinking, which means no miss. Earlier successful runs most likely had a larger panel. A recent layout change (more side panels in Studio) makes the panel smaller, so the same workflow now fails. The workflow did not break. The panel got smaller.</p>
+  </div>
+
+  <h3>Why the safety check missed it</h3>
+  <p>The runtime has a check called <code>checkGeometry</code> that runs before each step. It asked the page “how big are you?” and the page truthfully said “1280 by 720”. That was correct and still useless, because the page was drawn smaller and the click numbers were never converted. The check measured what the page <em>believes</em>, not whether a click <em>lands</em>.</p>
+</section>
+
+<section id="cause2">
+  <h2>Root cause 2: the long silence after a miss</h2>
+  <p>A missed click should fail in a few seconds and say so. Instead, nothing was reported for four minutes. After the click timed out (4.5 s), the runtime asked “did it work anyway?” by running the step’s checks. One of them is “the web address changed” and it comes with a floor of 60 seconds, because normal page loads can be slow. The address could never change (nothing was clicked), so it waited the full 60 seconds. A second, optional check about the address waited another 60.</p>
+  <figure>
+    <svg viewBox="0 0 720 210" role="img" aria-label="Time spent re-checking after a missed click: before the fix two checks take about 240 seconds, past the 210 second run limit; after the fix they take about 12 seconds.">
+      <g font-size="13">
+        <text x="0" y="40">Before the fix</text>
+        <rect x="150" y="24" width="190" height="26" rx="3" fill="var(--bad)"/><text x="245" y="42" text-anchor="middle" style="fill:#fff" font-size="12">check 1 · 120 s</text>
+        <rect x="342" y="24" width="190" height="26" rx="3" fill="var(--bad)" opacity=".75"/><text x="437" y="42" text-anchor="middle" style="fill:#fff" font-size="12">check 2 · 120 s</text>
+        <text x="0" y="104">After the fix</text>
+        <rect x="150" y="88" width="9.5" height="26" rx="2" fill="var(--good)"/>
+        <text x="168" y="106" class="mono" font-size="12">≈ 6 s each, 2 checks ≈ 12 s</text>
+        <line x1="150" y1="10" x2="150" y2="150" stroke="var(--muted)"/>
+        <line x1="486" y1="10" x2="486" y2="150" stroke="var(--bad)" stroke-dasharray="5 4"/>
+        <text x="486" y="168" text-anchor="middle" font-size="12" style="fill:var(--bad)">run timer ends at 210 s: everything stops</text>
+        <text x="150" y="168" class="m" font-size="12">0 s</text>
+      </g>
+    </svg>
+    <figcaption>Scale: 1 px ≈ 0.63 s. “120 s per check” is arithmetic from the code (60 s + 60 s). My direct measurement was that the check was still waiting when I cut it off at 60 s.</figcaption>
+  </figure>
+  <p>The same check was repeated before and after every repair attempt, so there was never time to reach the later repair steps. The run timer then cancelled everything and the screen said the page “never reached the expected state… inputs don’t match what the site returned”. That message is wrong. It hid the real first error, “click intercepted”.</p>
+</section>
+
+<section id="tierb">
+  <h2>Why Tier B (AI repair) never started</h2>
+  <ul>
+    <li><b>It is switched off in Studio tests on purpose.</b> Studio sets the repair ceiling to level 2 (<code>runtime_tool.py</code> line 319, <code>CONXA_MAX_RECOVERY_TIER=2</code>). The reason in the code: a test should judge the compiled workflow on its own merits.</li>
+    <li><b>Tier B is not a function the runtime calls.</b> It is a hand-over to the AI agent that is driving the workflow for the customer. In a Studio test there is no such agent.</li>
+    <li><b>Dry Run is unrelated.</b> It controls whether AI credits can be spent, not which repair levels exist.</li>
+    <li><b>Even if it were on, it would have starved.</b> Tier B only begins after levels 1 and 2 give up. Those never gave up, because of cause 2.</li>
+  </ul>
+</section>
+
+<section id="changes">
+  <h2>What I changed</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>File</th><th>Change</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>conxa-builder/electron/browser_panel.js</code></td><td>Test and execute runs shrink the page with the device scale factor. Recording runs keep the old <code>scale</code>.</td><td>Keeps clicks exact. A person’s mouse (recording) is mapped correctly by the old way.</td></tr>
+      <tr><td><code>runtime/app/page_geometry.js</code></td><td><code>checkGeometry</code> now also moves the mouse to a known point and checks the page received that point. The “DPR must be 1” rule became “DPR must not be above 1”.</td><td>Tests the thing that matters (clicks land), whatever the cause.</td></tr>
+      <tr><td><code>runtime/app/assertions.js</code>, <code>run_config.js</code>, <code>run.js</code>, <code>cascade.js</code></td><td>Optional checks never get the 60 s floor. Re-checks after a failure wait at most 3 s (<code>CONXA_RECHECK_CAP_MS</code>).</td><td>A failed step fails in seconds, not minutes.</td></tr>
+      <tr><td><code>run.js</code> message</td><td>The page-size error now says clicks could land in the wrong place.</td><td>Honest wording.</td></tr>
+      <tr><td>Tests</td><td>New tests for the calibration, the shrunk-pane case, the click-offset repair and the capped waits. 78 related tests pass.</td><td>Keeps the behaviour from drifting back.</td></tr>
+    </tbody></table></div>
+  <p><b>Live evidence after the change:</b> in the 1400×900 window that failed before, the test ran steps 1 to 9 in about 28 seconds, past the click that used to freeze. I stopped it before the Google Drive upload.</p>
+</section>
+
+<section id="still">
+  <h2>If it is still failing: how to find out why</h2>
+  <p>A fix that works in one run can still fail on another machine state. These are ordered from most to least likely. Each one takes under a minute.</p>
+  <ol>
+    <li><b>Is the test running the new code?</b> The Studio test uses a copy of the runtime that is rebuilt by hand. Check that the build is newer than your last edit: <pre>type "%USERPROFILE%\.conxa-build-studio-dev\sandbox\.conxa\version.json"</pre> The <code>app_version</code> stamp (for example <code>app-v0.0.0-local.20261111230746</code>) must be later than the time of my edits. If not, run <code>scripts\build-app-local.ps1</code>.</li>
+    <li><b>Was Studio restarted after the panel change?</b> <code>browser_panel.js</code> belongs to the Electron app, not the runtime. It only loads when the app starts. Close every Studio window and start again with <code>scripts\conxa.ps1 dev studio</code>.</li>
+    <li><b>Is it the same failure?</b> Look at the last lines of <code>%USERPROFILE%\.conxa-build-studio-dev\sandbox\data\logs\runtime.log</code>. The old problem logged <code>step_N_click_start</code> and then nothing until <code>execution_deadline_exceeded</code>. A different failure will show a different last line. Send me those 40 lines.</li>
+    <li><b>Is it a different recording?</b> The Studio window I saw late in the session was a newer 12-step version (slug <code>github-to-drive-handoff-ae9b464d</code>, “Lean.gitignore”), not the 11-step one I first investigated. A new recording can fail at a different step for a different reason.</li>
+    <li><b>Is the window very small?</b> Between a certain size, the panel may be below the minimum height the runtime accepts (480 px). The runtime now stops with the message above instead of clicking wrongly.</li>
+    <li><b>Is it the Drive step?</b> In my large-window run, step 11 (the Drive upload) paused for the “can’t be undone” guard and then reported “couldn’t confirm the upload finished”. That is a separate behaviour from the freeze and is not fixed by anything above.</li>
+  </ol>
+  <div class="callout bad">
+    <strong class="t">Things I did not verify</strong>
+    <p>I did not run the complete workflow to the end after the fix. I did not test the Conxa Execute app, which has its own browser panel. I did not test other zoom levels or a second monitor. Sites that read the device pixel ratio now see a value below 1 in a narrow panel; I expect that to be harmless but I did not test it.</p>
+  </div>
+</section>
+
+<section id="design">
+  <h2>The general fixes (from first principles)</h2>
+  <p>The two bugs are different, but they share a shape: <b>the system trusted a number that something else was supposed to keep true, and when it was not true, nobody noticed for minutes.</b> Fixing only the clicks would leave the silence. Fixing only the silence would leave wrong clicks that fail quickly instead. These principles apply to every workflow on every site.</p>
+
+  <div class="principles">
+    <div class="principle"><h3>1. Test the invariant you actually need, at the place where it matters</h3>
+      <div class="row"><b>Problem</b><span>The guard checked “the page says it is 1280×720”. What we need is “a click I send lands where I aimed”.</span></div>
+      <div class="row"><b>Principle</b><span>Every guard should measure the end result a step depends on, not a nearby number that usually goes with it.</span></div>
+      <div class="row"><b>Do</b><span>Keep the click-calibration probe. Add the same style of probe for the other things a step relies on: scroll lands where asked, keyboard focus goes to the page, the screenshot matches the viewport. Run them once when a run starts and after any window or layout change.</span></div></div>
+
+    <div class="principle"><h3>2. One owner for the coordinate space, and no second way to scale</h3>
+      <div class="row"><b>Problem</b><span>Two parties each thought they owned “size”: the panel (shrink with <code>scale</code>) and Playwright (sends raw numbers). Neither knew the other’s assumption.</span></div>
+      <div class="row"><b>Principle</b><span>Shrinking the display must never change what the page believes about its own size or where input lands. Pick one transform, keep it in one file, and prove it with a test per kind of run.</span></div>
+      <div class="row"><b>Do</b><span>Long term, stop shrinking at all for runs driven by the runtime: run the page at true size in a hidden or separate window and show a live picture of it in the panel. Then the page, the clicks and the screenshots always share one space, and the panel size becomes a pure display choice.</span></div></div>
+
+    <div class="principle"><h3>3. Every step owns a time budget, and everything inside it shares one clock</h3>
+      <div class="row"><b>Problem</b><span>Act, settle, verify, repair stages and re-checks each had their own timeout. Added together, one failed step cost minutes. Only a run-wide timer stopped it.</span></div>
+      <div class="row"><b>Principle</b><span>The step is the unit of failure. Give it a deadline, hand out slices of it (act, check, repair), and when it runs out, fail <em>the step</em> with its first real cause.</span></div>
+      <div class="row"><b>Do</b><span>Introduce a step budget object passed to settle, verify and recovery. Waits read “time left in the step” instead of fixed constants. Reserve a slice for each repair tier so a slow early stage can never starve a later one (including Tier B where it exists). Advisory checks run in parallel and never block.</span></div></div>
+
+    <div class="principle"><h3>4. Report the first real error, not the last symptom</h3>
+      <div class="row"><b>Problem</b><span>The screen said “inputs don’t match”. The real first error (click intercepted) was recorded and then lost when the run timer fired.</span></div>
+      <div class="row"><b>Principle</b><span>A failure message is built from the earliest failure on that step plus what was tried after it.</span></div>
+      <div class="row"><b>Do</b><span>Store the step’s first error on the run state. When a timeout or cancel ends the run, the summary uses it and lists the repair stages that were attempted, in everyday words.</span></div></div>
+
+    <div class="principle"><h3>5. No silent states</h3>
+      <div class="row"><b>Problem</b><span>For four minutes the log said nothing. A hang and a slow-but-working run looked identical.</span></div>
+      <div class="row"><b>Principle</b><span>Anything that can wait must say what it is waiting for and for how long.</span></div>
+      <div class="row"><b>Do</b><span>Emit an event at the start of each stage (“checking the page”, “trying repair 2 of 4”) with its budget. Show it in the test card. Add a watchdog: if a step has produced no event for 20 seconds, say so.</span></div></div>
+
+    <div class="principle"><h3>6. Do not trust “did the action run?” flags that over-report</h3>
+      <div class="row"><b>Problem</b><span>A click that timed out before being sent was marked “may have acted”, so extra safety checks ran as if something might have happened.</span></div>
+      <div class="row"><b>Principle</b><span>Record what is known: “never dispatched” (intercepted, not visible, detached) is different from “dispatched, result unknown”.</span></div>
+      <div class="row"><b>Do</b><span>Split the flag in two. “Never dispatched” skips the long outcome checks and goes straight to repair. This also makes repeating a click safer, because we know it never went out.</span></div></div>
+
+    <div class="principle"><h3>7. Test builds must be provably current</h3>
+      <div class="row"><b>Problem</b><span>The Studio test ran a hand-built copy of the runtime that was older than two fix commits, with no warning.</span></div>
+      <div class="row"><b>Principle</b><span>A test of the code should refuse to run on code that is not the code.</span></div>
+      <div class="row"><b>Do</b><span>Stamp each build with the hash of the source files. At the start of a test, compare it to the current source and either rebuild or show “this test is using an older runtime”. In the dev lane, load the plain source instead of the obfuscated build.</span></div></div>
+
+    <div class="principle"><h3>8. A permanent contract test for the test panel itself</h3>
+      <div class="row"><b>Problem</b><span>The unit tests used fake pages, so they could not see a real window shrinking.</span></div>
+      <div class="row"><b>Principle</b><span>The most basic promise (“a click lands where aimed”) should be tested on the real panel at several window sizes.</span></div>
+      <div class="row"><b>Do</b><span>Keep the probe scripts from this investigation (they live in the session scratchpad) as one automated check: launch Studio, open a test page at 3 window sizes, assert the offset factor is 1.000 each time. Run it in CI or before release.</span></div></div>
+  </div>
+
+  <h3>The proposed shape of a step</h3>
+  <figure>
+    <svg viewBox="0 0 720 300" role="img" aria-label="A step budget nested inside the run deadline: act, settle, verify and repair tiers each get a slice, share one clock, and emit events.">
+      <g font-size="13">
+        <rect x="10" y="10" width="700" height="280" rx="8" fill="none" stroke="var(--muted)" stroke-dasharray="6 4"/>
+        <text x="24" y="32" class="m" font-weight="600">Run deadline (protects the caller)  ·  210 s</text>
+        <rect x="30" y="48" width="660" height="224" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="44" y="72" font-weight="600" style="fill:var(--accent)">Step budget  ·  one clock, one owner, first error remembered</text>
+        <g>
+          <rect x="46" y="90" width="110" height="64" rx="5" fill="var(--code-bg)"/><text x="101" y="116" text-anchor="middle" font-weight="600">Act</text><text x="101" y="136" text-anchor="middle" class="m" font-size="11">click, type</text>
+          <rect x="166" y="90" width="110" height="64" rx="5" fill="var(--code-bg)"/><text x="221" y="116" text-anchor="middle" font-weight="600">Settle</text><text x="221" y="136" text-anchor="middle" class="m" font-size="11">page stops moving</text>
+          <rect x="286" y="90" width="130" height="64" rx="5" fill="var(--code-bg)"/><text x="351" y="116" text-anchor="middle" font-weight="600">Verify</text><text x="351" y="136" text-anchor="middle" class="m" font-size="11">required only blocks</text>
+          <rect x="426" y="90" width="250" height="64" rx="5" fill="var(--code-bg)"/><text x="551" y="116" text-anchor="middle" font-weight="600">Repair tiers</text>
+          <rect x="436" y="124" width="70" height="22" rx="3" fill="var(--good-soft)"/><text x="471" y="139" text-anchor="middle" font-size="11">Tier A1</text>
+          <rect x="511" y="124" width="70" height="22" rx="3" fill="var(--good-soft)"/><text x="546" y="139" text-anchor="middle" font-size="11">Tier A2</text>
+          <rect x="586" y="124" width="80" height="22" rx="3" fill="var(--warn-soft)"/><text x="626" y="139" text-anchor="middle" font-size="11">Tier B*</text>
+        </g>
+        <text x="46" y="184" font-size="12" class="m">Each tier gets a reserved slice, so a slow early stage cannot starve a later one.</text>
+        <line x1="46" y1="200" x2="676" y2="200" stroke="var(--muted)"/>
+        <text x="46" y="222" font-size="12" font-weight="600">Every box emits:</text>
+        <text x="150" y="222" font-size="12" class="m">“what I am doing · time left in this step · why I stopped”</text>
+        <text x="46" y="248" font-size="12" font-weight="600">When time runs out:</text>
+        <text x="178" y="248" font-size="12" class="m">fail this step, show its first real error, list what was tried</text>
+        <text x="46" y="266" font-size="11" class="m">* Tier B exists only when an AI agent runs the workflow, never in a Studio test.</text>
+      </g>
+    </svg>
+    <figcaption>Today the boxes run one after another with their own private timers, and the only shared clock is the outer dashed line, which cancels the whole run.</figcaption>
+  </figure>
+</section>
+
+<section id="facts">
+  <h2>Evidence you can check yourself</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Claim</th><th>Where to look</th></tr></thead>
+    <tbody>
+      <tr><td>Studio caps repair at tier 2</td><td><code>conxa-builder/python/conxa_compile/runtime_tool.py:319</code>, <code>runtime/app/server.js:57-63</code></td></tr>
+      <tr><td>The run timer is 210 s</td><td><code>runtime/app/server.js:92</code> (<code>EXECUTION_DEADLINE_MS</code>)</td></tr>
+      <tr><td>URL checks get a 60 s floor</td><td><code>runtime/app/assertions.js</code> <code>assertionTimeout</code>, <code>runtime/app/run_config.js:17</code></td></tr>
+      <tr><td>Panel shrinks with <code>scale</code></td><td><code>conxa-builder/electron/browser_panel.js</code> <code>_emulate</code>, <code>setActiveBounds</code></td></tr>
+      <tr><td>The old size check read only the page’s own numbers</td><td><code>runtime/app/page_geometry.js</code> <code>checkGeometry</code></td></tr>
+      <tr><td>The failing run’s signature</td><td><code>%USERPROFILE%\.conxa-build-studio-dev\sandbox\data\logs\runtime.log</code>: <code>step_2_click_start</code>, then <code>execution_deadline_exceeded</code></td></tr>
+      <tr><td>The run’s own telemetry</td><td><code>…\.conxa-build-studio-dev\data\kv\tracking\wrk_local\*.json</code>: steps 1 and 2 pass, then one <code>settle_retry</code> and no more events</td></tr>
+      <tr><td>Test build was older than the fixes</td><td><code>…\sandbox\.conxa\version.json</code> versus <code>git log</code> dates</td></tr>
+    </tbody></table></div>
+
+  <div class="callout info">
+    <strong class="t">Side effects of the investigation you should know about</strong>
+    <ul>
+      <li>Because Dry Run was off, one test run reached the Google Drive upload step. It reported it could not confirm the upload finished. Please check your Drive for a stray <code>Grails.gitignore</code> file.</li>
+      <li>I rebuilt the dev runtime copy twice (<code>deps\conxa-app</code>), which replaces the older version there.</li>
+      <li>The Studio window was resized for experiments. Scratch probe scripts are in the session scratchpad folder, not in your project.</li>
+      <li>Nothing is committed. The changed files are in your working tree on branch <code>feat/clarify-phase-0</code>.</li>
+    </ul>
+  </div>
+</section>
+</main>

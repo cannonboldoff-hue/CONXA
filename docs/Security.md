@@ -42,6 +42,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-17](#sg-17-starter-external-distribution-is-detectable-not-blocked) | Starter external distribution is detectable, not blocked | Distribution | Low (by design) | `app/api/publish_routes.py` |
 | [SG-18](#sg-18-seat-limit-not-enforced) | Seat limit not enforced — team invites bypass the backend entirely | Cloud API | Low ✅ Fixed | `app/services/entitlements.py`, `app/api/deps.py` |
 | [SG-19](#sg-19-one-signing-key-now-covers-two-artifacts-no-rotation) | One Ed25519 signing key now covers two artifacts, no key rotation | Cloud API / Runtime | Low | `app/api/manifest_signer.py`, `runtime/app/manifest_manager.js`, `runtime/app/policy_gate.js` |
+| [SG-25](#sg-25-the-recording-persons-account-text-in-a-shipped-package) | The recording person's account name/email can end up in a shipped package | Studio compiler | Medium (mitigated) | `conxa_compile/compiler/selector_filters.py`, `conxa_compile/compiler/build.py`, `conxa_compile/skill_package_builder.py` |
 | [SG-23](#sg-23-an-unrecorded-popup-can-be-answered-by-the-mcp-client) | An unrecorded question popup can be answered by the MCP client | Runtime | Low (mitigated) | `runtime/app/run.js`, `runtime/app/fork.js`, `runtime/app/fork_pause.js` |
 | [SG-24](#sg-24-an-agent-span-can-go-anywhere-with-the-signed-in-browser) | An agent span can go to any site with the signed-in browser | Runtime | Medium | `runtime/app/agent_span.js` |
 | [SG-22](#sg-22-clipboard-steps-and-the-data-an-agent-span-is-shown) | Clipboard steps and the data an agent span is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/agent_span.js` |
@@ -768,6 +769,14 @@ Let the author mark words irreversible for an app (in the app map's policy page)
 in the run report so the owner sees them without reading the log.
 
 ---
+
+## SG-25 — The Recording Person's Account Text In A Shipped Package
+
+**Found 2026-11-13.** A hidden file input on Google Drive was recorded with `label_text` = the account chip ("Google Account", a name and an email). That text became a fallback selector (`label:has-text("…@…") + input`), a fingerprint field and a signal in the compiled skill, which is shipped to customers.
+
+**Fix.** `selector_filters.py::drop_personal_target_text` runs once at the start of `build.py::prepare_compile_events` and blanks any target text (`label_text`, `aria_label`, `inner_text`, `name`, `title`, `placeholder`, `text`) that contains an email address, and any `label_text` over 60 characters (a label that long wrapped several elements). Nothing built later can carry what is not there. `skill_package_builder.py::_assert_no_account_text` stops a build whose saved skill still has an email in `target`, `identity_bundle`, `signals` or `compiled_selectors` (a workflow compiled before the fix) and tells the person to compile again.
+
+**Residual.** A name without an email is not detected; only the length cap guards that. Typed values are not scanned.
 
 ## Cross-Reference: TRD §17 (Known Gaps & Tech Debt)
 
