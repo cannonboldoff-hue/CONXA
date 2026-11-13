@@ -1076,6 +1076,7 @@ class WorkflowsMixin:
             _bootstrap_app_dir,
             ensure_chromium_installed,
             ensure_test_sandbox,
+            stale_app_layer_files,
             resolve_runtime_dir,
             sync_skill_pack,
         )
@@ -1207,6 +1208,12 @@ class WorkflowsMixin:
             _mark("Preparing test sandbox…")
             app_dir = _bootstrap_app_dir()
             conxa_dir, test_data_dir = ensure_test_sandbox(runtime_dir, app_dir)
+            stale = stale_app_layer_files(conxa_dir)
+            if stale:
+                # Dev only. The test would run an older engine than the code on this computer, and a pass or fail
+                # would say nothing about the latest edits.
+                _mark(f"This test runs an older copy of the test engine than your code ({', '.join(stale[:4])}"
+                      f"{' …' if len(stale) > 4 else ''}). Run scripts\\build-app-local.ps1 to test your latest changes.")
 
             with _test_run_lock:
                 _active_test_runs[workflow_id] = {

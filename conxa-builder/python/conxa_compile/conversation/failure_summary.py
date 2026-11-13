@@ -34,20 +34,40 @@ _BY_KIND = {
     "entity_not_found": "The item this step works on wasn’t found on the page.",
     "frame_not_found": "The embedded section holding this element couldn’t be found. The page may have changed.",
     "verify_fail": "The step ran, but the page didn’t end up where it should have.",
+    # Deliberate stops: the run saw something it was never told how to handle and stopped on purpose.
+    "decision_needed": "A popup showed up that asks a question this workflow has no answer for, so the test stopped instead of guessing.",
+    "left_open_unclassified": "A panel was still open at the end and the test couldn’t tell whether it is just news or a question.",
+    "couldnt_confirm": "The step ran, but nothing on the page confirmed it finished, so the test stopped instead of reporting success. Check it before running it again.",
+    "bad_input": "One of the values given for this test isn’t one this step can use.",
+    "tab_not_found": "The browser tab this step needs wasn’t open.",
 }
+# The kinds whose cause is already known exactly: the kind decides the sentence, not a word in the message.
+_KIND_FIRST = frozenset({"decision_needed", "couldnt_confirm", "left_open_unclassified", "bad_input", "tab_not_found"})
 
 _SMALL_WINDOW = re.compile(r"recorded at \d+\s*[x×]\s*\d+; this browser is \d+\s*[x×]\s*\d+", re.I)
 _GENERIC = "Something went wrong at this step."
 
 
+def _after_failed_prefix(text: str) -> str:
+    """The sentence after "Step N (type) failed: ", cut before a technical bracket."""
+    m = re.search(r"\bfailed:\s*(.+?)(?:\s*\(|\n|$)", text)
+    return m.group(1).strip()[:300] if m else ""
+
+
 def summarize(message: str, failure_kind: str | None = None) -> str:
     """One plain sentence. Never returns the raw text; unmatched errors get a generic line."""
     text = message or ""
-    for pattern, sentence in _PATTERNS:
-        if pattern.search(text):
-            break
+    if failure_kind in _KIND_FIRST:
+        sentence = _BY_KIND[failure_kind]
+    elif (failure_kind or "").startswith("fault:"):
+        # The app's own refusal. The runtime wrote a plain sentence for it ("This step didn't finish: ..."): keep it.
+        sentence = _after_failed_prefix(text) or "The app reported a problem, so the test stopped."
     else:
-        sentence = _BY_KIND.get(failure_kind or "", _GENERIC)
+        for pattern, sentence in _PATTERNS:
+            if pattern.search(text):
+                break
+        else:
+            sentence = _BY_KIND.get(failure_kind or "", _GENERIC)
     if _SMALL_WINDOW.search(text):
         sentence += " The test window is smaller than when you recorded, so some buttons may be hidden."
     return sentence

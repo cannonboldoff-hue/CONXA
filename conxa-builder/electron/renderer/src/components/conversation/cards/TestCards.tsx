@@ -485,6 +485,15 @@ export function AutofixCard({ threadId, item }: CardProps) {
       </CardShell>
     )
   }
+  if (state === 'needs_answer') {
+    // The test stopped on purpose at something it was never told how to handle. The cause is already known, so there
+    // is no "try again" here: the person tells Conxa in the chat, or fixes it by hand.
+    return (
+      <CardShell glyph="warn" title="This needs your answer" footer={editByHand}>
+        {item.reason ? String(item.reason) : 'Tell me in the chat how this should be handled.'}
+      </CardShell>
+    )
+  }
   if (state === 'interrupted') {
     return <CardShell glyph="warn" title="Looking for the cause was interrupted" meta="Studio was closed or restarted" footer={retry}>Nothing was changed.</CardShell>
   }

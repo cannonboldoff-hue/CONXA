@@ -350,6 +350,36 @@ def ensure_test_sandbox(
     return conxa_dir, data_dir
 
 
+def stale_app_layer_files(conxa_dir: Path) -> list[str]:
+    """Dev only: the app-layer files edited in this repo's runtime/app/ AFTER the staged app layer was built.
+
+    The sandbox is re-staged only when the version LABEL changes, so a source edit made after the last
+    scripts/build-app-local.ps1 run is silently not what a Studio test executes. The staged files are minified, so
+    they cannot be compared byte for byte; an edit newer than the build is the signal.
+    [] when the source tree is not here (an installed Studio) or nothing is newer."""
+    try:
+        repo = next((p for p in Path(__file__).resolve().parents if (p / "runtime" / "app-layer-files.json").is_file()), None)
+        if repo is None:
+            return []
+        staged = conxa_dir / "conxa-app" / "current"
+        if not (staged / "server.js").is_file():  # `current` is a link; where it cannot be followed, use the newest version folder
+            versions = sorted((d for d in (conxa_dir / "conxa-app").glob("app-*") if (d / "server.js").is_file()), key=lambda d: d.stat().st_mtime)
+            if not versions:
+                return []
+            staged = versions[-1]
+        names = [f["name"] for f in json.loads((repo / "runtime" / "app-layer-files.json").read_text(encoding="utf-8")).get("files", [])
+                 if isinstance(f, dict) and isinstance(f.get("name"), str)]
+        built_at = (staged / "server.js").stat().st_mtime
+        out = []
+        for name in names:
+            src = repo / "runtime" / "app" / name
+            if src.is_file() and src.stat().st_mtime > built_at + 2:  # 2 s: a build copies files a moment apart
+                out.append(name)
+        return out
+    except Exception:  # noqa: BLE001 -- advisory only
+        return []
+
+
 def resolve_runtime_dir() -> Path | None:
     """Find a runnable Conxa runtime directory (packed exe).
 

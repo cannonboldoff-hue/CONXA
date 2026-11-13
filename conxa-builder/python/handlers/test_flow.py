@@ -46,6 +46,35 @@ def _humanize(intent: str) -> str:
     return (text[:1].upper() + text[1:]) if text else "A step"
 
 
+_DELIBERATE_KINDS = frozenset({"decision_needed", "left_open_unclassified", "couldnt_confirm", "bad_input", "tab_not_found"})
+
+
+def _is_deliberate_stop(kind: str | None) -> bool:
+    return bool(kind) and (kind in _DELIBERATE_KINDS or str(kind).startswith("fault:"))
+
+
+def _deliberate_stop_message(facts: dict[str, Any]) -> str:
+    """One plain message for a stop the runtime chose on purpose, from the recorded kind, surface and the runtime's
+    own sentence. Only a popup the workflow has no answer for ends by asking the person what should happen."""
+    from conxa_compile.conversation.failure_summary import summarize
+
+    kind = str(facts.get("kind") or "")
+    surface = facts.get("surface") or {}
+    title = str(surface.get("title") or "").strip()
+    buttons = [str(b) for b in (surface.get("buttons") or []) if b][:4]
+    if kind == "decision_needed" and title:
+        shown = f"“{title}”" + (f", with the buttons {', '.join(buttons)}," if buttons else ",")
+        text = (f"The test stopped on purpose. A popup {shown} was open, and this workflow has no recorded answer for it, "
+                "so it did not guess.")
+    else:
+        text = summarize(str(facts.get("message") or ""), kind)
+    if facts.get("took_effect"):
+        text += " The step before it had already run, so nothing was repeated."
+    if kind in ("decision_needed", "left_open_unclassified"):
+        text += " Tell me here what should happen when this shows up, or fix it yourself in Human Edit."
+    return text
+
+
 class TestFlowMixin:
     __test__ = False  # not a pytest class, despite the name
 
@@ -213,7 +242,9 @@ class TestFlowMixin:
             harness.update_card(thread, card_id, sink=sink, rows=[dict(r) for r in rows], **extra)
 
         def phase_hook(entry: dict[str, Any]) -> None:
-            if entry.get("step") is None or not str(entry.get("phase", "")).endswith("_start"):
+            phase = str(entry.get("phase", ""))
+            # `inner_*` marks a step inside a popup answer or loop: its row is the plan step that holds it.
+            if entry.get("step") is None or not phase.endswith("_start") or phase.startswith("inner_"):
                 return
             for r in rows:
                 if r["status"] == "running":
@@ -366,6 +397,28 @@ class TestFlowMixin:
         record_outcome("stopped", rows[-1]["name"] if rows else "")
         return "stopped"
 
+    def _tf_run_facts(self, workflow_id: str) -> dict[str, Any]:
+        """What the runtime recorded about the latest failure, as data: its kind, whether the failing step's action may
+        already have happened, and the surface a deliberate stop was about. Nothing here is read from message text.
+        Empty-handed ({"kind": None, ...}) when no evidence was kept; callers then fall back to the old behaviour."""
+        facts: dict[str, Any] = {"kind": None, "took_effect": False, "surface": None, "message": ""}
+        try:
+            from conxa_compile.editor.evidence import build_evidence_bundle
+            from conxa_core.storage.workflow_store import get_workflow
+
+            wf = get_workflow(workflow_id)
+            if wf is None or not wf.skill_id or not wf.last_test_run_id:
+                return facts
+            ev = build_evidence_bundle(wf.skill_id, run_id=wf.last_test_run_id, detail="digest").get("runtime_evidence") or {}
+            facts["kind"] = ev.get("failure_kind") if ev.get("failure_kind") not in (None, "other") else None
+            facts["took_effect"] = bool(ev.get("action_may_have_taken_effect"))
+            facts["message"] = str(ev.get("message") or "")
+            surface = ev.get("left_open_surface")
+            facts["surface"] = surface if isinstance(surface, dict) else None
+        except Exception:  # noqa: BLE001 -- facts are a bonus; a failed test must still report
+            pass
+        return facts
+
     def _tf_failure_image(self, workflow_id: str) -> str | None:
         """``conxa-asset://`` address of the failure screenshot the runtime kept for the latest test, or
         None. Only the run id and file name leave the sandbox path; the renderer cannot ask for anything else."""
@@ -481,15 +534,16 @@ class TestFlowMixin:
         failing = next((r for r in reversed(rows) if r["status"] == "running"), None)
         if failing is not None:
             failing["status"] = "failed"
-        # Only claim "nothing was sent" when no step that can't be undone even started: a failure
-        # AT such a step may have half-happened.
-        nothing_sent = not any(r.get("destructive") for r in rows)
+        facts = self._tf_run_facts(workflow_id)
+        # Only claim "nothing was sent" when no step that can't be undone even started AND the runtime does not say
+        # the failing step's action may already have happened: a failure AT such a step may have half-happened.
+        nothing_sent = not any(r.get("destructive") for r in rows) and not facts["took_effect"]
         # "Couldn't confirm" / "Partly done" already read in plain words and say something an ordinary
         # failure summary would flatten: the work may have happened. Keep their own sentences.
         own = outcome in ("couldnt_confirm", "partly_done")
-        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message)
+        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message, facts["kind"])
         harness.update_card(
-            _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:600],
+            _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:4000],
             summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent and not own,
             seconds=int(time.time() - started), outcome=outcome or "failed",
             failure_image=self._tf_failure_image(workflow_id), actions=[],
@@ -590,9 +644,11 @@ class TestFlowMixin:
         threading.Thread(target=self._tf_investigate, args=(workflow.id,), daemon=True).start()
         return {"ok": True}
 
-    def _tf_propose_fix(self, workflow_id: str) -> tuple[str, list[dict[str, Any]]]:
+    def _tf_propose_fix(self, workflow_id: str, sink: Any = None) -> tuple[str, list[dict[str, Any]], Any]:
         """The copilot's plain-words reading of the latest failure, and at most one gated fix proposal —
-        its own call and gates. ("", []) when there is nothing to read."""
+        its own call and gates. A change only a person can draw (a new element) becomes the same "Open Human Edit"
+        link card the chat turn makes; the third item posts it when called (None when none is needed). ("", [], None) when there is
+        nothing to read."""
         from conxa_compile.conversation.context_pack import build_context_pack
         from conxa_compile.editor.evidence import EvidenceError, build_evidence_bundle
         from conxa_compile.llm.copilot import _capability_manifest_text, copilot_turn
@@ -600,15 +656,19 @@ class TestFlowMixin:
 
         workflow = get_workflow(workflow_id)
         if workflow is None or not workflow.skill_id:
-            return "", []
+            return "", [], None
         try:
             digest = build_evidence_bundle(workflow.skill_id, run_id=workflow.last_test_run_id, detail="digest")
         except EvidenceError:
-            return "", []
+            return "", [], None
+        facts = self._tf_run_facts(workflow_id)
+        known = (f" The runtime recorded the kind of failure as \"{facts['kind']}\"." if facts["kind"] else "") + (
+            " The failing step's action may already have taken effect, so it must not be repeated." if facts["took_effect"] else "")
         message = ("The last test failed. In plain, everyday words for a non-technical person, say what went wrong "
                    "(the root cause, from the evidence) and what you would change to fix it. Then propose at most ONE "
                    "change that is within the allowed change types and that you are confident fixes it. If you are "
-                   "unsure, propose nothing: say what you saw and ask how the person would like it fixed.")
+                   "unsure, propose nothing: say what you saw and ask how the person would like it fixed. "
+                   "State only causes the evidence shows; do not guess at causes it does not." + known)
         pack = build_context_pack(message=message, budget_tokens=12_000, digest=digest,
                                   failure={"last_test": digest.get("last_test"), "runtime_evidence": digest.get("runtime_evidence")})
         user_text = ("Capability manifest — what you may propose and what the runtime does with each step kind:\n"
@@ -620,7 +680,14 @@ class TestFlowMixin:
                               on_delta=None, user_text=user_text, screenshot_path=shot)
         ctx = self._thread_context("wf", workflow_id, None)
         proposals = ctx["gate_proposals"]([p for p in result.get("proposals") or [] if isinstance(p, dict)])
-        return str(result.get("reply") or "").strip(), proposals[:1]
+        hints = [n for n in result.get("needs_editor") or [] if isinstance(n, dict)]
+        post_hint = None
+        if hints and sink is not None:
+            def post_hint() -> None:  # called by the caller after its Stop check, so Stop leaves nothing behind
+                from conxa_compile.conversation import harness
+
+                harness.post_editor_hint_card(_thread(workflow_id), sink, hints[0], digest)
+        return str(result.get("reply") or "").strip(), proposals[:1], post_hint
 
     def _tf_investigate(self, workflow_id: str) -> None:
         """Find why the latest test failed and put a fix to the person. Changes nothing itself: the fix is an
@@ -632,6 +699,18 @@ class TestFlowMixin:
         sink = _event_sink(rid)
         stop = _autofix_stop.setdefault(workflow_id, threading.Event())
         stop.clear()
+
+        def say(text: str) -> None:
+            harness.emit_item(sink, thread, ts.append(thread, "assistant_message", text=text))
+
+        # A deliberate stop (a popup with no recorded answer, a refusal the app showed, a bad input...) is already
+        # fully explained by the runtime's own record. There is nothing for a model to guess at, so none is asked:
+        # one plain message, and the route comes from the kind, not from model text.
+        facts = self._tf_run_facts(workflow_id)
+        if _is_deliberate_stop(facts["kind"]):
+            harness.post_card(thread, "autofix", "needs_answer", sink=sink, reason=_deliberate_stop_message(facts), actions=[])
+            return
+
         runtime_state.set_flags(workflow_id, investigating=True)
         card = harness.post_card(thread, "autofix", "running", sink=sink, phase="Finding the cause", actions=["stop"])
         card_id = card["card_id"]
@@ -639,21 +718,22 @@ class TestFlowMixin:
         def end(state: str, **extra: Any) -> None:
             harness.update_card(thread, card_id, sink=sink, state=state, actions=extra.pop("actions", []), **extra)
 
-        def say(text: str) -> None:
-            harness.emit_item(sink, thread, ts.append(thread, "assistant_message", text=text))
-
         try:
             self._install_proxy_router(sink=sink, usage_class="ai_credits")
             try:
-                reply, proposals = self._tf_propose_fix(workflow_id)
+                reply, proposals, post_hint = self._tf_propose_fix(workflow_id, sink)
             except Exception as exc:  # noqa: BLE001 — entitlement/quota/cloud errors end the round cleanly
                 return end("failed", reason=str(exc)[:160] or "I couldn’t reach the AI service.", actions=["investigate", "human_edit"])
             if stop.is_set():  # pressed while it was thinking: nothing may be posted after Stop
                 return end("stopped", actions=["investigate", "human_edit"])
+            # Exactly one thing is said: the model's own reading, or (when it gave none) the plain fallback. Never both.
+            if post_hint:
+                post_hint()
             if reply:
                 say(reply)
-            if not proposals:
+            elif not proposals and not post_hint:
                 say("I’m not sure how to fix this. Tell me how you’d like it fixed here in the chat, or open Human Edit.")
+            if not proposals:
                 return end("no_fix", actions=["investigate", "human_edit"])
             proposal = proposals[0]
             harness.post_card(

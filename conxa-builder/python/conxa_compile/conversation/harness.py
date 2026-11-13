@@ -421,23 +421,28 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
             preview=(single or {}).get("preview"), actions=["apply", "dismiss"],
         ))
     if editor_hints:
-        # Re-pointing a step at an element nobody has used yet is drawn by a person in the re-target wizard.
-        hint = editor_hints[0]
-        reason = " ".join(str(hint.get("reason") or "").split())[:120]
-        # The step the model named, found in the digest by its key, so the editor opens on it.
-        row = next((s for s in (digest or {}).get("steps") or []
-                    if isinstance(s, dict) and s.get("step_key") == hint.get("step_key")), None)
-        step_index = row.get("step_index") if row and isinstance(row.get("step_index"), int) else None
-        where = f"step {step_index + 1}" if step_index is not None else "a step"
-        push(post_card(thread_id, "action_link", "open", sink=sink, action="edit", target="edit",
-                       title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason else ""),
-                       step_index=step_index, actions=["open"]))
+        push(post_editor_hint_card(thread_id, sink, editor_hints[0], digest))
     if draft:
         push(post_card(thread_id, "draft_workflow", "open", sink=sink, draft=draft, actions=["create_and_record", "edit_details", "dismiss"]))
 
     if pack.needs_summary:
         _summarize(thread_id, pack.dropped_turns, (summary_item or {}).get("text"), sink)
     return {"turn_id": turn_id, "status": "done", "reply": reply, "items": new_items}
+
+
+def post_editor_hint_card(thread_id: str, sink: Any, hint: dict[str, Any], digest: dict[str, Any] | None) -> dict[str, Any]:
+    """Re-pointing a step at an element nobody has used yet is drawn by a person in the re-target wizard. The
+    model names the step and why (never a selector); this turns that into a link card. The one place that does it,
+    for the chat turn and for the investigation after a failed test."""
+    reason = " ".join(str(hint.get("reason") or "").split())[:120]
+    # The step the model named, found in the digest by its key, so the editor opens on it.
+    row = next((s for s in (digest or {}).get("steps") or []
+                if isinstance(s, dict) and s.get("step_key") == hint.get("step_key")), None)
+    step_index = row.get("step_index") if row and isinstance(row.get("step_index"), int) else None
+    where = f"step {step_index + 1}" if step_index is not None else "a step"
+    return post_card(thread_id, "action_link", "open", sink=sink, action="edit", target="edit",
+                     title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason else ""),
+                     step_index=step_index, actions=["open"])
 
 
 def _route_command(kind: str, message: str, lifecycle: dict[str, Any] | None, load_digest: Any,

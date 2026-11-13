@@ -107,7 +107,7 @@ def derive_lifecycle(
         if rt.get("compiling") or rt.get("queued"):
             stage, substate, glyph, note, actions = "compile", "compiling", RUN, "Compiling", []
         elif rt.get("understanding"):
-            stage, substate, glyph, note, actions = "clarify", "checking", RUN, "Checking it against your description", []
+            stage, substate, glyph, note, actions = "clarify", "checking", RUN, "Checking your workflow", []
         elif rt.get("testing"):
             stage = "test"
             substate, note = "running", "Test running"

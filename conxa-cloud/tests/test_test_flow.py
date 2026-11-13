@@ -349,6 +349,24 @@ def test_ending_at_a_popup_is_recorded_as_a_popup_stop_with_its_step_and_reason(
     assert get_workflow(wf.id).last_test_status == "never"
 
 
+def test_a_step_inside_a_popup_answer_never_becomes_a_row_or_the_failed_step(env):
+    b, wf, _out = env
+
+    def fake(payload, rid):
+        hook = payload["_phase_hook"]
+        hook({"phase": "step_0_click_start", "step": 0, "path": [0], "step_total": 2, "intent": "open_new_invoice", "destructive": False})
+        hook({"phase": "step_1_outcome_fork_start", "step": 1, "path": [1], "step_total": 2, "intent": "handle_popup_decision", "destructive": False})
+        # the chosen option's own click reports itself against plan step 1, not as a new row (or as step 0 again)
+        hook({"phase": "inner_1_click_start", "step": 1, "path": [1, 0], "step_total": 2, "intent": "click_upload", "destructive": False})
+        raise _CommandError("workflow_test_failed", "The popup is still open.")
+
+    b.cmd_test_workflow = fake
+    assert b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False) == "failed"
+    card = _cards(wf.id, "test_run")[0]
+    assert [r["index"] for r in card["rows"]] == [0, 1]
+    assert card["failed_step"] == "Handle popup decision"
+
+
 def test_a_failure_says_what_ran_and_only_claims_nothing_was_sent_when_true(env):
     b, wf, _out = env
     _fake_test(b, steps=[("open_new_invoice", False), ("enter_po_number", False)], error="The customer list didn't appear within 5 seconds.")
@@ -426,7 +444,7 @@ def _said(wf_id):
 
 def test_a_failure_explains_the_cause_and_proposes_one_fix_but_applies_nothing(env, monkeypatch):
     b, wf, _out = env
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: ("The Save button moved into a menu.", [_proposal()]))
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid, sink=None: ("The Save button moved into a menu.", [_proposal()], False))
     monkeypatch.setattr(b, "_card_pending_change", lambda *a: pytest.fail("a fix must wait for the person's Apply"))
     b.cmd_test_workflow = lambda p, r: pytest.fail("nothing re-tests until a fix is applied")
     b._tf_investigate(wf.id)
@@ -441,18 +459,18 @@ def test_a_failure_explains_the_cause_and_proposes_one_fix_but_applies_nothing(e
 
 def test_with_no_confident_fix_it_says_so_and_asks_how_the_person_would_fix_it(env, monkeypatch):
     b, wf, _out = env
-    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid: ("It never found the Save button.", []))
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid, sink=None: ("It never found the Save button.", [], False))
     b._tf_investigate(wf.id)
     af = _cards(wf.id, "autofix")[0]
     assert af["state"] == "no_fix" and "human_edit" in af["actions"]
-    assert any("Tell me how you’d like it fixed" in t for t in _said(wf.id))
+    assert _said(wf.id) == ["It never found the Save button."]  # the model's reading, once; no second hardcoded line
     assert not _cards(wf.id, "pending_change")
 
 
 def test_an_error_while_investigating_ends_the_round_cleanly(env, monkeypatch):
     b, wf, _out = env
 
-    def boom(wid):
+    def boom(wid, sink=None):
         raise RuntimeError("quota used up")
 
     monkeypatch.setattr(b, "_tf_propose_fix", boom)
@@ -462,12 +480,67 @@ def test_an_error_while_investigating_ends_the_round_cleanly(env, monkeypatch):
     assert runtime_state.get_flags(wf.id) == {}
 
 
+def test_a_reply_and_the_fallback_line_are_never_both_said(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid, sink=None: ("It never found the Save button.", [], False))
+    b._tf_investigate(wf.id)
+    assert _said(wf.id) == ["It never found the Save button."]
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda wid, sink=None: ("", [], False))
+    b._tf_investigate(wf.id)
+    assert sum("not sure how to fix" in t for t in _said(wf.id)) == 1
+
+
+def test_a_deliberate_stop_is_one_card_built_from_the_record_and_never_sent_to_the_model(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(b, "_tf_propose_fix", lambda *a, **k: pytest.fail("a known cause is not guessed at by a model"))
+    monkeypatch.setattr(b, "_tf_run_facts", lambda wid: {
+        "kind": "decision_needed", "took_effect": True, "message": "",
+        "surface": {"title": "Replace file?", "buttons": ["Replace", "Keep both"], "blocks": True}})
+    b._tf_investigate(wf.id)
+    cards = _cards(wf.id, "autofix")
+    assert len(cards) == 1 and cards[0]["state"] == "needs_answer" and not _said(wf.id)
+    reason = cards[0]["reason"]
+    assert "Replace file?" in reason and "Keep both" in reason and "nothing was repeated" in reason
+    assert "re-target" not in reason and "Tell me here what should happen" in reason
+    assert runtime_state.get_flags(wf.id) == {}
+    # a refusal the app showed does not ask "what should happen when this shows up": the runtime's sentence stands
+    monkeypatch.setattr(b, "_tf_run_facts", lambda wid: {
+        "kind": "fault:action_failed", "took_effect": True, "surface": None,
+        "message": "Step 3 (click) failed: This step didn't finish: the app said \"Upload failed\". (x)"})
+    b._tf_investigate(wf.id)
+    reason = _cards(wf.id, "autofix")[1]["reason"]
+    assert "Upload failed" in reason and "Tell me here" not in reason
+
+
+def test_nothing_sent_is_false_when_the_runtime_says_the_action_may_have_happened(env, monkeypatch):
+    b, wf, _out = env
+    monkeypatch.setattr(b, "_tf_run_facts", lambda wid: {"kind": "decision_needed", "took_effect": True, "surface": None, "message": ""})
+    _fake_test(b, steps=[("open_new_invoice", False), ("upload_file", False)], error="Needs a decision: 1 upload complete.")
+    assert b._tf_run_test(wf.id, {}, guard=True, show_browser=False, attempt=1, auto=False) == "failed"
+    card = _cards(wf.id, "test_run")[0]
+    assert card["nothing_sent"] is False
+    assert "popup" in card["summary"] and "Something went wrong" not in card["summary"]
+
+
+def test_stop_pressed_while_thinking_posts_no_editor_link_either(env, monkeypatch):
+    b, wf, _out = env
+    posted = []
+
+    def propose(wid, sink=None):
+        test_flow._autofix_stop[wid].set()
+        return "A diagnosis.", [], lambda: posted.append(1)
+
+    monkeypatch.setattr(b, "_tf_propose_fix", propose)
+    b._tf_investigate(wf.id)
+    assert posted == [] and "A diagnosis." not in _said(wf.id)
+
+
 def test_the_stop_button_ends_investigating_and_posts_nothing(env, monkeypatch):
     b, wf, _out = env
 
-    def propose(wid):
+    def propose(wid, sink=None):
         test_flow._autofix_stop[wid].set()  # the person presses Stop while it is thinking
-        return "A diagnosis.", [_proposal()]
+        return "A diagnosis.", [_proposal()], False
 
     monkeypatch.setattr(b, "_tf_propose_fix", propose)
     b._tf_investigate(wf.id)
