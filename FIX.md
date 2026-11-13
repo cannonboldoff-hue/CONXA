@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Editing a step is now one page you scroll, not three pages you click through — 2026-11-13**
+Fixing a step used to mean going through three separate pages: “Element”, “How it’s found” and “Validation”, with Continue and Back buttons between them. That whole flow is gone, along with the recording-pictures window and the chat request to point one step at another step’s button. Every step now opens as a single page with all its details in one place, and you can still change how it is found and what is checked by hand.
+— 2026-11-13
+
 **Scrolls that move nothing are no longer saved as steps — 2026-11-13**
 While recording, the page sometimes “scrolled” by zero, for example when you were already at the top. Those showed up as empty scroll steps in your workflow. They are now left out, and only scrolls that really moved the page are kept.
 — 2026-11-13

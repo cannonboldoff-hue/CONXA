@@ -4,9 +4,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { stepTypeColor } from '@/lib/status'
 import type { StepEditorDTO } from '@/types/workflow'
-import { RECORDING_SCREENSHOT_DRAG_MIME } from '@/api/workflowApi'
 import { BoxSelect, GitBranch, GripVertical, Repeat, Trash2 } from 'lucide-react'
-import { compactStepLabel, handleRecordingScreenshotDrop, visualBboxState, type BboxState } from '@/lib/workflowViewerHelpers'
+import { compactStepLabel, visualBboxState, type BboxState } from '@/lib/workflowViewerHelpers'
 
 type WorkflowStepItemProps = {
   step: StepEditorDTO
@@ -18,15 +17,12 @@ type WorkflowStepItemProps = {
   belowThreshold?: boolean
   /** An effect of the step above it (a download, a new tab): indented, still its own step. */
   isEffect?: boolean
-  recordingShotDragActive?: boolean
   draggingIndex: number | null
   onSelect: (index: number) => void
   onDeleteRequest: (index: number) => void
   onDragStart: (index: number) => void
   onDragEnd: () => void
   onMove: (from: number, to: number) => void
-  onDroppedRecordingScreenshot?: (stepIndex: number, eventIndex: number) => void
-  onClearStepVisual?: (stepIndex: number) => void
 }
 
 export function WorkflowStepItem({
@@ -36,15 +32,12 @@ export function WorkflowStepItem({
   isDragging,
   belowThreshold,
   isEffect,
-  recordingShotDragActive,
   draggingIndex,
   onSelect,
   onDeleteRequest,
   onDragStart,
   onDragEnd,
   onMove,
-  onDroppedRecordingScreenshot,
-  onClearStepVisual,
 }: WorkflowStepItemProps) {
   const bboxState = visualBboxState(step)
 
@@ -57,17 +50,11 @@ export function WorkflowStepItem({
 
   const onDragOver = (event: DragEvent<HTMLLIElement>) => {
     event.preventDefault()
-    event.dataTransfer.dropEffect =
-      recordingShotDragActive || event.dataTransfer.types.includes(RECORDING_SCREENSHOT_DRAG_MIME) ? 'copy' : 'move'
+    event.dataTransfer.dropEffect = 'move'
   }
 
   const onDrop = (event: DragEvent<HTMLLIElement>) => {
     event.preventDefault()
-    const raw = event.dataTransfer.getData(RECORDING_SCREENSHOT_DRAG_MIME).trim()
-    if (raw && (onClearStepVisual || onDroppedRecordingScreenshot)) {
-      handleRecordingScreenshotDrop(raw, step.step_index, onDroppedRecordingScreenshot, onClearStepVisual)
-      return
-    }
     if (draggingIndex === null) return
     onMove(draggingIndex, step.step_index)
     onDragEnd()
@@ -207,7 +194,7 @@ function VisualBboxBadge({ state }: { state: BboxState }) {
 
 /** A single quiet status dot with an explanatory tooltip — replaces the old text badge row.
  *  Destructive/forced/hover-chain/generic-intent detail now surfaces in the step editor's own
- *  eyebrow line (InlineRetargetFlow) instead of cluttering every row in the list. */
+ *  eyebrow line (StepEditor) instead of cluttering every row in the list. */
 function StatusDot({ colorClass, label, detail }: { colorClass: string; label: string; detail: string }) {
   return (
     <Tooltip>

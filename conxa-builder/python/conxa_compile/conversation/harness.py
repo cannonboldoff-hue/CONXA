@@ -431,7 +431,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
 
 
 def post_editor_hint_card(thread_id: str, sink: Any, hint: dict[str, Any], digest: dict[str, Any] | None) -> dict[str, Any]:
-    """Re-pointing a step at an element nobody has used yet is drawn by a person in the re-target wizard. The
+    """Pointing a step at a different element is done by a person in Human Edit. The
     model names the step and why (never a selector); this turns that into a link card. The one place that does it,
     for the chat turn and for the investigation after a failed test."""
     reason = " ".join(str(hint.get("reason") or "").split())[:120]

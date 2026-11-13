@@ -57,7 +57,7 @@ def _get_step_screenshot(skill_id: str, args: dict[str, Any]) -> dict[str, Any]:
     downscale exactly like the failure screenshot — never a URL, since this is consumed
     server-side, not by a browser."""
     from conxa_compile.editor.assets import resolve_skill_asset
-    from conxa_compile.editor.retarget import find_source_event
+    from conxa_compile.editor.source_event import find_source_event
     from conxa_compile.compiler.build import _persisted_visual_asset_path
     from conxa_core.storage.json_store import read_skill
 

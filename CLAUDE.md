@@ -75,10 +75,10 @@ Each is explained in full in `docs/TRD.md`.
 
 **Compile**
 - A step comes only from something the person did. Script events (`origin == "script"`) are dropped in `prepare_compile_events`; never add name- or site-based filters for this.
-- No LLM writes selector strings on the primary compile path: `IdentityBundle` + `selector_grammar.py` only. Two user-initiated exceptions: the 1-click fix (`compiler/patch.py`) and Human Edit "draw a new region" (`editor/retarget.py`).
+- No LLM writes selector strings on the primary compile path: `IdentityBundle` + `selector_grammar.py` only. One user-initiated exception: the 1-click fix (`compiler/patch.py`).
 - The second opinion (`compiler/second_opinion.py`) may write meaning (input bindings, placeholders, phase, `try_dismiss` branches, optional text/URL assertions, archiving no-effect steps). It never touches `target`, `identity_bundle`, `compiled_selectors`, waits or the frame/tab chain. Human Review is the gate.
 - `try_dismiss` branches are built only by `second_opinion.py::build_try_dismiss_from_hint`.
-- Chat edits never touch address keys (`ADDRESS_KEYS` in `editor/capability_manifest.py`). Chat re-points a step only via `retarget_from_step`, copying another step's identity.
+- Chat edits never touch address keys (`ADDRESS_KEYS` in `editor/capability_manifest.py`). Chat never re-points a step; a person does it in Human Edit.
 - Iframe chain is kept verbatim from recording to execution; bounding boxes are page-level. `frame_enter`/`frame_exit` get `no_recovery_block`.
 - An app map (`app_graph/`) stores app shape, never data (all text through `scrub.py`), uses no LLM, and is always rebuilt, never edited.
 

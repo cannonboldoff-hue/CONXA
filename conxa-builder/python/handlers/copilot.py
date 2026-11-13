@@ -371,12 +371,6 @@ class CopilotMixin:
         if kind == "set_date_offset":
             return self.cmd_set_date_offset({**base, "days": op.get("days")}, rid)
 
-        if kind == "retarget_from_step":
-            # The model named a source; code copies its identity (the only way chat points a step elsewhere).
-            source = steps[resolve_step_index(doc, str(op.get("identity_from_step_key") or "").strip())]
-            patch = identity_patch_from_source(action_name(steps[step_index]).lower(), source)
-            return self.cmd_patch_step({**base, "patch": patch}, rid)
-
         if kind == "body_insert_step":
             action_kind = str(op.get("action_kind") or "").strip()
             nested_before = len(((steps[step_index].get(container) or {}).get("steps")) or [])

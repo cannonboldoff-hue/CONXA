@@ -9,12 +9,8 @@ import {
   deleteStep,
   errorMessage,
   fetchMetrics,
-  fetchRecordingScreenshots,
   fetchSkillList,
   fetchWorkflow,
-  postApplyRecordingVisual,
-  postApplyStepFrame,
-  postClearStepVisual,
   postInsertStep,
   postReorder,
   postSignOff,
@@ -26,13 +22,12 @@ import { EditConversationPanel } from '@/components/conversation/EditConversatio
 import { flowRerecordFrom, flowTestPrepare } from '@/api/conversationApi'
 import { useShellData } from '@/hooks/useShellData'
 import { compactStepLabel } from '@/lib/workflowViewerHelpers'
-import { RecordingScreenshotsPanel } from '@/components/RecordingScreenshotsPanel'
 import { WorkflowPlanPanel } from '@/components/WorkflowPlanPanel'
 import { ReviewQuestionsDialog } from '@/components/ReviewQuestionsDialog'
 import { DiagnosticsPanel } from '@/components/DiagnosticsPanel'
 import { WorkflowViewer } from '@/components/WorkflowViewer'
 import { UnsavedChangeGuard } from '@/components/UnsavedChangeGuard'
-import { InlineRetargetFlow, type InlineRetargetFlowHandle } from '@/components/retarget/InlineRetargetFlow'
+import { StepEditor, type StepEditorHandle } from '@/components/StepEditor'
 import { SuggestionsInlinePanel } from '@/components/SuggestionsPanel'
 import { ParameterizationInlinePanel } from '@/components/ParameterizationDrawer'
 import { useEditorStore } from '@/store/editorStore'
@@ -56,7 +51,6 @@ import {
   BadgeCheck,
   ChevronDown,
   Home,
-  Image as ImageIcon,
   Lightbulb,
   type LucideIcon,
   Map as MapIcon,
@@ -70,7 +64,7 @@ import {
 } from 'lucide-react'
 import type { HelpEntry } from '@/lib/editorHelp'
 
-type ToolPaneKey = 'suggestions' | 'variables' | 'screenshots' | 'workflowPlan' | 'diagnostics'
+type ToolPaneKey = 'suggestions' | 'variables' | 'workflowPlan' | 'diagnostics'
 
 const FLOW_STEPS = ['Record', 'Compile', 'Edit', 'Approve'] as const
 
@@ -120,14 +114,12 @@ export function HumanEditPage() {
   const [workflowPaneWidth, setWorkflowPaneWidth] = useState(340)
   const [isResizingPane, setIsResizingPane] = useState(false)
   const [openTool, setOpenTool] = useState<ToolPaneKey | null>(null)
-  const [showAllScreenshots, setShowAllScreenshots] = useState(false)
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const splitPaneRef = useRef<HTMLDivElement | null>(null)
-  const stepEditorRef = useRef<InlineRetargetFlowHandle>(null)
+  const stepEditorRef = useRef<StepEditorHandle>(null)
   const openedStepRef = useRef(false)
   const selected = useEditorStore((s) => s.selectedStepIndex)
-  const focusedBranchIndex = useEditorStore((s) => s.focusedBranchIndex)
   const setValidationReport = useEditorStore((s) => s.setValidationReport)
   const setSelectedStepIndex = useEditorStore((s) => s.setSelectedStepIndex)
   const canUndo = useEditorStore((s) => s.canUndo)
@@ -180,17 +172,6 @@ export function HumanEditPage() {
     if (!q.data || selected === null) return null
     return q.data.steps.find((s) => s.step_index === selected) ?? null
   }, [q.data, selected])
-
-  // A focused nested for_each step (clicked in ForEachSubList.tsx) — the recording-screenshots
-  // tool (opened from InlineRetargetFlow.tsx's Pick Element phase) must read/write the nested
-  // step's own screenshot data, not the parent for_each wrapper's, and address it the same way
-  // InlineRetargetFlow.tsx does: `for_each.steps[N]` (see step_path.py).
-  const nestedForEachStep =
-    currentStep?.for_each_summary && focusedBranchIndex !== null
-      ? (currentStep.for_each_steps[focusedBranchIndex] ?? null)
-      : null
-  const nestedPath = nestedForEachStep ? `for_each.steps[${focusedBranchIndex}]` : undefined
-  const effectiveStep = nestedForEachStep ?? currentStep
 
   useEffect(() => {
     if (skillId) {
@@ -466,76 +447,6 @@ export function HumanEditPage() {
     // dedicated Test Skill page anymore.
     await goToOwnerGroup()
   }
-
-  const onDroppedRecordingScreenshot = useCallback(
-    async (stepIndex: number, eventIndex: number, frameLabel?: string, path?: string) => {
-      if (!skillId) return
-      try {
-        const res = await postApplyRecordingVisual(
-          skillId,
-          stepIndex,
-          { event_index: eventIndex, frame_label: frameLabel },
-          path,
-        )
-        onWorkflowUpdated(res.workflow)
-        if (res.can_undo !== undefined) setHistoryState(res.can_undo, res.can_redo ?? false)
-        useEditorStore.getState().clearStepDirty(stepIndex)
-        void qc.invalidateQueries({ queryKey: ['recordingScreenshots', skillId] })
-        toast.success('Screenshot attached — anchors recomputed')
-      } catch (err) {
-        toast.error(errorMessage(err, 'Could not apply recording screenshot'))
-      }
-    },
-    [onWorkflowUpdated, qc, setHistoryState, skillId],
-  )
-
-  const allScreenshotsQ = useQuery({
-    queryKey: ['recordingScreenshots', skillId],
-    queryFn: () => fetchRecordingScreenshots(skillId as string),
-    enabled: !!skillId && openTool === 'screenshots' && showAllScreenshots,
-  })
-
-  const onSelectAllScreenshot = useCallback(
-    (eventIndex: number, frameLabel: string | null) => {
-      if (selected === null) return
-      // null means this event has no precomputed timed frame — apply its representative
-      // full_screenshot by omitting frame_label, not a frame image that doesn't exist.
-      void onDroppedRecordingScreenshot(selected, eventIndex, frameLabel ?? undefined, nestedPath)
-    },
-    [onDroppedRecordingScreenshot, selected, nestedPath],
-  )
-
-  const onClearStepVisual = useCallback(
-    async (stepIndex: number, path?: string) => {
-      if (!skillId) return
-      try {
-        const res = await postClearStepVisual(skillId, stepIndex, path)
-        onWorkflowUpdated(res.workflow)
-        if (res.can_undo !== undefined) setHistoryState(res.can_undo, res.can_redo ?? false)
-        useEditorStore.getState().clearStepDirty(stepIndex)
-        toast.success('Screenshot removed — anchors cleared')
-      } catch (err) {
-        toast.error(errorMessage(err, 'Could not remove screenshot'))
-      }
-    },
-    [onWorkflowUpdated, setHistoryState, skillId],
-  )
-
-  const onApplyStepFrame = useCallback(
-    async (frameLabel: string) => {
-      if (!skillId || selected === null) return
-      try {
-        const res = await postApplyStepFrame(skillId, selected, frameLabel, nestedPath)
-        onWorkflowUpdated(res.workflow)
-        if (res.can_undo !== undefined) setHistoryState(res.can_undo, res.can_redo ?? false)
-        useEditorStore.getState().clearStepDirty(selected)
-        toast.success('Frame applied — anchors recomputed')
-      } catch (err) {
-        toast.error(errorMessage(err, 'Could not apply frame'))
-      }
-    },
-    [onWorkflowUpdated, selected, setHistoryState, skillId, nestedPath],
-  )
 
   const openSkillForEdit = useCallback(
     (id: string) => {
@@ -831,18 +742,7 @@ export function HumanEditPage() {
     { key: 'workflowPlan', label: 'Workflow plan', icon: MapIcon, iconClass: 'text-violet-300', help: editorHelp.toolWorkflowPlan, controls: 'workflow-plan-modal' },
     { key: 'diagnostics', label: 'Diagnostics', icon: Wrench, iconClass: 'text-zinc-400', help: editorHelp.toolDiagnostics, controls: 'diagnostics-modal' },
   ]
-  // Not a top-bar tab — opened from the "Recording screenshots" button inside the Pick
-  // Element phase of the re-target wizard, but reuses the same dialog/state machinery.
-  const screenshotsTool = {
-    key: 'screenshots' as const,
-    label: 'Recording screenshots',
-    icon: ImageIcon,
-    iconClass: 'text-fuchsia-300',
-    help: editorHelp.toolScreenshots,
-    controls: 'recording-screenshots-modal',
-    count: effectiveStep?.screenshot?.frames?.length ?? '—',
-  }
-  const activeTool = openTool === 'screenshots' ? screenshotsTool : (toolPanes.find((t) => t.key === openTool) ?? null)
+  const activeTool = toolPanes.find((t) => t.key === openTool) ?? null
   // Workflow plan / Diagnostics use the redesigned 760px auto-height modal with a Close footer.
   const isCompactTool = activeTool?.key === 'workflowPlan' || activeTool?.key === 'diagnostics'
   const compileHealth = wf.compile_health
@@ -1063,10 +963,6 @@ export function HumanEditPage() {
           onReorder={onReorder}
           onDelete={onDelete}
           onAddAction={(actionKind) => void onAddAction(actionKind)}
-          onDroppedRecordingScreenshot={(stepIndex, eventIndex) =>
-            void onDroppedRecordingScreenshot(stepIndex, eventIndex)
-          }
-          onClearStepVisual={(stepIndex) => void onClearStepVisual(stepIndex)}
         />
         <div
           className="group absolute inset-y-0 z-20 hidden w-3 -translate-x-1/2 cursor-col-resize md:block"
@@ -1081,15 +977,13 @@ export function HumanEditPage() {
         >
           <div className="mx-auto h-full w-px bg-white/10 transition-colors group-hover:bg-white/35 group-active:bg-white/45" />
         </div>
-        <InlineRetargetFlow
+        <StepEditor
           key={currentStep?.id ?? 'empty-step-editor'}
           ref={stepEditorRef}
           step={currentStep}
           skillId={skillId}
           onWorkflowUpdated={onWorkflowUpdated}
           onHistoryUpdate={onHistoryUpdate}
-          onOpenScreenshots={() => setOpenTool('screenshots')}
-          screenshotCount={screenshotsTool.count}
         />
       </div>
     {convWorkflow && (
@@ -1105,10 +999,7 @@ export function HumanEditPage() {
     <Dialog
       open={activeTool !== null}
       onOpenChange={(open) => {
-        if (!open) {
-          setOpenTool(null)
-          setShowAllScreenshots(false)
-        }
+        if (!open) setOpenTool(null)
       }}
     >
       <DialogContent
@@ -1118,13 +1009,11 @@ export function HumanEditPage() {
           // tailwind-merge scope), so without this every tool dialog was silently clamped
           // to 384px and its content overflowed/clipped instead of using the width below.
           'anim-pop flex max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none',
-          activeTool?.key === 'screenshots'
-            ? 'h-[min(85vh,880px)] w-[min(1500px,96vw)]'
-            : activeTool?.key === 'suggestions'
-              ? 'h-[min(85vh,880px)] w-[min(1100px,94vw)]'
-              : // Variables / Workflow plan / Diagnostics: the step-editor-redesign 760px
-                // modal, sized to its content up to a cap instead of a fixed height.
-                'max-h-[min(780px,88vh)] w-[min(760px,94vw)]',
+          activeTool?.key === 'suggestions'
+            ? 'h-[min(85vh,880px)] w-[min(1100px,94vw)]'
+            : // Variables / Workflow plan / Diagnostics: the step-editor-redesign 760px
+              // modal, sized to its content up to a cap instead of a fixed height.
+              'max-h-[min(780px,88vh)] w-[min(760px,94vw)]',
         )}
         id={activeTool?.controls}
       >
@@ -1148,20 +1037,6 @@ export function HumanEditPage() {
                 </div>
                 <InfoHint {...activeTool.help} side="bottom" align="end" triggerLabel={`About ${activeTool.label}`} />
               </div>
-              {activeTool.key === 'screenshots' && (
-                <div className="flex justify-end pl-12">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 whitespace-nowrap"
-                    onClick={() => setShowAllScreenshots((v) => !v)}
-                  >
-                    <ImageIcon className="size-3.5 shrink-0" aria-hidden />
-                    {showAllScreenshots ? 'Show 5 frames for this step' : 'Show all recording screenshots'}
-                  </Button>
-                </div>
-              )}
             </DialogHeader>
             {activeTool.key === 'variables' ? (
               // Own bounded flex layout (not the shared ScrollArea below): its footer sits
@@ -1174,23 +1049,6 @@ export function HumanEditPage() {
               <ScrollArea className="min-h-0 flex-1">
                 <div className="p-5">
                   {activeTool.key === 'suggestions' && <SuggestionsInlinePanel suggestions={wf.suggestions} />}
-                  {activeTool.key === 'screenshots' && (
-                    <RecordingScreenshotsPanel
-                      frames={effectiveStep?.screenshot?.frames ?? []}
-                      activeFrameLabel={effectiveStep?.screenshot?.default_frame_label ?? null}
-                      canClearVisual={!!effectiveStep && !effectiveStep.flags.is_scroll}
-                      onApplyFrame={effectiveStep && !effectiveStep.flags.is_scroll ? onApplyStepFrame : undefined}
-                      onClearVisual={
-                        selected !== null ? () => void onClearStepVisual(selected, nestedPath) : undefined
-                      }
-                      showAllFrames={showAllScreenshots}
-                      allItems={allScreenshotsQ.data?.items}
-                      isLoadingAllFrames={allScreenshotsQ.isLoading}
-                      onSelectAllFrame={
-                        effectiveStep && !effectiveStep.flags.is_scroll ? onSelectAllScreenshot : undefined
-                      }
-                    />
-                  )}
                 </div>
               </ScrollArea>
               ) : (

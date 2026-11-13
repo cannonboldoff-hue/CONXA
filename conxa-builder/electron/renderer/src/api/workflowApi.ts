@@ -9,8 +9,6 @@ import type {
   WorkflowUndoRedoResponse,
 } from '../types/workflow'
 
-export { RECORDING_SCREENSHOT_DRAG_MIME, RECORDING_DRAG_MODE_CLEAR_VISUAL } from '@/lib/dragConstants'
-
 export type SkillPackBuildLogEntry = Record<string, unknown>
 
 export class SkillPackBuildRequestError extends Error {
@@ -66,23 +64,6 @@ export type SkillPackageFiles = {
   package_name: string
   bundle_name?: string
   files: Record<string, string>
-}
-
-export type RecordingScreenshotFrameDTO = {
-  label: string
-  url: string
-}
-
-export type RecordingScreenshotItemDTO = {
-  event_index: number
-  sequence: number
-  persisted_full_screenshot: string
-  preview_url: string
-  viewport: string
-  has_element_snapshot: boolean
-  frame: Record<string, unknown>
-  /** Every timed frame (before_far/before_near/at/after_near/after_far) captured around this event. */
-  frames: RecordingScreenshotFrameDTO[]
 }
 
 export type SkillPackBuildPayload = {
@@ -149,141 +130,6 @@ export function fetchWorkflow(skillId: string): Promise<WorkflowResponse> {
   // top-level Workflow entity (see api/workflowsApi.ts). This one still fetches
   // a compiled skill's step-editor payload by skill_id, unchanged otherwise.
   return cmd<WorkflowResponse>('get_skill_workflow', { skill_id: skillId })
-}
-
-export function fetchRecordingScreenshots(skillId: string): Promise<{
-  skill_id: string
-  session_id: string | null
-  items: RecordingScreenshotItemDTO[]
-}> {
-  return cmd('list_recording_screenshots', { skill_id: skillId })
-}
-
-// `path` addresses a nested for_each loop-body step ("for_each.steps[N]") instead of the
-// top-level step at stepIndex — see retargetPreview's `path` doc comment. Omit for an
-// ordinary top-level step.
-export function postApplyRecordingVisual(
-  skillId: string,
-  stepIndex: number,
-  body: { event_index: number; frame_label?: string },
-  path?: string,
-): Promise<WorkflowRevalidationResponse> {
-  return cmd('apply_recording_visual', { skill_id: skillId, step_index: stepIndex, ...body, path })
-}
-
-export function postApplyStepFrame(
-  skillId: string,
-  stepIndex: number,
-  frameLabel: string,
-  path?: string,
-): Promise<WorkflowRevalidationResponse> {
-  return cmd('apply_step_frame', { skill_id: skillId, step_index: stepIndex, frame_label: frameLabel, path })
-}
-
-export function postClearStepVisual(
-  skillId: string,
-  stepIndex: number,
-  path?: string,
-): Promise<WorkflowRevalidationResponse> {
-  return cmd('clear_step_visual', { skill_id: skillId, step_index: stepIndex, path })
-}
-
-export function postUpdateVisualBbox(
-  skillId: string,
-  stepIndex: number,
-  body: { x: number; y: number; w: number; h: number },
-): Promise<WorkflowRevalidationResponse> {
-  return cmd('update_visual_bbox', { skill_id: skillId, step_index: stepIndex, ...body })
-}
-
-// ─────────────────────────────────────────────────
-// Re-target wizard (Phase 2/3 preview + atomic apply)
-// ─────────────────────────────────────────────────
-
-export type Bbox = { x: number; y: number; w: number; h: number }
-
-export type RetargetCandidate = {
-  selector: string
-  engine: string
-  durability: number
-  /** test-contract | semantic-aria | visible-text | spatial-anchor | structural — signals in
-   *  different classes are independent axes of identity (see selector_score.py). */
-  orthogonality_class?: string
-  /** compiler | llm | input_bound | user — where this candidate's selector came from. */
-  source?: string
-  match_count: number
-  unique: boolean
-  /** unique = uniquely matched the recorded page; not_unique = matched 0 or many; unverified =
-   *  couldn't be checked offline (validated by the browser at run time). */
-  verified?: 'unique' | 'not_unique' | 'unverified'
-  descriptor: string
-}
-
-/** `RetargetCandidate` plus a client-only stable id, so the Review Selectors phase can let a
- *  human reorder/edit/add/remove candidates by identity instead of by array index. Never sent
- *  to the backend — `retargetApply` only ever sees the plain `selector` strings. */
-export type EditableCandidate = RetargetCandidate & { id: string }
-
-export type PickQuality = 'good' | 'ambiguous' | 'none'
-
-/** Recovery anchors generated for a redrawn region, computed once here at preview time so
- *  `retargetApply` can pass them straight through instead of re-calling the vision LLM. */
-export type VisualAnchors = { anchors: Record<string, unknown>[]; intent: string }
-
-export type RetargetPreviewResponse = {
-  bbox: Bbox
-  pick_quality: PickQuality
-  candidates: RetargetCandidate[]
-  current_wait_for: Record<string, unknown>
-  proposed_wait_for: Record<string, unknown>
-  current_assertions: Record<string, unknown>[]
-  proposed_assertions: Record<string, unknown>[]
-  validation_changed: boolean
-  fast_finish: boolean
-  /** Step-level identity-signal-quality rollup (0-1); null/undefined when there's no
-   *  identity_bundle to derive it from. */
-  compile_confidence?: number | null
-  /** Only set when this preview regenerated (redrawn region) — null on the review-only path. */
-  visual_anchors?: VisualAnchors | null
-}
-
-// regenerate=false reviews the already-compiled selectors (no LLM); pass true only when the
-// user re-picked the element and the selectors must be regenerated for the new target.
-// `path` addresses a nested for_each loop-body step ("for_each.steps[N]") instead of the
-// top-level step at stepIndex — see cmd_retarget_preview's `path` parameter
-// (handlers/workflow_editor.py). Omit for an ordinary top-level step.
-export function retargetPreview(
-  skillId: string,
-  stepIndex: number,
-  bbox: Bbox,
-  regenerate = true,
-  path?: string,
-): Promise<RetargetPreviewResponse> {
-  return cmd('retarget_preview', { skill_id: skillId, step_index: stepIndex, ...bbox, regenerate, path })
-}
-
-export function retargetApply(
-  skillId: string,
-  stepIndex: number,
-  body: {
-    bbox: Bbox
-    primary_selector: string
-    fallback_selectors: string[]
-    keep_validation: boolean
-    proposed_wait_for?: Record<string, unknown>
-    proposed_assertions?: Record<string, unknown>[]
-    /** Human-edited assertion list from the Validation phase — takes precedence over
-     *  proposed_assertions/current assertions when present. */
-    edited_assertions?: Record<string, unknown>[]
-    /** Anchors already generated at Continue's preview — reused here so Apply doesn't call the
-     *  vision LLM again. Omitted/undefined on the position-only/no-preview fallback paths. */
-    visual_anchors?: VisualAnchors | null
-  },
-  /** Addresses a nested for_each loop-body step ("for_each.steps[N]") — see retargetPreview's
-   *  `path` doc comment. Omit for an ordinary top-level step. */
-  path?: string,
-): Promise<WorkflowRevalidationResponse> {
-  return cmd('retarget_apply', { skill_id: skillId, step_index: stepIndex, ...body, path })
 }
 
 export function patchStep(

@@ -303,12 +303,10 @@ type Props = {
   onWorkflowUpdated: (wf: WorkflowResponse) => void
   onHistoryUpdate?: (canUndo: boolean, canRedo: boolean) => void
   /** Hide the free-text selector list / CSS-ARIA-XPath channel cards / anchors, and the
-   *  Validation panel — used when the re-target flow's own phases own selector picking and
-   *  validation editing instead. */
+   *  Validation panel. */
   hideSelectorTools?: boolean
   /** Hide the "Save step" submit button — used when an outer flow already calls
-   *  `submitIfDirty()` itself (e.g. the re-target wizard's Continue button), so a second,
-   *  redundant manual save action isn't shown alongside it. */
+   *  `submitIfDirty()` itself, so a second, redundant manual save action isn't shown. */
   hideSubmitButton?: boolean
   /** Set when `step` is a nested for_each loop-body step instead of a top-level one — addresses
    *  the patch as `patchStep(skillId, parentStepIndex, patch, false, path)` (see
@@ -383,10 +381,8 @@ function StepValidationPanel({ step, assertions, onChange }: StepValidationPanel
   )
 }
 
-// memo: this stays mounted across all three re-target wizard phases (see InlineRetargetFlow's
-// "kept mounted" comment) and that parent re-renders on every candidate edit/reorder in the
-// Review Selectors phase — memo stops this form (react-hook-form + several child cards) from
-// re-rendering on candidate changes that don't touch any of its own props.
+// memo: its parent re-renders on unrelated editor state changes — memo stops this form
+// (react-hook-form + several child cards) from re-rendering when none of its own props changed.
 export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   function StepConfigForm(
     { step, skillId, onWorkflowUpdated, onHistoryUpdate, hideSelectorTools, hideSubmitButton, path, parentStepIndex },
@@ -403,12 +399,11 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   // no unsaved edits. `step` (HumanEditPage's currentStep) is re-derived from the workflow query
   // cache and gets a fresh reference any time that cache is replaced for ANY reason, including
   // ones unrelated to this step: a background refetch (window focus after staleTime), or a
-  // sibling save on the same page (e.g. RecoveryAnchorsCard, rendered alongside this form in the
-  // re-target wizard's Review Selectors phase). Resetting unconditionally on every reference
-  // change silently discarded whatever the user had just typed and cleared isDirty, so
-  // submitIfDirty()'s Continue-button save saw "nothing to save" and skipped the write entirely
-  // — no error, edit just vanished. Genuine step switches remount this component (see
-  // InlineRetargetFlow's key={currentStep?.id}), giving a fresh isDirty=false form regardless of
+  // sibling save on the same page (e.g. RecoveryAnchorsCard, rendered alongside this form).
+  // Resetting unconditionally on every reference change silently discarded whatever the user had
+  // just typed and cleared isDirty, so submitIfDirty() saw "nothing to save" and skipped the write
+  // entirely — no error, edit just vanished. Genuine step switches remount this component (see
+  // StepEditor's key={currentStep?.id} in HumanEditPage), giving a fresh isDirty=false form regardless of
   // this guard, so this only ever protects an in-progress edit on the step already open.
   useEffect(() => {
     if (!step) return

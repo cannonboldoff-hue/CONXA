@@ -106,7 +106,7 @@ def test_popup_decision_is_worded_from_the_fork_not_the_model():
     assert gate_structural_proposals(plain, [{**raw, "step_key": step_keys(plain["skills"][0]["steps"])[0]}]) == []
 
 
-def test_body_ops_and_date_offset_and_retarget_and_rename():
+def test_body_ops_and_date_offset_and_rename():
     parent = _new_manual_step("if_present", "https://x")
     parent["branch"] = {"steps": [_click(), _click(intent="click_other")]}
     date = {"action": {"action": "date_pick"}, "url": "https://x", "intent": "pick_date", "value": "2026-01-01"}
@@ -117,12 +117,10 @@ def test_body_ops_and_date_offset_and_retarget_and_rename():
         {"op": "body_move_step", "step_key": k[0], "new_order": [1, 0]},
         {"op": "body_insert_step", "step_key": k[0], "action_kind": "wait", "after_nested_index": 0},
         {"op": "set_date_offset", "step_key": k[2], "days": 3},
-        {"op": "retarget_from_step", "step_key": k[1], "identity_from_step_key": k[0]},
         {"op": "rename_workflow", "name": "Invoices"},
     ]
     out = gate_structural_proposals(doc, [{**o, **_ev(k[0])} for o in ops])
     kept = [p["op"] for p in out]
-    # the retarget source (an if_present) has no root identity, so that one is refused
     assert kept == ["body_delete_step", "body_move_step", "body_insert_step", "set_date_offset", "rename_workflow"]
     bad = [
         {"op": "body_delete_step", "step_key": k[0], "nested_index": 9},
@@ -133,12 +131,10 @@ def test_body_ops_and_date_offset_and_retarget_and_rename():
     assert gate_structural_proposals(doc, [{**o, **_ev(k[0])} for o in bad]) == []
 
 
-def test_retarget_copies_an_existing_steps_identity():
-    doc = _doc([_click(), _click(intent="click_other", identity_bundle={"signals": [{"engine": "testid", "selector": "[data-testid=cancel]", "durability": 0.9}]})])
+def test_retarget_from_step_is_no_longer_a_chat_action():
+    doc = _doc([_click(), _click(intent="click_other")])
     k = step_keys(doc["skills"][0]["steps"])
-    out = gate_structural_proposals(doc, [{"op": "retarget_from_step", "step_key": k[1], "identity_from_step_key": k[0], **_ev(k[0])}])
-    assert len(out) == 1 and proposal_summary(out[0]) == "Point step 2 at the same element as step 1"
-    assert gate_structural_proposals(doc, [{"op": "retarget_from_step", "step_key": k[0], "identity_from_step_key": k[0], **_ev(k[0])}]) == []
+    assert gate_structural_proposals(doc, [{"op": "retarget_from_step", "step_key": k[1], "identity_from_step_key": k[0], **_ev(k[0])}]) == []
 
 
 def test_action_words_reach_the_proposal_call_but_a_question_does_not():

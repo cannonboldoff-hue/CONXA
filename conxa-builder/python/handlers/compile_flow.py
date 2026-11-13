@@ -212,7 +212,7 @@ class CompileFlowMixin:
 
     def _flow_after_compile(self, workflow_id: str, result: dict[str, Any], sink: Any) -> None:
         from conxa_compile.conversation import clarify, clarify_store, thread_store as ts
-        from conxa_compile.editor.retarget import find_source_event
+        from conxa_compile.editor.source_event import find_source_event
         from conxa_compile.recorder import hints
         from conxa_core.storage.json_store import read_skill
         from conxa_core.storage.session_events import read_session_events
@@ -412,7 +412,7 @@ class CompileFlowMixin:
 
         from conxa_compile.compiler.step_key import step_keys
         from conxa_compile.conversation import clarify, clarify_store, question_plan
-        from conxa_compile.editor.retarget import find_source_event
+        from conxa_compile.editor.source_event import find_source_event
         from conxa_compile.recorder import hints
         from conxa_core.storage.json_store import read_skill
         from conxa_core.storage.workflow_store import get_workflow

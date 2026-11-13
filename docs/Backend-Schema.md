@@ -1454,7 +1454,7 @@ model call.
 `compile_report["model_ledger"]` = `{task: {dropped, changed, added, report}}`, written only when something was dropped
 (`dropped` = shape + reference counts, `changed` = override + safety, `added` = backfill). The Human Edit DTO exposes
 `compile_health.model_ledger` as `{task: {dropped, changed, added}}`, zero rows omitted. Tasks: `second_opinion`,
-`clarify_question_copy`, `chat_route_intent`, `chat_change_cards`, `region_selector`, `agent_span`. `example` is an id,
+`clarify_question_copy`, `chat_route_intent`, `chat_change_cards`, `agent_span`. `example` is an id,
 never model or page text. Setting `SKILL_MODEL_LEDGER` (`observe` default, `off`).
 
 ### 3.9c video_job.json (Engine v2 C2, 2026-11-06)
@@ -2746,7 +2746,7 @@ falls back to `Workflow.last_test_run_id`) →
                 "why": "...", "evidence_refs": ["h2#1"], "preview": {"before": [...], "after": [...]}}]}
 ```
 Errors: `invalid_input` (empty message), `skill_not_found`, `human_edit_pool_exceeded` /
-`quota_exceeded` / `cloud_unreachable` (same codes `retarget_preview` uses for the same reasons).
+`quota_exceeded` / `cloud_unreachable`.
 
 **Context sent to the model (BUILD-26 stage g)** is now a capability manifest (what step kinds
 exist and what the runtime does with each — `capability_manifest.py`) plus a compact workflow

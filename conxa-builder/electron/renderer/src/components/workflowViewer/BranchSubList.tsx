@@ -11,8 +11,8 @@ type Props = {
   parentStepIndex: number
   branchSteps: StepEditorDTO[]
   /** Selects a nested step, guarded the same way a top-level click is (WorkflowViewer's
-   *  guardedSelect) — confirms first if the re-target wizard or a copilot proposal has unsaved
-   *  state on whatever's currently open, instead of silently discarding it. */
+   *  guardedSelect) — confirms first if a copilot proposal is pending on whatever's
+   *  currently open, instead of silently discarding it. */
   onSelectNested: (parentStepIndex: number, nestedIndex: number) => void
 }
 

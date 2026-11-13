@@ -146,7 +146,7 @@ ASSERTION_TYPES = (
 
 
 # Keys that name WHERE on the page a step acts, or its structure. Chat never writes these: an element
-# address comes from a person (Human Edit / the re-target wizard) or is copied by code from an existing
+# address comes from a person (Human Edit) or is copied by code from an existing
 # step, and a branch / loop body is edited through its own ops, never as a raw array.
 ADDRESS_KEYS = frozenset({
     "target", "identity_bundle", "compiled_selectors", "check_selector", "signals", "frame", "action",

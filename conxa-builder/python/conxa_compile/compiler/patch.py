@@ -66,7 +66,7 @@ def _regenerate_compiled_selectors(step: dict[str, Any], document: dict[str, Any
         if not source_session_id:
             return out
 
-        from conxa_compile.editor.retarget import find_source_event
+        from conxa_compile.editor.source_event import find_source_event
         from conxa_compile.llm.selector_regeneration import (
             compile_selectors_for_task,
             task_from_recorded_event,
@@ -301,7 +301,7 @@ def sync_derived_step_fields(
     effective intent + ``validation.wait_for``.
 
     This is the single place that keeps derived shadows coherent, so no edit path (live
-    editor, 1-click fix, retarget) can forget one (audit findings C-2/M-1/M-2). Branch-body
+    editor, 1-click fix) can forget one (audit findings C-2/M-1/M-2). Branch-body
     leaf steps pass ``sync_recovery=False`` — they never enter the recovery cascade
     (CLAUDE.md Key Invariants), so their recovery block must stay a no-op marker.
     """

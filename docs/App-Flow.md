@@ -329,8 +329,6 @@ flowchart TD
     E --> L[Delete step] --> M[cmd_delete_step]
     E --> N[Update input variables] --> O[cmd_update_workflow_inputs]
     E --> P[Replace literal with variable] --> Q[cmd_replace_literals]
-    E --> R[Apply recording screenshot to step] --> S[cmd_apply_recording_visual]
-    E --> T[Re-target element wizard] --> T1[Phase 1: draw region] --> T2[cmd_retarget_preview: candidates + validation diff] --> T3[Phase 3: Validation — review/edit the enforced post-condition] --> T4[cmd_retarget_apply → bbox + target + identity_bundle + validation, one undo entry]
     E --> U1[Add/remove/reorder if_present body step] --> U2[cmd_insert_branch_step / cmd_delete_branch_step / cmd_reorder_branch_steps]
     E --> U3[Edit nested branch-body step field] --> U4[cmd_patch_step with path='branch.steps N ']
     E --> U5["Answer 'Optional popup?' in the review-questions dialog"] --> U6[cmd_confirm_optional_interstitial → step becomes try_dismiss branch]
@@ -396,21 +394,7 @@ human confirmation."
 
 **Auto-build on sign-off (2026-07 workflow redesign, Phase 1):** sign-off no longer just flips a flag. `cmd_sign_off_workflow` re-checks, after persisting `signed_off`/`edited_at`, whether every workflow belonging to the workflow is compiled and signed off — the same condition `workflow_builder.build_workflow` already gates on (§8). If so, it calls `build_workflow` itself, so the package exists the moment the gate is satisfied instead of requiring a separate visit to a build page (there is no such page anymore — see §8). The gate itself is unchanged; this only moves *when* the already-existing build call happens to fire.
 
-**Re-target wizard (replaces the old direct "update visual bbox" flow):** `cmd_update_visual_bbox` still exists (bbox + vision-anchor regeneration only, no selector change) but the primary re-target entry point is the 3-phase wizard — Pick element → Review selectors → **Validation**. `cmd_retarget_preview` is read-only (generates and scores candidates + a validation diff without persisting); `cmd_retarget_apply` is the only command that writes, composing bbox + `target.primary_selector`/`fallback_selectors` + rebuilt `identity_bundle` + (optionally) regenerated `validation.wait_for`/`assertions` into a single document mutation and a single undo entry. See `docs/UI-UX-Brief.md` §2.8 for the UI.
-
-**Phase 2 candidate generation when the element is re-picked** (drawing a new region) uses a vision LLM, not text: there is no stored per-element geometry anywhere in a recording (only the originally-clicked element carries a bbox, and the DOM snapshot is plain HTML with no inline coordinates), so a text prompt has no way to relate a drawn region to a DOM node. `conxa_compile/llm/region_selector_vision.py` (task `region_selector`) sends the step's full-page screenshot — with the drawn region highlighted, the same technique `anchor_vision_llm.py` uses for anchors — together with the recorded DOM snippet, so the model can see which element the box points to and read the DOM to select it. Candidates then go through the same validate/prune pipeline as every other selector source (§7.2). Continuing without re-picking the element (`regenerate=False`) still reads back the already-compiled selectors with no LLM call.
-
-**Validation phase (was "Confirm & apply"):** Phase 3 is a true post-condition review, not just a
-confirm-and-go screen. It surfaces the step's enforced (`required=True`) assertion — the single
-deterministic post-condition the compiler picked for this action (`docs/Backend-Schema.md` §3.6)
-— alongside any advisory checks, and lets the user edit the flat assertion list (type, target,
-expected value, timeout, required) before applying. An edit sends `edited_assertions` in the
-`cmd_retarget_apply` payload, which takes precedence over the previewed `proposed_assertions`;
-omitting any edit falls back to today's keep/replace behavior unchanged. A step with no enforced
-assertion is flagged in the UI ("this step will pass even if the action had no effect") rather
-than silently accepted.
-
-Deterministic Human Edit actions are available without quota: patch, reorder, delete, input edits, validation edits, sign-off, and reviewing a step's already-compiled selectors in the re-target wizard (continuing without re-picking the element). LLM-assisted actions such as selector regeneration (including the re-target wizard's Phase 2 candidate generation **when the element is re-picked**), visual re-anchor, screenshot/bbox anchor regeneration, semantic repair, and raw-recording recompile require remaining Human Edit pool.
+Deterministic Human Edit actions are available without quota: patch, reorder, delete, input edits, validation edits, sign-off, and editing a step's selectors and validation by hand. LLM-assisted actions such as selector regeneration (the 1-click fix), visual re-anchor, semantic repair, and raw-recording recompile require remaining Human Edit pool.
 
 **Human Review Copilot (BUILD-26, 2026-09-10):** Human Edit gains a conversation. A floating
 launcher (bottom-right by default, freely draggable anywhere on screen, position persisted)
@@ -427,8 +411,7 @@ a change as an accept/reject diff (never applying anything itself), restricted t
 selector, same boundary as every other LLM path in this product. Accepting one runs through the
 exact same `cmd_patch_step` a manual edit uses (its own undo entry, its own quota draw from the
 Human Edit pool); rejecting logs the decision without touching the compiled skill. Switching to a
-different step while a proposal is pending prompts the same "you'll lose this" confirmation the
-re-target wizard already shows for an unsaved edit — discarding one this way still counts as a
+different step while a proposal is pending prompts a "you'll lose this" confirmation — discarding one this way still counts as a
 rejection, not a silent drop. See `docs/UI-UX-Brief.md` §2.7 and `docs/TRD.md` §7.4.
 
 **Verify fix (BUILD-26 stage e, 2026-09-10):** after accepting a proposal, a **Verify fix** button

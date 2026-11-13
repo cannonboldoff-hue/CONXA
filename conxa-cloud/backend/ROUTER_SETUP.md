@@ -104,7 +104,7 @@ LLM_PRO_API_KEYS=your-anthropic-key
 The Human Review Copilot's turns (`copilot_diagnose`/`copilot_reply`) route to `text_model`
 when the turn has no screenshot, and to a separate `*_MULTIMODAL_MODEL` slot — not
 `*_VISION_MODEL` — when it does, so Copilot's screenshot+conversation turns can use a different
-model than the compiler's other vision tasks (`anchor_vision`, `region_selector`, ...) on the
+model than the compiler's other vision tasks (`anchor_vision`, ...) on the
 same tier. Every tier has its own `LLM_{TIER}_MULTIMODAL_MODEL`, e.g.:
 
 ```env

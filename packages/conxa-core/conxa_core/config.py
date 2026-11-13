@@ -97,7 +97,7 @@ class ProviderConfig:
     fallback_vision_model: str = ""
     # Copilot's screenshot+conversation turns (BUILD-26) — separate from vision_model so a
     # dedicated multimodal-capable model can be configured without affecting the compiler's
-    # other vision tasks (anchor_vision, region_selector, ...). Empty = falls back to
+    # other vision tasks (anchor_vision, ...). Empty = falls back to
     # vision_model at call time (see router.py's _call_provider).
     multimodal_model: str = ""
     fallback_multimodal_model: str = ""

@@ -613,7 +613,7 @@ def step_to_dto(
     bundle_signals_raw = bundle.get("signals") if isinstance(bundle.get("signals"), list) else []
     identity_display = signals_to_display_list(bundle_signals_raw)  # [{selector, engine, durability, ...}]
 
-    # Step-level confidence rollup: prefer whatever was persisted at last (re)compile/retarget
+    # Step-level confidence rollup: prefer whatever was persisted at last (re)compile
     # (target.selector_confidence), else derive it fresh from the bundle's raw signals.
     stored_confidence = raw_target.get("selector_confidence")
     if isinstance(stored_confidence, (int, float)):
@@ -757,7 +757,7 @@ def _compile_health(document: dict[str, Any], meta: dict[str, Any], skill_id: st
 
 def _model_ledger_view(report: dict[str, Any], meta: dict[str, Any]) -> dict[str, dict[str, int]]:
     """``{task: {dropped, changed, added}}`` for Human Review. The compile report holds the second opinion's
-    counts; the recording's ``model_ledger.jsonl`` adds later calls (question wording, re-target). A task with
+    counts; the recording's ``model_ledger.jsonl`` adds later calls (question wording). A task with
     nothing counted is left out. Never raises: a display glitch must not break Human Edit."""
     from conxa_compile.llm import model_ledger
 

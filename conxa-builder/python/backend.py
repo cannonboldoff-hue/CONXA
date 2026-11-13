@@ -714,8 +714,7 @@ class Backend(
         "patch_step", "insert_branch_step", "delete_branch_step", "reorder_branch_steps",
         "confirm_optional_interstitial", "reorder_steps", "insert_step", "delete_step",
         "update_workflow_inputs", "replace_literals", "undo_workflow", "redo_workflow",
-        "retarget_apply", "sign_off_workflow", "apply_recording_visual", "apply_step_frame",
-        "clear_step_visual", "update_visual_bbox",
+        "sign_off_workflow",
         # BUILD-26 stage (d): logged with source="copilot" below, not "patch_step" — the command
         # this delegates to internally is a plain method call, not a re-entrant dispatch(), so it
         # never trips this hook a second time under the wrong name.

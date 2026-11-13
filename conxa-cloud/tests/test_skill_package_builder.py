@@ -380,7 +380,7 @@ class TestBranchStepSerialization:
         scaffolded_step = doc["skills"][0]["steps"][0]
 
         # The scaffold starts with empty selectors (nothing is a real target until a human picks
-        # one) — set them the way the editor's re-target flow would before this step is usable,
+        # one) — set them the way a person editing the step in Human Edit would before this step is usable,
         # so serialization has something real to carry.
         scaffolded_step["target"]["primary_selector"] = ".cookie-banner"
         scaffolded_step["branch"]["steps"][0]["target"]["primary_selector"] = "#accept-cookies"

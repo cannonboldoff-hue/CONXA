@@ -333,7 +333,7 @@ def resolve_step_index(doc: dict[str, Any], step_key: str) -> int:
 _STRUCTURAL_OPS = frozenset({
     "insert_step", "delete_step", "move_step", "update_inputs", "replace_literals", "parameterize",
     "body_insert_step", "body_delete_step", "body_move_step", "set_popup_decision", "flatten_popup",
-    "set_date_offset", "retarget_from_step", "rename_workflow",
+    "set_date_offset", "rename_workflow",
 })
 
 # Kinds that cannot be put inside an if-present body: they pause the run, or hold a body of their own
@@ -342,9 +342,6 @@ _NOT_IN_BODY = frozenset({
     "agent_span", "handover", "call_workflow", "for_each", "if_present", "try_dismiss", "wait_for_one_of",
     "outcome_fork",
 })
-# Branch kinds refuse a root identity (their element lives in the branch body), so re-pointing one is a
-# job for the editor, not a copy.
-_NO_RETARGET = frozenset({"if_present", "try_dismiss", "wait_for_one_of", "outcome_fork"})
 _FORK_MODES = frozenset({"auto", "by_input", "ask_human", "stop"})
 
 
@@ -456,8 +453,6 @@ def proposal_summary(p: dict[str, Any]) -> str:
         return f"Make the “{p.get('popup_title')}” popup an ordinary recorded step ({label}); it must show up every run"
     if op == "set_date_offset":
         return f"Make the date in {label} today {int(p.get('days') or 0):+d} days"
-    if op == "retarget_from_step":
-        return f"Point {label} at the same element as {p.get('source_label')}"
     if op == "rename_workflow":
         return f"Rename the workflow to “{p.get('name')}”"
     if op == "parameterize":
@@ -624,7 +619,7 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
 
 _STEP_SCOPED_OPS = frozenset({
     "body_insert_step", "body_delete_step", "body_move_step", "set_popup_decision", "flatten_popup",
-    "set_date_offset", "retarget_from_step",
+    "set_date_offset",
 })
 
 
@@ -710,17 +705,6 @@ def _gate_step_scoped_op(
                 return None
             set_date_offset(copy.deepcopy(doc), index, days)
             return {**scoped, "days": days, "preview": {"before": None, "after": f"today {days:+d} days"}}
-
-        if op == "retarget_from_step":
-            identity_from = str(raw.get("identity_from_step_key") or "").strip()
-            source = _resolve_step(doc, identity_from) if identity_from else None
-            if source is None or identity_from == step_key or not (source[1].get("identity_bundle") or {}):
-                return None
-            if kind not in SELECTOR_ACTIONS or kind in _NO_RETARGET:
-                return None
-            validate_editor_patch(step, identity_patch_from_source(kind, source[1]), policy)
-            return {**scoped, "identity_from_step_key": identity_from, "source_label": _step_label(doc, identity_from),
-                    "preview": {"before": None, "after": f"Point at the same element as {_step_label(doc, identity_from)}"}}
     except ValueError:
         return None
     return None

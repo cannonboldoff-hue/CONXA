@@ -130,7 +130,7 @@ class StepEditorDTO(BaseModel):
     # PROD-3: {container_selector, identifier, source, confirmed} when the compiler detected
     # this step's target sits inside a repeating container; {} when it did not (nothing to
     # confirm). `confirmed` is patchable (entity_binding.confirmed); the rest is display-only —
-    # regenerated at compile/retarget, never hand-edited (see the "row-container detection"
+    # regenerated at compile, never hand-edited (see the "row-container detection"
     # note on EntityBinding). An irreversible step with a detected but unconfirmed binding
     # cannot be saved (patch_gate) or published (see publish invariant).
     entity_binding: dict[str, Any] = Field(default_factory=dict)

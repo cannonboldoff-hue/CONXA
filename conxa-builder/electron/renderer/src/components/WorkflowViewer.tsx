@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { StepEditorDTO } from '../types/workflow'
 import { useEditorStore } from '../store/editorStore'
-import { useRetargetStore } from '@/store/retargetStore'
 import { useCopilotStore } from '@/store/copilotStore'
 import { rejectCopilotProposal } from '@/api/workflowApi'
 import { ListPlus, Plus } from 'lucide-react'
@@ -33,11 +32,6 @@ type Props = {
   onReorder: (newOrder: number[]) => void
   onDelete: (index: number) => void
   onAddAction: (actionKind: AddActionKind) => void
-  /** Drop a recording screenshot (custom drag payload) onto a step to swap visuals and refresh anchors. */
-  onDroppedRecordingScreenshot?: (stepIndex: number, eventIndex: number) => void
-  /** Drop “No image” payload to detach screenshot and clear anchors. */
-  onClearStepVisual?: (stepIndex: number) => void
-  recordingShotDragActive?: boolean
   /** compile_health.steps_below_threshold — shown as a warn dot on the matching row. */
   stepsBelowThreshold?: number[]
 }
@@ -48,9 +42,6 @@ export function WorkflowViewer({
   onReorder,
   onDelete,
   onAddAction,
-  onDroppedRecordingScreenshot,
-  onClearStepVisual,
-  recordingShotDragActive,
   stepsBelowThreshold,
 }: Props) {
   const belowThresholdSet = new Set(stepsBelowThreshold ?? [])
@@ -65,32 +56,15 @@ export function WorkflowViewer({
   // `nested: null` for a plain top-level target; a number for a nested for_each/branch step under
   // that top-level index (see guardedSelect below).
   const [pendingSelect, setPendingSelect] = useState<{ index: number; nested: number | null } | null>(null)
-  // Which unsaved-state kind is blocking the switch — decides the dialog copy/action below.
-  const [pendingKind, setPendingKind] = useState<'retarget' | 'copilot' | null>(null)
 
-  // The re-target wizard stages selector/validation edits in useRetargetStore until Apply
-  // (see InlineRetargetFlow) — switching steps before Apply would silently drop them, so confirm
-  // first instead. `dirty` only ever gets set once a phase-2/3 edit actually happens. Shared by
-  // every way a selection can change — a plain top-level click (handleSelect) and a nested
-  // for_each/branch row (handleSelectNested) alike — since a nested for_each step now stages the
-  // exact same wizard state a top-level one does (InlineRetargetFlow's nestedForEachStep path),
-  // and rows in ForEachSubList/BranchSubList used to call selectBranchStep directly, bypassing
-  // this guard entirely.
-  //
-  // BUILD-26: a pending copilot proposal is the same kind of "you're about to lose this" state —
-  // reuses the same dialog rather than a second one, but discarding it must still COUNT as a
-  // rejection (stage d: a proposal a reviewer walks away from is logged as loudly as one they
-  // accept), not a silent drop.
+  // BUILD-26: a pending copilot proposal is a "you're about to lose this" state — switching steps
+  // asks first, and discarding it must still COUNT as a rejection (stage d: a proposal a reviewer
+  // walks away from is logged as loudly as one they accept), not a silent drop. Shared by every
+  // way a selection can change — a plain top-level click (handleSelect) and a nested
+  // for_each/branch row (handleSelectNested) alike.
   const guardedSelect = (target: { index: number; nested: number | null }) => {
     if (target.index === selected && target.nested === focusedBranchIndex) return
-    const rt = useRetargetStore.getState()
-    if (rt.dirty) {
-      setPendingKind('retarget')
-      setPendingSelect(target)
-      return
-    }
     if (useCopilotStore.getState().pendingProposal) {
-      setPendingKind('copilot')
       setPendingSelect(target)
       return
     }
@@ -155,15 +129,12 @@ export function WorkflowViewer({
                   belowThreshold={belowThresholdSet.has(step.step_index)}
                   isEffect={effectFlags[index]}
                   isDragging={draggingIndex === step.step_index}
-                  recordingShotDragActive={recordingShotDragActive}
                   draggingIndex={draggingIndex}
                   onSelect={handleSelect}
                   onDeleteRequest={setDeleteIndex}
                   onDragStart={setDraggingIndex}
                   onDragEnd={() => setDraggingIndex(null)}
                   onMove={move}
-                  onDroppedRecordingScreenshot={onDroppedRecordingScreenshot}
-                  onClearStepVisual={onClearStepVisual}
                 />
                 <BranchSubList
                   parentStepIndex={step.step_index}
@@ -196,50 +167,37 @@ export function WorkflowViewer({
       <AlertDialog
         open={pendingSelect !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setPendingSelect(null)
-            setPendingKind(null)
-          }
+          if (!open) setPendingSelect(null)
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingKind === 'copilot'
-                ? 'Reject the copilot’s pending proposal?'
-                : 'Discard your unsaved re-target edits?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Reject the copilot’s pending proposal?</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingKind === 'copilot'
-                ? "The copilot proposed a change on the current step that you haven't accepted or rejected. Switching steps now will reject it."
-                : "You've changed selectors or outcome checks on the current step that haven't been applied yet. Switching steps now will lose those changes."}
+              The copilot proposed a change on the current step that you haven&apos;t accepted or rejected. Switching
+              steps now will reject it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setPendingSelect(null); setPendingKind(null) }}>
+            <AlertDialogCancel onClick={() => setPendingSelect(null)}>
               Keep editing
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                if (pendingKind === 'copilot') {
-                  const proposal = useCopilotStore.getState().pendingProposal
-                  useCopilotStore.getState().setPendingProposal(null)
-                  // Fire-and-forget, same as every other reject path — a logging failure must
-                  // never block the step switch the reviewer already confirmed.
-                  if (proposal) void rejectCopilotProposal(skillId, proposal)
-                } else {
-                  useRetargetStore.getState().reset()
-                }
+                const proposal = useCopilotStore.getState().pendingProposal
+                useCopilotStore.getState().setPendingProposal(null)
+                // Fire-and-forget, same as every other reject path — a logging failure must
+                // never block the step switch the reviewer already confirmed.
+                if (proposal) void rejectCopilotProposal(skillId, proposal)
                 if (pendingSelect !== null) {
                   if (pendingSelect.nested === null) setSel(pendingSelect.index)
                   else selectBranchStep(pendingSelect.index, pendingSelect.nested)
                 }
                 setPendingSelect(null)
-                setPendingKind(null)
               }}
             >
-              {pendingKind === 'copilot' ? 'Reject and switch' : 'Discard edits'}
+              Reject and switch
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

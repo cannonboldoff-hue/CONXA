@@ -1,6 +1,5 @@
 """LLMRouter's multimodal model slot (BUILD-26) — Copilot's screenshot-bearing turns must
-cool/select independently of the compiler's plain vision tasks (anchor_vision, region_selector,
-...), since both can live on the same pool entry with distinct model IDs. Before this, Copilot
+cool/select independently of the compiler's plain vision tasks (anchor_vision, ...), since both can live on the same pool entry with distinct model IDs. Before this, Copilot
 was unconditionally routed through vision_model/cooled_until_vision, so a rate-limited vision
 model would falsely cool down Copilot's own multimodal model on the same entry (and vice versa).
 """

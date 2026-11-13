@@ -7,21 +7,20 @@ import { useEditorStore } from '@/store/editorStore'
 
 type Props = {
   /** The parent for_each step's own step_index — nested rows select this step and focus the
-   * clicked nested index so the right column opens that step's own re-target wizard. */
+   * clicked nested index so the right column opens that step's own editor. */
   parentStepIndex: number
   forEachSteps: StepEditorDTO[]
   /** Selects a nested step, guarded the same way a top-level click is (WorkflowViewer's
-   *  guardedSelect) — confirms first if the re-target wizard or a copilot proposal has unsaved
-   *  state on whatever's currently open, instead of silently discarding it. */
+   *  guardedSelect) — confirms first if a copilot proposal is pending on whatever's
+   *  currently open, instead of silently discarding it. */
   onSelectNested: (parentStepIndex: number, nestedIndex: number) => void
 }
 
 /**
  * Indented, collapsible preview of a for_each step's nested body, rendered directly under its
  * WorkflowStepItem row — the for_each twin of BranchSubList.tsx. Clicking a row selects the
- * parent loop step and focuses that nested index, which InlineRetargetFlow.tsx reads to swap the
- * right column to that nested step's own Pick element/Review selectors/Validation wizard,
- * addressed via `for_each.steps[N]` (see step_path.py) — the same experience a top-level step
+ * parent loop step and focuses that nested index, which StepEditor.tsx reads to swap the
+ * right column to that nested step's own editor, addressed via `for_each.steps[N]` (see step_path.py) — the same experience a top-level step
  * gets. Structural edits (add/delete/reorder a loop body step) aren't supported yet (EXEC-38-UI).
  */
 export function ForEachSubList({ parentStepIndex, forEachSteps, onSelectNested }: Props) {

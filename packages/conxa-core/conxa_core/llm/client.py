@@ -55,7 +55,7 @@ def _debug_log(message: str) -> None:
 # used to be three separately hand-maintained copies — collapsed to one after the third copy
 # silently dropped workflow_review and every compile went rules-only with no error.)
 VISION_TASKS = frozenset({
-    "anchor_vision", "anchor_vision_frameset", "vision_reasoning", "region_selector",
+    "anchor_vision", "anchor_vision_frameset", "vision_reasoning",
     "copilot_diagnose", "copilot_reply",
 })
 
@@ -742,53 +742,6 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             },
             {"role": "user", "content": content},
         ]
-    if task == "region_selector":
-        # Re-target wizard: user drew a fresh bbox with no stored per-element geometry to
-        # resolve it against. The image (highlighted region) + DOM snippet together let the
-        # model see which element the box points to and read the DOM to select it.
-        image_b64 = str(payload.get("image_base64") or "")
-        mime = str(payload.get("image_mime") or "image/jpeg")
-        user_text = str(payload.get("user_text") or "")
-        return [
-            {
-                "role": "system",
-                "content": (
-                    "You generate Playwright locator strings for web automation. The user "
-                    "message contains a screenshot with a red highlighted region marking the "
-                    "target element, followed by a snippet of the page's DOM HTML. Find the "
-                    "element the highlighted region points to in the DOM, then return strict "
-                    "JSON with key 'candidates' (array of objects: selector (string), rank "
-                    "(1=best), rationale (short string), intent (snake_case action description)). "
-                    "Selector priority — use the first that applies:\n"
-                    "1. [data-testid=\"x\"] — most stable\n"
-                    "2. [aria-label=\"x\"] — when element has an explicit aria-label attribute\n"
-                    "3. button:has-text(\"x\"), a:has-text(\"x\") — tag + visible text for buttons and links\n"
-                    "4. input[name=\"x\"], select[name=\"x\"], textarea[name=\"x\"] — name attr for form controls only\n"
-                    "5. [placeholder=\"x\"] — for text inputs with placeholder\n"
-                    "6. #stable-id — non-hashed, non-generated IDs\n"
-                    "7. text=\"x\" — Playwright text locator (exact, case-sensitive) as last text-based resort\n"
-                    "Critical rules:\n"
-                    "- NEVER write [role=\"button\"] or [role=\"x\"] — CSS [role] only matches the raw HTML "
-                    "attribute, not the ARIA role; plain <button> and <a> elements do NOT have a role "
-                    "attribute in HTML\n"
-                    "- NEVER write [name=\"x\"] on buttons, divs, spans, or links — the name attribute only "
-                    "exists on form controls (input/select/textarea) and form elements\n"
-                    "- Selectors MUST match exactly one element in the provided DOM snippet\n"
-                    "- Avoid: hashed classes, auto-generated IDs, nth-of-type chains, XPath\n"
-                    "No markdown, no extra keys."
-                ),
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{image_b64}"},
-                    },
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ]
     if task == "copilot_reply":
         # Streamed sibling of copilot_diagnose (BUILD-26 stage c): same evidence/transcript
         # framing, but asks for prose only — no JSON contract — because a streamed JSON object
@@ -919,10 +872,9 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             "   - flatten_popup: {step_key, state_id} — the reviewer says the popup shows up every "
             "run and the recorded choice is the answer.\n"
             "   - set_date_offset: {step_key, days} — a date step becomes today plus N days.\n"
-            "   - retarget_from_step: {step_key, identity_from_step_key} — the reviewer wants step A "
-            "to act on the same element step B already uses. If NO existing step uses the element "
-            "they mean, do not guess: add {step_key, reason} to \"needs_editor\" (a top-level array, "
-            "usually empty) and the reviewer is sent to the re-target wizard to draw it.\n"
+            "   - If the reviewer wants a step to act on a different element, do not guess: add "
+            "{step_key, reason} to \"needs_editor\" (a top-level array, usually empty) and the "
+            "reviewer is sent to Human Edit to change it.\n"
             "   - rename_workflow: {name}.\n"
             "AGENT STEPS FROM PLAIN WORDS. When the reviewer describes a decision that depends on "
             "what the PAGE shows (\"if it says verified click Download, if it says not verified click "
@@ -938,7 +890,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             "You must NEVER propose target, identity_bundle, compiled_selectors, primary_selector, "
             "fallback_selectors, recovery, no_recovery_block, or a raw for_each/branch \"steps\" "
             "array in any proposal of any kind — you never write or change a page selector or a "
-            "loop/branch body directly; a human re-targeting a step in the editor does that, and a "
+            "loop/branch body directly; a human editing the step in Human Edit does that, and a "
             "branch/structural insertion's own selectors are built deterministically from what you "
             "referenced, not by you. Never re-propose something the digest's prior_decisions "
             "already shows as rejected for the same step/field unless the reviewer asks again. "
@@ -1116,7 +1068,6 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
 # Why each is the size it is:
 #  * anchor_vision: short JSON anchors; VLMs often expect an explicit ceiling.
 #  * anchor_vision_frameset: one label and one short sentence.
-#  * region_selector: a handful of selector candidates with rationale.
 #  * workflow_review: a whole-workflow intent graph AND a suggestions array in one reply, the largest
 #    structured JSON of any task (was 4096, then 6144; the description check and loop wording ride on
 #    this call, and it writes an intent for every step, so a long workflow needs the room).
@@ -1130,7 +1081,6 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
 TASK_OUTPUT_BUDGET: dict[str, int] = {
     "anchor_vision": 1024,
     "anchor_vision_frameset": 300,
-    "region_selector": 1536,
     "workflow_review": 12288,
     "copilot_diagnose": 16384,
     "copilot_reply": 16384,

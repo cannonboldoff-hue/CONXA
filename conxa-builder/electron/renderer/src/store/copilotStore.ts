@@ -63,9 +63,8 @@ try {
 }
 
 // The Human Review Copilot's conversation state (BUILD-26). Lives outside the launcher/panel
-// components (mirroring store/retargetStore.ts) so the conversation survives the panel closing
-// and reopening, and so WorkflowViewer's step-select handler can guard on `dirty` the same way
-// it already does for a pending re-target edit — a pending proposal is exactly the same kind of
+// components so the conversation survives the panel closing and reopening, and so
+// WorkflowViewer's step-select handler can guard on a pending proposal — it is a
 // "you're about to lose this" state.
 type CopilotState = {
   skillId: string | null

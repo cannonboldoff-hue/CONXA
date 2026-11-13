@@ -95,17 +95,6 @@ export const editorHelp = {
       </p>
     ),
   },
-  toolScreenshots: {
-    label: "Recording screenshots",
-    summary:
-      "Five frames captured around each step (just before to just after). Click or drag one to set the picture used for that step.",
-    details: (
-      <p>
-        Frames span roughly −0.5 s to +0.5 s of the action. The chosen frame anchors visual
-        recovery; drag “No image” onto a step to detach it and clear those visual anchors.
-      </p>
-    ),
-  },
   toolAgentView: {
     label: "How Claude sees this skill",
     summary:
@@ -210,8 +199,7 @@ export const editorHelp = {
       "Drag steps to reorder them. Select a step to edit it on the right; use the trash icon to remove one.",
     details: (
       <p>
-        From <strong>Tools → Recording screenshots</strong>, drag a frame (or “No image”) onto a
-        step to swap or clear its screenshot and the anchors derived from it.
+        Each step saves on its own. Use undo and redo in the top bar to step back through your changes.
       </p>
     ),
   },
@@ -223,18 +211,6 @@ export const editorHelp = {
       <p>
         Each step carries a human description, the element it targets, compiled selectors, optional
         visual anchors, and any outcome checks. Edits are saved per step.
-      </p>
-    ),
-  },
-  reviewSelectors: {
-    label: "Selector candidates",
-    summary:
-      "Every way the runtime can find this element, ranked top to bottom. The top row is tried first; the rest are fallbacks if it stops matching.",
-    details: (
-      <p>
-        Drag a row (or use the up/down arrows) to reorder, click a selector to edit it by hand, or
-        add one manually. Badges show the engine that produced each selector, whether it uniquely
-        matched at compile time, and its durability — how likely it is to survive a UI change.
       </p>
     ),
   },

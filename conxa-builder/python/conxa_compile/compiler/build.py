@@ -374,7 +374,7 @@ def _fallback_anchors_from_event(ev_with_intent: dict[str, Any], policy: dict[st
     return anchors
 
 
-# Kept for the Human Edit screenshot tools (editor/recording_visual.py, copilot_retrieval.py); the
+# Kept for the copilot's screenshot lookup (editor/copilot_retrieval.py); the
 # compiler itself no longer records screenshot paths on steps.
 def _persisted_visual_asset_path(
     ev: dict[str, Any],

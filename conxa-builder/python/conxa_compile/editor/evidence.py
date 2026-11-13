@@ -10,7 +10,7 @@ reader elsewhere in the pipeline:
   - compile_report (per-step confidence, warnings, second_opinion, archived_steps)
   - the recorded event's post_condition.classified_effect / state_change.dom_diff, which live on
     the RECORDING, not on the compiled SkillStep — conxa_core.storage.session_events, correlated
-    via editor/retarget.py::find_source_event (the same lookup the 1-click-fix path uses)
+    via editor/source_event.py::find_source_event (the same lookup the 1-click-fix path uses)
   - deterministic step prose — editor/describe.py::describe_step
   - prior reviewer edits on this step — editor/edit_log.py::read_edits
 
@@ -34,7 +34,7 @@ from conxa_compile.compiler.step_key import step_keys
 from conxa_compile.conxa_runtime import resolve_test_sandbox_dir
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.edit_log import read_edits
-from conxa_compile.editor.retarget import find_source_event
+from conxa_compile.editor.source_event import find_source_event
 
 # Caps applied before anything reaches the LLM payload — the runtime evidence file and the
 # recovery log are both effectively unbounded.

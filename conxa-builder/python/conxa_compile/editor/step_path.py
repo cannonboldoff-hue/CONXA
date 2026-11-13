@@ -1,7 +1,6 @@
 """Path addressing for a nested step inside another step's body — `branch.steps[N]` (if_present,
-EXEC-1) or `for_each.steps[N]` (EXEC-38). Shared by `handlers/workflow_editor.py`'s patch/retarget
-RPCs and `conxa_compile/editor/retarget.py` + `recording_visual.py`'s wizard preview/apply, so
-every write path parses and resolves the same syntax — a hand-rolled second parser drifts (see
+EXEC-1) or `for_each.steps[N]` (EXEC-38). Shared by `handlers/workflow_editor.py`'s patch
+RPCs, so every write path parses and resolves the same syntax — a hand-rolled second parser drifts (see
 CLAUDE.md's try_dismiss-branch-builder invariant for why that rule exists elsewhere too).
 """
 

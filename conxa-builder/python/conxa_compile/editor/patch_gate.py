@@ -502,7 +502,7 @@ def validate_editor_patch(
     the opposite case from branch: EXEC-38 runs a loop body through `executeOneStep`, the exact
     same tab-resolution/GATE/VERIFY/recovery-cascade path every top-level step gets (see
     runtime/app/run.js), so `recovery`/`validation` are meaningful there and must stay patchable —
-    the re-target wizard's Validation phase is exactly this. Callers patching a for_each nested
+    Human Edit's Validation panel is exactly this. Callers patching a for_each nested
     step pass `in_branch_body=False` (the default), same as an ordinary top-level step.
 
     `previous_step`, when given, is the step immediately before this one in the same step list
@@ -804,7 +804,7 @@ def validate_editor_patch(
     # Only enforced when there is something to protect: either the patch explicitly touches
     # `validation` (the Human Editor's Validation phase), or the step already carried a required
     # assertion before this edit. This keeps packs compiled before enforced post-conditions
-    # existed editable via unrelated patches (intent rename, retarget) without forcing a
+    # existed editable via unrelated patches (intent rename) without forcing a
     # recompile — see the plan's backward-compatibility decision.
     consequential_input = act in {"fill", "type", "select", "select_option"} and bool(merged.get("value"))
     consequential_click = (

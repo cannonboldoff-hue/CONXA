@@ -76,8 +76,7 @@ def _llm_reply_text(data: dict[str, Any] | None) -> str:
 
 
 def _encode_screenshot(path: str | None) -> str | None:
-    """Read + downscale a screenshot for the vision call, matching
-    region_selector_vision.py's own read → downscale → base64 shape exactly. Missing/unreadable
+    """Read + downscale a screenshot for the vision call. Missing/unreadable
     is the same as "no screenshot" — the graceful-degrade case, never an error."""
     if not path:
         return None
@@ -161,8 +160,7 @@ def copilot_turn(
     matching `workflow_intent.py` / `workflow_semantics.py` — **except** QuotaExceeded /
     EntitlementBlocked / CloudUnreachable, which propagate so the caller
     (`handlers/copilot.py`) can surface an actionable message ("your AI Usage Credits are
-    exhausted") instead of the panel going silently mute — the same carve-out
-    `region_selector_vision.py` makes.
+    exhausted") instead of the panel going silently mute.
     """
     base_user_text = user_text if user_text is not None else _base_user_text(evidence, transcript, message)
 

@@ -10,7 +10,7 @@ web
 
 ## Users
 
-Mixed skill levels operate Build Studio: non-technical staff (product managers, ops, support leads) record workflows because they know the target software, while technical staff step in for Human Edit and recovery-tier debugging when a compile produces a low-confidence selector or a step needs re-targeting. The app has to hold a non-expert's hand through recording and compiling, while still exposing enough precision (selector confidence, identity signals, recovery tiers) for a technical operator to diagnose and fix a broken step.
+Mixed skill levels operate Build Studio: non-technical staff (product managers, ops, support leads) record workflows because they know the target software, while technical staff step in for Human Edit and recovery-tier debugging when a compile produces a low-confidence selector or a step needs its element changed. The app has to hold a non-expert's hand through recording and compiling, while still exposing enough precision (selector confidence, identity signals, recovery tiers) for a technical operator to diagnose and fix a broken step.
 
 ## Product Purpose
 

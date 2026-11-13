@@ -14,12 +14,12 @@ type Props = {
 
 /**
  * The for_each loop's own summary + a list of its nested body steps, each of which opens the
- * SAME 3-phase re-target wizard a top-level step gets (InlineRetargetFlow's nestedForEachStep
- * path) — clicking a row here sets focusedBranchIndex, which swaps this card out for that
- * step's own Pick element/Review selectors/Validation view, addressed via `for_each.steps[N]`.
+ * SAME editor a top-level step gets (StepEditor's nestedForEachStep path) — clicking a row here
+ * sets focusedBranchIndex, which swaps this card out for that step's own editor, addressed via
+ * `for_each.steps[N]`.
  * Shown only while no nested step is focused — the twin of BranchBodyEditor.tsx for a loop body,
  * but without add/delete/reorder: patch_gate.py has no structural (insert/delete/move) route for
- * `for_each.steps[j]` yet, only the field-level patch route the wizard itself uses.
+ * `for_each.steps[j]` yet, only the field-level patch route the step editor uses.
  */
 export function ForEachBodyViewer({ step }: Props) {
   const setFocusedBranchIndex = useEditorStore((s) => s.setFocusedBranchIndex)
@@ -42,7 +42,7 @@ export function ForEachBodyViewer({ step }: Props) {
               : 'No row source set yet.'}
           {', up to '}
           {summary?.max_iterations ?? '?'}
-          {' times. Click a step below to view or re-target it.'}
+          {' times. Click a step below to view or edit it.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-1.5 p-2.5 pt-0">

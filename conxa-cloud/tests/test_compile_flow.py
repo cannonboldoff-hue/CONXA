@@ -66,7 +66,7 @@ def env(monkeypatch, tmp_path):
     mod._write = out.append
     protocol._write = out.append
     b = mod.Backend()
-    monkeypatch.setattr("conxa_compile.editor.retarget.find_source_event", lambda step, doc: SOURCES.get(step.get("intent")))
+    monkeypatch.setattr("conxa_compile.editor.source_event.find_source_event", lambda step, doc: SOURCES.get(step.get("intent")))
     from conxa_core.storage.group_store import create_group
     from conxa_core.storage.workflow_store import create_workflow, get_workflow, save_workflow
 

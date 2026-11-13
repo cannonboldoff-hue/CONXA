@@ -1,5 +1,4 @@
 import type { StepEditorDTO, WorkflowResponse } from '@/types/workflow'
-import { RECORDING_DRAG_MODE_CLEAR_VISUAL } from '@/api/workflowApi'
 
 /** Parses a step's own `id` — `"{skillId}:{stepIndex}"` for a top-level step, or
  * `"{skillId}:{stepIndex}.for_each.steps[{j}]"` / `"...branch.steps[{j}]"` for a nested one
@@ -112,24 +111,3 @@ export function visualBboxState(step: StepEditorDTO): {
 }
 
 export type BboxState = NonNullable<ReturnType<typeof visualBboxState>>
-
-export function handleRecordingScreenshotDrop(
-  raw: string,
-  stepIndex: number,
-  onDroppedRecordingScreenshot?: (stepIndex: number, eventIndex: number) => void,
-  onClearStepVisual?: (stepIndex: number) => void,
-) {
-  try {
-    const parsed = JSON.parse(raw) as { event_index?: unknown; mode?: unknown }
-    if (parsed.mode === RECORDING_DRAG_MODE_CLEAR_VISUAL && onClearStepVisual) {
-      void onClearStepVisual(stepIndex)
-      return
-    }
-    const eventIndex = parsed.event_index
-    if (typeof eventIndex === 'number' && Number.isFinite(eventIndex) && eventIndex >= 0) {
-      void onDroppedRecordingScreenshot?.(stepIndex, Math.floor(eventIndex))
-    }
-  } catch {
-    // Ignore malformed drag payloads from unrelated sources.
-  }
-}

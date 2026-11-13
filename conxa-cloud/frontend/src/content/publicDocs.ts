@@ -513,7 +513,7 @@ export const publicDocs = [
               'Edit what a step does, or which input field it fills.',
               'Reorder, insert, or delete steps.',
               'Turn a value typed during recording into a variable the AI assistant asks for each time, instead of a fixed value.',
-              'Re-target a step pointing at the wrong element: draw a box around the correct one, review the suggested options, and confirm what should be checked afterward to know it worked.',
+              'Fix a step pointing at the wrong element: change how it is found in the details of the step, or re-record from that step, and adjust what should be checked afterward to know it worked.',
             ],
           },
           {
@@ -593,7 +593,7 @@ export const publicDocs = [
               ],
               [
                 'A step keeps failing when testing.',
-                "Open the step's reliability details in review; it usually shows the recorded element could not be found the same way anymore. Re-target it by drawing a box around the correct element, then re-test.",
+                "Open the step's reliability details in review; it usually shows the recorded element could not be found the same way anymore. Fix how it is found in the step's details, or re-record from that step, then re-test.",
               ],
               [
                 'Out of compile credits or AI Usage Credits.',

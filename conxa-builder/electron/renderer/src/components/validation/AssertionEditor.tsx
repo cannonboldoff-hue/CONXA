@@ -142,15 +142,12 @@ export function hasInvalidAssertions(assertions: AssertionDraft[]): boolean {
 }
 
 // Same gradient-fill + ring depth treatment as StepConfigForm's PANEL_CARD_CLASS (each panel
-// file keeps its own copy of this small const rather than sharing one export — see
-// RetargetPhaseSelectors.tsx for the same convention).
+// file keeps its own copy of this small const rather than sharing one export).
 const PANEL_CARD_CLASS =
   'bg-[linear-gradient(180deg,rgba(17,24,39,0.85),rgba(7,10,16,0.92))] ring-white/10'
 
-/** Read-only "what confirms this step worked" summary — shown regardless of which re-target
- *  wizard phase is open (InlineRetargetFlow), so a user reviewing a step doesn't have to click
- *  all the way to the Validation phase just to see whether a check exists at all. Editing stays
- *  exclusively in that phase's own AssertionEditorRows / the Human Edit form's Validation panel
+/** Read-only "what confirms this step worked" summary. Editing stays exclusively in
+ *  AssertionEditorRows / the Human Edit form's Validation panel
  *  — this never writes anything, so there's no risk of it fighting either of those save paths. */
 export function ExpectedOutcomeSummary({ step }: { step: StepEditorDTO }) {
   const assertions = (step.validation?.assertions ?? []) as Record<string, unknown>[]
@@ -188,8 +185,7 @@ type RowsProps = {
   onChange: (next: AssertionDraft[]) => void
 }
 
-/** Editable list of post-condition assertion rows — shared by the re-target wizard's
- *  Validation phase and the Human Edit screen's per-step Validation panel. */
+/** Editable list of post-condition assertion rows — the Human Edit screen's per-step Validation panel. */
 export function AssertionEditorRows({ assertions, onChange }: RowsProps) {
   const hasRequired = assertions.some(isAssertionRequired)
 

@@ -1,6 +1,6 @@
 """conxa_compile.llm.copilot::copilot_turn (BUILD-26 stage b2) — the Studio-side client for one
 Human Review Copilot conversation turn. Graceful-empty on failure except the three infra
-exceptions, which must keep bubbling up (same contract as region_selector_vision.py)."""
+exceptions, which must keep bubbling up (so an actionable message can reach the panel)."""
 
 from __future__ import annotations
 

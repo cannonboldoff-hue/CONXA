@@ -269,7 +269,7 @@ def _compile(b, wf, monkeypatch):
     from tests.test_compile_flow import SOURCES, _fake_compile
 
     sources = {**SOURCES, "send_invoice": {"action": {"value": None}, "extras": {"sequence": 7}}}
-    monkeypatch.setattr("conxa_compile.editor.retarget.find_source_event", lambda step, doc: sources.get(step.get("intent")))
+    monkeypatch.setattr("conxa_compile.editor.source_event.find_source_event", lambda step, doc: sources.get(step.get("intent")))
     _fake_compile(b, wf)
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid")
     return clarify_store.load(wf.id)
@@ -388,7 +388,7 @@ def test_a_generic_popup_answer_still_replays_as_before():
 
 
 def test_a_step_finds_its_own_event_when_a_snapshot_is_shared(monkeypatch):
-    from conxa_compile.editor.retarget import find_source_event
+    from conxa_compile.editor.source_event import find_source_event
 
     events = [{"extras": {"sequence": 1}, "action": {"action": "scroll"}, "snapshot": {"ref": "snap"}},
               {"extras": {"sequence": 2}, "action": {"action": "click"}, "snapshot": {"ref": "snap"}}]
