@@ -72,15 +72,15 @@ test("runViewport: the contract width and the recorded height, kept to what a pa
   for (const none of [undefined, null, 0, -5, "x", NaN]) assert.deepStrictEqual(runViewport(none), RUN_VIEWPORT, String(none));
 });
 
-test("checkGeometry: a wrong DPR is repaired by the host and measured again", async () => {
+test("checkGeometry: a page at the wrong width is repaired by the host and measured again", async () => {
   hostCalls.length = 0;
-  const r = await checkGeometry(sizedPage([1280, 720, 1.25], [1280, 720, 1]), HOST);
+  const r = await checkGeometry(sizedPage([1024, 576, 1.25], [1280, 720, 1]), HOST);
   assert.deepStrictEqual(r, { ok: true });
   assert.deepStrictEqual(hostCalls, [{ runId: "r1" }]);
 });
 
 test("checkGeometry: a repair that does not hold is not ok", async () => {
-  const r = await checkGeometry(sizedPage([1280, 720, 1.25]), HOST);
+  const r = await checkGeometry(sizedPage([1100, 720, 1.25]), HOST);
   assert.strictEqual(r.ok, false);
   assert.ok(!r.unsupported);
 });
@@ -92,7 +92,42 @@ test("checkGeometry: a host that cannot answer the repair op is unsupported, not
   assert.deepStrictEqual({ ok: r.ok, unsupported: r.unsupported }, { ok: false, unsupported: true });
 });
 
+test("checkGeometry: any DPR is fine at the right width (a zoomed pane reads screen DPR x zoom)", async () => {
+  hostCalls.length = 0;
+  assert.deepStrictEqual(await checkGeometry(sizedPage([1280, 720, 1.25]), HOST), { ok: true });
+  assert.strictEqual(hostCalls.length, 0);
+});
+
 test("checkGeometry: a page that cannot be measured, or has no host owner, passes", async () => {
   assert.deepStrictEqual(await checkGeometry(sizedPage(null), HOST), { ok: true });
   assert.deepStrictEqual(await checkGeometry(sizedPage([800, 600, 2]), { hostOwned: false }), { ok: true });
+});
+
+// A page whose reported size is fine but whose input lands where `map` says it does.
+const mousePage = (map, size = [1280, 720, 1]) => ({
+  evaluate: async (fn) => (fn && fn.name === "_firstMove" ? new Promise((r) => setTimeout(() => r(page.__moved), 5)) : size),
+  mouse: { move: async (x, y) => { page.__moved = map(x, y); } },
+});
+let page;
+
+test("checkGeometry: a shrunk pane (DPR below 1) is right when input lands where it is aimed", async () => {
+  hostCalls.length = 0;
+  page = mousePage((x, y) => [x, y], [1280, 720, 0.72]);
+  assert.deepStrictEqual(await checkGeometry(page, HOST), { ok: true });
+  assert.strictEqual(hostCalls.length, 0);
+});
+
+test("checkGeometry: right size but input lands at 1/scale is repaired, and fails when the repair does not hold", async () => {
+  hostCalls.length = 0;
+  page = mousePage((x, y) => [x * 1.39, y * 1.39]);
+  const r = await checkGeometry(page, HOST);
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(hostCalls, [{ runId: "r1" }]);
+  hostCalls.length = 0;
+  let fixed = false;
+  hostReply = () => { fixed = true; return { ok: true }; };
+  page = mousePage((x, y) => (fixed ? [x, y] : [x * 1.39, y * 1.39]));
+  assert.deepStrictEqual(await checkGeometry(page, HOST), { ok: true });
+  assert.strictEqual(hostCalls.length, 1);
+  hostReply = () => ({ ok: true });
 });

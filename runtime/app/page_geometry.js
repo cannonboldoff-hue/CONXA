@@ -75,23 +75,54 @@ const _measure = () => [window.innerWidth, window.innerHeight, window.devicePixe
 // page: the check is advisory then.
 const _unmeasured = (live) => live === EVAL_TIMED_OUT || !Array.isArray(live);
 
-// The width and DPR are the contract; the height follows the host's pane, so any height a panel can
-// hand out is right. What this catches is Playwright's clipped screenshot putting the page back at the
-// screen's native DPR, which also changes the width.
+// The width is the contract (layout breakpoints hang on it); the height follows the host's pane, so any
+// height a panel can hand out is right. The DPR is no contract: a host shrinks a narrow pane's page with
+// the view's zoom, so it reads as the screen's DPR times the zoom (above or below 1). Playwright's clipped
+// screenshot putting the page back at native size changes the width, which this catches (and inputLands).
+// The width is off by a pixel at most from the zoom's rounding.
 function _matches(live) {
-  return live[0] === RUN_VIEWPORT.width && live[1] >= MIN_H && Math.abs(live[2] - 1) < 0.01;
+  return Math.abs(live[0] - RUN_VIEWPORT.width) <= 1 && live[1] >= MIN_H;
 }
 
-// { ok: true } when the page is at the contract size (or could not be measured: advisory, a busy page
-// is not a wrong-sized one). Otherwise asks the host panel to repair it and measures again:
-// { ok: false, live } when the repair did not hold, { ok: false, unsupported: true } when the host is
-// too old to know the repair op or not answering (the app layer updates separately from the host exe).
+// Where the page says the mouse arrived, as [x, y], or null. Resolves on the first mousemove.
+const _firstMove = () => new Promise((resolve) => {
+  const done = (v) => { removeEventListener("mousemove", on, true); resolve(v); };
+  const on = (e) => done([e.clientX, e.clientY]);
+  addEventListener("mousemove", on, true);
+  setTimeout(() => done(null), 1500);
+});
+const PROBE_POINT = { x: 97, y: 61 };
+
+// The invariant that actually matters: a point the runtime aims at is the point the page receives.
+// The page's own report of its size cannot show this. A host that shrinks the page the wrong way
+// (an emulation `scale`) still reports 1280 x 720, yet every Playwright click lands at 1/scale of where
+// it was aimed, so steps fail with "intercepts pointer events" and the real cause is invisible.
+// True when it cannot be measured (no mouse, no answer): advisory, like the size check.
+async function inputLands(page) {
+  if (!page || !page.mouse || typeof page.mouse.move !== "function") return true;
+  try {
+    const seen = evalOn(page, _firstMove, undefined, 3000);
+    await page.mouse.move(PROBE_POINT.x, PROBE_POINT.y);
+    const at = await seen;
+    if (!Array.isArray(at)) return true;
+    return Math.abs(at[0] - PROBE_POINT.x) <= 2 && Math.abs(at[1] - PROBE_POINT.y) <= 2;
+  } catch (_) {
+    return true;
+  }
+}
+
+// { ok: true } when the page is at the contract size and input lands where it is aimed (or could not be
+// measured: advisory, a busy page is not a wrong-sized one). Otherwise asks the host panel to repair it
+// and measures again: { ok: false, live } when the repair did not hold, { ok: false, unsupported: true }
+// when the host is too old to know the repair op or not answering (the app layer updates separately
+// from the host exe).
 async function checkGeometry(page, { hostOwned, hostRunId } = {}) {
   // Only a host panel owns (and can repair) the page size. A browser the runtime launched itself is
   // created at its viewport by Playwright and nothing else resizes it.
   if (!hostOwned || !hostRunId) return { ok: true };
+  const good = async (live) => (_unmeasured(live) || _matches(live)) && (await inputLands(page));
   const first = await evalOn(page, _measure).catch(() => EVAL_TIMED_OUT);
-  if (_unmeasured(first) || _matches(first)) return { ok: true };
+  if (await good(first)) return { ok: true };
   try {
     await require("./host_browser").ensureGeometry({ runId: hostRunId });
   } catch (_) {
@@ -99,7 +130,7 @@ async function checkGeometry(page, { hostOwned, hostRunId } = {}) {
     return { ok: false, live: first, unsupported: true };
   }
   const again = await evalOn(page, _measure).catch(() => EVAL_TIMED_OUT);
-  return _unmeasured(again) || _matches(again) ? { ok: true } : { ok: false, live: again };
+  return (await good(again)) ? { ok: true } : { ok: false, live: again };
 }
 
 module.exports = { RUN_VIEWPORT, MIN_H, MAX_H, runViewport, capture, checkGeometry };

@@ -18,13 +18,13 @@ let repairFixesPage = false;
 const realLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "./host_browser") {
-    return { ensureGeometry: async (a) => { repairs.push(a); if (repairFixesPage) pageDpr = 1; return { ok: true }; } };
+    return { ensureGeometry: async (a) => { repairs.push(a); if (repairFixesPage) pageWidth = 1280; return { ok: true }; } };
   }
   return realLoad.call(this, request, ...rest);
 };
 const { runPlan } = require("../../app/run");
 
-let pageDpr = 1.25;
+let pageWidth = 1024; // a page Playwright's screenshot put back at native size
 function page() {
   return {
     url: () => "https://app.test/home",
@@ -35,13 +35,13 @@ function page() {
     waitForLoadState: async () => {},
     waitForTimeout: async () => {},
     goto: async () => {},
-    evaluate: async (fn) => (String(fn).includes("devicePixelRatio") ? [1280, 720, pageDpr] : null),
+    evaluate: async (fn) => (String(fn).includes("devicePixelRatio") ? [pageWidth, 720, 1.25] : null),
   };
 }
 const OPTS = (events) => ({ tracker: { emit: (c, d) => events.push([c, d]) }, hostOwned: true, hostRunId: "run-1" });
 
 test("runPlan: a host-owned page stuck at the wrong size ends the run as a page_size fault before the step", async () => {
-  pageDpr = 1.25; repairFixesPage = false; repairs.length = 0;
+  pageWidth = 1024; repairFixesPage = false; repairs.length = 0;
   const events = [];
   await assert.rejects(
     runPlan(page(), [{ type: "navigate", url: "https://app.test/next" }], {}, 0, "slug-size", OPTS(events)),
@@ -49,7 +49,7 @@ test("runPlan: a host-owned page stuck at the wrong size ends the run as a page_
       assert.strictEqual(err.fault, true);
       assert.strictEqual(err.faultKind, "page_size");
       assert.strictEqual(err.failedAt, 0);
-      assert.match(err.message, /changed size partway through/);
+      assert.match(err.message, /not showing the page at its normal size/);
       return true;
     },
   );
@@ -59,7 +59,7 @@ test("runPlan: a host-owned page stuck at the wrong size ends the run as a page_
 });
 
 test("runPlan: a page the host repairs runs the step normally", async () => {
-  pageDpr = 1.25; repairFixesPage = true; repairs.length = 0;
+  pageWidth = 1024; repairFixesPage = true; repairs.length = 0;
   const events = [];
   await runPlan(page(), [{ type: "navigate", url: "https://app.test/next" }], {}, 0, "slug-size-ok", OPTS(events));
   assert.strictEqual(repairs.length, 1);

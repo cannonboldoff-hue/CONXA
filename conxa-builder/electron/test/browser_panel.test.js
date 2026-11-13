@@ -18,6 +18,7 @@ class FakeWebContents {
     this.commands = [];
     this.live = null; // what the page reports as [innerWidth, innerHeight, devicePixelRatio]; null = unreadable
     this.attached = false;
+    this.zooms = [];
     this.debugger = {
       isAttached: () => this.attached,
       attach: () => { this.attached = true; },
@@ -29,6 +30,7 @@ class FakeWebContents {
     };
     this.navigationHistory = { canGoBack: () => false, canGoForward: () => false };
   }
+  setZoomFactor(z) { this.zooms.push(z); }
   setWindowOpenHandler(fn) { this.openHandler = fn; }
   on(ev, fn) { this.handlers[ev] = fn; }
   once(ev, fn) { this.handlers[ev] = fn; }
@@ -279,20 +281,22 @@ test("test runs share one persistent partition (warm cache), wiped between runs;
 const settle = () => new Promise((r) => setImmediate(r));
 const has = (wc, method) => wc.commands.some((c) => c.method === method);
 
-test("a page that becomes ready at the wrong size is cleared and set again, at the run's current scale", async () => {
+test("a test page that becomes ready at the wrong size is cleared and zoomed again, at the run's current scale", async () => {
   const { tabId } = panel.newView("reapply", { viewport: { width: 1280, height: 720 } });
   const view = added[added.length - 1];
   panel.setActiveBounds("reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
   const wc = view.webContents;
+  assert.strictEqual(wc.zooms[wc.zooms.length - 1], 0.5, "a test run shrinks with the view's zoom: `scale` breaks CDP clicks, a device scale factor leaves the page clipped");
   for (const ev of ["dom-ready", "did-finish-load"]) {
-    for (const live of [[1280, 720, 1.25], [1024, 576, 1], null]) { // drifted DPR, drifted size, unreadable
+    for (const live of [[1024, 576, 1], null]) { // drifted size, unreadable
       wc.live = live;
       wc.commands.length = 0;
+      wc.zooms.length = 0;
       wc.handlers[ev]();
       await settle();
-      const methods = wc.commands.map((c) => c.method);
-      assert.ok(methods.indexOf("Emulation.clearDeviceMetricsOverride") < methods.indexOf("Emulation.setDeviceMetricsOverride"), "clears before it sets: a repeat of the same override is a no-op to Chromium");
-      assert.strictEqual(lastMetrics(wc).params.scale, 0.5);
+      assert.ok(has(wc, "Emulation.clearDeviceMetricsOverride"), "clears Playwright's override first");
+      assert.ok(!has(wc, "Emulation.setDeviceMetricsOverride"), "a test run sets no metrics override");
+      assert.deepStrictEqual(wc.zooms, [0.5]);
     }
   }
 });
@@ -301,7 +305,7 @@ test("a page that is already at the recorded size is left alone", async () => {
   const { tabId } = panel.newView("reapply-ok", { viewport: { width: 1280, height: 720 } });
   const wc = added[added.length - 1].webContents;
   panel.setActiveBounds("reapply-ok", tabId, { x: 0, y: 0, width: 640, height: 600 });
-  wc.live = [1280, 720, 1];
+  wc.live = [1280, 720, 0.5]; // a zoomed test page reads the screen's DPR times the zoom
   wc.commands.length = 0;
   wc.handlers["dom-ready"]();
   await settle();
@@ -313,7 +317,7 @@ test("ensure_geometry repairs every tab of the run, hidden ones too, and says wh
   const first = added[added.length - 1].webContents;
   panel.newTab("ensure", {});
   const second = added[added.length - 1].webContents;
-  first.live = [1280, 720, 1.25];
+  first.live = [1024, 576, 1];
   second.live = [1280, 720, 1];
   first.commands.length = 0; second.commands.length = 0;
   const r = await panel.ensureGeometry("ensure");

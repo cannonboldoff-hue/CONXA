@@ -92,7 +92,7 @@ Each is explained in full in `docs/TRD.md`.
 - A step runs only on the tab it was recorded on (`tabs.js::resolveStepPage`). If that tab can't be found, the step fails; no fallback.
 - The resolver never picks `candidate[0]` blindly: the winner must beat the runner-up by `uniqueMargin` (0.15).
 - An app fault (offline, 4xx/5xx, alert, invalid field) ends the run before any recovery (`run.js::detectFault`).
-- Only a host panel (`browser_panel.js`) sets the page size; every runtime screenshot goes through `page_geometry.capture()`, never `page.screenshot()` (its clip resets the size). A host-owned page at the wrong width or DPR ends the run before the step (`page_geometry.js::checkGeometry`); the width is pinned at 1280, the height follows the pane.
+- Only a host panel (`browser_panel.js`) sets the page size; every runtime screenshot goes through `page_geometry.capture()`, never `page.screenshot()` (its clip resets the size). A host-owned page at the wrong width ends the run before the step (`page_geometry.js::checkGeometry`); the width is pinned at 1280, the height follows the pane.
 - Tier A recovery costs zero LLM tokens. LLM is used only at Tier B. No silent LLM fallback in selector or a11y resolution.
 - `extract` resolves like a click; no match or empty value fails. `run_if` reads inputs only and can never skip a guard. `on_missing: "skip"` acts only on provable absence.
 - `agent_span` is the one author-placed step where an agent drives the browser. The agent picks numbered actions, never selectors. Irreversible clicks need the person's confirmation. Spans fail closed on scheduled, dry, loop and called runs. Manifest says `uses_agent: true`.

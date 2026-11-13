@@ -136,8 +136,23 @@ function _debugger(tab) {
   }
 }
 
+// How a run's page is shrunk to fit the pane. A record run is driven by the person's own mouse, which
+// Chromium maps through the override's `scale`. Every other run is driven by Playwright over CDP, and
+// CDP Input events are NOT mapped through `scale` (a click lands at 1/scale of where it was aimed), while
+// a device scale factor shrinks the render but not the layout (the page stays full size and is clipped).
+// So those runs use the view's zoom factor: the page lays out at pane/zoom = viewport.width CSS pixels,
+// is painted shrunk, and CDP input lands exactly (spike, Electron 42). The pane's size is the only
+// input: no metrics override is set at all, so `innerHeight` follows the pane by itself.
+function _setZoom(tab, z) {
+  try { if (!tab.view.webContents.isDestroyed()) tab.view.webContents.setZoomFactor(z); } catch (err) {
+    console.error("browser_panel: setZoomFactor failed", err);
+  }
+}
+
 function _emulate(run, tab) {
   if (!run.viewport) return;
+  if (run.kind !== "record") { _setZoom(tab, run.scale); return; }
+  _setZoom(tab, 1); // a test handed to the recorder (adoptRun) must not shrink twice
   const dbg = _debugger(tab);
   if (!dbg) return;
   return dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
@@ -161,7 +176,11 @@ async function _ensureGeometry(run, tab) {
       return Array.isArray(v) ? v : null;
     } catch (_) { return null; }
   };
-  const fits = (v) => !!v && v[0] === run.viewport.width && v[1] === run.height && Math.abs(v[2] - 1) < 0.01;
+  // A record page is at exact size and DPR 1. A zoomed (test) page's DPR is the screen's DPR times the zoom,
+  // and its layout size is the pane divided by the zoom, so it is off by a pixel from rounding.
+  const fits = (v) => !!v && (run.kind === "record"
+    ? v[0] === run.viewport.width && v[1] === run.height && Math.abs(v[2] - 1) < 0.01
+    : Math.abs(v[0] - run.viewport.width) <= 1 && Math.abs(v[1] - run.height) <= 2);
   let live = await read();
   if (fits(live)) return { ok: true, live };
   try { await dbg.sendCommand("Emulation.clearDeviceMetricsOverride"); } catch (_) { /* the set below still runs */ }
@@ -630,6 +649,8 @@ async function closeRun(runId) {
   const run = _runs.get(runId);
   if (!run) return;
   _runs.delete(runId);
+  // Chromium keeps a page's zoom per site in the partition, which test runs share: put it back to 1.
+  for (const t of run.tabs) _setZoom(t, 1);
   for (const t of run.tabs) {
     try { if (_win) _win.contentView.removeChildView(t.view); } catch (_) { /* best effort */ }
     try { t.view.webContents.close(); } catch (_) { /* best effort */ }
