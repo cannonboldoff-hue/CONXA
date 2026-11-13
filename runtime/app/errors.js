@@ -35,6 +35,9 @@ function firstLine(message) {
 function plainCause(err) {
   const raw = (err && err.message) || String(err || "");
   const detail = firstLine(raw) || "No error message was provided.";
+  // A deliberate stop (a popup with no recorded answer, an app fault, a bad input, "couldn't confirm") is thrown
+  // with a sentence written for a person. It is the summary; wrapping it as "unexpected" would hide the cause.
+  if (err && (err.forkDecisionNeeded || err.fault || err.badInput)) return { summary: detail, detail: "" };
   for (const [re, summary] of PATTERNS) {
     if (re.test(raw)) return { summary, detail };
   }

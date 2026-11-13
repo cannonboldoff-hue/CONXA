@@ -48,7 +48,8 @@ function forkStep(states, extra = {}) {
 
 // `probe` is what dialogProbe sees; any navigation (an option running) closes it unless
 // `stayOpen`. gotos records where the run went.
-function mockPage({ probe = null, stayOpen = false, gotoThrows = false } = {}) {
+// `afterProbe` is what is on screen once an option has run (a tray the app opened in answer).
+function mockPage({ probe = null, stayOpen = false, gotoThrows = false, afterProbe = null } = {}) {
   const page = {
     gotos: [],
     probe,
@@ -59,7 +60,7 @@ function mockPage({ probe = null, stayOpen = false, gotoThrows = false } = {}) {
     goto: async (url) => {
       if (gotoThrows) throw new Error("net::ERR_FAILED");
       page.gotos.push(url);
-      if (!stayOpen) page.probe = null;
+      if (!stayOpen) page.probe = afterProbe;
     },
   };
   return page;
@@ -215,8 +216,10 @@ test("isDecisionDialog agrees with the shared decision-surface cases", () => {
       controls: c.buttons.map((name) => ({ name, text: name })),
       hasFields: !!c.has_fields,
       native: !!c.native,
+      ...("blocks" in c ? { blocks: c.blocks } : {}),
     };
     assert.strictEqual(fork.isDecisionDialog(probe), c.decision, c.name);
+    if ("stops_when_left_open" in c) assert.strictEqual(fork.isBlockingDecision(probe), c.stops_when_left_open, `${c.name}: stops`);
     assert.strictEqual(fork.classifySurface({ ...probe, live: !!c.live, progress: !!c.progress }), c.class, `${c.name}: class`);
   }
 });
@@ -255,6 +258,58 @@ test("known dialog + auto policy: the chosen option runs and the dialog is confi
   const decided = tracker.events.find((e) => e.e === "fork_decided");
   assert.strictEqual(decided.opt, "keep_both");
   assert.strictEqual(decided.src, "policy");
+});
+
+// What the run checks after answering: that THIS popup is gone, not that the page has no dialog at all.
+const UPLOAD_TRAY = { title: "1 upload complete", text: "report.pdf Show file location", controls: [{ name: "Minimize" }, { name: "Close" }, { name: "Show file location" }], blocks: false };
+
+test("answered popup gone but the app opened a tray in answer: the choice stands", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE, afterProbe: UPLOAD_TRAY });
+  const { result } = await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })])]);
+  assert.deepStrictEqual(page.gotos, ["https://x.test/keep"]);
+  assert.deepStrictEqual(result.warnings, []);
+});
+
+test("the same popup still on screen after the answer fails the step and names the popup", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE, stayOpen: true });
+  await assert.rejects(
+    () => run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })])]),
+    (err) => {
+      assert.match(String(err.message), /"Upload options" popup is still open after choosing "Keep both"/);
+      // Whatever step fails, the error carries the page that step ran on (not a per-call-site opt-in).
+      assert.strictEqual(err.failedPage, page);
+      return true;
+    },
+  );
+});
+
+test("progress inside a popup answer is reported against the plan step that holds it", async () => {
+  const page = mockPage({ probe: EXISTS_PROBE });
+  const seen = [];
+  await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })]), nav("https://x.test/a")], {}, {
+    onStep: (i, info) => seen.push({ i, path: info.path, type: info.step.type }),
+  });
+  assert.deepStrictEqual(seen.map((s) => s.path), [[0], [0, 0], [1]]);
+  assert.strictEqual(seen[1].type, "navigate");
+});
+
+test("a different blocking popup after the answer is not this popup: the run goes on with a warning", async () => {
+  const next = { title: "Share with others?", text: "", controls: [{ name: "Share" }, { name: "Not now" }], modal: true };
+  const page = mockPage({ probe: EXISTS_PROBE, afterProbe: next });
+  const { result } = await run(page, [forkStep([existsState({ mode: "auto", option_id: "keep_both" })])]);
+  assert.strictEqual(result.warnings.length, 1);
+  assert.match(result.warnings[0], /another popup \("Share with others\?"\) appeared/);
+});
+
+test("stillShowing: same title+buttons is the popup, a tray or nothing is not", () => {
+  const state = existsState({ mode: "auto", option_id: "keep_both" });
+  assert.strictEqual(fork.stillShowing(state, EXISTS_PROBE), true);
+  assert.strictEqual(fork.stillShowing(state, UPLOAD_TRAY), false);
+  assert.strictEqual(fork.stillShowing(state, null), false);
+  // A popup no state lists is identified by what was on screen before the click.
+  const sig = fork.surfaceSignature(UPLOAD_TRAY);
+  assert.strictEqual(fork.stillShowing(sig, UPLOAD_TRAY), true);
+  assert.strictEqual(fork.stillShowing(sig, EXISTS_PROBE), false);
 });
 
 test("by_input: the caller's value picks the option", async () => {

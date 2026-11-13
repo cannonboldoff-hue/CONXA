@@ -64,6 +64,10 @@ const VIRTUAL_SCROLL_MAX_PASSES    = envNumber("CONXA_VIRTUAL_SCROLL_MAX_PASSES"
 // behavior exactly (a miss goes straight to recovery, no settle-and-retry attempt).
 const SETTLE_RETRY_ENABLED         = process.env.CONXA_SETTLE_RETRY !== "0";
 const SETTLE_BUDGET_MS             = envNumber("CONXA_SETTLE_BUDGET_MS", 8000);
+// A check on a page that has already settled (after a failure, before recovery acts) waits at most this
+// long: it asks "did the step already land?", and waiting a page-load budget for it multiplied one failed
+// step by every recovery stage until the whole run hit its deadline.
+const RECHECK_CAP_MS               = envNumber("CONXA_RECHECK_CAP_MS", 3000);
 const SETTLE_POLL_MS               = envNumber("CONXA_SETTLE_POLL_MS", 250);
 
 // EXEC-38: hard ceiling on a for_each loop's row count, independent of (and always <=) the
@@ -93,6 +97,7 @@ module.exports = {
   VIRTUAL_SCROLL_MAX_PASSES,
   SETTLE_RETRY_ENABLED,
   SETTLE_BUDGET_MS,
+  RECHECK_CAP_MS,
   SETTLE_POLL_MS,
   MAX_LOOP_ITERATIONS,
 };

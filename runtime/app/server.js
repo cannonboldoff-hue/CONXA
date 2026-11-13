@@ -2030,7 +2030,17 @@ async function _handleTool(name, args, extra) {
           const result = await runPlan(page, steps, inputs, startAt, entry.slug, {
             // `step`/`intent`/`destructive` ride along so Build Studio's test card can name each step as it
             // starts (RT-9) — extra fields on a diagnostic log line, ignored by every other reader.
-            onStep:        (i) => { exec.step = i; _phase(`step_${i}_${steps[i]?.type || "?"}_start`, { step: i, step_total: steps.length, intent: steps[i]?.intent || null, destructive: steps[i]?.destructive === true, source_step_key: steps[i]?.source_step_key || null }); },
+            // `info.path` is the chain of indices down to the step ([9, 0] = first step inside step 9's chosen
+            // option). Progress is always reported against the plan's own step (path[0]); a step inside it is
+            // marked `inner` so a reader that builds one row per plan step never mistakes it for a plan step.
+            onStep:        (i, info) => {
+              const path = (info && Array.isArray(info.path) && info.path.length) ? info.path : [i];
+              const inner = path.length > 1;
+              const top = path[0];
+              const s = inner ? (info && info.step) : steps[top];
+              exec.step = top;
+              _phase(`${inner ? "inner" : "step"}_${top}_${s?.type || "?"}_start`, { step: top, path, step_total: steps.length, intent: s?.intent || null, destructive: s?.destructive === true, source_step_key: s?.source_step_key || null });
+            },
             onPhase:       _phase,
             cancelCheck:   _execCancelled,
             deadlineAt:    exec.deadlineAt,

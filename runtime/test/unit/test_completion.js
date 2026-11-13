@@ -123,6 +123,28 @@ test("a question left open when the work ended is handed off, not passed", async
   assert.strictEqual(v.reason, "decision_popup");
 });
 
+test("a panel that leaves the page usable never stops the wait; it is reported for the step's own proof", async () => {
+  const tray = { title: "1 upload complete", text: "", hasFields: false, blocks: false,
+    controls: [{ name: "Minimize" }, { name: "Close" }, { name: "Show file location" }] };
+  const { page } = mockPage([DONE_TRAY], { dialog: tray });
+  const v = await waitForCompletion(page, opts());
+  assert.strictEqual(v.status, "done");
+  assert.strictEqual(v.leftOpen.title, "1 upload complete");
+  // The same buttons with the page covered (or not measured) are still a question: nothing makes it less careful.
+  for (const blocks of [true, null, undefined]) {
+    const r = await waitForCompletion(mockPage([DONE_TRAY], { dialog: { ...tray, blocks } }).page, opts());
+    assert.strictEqual(r.status, "handoff", `blocks=${blocks}`);
+  }
+});
+
+test("a result text is not work in flight, even if a recording learned one of its words as progress", async () => {
+  // The real Drive recording: words kept without their phrase, nothing learned as success.
+  const signals = { progress: new RegExp(String.raw`(cancel|starting|upload|uploading)`, "i"), success: null, failure: null };
+  const v = await waitForCompletion(mockPage([DONE_TRAY]).page, opts({ signals }));
+  assert.strictEqual(v.status, "done");
+  assert.strictEqual(classifySample({ busyCount: 0, regions: ["Uploading 1 item"] }, CLEAN, signals).busy, true, "real progress still counts");
+});
+
 test("progress that clears is done, and only after it cleared", async () => {
   const { page } = mockPage([TRAY, TRAY, TRAY, DONE_TRAY]);
   const v = await waitForCompletion(page, opts());
@@ -341,6 +363,19 @@ test("runPlan: a popup left open by the final step stops the run instead of repo
   );
   assert.deepStrictEqual(page.pressed, ["Enter"], "the popup was not answered and the action did not run twice");
   assert.ok(!events.some(([c]) => c === "tier_ok"), "not reported ok");
+});
+
+test("runPlan: a decision-looking panel that leaves the page usable does not fail a step that finished", async () => {
+  const tray = { title: "1 upload complete", text: "", hasFields: false, blocks: false,
+    controls: [{ name: "Minimize" }, { name: "Close" }, { name: "Show file location" }] };
+  const events = [];
+  const page = runPage([CLEAN, DONE_TRAY], { dialog: tray });
+  const tracker = { emit: (code, data) => events.push([code, data]) };
+  const result = await runPlan(page, ACT, {}, 0, "slug-completion-leftopen", { tracker });
+  assert.ok(events.some(([c]) => c === "tier_ok"), "the step is reported ok");
+  assert.ok(events.some(([c]) => c === "left_open"), "the panel is recorded, not ignored");
+  assert.match(result.warnings.join(" "), /A panel \("1 upload complete".*still open.*does not block the page/);
+  assert.strictEqual(result.proof.steps[0].left_open.title, "1 upload complete");
 });
 
 test("runPlan: Drive's upload tray after the final step is waited out and the run is done", async () => {

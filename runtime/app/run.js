@@ -37,6 +37,7 @@ const {
   RUN_RETENTION_MS,
   SETTLE_RETRY_ENABLED,
   SETTLE_BUDGET_MS,
+  RECHECK_CAP_MS,
   SETTLE_POLL_MS,
   MAX_LOOP_ITERATIONS,
   COMPLETION_GATE_ENABLED,
@@ -148,7 +149,7 @@ function sweepOldRuns(runsBaseDir, maxAgeMs = RUN_RETENTION_MS, excludeRunId = n
   }
 }
 
-const PAGE_SIZE_MESSAGE = "The test browser changed size partway through the run, so this step could not be trusted. Run the test again.";
+const PAGE_SIZE_MESSAGE = "The test browser is not showing the page at its normal size, so a click could land in the wrong place and this step could not be trusted. Run the test again.";
 
 function stepFailure(step, stepIndex, cause, preShot, warnings) {
   // Shaped once here (the single funnel every step failure passes through) rather than at each
@@ -157,7 +158,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
   // err.message itself is now "<plain summary> (<technical detail>)", never the raw dump.
   const rawMessage = cause && cause.message ? cause.message : String(cause);
   const { summary, detail } = plainCause(cause instanceof Error ? cause : new Error(rawMessage));
-  const err = new Error(`Step ${stepIndex + 1} (${step.type}) failed: ${summary} (${detail})`);
+  const err = new Error(`Step ${stepIndex + 1} (${step.type}) failed: ${summary}${detail ? ` (${detail})` : ""}`);
   err.rawMessage = rawMessage;
   err.failedAt = stepIndex;
   err.failedStep = step;
@@ -208,6 +209,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
       err.faultKind = cause.faultKind;
     }
     if (cause.decisionDialog) err.decisionDialog = cause.decisionDialog;
+    if (cause.leftOpenSurface) err.leftOpenSurface = cause.leftOpenSurface;
   }
   return err;
 }
@@ -391,6 +393,22 @@ function gateAnswer(gate) {
   }
 }
 
+// A decision-looking panel that did not block the page and was still open when the plan's last acting step ended.
+// Returns what to record about it, or null when the recording already saw it (its words are the step's own
+// "the app says ..." witness): that one is a result, not a surprise. Never decides anything and never clicks.
+function leftOpenRecord(effect, open) {
+  if (!open) return null;
+  const said = String([open.title, open.text].join(" ")).toLowerCase();
+  const recorded = new Set();
+  if (effect) {
+    for (const c of effect.checks || []) if (c && c.probe && Array.isArray(c.probe.words)) c.probe.words.forEach((w) => recorded.add(String(w).toLowerCase()));
+    const w = effect.words || {};
+    for (const k of ["success", "progress"]) (w[k] || []).forEach((x) => recorded.add(String(x).toLowerCase()));
+  }
+  if ([...recorded].some((w) => w.length >= 4 && said.includes(w))) return null;
+  return { title: open.title || "", buttons: fork.probeLabelsRaw(open).slice(0, 8), blocks: open.blocks === false ? false : null };
+}
+
 async function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null } = {}) {
   const hasReq = hasRequiredAssertion(step);
   const full = (step.type === "upload" || step === ctx.lastActStep) && !!gate;
@@ -429,6 +447,14 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     && String(step.validation.effect.on.unverified || "").startsWith("handover") ? "handover" : "fail";
   const move = proof.nextMove(j.verdict, { idempotent: proof.safeToRepeat(step), attended: !ctx.scheduled, onUnverified });
 
+  const leftOpen = leftOpenRecord(effect, gate && gate.leftOpen);
+  if (leftOpen) {
+    ctx.tracker.emit("left_open", { si: i, v: j.verdict });
+    if (move.do === "continue") {
+      state.warnings.push(`A panel ("${leftOpen.title || "untitled"}"${leftOpen.buttons.length ? `, buttons: ${leftOpen.buttons.join(", ")}` : ""}) `
+        + "was still open when the run ended. It does not block the page and the step's result was confirmed, so the run was not stopped. Check it if it looks like a question.");
+    }
+  }
   state.proof.steps.push({
     index: i,
     ...(step.source_step_key ? { source_step_key: step.source_step_key } : {}),
@@ -436,6 +462,7 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     verdict: j.verdict,
     rung: j.rung,
     required,
+    ...(leftOpen ? { left_open: leftOpen } : {}),
     ...(effect ? { effect_kind: effect.kind } : {}),
     checks: checks.map(({ id, rung, witness, role, answer }) => ({ ...(id ? { id } : {}), rung, witness, ...(role === "veto" ? { role } : {}), answer })),
   });
@@ -479,7 +506,7 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
 // else (put to the MCP client when allowed, otherwise the run stops), and the run is not "Done".
 async function popupLeftBehind(ctx, state, step, i, page, preShot) {
   const blocking = await observeDialog(page, ctx);
-  if (!blocking || !fork.isDecisionDialog(blocking)) return;
+  if (!blocking || !fork.isBlockingDecision(blocking)) return;
   try {
     await askAboutBlockingPopup(ctx, state, step, page, i, { verifyFail: true });
   } catch (e) {
@@ -491,7 +518,10 @@ async function popupLeftBehind(ctx, state, step, i, page, preShot) {
   const cause = Object.assign(
     new Error(`Needs a decision: ${title}. The last step ended with a popup asking a question that this workflow doesn't answer, `
       + "so the run stopped instead of reporting success. Tell Conxa in the chat how this popup should be handled."),
-    { forkDecisionNeeded: true, actionMayHaveTakenEffect: true },
+    {
+      forkDecisionNeeded: true, actionMayHaveTakenEffect: true,
+      leftOpenSurface: { title: blocking.title || "", buttons: fork.probeLabelsRaw(blocking).slice(0, 8), blocks: blocking.blocks === false ? false : (blocking.blocks === true ? true : null) },
+    },
   );
   throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
 }
@@ -523,7 +553,30 @@ function raceCancel(stepPromise, cancelCheck) {
 // for_each body is a DIFFERENT array from the top-level plan; `ctx` carries everything that is
 // genuinely constant for the whole run (tabs, watch, dryRun, slug, runCtx, the queues, and the
 // tracker/cancelCheck/onStep/onPhase callbacks server.js supplied to runPlan).
+// The one entry for running a step (top level, loop body, fork option, branch body, called workflow).
+// It owns two facts every caller used to have to remember:
+//  - WHERE the step is: state.stepPath is the chain of indices from the plan's own list down to this step
+//    ([9, 0] = the first step inside step 9's chosen option), so progress and failures can name the
+//    top-level step they belong to instead of a body-local number that collides with one.
+//  - WHICH PAGE it ran on: any error leaving the step carries that page (`failedPage`), so evidence,
+//    sign-in checks and recovery describe the tab that failed, not whichever tab the run started on.
 async function executeOneStep(ctx, state, steps, i) {
+  const frame = { page: null };
+  if (!state.stepPath) state.stepPath = [];
+  state.stepPath.push(i);
+  try {
+    return await runStepFrame(ctx, state, steps, i, frame);
+  } catch (e) {
+    if (e && typeof e === "object" && !e.failedPage && frame.page && !(typeof frame.page.isClosed === "function" && frame.page.isClosed())) {
+      e.failedPage = frame.page;
+    }
+    throw e;
+  } finally {
+    state.stepPath.pop();
+  }
+}
+
+async function runStepFrame(ctx, state, steps, i, frame) {
   if (ctx.cancelCheck && ctx.cancelCheck()) {
     throw Object.assign(new Error("Execution cancelled"), { cancelled: true });
   }
@@ -539,7 +592,7 @@ async function executeOneStep(ctx, state, steps, i) {
     if (ctx.onPhase) ctx.onPhase(`step_${i}_skipped_by_input`, { step: i, input: gate.input });
     return;
   }
-  if (ctx.onStep) ctx.onStep(i);
+  if (ctx.onStep) ctx.onStep(i, { path: state.stepPath.slice(), step });
 
   // EXEC-49 P5 (G8): the agent looked at the page and said this is not a moved element. Honour it by
   // ending the run with its reason: a verdict can only make a run stop sooner, never act further.
@@ -578,6 +631,7 @@ async function executeOneStep(ctx, state, steps, i) {
     }
   }
 
+  frame.page = page;
   if (state.hasExecutedStep && page === state.prevPage) await waitForPageLoad(page, state.prevStepType);
 
   // RT-9 — Studio-only test guard. A caller that passes `_pause_before_irreversible` asks the run to
@@ -996,7 +1050,7 @@ async function executeOneStep(ctx, state, steps, i) {
       const doneKey = `__handover_done_${i}`;
       if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
         delete state.inputs[doneKey];
-        return executeOneStep(ctx, state, steps, i);
+        return runStepFrame(ctx, state, steps, i, frame);
       }
       const asked = { ...step, type: "handover", message: step.message || `“${step.intent || "This step"}”: its record isn't on the page. Fix that, then click Done.` };
       const armed = await handover.arm(ctx.context, page, asked, ctx.runCtx && ctx.runCtx.runId);
@@ -1007,7 +1061,7 @@ async function executeOneStep(ctx, state, steps, i) {
       if (winner) {
         await armed.disarm();
         ctx.tracker.emit("handover_resumed", { si: i, via: winner, inCall: true, reason: "on_missing" });
-        return executeOneStep(ctx, state, steps, i);
+        return runStepFrame(ctx, state, steps, i, frame);
       }
       throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step: asked, page, armed, dryRun: ctx.dryRun });
     }
@@ -1040,7 +1094,7 @@ async function executeOneStep(ctx, state, steps, i) {
     if (settle && settle.waitedMs > SETTLE_POLL_MS) {
       if (mayHaveActed) {
         ctx.tracker.emit("settle_retry", { si: i, waited: settle.waitedMs, phase: "verify", ok: settle.settled });
-        const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue).catch(() => null);
+        const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue, { capMs: RECHECK_CAP_MS }).catch(() => null);
         if (verdict2 && verdict2.pass) {
           emitVerifyResult(ctx, i, verdict2);
           const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
@@ -1412,7 +1466,7 @@ function forkGuard(ctx, state, step, page, i, destructive) {
 
 // Run one chosen option: the RT-9 guard check at the fork's own index, the option's steps through
 // the real executeOneStep, then confirm the popup is actually gone.
-async function runForkOption(ctx, state, step, page, i, option, title) {
+async function runForkOption(ctx, state, step, page, i, option, title, answered) {
   const optionSteps = Array.isArray(option.steps) ? option.steps : [];
 
   forkGuard(ctx, state, step, page, i, optionSteps.some((s) => s && s.destructive === true));
@@ -1425,7 +1479,7 @@ async function runForkOption(ctx, state, step, page, i, option, title) {
   } finally {
     state.forkDepth -= 1;
   }
-  await confirmForkDialogClosed(ctx, state, step, page, i, title, option.label || option.id);
+  await confirmForkDialogClosed(ctx, state, step, page, i, answered, title, option.label || option.id);
 
   // Where the workflow goes from here (EXEC-49 G4). Default: carry on with the next recorded step.
   // "end": this path is a complete run on its own. "stop": the rest of the workflow does not cover
@@ -1446,14 +1500,25 @@ async function runForkOption(ctx, state, step, page, i, option, title) {
   }
 }
 
-// The choice must have actually dealt with the popup. A dialog still on screen means the click
-// did nothing (or the app re-asked) -- failing here is cleaner than the next step tripping over it.
-async function confirmForkDialogClosed(ctx, state, step, page, i, title, chosenLabel) {
+// The choice must have actually dealt with the popup. THAT popup (`answered`: the fork state, or the
+// signature of the live popup taken before the click) still on screen means the click did nothing (or
+// the app re-asked) -- failing here is cleaner than the next step tripping over it. A different surface
+// is not this popup: a progress tray or "complete" notice opening right after the answer is the app
+// working, so it is passed over, and a different blocking popup is left to the next step, with a warning.
+async function confirmForkDialogClosed(ctx, state, step, page, i, answered, title, chosenLabel) {
   if (ctx.dryRun) return;
-  const closed = await pollNegative(async () => !(await observeDialog(page, ctx)), 3000);
+  let seen = null;
+  const closed = await pollNegative(async () => {
+    seen = await observeDialog(page, ctx);
+    return !fork.stillShowing(answered, seen);
+  }, 3000);
   if (!closed) {
     ctx.tracker.emit("step_fail", { si: i, fc: "fork_dialog_still_open" });
     throw stepFailure(step, i, new Error(`The "${title}" popup is still open after choosing "${chosenLabel}".`), null, state.warnings);
+  }
+  const cls = fork.classifySurface(seen);
+  if (cls && cls !== "notice" && fork.blocksPage(seen)) {
+    state.warnings.push(`After choosing "${chosenLabel}" in the "${title}" popup, another popup ("${(seen && seen.title) || "untitled"}") appeared.`);
   }
 }
 
@@ -1591,7 +1656,7 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
         ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
         throw stepFailure(step, i, e, null, state.warnings);
       }
-      await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
+      await confirmForkDialogClosed(ctx, state, step, page, i, fork.surfaceSignature(probe), title, choice);
     }
     state.warnings.push(`The "${title}" popup was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`);
   }
@@ -1734,7 +1799,7 @@ async function actOnForkDecision(ctx, state, step, page, i, decision, { stateId,
       ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
       throw stepFailure(step, i, e, null, state.warnings);
     }
-    await confirmForkDialogClosed(ctx, state, step, page, i, title, decision.label);
+    await confirmForkDialogClosed(ctx, state, step, page, i, fork.surfaceSignature(probe), title, decision.label);
     return;
   }
 
@@ -1750,7 +1815,7 @@ async function actOnForkDecision(ctx, state, step, page, i, decision, { stateId,
   countSurface(ctx, state, step, i, stateId, title);
   ctx.tracker.emit("fork_decided", { si: i, st: stateId, opt: option.id, mode: "run", src: decision.source });
   appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: stateId, option: option.id, mode: "run", source: decision.source, title });
-  await runForkOption(ctx, state, step, page, i, option, title);
+  await runForkOption(ctx, state, step, page, i, option, title, seen.state);
 }
 
 async function runForkStep(ctx, state, step, page, i) {
@@ -1854,7 +1919,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
     countSurface(ctx, state, step, i, seen.state.id, title);
     ctx.tracker.emit("fork_decided", { si: i, st: seen.state.id, opt: option.id, mode: "run", src: "human" });
     appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: seen.state.id, option: option.id, mode: "run", source: "human", title });
-    await runForkOption(ctx, state, step, page, i, option, title);
+    await runForkOption(ctx, state, step, page, i, option, title, seen.state);
     return;
   }
 
@@ -1881,7 +1946,7 @@ async function runForkAnswer(ctx, state, step, page, i, states, choice) {
     ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
     throw stepFailure(step, i, e, null, state.warnings);
   }
-  await confirmForkDialogClosed(ctx, state, step, page, i, title, choice);
+  await confirmForkDialogClosed(ctx, state, step, page, i, fork.surfaceSignature(probe), title, choice);
 }
 
 async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPhase, cancelCheck, deadlineAt, scheduled, tracker, downloadQueue, dialogQueue, structuralFingerprint, environmentFingerprint, watch, runId, hostOwned, hostRunId, dataDir, dryRun, isResume, context, guard, stopBefore, resumeLoop, appKnowledge: knowledge, callees, answerPopups, agentSpans } = {}) {

@@ -1,5 +1,5 @@
 {
-  "_about": "One definition of 'is this surface asking the person to choose?', shared by the runtime (runtime/app/fork.js::isDecisionDialog) and the compiler (conxa_compile/compiler/outcome_fork.py::classify_dialog). Both test suites load this file, so the two implementations cannot drift. A surface is a decision only when it has no input fields, is not a native dialog, is not a cookie/consent banner, has two or more buttons, and those buttons are not all plain dismiss labels. Anything else -- a toast, a progress panel, a lone Cancel -- is not. Each case also carries the surface `class` (notice | obstruction | decision_benign | info_request | decision_consequential | native) that fork.js::classifySurface and outcome_fork.py::classify_surface must agree on, and `irreversible_labels` pins is_irreversible_label / isIrreversibleLabel (a popup with an irreversible-looking button is never answered by an agent). `live` and `progress` are optional probe flags: a toast or progress panel is a notice.",
+  "_about": "One definition of 'is this surface asking the person to choose?', shared by the runtime (runtime/app/fork.js::isDecisionDialog) and the compiler (conxa_compile/compiler/outcome_fork.py::classify_dialog). Both test suites load this file, so the two implementations cannot drift. A surface is a decision only when it has no input fields, is not a native dialog, is not a cookie/consent banner, has two or more buttons, and those buttons are not all plain dismiss labels. Anything else -- a toast, a progress panel, a lone Cancel -- is not. Each case also carries the surface `class` (notice | obstruction | decision_benign | info_request | decision_consequential | native) that fork.js::classifySurface and outcome_fork.py::classify_surface must agree on, and `irreversible_labels` pins is_irreversible_label / isIrreversibleLabel (a popup with an irreversible-looking button is never answered by an agent). `live` and `progress` are optional probe flags: a toast or progress panel is a notice. `blocks` and `stops_when_left_open` are runtime-only: `blocks` is the measured page_scripts.js::dialogProbe fact (true | false | null/absent = could not tell, counts as blocking) and `stops_when_left_open` is whether fork.js::isBlockingDecision ends a run that finished with this surface still open. Words never turn a decision into a notice; only a measured `blocks: false` lets a run carry on past one.",
   "cases": [
     {
       "name": "file exists: Replace / Keep both / Cancel",
@@ -167,6 +167,58 @@
       ],
       "decision": true,
       "class": "decision_consequential"
+    },
+    {
+      "name": "Drive upload-complete tray (page stays usable): a decision-looking panel that cannot block",
+      "title": "1 upload complete",
+      "message": "report.pdf Show file location",
+      "buttons": [
+        "Minimize",
+        "Close",
+        "Show file location"
+      ],
+      "blocks": false,
+      "decision": true,
+      "class": "decision_benign",
+      "stops_when_left_open": false
+    },
+    {
+      "name": "same wording on a panel that covers the page still stops",
+      "title": "Upload complete",
+      "message": "Choose where to go next.",
+      "buttons": [
+        "Open folder",
+        "Stay here"
+      ],
+      "blocks": true,
+      "decision": true,
+      "class": "decision_benign",
+      "stops_when_left_open": true
+    },
+    {
+      "name": "same wording, page coverage not measured (old recording or unreadable page) still stops",
+      "title": "Upload complete",
+      "message": "Choose where to go next.",
+      "buttons": [
+        "Open folder",
+        "Stay here"
+      ],
+      "decision": true,
+      "class": "decision_benign",
+      "stops_when_left_open": true
+    },
+    {
+      "name": "same wording, measurement unknown (null) still stops",
+      "title": "Upload complete",
+      "message": "Choose where to go next.",
+      "buttons": [
+        "Open folder",
+        "Stay here"
+      ],
+      "blocks": null,
+      "decision": true,
+      "class": "decision_benign",
+      "stops_when_left_open": true
     }
   ],
   "irreversible_labels": [

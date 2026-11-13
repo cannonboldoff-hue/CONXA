@@ -338,9 +338,38 @@ function dialogProbe() {
   // Facts about what kind of surface this is. They never decide anything on their own; they let a
   // failure say "a progress panel was on screen" instead of "a popup", and keep the picture honest.
   const modal = isModal(dlg);
-  const live = !!dlg.closest('[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]');
+  // Does it stop the person (or the run) from reaching the rest of the page? Measured, never read from words:
+  // true = a modal, a covering backdrop, or an inert page; false = every point outside it reaches ordinary page
+  // content; null = could not tell (a frame, an unreadable page). Callers treat null like true.
+  const blocks = (() => {
+    if (modal) return true;
+    try {
+      if (document.querySelector("[inert]") && !dlg.closest("[inert]")) return true;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const r = dlg.getBoundingClientRect();
+      const pts = [[8, 8], [vw - 8, 8], [8, vh - 8], [vw - 8, vh - 8], [vw / 2, 8], [vw / 2, vh - 8], [8, vh / 2], [vw - 8, vh / 2]]
+        .filter(([x, y]) => x < r.left - 4 || x > r.right + 4 || y < r.top - 4 || y > r.bottom + 4);
+      if (!pts.length) return true; // it covers the whole window
+      let unknown = false;
+      for (const [x, y] of pts) {
+        const el = document.elementFromPoint(x, y);
+        if (!el) { unknown = true; continue; }
+        if (el === document.documentElement || el === document.body || dlg.contains(el)) continue;
+        if (el.tagName === "IFRAME" || el.tagName === "FRAME") { unknown = true; continue; }
+        const er = el.getBoundingClientRect();
+        const coversWindow = er.width * er.height >= 0.9 * vw * vh && window.getComputedStyle(el).position === "fixed";
+        if (!coversWindow) continue;
+        // A fixed window-sized element over a point outside the dialog is a backdrop: a sibling of the dialog, or a
+        // wrapper that holds little besides it. A window-sized app shell that also holds the page's own content
+        // (far more text than the dialog) is the page itself.
+        if (!el.contains(dlg) || (el.innerText || "").length <= (dlg.innerText || "").length + 40) return true;
+      }
+      return unknown ? null : false;
+    } catch (_) { return null; }
+  })();
+  const live =!!dlg.closest('[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]');
   const progress = !!dlg.querySelector('[role="progressbar"],progress,[aria-busy="true"]');
-  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, live, progress };
+  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, blocks, live, progress };
 }
 
 // EXEC-49 — fault probe. What the app itself is saying is wrong right now: visible role=alert /

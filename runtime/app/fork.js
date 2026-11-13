@@ -223,6 +223,19 @@ function isDecisionDialog(probe) {
   return !labels.every((l) => PURE_DISMISS.has(norm(l)));
 }
 
+/** Does the surface stop the page from being used? Only a measured `blocks: false` (page_scripts.js::dialogProbe)
+ * says no. true, null (could not tell) and a probe without the field (an old recording) all count as blocking, so
+ * a missing fact can only make the run more careful. Words never decide this. */
+function blocksPage(probe) {
+  return !probe || probe.blocks !== false;
+}
+
+/** A decision popup that actually blocks. This, not isDecisionDialog alone, is what stops a run that ended with
+ * the popup still open: a panel that leaves the page usable cannot be in the way of anything. */
+function isBlockingDecision(probe) {
+  return isDecisionDialog(probe) && blocksPage(probe);
+}
+
 // A button that cannot be taken back or that spends / sends / publishes. A popup with any of these is
 // never answered by an agent; the run stops. Mirrors outcome_fork.py::is_irreversible_label (pinned
 // by decision_surface_cases.json). Errs wide: a wrong match only ever stops a run.
@@ -256,6 +269,21 @@ function classifySurface(probe) {
   if (probe.progress || isProgressSurface(probe) || (probe.live && labels.length < 2)) return "notice";
   if (!isDecisionDialog(probe)) return "obstruction";
   return labels.some((l) => CONSEQUENTIAL_RE.test(l) || isIrreversibleLabel(l)) ? "decision_consequential" : "decision_benign";
+}
+
+/** What identifies a surface the run just answered: its title and visible buttons, in the same shape a
+ * fork state's `signature` has. Taken from the live probe BEFORE the click, for a popup no state lists. */
+function surfaceSignature(probe) {
+  return { signature: { title: (probe && probe.title) || "", button_labels: probeLabelsRaw(probe) } };
+}
+
+/** Is `probe` still the popup that was answered? `answered` is a fork state or surfaceSignature(). The
+ * test is the one that recognised the popup in the first place (scoreState), so "same popup" means the
+ * same thing before and after the click. Any other surface -- a progress tray, a toast, a later
+ * question -- is not the answered popup, whatever else it is. */
+function stillShowing(answered, probe) {
+  if (!probe) return false;
+  return scoreState({ signature: (answered && answered.signature) || {} }, probe) != null;
 }
 
 // Reserved id for "stop the run" in a pause's choice list. Not a slug, so it can never collide
@@ -296,6 +324,10 @@ function pauseChoices(state, probe) {
 module.exports = {
   isDecisionDialog,
   isProgressSurface,
+  blocksPage,
+  isBlockingDecision,
+  surfaceSignature,
+  stillShowing,
   IN_PROGRESS_RE,
   classifySurface,
   mostCautious,

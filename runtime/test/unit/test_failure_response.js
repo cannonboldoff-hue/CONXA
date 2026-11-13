@@ -508,3 +508,20 @@ test("the agent payload carries the recorded structure beside the live digest", 
   assert.match(texts, /div#toolbar/);
   assert.match(texts, /Interactive elements NOW/, "sits alongside the live list, not instead of it");
 });
+
+test("failureKind names a deliberate stop instead of calling it 'other'", () => {
+  const { failureKind } = require("../../app/failure_response");
+  const { plainCause } = require("../../app/errors");
+  assert.strictEqual(failureKind({ forkDecisionNeeded: true }), "decision_needed");
+  assert.strictEqual(failureKind({ couldntConfirm: true, fault: true, faultKind: "unconfirmed" }), "couldnt_confirm");
+  assert.strictEqual(failureKind({ fault: true, faultKind: "action_failed" }), "fault:action_failed");
+  assert.strictEqual(failureKind({ badInput: true }), "bad_input");
+  assert.strictEqual(failureKind({ tabNotFound: true }), "tab_not_found");
+  assert.strictEqual(failureKind({ resolveMiss: true }), "not_found");
+  assert.strictEqual(failureKind({}), "other");
+  // The sentence a deliberate stop carries is its summary; it is never wrapped as "unexpected".
+  const c = plainCause(Object.assign(new Error("Needs a decision: Replace file?. Tell Conxa how to handle it."), { forkDecisionNeeded: true }));
+  assert.match(c.summary, /^Needs a decision/);
+  assert.strictEqual(c.detail, "");
+  assert.match(plainCause(new Error("boom")).summary, /unexpected/);
+});

@@ -51,11 +51,19 @@ function newTexts(sample, baseline) {
   return ((sample && sample.regions) || []).filter((t) => !before.has(t));
 }
 
+// Only ever read against the app's LEARNED progress words, never the defaults. A recording can learn a word that also
+// sits in the app's result line ("upload" in "1 upload complete"), because words are kept without their phrase; a
+// text that says the work is finished is then never work in flight. The English defaults still decide on their own.
+const FINISHED_RE = /\b(complete|completed|done|finished|uploaded|saved|sent|success|successful|succeeded)\b/i;
+
 /** Pure. What one page sample says, measured against the sample taken before the action. */
 function classifySample(sample, baseline, signals = null) {
   const fresh = newTexts(sample, baseline);
   // The app's own words (app_knowledge.js::signalsFor) count beside the English defaults.
-  const busyText = fresh.find((t) => IN_PROGRESS_RE.test(t) || (signals && signals.progress && signals.progress.test(t))) || null;
+  // A text that carries the app's own success wording is a result, not work in flight, even when it also shares a
+  // word with the app's progress list (an older recording could learn "complete" as progress).
+  const busyText = fresh.find((t) => IN_PROGRESS_RE.test(t)
+    || (signals && signals.progress && signals.progress.test(t) && !FINISHED_RE.test(t) && !(signals.success && signals.success.test(t)))) || null;
   const busy = (sample.busyCount || 0) > ((baseline && baseline.busyCount) || 0) || !!busyText;
   const failure = classifyCompletionFailure(fresh, signals && signals.failure);
   return { busy, busyText, failure };
@@ -134,7 +142,7 @@ async function waitForCompletion(page, o) {
     if (c.busy) {
       // A decision popup would hold the page "busy" forever; it is not ours to wait out or answer.
       const dlg = await evalOn(page, pageScripts.dialogProbe, undefined, 2000).catch(() => null);
-      if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) return out("handoff", { reason: "decision_popup" });
+      if (dlg && dlg !== EVAL_TIMED_OUT && fork.isBlockingDecision(dlg)) return out("handoff", { reason: "decision_popup" });
     }
 
     if (!c.busy && !pending) {
@@ -145,13 +153,18 @@ async function waitForCompletion(page, o) {
         if (Date.now() - quietSince >= quietMs) {
           // The step that ended the run may have left a question behind (a "Replace or keep both?").
           // Nothing after it will look, so this is the last chance to say so.
+          // Only a surface that blocks the page stops the run here. One that leaves the page usable is reported
+          // (`leftOpen`) and the step's own proof decides, so a finished-work panel can never fail a step that worked.
+          let leftOpen = null;
           if (full) {
             const dlg = await evalOn(page, pageScripts.dialogProbe, undefined, 2000).catch(() => null);
-            if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) return out("handoff", { reason: "decision_popup" });
+            if (dlg && dlg !== EVAL_TIMED_OUT && fork.isBlockingDecision(dlg)) return out("handoff", { reason: "decision_popup" });
+            if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) leftOpen = dlg;
           }
-          return out("done", sawPendingGrace
-            ? { warning: "The app was still sending data in the background when this step ended." }
-            : {});
+          return out("done", {
+            ...(leftOpen ? { leftOpen } : {}),
+            ...(sawPendingGrace ? { warning: "The app was still sending data in the background when this step ended." } : {}),
+          });
         }
       }
     } else {

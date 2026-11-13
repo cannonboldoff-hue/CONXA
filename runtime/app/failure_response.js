@@ -39,7 +39,14 @@ const { inputsReferenced } = require("./interpolate");
 
 // One normalized class for the failure, read from flags the throw sites already set. The Studio
 // uses it to tell "could not find the element" apart from every other failure.
+// Deliberate stops come first: they were not a failure to find or click anything, and calling them "other" is
+// what left every layer above guessing from the message text.
 function failureKind(err) {
+  if (err.forkDecisionNeeded) return "decision_needed";
+  if (err.couldntConfirm) return "couldnt_confirm";
+  if (err.fault) return `fault:${err.faultKind || "app"}`;
+  if (err.badInput) return "bad_input";
+  if (err.tabNotFound) return "tab_not_found";
   if (err.ambiguous) return "ambiguous";
   if (err.entityNotFound) return "entity_not_found";
   if (err.frameNotFound) return "frame_not_found";
@@ -501,6 +508,9 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       // which run inputs the failing step reads (and what they held), how many elements each
       // signal found.
       failure_kind: failureKind(err),
+      // The surface a deliberate stop was about (title, buttons, whether it blocks the page), as data. The generic
+      // overlay above is only the recovery ladder's view of an intercepted click.
+      left_open_surface: err.leftOpenSurface || null,
       input_refs: inputsReferenced(err.failedStep, deps.inputs),
       signal_counts: Array.isArray(err.signalCounts) ? err.signalCounts : null,
     };
@@ -704,6 +714,7 @@ async function buildFailureResponse(page, err, resolvedEntry, runTracker, steps,
 
 module.exports = {
   buildFailureResponse,
+  failureKind,
   stepRecoveryContext,
   digestTargetContext,
   expectedStateBlock,

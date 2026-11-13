@@ -120,9 +120,11 @@ async function anyRootHasMatch(roots, target) {
 const URL_ASSERTION_TYPES = new Set(["url_changed", "url_pattern"]);
 
 // Full navigations may need the page-load budget; same-document hash checks do not.
-function assertionTimeout(type, target, declaredMs) {
+function assertionTimeout(type, target, declaredMs, required = true) {
   const declared = Number(declaredMs) || 0;
-  if (!URL_ASSERTION_TYPES.has(type)) return declared || 3000;
+  // An advisory check never decides the verdict, so it never earns the page-load wait: that floor once
+  // let one failed click burn 60s per advisory URL check.
+  if (!required || !URL_ASSERTION_TYPES.has(type)) return declared || 3000;
   if (type === "url_pattern") {
     const raw = String(target || "");
     if (raw.startsWith("#")) return declared || 3000;
@@ -130,11 +132,12 @@ function assertionTimeout(type, target, declaredMs) {
   return Math.max(declared, PAGE_LOAD_TIMEOUT_MS);
 }
 
-async function evaluateAssertion(roots, page, a, inputs, baseline) {
+async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0) {
   const type = String(a.type || "").toLowerCase();
   const target = interpolate(String(a.target || ""), inputs);
   const required = a.required !== false;
-  const timeout = assertionTimeout(type, target, a.timeout_ms);
+  // capMs: a re-check on a page that has already settled asks "did it land?", not "will it land?".
+  const timeout = capMs > 0 ? Math.min(capMs, assertionTimeout(type, target, a.timeout_ms, required)) : assertionTimeout(type, target, a.timeout_ms, required);
   const startedAt = Date.now();
   let ok = true;
   let recognized = true;
@@ -221,7 +224,7 @@ function summarizeAnswers(results) {
   return "cant_tell";
 }
 
-async function verifyStep(page, step, inputs, baseline = null, dialogQueue = null) {
+async function verifyStep(page, step, inputs, baseline = null, dialogQueue = null, { capMs = 0 } = {}) {
   // A native alert/confirm/prompt blocks the page's renderer thread until the *next* step
   // (dialog_accept/dialog_dismiss, which carries no assertions of its own) resolves it — no
   // DOM/URL/value check on THIS step can possibly answer while that's true, and every one of
@@ -250,7 +253,7 @@ async function verifyStep(page, step, inputs, baseline = null, dialogQueue = nul
   const results = [];
   let failing = null;
   for (const a of assertions) {
-    const result = await evaluateAssertion(roots, page, a, inputs, baseline);
+    const result = await evaluateAssertion(roots, page, a, inputs, baseline, capMs);
     results.push(result);
     if (!result.ok && result.required && !failing) failing = result;
   }

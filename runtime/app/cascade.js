@@ -14,7 +14,7 @@
 // wrong guess is caught before it acts.
 const { classifyException, remedyFor } = require("./recovery");
 const { appendRecoveryEvent } = require("./recovery_log");
-const { SECONDARY_ACTION_TIMEOUT_MS, CAPTURE_PRESTEP } = require("./run_config");
+const { SECONDARY_ACTION_TIMEOUT_MS, CAPTURE_PRESTEP, RECHECK_CAP_MS } = require("./run_config");
 const { asObject, asArray, isNonIdempotent } = require("./step_utils");
 const { rootCandidates } = require("./resolution");
 const { fingerprintName, stripKeyboardShortcutTail } = require("./accessible_name");
@@ -78,7 +78,7 @@ function createActionGuard(step, { acted = false, signature = null } = {}) {
 async function guardDecision(page, step, inputs, baseline, guard) {
   if (!guard || !guard.guarded || !guard.acted) return "go";
 
-  const verdict = await verifyStep(page, step, inputs, baseline);
+  const verdict = await verifyStep(page, step, inputs, baseline, null, { capMs: RECHECK_CAP_MS });
   if (guard) guard.lastVerify = verdict; // run.js reports it (verify_result, proof) once recovery succeeds
   if (verdict.results.length) {
     // Post-conditions exist and ALL hold → the action landed; the earlier failure was a slow

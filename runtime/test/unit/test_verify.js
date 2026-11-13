@@ -435,3 +435,20 @@ test("answers: one real yes outweighs a check that could not look, and a require
   assert.deepStrictEqual(mixed.results.map((r) => r.answer), ["yes", "cant_tell"]);
   assert.strictEqual(mixed.answer, "yes");
 });
+
+test("a failed click does not burn the page-load wait: advisory checks use their own short timeout, and a re-check is capped", async () => {
+  const page = mockPage("https://github.com/github/gitignore");
+  const step = { type: "click", validation: { assertions: [
+    { type: "url_changed", target: "https://github.com/github/gitignore", timeout_ms: 8000, required: false },
+    { type: "url_pattern", target: "^https://github\.com/x/blob", timeout_ms: 8000, required: false },
+  ] } };
+  const t0 = Date.now();
+  const r = await verifyStep(page, step, {}, null, null);
+  assert.strictEqual(r.pass, true, "advisory only: never fails the step");
+  assert.ok(Date.now() - t0 < 20000, "two advisory URL checks wait their own 8s, not 60s each");
+  const required = { type: "click", validation: { assertions: [{ type: "url_changed", target: "https://github.com/github/gitignore", timeout_ms: 8000, required: true }] } };
+  const t1 = Date.now();
+  const r2 = await verifyStep(page, required, {}, null, null, { capMs: 300 });
+  assert.strictEqual(r2.pass, false);
+  assert.ok(Date.now() - t1 < 3000, "a capped re-check returns quickly");
+});
