@@ -2361,13 +2361,14 @@ Allowed `usage_class` values are `compile`, `ai_credits` (canonical; also covers
 **`POST /api/v1/llm/proxy/decide`** (Proof-of-Done picker) — same envelope and the same entitlement, quota and
 concurrency gates, but the call goes to the decision model, not the text/vision pool (`app/llm/decisions.py`; an
 Enterprise BYOK deployment never applies to it). `payload` is `{input: "<value-free step facts>", questions: [{name,
-instructions}]}`; every question is sent upstream as a `predicate` (at most 40; names, instructions and input are
+instructions}]}`; every question is sent upstream as a `noul` (at most 40; names, instructions and input are
 length-capped). Response: `{"probabilities": {"<name>": 0.0-1.0}}`, only for questions the model answered with a valid
 probability. Status: `501 decide_unavailable` when `SKILL_LLM_DECISIONS_API_KEY` is empty (not 503: Studio retries
 502/503/504 with backoff, and an off feature must cost nothing); `502 llm_all_providers_failed` when the provider
-call failed. The upstream request is OpenAI's Decisions API shape (`model`, `input`, `questions`; answers come back as
-`{type: "predicate", name, probability}`); settings `llm_decisions_endpoint`, `llm_decisions_path` (the path
-OpenRouter serves it on is not confirmed), `llm_decisions_model`, `llm_decisions_api_key`.
+call failed. The upstream request is OpenRouter's alpha Decisions API (`POST https://openrouter.ai/api/alpha/decisions`:
+`model`, `state: [text]`, `questions: {name: {type: "noul", instructions, criteria}}`; answers come back as
+`answers: {name: {noul: probability}}`); settings `llm_decisions_endpoint`, `llm_decisions_path`,
+`llm_decisions_model`, `llm_decisions_api_key`.
 
 **`POST /api/v1/llm/proxy/text/stream` and `/vision/stream`** (BUILD-26 stage c) — same request
 body as above, for a task that wants its reply streamed (currently only `copilot_reply`). Response

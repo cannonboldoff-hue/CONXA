@@ -1,9 +1,9 @@
 """Decision-model client for the Proof-of-Done picker (the cloud half of ``POST /llm/proxy/decide``).
 
 One request carries shared evidence plus several yes/no questions; each comes back with a probability that
-the answer is yes. The model writes no text. Request shape is OpenAI's Decisions API: ``model``, ``input``,
-``questions`` (each ``{type: "predicate", name, instructions}``); the response holds an ``answers`` array of
-``{type: "predicate", name, probability}``. Studio sends only value-free step facts (see
+the answer is yes. The model writes no text. Request shape is OpenRouter's alpha Decisions API: ``model``,
+``state`` (a list of text parts) and ``questions`` (``{name: {type: "noul", instructions, criteria}}``); the
+response holds ``answers`` as ``{name: {noul: probability}}``. Studio sends only value-free step facts (see
 ``conxa_compile/compiler/proof_picker.py``); this module never trusts the shape it is handed.
 """
 
@@ -29,7 +29,7 @@ class DecisionsUnavailable(RuntimeError):
 
 
 def clean_questions(raw: Any) -> list[dict[str, str]]:
-    """Keep well-formed ``{name, instructions}`` pairs, bounded; drop the rest. Every question is a predicate."""
+    """Keep well-formed ``{name, instructions}`` pairs, bounded; drop the rest. Every question is sent as a ``noul``."""
     out: list[dict[str, str]] = []
     seen: set[str] = set()
     for q in raw if isinstance(raw, list) else []:
@@ -40,22 +40,19 @@ def clean_questions(raw: Any) -> list[dict[str, str]]:
         if not name or not text or name in seen:
             continue
         seen.add(name)
-        out.append({"type": "predicate", "name": name, "instructions": text})
+        out.append({"name": name, "instructions": text})
         if len(out) >= MAX_QUESTIONS:
             break
     return out
 
 
 def parse_probabilities(data: Any, asked: set[str]) -> dict[str, float]:
-    """``{name: probability}`` for every asked predicate the model answered. A refusal, an unknown name or a
+    """``{name: probability}`` for every asked question the model answered. A refusal, an unknown name or a
     probability outside 0..1 is dropped, never guessed."""
     answers = data.get("answers") if isinstance(data, dict) else None
     out: dict[str, float] = {}
-    for a in answers if isinstance(answers, list) else []:
-        if not isinstance(a, dict) or a.get("type") != "predicate":
-            continue
-        name = a.get("name")
-        p = a.get("probability")
+    for name, a in (answers.items() if isinstance(answers, dict) else []):
+        p = a.get("noul") if isinstance(a, dict) else None
         if name in asked and isinstance(p, (int, float)) and not isinstance(p, bool) and 0.0 <= float(p) <= 1.0:
             out[str(name)] = float(p)
     return out
@@ -71,7 +68,14 @@ def decide(payload: dict[str, Any], timeout_s: float = 30.0) -> dict[str, Any] |
     if not questions or not text:
         return {"probabilities": {}}
     url = settings.llm_decisions_endpoint.rstrip("/") + "/" + settings.llm_decisions_path.lstrip("/")
-    body = {"model": settings.llm_decisions_model, "input": text, "questions": questions}
+    body = {
+        "model": settings.llm_decisions_model,
+        "state": [text],
+        "questions": {
+            q["name"]: {"type": "noul", "instructions": q["instructions"], "criteria": {"true": "Yes", "false": "No"}}
+            for q in questions
+        },
+    }
     try:
         resp = httpx.post(url, json=body, headers={"Authorization": f"Bearer {key}"}, timeout=timeout_s)
         resp.raise_for_status()

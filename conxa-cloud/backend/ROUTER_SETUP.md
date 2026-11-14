@@ -91,7 +91,7 @@ LLM_PRO_API_KEYS=your-anthropic-key
 
 # Proof-of-Done picker (optional) — a decision model, not a pooled text model. Empty = picker off.
 # Model openai/gpt-6-luna-decisions; LLM_DECISIONS_ENDPOINT / LLM_DECISIONS_PATH default to
-# https://openrouter.ai/api/v1 + /decisions (the path OpenRouter serves it on is unconfirmed).
+# https://openrouter.ai/api/alpha + /decisions.
 LLM_DECISIONS_API_KEY=sk-or-your-key
 ```
 

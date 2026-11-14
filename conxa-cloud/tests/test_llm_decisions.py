@@ -21,23 +21,23 @@ def _env(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "llm_proxy_monthly_token_quota", 1_000_000)
 
 
-def test_questions_are_cleaned_and_always_predicates():
+def test_questions_are_cleaned():
     raw = [{"name": "a", "instructions": "q1", "type": "choice"}, {"name": "a", "instructions": "dup"},
            {"name": "", "instructions": "no name"}, {"name": "b"}, "junk", {"name": "c", "instructions": "x" * 900}]
     out = decisions.clean_questions(raw)
     assert [q["name"] for q in out] == ["a", "c"]
-    assert all(q["type"] == "predicate" for q in out) and len(out[1]["instructions"]) == decisions.MAX_INSTRUCTION_CHARS
+    assert len(out[1]["instructions"]) == decisions.MAX_INSTRUCTION_CHARS
 
 
-def test_only_valid_predicate_probabilities_for_asked_names_are_kept():
-    data = {"answers": [
-        {"type": "predicate", "name": "a", "probability": 0.9},
-        {"type": "predicate", "name": "b", "probability": 1.4},      # out of range
-        {"type": "predicate", "name": "zzz", "probability": 0.5},    # never asked
-        {"type": "refusal", "name": "c"},
-        {"type": "choice", "name": "d", "probability": 0.7},
-        {"type": "predicate", "name": "e", "probability": True},
-    ]}
+def test_only_valid_probabilities_for_asked_names_are_kept():
+    data = {"answers": {
+        "a": {"noul": 0.9},
+        "b": {"noul": 1.4},      # out of range
+        "zzz": {"noul": 0.5},    # never asked
+        "c": {"refusal": "no"},
+        "d": "junk",
+        "e": {"noul": True},
+    }}
     assert decisions.parse_probabilities(data, {"a", "b", "c", "d", "e"}) == {"a": 0.9}
     assert decisions.parse_probabilities({"nope": 1}, {"a"}) == {}
 
@@ -48,7 +48,7 @@ def test_decide_sends_the_documented_shape(monkeypatch):
 
     class _Resp:
         def raise_for_status(self): ...
-        def json(self): return {"answers": [{"type": "predicate", "name": "a", "probability": 0.8}]}
+        def json(self): return {"answers": {"a": {"noul": 0.8}}}
 
     def fake_post(url, json, headers, timeout):
         seen.update(url=url, body=json, auth=headers["Authorization"])
@@ -57,9 +57,9 @@ def test_decide_sends_the_documented_shape(monkeypatch):
     monkeypatch.setattr(decisions.httpx, "post", fake_post)
     out = decisions.decide({"input": "facts", "questions": [{"name": "a", "instructions": "q"}]})
     assert out == {"probabilities": {"a": 0.8}}
-    assert seen["url"] == "https://openrouter.ai/api/v1/decisions" and seen["auth"] == "Bearer k"
-    assert seen["body"] == {"model": "openai/gpt-6-luna-decisions", "input": "facts",
-                            "questions": [{"type": "predicate", "name": "a", "instructions": "q"}]}
+    assert seen["url"] == "https://openrouter.ai/api/alpha/decisions" and seen["auth"] == "Bearer k"
+    assert seen["body"] == {"model": "openai/gpt-6-luna-decisions", "state": ["facts"], "questions": {
+        "a": {"type": "noul", "instructions": "q", "criteria": {"true": "Yes", "false": "No"}}}}
 
 
 def test_route_without_a_key_answers_501_and_a_provider_error_answers_502(monkeypatch):

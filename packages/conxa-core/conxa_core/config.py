@@ -393,10 +393,9 @@ class Settings(BaseSettings):
 
     # Proof-of-Done picker: a decision model that answers yes/no questions with a probability and writes
     # no text. Reached only through POST /llm/proxy/decide (app/llm/decisions.py). The request shape is
-    # OpenAI's Decisions API (POST {endpoint}{path}); the path OpenRouter serves it on is NOT confirmed, so it
-    # is a setting. No key = the picker is off and compile builds checks from code alone.
+    # OpenRouter's alpha Decisions API (POST {endpoint}{path}). No key = the picker is off and compile builds checks from code alone.
     llm_decisions_endpoint: str = Field(
-        default="https://openrouter.ai/api/v1", validation_alias=_provider_env("LLM_DECISIONS_ENDPOINT")
+        default="https://openrouter.ai/api/alpha", validation_alias=_provider_env("LLM_DECISIONS_ENDPOINT")
     )
     llm_decisions_path: str = Field(default="/decisions", validation_alias=_provider_env("LLM_DECISIONS_PATH"))
     llm_decisions_model: str = Field(
