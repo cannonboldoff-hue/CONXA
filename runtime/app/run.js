@@ -379,7 +379,7 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     ctx.tracker.emit("proof", { si: i, rung: null, v: "still_working", w: [] });
     throw Object.assign(new Error("proof_pause"), {
       proofPause: true, completionGate: true, stepIndex: i, step, page,
-      evidence: v.evidence,
+      evidence: v.evidence, openRequests: v.open || [],
       recheck: completion.baseline,
       proof: { steps: state.proof.steps.slice(), notes: state.proof.notes.slice() },
     });

@@ -276,7 +276,10 @@ async function open(o) {
       return false;
     },
     mutationStarted() { return state.mutationStartedAt > 0; },
-    pendingMutations() { let n = 0; for (const e of openReqs.values()) if (e.mutation && e.open) n++; return n; },
+    // Not the page's own background calls (`amb`): an analytics or heartbeat request that stays open says nothing about this action.
+    pendingMutations() { let n = 0; for (const e of openReqs.values()) if (e.mutation && e.open && !e.amb) n++; return n; },
+    /** Metadata only: which data-changing requests are still open, as endpoint templates. For a log line, never a value. */
+    openMutations() { const out = []; for (const e of openReqs.values()) if (e.mutation && e.open) out.push(`${e.m} ${e.t}${e.amb ? " (background)" : ""}`); return out.slice(0, 8); },
     /** The last data-changing request this run lost, had refused, or that answered OK saying it failed. */
     mutationFailure() { return state.failed; },
     downloads() { return state.downloads; },

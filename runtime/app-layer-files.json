@@ -157,6 +157,8 @@
       "_note": "run.js requires this directly: go and look, a read-only re-open of the same page in a separate tab (Proof of Done stage 5)." },
     { "name": "effect_probes.js",     "profile": "default",
       "_note": "run.js requires this directly: answers a step's compiled validation.effect checks from the evidence notebook (Proof of Done stage 4)." },
+    { "name": "result_probes.js",     "profile": "default",
+      "_note": "run.js requires this directly: answers a step's result checks (does the result the recording saw reappear) from the evidence notebook." },
     { "name": "evidence.js",          "profile": "default",
       "_note": "run.js requires this directly: the evidence notebook (what every tab and visible frame of the run shows, plus request/response metadata) read by completion.js." },
     { "name": "route_template.js",    "profile": "default",

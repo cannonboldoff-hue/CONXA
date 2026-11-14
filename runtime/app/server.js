@@ -2379,7 +2379,7 @@ async function _handleTool(name, args, extra) {
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
         await closeExtraTabs(_openedTabs, _proofPage);
         appendRecoveryEvent({ event: "proof_park_created", slug: primary.entry.slug, step_index: runErr.stepIndex, ttl_ms: PROOF_PARK_TTL_MS });
-        log("info", "proof_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex });
+        log("info", "proof_park_created", { run_id: _runId, skill: primary.entry.slug, step_index: runErr.stepIndex, still_showing: runErr.evidence || null, open_requests: runErr.openRequests || [] });
         _runTracker.emit("park_created", { si: runErr.stepIndex, kind: "proof" });
         _runTracker.emit("wf_ok", { dur: Date.now() - _wfStartAt, tot: resolved.reduce((n, r) => n + r.steps.length, 0), rec: _totalRecovered, oc: "submitted" });
         const waitIntent = (runErr.step && (runErr.step.intent || runErr.step.type)) || `step ${runErr.stepIndex + 1}`;
