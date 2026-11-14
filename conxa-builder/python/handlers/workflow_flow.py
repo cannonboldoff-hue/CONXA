@@ -436,7 +436,7 @@ class WorkflowFlowMixin:
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
         saved = get_workflow(workflow.id)
         seconds = int(getattr(saved, "recording_duration_seconds", 0) or 0)
-        count = int(result.get("event_count") or 0)
+        count = int(result.get("action_count", result.get("event_count")) or 0)
         harness.update_card(_thread(workflow.id), card["card_id"], state="saved", count=count, duration_seconds=seconds, actions=[], sink=sink)
         if payload.get("auto_compile", True):
             self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}. I’m watching the recording back and lining it up with "
@@ -547,7 +547,7 @@ class WorkflowFlowMixin:
             harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
             raise
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
-        count = int(stopped.get("event_count") or 0)
+        count = int(stopped.get("action_count", stopped.get("event_count")) or 0)
         harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
         where = "adding them as a second way from that step on" if mode == "branch" else "putting them in place of that step and the ones after it"
         self._flow_say(workflow.id, f"Got it \u2014 {plural(count, 'action')}. I\u2019m compiling them and {where}." + capture_gap_note(stopped), sink)
@@ -658,7 +658,7 @@ class WorkflowFlowMixin:
             harness.update_card(thread, card["card_id"], state="discarded", note=exc.message, actions=[], sink=sink)
             raise
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False)
-        count = int(stopped.get("event_count") or 0)
+        count = int(stopped.get("action_count", stopped.get("event_count")) or 0)
         harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
         lines = []
         if learned["clean_observed"]:

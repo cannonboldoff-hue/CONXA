@@ -352,8 +352,9 @@ class TestFlowMixin:
                 text = ("It ran to the end, but I couldn’t confirm everything: " + " ".join(notes)
                         + " Take a look before you approve it. Approving doesn’t publish anything on its own.")
             elif outcome == "submitted":
-                text = ("It ran, and the app accepted the work. It finishes on its own, so check the result before "
-                        "you approve it. Approving doesn’t publish anything on its own.")
+                text = ("It ran and the app took the work, but I couldn’t confirm that it finished. Look at the result in the "
+                        "app. If it’s there, press “I checked — it worked” on the test card; otherwise test it again. "
+                        "Approving doesn’t publish anything on its own.")
             else:
                 text = ("It works. Approve it when you’re happy — that adds it to the next skill package release. "
                         "Approving doesn’t publish anything on its own.")
@@ -596,6 +597,14 @@ class TestFlowMixin:
         card = self._flow_card(workflow.id, card_id)
         if card.get("state") != "passed":
             raise _CommandError("not_passed", "Only a passing test can be approved.")
+        if (card.get("outcome") == "submitted" and payload.get("checked") is True and workflow.last_test_status == "never"
+                and (workflow.last_test_outcome or {}).get("outcome") == "submitted"):
+            # The app took the work but nothing could confirm it finished. The person looked and says it did:
+            # their word is the proof, and only this button gives it (never a chat message).
+            from conxa_core.storage.workflow_store import set_workflow_test_result
+
+            set_workflow_test_result(workflow.id, status="passed", inputs=workflow.last_test_inputs or {}, run_id=workflow.last_test_run_id)
+            workflow = get_workflow(workflow.id) or workflow
         if workflow.last_test_status != "passed":
             raise _CommandError("test_required", "The workflow changed since that test. Test it again, then approve.")
         self._require_allowed(workflow.id, "approve")   # an unanswered question blocks approval

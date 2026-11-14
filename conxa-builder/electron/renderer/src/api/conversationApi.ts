@@ -123,8 +123,8 @@ export const flowTestRun = (workflowId: string, cardId: string, inputs: Record<s
 export const flowTestDecision = (workflowId: string, decision: 'run_rest' | 'yes' | 'end_here' | `fork:${string}`) =>
   cmd<{ ok: boolean }>('flow_test_decision', { workflow_id: workflowId, decision })
 export const flowTestStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_test_stop', { workflow_id: workflowId })
-export const flowApprove = (workflowId: string, cardId: string) =>
-  cmd<{ ok: boolean; approved: boolean; built: boolean }>('flow_approve', { workflow_id: workflowId, card_id: cardId })
+export const flowApprove = (workflowId: string, cardId: string, checked = false) =>
+  cmd<{ ok: boolean; approved: boolean; built: boolean }>('flow_approve', { workflow_id: workflowId, card_id: cardId, ...(checked ? { checked: true } : {}) })
 export const flowAutofixStop = (workflowId: string) => cmd<{ ok: boolean }>('flow_autofix_stop', { workflow_id: workflowId })
 export const flowInvestigate = (workflowId: string) => cmd<{ ok: boolean }>('flow_investigate', { workflow_id: workflowId })
 

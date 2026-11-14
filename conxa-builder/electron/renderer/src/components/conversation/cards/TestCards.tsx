@@ -317,12 +317,15 @@ export function TestRunCard({ threadId, item }: CardProps) {
     return (
       <CardShell
         glyph={careful && !approved ? 'warn' : 'ok'}
-        title={approved ? 'Approved' : outcome === 'done_please_check' ? 'Test finished — please check' : outcome === 'submitted' ? 'Submitted — finishing on its own' : 'Test passed'}
+        title={approved ? 'Approved' : outcome === 'done_please_check' ? 'Test finished — please check' : outcome === 'submitted' ? 'Couldn’t confirm it finished' : 'Test passed'}
         meta={approved ? `by you${item.approved_version ? ` · version ${String(item.approved_version)}` : ''}` : `${plural(Number(item.steps_ran ?? rows.length), 'step')}${clock ? ` · ${clock}` : ''}`}
         footer={
           <>
-            {!approved && (
+            {!approved && outcome !== 'submitted' && (
               <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowApprove(wf, cardId))}>Approve for packaging</Button>
+            )}
+            {!approved && outcome === 'submitted' && (
+              <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowApprove(wf, cardId, true))}>I checked — it worked</Button>
             )}
             <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowTestPrepare(wf))}>Test with other inputs</Button>
           </>
@@ -332,7 +335,7 @@ export function TestRunCard({ threadId, item }: CardProps) {
           <p className="flex items-start gap-2 text-status-warn"><StatusGlyph kind="warn" /><span className="text-[var(--text-secondary)]">Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.</span></p>
         )}
         {outcome === 'submitted' && (
-          <p className="text-[var(--text-secondary)]">The app accepted the work and will finish it on its own. Check the result before you approve this.</p>
+          <p className="text-[var(--text-secondary)]">The app took the work, but nothing on screen showed that it finished. Look at the result in the app. If it’s there, press “I checked — it worked”; if not, test it again.</p>
         )}
         {notes.length > 0 && (
           <ul className="mt-1 space-y-1">

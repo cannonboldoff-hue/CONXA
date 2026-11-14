@@ -40,6 +40,12 @@ def _recording_duration_seconds(events: list[dict[str, Any]]) -> float | None:
     return duration if duration > 0 else None
 
 
+def _action_count(events: list[dict[str, Any]]) -> int:
+    """How many things the PERSON did. The recording also holds what the page did by itself (a script's own click),
+    which is never a step; counting it makes "you did 11 things" wrong."""
+    return sum(1 for e in events if not (isinstance(e, dict) and e.get("origin") == "script"))
+
+
 def _capture_gap_count(sess: Any) -> int:
     """How many steps the recording lost on the way (BUILD-80). Tolerates a session object without the counter."""
     counter = getattr(sess, "capture_gap_count", None)
@@ -573,6 +579,7 @@ class SessionMixin:
             return {
                 "session_id": session_id,
                 "event_count": len(events),
+                "action_count": _action_count(events),
                 "workflow_id": workflow_id,
                 "status": "variant_recorded",
                 "capture_gaps": gaps,
@@ -600,10 +607,11 @@ class SessionMixin:
             return {
                 "session_id": session_id,
                 "event_count": len(events),
+                "action_count": _action_count(events),
                 "workflow_id": workflow_id,
                 "status": "recorded",
                 "capture_gaps": gaps,
                 "workflow_kind": "workflow",
             }
-        return {"session_id": session_id, "event_count": len(events), "capture_gaps": gaps}
+        return {"session_id": session_id, "event_count": len(events), "action_count": _action_count(events), "capture_gaps": gaps}
 

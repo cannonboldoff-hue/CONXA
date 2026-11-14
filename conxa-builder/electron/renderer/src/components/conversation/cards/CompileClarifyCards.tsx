@@ -93,6 +93,23 @@ export function CompileCard({ threadId, item }: CardProps) {
       </CardShell>
     )
   }
+  if (state === 'partial') {
+    return (
+      <CardShell
+        glyph="fail"
+        title="Part of the build failed"
+        footer={
+          <>
+            <Button variant="outline" size="sm" disabled={offline} title={waitingTitle} onClick={() => run('retry')}>Build again</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowDetails((v) => !v)}>{showDetails ? 'Hide details' : 'Show details'}</Button>
+          </>
+        }
+      >
+        <p>Your workflow is saved, but I couldn’t finish working out what some steps are for. Building again usually fixes it.</p>
+        {showDetails && <p className="mt-2 whitespace-pre-wrap font-mono text-xs text-[var(--text-meta)]">{error || 'No details were reported.'}</p>}
+      </CardShell>
+    )
+  }
   if (state === 'deferred') {
     return (
       <CardShell glyph="none" title="Compile later" footer={<Button variant="brand" size="sm" disabled={offline} title={waitingTitle} onClick={() => run('retry')}>Compile now</Button>}>

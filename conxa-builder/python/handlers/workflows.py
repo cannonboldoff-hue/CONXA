@@ -258,6 +258,22 @@ _RUNTIME_OUTCOME_LEADS = (
 )
 
 
+def _live_sign_in_status(wf: Any) -> str:
+    """The workflow's sign-in status read from its group's apps right now. The stored ``status`` is a copy taken when the
+    group was set and goes stale once a sign-in is captured later; the group is the truth. "error" stays as stored."""
+    if wf.status == "error" or not wf.group_id:
+        return wf.status
+    try:
+        from conxa_core.storage.group_store import get_group  # noqa: PLC0415
+
+        group = get_group(wf.group_id)
+    except Exception:  # noqa: BLE001 -- a status read must never fail the list
+        return wf.status
+    if group is None or not group.apps:
+        return wf.status
+    return "ready" if all(a.captured_at for a in group.apps) else "needs_auth"
+
+
 def runtime_outcome(result: dict[str, Any], message: str) -> tuple[str | None, list[dict[str, Any]]]:
     """How the runtime says the run ended (Proof of Done) and what each step proved.
 
@@ -569,6 +585,7 @@ class WorkflowsMixin:
         result = []
         for wf in workflows:
             data = wf.model_dump(mode="json")
+            data["status"] = _live_sign_in_status(wf)
             data["stage"] = derive_workflow_stage(wf)
             result.append(data)
         return {"workflows": result}
@@ -594,6 +611,7 @@ class WorkflowsMixin:
             except Exception:
                 pass
         data["step_count"] = step_count
+        data["status"] = _live_sign_in_status(workflow)
         data["stage"] = derive_workflow_stage(workflow)
         return {"workflow": data}
 
@@ -1410,11 +1428,17 @@ class WorkflowsMixin:
             raise _CommandError("workflow_test_failed", failure, run_id=_test_run_id,
                                 outcome=outcome if outcome in ("couldnt_confirm", "partly_done") else None)
 
+        # "Submitted": the app took the work but nothing could show it finished. That is not a pass: the workflow
+        # stays "not tested yet" (Approve stays closed) until the person says they checked the result.
         set_workflow_test_result(
-            workflow_id, status="passed",
+            workflow_id, status="never" if outcome == "submitted" else "passed",
             inputs=_redact_sensitive_test_inputs(workflow.skill_id, inputs),
             run_id=_test_run_id,
         )
+        if outcome == "submitted":
+            from conxa_core.storage.workflow_store import set_workflow_test_outcome  # noqa: PLC0415
+
+            set_workflow_test_outcome(workflow_id, {"outcome": "submitted"})
         sink({"kind": "workflow_test", "message": message})
         return {
             "status": "passed", "message": message, "company": company,

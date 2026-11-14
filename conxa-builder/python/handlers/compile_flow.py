@@ -155,8 +155,16 @@ class CompileFlowMixin:
 
         try:
             progress.observe({"phase": "compile_done", "step_count": result.get("step_count")})
-            harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
-                                credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
+            # A build step that crashed is said out loud, on the card that says the build is over, not left in
+            # the report: the workflow is saved but part of it was never worked out.
+            broken = self._flow_degraded_passes(result.get("skill_id"))
+            if broken:
+                harness.update_card(thread, card_id, sink=sink, state="partial", rows=progress.rows(),
+                                    credits_left=progress.credits_left, step_count=result.get("step_count"),
+                                    error="\n".join(broken), actions=["retry", "details"])
+            else:
+                harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
+                                    credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
             warnings = int(result.get("compile_steps_with_warnings") or 0)
             self._flow_after_compile(workflow_id, result, sink)
         except Exception:  # noqa: BLE001 — the compile itself succeeded; only the questions failed
@@ -172,6 +180,16 @@ class CompileFlowMixin:
         finally:
             runtime_state.set_flags(workflow_id, understanding=False)
         return {"ok": True, **result}
+
+    @staticmethod
+    def _flow_degraded_passes(skill_id: Any) -> list[str]:
+        """The technical line for each build pass that crashed (``compile_report["degraded"]``), or [] when none did.
+        A pass that was switched off or found nothing is not listed (build.py only records a real failure)."""
+        from conxa_core.storage.json_store import read_skill
+
+        doc = read_skill(str(skill_id)) if skill_id else None
+        degraded = ((doc or {}).get("compile_report") or {}).get("degraded") or []
+        return [f"{d.get('pass')}: {d.get('reason')}: {d.get('detail')}"[:400] for d in degraded if isinstance(d, dict)]
 
     def _flow_rebuild_questions(self, workflow_id: str, result: dict[str, Any], sink: Any) -> None:
         """Write the questions for a compile whose check was cut short (the app closed before
