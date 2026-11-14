@@ -1426,6 +1426,37 @@ def test_the_final_message_of_a_long_action_is_recorded_as_value_free_words(page
     assert watch["waited_ms"] >= 800, "it must have waited for the work to finish"
 
 
+def test_only_the_surface_that_showed_the_progress_speaks_for_the_result(page: Page) -> None:
+    # A tray shows the work; elsewhere the page announces a window change and a tooltip appears. Both are live
+    # regions that are new when the work ends, but neither is what the app said about the work.
+    _install_bridge(
+        page,
+        """<button id="upload" onclick="
+          const tray = document.createElement('div');
+          tray.setAttribute('role', 'dialog');
+          tray.innerHTML = '<p>Uploading 1 item</p><div role=progressbar style=width:80px;height:6px></div>';
+          document.body.appendChild(tray);
+          setTimeout(() => {
+            const live = document.createElement('div');
+            live.setAttribute('role', 'status');
+            live.textContent = 'Window maximized';
+            document.body.appendChild(live);
+            const tip = document.createElement('div');
+            tip.setAttribute('aria-live', 'polite');
+            tip.textContent = 'More actions';
+            document.body.appendChild(tip);
+          }, 300);
+          setTimeout(() => { tray.innerHTML = '<p>1 upload complete</p>'; }, 900);">Upload</button>""",
+    )
+    page.click("#upload")
+    watch = _wait_for_event(page, "click", watch=True).get("post_watch")
+
+    assert watch is not None
+    words = [w for item in watch["final_status"] for w in item["words"]]
+    assert "complete" in words, watch
+    assert "maximized" not in words and "actions" not in words, f"text from another surface leaked: {words}"
+
+
 def test_a_commit_click_that_shows_no_progress_records_no_post_watch_and_is_not_delayed(page: Page) -> None:
     _install_bridge(page, '<button id="save">Save</button>')
     page.click("#save")

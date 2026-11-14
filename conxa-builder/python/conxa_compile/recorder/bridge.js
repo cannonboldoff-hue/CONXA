@@ -691,6 +691,16 @@
   const _SKIP_INTERACTIVE = new Set(["input", "button", "select", "textarea", "a", "option"]);
 
   function captureAssociatedLabel(el) {
+    // A menu entry, option or tab sits among siblings of its own kind, and a hidden file input sits among the
+    // page's other controls: the nearest preceding text there is a DIFFERENT control's name ("New folder" for
+    // "File upload", "Type" for the file input), never this one's caption.
+    try {
+      const role = (el.getAttribute("role") || "").toLowerCase();
+      if (/^(menuitem|menuitemradio|menuitemcheckbox|option|tab|treeitem)$/.test(role)
+          || (el.tagName === "INPUT" && (el.type || "").toLowerCase() === "file")) {
+        return "";
+      }
+    } catch (_) {}
     // 1. Standard: <label for="id">
     if (el.id) {
       try {
@@ -1735,6 +1745,43 @@
     return _watchTexts().some((t) => _PROGRESS_RE.test(t));
   }
 
+  // The surfaces (a dialog, a live region) that SHOW work in progress right now: where a progress text sits, and the
+  // surface around a visible progress bar. A result belongs to the surface that showed the progress; a window
+  // announcement or a tooltip elsewhere on the page is not what the app said about this work.
+  const _SURFACE_SEL = '[role="dialog"], [role="alertdialog"], dialog[open], [role="alert"], [aria-live="assertive"], [role="status"], [aria-live="polite"]';
+  function _progressHosts() {
+    const hosts = new Set();
+    try {
+      for (const el of document.querySelectorAll(_SURFACE_SEL)) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        if (_PROGRESS_RE.test(String(el.innerText || el.textContent || ""))) hosts.add(el);
+      }
+      for (const bar of document.querySelectorAll('[aria-busy="true"], [role="progressbar"], progress')) {
+        const r = bar.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const host = bar.closest(_SURFACE_SEL);
+        if (host) hosts.add(host);
+      }
+    } catch (_e) {}
+    return hosts;
+  }
+
+  // The visible surfaces with their text, so a text can be tied back to the surface that carries it.
+  function _watchSurfaces() {
+    const out = [];
+    try {
+      const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      for (const el of document.querySelectorAll(_SURFACE_SEL)) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const t = clean(el.innerText || el.textContent);
+        if (t) out.push({ text: t, el });
+      }
+    } catch (_e) {}
+    return out;
+  }
+
   const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // Keeps watching ONLY while progress is on screen. Records that progress was seen and the value-free
@@ -1765,11 +1812,13 @@
     // A text is progress only if it WENT AWAY by the time the work ended. A text seen while a progress bar was up
     // but still on screen at the end is the result ("1 upload complete"), whatever else was showing beside it.
     const progressTexts = new Set();
+    const hosts = new Set();   // the surfaces that showed the progress: the result is read from these only
     const noteProgress = () => {
       for (const text of _watchTexts()) {
         if (before.has(text)) continue;
         progressTexts.add(text);
       }
+      for (const h of _progressHosts()) hosts.add(h);
     };
     noteProgress();
     let lastBusy = Date.now();
@@ -1788,7 +1837,14 @@
     }
     // A watch cut short by Stop never saw the work end, so it must not claim any "done" words.
     if (!_cutAll) {
-      for (const text of endTexts) {
+      // What the app said about THIS work is on the surface that showed its progress. A window announcement
+      // ("maximized") or a tooltip is a live region too but sits elsewhere. When no progress surface can be named,
+      // or none of them says anything new, every new text still counts, as before.
+      const related = (el) => { for (const h of hosts) if (h === el || h.contains(el) || el.contains(h)) return true; return false; };
+      const fromProgressSurface = new Set(_watchSurfaces().filter((s) => hosts.size && related(s.el)).map((s) => s.text));
+      const candidates = endTexts.filter((t) => !before.has(t) && !_PROGRESS_RE.test(t));
+      const scoped = candidates.filter((t) => fromProgressSurface.has(t));
+      for (const text of (scoped.length ? scoped : candidates)) {
         if (before.has(text) || _PROGRESS_RE.test(text)) continue;
         const words = _valueFreeWords(text);
         if (words.length) final.push({ kind: "status", words });
