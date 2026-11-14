@@ -238,6 +238,8 @@ async function open(o) {
       nb.refresh();
       let busyCount = 0;
       const regions = [];
+      const bars = [];
+      let busyWhat = "";
       let stepPageAnswered = false;
       for (const p of livePages()) {
         const frames = (typeof p.frames === "function" && p.frames()) || [p];
@@ -253,13 +255,15 @@ async function open(o) {
           if (!s || s === EVAL_TIMED_OUT) continue;
           if (isMain && p === o.page) stepPageAnswered = true;
           busyCount += s.busyCount || 0;
+          if (s.bars) bars.push(s.bars);
+          if (!busyWhat && s.busyWhat) busyWhat = s.busyWhat;
           for (const t of s.regions || []) if (regions.length < MAX_REGIONS && !regions.includes(t)) regions.push(t);
         }
       }
       if (!stepPageAnswered) return null;
       const before = new Set((nb.baseline && nb.baseline.regions) || []);
       for (const t of regions) if (!before.has(t) && seenNew.size < MAX_REGIONS * 4) seenNew.add(t);
-      return { busyCount, regions };
+      return { busyCount, regions, ...(bars.length ? { bars: bars.join("/") } : {}), ...(busyWhat ? { busyWhat } : {}) };
     },
 
     /** Every text that appeared since the notebook opened, even one that has gone again (a "complete" toast). */

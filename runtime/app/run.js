@@ -71,6 +71,7 @@ const {
   verifyStep,
   hasRequiredAssertion,
   needsStateChangedBaseline,
+  watchedTexts,
   pollNegative,
 } = require("./assertions");
 const {
@@ -320,6 +321,12 @@ function closeNotebook(ctx, only = null) {
   if (ctx.notebook === nb) ctx.notebook = null;
 }
 
+function stallAfterMs(step) {
+  const t = step && step.validation && step.validation.effect && step.validation.effect.time;
+  const s = t && Number(t.stall_after_s);
+  return s > 0 ? Math.round(s * 1000) : 0;
+}
+
 async function confirmCompletedInner(ctx, state, step, i, page, completion, preShot) {
   const full = step.type === "upload" || step === ctx.lastActStep;
   const mode = full ? "full" : "short";
@@ -338,13 +345,15 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     budgetMs: full ? COMPLETION_BUDGET_MS : COMPLETION_SHORT_MS,
     pendingBudgetMs: upload ? COMPLETION_BUDGET_MS : NETWORK_GRACE_MS,
     startGraceMs: COMPLETION_START_GRACE_MS,
+    // The step's own stall time, when the compiler wrote one: an indicator unchanged for that long is not work.
+    ...(stallAfterMs(step) ? { stallMs: stallAfterMs(step) } : {}),
     notebook: completion.notebook || null,
     signals: appSignals(ctx, page),
     deadlineAt: ctx.deadlineAt,
     cancelCheck: ctx.cancelCheck,
     dialogQueue: ctx.dialogQueue,
   });
-  ctx.tracker.emit("completion", { si: i, mode, st: v.status, waited: v.waitedMs });
+  ctx.tracker.emit("completion", { si: i, mode, st: v.status, waited: v.waitedMs, ...(v.still ? { still: 1 } : {}), ...(v.busyWhat ? { bw: v.busyWhat } : {}) });
   warn(v.warning);
   if (v.status === "handoff") {
     // A popup left open by the plan's final step has no next step to answer it: put it to the same
@@ -407,7 +416,8 @@ function emitVerifyResult(ctx, i, verdict) {
 function gateAnswer(gate) {
   if (!gate) return null;
   switch (gate.status) {
-    case "done": return "yes";
+    // Quiet is not proof: a gate that ended only because a static indicator stopped changing never saw the work end.
+    case "done": return gate.still ? "cant_tell" : "yes";
     case "no_sign": case "cant_tell": return "cant_tell";
     case "still_working": case "handoff": return "not_yet";
     default: return null;
@@ -558,12 +568,36 @@ function resolveLaterProofs(state, ran) {
   state.proof.later = kept;
 }
 
+// Before a run stops on a popup nothing answers, the pointer is taken off the page ONCE and the page is looked at again.
+// Only a surface that is gone after that is excused (a hover card closes when its hover ends); a real question stays, and
+// a native dialog or an unreadable page is never excused. Moving the pointer clicks, types and answers nothing. The
+// outcome is the measured disappearance itself, never a guess from words or from who put the pointer there.
+const PARK_RECHECK_MS = 400;
+async function parkAndRecheck(page, ctx, blocking) {
+  if (!blocking || blocking.native) return blocking;
+  try {
+    const spot = await evalOn(page, pageScripts.neutralPoint, undefined, 2000);
+    if (!spot || spot === EVAL_TIMED_OUT || !page.mouse || typeof page.mouse.move !== "function") return blocking;
+    await page.mouse.move(spot.x, spot.y);
+    await new Promise((resolve) => setTimeout(resolve, PARK_RECHECK_MS));
+  } catch (_) { return blocking; }
+  return observeDialog(page, ctx);
+}
+
 // The plan's final step ended with a popup that asks a question and nothing is left to answer it.
 // Never answered on anyone's behalf: it goes through the same rules as an unrecorded popup anywhere
 // else (put to the MCP client when allowed, otherwise the run stops), and the run is not "Done".
 async function popupLeftBehind(ctx, state, step, i, page, preShot) {
-  const blocking = await observeDialog(page, ctx);
+  let blocking = await observeDialog(page, ctx);
   if (!blocking || !fork.isBlockingDecision(blocking)) return;
+  const after = await parkAndRecheck(page, ctx, blocking);
+  if (!after || !fork.isBlockingDecision(after)) {
+    // It closed when the pointer moved away, so a hover opened it, not the step. It is not a question for anyone.
+    const msg = `A panel ("${blocking.title || "untitled"}") opened where the pointer was resting and closed when the pointer moved away, so it was not treated as a question.`;
+    if (!state.warnings.includes(msg)) state.warnings.push(msg);
+    return;
+  }
+  blocking = after;
   try {
     await askAboutBlockingPopup(ctx, state, step, page, i, { verifyFail: true });
   } catch (e) {
@@ -1008,7 +1042,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   const primarySelector = baseSelector(step, state.inputs);
   // Pre-action baseline for the state_changed assertion (only captured when the step actually
   // carries one — cheap, but no reason to pay it on every step).
-  const stateBaseline = needsStateChangedBaseline(step) ? await capturePreStepSignature(page) : null;
+  const watched = watchedTexts(step, state.inputs);
+  const stateBaseline = needsStateChangedBaseline(step) || watched.length ? await capturePreStepSignature(page, watched) : null;
   // Completion gate: what the page shows before the action, so only NEW progress/errors count after.
   // The evidence notebook opens here too: from now until the verdict it writes down what every tab this run
   // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.
@@ -1210,7 +1245,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // before this step touched anything, which is what the guard compares against.
   const guard = createActionGuard(step, {
     acted: !!(primaryErr && (primaryErr.mayHaveActed || primaryErr.verifyFail)),
-    signature: stateBaseline,
+    signature: needsStateChangedBaseline(step) ? stateBaseline : null, // a baseline taken only for text counts is not a page signature
   });
 
   const recovered = await recoverStep(page, step, state.inputs, ctx.slug, i, primarySelector, ctx.tracker, primaryErr, ctx.cancelCheck, stateBaseline, guard, ctx.dialogQueue, ctx.runCtx);
@@ -2281,6 +2316,7 @@ module.exports = {
   detectFault,
   countSurface,
   askAboutBlockingPopup,
+  parkAndRecheck,
   runIfDecision,
   collectOutputs,
   declaredOutputNames,

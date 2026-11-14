@@ -341,15 +341,16 @@ function dialogProbe() {
   // Does it stop the person (or the run) from reaching the rest of the page? Measured, never read from words:
   // true = a modal, a covering backdrop, or an inert page; false = every point outside it reaches ordinary page
   // content; null = could not tell (a frame, an unreadable page). Callers treat null like true.
-  const blocks = (() => {
-    if (modal) return true;
+  // `why` names the branch that decided, so a verdict can say which fact it rested on.
+  const measured = (() => {
+    if (modal) return { v: true, why: "modal" };
     try {
-      if (document.querySelector("[inert]") && !dlg.closest("[inert]")) return true;
+      if (document.querySelector("[inert]") && !dlg.closest("[inert]")) return { v: true, why: "inert_page" };
       const vw = window.innerWidth, vh = window.innerHeight;
       const r = dlg.getBoundingClientRect();
       const pts = [[8, 8], [vw - 8, 8], [8, vh - 8], [vw - 8, vh - 8], [vw / 2, 8], [vw / 2, vh - 8], [8, vh / 2], [vw - 8, vh / 2]]
         .filter(([x, y]) => x < r.left - 4 || x > r.right + 4 || y < r.top - 4 || y > r.bottom + 4);
-      if (!pts.length) return true; // it covers the whole window
+      if (!pts.length) return { v: true, why: "covers_window" };
       let unknown = false;
       for (const [x, y] of pts) {
         const el = document.elementFromPoint(x, y);
@@ -359,17 +360,39 @@ function dialogProbe() {
         const er = el.getBoundingClientRect();
         const coversWindow = er.width * er.height >= 0.9 * vw * vh && window.getComputedStyle(el).position === "fixed";
         if (!coversWindow) continue;
-        // A fixed window-sized element over a point outside the dialog is a backdrop: a sibling of the dialog, or a
-        // wrapper that holds little besides it. A window-sized app shell that also holds the page's own content
-        // (far more text than the dialog) is the page itself.
-        if (!el.contains(dlg) || (el.innerText || "").length <= (dlg.innerText || "").length + 40) return true;
+        // A fixed window-sized element over a point outside the dialog is a backdrop only when it holds little besides
+        // the dialog (and, if the dialog is not inside it, little at all). One that holds far more text than that is the
+        // page's own app shell, whether or not the dialog happens to be mounted inside it.
+        const room = el.contains(dlg) ? (dlg.innerText || "").length : 0;
+        if ((el.innerText || "").length <= room + 40) return { v: true, why: "backdrop" };
       }
-      return unknown ? null : false;
-    } catch (_) { return null; }
+      return unknown ? { v: null, why: "unreadable" } : { v: false, why: "page_reachable" };
+    } catch (_) { return { v: null, why: "unreadable" }; }
   })();
+  const blocks = measured.v;
+  const blocks_reason = measured.why;
   const live =!!dlg.closest('[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]');
   const progress = !!dlg.querySelector('[role="progressbar"],progress,[aria-busy="true"]');
-  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, blocks, live, progress };
+  return { title: title.slice(0, 120), text: clean(dlg.innerText).slice(0, 300), controls, hasFields, modal, blocks, blocks_reason, live, progress };
+}
+
+// A spot where a resting pointer cannot open anything: a point that reaches the page itself (or inert text), outside any
+// dialog and not on or inside anything a pointer could act on. Used to take the pointer off the page before the run stops
+// on a popup (run.js::parkAndRecheck). Returns {x, y}, or null when no such spot is found (then the pointer stays put).
+// Re-parsed standalone in the page realm like every function here, so it closes over nothing.
+function neutralPoint() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const ACTIVE = 'a,button,input,select,textarea,summary,label,[role],[tabindex],[onclick],[onmouseover],[onmouseenter],[data-tooltip],[title],[aria-haspopup]';
+  const spots = [[2, 2], [vw - 3, 2], [2, vh - 3], [vw - 3, vh - 3], [vw / 2, 2], [vw / 2, vh - 3], [2, vh / 2], [vw - 3, vh / 2], [vw / 2, vh / 2]];
+  for (const [x, y] of spots) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) continue;
+    if (el === document.documentElement || el === document.body) return { x: Math.round(x), y: Math.round(y) };
+    if (el.tagName === "IFRAME" || el.tagName === "FRAME") continue;
+    if (el.closest('[role="dialog"],[role="alertdialog"],dialog,[aria-modal="true"]') || el.closest(ACTIVE)) continue;
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+  return null;
 }
 
 // EXEC-49 — fault probe. What the app itself is saying is wrong right now: visible role=alert /
@@ -638,8 +661,21 @@ function completionProbe() {
     return cs.visibility !== "hidden" && cs.display !== "none";
   }
   var busyCount = 0;
+  var bars = [];
+  var busyWhat = "";
   var busy = document.querySelectorAll(busySel);
-  for (var i = 0; i < busy.length; i++) if (visible(busy[i])) busyCount++;
+  for (var i = 0; i < busy.length; i++) {
+    if (!visible(busy[i])) continue;
+    busyCount++;
+    var b = busy[i];
+    // What each indicator reads right now, so the gate can tell a bar that moves from one that only stays on screen.
+    bars.push(String(b.getAttribute("aria-valuenow") || b.getAttribute("data-progress") || b.value || ""));
+    if (!busyWhat) {
+      var host = b.closest('[role="dialog"],[role="alertdialog"],[role="status"],[aria-live]');
+      busyWhat = (b.tagName.toLowerCase() + (b.getAttribute("role") ? "[" + b.getAttribute("role") + "]" : "") +
+        (host ? " in " + String(host.getAttribute("aria-label") || host.getAttribute("role") || host.tagName).slice(0, 60) : "")).slice(0, 120);
+    }
+  }
   var regions = [];
   var els = document.querySelectorAll(regionSel);
   for (var j = 0; j < els.length && regions.length < 8; j++) {
@@ -658,7 +694,7 @@ function completionProbe() {
     if (!mt || regions.indexOf(mt) !== -1) continue;
     if (modals[k].querySelector('[role="progressbar"], progress, [aria-busy="true"]') || progressWords.test(mt)) regions.push(mt);
   }
-  return { busyCount: busyCount, regions: regions };
+  return { busyCount: busyCount, regions: regions, bars: bars.slice(0, 8).join("|"), busyWhat: busyWhat };
 }
 
 // How many times `needle` appears in the page's visible text (case-insensitive). Used to see whether an uploaded
@@ -779,6 +815,7 @@ module.exports = {
   inventoryEntryForElement,
   overlayProbe,
   dialogProbe,
+  neutralPoint,
   faultProbe,
   completionProbe,
   INVENTORY_SELECTOR,

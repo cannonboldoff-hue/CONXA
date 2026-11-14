@@ -82,7 +82,8 @@ function pageUrl(page) {
  * @param {{baseline: {busyCount:number, regions:string[], url?:string}, sinceMs: number,
  *   mode?: "short"|"full", budgetMs: number, pendingBudgetMs?: number, pollMs?: number, quietMs?: number,
  *   startGraceMs?: number, deadlineAt?: number, deadlineMarginMs?: number, cancelCheck?: () => boolean,
- *   dialogQueue?: any[], notebook?: object, signals?: {progress: RegExp|null, failure: RegExp|null}}} o  `signals` are the app's own
+ *   dialogQueue?: any[], stallMs?: number, notebook?: object, signals?: {progress: RegExp|null, failure: RegExp|null}}} o  `stallMs`:
+ *   an indicator that reads the same for this long is on screen, not working (see `still` on a "done" verdict). `signals` are the app's own
  *   words (app_knowledge.js::signalsFor). `notebook` (evidence.js) widens what is read from the one page
  *   to every tab and visible frame the run owns; without it the wait reads `page` alone, as before.
  * @returns {Promise<{status: "done"|"failed"|"timed_out"|"still_working"|"no_sign"|"cant_tell"|"handoff",
@@ -104,6 +105,10 @@ async function waitForCompletion(page, o) {
   let pendingSince = null;
   let sawPendingGrace = false;
   let started = false;
+  let lastSig = null;
+  let lastChangeAt = Date.now();
+  let sawBusy = false;
+  let sawOpenRequest = false;
 
   for (;;) {
     if (cancelCheck && cancelCheck()) return out("still_working", { reason: "cancelled" });
@@ -118,6 +123,13 @@ async function waitForCompletion(page, o) {
     if (!sample || sample === EVAL_TIMED_OUT) return out("cant_tell", { reason: "probe_unavailable" });
 
     const c = classifySample(sample, baseline, o.signals || null);
+    // Motion: a progress indicator that has shown the same thing (same count, same values, same status text) for the
+    // whole stall window is on screen, not working. A finished tray's bar or a hover card's thumbnail spinner stays
+    // visible forever; waiting for it to leave never ends. Work that is really in flight is held by its open request.
+    const sig = `${sample.busyCount || 0}|${sample.bars || ""}|${(sample.regions || []).join("\n")}`;
+    if (sig !== lastSig) { lastSig = sig; lastChangeAt = Date.now(); }
+    const stalled = !!(o.stallMs && c.busy && Date.now() - lastChangeAt >= o.stallMs);
+    if (c.busy) sawBusy = true;
     const urlNow = baseUrl ? pageUrl(page) : null;
     // A first sign the app took the work. Silence before this proves nothing: a tray can open late.
     if (c.busy || newTexts(sample, baseline).length || (urlNow && urlNow !== baseUrl)
@@ -130,10 +142,11 @@ async function waitForCompletion(page, o) {
       if (refused) return out("failed", { evidence: requestFailureEvidence(refused), kind: "action_failed" });
     }
 
+    const busyNow = c.busy && !stalled;
     let pending = false;
-    if (full && !c.busy && (nb ? nb.pendingMutations() : pageStatus.pendingMutations(page, sinceMs)) > 0) {
+    if (full && !busyNow && (nb ? nb.pendingMutations() : pageStatus.pendingMutations(page, sinceMs)) > 0) {
       pendingSince = pendingSince ?? Date.now();
-      if (Date.now() - pendingSince <= pendingBudgetMs) pending = true;
+      if (Date.now() - pendingSince <= pendingBudgetMs) { pending = true; sawOpenRequest = true; }
       else sawPendingGrace = true;
     } else {
       pendingSince = null;
@@ -145,7 +158,7 @@ async function waitForCompletion(page, o) {
       if (dlg && dlg !== EVAL_TIMED_OUT && fork.isBlockingDecision(dlg)) return out("handoff", { reason: "decision_popup" });
     }
 
-    if (!c.busy && !pending) {
+    if (!busyNow && !pending) {
       if (full && !started) {
         if (Date.now() - start >= startGraceMs) return out("no_sign");
       } else {
@@ -161,7 +174,12 @@ async function waitForCompletion(page, o) {
             if (dlg && dlg !== EVAL_TIMED_OUT && fork.isBlockingDecision(dlg)) return out("handoff", { reason: "decision_popup" });
             if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) leftOpen = dlg;
           }
+          // Did the work visibly END (an indicator that was showing has gone, or a request that was open has closed)?
+          // A step that is only quiet, with an indicator that never moved, is not shown to have finished: `still` tells
+          // the caller to count this as "couldn't tell", never as a yes.
+          const seenEnd = sawOpenRequest || (sawBusy && !c.busy);
           return out("done", {
+            ...(c.busy && stalled && !seenEnd ? { still: true, busyWhat: sample.busyWhat || "" } : {}),
             ...(leftOpen ? { leftOpen } : {}),
             ...(sawPendingGrace ? { warning: "The app was still sending data in the background when this step ended." } : {}),
           });
@@ -175,10 +193,12 @@ async function waitForCompletion(page, o) {
     const evidence = c.busyText || "it still showed progress";
     // Stop before the run's own time limit: the caller must still be listening when the answer arrives.
     if (deadlineAt && (c.busy || pending) && now >= deadlineAt - deadlineMarginMs) {
-      return out("still_working", { reason: "deadline", evidence });
+      // `open`: the data-changing requests still open, by endpoint only, so a step that never settles can be told apart
+      // (a request that really is in flight, a page's own background call, or progress words still on screen).
+      return out("still_working", { reason: "deadline", evidence, busyWhat: sample.busyWhat || "", open: nb && nb.openMutations ? nb.openMutations() : [] });
     }
     if (now - start >= budgetMs) {
-      return full ? out("timed_out", { evidence }) : out("still_working", { reason: "budget", evidence });
+      return full ? out("timed_out", { evidence, busyWhat: sample.busyWhat || "" }) : out("still_working", { reason: "budget", evidence, busyWhat: sample.busyWhat || "" });
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }

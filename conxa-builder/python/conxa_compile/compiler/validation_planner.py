@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from conxa_compile.compiler.action_semantics import (
@@ -264,6 +265,32 @@ def _diff_strength(state_diff: dict[str, Any]) -> float:
     return min(1.0, max(0.0, raw))
 
 
+def _own_words(source_step: Any) -> set[str]:
+    """Words of what the person chose in this step: the clicked item's own text and any value they typed or picked."""
+    if not isinstance(source_step, dict):
+        return set()
+    target = source_step.get("target") if isinstance(source_step.get("target"), dict) else {}
+    action = source_step.get("action") if isinstance(source_step.get("action"), dict) else {}
+    parts = [str(target.get(k) or "") for k in ("inner_text", "aria_label", "label_text", "title", "name", "alt", "placeholder")]
+    parts.append(str(action.get("value") or ""))
+    return {w for w in re.findall(r"\w+", " ".join(parts).lower()) if len(w) >= 3}
+
+
+def _drop_echoes(text_change: list[str], source_step: Any) -> list[str]:
+    """New page text that only repeats what the person just chose says nothing about how the app responded (the
+    opened item's own name, the value they typed): a check built from it is true of this recording and no other."""
+    own = _own_words(source_step)
+    if not own:
+        return text_change
+    kept = []
+    for t in text_change:
+        words = {w for w in re.findall(r"\w+", str(t).lower()) if len(w) >= 3}
+        if words and words <= own:
+            continue
+        kept.append(t)
+    return kept
+
+
 def infer_success_conditions(
     wait_for: dict[str, Any],
     state_diff: dict[str, Any],
@@ -277,9 +304,9 @@ def infer_success_conditions(
     wt = str(wait_for.get("type") or "none")
     new_els = list(state_diff.get("new_elements") or [])
     removed = list(state_diff.get("removed_elements") or [])
-    text_change = list(state_diff.get("text_change") or [])
+    text_change = _drop_echoes(list(state_diff.get("text_change") or []), source_step)
     strength = _diff_strength(state_diff)
-    dl = policy.get("decision_layer") if isinstance(policy, dict) and isinstance(policy.get("decision_layer"), dict) else {}
+    dl =policy.get("decision_layer") if isinstance(policy, dict) and isinstance(policy.get("decision_layer"), dict) else {}
     add_intent_tokens = bool(dl.get("success_add_intent_tokens", True))
     intent_primary = intent_primary_validation_enabled(policy) if isinstance(policy, dict) else False
 
@@ -293,6 +320,9 @@ def infer_success_conditions(
             # against, so keep today's behavior rather than silently dropping every token.
             if source_step:
                 candidates = intent_tokens_grounded_in_context(candidates, source_step)
+                # "Grounded in the context" means the word was on the page BEFORE the action (usually the clicked
+                # control's own label), so it cannot say whether the action worked: same rule as for new page text.
+                candidates = _drop_echoes(candidates, source_step)
             for t in candidates:
                 if t and t not in out:
                     out.append(t)

@@ -30,10 +30,20 @@ const STATE_CHANGED_TEXT_LEN_TOLERANCE = 20;
 
 // Cheap, deterministic snapshot of page shape used only to answer "did anything happen" for the
 // state_changed assertion. No LLM, no DOM diffing — three counters compared before vs. after.
-async function capturePreStepSignature(page) {
+async function capturePreStepSignature(page, countTexts = []) {
   try {
     const url = page.url();
     const sig = await evalOn(page, pageScripts.preStepSignature, STATE_CHANGED_SELECTOR);
+    // How many times each text the step will look for is already on the page, so a later "it is there" can be told
+    // apart from "it was already there" (contrast: a check only proves something if it could have said no).
+    let counts;
+    if (countTexts.length) {
+      counts = {};
+      for (const t of countTexts) {
+        const n = await evalOn(page, pageScripts.countTextOccurrences, t).catch(() => null);
+        if (typeof n === "number") counts[t] = n;
+      }
+    }
     // A timed-out probe is unknown, not "definitely empty" — every caller already treats a null
     // signature as "no evidence" (signatureChanged/evaluateAssertion's state_changed branch both
     // fail closed to "no movement detected" rather than false-reporting one). Fabricating
@@ -41,10 +51,22 @@ async function capturePreStepSignature(page) {
     // real page, which is a false positive on the exact guard meant to catch a repeated action.
     if (!sig || sig === EVAL_TIMED_OUT) return null;
     const { textLen, interactiveCount } = sig;
-    return { url, textLen, interactiveCount };
+    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}) };
   } catch (_) {
     return null;
   }
+}
+
+// The texts a step's text_present checks look for. Any of them may already be on the page before the action (the
+// label of the control that was clicked, a file name already listed), and finding it afterwards then proves nothing.
+function watchedTexts(step, inputs) {
+  const out = [];
+  for (const a of stepAssertions(step)) {
+    if (String(a.type || "").toLowerCase() !== "text_present") continue;
+    const t = interpolate(String(a.target), inputs);
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out;
 }
 
 // EXEC-24 — "has the page moved since we last looked?" using the signature above. This is the
@@ -164,6 +186,16 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0) {
       ok = await pollNegative(async () => !(await anyRootHasMatch(roots, target)), timeout);
     } else if (type === "text_present") {
       ok = await pollPositive(() => anyRootHasMatch(roots, `text=${JSON.stringify(target)}`), timeout);
+      // Same document, and the text was already on the page this many times before the action: finding it again says
+      // nothing about the action, so it is "can't tell" unless there is more of it now. Never a new failure.
+      const before = ok && baseline && baseline.counts && baseline.counts[target];
+      if (before > 0 && page.url() === baseline.url) {
+        const more = await pollPositive(async () => {
+          const n = await evalOn(page, pageScripts.countTextOccurrences, target).catch(() => null);
+          return typeof n === "number" && n > before;
+        }, Math.min(timeout, 1500));
+        if (!more) cantTell = true;
+      }
     } else if (type === "text_absent") {
       ok = await pollNegative(async () => !(await anyRootHasMatch(roots, `text=${JSON.stringify(target)}`)), timeout);
     } else if (type === "value_equals") {
@@ -295,5 +327,6 @@ module.exports = {
   verifyStep,
   hasRequiredAssertion,
   needsStateChangedBaseline,
+  watchedTexts,
   withDeadline,
 };
