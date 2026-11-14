@@ -102,10 +102,10 @@ export const BROWSER = { fraction: 0.75, conversationMin: 320 } as const
 export type BrowserLayout = { width: number }
 
 /**
- * Where the browser goes. While it is open navigation stays as the 56 px rail and the inspector as
- * its 44 px strip (nothing is hidden); the conversation gets what is left of the window.
+ * Where the browser goes. While it is open navigation stays as the 56 px rail and the inspector strip
+ * is not drawn; the conversation gets what is left of the window.
  */
 export function resolveBrowserLayout(i: { windowWidth: number }): BrowserLayout {
-  const room = i.windowWidth - NAV.rail - INSPECTOR.strip - BROWSER.conversationMin
+  const room = i.windowWidth - NAV.rail - BROWSER.conversationMin
   return { width: Math.round(Math.min(i.windowWidth * BROWSER.fraction, room)) }
 }

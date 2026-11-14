@@ -277,7 +277,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
         </>
       )}
-      {workflowId && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
+      {workflowId && !browserShown && (layout.inspectorMode === 'strip' || layout.inspectorMode === 'sheet') && (
         <div className="shrink-0 border-l border-[var(--border-subtle)]" style={{ width: INSPECTOR.strip }}>
           <InspectorStrip workflowId={workflowId} />
         </div>
