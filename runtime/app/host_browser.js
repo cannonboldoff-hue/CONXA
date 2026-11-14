@@ -173,6 +173,13 @@ function ensureGeometry({ runId }) {
   return _controlPost("ensure_geometry", { runId });
 }
 
+// A hand-over is the one time a person acts in the run's page. The panel keeps a transparent shield over the
+// run's page the rest of the time (so a stray click or hover is never taken for a step); this takes it off
+// (open) or puts it back. Best-effort: a failed lift leaves the person on the resume file/http signals.
+function setInputOpen({ runId, open }) {
+  return _controlPost("input", { runId, open: open === true }).catch(() => {});
+}
+
 // Tell Execute a view (or the whole run) is done. With `tabId` only that one view goes — a
 // login that finished must not take its sibling logins' views down with it (a group pack opens
 // one login per missing app, all under the same runId). Without it the run is over and Execute
@@ -187,4 +194,4 @@ function release({ runId, tabId }) {
   // idle cleanup (or app restart) reclaims it; never worth failing a run over.
 }
 
-module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, pageCookies, setPageCookies, saveDownload };
+module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, setInputOpen, pageCookies, setPageCookies, saveDownload };

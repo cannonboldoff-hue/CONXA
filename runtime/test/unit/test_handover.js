@@ -248,3 +248,39 @@ test("on_missing ask without a browser context still fails closed", async () => 
     (err) => err.handoverPause !== true && /Bound record could not be uniquely located/.test(String(err.message)),
   );
 });
+
+// ── the host panel's input shield comes off for the pause and goes back on ───────────────────────────────
+
+test("arm/disarm: a host-owned run lifts the panel's input shield, then puts it back", async () => {
+  const hostBrowser = require("../../app/host_browser");
+  const real = hostBrowser.setInputOpen;
+  const calls = [];
+  hostBrowser.setInputOpen = async (a) => { calls.push(a); };
+  try {
+    const armed = await handover.arm(mockContext(), mockPage(), { message: "m" }, "run-call-id", { hostOwned: true, hostRunId: "host-run-id" });
+    assert.deepStrictEqual(calls, [{ runId: "host-run-id", open: true }], "lifted, under the host's run id (not the call's)");
+    await armed.disarm();
+    assert.deepStrictEqual(calls[1], { runId: "host-run-id", open: false }, "back on when the person is done");
+  } finally { hostBrowser.setInputOpen = real; }
+});
+
+test("arm: a run that is not host-owned never talks to a panel", async () => {
+  const hostBrowser = require("../../app/host_browser");
+  const real = hostBrowser.setInputOpen;
+  let called = 0;
+  hostBrowser.setInputOpen = async () => { called++; };
+  try {
+    const a = await handover.arm(mockContext(), mockPage(), { message: "m" }, "r1", { hostOwned: false, hostRunId: "r1" });
+    await a.disarm();
+    const b = await handover.arm(mockContext(), mockPage(), { message: "m" }, "r2");
+    await b.disarm();
+    assert.strictEqual(called, 0);
+  } finally { hostBrowser.setInputOpen = real; }
+});
+
+test("host_browser.setInputOpen: posts the lift and never throws when the panel is gone", async () => {
+  const hostBrowser = require("../../app/host_browser");
+  const saved = process.env.CONXA_HOST_CONTROL_URL;
+  delete process.env.CONXA_HOST_CONTROL_URL; // _controlPost throws: no control channel
+  try { await hostBrowser.setInputOpen({ runId: "x", open: true }); } finally { if (saved !== undefined) process.env.CONXA_HOST_CONTROL_URL = saved; }
+});

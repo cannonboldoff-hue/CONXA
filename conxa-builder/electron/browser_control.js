@@ -65,7 +65,7 @@ function start() {
   });
 }
 
-async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, dest, timeoutMs }) {
+async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, dest, timeoutMs, open }) {
   if (!runId) throw new Error("missing runId");
   switch (op) {
     case "new_view":
@@ -81,6 +81,7 @@ async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, d
     case "close_run": await panel.closeRun(runId); return { ok: true };
     case "scale": return panel.scaleOf(runId);
     case "ensure_geometry": return panel.ensureGeometry(runId);
+    case "input": return panel.setInputOpen(runId, open);
     case "targets": return panel.targetsOf(runId);
     case "save_download":
       if (!url || !dest) throw new Error("missing url or dest");

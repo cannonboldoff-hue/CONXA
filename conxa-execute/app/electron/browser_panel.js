@@ -156,17 +156,77 @@ function _viewport(v) {
   return { width, height };
 }
 
+// While the runtime drives a run, the person's mouse must not reach the page: a hover opens a menu the recording never
+// saw, and a stray click would be taken for a step. A transparent view sits on top of the page and takes the native
+// input, while the runtime's CDP input still goes straight to the page beneath it (same as Build Studio's panel).
+// A sign-in tab, and any popup it opens, is the person's own and is never covered, and the shield comes off for a
+// hand-over. Both are the runtime's call (control op "input"): the shield exists only once a runtime that knows how to
+// lift it has asked for it, so an older runtime never meets a shield it cannot lift. It never takes keyboard focus
+// (the person may be typing in the chat beside it), and says nothing on the page.
+// The marker keeps the runtime from mistaking this page for a tab the run opened (runtime/app/tabs.js::isShieldPage).
+const SHIELD_URL = "about:blank?conxa_shield=1";
+const SHIELD_JS = `(() => {
+  document.documentElement.style.background = "transparent";
+  document.body.style.cssText = "margin:0;background:transparent;cursor:not-allowed;overflow:hidden";
+})();`;
+
+function _addShield(run) {
+  if (run.shield || !_win) return;
+  const shield = new WebContentsView({ webPreferences: { sandbox: true } });
+  if (typeof shield.setBackgroundColor === "function") shield.setBackgroundColor("#00000000");
+  shield.setBounds(_HIDDEN);
+  _win.contentView.addChildView(shield);
+  shield.webContents.loadURL(SHIELD_URL).then(() => shield.webContents.executeJavaScript(SHIELD_JS)).catch(() => {});
+  run.shield = shield;
+}
+
+function _dropShield(run) {
+  const shield = run.shield;
+  if (!shield) return;
+  run.shield = null;
+  try { if (_win) _win.contentView.removeChildView(shield); } catch (_) {}
+  try { shield.webContents.close(); } catch (_) {}
+}
+
+const _shieldCovers = (run, tab) => !!(run.shield && !run.handedOver && tab && !tab.human);
+
+// Sized to the page it covers and raised above every tab (adding a child again moves it to the top).
+function _layoutShield(run, tab, shown) {
+  if (!run.shield) return;
+  if (!_shieldCovers(run, tab) || !shown) { run.shield.setBounds(_HIDDEN); return; }
+  run.shield.setBounds(shown);
+  try { if (_win) _win.contentView.addChildView(run.shield); } catch (_) {}
+}
+
+// Control-channel op "input": `open: false` puts the shield over the run's page (the runtime asks once at run
+// start, and again when a hand-over ends); `open: true` takes it off, because a hand-over is the one time a person
+// acts in the page.
+function setInputOpen(runId, open) {
+  const run = _runs.get(runId);
+  if (!run) return { ok: false };
+  const wasOpen = run.handedOver === true;
+  run.handedOver = open === true;
+  if (!run.handedOver) _addShield(run);
+  const tab = run.tabs.find((t) => t.id === run.activeTabId);
+  _layoutShield(run, tab, run.shownRect);
+  if (run.handedOver) { if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.focus(); }
+  // The person just used the page; typing goes back to the app, not to the page the shield now covers again.
+  else if (wasOpen && _win && _win.webContents && !_win.webContents.isDestroyed()) _win.webContents.focus();
+  return { ok: true };
+}
+
 // Create a view, wire its popup handler, and register it as a tab on `run`. The new tab
 // becomes the active one and the renderer is told — this is the only place that happens, so a
 // window.open() popup (an OAuth "Sign in with Google" leg) is shown exactly like a tab the
 // runtime asked for, instead of sitting at 0x0 unannounced.
-function _createTab(run, runId, label, meta, loginKey, background = false) {
+function _createTab(run, runId, label, meta, loginKey, background = false, human = false) {
   const tabId = crypto.randomBytes(4).toString("hex");
   const view = new WebContentsView({
     webPreferences: { partition: run.partition, sandbox: true },
   });
   view.webContents.setWindowOpenHandler(({ url }) => {
-    const newTabId = _createTab(run, runId);
+    const opener = run.tabs.find((t) => t.view === view);
+    const newTabId = _createTab(run, runId, undefined, undefined, undefined, false, Boolean(opener && opener.human)); // an OAuth leg of a sign-in stays the person's
     const newView = run.tabs.find((t) => t.id === newTabId).view;
     // A real popup navigates to its actual destination itself (target=_blank); loading it
     // here too would race that navigation, so only seed it when the handler actually carries
@@ -184,7 +244,7 @@ function _createTab(run, runId, label, meta, loginKey, background = false) {
   // A navigation (marker page -> real site, a new render process) can drop the override, leaving the
   // page at full size inside a shrunk view. Check (and put right) each time a page is ready.
   for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => { _ensureGeometry(run, { view }).catch(() => {}); });
-  run.tabs.push({ id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null });
+  run.tabs.push({ id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null, human: Boolean(loginKey) || human });
   if (_win) _win.contentView.addChildView(view);
   // A background tab (a judge/prover probe, focus:false) must not steal the shown view from the
   // sign-in the user is typing into — it stays parked at 0x0 until closed.
@@ -347,6 +407,7 @@ async function runEnd(runId) {
   if (!run) return;
   _runs.delete(runId);
   _chatOf.delete(runId);
+  _dropShield(run);
   for (const t of run.tabs) {
     try { if (_win) _win.contentView.removeChildView(t.view); } catch (_) {}
     try { t.view.webContents.close(); } catch (_) {}
@@ -369,7 +430,10 @@ function setActiveBounds(runId, tabId, rect) {
   const run = _runs.get(runId);
   if (!run) return;
   for (const [id, r] of _runs) {
-    if (id !== runId) for (const t of r.tabs) t.view.setBounds(_HIDDEN); // a native view never goes away on its own
+    if (id === runId) continue;
+    for (const t of r.tabs) t.view.setBounds(_HIDDEN); // a native view never goes away on its own
+    if (r.shield) r.shield.setBounds(_HIDDEN);
+    r.shownRect = null;
   }
   let shown = rect;
   if (run.viewport) {
@@ -388,6 +452,8 @@ function setActiveBounds(runId, tabId, rect) {
     t.view.setBounds(t.id === tabId ? shown : _HIDDEN);
   }
   run.activeTabId = tabId;
+  run.shownRect = shown;
+  _layoutShield(run, run.tabs.find((t) => t.id === tabId), shown);
   _shown = { runId, tabId };
 }
 
@@ -396,7 +462,11 @@ let _shown = null;
 
 // The user hid the panel: park every view. Showing it again re-reports bounds via setActiveBounds.
 function hideAll() {
-  for (const run of _runs.values()) for (const t of run.tabs) t.view.setBounds(_HIDDEN);
+  for (const run of _runs.values()) {
+    for (const t of run.tabs) t.view.setBounds(_HIDDEN);
+    if (run.shield) run.shield.setBounds(_HIDDEN);
+    run.shownRect = null;
+  }
   _shown = null;
 }
 
@@ -415,9 +485,11 @@ function setVisibleChat(chatId) {
     const owner = _chatOf.get(runId);
     if (owner && owner !== chatId) {
       for (const t of run.tabs) t.view.setBounds(_HIDDEN);
+      if (run.shield) run.shield.setBounds(_HIDDEN);
+      run.shownRect = null;
       if (_shown && _shown.runId === runId) _shown = null;
     }
   }
 }
 
-module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, loginDone, saveDownload, ensureGeometry };
+module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, loginDone, saveDownload, ensureGeometry, setInputOpen };

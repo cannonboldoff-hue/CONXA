@@ -198,6 +198,55 @@ async function ensureGeometry(runId) {
   return { ok: results.every((r) => r.ok), tabs: results.length };
 }
 
+// While the runtime drives a test run, the person's mouse and keyboard must not reach the page: a pointer resting on a
+// file name opens a hover card the run never made, and a stray click would be taken for a step. Electron's
+// `before-mouse-event` cannot separate the person from the runtime (spike, Electron 42: it fires for CDP input, and
+// blocking it blocks the run's own clicks). So a transparent view sits on top of the page and takes the native input,
+// while the runtime's CDP input still goes straight to the page beneath it. The person's own tabs are never covered,
+// and the shield is lifted when the run ends, is adopted by a recorder or is closed.
+// The marker keeps the runtime from mistaking this page for a tab the run opened (runtime/app/tabs.js::isShieldPage).
+const SHIELD_URL = "about:blank?conxa_shield=1";
+const SHIELD_JS = `(() => {
+  document.documentElement.style.background = "transparent";
+  document.body.style.cssText = "margin:0;background:transparent;cursor:not-allowed;overflow:hidden";
+  const h = document.createElement("div");
+  h.textContent = "Hands off while the test runs. It will tell you when it needs you.";
+  h.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:none;padding:8px 14px;border-radius:8px;background:rgba(30,30,30,.9);color:#fff;font:13px system-ui,sans-serif";
+  document.body.appendChild(h);
+  let t;
+  addEventListener("mousedown", () => { h.style.display = "block"; clearTimeout(t); t = setTimeout(() => { h.style.display = "none"; }, 2500); });
+})();`;
+
+function _addShield(run) {
+  if (run.kind !== "test" || run.shield || !_win) return;
+  const shield = new WebContentsView({ webPreferences: { sandbox: true } });
+  if (typeof shield.setBackgroundColor === "function") shield.setBackgroundColor("#00000000");
+  shield.setBounds(_HIDDEN);
+  _win.contentView.addChildView(shield);
+  shield.webContents.loadURL(SHIELD_URL).then(() => shield.webContents.executeJavaScript(SHIELD_JS)).catch(() => {});
+  run.shield = shield;
+}
+
+function _dropShield(run) {
+  const shield = run.shield;
+  if (!shield) return;
+  run.shield = null;
+  try { if (_win) _win.contentView.removeChildView(shield); } catch (_) { /* best effort */ }
+  try { shield.webContents.close(); } catch (_) { /* best effort */ }
+}
+
+const _shieldCovers = (run, tab) => !!(run.shield && !run.finished && !run.handedOver && tab && tab.openedBy !== "person");
+
+// Sized to the page it covers, raised above every tab (adding a child again moves it to the top), and given the
+// keyboard focus so typing does not reach the page either.
+function _layoutShield(run, tab, shown) {
+  if (!run.shield) return;
+  if (!_shieldCovers(run, tab) || !shown) { run.shield.setBounds(_HIDDEN); return; }
+  run.shield.setBounds(shown);
+  try { if (_win) _win.contentView.addChildView(run.shield); } catch (_) { /* best effort */ }
+  try { if (!run.shield.webContents.isDestroyed()) run.shield.webContents.focus(); } catch (_) { /* best effort */ }
+}
+
 // Wires a view (ours, or one Chromium created for a popup) into the run as a tab.
 function _addTab(run, runId, view, { label, background = false, marker = true, opener = null, openedBy = null } = {}) {
   const tabId = crypto.randomBytes(4).toString("hex");
@@ -284,7 +333,7 @@ function _activate(runId, tabId) {
   if (!t) return false;
   if (run.rect) setActiveBounds(runId, tabId, run.rect);
   else run.activeTabId = tabId;
-  if (!t.view.webContents.isDestroyed()) t.view.webContents.focus();
+  if (!_shieldCovers(run, t) && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
   _emit(runId);
   return true;
 }
@@ -539,6 +588,7 @@ function newView(runId, { label, kind = "test", viewport } = {}) {
     };
     run.height = run.viewport ? run.viewport.height : null;
     _runs.set(runId, run);
+    _addShield(run);
     _hookDownloads(run.partition);
     void _dropFinishedRuns(runId);
   }
@@ -610,6 +660,7 @@ async function runEnd(runId) {
   const run = _runs.get(runId);
   if (!run) return;
   run.finished = true;
+  _dropShield(run); // the person checks the final page: it is theirs again
   _emit(runId);
 }
 
@@ -623,6 +674,7 @@ async function adoptRun(runId, { kind = "record", viewport } = {}) {
   if (!KINDS.has(kind) || kind === "test") throw new Error(`browser_panel: cannot adopt a run as ${kind}`);
   run.kind = kind;
   run.finished = false;
+  _dropShield(run); // the recorder is driven by the person's own mouse
   if (viewport) {
     run.viewport = _viewport(viewport);
     run.height = run.viewport.height;
@@ -649,6 +701,7 @@ async function closeRun(runId) {
   const run = _runs.get(runId);
   if (!run) return;
   _runs.delete(runId);
+  _dropShield(run);
   // Chromium keeps a page's zoom per site in the partition, which test runs share: put it back to 1.
   for (const t of run.tabs) _setZoom(t, 1);
   for (const t of run.tabs) {
@@ -691,7 +744,12 @@ function setActiveBounds(runId, tabId, rect) {
   const run = _runs.get(runId);
   if (!run) return;
   run.rect = rect;
-  for (const [id, r] of _runs) if (id !== runId) for (const t of r.tabs) t.view.setBounds(_HIDDEN);
+  for (const [id, r] of _runs) {
+    if (id === runId) continue;
+    for (const t of r.tabs) t.view.setBounds(_HIDDEN);
+    if (r.shield) r.shield.setBounds(_HIDDEN);
+    r.shownRect = null;
+  }
   let shown = rect;
   if (run.viewport) {
     let s, H = run.height;
@@ -714,6 +772,20 @@ function setActiveBounds(runId, tabId, rect) {
   }
   for (const t of run.tabs) t.view.setBounds(t.id === tabId ? shown : _HIDDEN);
   run.activeTabId = tabId;
+  run.shownRect = shown;
+  _layoutShield(run, run.tabs.find((t) => t.id === tabId), shown);
+}
+
+// Control-channel op "input": a hand-over is the one time a person is meant to act in the run's page, so the
+// runtime asks for the shield to come off while it waits, and to go back on when the person is done.
+function setInputOpen(runId, open) {
+  const run = _runs.get(runId);
+  if (!run) return { ok: false };
+  run.handedOver = open === true;
+  const tab = run.tabs.find((t) => t.id === run.activeTabId);
+  _layoutShield(run, tab, run.shownRect);
+  if (run.handedOver && tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.focus();
+  return { ok: true };
 }
 
 // Control-channel op "scale": how much a fixed-viewport run's pages are drawn at right now, and the
@@ -738,11 +810,15 @@ async function targetsOf(runId) {
 // A native view floats above the page, so nothing in the app can draw over it. Hiding parks every view
 // (a dialog is open, or the person folded the panel); showing re-reports bounds via setActiveBounds.
 function hideAll() {
-  for (const run of _runs.values()) for (const t of run.tabs) t.view.setBounds(_HIDDEN);
+  for (const run of _runs.values()) {
+    for (const t of run.tabs) t.view.setBounds(_HIDDEN);
+    if (run.shield) run.shield.setBounds(_HIDDEN);
+    run.shownRect = null;
+  }
 }
 
 function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry };
+module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, setInputOpen, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry };

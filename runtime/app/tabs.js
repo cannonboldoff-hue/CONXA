@@ -73,6 +73,12 @@ function stepNamesTab(step) {
 // (see NOOP marker handlers there) — every other step type resolves its own target unconditionally.
 const TAB_MARKER_TYPES = new Set(["tab_open", "tab_switch", "popup"]);
 
+// Studio's test browser lays a transparent "hands off" page over the run's page (conxa-builder/electron/browser_panel.js).
+// It is Studio's own page, never a tab anything opened: it must not be bound to a recorded tab or read as evidence.
+function isShieldPage(page) {
+  try { return String(page.url()).startsWith("about:blank?conxa_shield"); } catch (_) { return false; }
+}
+
 /**
  * True when a step is a tab-boundary marker that carries no `tab` block at all — a recorder
  * mis-stamp (e.g. a popup event attributed to whichever page happened to be active when the
@@ -142,7 +148,7 @@ async function resolveStepPage(registry, step, opts = {}) {
     // page created above for a user-opened tab).
     while (registry.pendingPages.length) {
       const candidate = registry.pendingPages.shift();
-      if (registry.bound.has(candidate)) continue;
+      if (registry.bound.has(candidate) || isShieldPage(candidate)) continue;
       let closed = false;
       try { closed = candidate.isClosed(); } catch (_) { closed = true; }
       if (closed) continue;
@@ -153,7 +159,7 @@ async function resolveStepPage(registry, step, opts = {}) {
       try {
         page = await registry.context.waitForEvent("page", {
           timeout: tabOpenTimeoutMs(),
-          predicate: (p) => !registry.bound.has(p),
+          predicate: (p) => !registry.bound.has(p) && !isShieldPage(p),
         });
       } catch (_) {
         page = null;
@@ -249,4 +255,4 @@ async function closeExtraTabs(openedTabs, keep) {
   }
 }
 
-module.exports = { createTabRegistry, resolveStepPage, stepNamesTab, stepInheritsPage, tabOpenTimeoutMs, closeExtraTabs };
+module.exports = { createTabRegistry, resolveStepPage, stepNamesTab, stepInheritsPage, tabOpenTimeoutMs, closeExtraTabs, isShieldPage };

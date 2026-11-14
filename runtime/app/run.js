@@ -783,7 +783,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       // directly) — fail loud rather than silently skipping the human gate.
       throw stepFailure(step, i, new Error("handover: no browser context available to arm"), null, state.warnings);
     }
-    const armed = await handover.arm(ctx.context, page, step, ctx.runCtx && ctx.runCtx.runId);
+    const armed = await handover.arm(ctx.context, page, step, ctx.runCtx && ctx.runCtx.runId, ctx);
     const winner = await Promise.race([
       armed.signal,
       new Promise((resolve) => setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS)),
@@ -1111,7 +1111,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
         return runStepFrame(ctx, state, steps, i, frame);
       }
       const asked = { ...step, type: "handover", message: step.message || `“${step.intent || "This step"}”: its record isn't on the page. Fix that, then click Done.` };
-      const armed = await handover.arm(ctx.context, page, asked, ctx.runCtx && ctx.runCtx.runId);
+      const armed = await handover.arm(ctx.context, page, asked, ctx.runCtx && ctx.runCtx.runId, ctx);
       const winner = await Promise.race([
         armed.signal,
         new Promise((resolve) => setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS)),

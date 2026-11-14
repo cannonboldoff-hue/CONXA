@@ -411,3 +411,86 @@ test("tour hint is allowed only in sign-in runs on the Conxa website host", () =
   panel.setTourHint(null);
   assert.strictEqual(panel._tourAllowed({ kind: "signin" }, wc("https://www.conxa.in/sign-in")), false);
 });
+
+// ── input shield: the person's mouse and keys stay off a page the runtime is driving ──────────────────────────
+// The shield is the FIRST view a test run adds (before its tab). `shieldOf` finds it by its marker URL.
+const shieldOf = (viewList) => viewList.filter((v) => String(v.webContents.url).startsWith("about:blank?conxa_shield")).pop();
+const RECT = { x: 10, y: 20, width: 800, height: 600 };
+
+test("a test run covers its page with a transparent shield the same size as the page, above the tab", () => {
+  const { tabId } = panel.newView("sh1");
+  const tabView = added[added.length - 1];
+  panel.setActiveBounds("sh1", tabId, RECT);
+  const shield = shieldOf(added);
+  assert.ok(shield, "a shield was created");
+  assert.deepStrictEqual(shield.bounds, RECT);
+  assert.deepStrictEqual(tabView.bounds, RECT);
+  assert.strictEqual(added[added.length - 1], shield, "re-added last = top-most");
+  assert.strictEqual(shield.webContents.focused, true, "keyboard focus goes to the shield, not the page");
+});
+
+test("record and sign-in runs never get a shield: the person drives them", () => {
+  const before = added.length;
+  panel.newView("sh-rec", { kind: "record", viewport: { width: 1280, height: 720 } });
+  assert.strictEqual(added.slice(before).filter((v) => String(v.webContents.url).startsWith("about:blank?conxa_shield")).length, 0);
+});
+
+test("a person's own tab in a test run is never covered", () => {
+  const { tabId } = panel.newView("sh2");
+  panel.setActiveBounds("sh2", tabId, RECT);
+  const shield = shieldOf(added);
+  const { tabId: mine } = panel.personTab("sh2");
+  assert.deepStrictEqual(shield.bounds, { x: 0, y: 0, width: 0, height: 0 }, "hidden while the person's tab is in front");
+  panel.selectTab("sh2", tabId);
+  assert.deepStrictEqual(shield.bounds, RECT, "back over the run's own tab");
+  assert.ok(mine);
+});
+
+test("the shield is lifted when the run ends, so the person can check the final page", async () => {
+  const { tabId } = panel.newView("sh3");
+  panel.setActiveBounds("sh3", tabId, RECT);
+  const shield = shieldOf(added);
+  await panel.runEnd("sh3");
+  assert.strictEqual(shield.webContents.destroyed, true);
+});
+
+test("adopting a test run for the recorder lifts the shield", async () => {
+  const { tabId } = panel.newView("sh4");
+  panel.setActiveBounds("sh4", tabId, RECT);
+  const shield = shieldOf(added);
+  await panel.adoptRun("sh4", { kind: "record", viewport: { width: 1280, height: 720 } });
+  assert.strictEqual(shield.webContents.destroyed, true);
+});
+
+test("hiding the panel parks the shield too, and closing the run removes it", async () => {
+  const { tabId } = panel.newView("sh5");
+  panel.setActiveBounds("sh5", tabId, RECT);
+  const shield = shieldOf(added);
+  panel.hideAll();
+  assert.deepStrictEqual(shield.bounds, { x: 0, y: 0, width: 0, height: 0 });
+  await panel.closeRun("sh5");
+  assert.strictEqual(shield.webContents.destroyed, true);
+});
+
+test("a hand-over lifts the shield off the page and puts it back", () => {
+  const { tabId } = panel.newView("sh6");
+  panel.setActiveBounds("sh6", tabId, RECT);
+  const shield = shieldOf(added);
+  const tabView = added.filter((v) => !String(v.webContents.url).startsWith("about:blank?conxa_shield")).pop();
+  panel.setInputOpen("sh6", true);
+  assert.deepStrictEqual(shield.bounds, { x: 0, y: 0, width: 0, height: 0 }, "the person can click the page");
+  assert.strictEqual(tabView.webContents.focused, true, "and type into it");
+  panel.setInputOpen("sh6", false);
+  assert.deepStrictEqual(shield.bounds, RECT, "back over the page when the person is done");
+  assert.deepStrictEqual(panel.setInputOpen("no-such-run", true), { ok: false });
+});
+
+test("a shield put back while the panel is hidden does not reappear over something else", () => {
+  const { tabId } = panel.newView("sh7");
+  panel.setActiveBounds("sh7", tabId, RECT);
+  const shield = shieldOf(added);
+  panel.setInputOpen("sh7", true);
+  panel.hideAll();
+  panel.setInputOpen("sh7", false);
+  assert.deepStrictEqual(shield.bounds, { x: 0, y: 0, width: 0, height: 0 }, "the panel is hidden; there is nothing to cover");
+});

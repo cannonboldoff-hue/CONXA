@@ -442,3 +442,26 @@ test("closeExtraTabs: a page whose close() throws does not stop the rest from cl
 test("closeExtraTabs: empty tracked set is a no-op", async () => {
   await assert.doesNotReject(() => closeExtraTabs(new Set()));
 });
+
+// Studio's test browser keeps a transparent "hands off" page over the run's page. It is the first new page the run's
+// context sees, and a site-opened-tab step binds the first pending page, so it must never be handed out as a tab.
+test("the test browser's hands-off page is never bound as a recorded tab", async () => {
+  const { isShieldPage } = require("../../app/tabs");
+  const ctx = fakeContext();
+  const registry = registryWith(ctx);
+  const shield = fakePage("shield", { url: "about:blank?conxa_shield=1" });
+  const popup = fakePage("popup", { url: "https://app.test/new" });
+  assert.strictEqual(isShieldPage(shield), true);
+  assert.strictEqual(isShieldPage(popup), false);
+  ctx.fireNewPage(shield); // created at run start, long before the popup
+  ctx.fireNewPage(popup);
+  const got = await resolveStepPage(registry, { tab: { id: "tab_1", opened_by: "site" } });
+  assert.strictEqual(got.id, "popup");
+});
+
+test("with only the hands-off page pending, a site-opened tab is not found (never falls back to it)", async () => {
+  const ctx = fakeContext({ waitForEventPage: fakePage("shield", { url: "about:blank?conxa_shield=1" }) });
+  const registry = registryWith(ctx);
+  ctx.fireNewPage(fakePage("shield2", { url: "about:blank?conxa_shield=1" }));
+  await assert.rejects(resolveStepPage(registry, { tab: { id: "tab_1", opened_by: "site" } }), (e) => e.tabNotFound === true);
+});

@@ -66,7 +66,7 @@ function start() {
   });
 }
 
-async function _dispatch({ op, runId, tabId, label, focus, loginKey, viewport, url, dest, timeoutMs }) {
+async function _dispatch({ op, runId, tabId, label, focus, loginKey, viewport, url, dest, timeoutMs, open }) {
   if (!runId) throw new Error("missing runId");
   switch (op) {
     case "new_view":   return panel.newView(runId, { label, focus, loginKey, viewport });
@@ -77,6 +77,7 @@ async function _dispatch({ op, runId, tabId, label, focus, loginKey, viewport, u
       return { ok: true };
     case "run_end":    await panel.runEnd(runId); return { ok: true };
     case "ensure_geometry": return panel.ensureGeometry(runId);
+    case "input":      return panel.setInputOpen(runId, open);
     case "save_download":
       if (!url || !dest) throw new Error("missing url or dest");
       return panel.saveDownload(runId, url, dest, timeoutMs);

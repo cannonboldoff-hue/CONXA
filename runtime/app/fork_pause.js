@@ -12,7 +12,8 @@
 // - The answer is a choice id from a fixed list built from what was actually offered (a state's
 //   own options, or the buttons visible on an unrecognised popup) plus "stop". Anything else is
 //   an invalid answer and gets a bounded re-ask.
-// - No page-drift check on resume: the person may well have clicked in the page themselves.
+// - No page-drift check on resume, though a host panel keeps its input shield on during a fork pause (the person answers
+//   in chat, not in the page). A plain Chrome window has no shield, so the person may still have clicked in it;
 //   run.js::runForkAnswer looks at the page again and copes with that.
 
 const { STOP_CHOICE } = require("./fork");

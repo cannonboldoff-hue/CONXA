@@ -1991,6 +1991,9 @@ async function _handleTool(name, args, extra) {
       };
 
       _attachPageListeners(page);
+      // A host panel keeps a transparent shield over the run's page so a stray click or hover is never taken for
+      // a step; the panel adds it only when asked (handover.js lifts it for a hand-over and puts it back).
+      if (_hostOwned) hostBrowser.setInputOpen({ runId: _hostRunId, open: false });
       // Multi-tab: a download (or console/page error) triggered from a tab other than the
       // initial one used to be invisible entirely — this listener was only ever attached to
       // `page`. Every tab opened during this run (site-opened or Ctrl+T — see tabs.js) now gets

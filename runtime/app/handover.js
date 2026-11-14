@@ -31,6 +31,7 @@ const { probePresent } = require("./handlers");
 const { resolveStepPage } = require("./tabs");
 const { evalOn } = require("./page_eval");
 const { capture } = require("./page_geometry");
+const hostBrowser = require("./host_browser");
 
 const CONXA_DIR = process.env.CONXA_DATA_DIR || path.join(os.homedir(), ".conxa");
 const RESUME_DIR = path.join(CONXA_DIR, "resume");
@@ -88,7 +89,7 @@ function _removeBannerScript() {
 // resume (server.js re-arms on the parked page). `disarm()` is idempotent and MUST be called on
 // every exit path (signalled, timed out into a park, or the run torn down for an unrelated
 // reason) or the loopback listener and file watcher leak.
-async function arm(context, page, step, runId) {
+async function arm(context, page, step, runId, host) {
   let resolveSignal;
   let settled = false;
   const signal = new Promise((resolve) => { resolveSignal = resolve; });
@@ -99,6 +100,11 @@ async function arm(context, page, step, runId) {
   };
 
   const message = (step && step.message) || "Please complete this step, then click Done.";
+
+  // A host panel keeps its input shield over a run's page; the person has to be able to click Done, so lift it
+  // for the pause and put it back in disarm(). `host` is { hostOwned, hostRunId } from the run.
+  const hostInput = (open) => (host && host.hostOwned ? hostBrowser.setInputOpen({ runId: host.hostRunId, open }) : null);
+  await hostInput(true);
 
   // 1) In-page banner. exposeBinding installs a function INSIDE the page's JS world that calls
   // back into this Node process — Playwright's page/context connection is bidirectional, so this
@@ -168,6 +174,7 @@ async function arm(context, page, step, runId) {
     try { fs.unlinkSync(cmdFile); } catch (_) {}
     await Promise.all(livePages().map((pg) => evalOn(pg, _removeBannerScript()).catch(() => {})));
     await new Promise((resolve) => { try { httpServer.close(() => resolve()); } catch (_) { resolve(); } });
+    await hostInput(false);
   };
 
   return { signal, disarm, message, httpPort, token, cmdFile, runId };
