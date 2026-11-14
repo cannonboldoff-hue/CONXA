@@ -57,6 +57,16 @@ def strip_keyboard_shortcut_tail(text: str) -> str:
     return _SHORTCUT_TAIL_RE.sub("", text).strip()
 
 
+def _file_input_selector(target: dict[str, Any]) -> str:
+    """``input[type="file"]``, narrowed by the first of name / accept / aria-label the recording has."""
+    attrs = target.get("attributes") if isinstance(target.get("attributes"), dict) else {}
+    for key in ("name", "accept", "aria-label"):
+        value = str(attrs.get(key) or "").strip()
+        if value and '"' not in value and len(value) <= 120:
+            return f'input[type="file"][{key}="{value}"]'
+    return 'input[type="file"]'
+
+
 def generate_deterministic_signals(
     ev: dict[str, Any],
     dom_html: str | None = None,
@@ -121,6 +131,13 @@ def generate_deterministic_signals(
         anchor = stable_anchors[0]
         rel_sel = f'internal:role={role}[name="{ax_name}"] >> right-of=internal:text="{anchor}"'
         candidates.append(("relational", rel_sel))
+
+    # 4b. A file input is found by what it is, not by where it sits: a page that adds another input would move
+    # a positional path. Narrowed by the first attribute that names it, when the recording has one.
+    if str(semantic.get("input_type") or target.get("input_type") or "").lower() == "file":
+        file_sel = _file_input_selector(attr_target)
+        if file_sel and not any(c[1] == file_sel for c in candidates):
+            candidates.append(("attr", file_sel))
 
     # 5. CSS (structural fallback)
     css_sel = str(selectors.get("css") or "").strip()

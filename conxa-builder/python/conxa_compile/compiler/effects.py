@@ -120,7 +120,11 @@ def _final_words(ev: dict[str, Any]) -> list[list[str]]:
     for w in out:
         if w not in seen:
             seen.append(w)
-    return seen[:2]
+    # A page says other things after the work too ("maximized", "more actions alt": a window and a tooltip). A phrase
+    # that says the work is finished is the one worth checking for, so those come first and, when there is one, the
+    # rest are left out. Only when no phrase has a known completion word (an app in another language) are the others kept.
+    done = [w for w in seen if any(x in _DONE_WORDS for x in w)]
+    return (done or seen)[:2]
 
 
 # Words too common to say anything about an app (and short ones). A learned word must be distinctive to be used.

@@ -1318,9 +1318,21 @@ def _template_assertion_targets(steps: list[Any], literal: str, token: str) -> N
     created") would fail on a run that supplies another value; the runtime interpolates an
     assertion's ``target`` per run, so the literal becomes the same token. Only these two types: a
     selector-type assertion's target is a raw selector and is never rewritten."""
+    # shortcut: this repairs workflows built before validation_planner._drop_echoes stopped creating echo checks;
+    # remove it once no such workflow is left.
+    # Words of the literal on their own ("kicad", "gitignore" from "KiCad.gitignore"): an optional text check on one of
+    # them was recorded for THIS value and would be wrong on a run that supplies another.
+    parts = {p.lower() for p in re.split(r"\W+", literal) if len(p) >= 3}
     for step in steps:
         if not isinstance(step, dict):
             continue
+        validation = step.get("validation")
+        if isinstance(validation, dict) and isinstance(validation.get("assertions"), list):
+            validation["assertions"] = [
+                a for a in validation["assertions"]
+                if not (isinstance(a, dict) and a.get("type") == "text_present" and a.get("required") is False
+                        and str(a.get("target") or "").strip().lower() in parts)
+            ]
         for a in (step.get("validation") or {}).get("assertions") or []:
             if not isinstance(a, dict) or a.get("type") not in ("url_pattern", "text_present"):
                 continue

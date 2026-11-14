@@ -2148,6 +2148,11 @@ def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) 
         step.validation = ValidationBlock()
 
 
+# The actions whose `value` is something a person typed or picked. Anything else (a page change, a download, an upload,
+# an action added later) can carry a data blob in `value` that nobody typed, so it is never asked about.
+_TYPED_VALUE_ACTIONS = frozenset({"type", "fill", "select", "select_option", "date_pick", "set_checkbox", "set_radio"})
+
+
 def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], after: list[dict[str, Any]], label: str) -> None:
     """Append one entry per recorded event (by its recorder sequence number) that is in ``before``
     and no longer in ``after``. Events without a sequence number can't be tracked and are skipped."""
@@ -2178,8 +2183,11 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
             entry["target"] = label_text[:60]
         # A dropped step that carried a typed/selected value is something the person may have
         # meant; Clarify asks about it (clarify.py, "dropped_value").
+        # Only what a person typed or picked. A page change, a download or an upload carries a data blob in `value`
+        # ({"from_url": ...}) that nobody typed, and asking about it makes no sense.
         val = act.get("value") if isinstance(act, dict) else None
-        if val not in (None, ""):
+        name = str(act.get("action") if isinstance(act, dict) else act or "")
+        if val not in (None, "") and name in _TYPED_VALUE_ACTIONS:
             entry["value"] = str(val)[:200]
         ledger.append(entry)
 

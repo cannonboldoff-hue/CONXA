@@ -59,10 +59,19 @@ def sanitize_intent_token(value: str, fallback: str) -> str:
     return intent
 
 
+# A shortcut hint printed beside a menu entry ("File upload  Alt+C then U"): not part of what the control is called.
+_KEY_HINT_RE = re.compile(r"\s+(?:alt|ctrl|control|shift|cmd|⌘)\s*\+.*$", re.I)
+
+
 def _visible_text_for_intent(ev: dict[str, Any]) -> str:
     target = ev.get("target") or {}
     semantic = ev.get("semantic") or {}
-    return str(target.get("inner_text") or semantic.get("normalized_text") or "").strip()
+    text = str(target.get("inner_text") or semantic.get("normalized_text") or "").strip()
+    if not text:
+        # An icon button has no text of its own; the page still names it (aria-label, title, a label, or its test id).
+        testid = str(target.get("data_testid") or "").replace("-", " ").replace("_", " ")
+        text = next((str(target.get(k)).strip() for k in ("aria_label", "title", "label_text") if target.get(k)), "") or testid.strip()
+    return _KEY_HINT_RE.sub("", text).strip()
 
 
 def _upgrade_tag_only_action_intent(ev: dict[str, Any], intent: str, action: str, policy: dict[str, Any]) -> str:
@@ -145,6 +154,19 @@ def normalize_compiler_intent(ev: dict[str, Any], llm_intent: str, policy: dict[
             base = f"{action}_{tag}"
 
     if not base:
+        target = ev.get("target") or {}
+        role = str((ev.get("semantic") or {}).get("role") or target.get("role") or "").lower()
+        vis = _visible_text_for_intent(ev)
+        # An action with no element text to name it (choosing a file) is named by what it is.
+        if action in {"upload", "upload_intent"}:
+            return sanitize_intent_token(action, "")
+        # Anything with an interactive role (a li or div that acts as a menu entry, option, tab…) is named by what it
+        # says, the same way a button is.
+        if action == "click" and role in _ACTIONABLE_ROLES and len(vis) >= 2:
+            slug_t, _c = semantic_slug_from_text("button", vis, policy)
+            return sanitize_intent_token(slug_t, "")
+
+    if not base:
         return ""
 
     refined = _refine_intent_for_action_semantics(ev, base, policy)
@@ -178,9 +200,16 @@ def _refine_intent_for_action_semantics(ev: dict[str, Any], intent: str, policy:
     return intent
 
 
+# Roles that mean "a person can act on this", whatever tag carries them.
+_ACTIONABLE_ROLES = frozenset({
+    "button", "link", "checkbox", "menuitem", "menuitemradio", "menuitemcheckbox", "option", "tab", "treeitem",
+    "switch", "combobox", "textbox",
+})
+
+
 def _target_has_actionable_semantics(target: dict[str, Any], semantic: dict[str, Any]) -> bool:
     role = str(semantic.get("role") or target.get("role") or "").lower()
-    if role in {"button", "link", "checkbox", "menuitem", "tab", "switch", "combobox", "textbox"}:
+    if role in _ACTIONABLE_ROLES:
         return True
     if str(target.get("aria_label") or "").strip():
         return True

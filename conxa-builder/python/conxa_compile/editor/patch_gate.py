@@ -737,7 +737,11 @@ def validate_editor_patch(
     if act != "scroll":
         eff = get_effective_intent_from_skill_step(merged) or str(merged.get("intent") or "").strip()
         if not eff.strip():
-            raise ValueError("intent_required_for_non_scroll_step")
+            # A step that never had a purpose stays editable for what it was not about (a done-when answer, a
+            # wait). Only blanking a purpose, or editing the purpose to nothing, is refused.
+            had = get_effective_intent_from_skill_step(step) or str(step.get("intent") or "").strip()
+            if "intent" in patch or had:
+                raise ValueError("intent_required_for_non_scroll_step")
 
     tgt = merged.get("target") if isinstance(merged.get("target"), dict) else {}
     primary = str(tgt.get("primary_selector") or "").strip()

@@ -214,12 +214,22 @@ def infer_workflow_review(
     )
     if data is None:
         return None
+    # A field of the wrong type (the model answered a sentence where an object belongs) is dropped on its own:
+    # dict("a sentence") raises, and list("a sentence") quietly becomes a list of letters.
     return {
         "goal": str(data.get("goal") or ""),
-        "steps": list(data.get("steps") or []),
-        "decision_points": list(data.get("decision_points") or []),
-        "expected_end_state": dict(data.get("expected_end_state") or {}),
-        "suggestions": list(data.get("suggestions") or []),
+        "steps": _as_list(data.get("steps")),
+        "decision_points": _as_list(data.get("decision_points")),
+        "expected_end_state": _as_dict(data.get("expected_end_state")),
+        "suggestions": _as_list(data.get("suggestions")),
         "understanding": dict(data["understanding"]) if isinstance(data.get("understanding"), dict) else None,
-        "loop_copy": [r for r in data.get("loop_copy") or [] if isinstance(r, dict)],
+        "loop_copy": [r for r in _as_list(data.get("loop_copy")) if isinstance(r, dict)],
     }
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
