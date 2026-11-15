@@ -201,6 +201,11 @@ def _apply_top_level_step_fields(
         step["signals"] = signals
     if "value" in patch:
         step["value"] = patch["value"]
+        # A step's value lives in two places: this top-level field and action.value, and the packager prefers
+        # action.value. Writing only one left the approval step shipping its placeholder goal and a typed subject
+        # shipping as empty text. One write, both homes.
+        if isinstance(step.get("action"), dict):
+            step["action"] = {**step["action"], "value": patch["value"]}
         # input_binding is a derived shadow of value: {{name}} → "name", anything else → None.
         # Keep it in lockstep here so no edit path can leave it pointing at a stale variable
         # (audit findings M-1/L-0). This is the single home for that derivation.

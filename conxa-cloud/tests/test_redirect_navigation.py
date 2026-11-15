@@ -350,3 +350,37 @@ def test_ledger_says_how_each_folded_navigation_was_decided() -> None:
     assert decided_by(nav(cause="action", cause_source="browser")) == "browser"
     assert decided_by(nav(cause="redirect")) == "clock"            # tagged by an older recorder build
     assert decided_by(nav()) == "legacy_clock"                      # a session recorded before tagging
+
+
+# ---- W5-f: the browser says how the address was reached; the clock is only the fallback --------------------------
+
+class _CdpWithTransition(_Cdp):
+    def __init__(self, entries, index, transition):
+        super().__init__(entries, index)
+        self._hist["entries"][index]["transitionType"] = transition
+
+
+def _drain_with_transition(rs, page, transition):
+    before, after = [FORM], [FORM, "https://elsewhere.test/"]
+    rs._nav_cdp_sessions[id(page)] = _CdpWithTransition(after, 1, transition)
+    rs._nav_history_state[id(page)] = {"index": 0, "entries": before}
+    rs._last_interaction_at[id(page)] = time.monotonic() - 1.5   # a click a moment ago
+    rs._nav_check_pages.append(page)
+    rs._drain_nav_history_checks_sync()
+    payload, _, _ = rs._pending_payloads.get_nowait()
+    return json.loads(payload["action"]["value"])
+
+
+def test_an_address_typed_a_moment_after_a_click_is_the_users_own_not_the_clicks_effect():
+    got = _drain_with_transition(RecordingSession(session_id="t"), _page(), "typed")
+    assert got["cause"] == "user" and got["cause_source"] == "browser"
+
+
+def test_a_redirect_that_keeps_the_clicks_link_transition_is_still_the_clicks_effect():
+    got = _drain_with_transition(RecordingSession(session_id="t"), _page(), "link")
+    assert got["cause"] == "action"
+
+
+def test_without_a_transition_from_the_browser_the_clock_still_decides():
+    got = _drain_with_transition(RecordingSession(session_id="t"), _page(), "")
+    assert got["cause"] == "action" and got["cause_source"] == "clock"

@@ -42,9 +42,19 @@ def is_stable_attr_value(value: str) -> bool:
     return True
 
 
+# What an element is doing right now, not what it is: a mid-animation or active/selected marker is unique at the moment of
+# recording and gone at replay. By name (`data-transitioning`) and by value (`active`, `true`, `open`).
+_STATE_KEY_RE = re.compile(
+    r"^data-(?:state|status|active|current|selected|checked|disabled|expanded|open|closed|hidden|visible|loading|busy|"
+    r"focus(?:ed)?|hover(?:ed)?|pressed|highlighted|transition(?:ing)?|animating|dragging|valid|invalid)$"
+)
+_STATE_VALUES = frozenset({"true", "false", "active", "inactive", "open", "closed", "on", "off", "loading", "loaded",
+                           "transitioning", "selected", "checked", "disabled", "enabled", "visible", "hidden", "current"})
+
+
 def is_identity_attr_key(key: str) -> bool:
     k = (key or "").strip().lower()
-    if not k or k in _SKIP_ATTRS or k in _TESTID_KEYS:
+    if not k or k in _SKIP_ATTRS or k in _TESTID_KEYS or _STATE_KEY_RE.match(k):
         return False
     if k == "role":
         return True
@@ -61,7 +71,7 @@ def filter_identity_attrs(raw: dict[str, Any] | None) -> dict[str, str]:
         if not is_identity_attr_key(k):
             continue
         v = str(val or "").strip()
-        if not is_stable_attr_value(v):
+        if not is_stable_attr_value(v) or (k != "role" and v.lower() in _STATE_VALUES):
             continue
         out[k] = v
     return out
@@ -156,8 +166,20 @@ def synthesize_attr_selector(
         or (target or {}).get("role")
         or ""
     ).strip()
+    # A selector that picks exactly one node on the recorded page is verified. One that picks NONE is not: the
+    # `role` in the ladder's second and third rungs is usually the implicit role of the tag (`<a href>` is a link
+    # but has no role attribute), so those rungs match nothing in the saved HTML and used to pass as "can't verify"
+    # (GitHub: `[role="link"][data-discover="true"]` was kept for every tab link, then matched them all live while a
+    # distinguishing `data-tab-item` sat unused). So look for a verified one across every key first. Only the plain
+    # `[data-key="value"]` rung, built from an attribute the element really has, may stand on "matched nothing"
+    # (the element can be missing from the snapshot, e.g. a menu mounted after it was taken).
+    unverified: str | None = None
     for name in data_keys:
-        for sel in _ladder(tag, role, name, attrs[name]):
-            if uniqueness_gate(sel, dom_html, absent_ok=True):
+        for rung, sel in enumerate(_ladder(tag, role, name, attrs[name])):
+            if not dom_html:
                 return sel
-    return None
+            if uniqueness_gate(sel, dom_html, absent_ok=False):
+                return sel
+            if rung == 0 and unverified is None and uniqueness_gate(sel, dom_html, absent_ok=True):
+                unverified = sel
+    return unverified

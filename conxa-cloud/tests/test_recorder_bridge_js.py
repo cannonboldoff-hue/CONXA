@@ -1174,6 +1174,38 @@ def test_sibling_combobox_value_is_not_captured_as_this_fields_label(page: Page)
     assert events[0]["target"]["label_text"] != "Uttar Pradesh"
 
 
+def test_a_page_heading_is_not_a_boxs_caption_and_a_link_gets_no_neighbour_caption(page: Page) -> None:
+    # W5-b (2026-11-15 run): on a flat form the page title was the only text above the boxes, so every box was named
+    # after the page ("Clicked Shapeshifter") and the compiler invented an input from it. A link inside a list was
+    # likewise named after the paragraph beside it. Neither is a caption: headings are skipped, and only a form
+    # control has a caption at all.
+    _install_bridge(
+        page,
+        """
+        <h1>Shapeshifter</h1>
+        <div><input id="plain" /></div>
+        <div><span>Email address</span><input id="real" /></div>
+        <p>Open pull requests for the repository</p>
+        <a id="lnk" href="#x">First change</a>
+        """,
+    )
+    page.click("#plain")
+    page.keyboard.type("a")
+    page.wait_for_timeout(200)
+    page.click("#real")
+    page.keyboard.type("b")
+    page.wait_for_timeout(200)
+    page.click("#lnk")
+    page.wait_for_timeout(150)
+
+    typed = _type_events(page)
+    labels = {e["target"]["id"]: e["target"].get("label_text") for e in typed}
+    assert labels["plain"] in (None, ""), f"a heading became the box's caption: {labels['plain']!r}"
+    assert labels["real"] == "Email address"
+    click = _action_events(page, "click")[-1]
+    assert not click["target"].get("label_text"), "a link was captioned by its neighbour"
+
+
 # ── "capture a value" (gap analysis G4) ─────────────────────────────────────────────────────
 
 

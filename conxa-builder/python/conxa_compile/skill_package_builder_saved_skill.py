@@ -257,6 +257,27 @@ def _bind_downloads_to_uploads(export_steps: list[dict[str, Any]]) -> None:
     apply_bindings_to_export_steps(export_steps)
 
 
+def _mark_unclassified_click(raw: dict[str, Any], converted: dict[str, Any]) -> None:
+    """A click nobody classified (a step added by hand has no recorded evidence to classify from) has an unknown
+    consequence, and a dry run withholds it: "I could not tell" must never read as "harmless". Top-level steps only: a
+    branch body is a different executor and keeps its exact shape."""
+    if converted.get("type") != "click" or converted.get("destructive"):
+        return
+    bundle = raw.get("identity_bundle")
+    if not (isinstance(bundle, dict) and "destructive" in bundle) and raw.get("consequence") is None:
+        converted["consequence_unknown"] = True
+
+
+def _mark_repeat_click(raw: dict[str, Any], converted: dict[str, Any]) -> None:
+    """A click recorded as repeated on purpose runs as `repeat_click` with a `count`. A new type, not a new field: a runtime
+    that predates it fails closed on an unknown step type instead of clicking once and calling it done."""
+    hints = raw.get("handler_hints")
+    count = int(hints.get("repeat_count") or 1) if isinstance(hints, dict) else 1
+    if converted.get("type") == "click" and count >= 3:
+        converted["type"] = "repeat_click"
+        converted["count"] = min(count, 200)
+
+
 def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
     _copy_frame(step, out)
     _copy_tab(step, out)
@@ -287,9 +308,15 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
     # runtime/app/resolution.js reads step.entity_binding (top-level) directly — neither looks
     # inside identity_bundle, even though identity_bundle.destructive is the compiler's own
     # source of truth (build.py sets both from the same classify_consequence() call).
+    # The runtime tells a person which step it could not confirm; it has no way to write that in plain words
+    # itself, so the compiler's own description travels with the step (never the bare intent token).
+    label = str(step.get("semantic_description") or "").strip()
+    if label and label != str(step.get("intent") or "").strip():
+        out["label"] = label[:120]
     bundle = step.get("identity_bundle")
     if isinstance(bundle, dict) and bundle.get("destructive"):
         out["destructive"] = True
+
     eb = step.get("entity_binding")
     if isinstance(eb, dict) and eb.get("container_selector") and eb.get("identifier"):
         out["entity_binding"] = eb
@@ -1381,6 +1408,8 @@ def _build_workflow_from_saved_skill(
         converted = _saved_step_to_execution_step(raw)
         if converted is not None:
             converted["source_step_key"] = doc_keys[raw_index - 1]
+            _mark_unclassified_click(raw, converted)
+            _mark_repeat_click(raw, converted)
         if converted is None:
             action = _step_action_name(raw) or "unknown"
             if normalize_action_kind(action) == "drag_drop":

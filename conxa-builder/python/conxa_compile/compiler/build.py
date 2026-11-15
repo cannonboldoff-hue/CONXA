@@ -1374,7 +1374,18 @@ def _build_step(
     # loop is that every step in the body targets the current row, not just its destructive one
     # — so detection now always runs; only the PUBLISH-GATE CONFIRMATION requirement stays
     # irreversible-only (see patch_gate.py::irreversible_step_requires_confirmed_entity_binding).
-    entity_binding = detect_entity_binding(ev_with_intent)
+    # A step that cannot do harm and whose own address is already unique on the recorded page needs no row binding
+    # (entity_binding.py says why). "Unique" counts only durable engines (test id, attribute, role): a unique
+    # positional path or generated id can change on the next visit, and the row is what would still find it.
+    entity_binding = detect_entity_binding(
+        ev_with_intent,
+        dom_html=dom_html,
+        destructive=bool(identity_bundle.destructive),
+        address_unique=any(
+            getattr(sig, "unique_at_compile", False) and getattr(sig, "durability", 0.0) >= 0.9
+            for sig in (identity_bundle.signals or [])
+        ),
+    )
     signals = _build_signals(
         ev,
         resolved_intent=intent,
@@ -1401,7 +1412,8 @@ def _build_step(
     # runtime/app/resolution.js, which scrolls the container and re-gathers before giving up on
     # a step whose row isn't in the DOM yet. "" (the common case) means no virtualization hint.
     virtualized_container = detect_virtualized_container(ev)
-    handler_hints = HandlerHints(virtualized_container=virtualized_container)
+    repeat = int((ev.get("extras") or {}).get("repeat_count") or 1)
+    handler_hints = HandlerHints(virtualized_container=virtualized_container, repeat_count=min(repeat, 200) if repeat >= 3 else 1)
     if choice_hints is not None:
         value = choice_hints["value"]
         input_binding = choice_hints["input_binding"]
@@ -1648,6 +1660,13 @@ def _studio_file_pick(e: dict[str, Any]) -> bool:
     return isinstance(extras.get("file_pick"), dict)
 
 
+def _is_failed_navigation(ev: dict[str, Any]) -> bool:
+    """A typed-address navigation whose page is the browser's own error page (chrome-error://...)."""
+    action = ev.get("action") if isinstance(ev.get("action"), dict) else {}
+    page = ev.get("page") if isinstance(ev.get("page"), dict) else {}
+    return str(action.get("action") or "") == "manual_navigate" and str(page.get("url") or "").startswith("chrome-error://")
+
+
 def prepare_compile_events(
     events: list[dict[str, Any]],
     pol: dict[str, Any],
@@ -1663,13 +1682,24 @@ def prepare_compile_events(
     # itself. Ledgered, never silently lost.
     human = [e for e in events if e.get("origin") != "script" or _studio_file_pick(e)]
     _record_drops(ledger, events, human, "not_from_user")
+    # An address the person typed that never loaded (a misspelt host: the browser's own error page) is not something
+    # the workflow can repeat; they corrected it, and the correction is the step. Ledgered like the other drops.
+    reachable = [e for e in human if not _is_failed_navigation(e)]
+    _record_drops(ledger, human, reachable, "failed_navigation")
+    human = reachable
     # The signed-in person's own name/email shown on an account chip must not become a selector or fingerprint in a
     # package other people run. Taken out here, once, so nothing built later can carry it.
     events = drop_personal_target_text(human)
     cleaned_events = list(events)
     if settings.compile_pass("cleanup"):
         cleaned_events = fix_step_order(clean_steps(events, pol), pol)
+        first_new = len(ledger)
         _record_drops(ledger, events, cleaned_events, "cleanup")
+        # A click folded into a repeat count was not left out: the step runs it that many times.
+        counted = {s for e in cleaned_events if int((e.get("extras") or {}).get("repeat_count") or 1) >= 3
+                   for s in ((e.get("extras") or {}).get("repeat_sequences") or [])}
+        if counted:
+            ledger[first_new:] = [r for r in ledger[first_new:] if r.get("sequence") not in counted]
     # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
     # effect, not a step: drop it and keep only a generalized post-condition on the action.
     # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
@@ -1943,6 +1973,15 @@ def compile_skill_package(
     )
 
 
+_NAVIGATION_WORDS = re.compile(r"^\s*(?:open|go to|navigate|visit|load|browse)(?![a-z])", re.IGNORECASE)
+_NON_NAVIGATING_ACTIONS = frozenset({"type", "fill", "select", "drag_drop", "drag", "set_checkbox", "set_radio", "keyboard_shortcut", "date_pick"})
+
+
+def _prose_contradicts_action(prose: str, action: str | None) -> bool:
+    """True when a step that only types, picks or drags is described as opening a page."""
+    return str(action or "").lower() in _NON_NAVIGATING_ACTIONS and bool(_NAVIGATION_WORDS.match(prose or ""))
+
+
 def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowIntentGraph) -> int:
     """Write the merged review call's per-step prose onto the already-compiled,
     already-collapsed `steps` list, and backfill `step.intent` from
@@ -1963,6 +2002,11 @@ def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowInten
     for i, step in enumerate(steps):
         entry = prose_by_index.get(i)
         prose = entry.intent if entry else None
+        # The model's wording is a guess about what a step does; the step's own action is a fact. A drag, a typed
+        # value or a pick described as "Open the page" was wrongly lined up with a neighbour: drop that wording and
+        # let the step be described from its own action.
+        if prose and _prose_contradicts_action(prose, _step_action_name(step)):
+            prose = None
         if prose:
             step.semantic_description = prose
         elif step.intent and not step.semantic_description:

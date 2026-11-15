@@ -644,6 +644,8 @@ class RecordingSession:
     # When the page last reported a user interaction (click, submit, typing, ...) through the
     # bridge — a navigation committing shortly after one is the interaction's effect.
     _last_interaction_at: dict[int, float] = field(default_factory=dict)
+    # Navigation transition types that mean the person reached the page through the browser's own UI.
+    _BROWSER_UI_TRANSITIONS = frozenset({"typed", "address_bar", "auto_bookmark", "generated", "keyword", "keyword_generated"})
     _NAV_INTERACTION_WINDOW_S = 5.0
     # Where each page's last emitted manual_navigate landed and when it committed. A browser-made
     # navigation that starts there, on the same site, with nothing done since, is the site moving
@@ -1299,8 +1301,12 @@ class RecordingSession:
             self.binding_errors.append(f"nav_history_read_error: {exc!s}")
             return None
         try:
-            entries = [str(e.get("url") or "") for e in (hist.get("entries") or [])]
-            return {"index": int(hist.get("currentIndex") or 0), "entries": entries}
+            raw = hist.get("entries") or []
+            entries = [str(e.get("url") or "") for e in raw]
+            index = int(hist.get("currentIndex") or 0)
+            # How the browser says the current entry was reached ("typed", "link", "form_submit", "reload", ...).
+            transition = str(raw[index].get("transitionType") or "") if 0 <= index < len(raw) else ""
+            return {"index": index, "entries": entries, "transition": transition}
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"nav_history_parse_error: {exc!s}")
             return None
@@ -1429,8 +1435,16 @@ class RecordingSession:
                 # (_NAV_INTERACTION_WINDOW_S), the fallback until the browser can tell us. The compile
                 # ledger repeats it so a clock-decided drop is visible and countable.
                 payload["cause_source"] = "clock"
+                transition = str(cur.get("transition") or "")
                 if same_document and same_document_type == "historyApi":
                     payload["cause"] = "action"
+                    payload["cause_source"] = "browser"
+                elif transition in self._BROWSER_UI_TRANSITIONS and not same_document:
+                    # The browser itself says the person typed this address (or picked a bookmark): it is theirs,
+                    # however soon after a click it came. A click's own redirect keeps the click's transition
+                    # ("link", "form_submit"), so it never lands here. The clock below is only for when the
+                    # browser does not say.
+                    payload["cause"] = "user"
                     payload["cause_source"] = "browser"
                 elif same_document or after_interaction:
                     payload["cause"] = "action"
@@ -3312,52 +3326,72 @@ class RecordingSession:
                     src_page=src_page,
                 )
 
-            if not self.auth_mode:
-                # Stop waits for a short "idle queue" condition so delayed
-                # Playwright binding callbacks can still be consumed.
-                shutdown_start = time.monotonic()
-                # BUILD-80: ask every frame to hand over what it holds (open watches are cut, typing is sent) and
-                # keep waiting until every step number a frame issued has arrived and no watch is open, so Stop
-                # can never close the browser on steps that are still on their way.
-                bridge_states = self._bridge_states_sync(flush=True)
-                barrier_ok = self._bridges_settled(bridge_states)
-                barrier_polled_at = time.monotonic()
-                while True:
-                    for page in self._open_pages_sync():
-                        try:
-                            self._ensure_bridge_installed_sync(page)
-                            self._pump_ping_sync(page)
-                        except Exception:
-                            pass
-                    self._drain_dialog_server_events_sync()
-                    drained = 0
-                    try:
-                        while True:
-                            payload, src_page, src_frame = self._next_payload_sync(final=True)
-                            drained += 1
-                            self._consume_payload_safe_sync(payload, src_page, src_frame)
-                    except Empty:
-                        pass
-                    elapsed = time.monotonic() - shutdown_start
-                    if not barrier_ok and elapsed < self._STOP_BARRIER_MAX_S and time.monotonic() - barrier_polled_at >= 0.25:
-                        barrier_polled_at = time.monotonic()
-                        barrier_ok = self._bridges_settled(self._bridge_states_sync(flush=False))
-                    idle_for = time.monotonic() - self._last_enqueue_at if self._last_enqueue_at else elapsed
-                    if elapsed >= 5.0 and idle_for >= 1.0 and drained == 0 and (barrier_ok or elapsed >= self._STOP_BARRIER_MAX_S):
-                        break
-                    time.sleep(0.05)
-                # Final diagnostics snapshot after all events are drained.
-                session_dir = self.data_root / "sessions" / self.session_id
-                session_dir.mkdir(parents=True, exist_ok=True)
-                self._write_diagnostics_sync(session_dir)
+            self._final_drain_sync()
             self._autosave_storage_state_sync(force=True)
         except Exception as exc:  # noqa: BLE001
             self._startup_error = format_startup_error(exc)
             self.binding_errors.append(f"start_error: {exc!s}")
             self._startup_done.set()
+            if self.browser_open and self._materialized_or_queued():
+                try:
+                    self._final_drain_sync()   # the error must not cost the steps already taken
+                except Exception as drain_exc:  # noqa: BLE001
+                    self.binding_errors.append(f"final_drain_error: {drain_exc!s}")
         finally:
             self.browser_open = False
             self._shutdown_playwright_sync()
+
+    def _materialized_or_queued(self) -> bool:
+        """Whether recording had begun capturing anything (so a drain after an error has something to rescue)."""
+        try:
+            return bool(self._materialized) or not self._pending_payloads.empty()
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _final_drain_sync(self) -> None:
+        """Hand over every step still on its way when recording ends, then write the diagnostics. Run on a normal
+        Stop AND after an unexpected error in the pump loop (a page that closes itself, such as Gmail's compose window
+        after Send, raises there): steps are saved the moment they happen, but they only reach the recording when
+        something consumes the queue, so skipping this loses everything not yet consumed."""
+        if self.auth_mode:
+            return
+        # Stop waits for a short "idle queue" condition so delayed
+        # Playwright binding callbacks can still be consumed.
+        shutdown_start = time.monotonic()
+        # BUILD-80: ask every frame to hand over what it holds (open watches are cut, typing is sent) and
+        # keep waiting until every step number a frame issued has arrived and no watch is open, so Stop
+        # can never close the browser on steps that are still on their way.
+        bridge_states = self._bridge_states_sync(flush=True)
+        barrier_ok = self._bridges_settled(bridge_states)
+        barrier_polled_at = time.monotonic()
+        while True:
+            for page in self._open_pages_sync():
+                try:
+                    self._ensure_bridge_installed_sync(page)
+                    self._pump_ping_sync(page)
+                except Exception:
+                    pass
+            self._drain_dialog_server_events_sync()
+            drained = 0
+            try:
+                while True:
+                    payload, src_page, src_frame = self._next_payload_sync(final=True)
+                    drained += 1
+                    self._consume_payload_safe_sync(payload, src_page, src_frame)
+            except Empty:
+                pass
+            elapsed = time.monotonic() - shutdown_start
+            if not barrier_ok and elapsed < self._STOP_BARRIER_MAX_S and time.monotonic() - barrier_polled_at >= 0.25:
+                barrier_polled_at = time.monotonic()
+                barrier_ok = self._bridges_settled(self._bridge_states_sync(flush=False))
+            idle_for = time.monotonic() - self._last_enqueue_at if self._last_enqueue_at else elapsed
+            if elapsed >= 5.0 and idle_for >= 1.0 and drained == 0 and (barrier_ok or elapsed >= self._STOP_BARRIER_MAX_S):
+                break
+            time.sleep(0.05)
+        # Final diagnostics snapshot after all events are drained.
+        session_dir = self.data_root / "sessions" / self.session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        self._write_diagnostics_sync(session_dir)
 
     async def stop(self) -> None:
         self._stop_requested.set()

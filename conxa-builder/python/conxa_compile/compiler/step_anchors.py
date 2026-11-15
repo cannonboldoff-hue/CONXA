@@ -286,6 +286,17 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                 if action in {"browser_back", "browser_forward", "manual_navigate"} or action in MARKER_ACTIONS:
                     cleaned.append(step)
                     continue
+                if action == "click":
+                    # The recorder emits one event per physical click (verified: one click, one event), so identical
+                    # consecutive clicks are repeated on purpose. Three or more are kept as a count on the first one;
+                    # two stay folded as before (a double-click arrives as two clicks and a dblclick, and counting
+                    # them would click four times). shortcut: no count for exactly two, revisit if a real "twice" shows up.
+                    extras = dict(prev.get("extras") or {})
+                    folded = list(extras.get("repeat_sequences") or []) + [(step.get("extras") or {}).get("sequence")]
+                    extras["repeat_sequences"] = [s for s in folded if s is not None]
+                    extras["repeat_count"] = len(folded) + 1
+                    cleaned[-1] = {**prev, "extras": extras}
+                    continue
                 if action == "type":
                     prev_payload = dict(prev.get("action") or {})
                     curr_payload = dict(step.get("action") or {})

@@ -689,6 +689,16 @@
   }
 
   const _SKIP_INTERACTIVE = new Set(["input", "button", "select", "textarea", "a", "option"]);
+  const _HEADING_SEL = 'h1,h2,h3,h4,h5,h6,[role="heading"],header,nav,footer';
+  const _CAPTIONED_ROLES = /^(textbox|searchbox|combobox|listbox|spinbutton|slider|checkbox|radio|switch)$/;
+  function _isCaptionedControl(el) {
+    try {
+      const tag = el.tagName.toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "textarea") return true;
+      if (el.isContentEditable) return true;
+      return _CAPTIONED_ROLES.test((el.getAttribute("role") || "").toLowerCase());
+    } catch (_) { return false; }
+  }
 
   function captureAssociatedLabel(el) {
     // A menu entry, option or tab sits among siblings of its own kind, and a hidden file input sits among the
@@ -731,6 +741,9 @@
     }
     // 6. Walk up 4 levels — find nearest preceding sibling with short visible text.
     // Handles apps (e.g. Pipedrive) that use <div>/<span> as visual labels instead of <label>.
+    // Only a form control has a caption beside it. A link, a button or a card is named by its own text, and a
+    // neighbouring paragraph is not its name ("Clicked Pull requests" for the first pull request in a list).
+    if (!_isCaptionedControl(el)) return null;
     let node = el;
     for (let depth = 0; depth < 8; depth++) {
       const container = node.parentElement;
@@ -750,6 +763,10 @@
         // as its own label_text, because _SKIP_INTERACTIVE only caught a bare <input> sibling,
         // never a wrapper <div> around one (audit finding, mega-workflow investigation).
         if (sib.querySelector && sib.querySelector('input,select,textarea,[contenteditable],[role="combobox"],[role="listbox"]')) continue;
+        // A page or section heading is a title, never one field's caption: on a flat form it is the only text
+        // above the boxes, and a box recorded as "Clicked <the page title>" then became an invented input named
+        // after the page.
+        if (_HEADING_SEL && sib.matches && (sib.matches(_HEADING_SEL) || (sib.querySelector && sib.querySelector(_HEADING_SEL)))) continue;
         const txt = safeText(sib, 80);
         // A sibling whose entire text is a month+year string ("August 2026") is never a real
         // field label — it's a live "current value" readout (a calendar widget's own header is

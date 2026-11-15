@@ -128,6 +128,12 @@ def derive_input_binding(
     if action_type in {"upload", "upload_intent"}:
         return "{{file_path}}", "file_path"
 
+    # A drag's value is its payload (which element was picked up and where it was dropped), not something a person
+    # typed or chose. Turning it into an input named after the drop target ("{{products}}") overwrote the payload,
+    # so the compiled step lost its source and replayed as a drag that moved nothing.
+    if action_type in {"drag_drop", "drag"}:
+        return raw_value, None
+
     if raw_value is None:
         return None, None
 

@@ -275,6 +275,10 @@ class HandlerHints(BaseModel):
     hover_chain: list[IdentitySignal] = Field(default_factory=list)  # elements to hover before acting
     virtualized_container: str = ""   # selector of a scroll container that virtualizes rows
     allow_forced_action: bool = False
+    # A click the person repeated on purpose (3 or more identical clicks in a row, e.g. "Add Element" x 50) is ONE step
+    # that runs this many times. Packaged as the runtime-only step type `repeat_click`, so an older runtime that does
+    # not know it refuses the step instead of clicking once and reporting Done.
+    repeat_count: int = 1
     # Dispatch-by-control-kind seam (03-replay-algorithm.md §5): "" means the handler dispatches
     # purely by action type, as every action does today. "date_picker" was the first populated
     # value — set by compiler/date_picker.py when a click run collapses into a date_pick step

@@ -18,6 +18,10 @@ def is_dynamic_id(selector: str) -> bool:
         return True
     if value.startswith("_r_"):
         return True
+    # Ids a framework hands out per render: React's useId (":r1:", ":rh"), Google's ":tv", Ember/React/Angular counters.
+    # They change on the next load, so an element is not "the one with this id".
+    if value.lstrip("\\").startswith(":") or re.match(r"^(?:ember|react|vue|ng|mat|cdk)[-_]?\d+", value, re.I):
+        return True
     if re.search(r"[:][a-z0-9]{6,}", value, re.I):
         return True
     if re.search(r"-[a-f0-9]{8,}\b", value, re.I):
@@ -245,6 +249,12 @@ def drop_personal_target_text(events: list[dict[str, Any]]) -> list[dict[str, An
     The input events are not modified."""
     out: list[dict[str, Any]] = []
     for ev in events:
+        if isinstance(ev, dict):
+            # A page's title can carry the signed-in address too (Gmail: "Inbox (274) - name@gmail.com - Gmail").
+            # It is saved on every step as context, so cut the address out here, once, like the target text.
+            page = ev.get("page")
+            if isinstance(page, dict) and isinstance(page.get("title"), str) and _EMAIL_RE.search(page["title"]):
+                ev = {**ev, "page": {**page, "title": scrub_email(page["title"])}}
         target = ev.get("target") if isinstance(ev, dict) else None
         if not isinstance(target, dict):
             out.append(ev)

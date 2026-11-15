@@ -54,7 +54,14 @@ def _assert_no_account_text(saved_skill: dict[str, Any], workflow_name: str) -> 
         for step in (block or {}).get("steps") or []:
             if not isinstance(step, dict):
                 continue
-            text = json.dumps({k: step.get(k) for k in ("target", "identity_bundle", "signals", "compiled_selectors")}, default=str)
+            # What is scanned is what ships: the page's title, address and timing in `signals.context` are
+            # deliberately left out of the package (skill_package_builder_saved_skill.py), so an address in a page
+            # title (Gmail's) is not a reason to refuse the build.
+            sig = step.get("signals")
+            if isinstance(sig, dict) and isinstance(sig.get("context"), dict):
+                sig = {**sig, "context": {k: v for k, v in sig["context"].items() if k not in {"page_title", "page_url", "timing"}}}
+            text = json.dumps({"target": step.get("target"), "identity_bundle": step.get("identity_bundle"), "signals": sig,
+                               "compiled_selectors": step.get("compiled_selectors")}, default=str)
             if _ACCOUNT_EMAIL_RE.search(text):
                 raise ValueError(
                     f"“{workflow_name}” contains someone’s account details (an email address) in how it finds a button. "
@@ -273,6 +280,8 @@ def build_skill_package(
                     # field existed. Never carries cookie values, response bodies, or a query
                     # string/fragment — enforced by auth_learning.learn()/self_test(), not here.
                     "auth_definition": getattr(a, "auth_definition", None),
+                    # The person said "I'm signed in" on a site the generic check cannot judge (GroupApp.person_confirmed_at).
+                    "person_confirmed": bool(getattr(a, "person_confirmed_at", None)),
                 }
                 for a in group.apps
             ],

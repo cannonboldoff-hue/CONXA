@@ -48,3 +48,12 @@ def test_never_leaks_target_or_identity_bundle():
     facts = describe_step(step, role="acquire")
     assert set(facts.keys()) == {"role", "action", "description"}
     assert "secret" not in str(facts) and "leak" not in str(facts)
+
+
+def test_a_step_that_only_types_or_drags_is_never_described_as_opening_a_page():
+    from conxa_compile.compiler.build import _prose_contradicts_action
+
+    assert _prose_contradicts_action("Open the shopping cart page", "drag_drop") is True
+    assert _prose_contradicts_action("Navigate to the hover page", "type") is True
+    assert _prose_contradicts_action("Open the shopping cart page", "click") is False   # a click can open a page
+    assert _prose_contradicts_action("Drag A onto B", "drag_drop") is False

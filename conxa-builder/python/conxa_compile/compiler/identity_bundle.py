@@ -67,6 +67,39 @@ def _file_input_selector(target: dict[str, Any]) -> str:
     return 'input[type="file"]'
 
 
+# A number that changes by itself: a count in a tab label ("Pull requests 58 (58)", "Issues 1.1k", "Inbox (274)").
+_COUNT_TAIL_RE = re.compile(r"(?:\s*[\(\[]?\d[\d.,]*[kKmM]?[\)\]]?)+\s*$")
+_ANY_NUMBER_RE = re.compile(r"\d")
+_BARE_NUMBER_RE = re.compile(r"^[\d.,\s]+[kKmM]?$")
+
+
+def strip_volatile_count(name: str) -> str:
+    """The name without a trailing live count. Playwright matches a role's name as a substring, so the shorter name still
+    finds the element after the count changes. A name that is only a number is left alone."""
+    stripped = _COUNT_TAIL_RE.sub("", name).strip()
+    return stripped if stripped else name
+
+
+def _link_href_selector(target: dict[str, Any], selectors: dict[str, Any], dom_html: str | None) -> str | None:
+    """``a[href="/path"]`` for a link whose address is unique on the recorded page. A link's destination is the most
+    stable thing about it (labels carry counts and wording that change; the route does not). Needs the saved page: the
+    recorder's attribute capture does not keep ``href``, and an address that cannot be shown to be unique is not used."""
+    if not dom_html:
+        return None
+    tag = str(target.get("tag") or "").lower()
+    role = str(target.get("role") or "").lower()
+    if tag != "a" and role != "link":
+        return None
+    href = str(target.get("href") or "").strip()
+    if not href:
+        node_attrs = backfill_attrs_from_snapshot(selectors, dom_html) or {}
+        href = str(node_attrs.get("href") or "").strip()
+    if not href or href.startswith(("#", "javascript:")) or len(href) > 160 or '"' in href:
+        return None
+    sel = f'a[href="{href}"]'
+    return sel if uniqueness_gate(sel, dom_html, absent_ok=False) else None
+
+
 def generate_deterministic_signals(
     ev: dict[str, Any],
     dom_html: str | None = None,
@@ -102,11 +135,16 @@ def generate_deterministic_signals(
     if attr_sel:
         candidates.append(("attr", attr_sel))
 
+    # 1c. a link's own address
+    href_sel = _link_href_selector(target, selectors, dom_html)
+    if href_sel and not any(c[1] == href_sel for c in candidates):
+        candidates.append(("attr", href_sel))
+
     # 2. role + name (semantic-aria)
     role = str(semantic.get("role") or target.get("role") or "").strip()
     ax_name = _accessible_name(target)
     if role and ax_name and role.lower() not in _EXCLUDED_ROLES:
-        candidates.append(("role", to_playwright_grammar("role", role, ax_name)))
+        candidates.append(("role", to_playwright_grammar("role", role, strip_volatile_count(ax_name))))
 
     # 3. text-based (visible-text)
     # Skipped for option-content elements: a <select>'s inner text is its concatenated <option>
@@ -117,7 +155,8 @@ def generate_deterministic_signals(
     raw_text = str(selectors.get("text_based") or "").strip()
     text_val = strip_keyboard_shortcut_tail(re.sub(r'^text=["\']?|["\']?$', "", raw_text).strip())
     tag_or_role = {str(target.get("tag") or "").lower(), str(semantic.get("role") or target.get("role") or "").lower()}
-    if text_val and not (tag_or_role & _OPTION_CONTENT_TAGS):
+    # A bare number ("3" on a cart badge) names nothing: it is a count, and it is the same on a hundred elements.
+    if text_val and not (tag_or_role & _OPTION_CONTENT_TAGS) and not _BARE_NUMBER_RE.match(text_val):
         candidates.append(("text_based", to_playwright_grammar("text", text_val)))
 
     # 4. relational from first *stable* (non-ephemeral) anchor phrase (spatial-anchor)
@@ -175,6 +214,13 @@ def generate_deterministic_signals(
         # uniqueness_gate's docstring. Without it, snapshot gaps (e.g. a modal captured before it
         # mounted) wrongly stamped real, durable selectors as unverified.
         unique = uniqueness_gate(sel, dom_html, a11y_tree, absent_ok=True)
+        # Known to match several elements on the recorded page (a zero count was let through above as "can't
+        # verify"): it must not outrank a signal that does pick one. Text and names that carry a digit run follow
+        # a number that changes by itself, so they rank below the same signal without one.
+        if not unique and dur > 0.35:
+            dur = 0.35
+        elif engine in ("text_based", "role", "relational") and _ANY_NUMBER_RE.search(sel) and dur > 0.6:
+            dur = 0.6
         signals.append(IdentitySignal(
             engine=engine,
             selector=sel,
