@@ -318,6 +318,10 @@ def call_runtime_tool(
         # An explicit caller-supplied value (via env=) still wins.
         "CONXA_MAX_RECOVERY_TIER": (env or {}).get("CONXA_MAX_RECOVERY_TIER")
             or os.environ.get("CONXA_MAX_RECOVERY_TIER", "2"),
+        # The runtime's 210 s run cap is sized for Claude Desktop's MCP timeout. Studio is
+        # attended and has an immediate Stop, so a long workflow gets 30 min. Explicit value wins.
+        "CONXA_EXECUTION_DEADLINE_MS": (env or {}).get("CONXA_EXECUTION_DEADLINE_MS")
+            or os.environ.get("CONXA_EXECUTION_DEADLINE_MS", "1800000"),
     }
 
     key = f"{exe}|{effective_conxa_dir}"

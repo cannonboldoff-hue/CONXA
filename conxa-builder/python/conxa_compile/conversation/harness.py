@@ -30,6 +30,7 @@ import re
 import threading
 import uuid
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from conxa_core.config import settings
 
@@ -575,7 +576,13 @@ def _propose(*, message: str, base_pack: Any, digest: dict[str, Any] | None, ski
     return gate_proposals(raw)
 
 
-_URL = re.compile(r"^https?://[^\s/]+\.[^\s/]+", re.I)
+def _is_web_url(s: str) -> bool:
+    """http(s) with a non-empty host; local pages (localhost, 127.0.0.1) are fine."""
+    try:
+        u = urlsplit(s)
+        return u.scheme in ("http", "https") and bool(u.hostname) and not re.search(r"\s", s)
+    except ValueError:
+        return False
 
 
 def _maybe_draft(context_text: str, reply: str, group_names: list[str]) -> dict[str, Any] | None:
@@ -600,7 +607,7 @@ def _maybe_draft(context_text: str, reply: str, group_names: list[str]) -> dict[
     return {
         "name": name[:80],
         "group": group if group in group_names else "",
-        "starting_page": url if _URL.match(url) else "",
+        "starting_page": url if _is_web_url(url) else "",
     }
 
 

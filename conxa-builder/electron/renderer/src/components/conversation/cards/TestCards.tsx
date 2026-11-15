@@ -129,10 +129,10 @@ export function TestInputsCard({ threadId, item }: CardProps) {
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <input type="checkbox" role="switch" className="mt-1 accent-white" checked={dryRun} disabled={aiSteps > 0} onChange={(e) => setDryRun(e.target.checked)} />
           <span>
-            <span className="text-[var(--text-primary)]">Dry Run</span>
+            <span className="text-[var(--text-primary)]">Keep the AI helper off</span>
             <span className="block text-xs text-[var(--text-meta)]">
               {dryRun
-                ? 'Safe test. The AI helper stays off, so no AI credits are used. The test stops if it reaches a step that needs AI, or an unexpected popup.'
+                ? 'No AI credits are used. The test stops if it reaches a step that needs AI, or an unexpected popup. This does not hold back steps that can’t be undone: those are checked separately before each one runs.'
                 : aiSteps > 0
                   ? `Turned off automatically — this workflow has ${plural(aiSteps, 'AI step')}, which need the AI helper. Uses AI credits.`
                   : 'The AI helper is on. It can answer an unexpected popup, and uses AI credits only if one appears.'}

@@ -83,10 +83,10 @@ test("browser: a roomy window gives it 75 percent", () => {
   assert.equal(resolveBrowserLayout({ windowWidth: 2400 }).width, 1800);
 });
 
-test("browser: a smaller window keeps the conversation at its minimum beside the rail and strip", () => {
+test("browser: a smaller window keeps the conversation at its minimum beside the rail (the strip is not drawn while the browser is open)", () => {
   for (let w = 960; w <= 2400; w += 20) {
     const l = resolveBrowserLayout({ windowWidth: w });
-    assert.ok(w - NAV.rail - INSPECTOR.strip - l.width >= BROWSER.conversationMin, `width ${w}`);
+    assert.ok(w - NAV.rail - l.width >= BROWSER.conversationMin, `width ${w}`);
     assert.ok(l.width <= w * BROWSER.fraction, `width ${w}`);
     assert.ok(l.width > 0, `width ${w}`);
   }

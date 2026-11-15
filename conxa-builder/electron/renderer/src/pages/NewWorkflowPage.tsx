@@ -13,7 +13,15 @@ import { useShellStore } from '@/store/shellStore'
 import { useBrowserStore } from '@/store/browserStore'
 import { cn } from '@/lib/utils'
 
-const URL_RE = /^https?:\/\/[^\s/]+\.[^\s/]+/
+/** http(s) with a non-empty host; local pages (localhost, 127.0.0.1) are fine. */
+function isWebUrl(s: string): boolean {
+  try {
+    const u = new URL(s)
+    return (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname !== '' && !/\s/.test(s)
+  } catch {
+    return false
+  }
+}
 
 function hostOf(url: string): string {
   try {
@@ -71,7 +79,7 @@ export function NewWorkflowPage() {
   const groupQ = useQuery({ queryKey: ['group', groupId], queryFn: () => fetchGroup(groupId), enabled: Boolean(groupId) })
 
   const nameOk = name.trim().length > 0
-  const urlOk = URL_RE.test(url.trim())
+  const urlOk = isWebUrl(url.trim())
   const groupOk = Boolean(groupId)
 
   // Does an app in the chosen group already cover this site, and is it signed in?

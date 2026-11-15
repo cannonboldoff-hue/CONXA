@@ -266,9 +266,12 @@ def test_prepare_prefills_recorded_values_and_names_what_cant_be_undone(env):
     assert ins["po_number"]["value"] == "PO-44821" and ins["po_number"]["required"] is True
     assert ins["date"]["value"] == "2026-11-15" and ins["date"]["required"] is False
     assert card["irreversible"] == ["Send invoice"] and card["version"] == 3 and card["step_count"] == 3
-    # asking again reuses the open card rather than stacking a second
-    assert b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"] == res["card_id"]
-    assert len(_cards(wf.id, "test_inputs")) == 1
+    # asking again folds the old card away (state "replaced") and puts a fresh one at the bottom, so pressing
+    # "Test it" again visibly does something; only one stays open (fd600d9).
+    again = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"]
+    assert again != res["card_id"]
+    open_cards = [c for c in _cards(wf.id, "test_inputs") if c["state"] == "open"]
+    assert [c["card_id"] for c in open_cards] == [again]
 
 
 def test_a_required_input_must_be_filled_and_a_started_test_cannot_start_twice(env, monkeypatch):

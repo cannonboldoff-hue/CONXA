@@ -41,6 +41,39 @@ def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
 
 
+def _pick_failing_row(rows: list[dict[str, Any]], failed_key: str | None, failed_at: Any,
+                      names: dict[str, tuple[str, bool]] | None = None) -> dict[str, Any] | None:
+    """The row for the step the runtime says failed. Rows come from progress lines that travel on a different
+    channel than the result, so the "running" row can be the step before the one that failed. The runtime's own
+    answer (step key, else plan index) wins; the running row is only the fallback when the runtime gave none."""
+    match = None
+    if failed_key:
+        match = next((r for r in rows if r.get("step_key") == failed_key), None)
+    if match is None and isinstance(failed_at, int) and not isinstance(failed_at, bool):
+        match = next((r for r in rows if r.get("index") == failed_at), None)
+    if match is None and failed_key and names and failed_key in names:
+        name, nested = names[failed_key]
+        match = {"index": failed_at if isinstance(failed_at, int) else len(rows), "name": name, "nested": nested,
+                 "status": "running", "destructive": False, "step_key": failed_key}
+        rows.append(match)
+    if match is None:
+        return next((r for r in reversed(rows) if r["status"] == "running"), None)
+    for r in rows:
+        if r is not match and r["status"] == "running":
+            r["status"] = "done"
+    return match
+
+
+def _built_package_has(output_path: str, slug: str) -> bool:
+    """True when the built package holds this workflow's runnable skill (skills/<slug>/execution.json)."""
+    try:
+        from pathlib import Path
+
+        return bool(slug) and (Path(output_path) / "skills" / slug / "execution.json").is_file()
+    except Exception:  # noqa: BLE001 -- when in doubt, build: a needless build is cheap, "Skill not found" is not
+        return False
+
+
 def _humanize(intent: str) -> str:
     text = str(intent or "").replace("_", " ").strip()
     return (text[:1].upper() + text[1:]) if text else "A step"
@@ -191,6 +224,11 @@ class TestFlowMixin:
         pack = get_skill_pack(LOCAL_WORKSPACE_ID)
         stale = pack is None or pack.build is None or (
             workflow.edited_at is not None and workflow.edited_at > pack.build.last_built_at)
+        # The build record is one timestamp for the whole pack, so "built" never meant "this workflow is in it": a
+        # second, never-edited workflow looked fresh while another workflow's build existed, and its test ended in
+        # "Skill not found". Ask the built package itself.
+        if not stale and not _built_package_has(pack.build.output_path, workflow.slug):
+            stale = True
         if stale:
             self.cmd_build_skill_package({"skill_slug": workflow.slug, "for_test": True}, rid)
 
@@ -328,9 +366,9 @@ class TestFlowMixin:
                  "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
             return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started, inputs,
-                                   outcome=getattr(exc, "outcome", None))
+                                   outcome=getattr(exc, "outcome", None), names=names)
         except Exception as exc:  # noqa: BLE001
-            return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs)
+            return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs, names=names)
         finally:
             runtime_state.set_flags(workflow_id, testing=False)
 
@@ -402,7 +440,8 @@ class TestFlowMixin:
         """What the runtime recorded about the latest failure, as data: its kind, whether the failing step's action may
         already have happened, and the surface a deliberate stop was about. Nothing here is read from message text.
         Empty-handed ({"kind": None, ...}) when no evidence was kept; callers then fall back to the old behaviour."""
-        facts: dict[str, Any] = {"kind": None, "took_effect": False, "surface": None, "message": ""}
+        facts: dict[str, Any] = {"kind": None, "took_effect": False, "surface": None, "message": "",
+                                 "failed_step_key": None, "failed_at": None}
         try:
             from conxa_compile.editor.evidence import build_evidence_bundle
             from conxa_core.storage.workflow_store import get_workflow
@@ -410,7 +449,10 @@ class TestFlowMixin:
             wf = get_workflow(workflow_id)
             if wf is None or not wf.skill_id or not wf.last_test_run_id:
                 return facts
-            ev = build_evidence_bundle(wf.skill_id, run_id=wf.last_test_run_id, detail="digest").get("runtime_evidence") or {}
+            bundle = build_evidence_bundle(wf.skill_id, run_id=wf.last_test_run_id, detail="digest")
+            ev = bundle.get("runtime_evidence") or {}
+            facts["failed_step_key"] = ev.get("failed_source_step_key") or bundle.get("failed_step_key")
+            facts["failed_at"] = ev.get("failed_at")
             facts["kind"] = ev.get("failure_kind") if ev.get("failure_kind") not in (None, "other") else None
             facts["took_effect"] = bool(ev.get("action_may_have_taken_effect"))
             facts["message"] = str(ev.get("message") or "")
@@ -528,14 +570,15 @@ class TestFlowMixin:
             return 0
 
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
-                   inputs: dict[str, Any] | None = None, outcome: str | None = None) -> str:
+                   inputs: dict[str, Any] | None = None, outcome: str | None = None,
+                   names: dict[str, tuple[str, bool]] | None = None) -> str:
         from conxa_compile.conversation import harness
         from conxa_compile.conversation.failure_summary import summarize
 
-        failing = next((r for r in reversed(rows) if r["status"] == "running"), None)
+        facts = self._tf_run_facts(workflow_id)
+        failing = _pick_failing_row(rows, facts.get("failed_step_key"), facts.get("failed_at"), names)
         if failing is not None:
             failing["status"] = "failed"
-        facts = self._tf_run_facts(workflow_id)
         # Only claim "nothing was sent" when no step that can't be undone even started AND the runtime does not say
         # the failing step's action may already have happened: a failure AT such a step may have half-happened.
         nothing_sent = not any(r.get("destructive") for r in rows) and not facts["took_effect"]

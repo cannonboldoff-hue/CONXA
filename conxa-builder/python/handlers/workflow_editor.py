@@ -50,7 +50,10 @@ class WorkflowEditorMixin:
                                    previous_step=previous_step, next_step=next_step,
                                    earlier_steps=earlier_steps)
         except ValueError as exc:
-            raise _CommandError(str(exc), f"Patch rejected: {exc}") from exc
+            # The code stays machine-readable (the UI branches on it); the message is what a person reads.
+            from conxa_compile.editor.patch_wording import plain_patch_error
+
+            raise _CommandError(str(exc), plain_patch_error(str(exc))) from exc
 
         merged = _deep_merge(dict(step), patch)
         # A plain deep-merge leaves every DERIVED field stale — semantic.final_intent (which

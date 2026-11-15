@@ -292,6 +292,14 @@ class SessionMixin:
                 # release it instead of permanently blocking new recordings.
                 if stale is not None:
                     _recorder_registry.pop(self._active_recording)
+                    # Its browser view in Studio's panel is released too: a session that died without a clean stop
+                    # left the view behind, and the next recording silently reused it (showing the wrong site).
+                    try:
+                        from conxa_compile.recorder import host_view
+
+                        host_view.release(str(getattr(stale, "session_id", "") or self._active_recording))
+                    except Exception:  # noqa: BLE001 -- a view that is already gone is the goal
+                        pass
                 self._active_recording = None
 
             workflow_id_raw = payload.get("workflow_id")

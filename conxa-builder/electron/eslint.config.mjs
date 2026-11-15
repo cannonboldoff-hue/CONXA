@@ -60,6 +60,12 @@ export default tseslint.config(
     },
   },
 
+  // Runs inside a web page (injected as text by browser_panel.js): browser globals, not Node.
+  {
+    files: ['tour_hint.js'],
+    languageOptions: { globals: { ...globals.browser } },
+  },
+
   // Plain node:test files that import a .ts module directly via Node's native
   // type-stripping (see releaseState.test.mjs) — genuinely ESM, unlike the
   // CommonJS bridge test above.

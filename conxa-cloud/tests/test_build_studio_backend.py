@@ -164,11 +164,14 @@ def test_patch_step_rejects_a_patch_that_drops_a_required_assertion(backend, mon
         },
     )
 
-    with pytest.raises(_CommandError, match="consequential_step_requires_required_assertion"):
+    with pytest.raises(_CommandError) as rejected:
         b.cmd_patch_step(
             {"skill_id": skill_id, "step_index": 0, "patch": {"validation": {"assertions": []}}},
             "rid",
         )
+    # The code stays machine-readable; the message is plain words, never the code (W9-a).
+    assert rejected.value.code == "consequential_step_requires_required_assertion"
+    assert "consequential_step" not in rejected.value.message and "_" not in rejected.value.message.split(".")[0]
 
     # Rejected patch must not be persisted.
     unchanged = read_skill(skill_id)
