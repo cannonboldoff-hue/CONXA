@@ -181,6 +181,36 @@ def db_list(namespace: str) -> list[Any]:
         return [r[0] for r in rows]
 
 
+_MAPPED_CACHE: dict[tuple[str, str], tuple[tuple[int, int], Any]] = {}
+
+
+def db_list_mapped(namespace: str, fn: Any) -> list[Any]:
+    """``[fn(doc) for doc in db_list(namespace)]``, without re-reading documents that have not changed.
+
+    On the filesystem store, listing a namespace parses every file on every call, and a dashboard asks several times:
+    a store of a few dozen skills cost ~100 ms per request, serialised behind one lock. Here each file is parsed once per
+    change (keyed by its modified time and size) and only ``fn``'s small result is kept, so a caller can never mutate a
+    cached document. With a database nothing is cached (the query is the cost there, and rows are not files)."""
+    if _get_engine() is not None:
+        return [fn(doc) for doc in db_list(namespace)]
+    d = _fs_path(namespace, "__sentinel__").parent
+    if not d.exists():
+        return []
+    out: list[Any] = []
+    for f in sorted(d.glob("*.json"), key=lambda f: f.stat().st_mtime):
+        st = f.stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+        key = (namespace, str(f))
+        hit = _MAPPED_CACHE.get(key)
+        if hit is not None and hit[0] == stamp:
+            out.append(hit[1])
+            continue
+        value = fn(json.loads(f.read_text(encoding="utf-8")))
+        _MAPPED_CACHE[key] = (stamp, value)
+        out.append(value)
+    return [dict(v) if isinstance(v, dict) else v for v in out]
+
+
 def db_list_kv(namespace: str) -> list[tuple[str, Any]]:
     """Return (key, value) pairs in a namespace ordered by created_at."""
     engine = _get_engine()

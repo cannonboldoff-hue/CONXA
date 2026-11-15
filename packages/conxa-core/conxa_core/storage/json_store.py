@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from conxa_core.config import settings
-from conxa_core.db import db_get, db_set, db_delete, db_list
+from conxa_core.db import db_get, db_set, db_delete, db_list, db_list_mapped
 from conxa_core.models.prose_binding import bind_prose
 from conxa_core.sanitize import scrub_surrogates
 from conxa_core.storage.skill_hooks import notify_skill_deleted, notify_skill_written
@@ -69,22 +69,22 @@ def delete_skill(skill_id: str) -> bool:
 
 def list_skill_summaries() -> list[dict[str, Any]]:
     """Return newest-first summaries for skills."""
-    db_items = db_list("skills")
-    if db_items:
-        out: list[dict[str, Any]] = []
-        for doc in db_items:
-            skill_id = doc.get("meta", {}).get("id") or ""
-            meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else {}
-            skills_raw = doc.get("skills") or []
-            block0 = skills_raw[0] if isinstance(skills_raw, list) and skills_raw and isinstance(skills_raw[0], dict) else {}
-            steps = block0.get("steps") if isinstance(block0.get("steps"), list) else []
-            out.append({
-                "skill_id": skill_id,
-                "title": str(meta.get("title") or skill_id),
-                "version": int(meta.get("version") or 1),
-                "step_count": len(steps),
-                "modified_at": 0.0,
-            })
+    def summarize(doc: dict[str, Any]) -> dict[str, Any]:
+        skill_id = doc.get("meta", {}).get("id") or ""
+        meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else {}
+        skills_raw = doc.get("skills") or []
+        block0 = skills_raw[0] if isinstance(skills_raw, list) and skills_raw and isinstance(skills_raw[0], dict) else {}
+        steps = block0.get("steps") if isinstance(block0.get("steps"), list) else []
+        return {
+            "skill_id": skill_id,
+            "title": str(meta.get("title") or skill_id),
+            "version": int(meta.get("version") or 1),
+            "step_count": len(steps),
+            "modified_at": 0.0,
+        }
+
+    out = db_list_mapped("skills", summarize)
+    if out:
         return list(reversed(out))
     # File fallback for local dev
     out = []

@@ -175,8 +175,9 @@ def test_waits_for_soonest_cooldown_then_succeeds(monkeypatch):
     result = router.route_text("intent", {}, 5_000)
 
     assert result is not None
-    assert len(slept) == 1
-    assert 0 < slept[0] <= 0.31
+    # One wait to the cooldown, then (on a coarse Windows clock) a few tiny remainders until a tick passes.
+    assert slept and all(x > 0 for x in slept)
+    assert slept[0] <= 0.31 and sum(slept) <= 0.4
 
 
 def test_cooldown_beyond_ceiling_fails_fast_without_sleeping(monkeypatch):

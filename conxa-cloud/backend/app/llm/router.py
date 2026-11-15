@@ -385,19 +385,23 @@ class LLMRouter:
                 _debug_log(f"router: pool={pool} exhausted{' for vision' if for_vision else ''}, falling back to any pool")
                 entry = self._next_available_entry(for_vision=for_vision, multimodal=multimodal)
 
-            if entry is None and wait_budget > 0:
+            # A sleep can return a hair before the monotonic clock reaches the cooldown (Windows ticks every 15.6 ms),
+            # so the entry may still read as cooled right after waking: keep waiting out the remainder, inside the
+            # same wait budget, instead of giving up after one look.
+            while entry is None and wait_budget > 0:
                 soonest = self._soonest_cooldown(for_vision=for_vision, multimodal=multimodal, pool=pool)
-                if soonest is not None:
-                    wait_s = min(soonest - time.monotonic(), remaining)
-                    if 0 < wait_s <= wait_budget:
-                        _debug_log(f"router: all entries cooled, waiting {wait_s:.1f}s for soonest to clear")
-                        time.sleep(wait_s)
-                        wait_budget -= wait_s
-                        entry = self._next_available_entry(for_vision=for_vision, multimodal=multimodal, pool=pool)
-                        if entry is None and pool is not None:
-                            entry = self._next_available_entry(for_vision=for_vision, multimodal=multimodal)
-                    else:
-                        wait_budget = 0
+                if soonest is None:
+                    break
+                wait_s = min(soonest - time.monotonic(), deadline - time.monotonic())
+                if not (0 < wait_s <= wait_budget):
+                    wait_budget = 0
+                    break
+                _debug_log(f"router: all entries cooled, waiting {wait_s:.1f}s for soonest to clear")
+                time.sleep(wait_s)
+                wait_budget -= wait_s
+                entry = self._next_available_entry(for_vision=for_vision, multimodal=multimodal, pool=pool)
+                if entry is None and pool is not None:
+                    entry = self._next_available_entry(for_vision=for_vision, multimodal=multimodal)
 
             if entry is None:
                 _debug_log("router: all providers cooled or exhausted")
