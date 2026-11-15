@@ -73,12 +73,22 @@ never `file://`.
 **Sites:** S11 (en.wikipedia.org) + S1 (the-internet.herokuapp.com) + S3 (demoqa.com) ·
 **Tabs:** up to 3
 
-Legs A (Wikipedia control baseline), B (S1 login + credential grep), C (S3 form fill), D (S1
-new-tab/popup round trip), and E (download → new-tab upload handoff) all **passed** via the
-`03-ONE-WORKFLOW-RUNBOOK.md` follow-up run, 2026-09-03 — see the "Follow-up run" entry in
-[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md). Credential grep came back clean. Leg F (native
-JS dialogs) also **passed**, 2026-09-04 — see **P-5** in `02-WORKFLOWS-PASSED.md`. All legs of WF-1
-are now graduated.
+**Re-test under the strict end-to-end rule (2026-11-16 campaign,
+[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)):** a leg counts only once it reaches the
+approved, publish-ready state through Studio's normal controls with independent proof of the
+outcome. Each leg that passes is removed from here and recorded in
+[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) (Leg C, the S3 form fill, is there as P-11).
+Still to pass:
+
+- Leg A — Wikipedia control baseline (search, open a link in the article, go back). *In test.*
+- Leg B — S1 login + credential grep. The recorder drops sign-in pages by design, so the login is
+  done through the group's saved sign-in, not recorded.
+- Leg D — S1 new-tab/popup round trip (`/windows`).
+- Leg E — download → new-tab upload handoff (S1 `/download` → S3 `/upload-download`).
+- Leg F — native JS dialogs (S1 `/javascript_alerts`).
+
+Earlier history: legs A, B, D and E passed the `03-ONE-WORKFLOW-RUNBOOK.md` follow-up run on
+2026-09-03, and Leg F passed on 2026-09-04 (P-5). Both runs predate the strict rule above.
 
 **Where failures go (regressions only):** `TODO.md` EXEC-34 (remaining unbounded `.evaluate()`
 sites, unrelated follow-up); EXEC-5 (#43 tab landing, #31/#32 download/upload verification).
