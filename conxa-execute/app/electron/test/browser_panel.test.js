@@ -42,6 +42,10 @@ class FakeWebContents {
     };
   }
   setWindowOpenHandler(fn) { this.openHandler = fn; }
+  capturePage(rect, opts) {
+    this.captured = { rect, opts };
+    return Promise.resolve({ toJPEG: (q) => Buffer.from(`jpeg${q}`), toPNG: () => Buffer.from("png") });
+  }
   executeJavaScript() { return Promise.resolve(); }
   focus() { this.focused = true; }
   on(ev, fn) { this.handlers[ev] = fn; }
@@ -358,4 +362,14 @@ test("hiding the panel parks the shield, and ending the run removes it", async (
   await panel.runEnd("sh4");
   assert.ok(removed.includes(shield));
   assert.strictEqual(shield.webContents.closed, true);
+});
+
+test("capture stills a tab with stayHidden/stayAwake, so it answers while the view is hidden, and refuses a missing run", async () => {
+  const { tabId } = panel.newView("cap-run", {});
+  const wc = added[added.length - 1].webContents;
+  const got = await panel.capture("cap-run", tabId, { type: "jpeg", quality: 55 });
+  assert.deepStrictEqual(wc.captured.opts, { stayHidden: true, stayAwake: true });
+  assert.strictEqual(Buffer.from(got.data, "base64").toString(), "jpeg55");
+  assert.strictEqual(Buffer.from((await panel.capture("cap-run", "gone", { type: "png" })).data, "base64").toString(), "png");
+  await assert.rejects(() => panel.capture("no-such-run", tabId), /no tab to capture/);
 });

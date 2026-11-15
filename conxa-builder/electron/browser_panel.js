@@ -36,6 +36,16 @@ const path = require("path");
 const _runs = new Map();
 const KINDS = new Set(["test", "record", "signin"]);
 const _HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
+// A page lays out at its view's size (zoomed), so a view shrunk to 0x0 is a 0-wide page, and a view born at
+// 0x0 stays one until something resizes it. Nothing a run drives is ever shrunk: a view the panel is not
+// showing (another tab, a dialog over the pane, a folded pane, a minimized window) is hidden with setVisible
+// and keeps its bounds, so the page keeps the size it was recorded at whether or not anyone can see it
+// (probe, Electron 42: a hidden view stays 1280x720, a 0x0 one reads 0x0). Only the shield, which nothing
+// drives, is still parked at _HIDDEN.
+let _paneHidden = false; // the renderer's pane is covered, folded or gone; cleared by its next real rect
+let _lastRect = null; // the last real pane rect, so a run's first view is placed without waiting for a report
+const _validRect = (r) => !!r && r.width > 0 && r.height > 0;
+const _hideView = (view) => view.setVisible(false);
 // The page height a fit-to-width pane may ask for. runtime/app/page_geometry.js mirrors MIN_H
 // (a pytest keeps them equal).
 const MIN_H = 480, MAX_H = 1440;
@@ -194,8 +204,29 @@ async function _ensureGeometry(run, tab) {
 async function ensureGeometry(runId) {
   const run = _runs.get(runId);
   if (!run) throw new Error(`browser_panel: no run ${runId}`);
-  const results = await Promise.all(run.tabs.map((t) => _ensureGeometry(run, t)));
+  const check = () => Promise.all(run.tabs.map((t) => _ensureGeometry(run, t)));
+  let results = await check();
+  if (!results.every((r) => r.ok) && run.rect && run.activeTabId) {
+    // A view left without its size (the pane's rect never reached it) is only put right by laying the
+    // run out again from the rect the panel last had; re-setting the zoom cannot size a 0x0 view.
+    _layout(run, run.activeTabId, run.rect);
+    results = await check();
+  }
   return { ok: results.every((r) => r.ok), tabs: results.length };
+}
+
+// Control-channel op "capture": a still of a run's tab as JPEG/PNG bytes (base64). The runtime's own
+// screenshot is a CDP call that only answers when the view is being drawn, so it hangs on a hidden tab, a
+// covered pane or a minimized window (probe, Electron 42); capturePage with stayHidden/stayAwake draws
+// the page for the capture and answers in every one of those states. It sees the view at its on-screen
+// scale, so the runtime asks for it only after its own capture did not answer.
+async function capture(runId, tabId, { type = "jpeg", quality = 80 } = {}) {
+  const run = _runs.get(runId);
+  const tab = run && (run.tabs.find((t) => t.id === tabId) || run.tabs.find((t) => t.id === run.activeTabId));
+  if (!tab || tab.view.webContents.isDestroyed()) throw new Error(`browser_panel: no tab to capture in run ${runId}`);
+  const img = await tab.view.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+  const buf = type === "png" ? img.toPNG() : img.toJPEG(Math.max(1, Math.min(100, Math.round(Number(quality) || 80))));
+  return { data: buf.toString("base64") };
 }
 
 // While the runtime drives a test run, the person's mouse and keyboard must not reach the page: a pointer resting on a
@@ -259,7 +290,6 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
     createWindow: (options) => {
       const nv = new WebContentsView({ webContents: options.webContents, webPreferences: options.webPreferences });
       _addTab(run, runId, nv, { marker: false, opener: tabId });
-      if (run.rect) setActiveBounds(runId, run.activeTabId, run.rect);
       return nv.webContents;
     },
   }));
@@ -302,6 +332,10 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   run.tabs.push(tab);
   if (_win) _win.contentView.addChildView(view);
   if (!background || run.activeTabId === null) run.activeTabId = tabId;
+  // Placed now, from what the panel already knows, never left at 0x0 until the renderer reports: a step
+  // that opens a tab reads its size right away, and the renderer may be slow (or hidden) to answer.
+  const rect = run.rect || (run.kind === "test" ? _lastRect : null);
+  if (rect) { run.rect = rect; _layout(run, run.activeTabId, rect); }
   _emit(runId);
   return tabId;
 }
@@ -318,7 +352,6 @@ function personTab(runId, { url } = {}) {
   const run = _runs.get(runId);
   if (!run) throw new Error(`browser_panel: no run ${runId} to add a tab to`);
   const tabId = _createTab(run, runId, null, false, "person");
-  if (run.rect) setActiveBounds(runId, tabId, run.rect);
   if (url) {
     const tab = run.tabs.find((t) => t.id === tabId);
     // After the marker has loaded, so the recorder still finds the tab by it.
@@ -331,7 +364,7 @@ function _activate(runId, tabId) {
   const run = _runs.get(runId);
   const t = run && run.tabs.find((x) => x.id === tabId);
   if (!t) return false;
-  if (run.rect) setActiveBounds(runId, tabId, run.rect);
+  if (run.rect) _layout(run, tabId, run.rect);
   else run.activeTabId = tabId;
   if (!_shieldCovers(run, t) && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
   _emit(runId);
@@ -428,7 +461,7 @@ function _forgetTab(runId, tabId) {
   if (run.activeTabId === tabId) {
     const back = run.tabs.find((t) => t.id === gone.opener) || run.tabs[Math.min(idx, run.tabs.length - 1)];
     run.activeTabId = back ? back.id : null;
-    if (back && run.rect) setActiveBounds(runId, back.id, run.rect);
+    if (back && run.rect) _layout(run, back.id, run.rect);
   }
   _emit(runId);
 }
@@ -681,7 +714,7 @@ async function adoptRun(runId, { kind = "record", viewport } = {}) {
     for (const t of run.tabs) _emulate(run, t);
     // The renderer only reports a rect when it changes, and an adopt changes none: lay the pages out
     // for the new viewport from the rect it last reported.
-    if (run.rect && run.activeTabId) setActiveBounds(runId, run.activeTabId, run.rect);
+    if (run.rect && run.activeTabId) _layout(run, run.activeTabId, run.rect);
   }
   await Promise.all(run.tabs.map((t) => {
     const dbg = _debugger(t);
@@ -740,23 +773,27 @@ function _fitBox(run, rect) {
   return { s, H, shown: rect };
 }
 
+// The renderer reports the pane's rect. A zero rect (a folded pane, a minimized window) is "nothing to show
+// here", not "make the page zero wide": the views are hidden and every size stays as it was.
 function setActiveBounds(runId, tabId, rect) {
   const run = _runs.get(runId);
   if (!run) return;
+  if (!_validRect(rect)) { hideAll(); return; }
+  _paneHidden = false;
+  _lastRect = rect;
   run.rect = rect;
-  for (const [id, r] of _runs) {
-    if (id === runId) continue;
-    for (const t of r.tabs) t.view.setBounds(_HIDDEN);
-    if (r.shield) r.shield.setBounds(_HIDDEN);
-    r.shownRect = null;
-  }
+  for (const [id, r] of _runs) if (id !== runId) _hideRun(r);
+  _layout(run, tabId, rect);
+}
+
+// Sizes every tab of the run for `rect` and shows `tabId` there. A tab that is not shown keeps the same
+// bounds (hidden, never shrunk), so switching tabs, or a hidden pane, never changes what a page measures.
+function _layout(run, tabId, rect) {
   let shown = rect;
   if (run.viewport) {
     let s, H = run.height;
     if (run.viewport.fit === "width") {
-      // A folded or zero-size rect leaves the geometry as it was.
-      if (rect.width > 0 && rect.height > 0) ({ s, H, shown } = _fitBox(run, rect));
-      else { s = run.scale; shown = rect; }
+      ({ s, H, shown } = _fitBox(run, rect));
     } else {
       const { width: W, height: VH } = run.viewport;
       s = Math.min(rect.width / W, rect.height / VH, 1);
@@ -770,10 +807,13 @@ function setActiveBounds(runId, tabId, rect) {
       for (const t of run.tabs) _emulate(run, t);
     }
   }
-  for (const t of run.tabs) t.view.setBounds(t.id === tabId ? shown : _HIDDEN);
+  for (const t of run.tabs) {
+    t.view.setBounds(shown);
+    if (t.id === tabId && !_paneHidden) t.view.setVisible(true); else _hideView(t.view);
+  }
   run.activeTabId = tabId;
-  run.shownRect = shown;
-  _layoutShield(run, run.tabs.find((t) => t.id === tabId), shown);
+  run.shownRect = _paneHidden ? null : shown;
+  _layoutShield(run, run.tabs.find((t) => t.id === tabId), run.shownRect);
 }
 
 // Control-channel op "input": a hand-over is the one time a person is meant to act in the run's page, so the
@@ -809,16 +849,19 @@ async function targetsOf(runId) {
 
 // A native view floats above the page, so nothing in the app can draw over it. Hiding parks every view
 // (a dialog is open, or the person folded the panel); showing re-reports bounds via setActiveBounds.
+function _hideRun(run) {
+  for (const t of run.tabs) _hideView(t.view);
+  if (run.shield) run.shield.setBounds(_HIDDEN);
+  run.shownRect = null;
+}
+
 function hideAll() {
-  for (const run of _runs.values()) {
-    for (const t of run.tabs) t.view.setBounds(_HIDDEN);
-    if (run.shield) run.shield.setBounds(_HIDDEN);
-    run.shownRect = null;
-  }
+  _paneHidden = true;
+  for (const run of _runs.values()) _hideRun(run);
 }
 
 function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, setInputOpen, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry };
+module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, setInputOpen, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry, capture };

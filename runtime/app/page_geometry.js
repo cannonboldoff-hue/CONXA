@@ -52,6 +52,11 @@ async function capture(page, { type = "jpeg", quality, timeout = 30000 } = {}) {
   if (!page || typeof page.context !== "function" || typeof page.context().newCDPSession !== "function") {
     return page.screenshot({ type, ...(quality ? { quality } : {}), timeout }).catch(() => null);
   }
+  // A host panel's page is only drawn while its view is on screen, and this CDP call answers only for a
+  // drawn page: on a hidden tab, a covered pane or a minimized window it never does (it used to cost the
+  // full 30 s on every failure report). So there it gets a short turn, then the host takes the still.
+  const hosted = !!(process.env.CONXA_HOST_BROWSER_CDP || "").trim();
+  const cdpTimeout = hosted ? Math.min(timeout, HOST_CAPTURE_AFTER_MS) : timeout;
   let timer;
   try {
     const cdp = await _session(page);
@@ -59,14 +64,26 @@ async function capture(page, { type = "jpeg", quality, timeout = 30000 } = {}) {
     if (params.format === "jpeg" && quality) params.quality = quality;
     const shot = await Promise.race([
       cdp.send("Page.captureScreenshot", params),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("capture timed out")), timeout); }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("capture timed out")), cdpTimeout); }),
     ]);
     return Buffer.from(shot.data, "base64");
   } catch (_) {
     _sessions.delete(page); // a detached session would fail every later call
-    return null;
+    return hosted ? hostCapture(page, { type, quality }) : null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+const HOST_CAPTURE_AFTER_MS = 1500;
+
+// The host's own still of its page, or null (an older host that does not know the op, a page that is not a host tab).
+async function hostCapture(page, opts) {
+  try {
+    const host = require("./host_browser");
+    return typeof host.capture === "function" ? await host.capture(page, opts) : null;
+  } catch (_) {
+    return null;
   }
 }
 

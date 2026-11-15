@@ -1897,6 +1897,12 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 - **Complexity:** S — find-and-replace in filenames/content + docstring updates.
 - **Success criteria:** all dev scripts in `conxa-cloud/scripts/` use consistent terminology (workflows, not plugins) in their names and documentation.
 
+### HOST-1 — Merge Studio's and Execute's `browser_panel.js` into one shared module
+- **Category:** Architecture / Maintenance
+- **Description:** `conxa-builder/electron/browser_panel.js` and `conxa-execute/app/electron/browser_panel.js` are two copies of the same seam. Each rule about a run's page (who owns its size, how a hidden view is kept, the `capture` op) has to be written twice, and the 2026-11-14 "page behaves the same whether or not it is on screen" fix only brought Studio fully in line (Execute got `capture` only, because its size is pinned by a metrics override).
+- **Why required:** two copies drift; the next panel rule will be fixed in one place and missed in the other.
+- **Dependencies:** none. **Complexity:** M. **Success criteria:** one module, both apps' panel and control tests pass against it.
+
 ### ADV-2 — Orphaned cloud-frontend jobsApi.ts and associated job-queue infrastructure
 - **Category:** Advanced
 - **Description:** `conxa-cloud/frontend/src/api/jobsApi.ts` is a fully-typed fetch wrapper over a cloud-side job-queue API (job status, polling, cancellation) that exists in the type definitions but has zero actual consumers in the current codebase. Discovered during Plugin→Workflow refactor (`grep -r "jobsApi"` found only test stubs and the file itself). This suggests either: (1) the job-queue infrastructure was built but never wired into the cloud backend's `main.py` or any routers, or (2) it was removed from the backend but the frontend stub was left behind. Either way, the client is dead code and should be removed unless it's a stub awaiting future implementation.

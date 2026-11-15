@@ -31,6 +31,10 @@ class FakeWebContents {
     this.navigationHistory = { canGoBack: () => false, canGoForward: () => false };
   }
   setZoomFactor(z) { this.zooms.push(z); }
+  capturePage(rect, opts) {
+    this.captured = { rect, opts };
+    return Promise.resolve({ toJPEG: (q) => Buffer.from(`jpeg${q}`), toPNG: () => Buffer.from("png") });
+  }
   setWindowOpenHandler(fn) { this.openHandler = fn; }
   on(ev, fn) { this.handlers[ev] = fn; }
   once(ev, fn) { this.handlers[ev] = fn; }
@@ -46,8 +50,9 @@ class FakeWebContents {
   destroy() { this.destroyed = true; if (this.handlers.destroyed) this.handlers.destroyed(); }
 }
 class FakeView {
-  constructor(opts = {}) { this.webContents = opts.webContents || new FakeWebContents(); this.bounds = null; }
+  constructor(opts = {}) { this.webContents = opts.webContents || new FakeWebContents(); this.bounds = null; this.visible = true; }
   setBounds(b) { this.bounds = b; }
+  setVisible(v) { this.visible = v; }
 }
 
 const realLoad = Module._load;
@@ -72,6 +77,9 @@ panel.init(win, {
   onShortcut: (runId, action) => shortcuts.push({ runId, action }),
 });
 
+// The newest page view. A test run's shield is re-added on top whenever the run is laid out, so "the last
+// view added" is not always the page.
+const lastPage = () => added.filter((v) => !String(v.webContents.url).startsWith("about:blank?conxa_shield")).pop();
 const lastMetrics = (wc) => wc.commands.filter((c) => c.method === "Emulation.setDeviceMetricsOverride").pop();
 
 test("a test run is unchanged: no emulation, the view fills the panel's rect", () => {
@@ -119,7 +127,8 @@ test("a site-opened popup is adopted as a tab with its opener, at the run's size
   assert.strictEqual(pop.active, true, "the popup comes to the front, as in a browser");
   assert.strictEqual(lastMetrics(chromiumMade).params.scale, 0.75);
   assert.strictEqual(chromiumMade.url, "", "a popup is not sent to a marker — Chromium navigates it itself");
-  assert.deepStrictEqual(opener.bounds, { x: 0, y: 0, width: 0, height: 0 }, "the opener is parked");
+  assert.strictEqual(opener.visible, false, "the opener is hidden");
+  assert.deepStrictEqual(opener.bounds, added[added.length - 1].bounds, "and keeps the size it had, so its page does not change");
 });
 
 test("a popup that closes itself drops its tab and hands the panel back to its opener", () => {
@@ -216,7 +225,7 @@ test("closing the active tab hands the panel to its neighbour and focuses it", a
 test("the address bar takes a site, a host, localhost or a search, as Chrome does", () => {
   panel.newView("nav", {});
   const tabId = last.tabs[0].id;
-  const wc = added[added.length - 1].webContents;
+  const wc = lastPage().webContents;
   const go = (url) => { panel.navigate("nav", tabId, { action: "load", url }); return wc.url; };
   assert.strictEqual(go("https://a.test/x"), "https://a.test/x");
   assert.strictEqual(go("example.com/path"), "https://example.com/path");
@@ -230,7 +239,7 @@ test("the address bar takes a site, a host, localhost or a search, as Chrome doe
 test("adopting a parked test run makes it a record run: kept views, target ids, fixed viewport, never dropped", async () => {
   const { tabId } = panel.newView("adopt1");
   panel.runEnd && await panel.runEnd("adopt1");                        // the runtime let go of it: finished
-  const wc = added[added.length - 1].webContents;
+  const wc = lastPage().webContents;
   assert.strictEqual(last.meta.finished, true);
   await assert.rejects(() => panel.targetsOf("adopt1").then((t) => { if (!t.targets.length) throw new Error("no targets"); }));  // a test tab has none
   const got = await panel.adoptRun("adopt1", { kind: "record", viewport: { width: 1280, height: 720 } });
@@ -283,7 +292,7 @@ const has = (wc, method) => wc.commands.some((c) => c.method === method);
 
 test("a test page that becomes ready at the wrong size is cleared and zoomed again, at the run's current scale", async () => {
   const { tabId } = panel.newView("reapply", { viewport: { width: 1280, height: 720 } });
-  const view = added[added.length - 1];
+  const view = lastPage();
   panel.setActiveBounds("reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
   const wc = view.webContents;
   assert.strictEqual(wc.zooms[wc.zooms.length - 1], 0.5, "a test run shrinks with the view's zoom: `scale` breaks CDP clicks, a device scale factor leaves the page clipped");
@@ -303,7 +312,7 @@ test("a test page that becomes ready at the wrong size is cleared and zoomed aga
 
 test("a page that is already at the recorded size is left alone", async () => {
   const { tabId } = panel.newView("reapply-ok", { viewport: { width: 1280, height: 720 } });
-  const wc = added[added.length - 1].webContents;
+  const wc = lastPage().webContents;
   panel.setActiveBounds("reapply-ok", tabId, { x: 0, y: 0, width: 640, height: 600 });
   wc.live = [1280, 720, 0.5]; // a zoomed test page reads the screen's DPR times the zoom
   wc.commands.length = 0;
@@ -314,9 +323,9 @@ test("a page that is already at the recorded size is left alone", async () => {
 
 test("ensure_geometry repairs every tab of the run, hidden ones too, and says whether it held", async () => {
   panel.newView("ensure", { viewport: { width: 1280, height: 720 } });
-  const first = added[added.length - 1].webContents;
+  const first = lastPage().webContents;
   panel.newTab("ensure", {});
-  const second = added[added.length - 1].webContents;
+  const second = lastPage().webContents;
   first.live = [1024, 576, 1];
   second.live = [1280, 720, 1];
   first.commands.length = 0; second.commands.length = 0;
@@ -380,7 +389,7 @@ test("a viewport without fit still letterboxes, and an unknown fit value is igno
 
 test("adopting a parked run into a fit-to-width viewport lays its page out from the last rect", async () => {
   const { tabId } = panel.newView("fit5");
-  const view = added[added.length - 1];
+  const view = lastPage();
   panel.setActiveBounds("fit5", tabId, { x: 0, y: 0, width: 640, height: 600 }); // a test run: full rect, no emulation
   assert.deepStrictEqual(view.bounds, { x: 0, y: 0, width: 640, height: 600 });
   await panel.adoptRun("fit5", { kind: "record", viewport: FIT });
@@ -493,4 +502,79 @@ test("a shield put back while the panel is hidden does not reappear over somethi
   panel.hideAll();
   panel.setInputOpen("sh7", false);
   assert.deepStrictEqual(shield.bounds, { x: 0, y: 0, width: 0, height: 0 }, "the panel is hidden; there is nothing to cover");
+});
+
+// ── a run's page keeps its size whether or not anyone can see it ──────────────────────────────────────────────
+const SIZED = { x: 5, y: 6, width: 960, height: 540 };
+const isHiddenAt = (view, rect) => view.visible === false && JSON.stringify(view.bounds) === JSON.stringify(rect);
+
+test("hiding the panel (a dialog, another page, a minimized window) hides views but never shrinks them", () => {
+  const { tabId } = panel.newView("keep1");
+  const view = lastPage();
+  panel.setActiveBounds("keep1", tabId, SIZED);
+  assert.strictEqual(view.visible, true);
+  panel.hideAll();
+  assert.ok(isHiddenAt(view, SIZED), "hidden, same bounds: its page still measures what it did");
+  panel.setActiveBounds("keep1", tabId, SIZED);
+  assert.strictEqual(view.visible, true, "the pane's next real rect shows it again");
+});
+
+test("a zero rect (folded pane, minimized window) hides the view and leaves its size and scale alone", () => {
+  const { tabId } = panel.newView("keep2", { kind: "record", viewport: FIT });
+  const view = lastPage();
+  panel.setActiveBounds("keep2", tabId, { x: 0, y: 0, width: 640, height: 600 });
+  const before = { ...view.bounds }, scale = panel.scaleOf("keep2").scale;
+  panel.setActiveBounds("keep2", tabId, { x: 0, y: 0, width: 0, height: 0 });
+  assert.ok(isHiddenAt(view, before));
+  assert.strictEqual(panel.scaleOf("keep2").scale, scale);
+});
+
+test("a tab another tab's step opens is sized at once from the run's rect, not left at 0x0 for the renderer", () => {
+  const { tabId } = panel.newView("keep3", { viewport: { width: 1280, height: 720 } });
+  panel.setActiveBounds("keep3", tabId, SIZED);
+  panel.newTab("keep3", {});
+  const opened = lastPage();
+  assert.deepStrictEqual(opened.bounds, SIZED);
+  assert.strictEqual(opened.visible, true, "it comes to the front like any new tab");
+  panel.newTab("keep3", { focus: false });
+  const background = lastPage();
+  assert.ok(isHiddenAt(background, SIZED), "a background tab is hidden at the same size");
+  assert.strictEqual(opened.visible, true);
+});
+
+test("a test run's first view is placed from the last pane rect without waiting for a report", () => {
+  panel.setActiveBounds("keep3", last.tabs[0].id, SIZED); // the pane has reported before
+  panel.newView("keep4");
+  assert.deepStrictEqual(lastPage().bounds, SIZED);
+});
+
+test("a tab opened while the pane is hidden is laid out at the right size but stays hidden", () => {
+  const { tabId } = panel.newView("keep5", { viewport: { width: 1280, height: 720 } });
+  panel.setActiveBounds("keep5", tabId, SIZED);
+  panel.hideAll();
+  panel.newTab("keep5", {});
+  assert.ok(isHiddenAt(lastPage(), SIZED), "never shown over a dialog, never 0x0");
+});
+
+test("ensure_geometry lays a run out again when a page is still not at size after the zoom is re-applied", async () => {
+  const { tabId } = panel.newView("keep6", { viewport: { width: 1280, height: 720 } });
+  panel.setActiveBounds("keep6", tabId, SIZED);
+  const view = lastPage();
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // something left the view unsized
+  view.webContents.live = [0, 0, 1];
+  const r = await panel.ensureGeometry("keep6");
+  assert.deepStrictEqual(view.bounds, SIZED, "back at the run's rect");
+  assert.strictEqual(r.tabs, 1);
+});
+
+test("capture stills a tab even while it is hidden, and refuses a run that is not there", async () => {
+  const { tabId } = panel.newView("keep7");
+  panel.setActiveBounds("keep7", tabId, SIZED);
+  panel.hideAll();
+  const wc = lastPage().webContents;
+  const got = await panel.capture("keep7", tabId, { type: "jpeg", quality: 55 });
+  assert.deepStrictEqual(wc.captured.opts, { stayHidden: true, stayAwake: true });
+  assert.strictEqual(Buffer.from(got.data, "base64").toString(), "jpeg55");
+  assert.strictEqual(Buffer.from((await panel.capture("keep7", "gone", { type: "png" })).data, "base64").toString(), "png", "an unknown tab falls back to the shown one");
+  await assert.rejects(() => panel.capture("no-such-run", tabId), /no tab to capture/);
 });

@@ -7,9 +7,11 @@ const Module = require("node:module");
 // host_browser needs Playwright from the host exe; stub it so the repair call can be observed.
 const hostCalls = [];
 let hostReply = () => ({ ok: true });
+let hostCaptureReply = async () => Buffer.from("host-still");
+const hostCaptures = [];
 const realLoad = Module._load;
 Module._load = function (request, ...rest) {
-  if (request === "./host_browser") return { ensureGeometry: async (a) => { hostCalls.push(a); return hostReply(); } };
+  if (request === "./host_browser") return { ensureGeometry: async (a) => { hostCalls.push(a); return hostReply(); }, capture: async (p, o) => { hostCaptures.push(o); return hostCaptureReply(); } };
   return realLoad.call(this, request, ...rest);
 };
 const { RUN_VIEWPORT, MIN_H, MAX_H, runViewport, capture, checkGeometry } = require("../../app/page_geometry");
@@ -130,4 +132,34 @@ test("checkGeometry: right size but input lands at 1/scale is repaired, and fail
   assert.deepStrictEqual(await checkGeometry(page, HOST), { ok: true });
   assert.strictEqual(hostCalls.length, 1);
   hostReply = () => ({ ok: true });
+});
+
+// A host panel's page is only drawn while its view is shown, so the runtime's own CDP screenshot never
+// answers on a hidden tab or a minimized window. The host takes the still then, and nothing waits 30 s.
+test("capture on a host-owned page asks the host for the still when its own screenshot does not answer", async () => {
+  process.env.CONXA_HOST_BROWSER_CDP = "http://127.0.0.1:1";
+  try {
+    hostCaptures.length = 0;
+    const hung = cdpPage({ send: () => new Promise(() => {}) });
+    const t0 = Date.now();
+    const buf = await capture(hung, { type: "jpeg", quality: 70, timeout: 40 });
+    assert.strictEqual(buf.toString(), "host-still");
+    assert.deepStrictEqual(hostCaptures, [{ type: "jpeg", quality: 70 }]);
+    assert.ok(Date.now() - t0 < 1000, "the CDP turn is capped by the caller's timeout, not the 30 s default");
+    hostCaptures.length = 0;
+    assert.strictEqual((await capture(cdpPage())).toString(), "img", "a page that answers never involves the host");
+    assert.strictEqual(hostCaptures.length, 0);
+    hostCaptureReply = async () => { throw new Error("HTTP 500 unknown op"); };
+    assert.strictEqual(await capture(cdpPage({ send: async () => { throw new Error("boom"); } })), null, "an older host: still null, never a throw");
+  } finally {
+    hostCaptureReply = async () => Buffer.from("host-still");
+    delete process.env.CONXA_HOST_BROWSER_CDP;
+  }
+});
+
+test("capture with no host never calls the host", async () => {
+  delete process.env.CONXA_HOST_BROWSER_CDP;
+  hostCaptures.length = 0;
+  assert.strictEqual(await capture(cdpPage({ send: async () => { throw new Error("boom"); } })), null);
+  assert.strictEqual(hostCaptures.length, 0);
 });

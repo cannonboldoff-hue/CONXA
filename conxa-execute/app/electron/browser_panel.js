@@ -478,6 +478,18 @@ async function captureVisible() {
   return `data:image/jpeg;base64,${img.toJPEG(85).toString("base64")}`;
 }
 
+// Control-channel op "capture": a still of a run's tab, as base64 JPEG/PNG. The runtime's own screenshot is a CDP
+// call that only answers while the view is being drawn, so it hangs on a hidden tab, a chat the user left or a
+// minimized window; capturePage with stayHidden/stayAwake answers in all of those (probe, Electron 42).
+async function capture(runId, tabId, { type = "jpeg", quality = 80 } = {}) {
+  const run = _runs.get(runId);
+  const tab = run && (run.tabs.find((t) => t.id === tabId) || run.tabs.find((t) => t.id === run.activeTabId));
+  if (!tab || tab.view.webContents.isDestroyed()) throw new Error(`browser_panel: no tab to capture in run ${runId}`);
+  const img = await tab.view.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+  const buf = type === "png" ? img.toPNG() : img.toJPEG(Math.max(1, Math.min(100, Math.round(Number(quality) || 80))));
+  return { data: buf.toString("base64") };
+}
+
 // The user moved to another chat: park every view that belongs to a different chat at 0x0. The
 // views stay alive (the run keeps going); coming back re-places them via setActiveBounds.
 function setVisibleChat(chatId) {
@@ -492,4 +504,4 @@ function setVisibleChat(chatId) {
   }
 }
 
-module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, loginDone, saveDownload, ensureGeometry, setInputOpen };
+module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, capture, loginDone, saveDownload, ensureGeometry, setInputOpen };

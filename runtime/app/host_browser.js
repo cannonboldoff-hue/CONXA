@@ -123,6 +123,19 @@ async function _seedStorageState(context, page, storageState) {
 // already created — callers must use this instead of context.newPage(), which
 // Electron doesn't support) and `hostOwned: true` so teardownExecBrowser() knows to
 // disconnect rather than close.
+// Which host tab a Playwright page is, so the host can be asked for something about it (a capture).
+const _hostTab = new WeakMap(); // page -> { runId, tabId }
+
+// A still of a host-owned page taken by the host itself (Electron's capturePage), as a Buffer or null.
+// The runtime's own screenshot is a CDP call that only answers while the view is being drawn; the host's
+// answers when the tab is hidden, covered or the window is minimized (page_geometry.capture falls back here).
+async function capture(page, { type, quality } = {}) {
+  const tab = _hostTab.get(page);
+  if (!tab) return null;
+  const r = await _controlPost("capture", { runId: tab.runId, tabId: tab.tabId, type, quality }, 8000);
+  return r && r.data ? Buffer.from(r.data, "base64") : null;
+}
+
 async function acquire({ runId, storageState, label, focus, loginKey, viewport }) {
   const cdp = endpoint();
   if (!cdp) throw new Error("host_browser: CONXA_HOST_BROWSER_CDP not set");
@@ -135,6 +148,7 @@ async function acquire({ runId, storageState, label, focus, loginKey, viewport }
     throw new Error("host_browser: no browser context on connect");
   }
   const page = await _findPageByMarker(context, markerUrl, runId);
+  _hostTab.set(page, { runId, tabId });
   await _seedStorageState(context, page, storageState);
   return { browser, context, page, hostOwned: true, hostTabId: tabId };
 }
@@ -159,7 +173,9 @@ async function _findPageByMarker(context, markerUrl, runId) {
 // tab shares the run's existing context/cookies already).
 async function openTab({ context, runId, label, focus, loginKey }) {
   const { markerUrl, tabId } = await _controlPost("new_tab", { runId, label, focus, loginKey });
-  return { page: await _findPageByMarker(context, markerUrl, runId), tabId };
+  const page = await _findPageByMarker(context, markerUrl, runId);
+  _hostTab.set(page, { runId, tabId });
+  return { page, tabId };
 }
 // The tabId is what a caller needs to close just this one view later (see release below) — a
 // sign-in / probe tab inside a session, as opposed to a `tab_open` step's tab, which lives to run end.
@@ -194,4 +210,4 @@ function release({ runId, tabId }) {
   // idle cleanup (or app restart) reclaims it; never worth failing a run over.
 }
 
-module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, setInputOpen, pageCookies, setPageCookies, saveDownload };
+module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, setInputOpen, capture, pageCookies, setPageCookies, saveDownload };

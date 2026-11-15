@@ -1033,7 +1033,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       }
     } else {
       ctx.tracker.emit("step_fail", { si: i, fc: "fault_page_size" });
-      appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "page_size", source: "geometry" });
+      appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "page_size", source: "geometry", live: Array.isArray(geometry.live) ? geometry.live : null });
       throw stepFailure(step, i, Object.assign(new Error(PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
     }
   }
