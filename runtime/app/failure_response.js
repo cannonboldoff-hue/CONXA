@@ -515,6 +515,8 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       left_open_surface: err.leftOpenSurface || null,
       input_refs: inputsReferenced(err.failedStep, deps.inputs),
       signal_counts: Array.isArray(err.signalCounts) ? err.signalCounts : null,
+      // Names (never scores) of the elements an "ambiguous" failure could not choose between.
+      ambiguous_candidates: Array.isArray(err.ambiguousCandidates) ? err.ambiguousCandidates : null,
     };
     fs.writeFileSync(path.join(dir, "evidence.json"), JSON.stringify(evidence));
   } catch (_) {

@@ -6,6 +6,7 @@ import { useNativeViewRegion } from '@/components/shell/useNativeViewRegion'
 import { Button } from '@/components/ui/button'
 import { activeTab, useBrowserStore, type FlowControls, type PanelDownload, type PanelRun, type PanelTab } from '@/store/browserStore'
 import { cn } from '@/lib/utils'
+import { NEEDS_ACTION_HINT } from '@/lib/errorMessages'
 
 type Phase = 'test' | 'ready' | 'signin' | 'recording' | 'paused'
 
@@ -26,7 +27,7 @@ function WidePrimary({ flow }: { flow: FlowControls }) {
     return <Button variant="brand" size="sm" className={cls} disabled={busy} onClick={() => run(() => flowSignInDone(flow.workflowId, flow.cardId))}>I’m signed in</Button>
   }
   return (
-    <Button variant="brand" size="sm" className={cls} disabled={busy || !flow.count} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>
+    <Button variant="brand" size="sm" className={cls} disabled={busy || !flow.count} title={!flow.count ? NEEDS_ACTION_HINT : undefined} onClick={() => run(() => flowFinishRecording(flow.workflowId, flow.cardId))}>
       Finish and save
     </Button>
   )

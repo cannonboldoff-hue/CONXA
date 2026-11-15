@@ -54,7 +54,15 @@ def _after_failed_prefix(text: str) -> str:
     return m.group(1).strip()[:300] if m else ""
 
 
-def summarize(message: str, failure_kind: str | None = None) -> str:
+def _which_ones(candidates: list[str] | None) -> str:
+    """The names a tie was between, so the person knows what to look at. Chat cannot re-point a step: Human Edit does."""
+    names = [n.strip() for n in (candidates or []) if n and n.strip()][:3]
+    if len(names) < 2:
+        return ""
+    return " It matched " + ", ".join(f"“{n}”" for n in names) + ". Open this step in Human Edit to pick the right one."
+
+
+def summarize(message: str, failure_kind: str | None = None, candidates: list[str] | None = None) -> str:
     """One plain sentence. Never returns the raw text; unmatched errors get a generic line."""
     text = message or ""
     if failure_kind in _KIND_FIRST:
@@ -68,6 +76,8 @@ def summarize(message: str, failure_kind: str | None = None) -> str:
                 break
         else:
             sentence = _BY_KIND.get(failure_kind or "", _GENERIC)
+    if failure_kind == "ambiguous" or re.search(r"Ambiguous element resolution", text, re.I):
+        sentence += _which_ones(candidates)
     if _SMALL_WINDOW.search(text):
         sentence += " The test window is smaller than when you recorded, so some buttons may be hidden."
     return sentence

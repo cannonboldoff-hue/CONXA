@@ -16,6 +16,7 @@ import { selectSession, useRecordingStore } from '@/store/recordingStore'
 import { useBrowserStore, type FlowControls } from '@/store/browserStore'
 import { stepTypeColor, type StatusKind } from '@/lib/status'
 import { cn } from '@/lib/utils'
+import { NEEDS_ACTION_HINT } from '@/lib/errorMessages'
 
 const workflowIdOf = (threadId: string) => threadId.replace(/^wf:/, '')
 
@@ -168,7 +169,7 @@ export function RecordingCard({ threadId, item }: CardProps) {
       footer={
         live ? (
           <>
-            <Button variant="brand" size="sm" data-tour="finish-recording" disabled={busy || count === 0} onClick={() => run(() => flowFinishRecording(wf, cardId))}>
+            <Button variant="brand" size="sm" data-tour="finish-recording" disabled={busy || count === 0} title={count === 0 ? NEEDS_ACTION_HINT : undefined} onClick={() => run(() => flowFinishRecording(wf, cardId))}>
               Finish and save
             </Button>
             {state === 'recording' && (

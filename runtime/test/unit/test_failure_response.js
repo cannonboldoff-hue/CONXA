@@ -168,6 +168,7 @@ test("evidence.json names the failure kind, the inputs the step read, and per-si
     {
       message: "Ambiguous element resolution", failedAt: 1, failedStep: step, ambiguous: true,
       signalCounts: [{ selector: "role=link[name=\"{{gitignore_file}}\"]", matches: 3 }],
+      ambiguousCandidates: [{ role: "link", name: "Apple Juice" }, { role: "link", name: "Pineapple Juice" }],
     },
     entry("studio-evidence-inputs"), null, null,
     { ...BASE_DEPS, maxRecoveryTier: 2, dataDir, runId: "run_inputs1", runStartTs: new Date(0).toISOString(),
@@ -178,6 +179,7 @@ test("evidence.json names the failure kind, the inputs the step read, and per-si
   assert.deepStrictEqual(evidence.input_refs, [{ id: "gitignore_file", empty: false }]);
   assert.ok(!JSON.stringify(evidence).includes("\"gitignore\""), "input values never reach the evidence file");
   assert.strictEqual(evidence.signal_counts[0].matches, 3);
+  assert.deepStrictEqual(evidence.ambiguous_candidates.map(x => x.name), ["Apple Juice", "Pineapple Juice"]);
 });
 
 test("failureKind: one class per find-failure flag, 'other' otherwise", () => {

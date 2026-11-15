@@ -17,6 +17,9 @@
  * editing, wait_for_one_of options) have no editor yet, so the raw code reaching a toast isn't
  * reachable in practice today. Add a mapping if/when that gap is closed.
  */
+// Why "Finish and save" is greyed out before anything was recorded.
+export const NEEDS_ACTION_HINT = 'Click or type something on the page first. A workflow needs at least one action.'
+
 export const errorMessages: Record<string, string> = {
   // Cloud / connectivity
   cloud_unreachable:
