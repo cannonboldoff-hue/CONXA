@@ -161,9 +161,12 @@ def app_words(ev: dict[str, Any]) -> dict[str, list[str]]:
     for words in _final_words(ev):
         success += [w for w in words if _usable_word(w) and w not in mine]
     failure: list[str] = []
-    for item in ctx.get("items") or []:
-        if item.get("kind") in {"alert", "invalid"}:
-            failure += [w for w in (item.get("words") or []) if _usable_word(w) and w not in mine]
+    # A step that showed the work finishing teaches no failure words: a loud announcement beside a success ("Maximized"
+    # on Google Drive's upload tray) is the app's chrome, not its wording for failure.
+    if not success:
+        for item in ctx.get("items") or []:
+            if item.get("kind") in {"alert", "invalid"}:
+                failure += [w for w in (item.get("words") or []) if _usable_word(w) and w not in mine]
     groups = {"progress": progress, "success": success, "failure": failure}
     clash = {w for g in groups.values() for w in g if sum(w in other for other in groups.values()) > 1}
     return {k: sorted({w for w in v if w not in clash})[:12] for k, v in groups.items() if any(w not in clash for w in v)}

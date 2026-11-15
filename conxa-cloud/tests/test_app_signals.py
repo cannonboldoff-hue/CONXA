@@ -26,7 +26,23 @@ def test_a_german_upload_teaches_the_apps_own_words_and_drops_the_short_and_the_
     words = app_words(_german_upload_event())
     assert words["progress"] == ["datei", "hochgeladen"], "'wird' is too short to say anything"
     assert words["success"] == ["abgeschlossen", "upload"]
-    assert words["failure"] == ["fehlgeschlagen", "speicher"]
+    assert "failure" not in words, "a step that finished teaches no failure words"
+
+
+def test_a_step_that_did_not_finish_teaches_the_apps_failure_words():
+    ev = _german_upload_event()
+    ev["post_watch"]["final_status"] = []
+    assert app_words(ev)["failure"] == ["fehlgeschlagen", "speicher"]
+
+
+def test_a_loud_announcement_beside_a_finished_upload_is_not_a_failure_word():
+    """Google Drive announces "Maximized" (assertive) when its upload tray opens."""
+    ev = {
+        "action": {"action": "upload_intent"},
+        "post_watch": {"progress_seen": True, "progress_words": ["uploading"], "final_status": [{"kind": "status", "words": ["upload", "complete"]}]},
+        "surface_context": {"items": [{"kind": "alert", "words": ["maximized"]}]},
+    }
+    assert "failure" not in app_words(ev)
 
 
 def test_a_word_used_for_both_progress_and_success_says_nothing_and_is_dropped():
