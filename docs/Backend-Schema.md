@@ -212,7 +212,9 @@ class GroupApp(BaseModel):
                                 # conxa_compile.auth_learning's module docstring for the shape:
                                 # {version, probe_url, signed_out: {final_path, markers,
                                 # password_box}, signed_in: {final_path, endpoints}, session_keys,
-                                # journey_hosts}. Never a cookie value, a response body, or a query
+                                # journey_hosts}, plus signed_in.doc_ok / signed_out.doc_denied (the
+                                # page's own HTTP status) only when the two sides differ in class.
+                                # Never a cookie value, a response body, or a query
                                 # string/fragment — cookie *names* and method+path+status shapes only.
 
 class WorkflowGroup(BaseModel):
@@ -396,7 +398,7 @@ is tagged in code and below as one of:
 | `SkillStep` | `action`, `intent`, `url`, `value`, `input_binding`, `validation`, `recovery`, `confidence_protocol`, `decision_policy`, `semantic_description`, `phase`, `optional_hint`, `consequence` | `frame`, `tab`, `target`, `identity_bundle`\*, `handler_hints`, `signals`, `state`, `compiled_selectors`, `snapshot_ref`, `snapshot_dom_hash` |
 | `SkillStep.branch` | — (mixed today; see below) | — |
 | `SkillStep.entity_binding` | — (mixed today; see `EntityBinding` row) | — |
-| `SkillStep.for_each` (EXEC-38) | `as`, `max_iterations`, `on_row_error` | `rows.container_selector` XOR `items` |
+| `SkillStep.for_each` (EXEC-38) | `as`, `max_iterations`, `on_row_error` | `rows.container_selector` XOR `items` XOR `items_rows` (+ `columns`, EXEC-60) |
 | `WorkflowIntentGraph` / `WorkflowIntentStep` | all | — |
 | `SkillPackage` | `meta`, `inputs`, `policies`, `llm`, `intent_graph`, `compile_report` | — |
 
@@ -441,7 +443,10 @@ Each entry in `inputs` is validated against `SkillInputVariable` (`conxa-builder
 class SkillInputVariable(BaseModel):
     id: str                    # letter-led, alnum + underscore — must match {{id}} grammar
     label: str = ""
-    type: Literal["text", "select", "date", "multiselect"] = "text"
+    type: Literal["text", "select", "date", "multiselect", "rows"] = "text"
+                               # "rows" (EXEC-60) is a table for a `for_each` loop: `columns` (1-12 unique
+                               # names) is required for it and refused for every other type. Packaged as
+                               # a JSON-Schema array of objects (`columns` kept alongside `items`).
                                # "date" (2026-08-30) is editor-level sugar over a plain string —
                                # the packaged input row's own `type` stays JSON-Schema "string"
                                # (every MCP client's expectation), with `format: "date"`/
@@ -1032,7 +1037,7 @@ path every top-level step gets) and its sibling **PROD-3-DRYRUN** section (§10.
 required dry-run/cap/entity-binding safety mechanisms it depends on.
 
 ```python
-for_each: dict   # {rows: {container_selector}} XOR {items}, plus as, max_iterations, on_row_error, steps
+for_each: dict   # {rows: {container_selector}} XOR {items} XOR {items_rows + columns}, plus as, max_iterations, on_row_error, steps
 ```
 
 - **`rows.container_selector`** `str` — `[executor]`, a plain CSS selector matching every
@@ -1601,6 +1606,7 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 | `step_fail` | Step failed | `si`, `code` (error code) |
 | `recovery_tier{N}` | Recovery rung N attempted (legacy numbers; 1–2 = A, 3–4 = B) | `si` |
 | `tier_ok` | A resolution/recovery tier succeeded | `si`, `tier`, `sel` |
+| `step_ms` | A step finished (any outcome); how long it took in total | `si`, `ms` |
 | `verify_fail` | Post-action VERIFY failed | `si`, `ch` (assertion channel) |
 | `verify_result` | Full post-action assertion audit for a step that carries assertions, pass or fail, on every path that verifies (primary, settle re-verify, recovery, after a popup) | `si`, `ok` (overall pass/fail), `n` (assertion count), `advFail` (count of failed advisory/non-required assertions), `ct` (checks that passed only because they could not look: `cant_tell`) |
 | `fresh_look` | A read-only re-open of the page in a separate tab to see whether an uploaded file's name is there (Proof of Done) | `si`, `a` (`yes` / `no` / `cant_tell`) |

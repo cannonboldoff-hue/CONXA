@@ -7,18 +7,18 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | Area | Done | Items |
 |---|---|---|
 | BUILD — Build Studio | 43 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
-| EXEC — Execution & Recovery | 28 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47 |
-| CLOUD — Cloud | 10 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25 |
+| EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
+| CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 8 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13 |
-| PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
+| PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
-| TEST — Testing & Cleanup | 2 | TEST-6, 15 |
+| TEST — Testing & Cleanup | 3 | TEST-6, 14, 15 |
 | REC — Recorder | 1 | REC-STALE-1 |
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **108** | |
+| **Total** | **112** | |
 
 ---
 
@@ -775,7 +775,7 @@ inferred from `outer_html`, not read directly.
 - **Resolution:** Found from a "GitHub to Drive Handoff" recording that kept 9 of ~12 steps (sessions `59dea81a`, `b6ac8844`, `67178545`): `bridge.js` chained every click's report behind one promise that also held the Proof-of-Done progress watch (up to 15 s), and Stop never asked the page to release what it held. Now `finalizeStateAfterSettle` reports the step at once (`uid`/`bridge`/`seq`) and sends state change / post condition / the app's words as `{_amend}` after the settle; the progress watch runs concurrently and arrives as a second amendment, starting only when progress is new since the act. `RecordingSession._apply_amend_sync` merges by `extras.uid` (before the pause and login drops). Stop calls `window.__skillFlush()` in every frame (open watches cut, `post_watch.cut_by_stop`) and drains until every `seq` has arrived (`_STOP_BARRIER_MAX_S` 10 s); `cmd_stop_recording` now snapshots events after the stop. `capture_gaps` (lost step numbers, failed saves; clicks on non-controls diagnostics-only) go to `recorder_diag.json`, and the Studio adds a plain sentence to "Got it" when steps were lost. Tests: 5 new bridge tests, 9 new session tests, 3 handler tests; docs in `TRD.md` and `Backend-Schema.md`.
 - **Not done / open:** not yet re-recorded in the running Studio against Drive (the real-run check in the plan). A frame destroyed before Stop can still lose its very last step without a trace, because a hole in step numbers cannot show a missing final one. The plan's "trusted click matched no control counts as a gap" was narrowed to diagnostics only, since clicks on plain text are normal.
 
-## EXEC — Execution & Recovery (28 done)
+## EXEC — Execution & Recovery (29 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -1159,7 +1159,15 @@ inferred from `outer_html`, not read directly.
 
 ---
 
-## CLOUD — Cloud (10 done)
+### EXEC-60 — A loop cannot carry several values per row (`{{row.to}}`)
+**Resolved:** 2026-11-15
+- **Resolution:** a `for_each` can now read a table. A table input (editor type `rows`, with columns) feeds `items_rows` + `columns`; the body reads `{{row.to}}` (grammar widened by one optional `.column`, shared fixture `runtime/test/fixtures/placeholder_cases.json`). Runtime: `resolution.js::readTableRows`, `run.js::runForEachStep`. Fails closed on an older engine: the loop is packaged as its own step type `for_each_rows` and the pack requires the `loop_rows` capability. Consumers updated: Human Edit input drawer, Studio test card (one row per line, `a | b`), Conxa Execute (table editor), schedules (JSON passes through), `get_skill_inputs` / tool schema (array of objects). Also fixed: an address whose placeholder is well-formed but empty is now refused (`handlers.js::navigate`); the earlier note said this already held.
+- **Category:** Execution & Recovery
+- **Open follow-up:** chat cannot create or edit a table loop: EXEC-63.
+
+---
+
+## CLOUD — Cloud (11 done)
 
 ### CLOUD-6 — Settings UI: BYOK panel, machine device list, billing add-on control, trial banner
 **Resolved:** 2026-08-22
@@ -1293,6 +1301,12 @@ inferred from `outer_html`, not read directly.
 - **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
 - **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
 
+### CLOUD-27 — The publish reply's tracking address pointed at production in a dev setup
+**Resolved:** 2026-11-15
+- **Resolution:** cause was `conxa-cloud/backend/.env` setting `SKILL_API_BASE_URL=https://apis.conxa.in`, which the cloud uses to build the address in its reply. Studio now keeps the reply's path and puts it on the cloud it published to (`backend.py::_rebase_to_cloud`), so the address written into the installer matches the sync address.
+- **Category:** Cloud
+---
+
 ## RT — Runtime (8 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
@@ -1405,7 +1419,7 @@ Updater.md` §1.3.
 - **What fixed it:** `run.js` (guard in `executeOneStep`, `state.loopDepth` so it fails closed inside a loop), `server.js` (park + `_meta["conxa/guard"]`, a release-resume that adopts the guard's park and refuses an expired one, step info on `test_phase` log lines), `tool_defs.js`, and a `capabilities: ["test_guard"]` entry written by `build-runtime-app.yml`, `scripts/build-app-local.ps1` and the dev `version.json`. Inert without the argument; never touches `recovery_stage.js` / `retry_budget.js`; app layer only, `MIN_HOST` unchanged. **Needs a new `app-vX.Y.Z` tag to ship.**
 - **Verified:** new `runtime/test/unit/test_guard.js` (7 tests) and the whole runtime unit suite (868 pass). While running it, found the runtime was unloadable at HEAD: commit `ac367ed` had deleted two lines from `runtime/app/date_picker.js` (the `FORMAT_TOKEN_RE` constant and the `formatForDisplay` header), a syntax error that broke every runtime test and the app layer; restored exactly those two lines from `ee83fec`. **Not exercised:** the gate replay (`gate_replay.js`) needs the built host exe.
 
-## PROD — Product (3 done)
+## PROD — Product (4 done)
 
 ### PROD-3 — Safe-action system (Strict Mode, entity binding, dry-run, compensation flows)
 **Resolved:** 2026-08-29
@@ -1480,6 +1494,12 @@ Updater.md` §1.3.
 
 ---
 
+### PROD-11 (run follow-ups) — Open product questions from the 2026-11-15 test run
+**Resolved:** 2026-11-15
+- **Resolution:** (a) The installer domain stays settable on every plan; the code comments now say paid plans name the installer from it and Free ignores it. (b) "Buy now", "buy it now" and "complete purchase" join `submit_text_tokens`, and `buy_now`, `buy_it_now`, `complete_purchase`, `place_order`, `pay_now` join `commit_intent_substrings`, so those clicks are irreversible; "Purchase history" and "Display options" are not. (c) A recording with no actions is still refused; the greyed-out Finish button now explains why. (d) A tied element match carries the names it was between into the failure evidence (`ambiguous_candidates`), and the failed-test sentence names them and sends the person to Human Edit.
+- **Category:** Product
+---
+
 ## ARCH — Architecture (3 done)
 
 ### ARCH-1 — `/api/tracking/{company}/events` reframed as a permanent alias
@@ -1529,12 +1549,17 @@ Updater.md` §1.3.
 
 ---
 
-## TEST — Testing & Cleanup (2 done)
+## TEST — Testing & Cleanup (3 done)
 
 ### TEST-6 — Remove dead `refreshSession()` from `runtime/auth_manager.js`
 **Resolved:** 2026-08-17
 - **Resolution:** Removed as part of BUILD-15's authentication-is-pre-flight-only redesign — `refreshSession` would have directly violated that model (a blocking mid-run re-login) had anything ever called it. Deleted the function, its attempt-counter state, and its now-dead `AUTH_FAILURE_URL_RE` copy from `auth_manager.js`; removed its two dedicated tests from `runtime/test/test_auth_recovery.js` (the file's other, unrelated tests — `isAuthFailure`, `_reachedProtectedUrl`, session-encryption fallback — are untouched and still pass). `run.js`'s and `browser.js`'s own (semantically different, deliberately-not-merged) auth regexes now cross-reference each other in comments so a future reader doesn't mistake them for accidental duplication.
 
+---
+
+### TEST-14 — Runbook corrections after the 2026-11-15 dev test run
+**Resolved:** 2026-11-15
+- **Resolution:** `conxa-cloud/scripts/recompile_session.py` now installs the metered cloud connection the way Studio does (needs `CONXA_TOKEN`, optional `CONXA_CLOUD_API`) and stops with a plain message when the token is missing. The "failures get cheaper" claim (WF-7 R5) is removed from the runbooks and marked not reproduced in `02-WORKFLOWS-PASSED.md` (every failure took 21.3 s). The runbook now says a skill with no target host takes no host lock. That last behaviour is filed as RT-15.
 ---
 
 ### TEST-15 — Two long-standing failing tests (BUILD-73 / TEST-13): router backoff and the test-inputs card

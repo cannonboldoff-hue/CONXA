@@ -2,6 +2,34 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A repeat can now carry a whole table of values — 2026-11-15**
+A workflow that repeats once per item could only carry one value per item, such as a file name. It could not carry a recipient and a subject together. You can now give it a small table, one row per repeat, and each row's values are used in that repeat. If a row has a blank value, nothing runs at all. Older copies of the app refuse such a workflow instead of quietly doing the wrong thing.
+— 2026-11-15
+
+**Sign-in checks and form labels read more of the page — 2026-11-15**
+Some sites answer a visitor with an error page at the very address Build Studio used to check sign-in, so it learned nothing. It now also looks at how the page itself answers, and tries the page you land on after signing in. Separately, a form box whose label shows up a moment late, or sits after the box, now gets that label recorded.
+— 2026-11-15
+
+**Buy and pay buttons are treated as the point of no return — 2026-11-15**
+A button called "Buy now" or "Complete purchase" was handled like any ordinary click, so a test or a repeat run could press it without asking first. These buttons now count as steps that cannot be undone, the same as "Place order" already did. Ordinary buttons such as "Purchase history" are not affected.
+— 2026-11-15
+
+**When two things on a page look the same, the test now says which — 2026-11-15**
+If a test could not tell which of several matching buttons to use, it only said so in general terms. It now names the ones it was choosing between, for example "Apple Juice" and "Pineapple Juice", and points you to the step editor to pick the right one. The "Finish and save" button on an empty recording also now explains why it is greyed out.
+— 2026-11-15
+
+**A web address with a blank value is no longer opened — 2026-11-15**
+A step that opens an address built from something you fill in, such as a recipient, would open the page anyway if you left that value blank. It now stops before opening anything and names the missing value.
+— 2026-11-15
+
+**Test installers no longer carry the live website's tracking address — 2026-11-15**
+When you published from a test setup, the installer could still point its usage reporting at the live service instead of your test one. Build Studio now uses the service you actually published to, so a test installer reports to the test service.
+— 2026-11-15
+
+**Testing guides corrected — 2026-11-15**
+The testing guides said a failing workflow gets cheaper to repeat. The latest run measured the same time every time, so the claim is removed. The helper that recompiles a recording now explains what it needs to connect, instead of stopping with a vague message.
+— 2026-11-15
+
 **A first hands-off test run of the Build Studio, and what it found — 2026-11-15**
 Instead of a person clicking through the app, a script drove the Build Studio and its recording browser to record, build and test three small workflows. It showed the whole trip works, but found that a second new workflow in the same group can't be tested the first time (the test says it can't find the workflow). A full written report is in the testing folder.
 — 2026-11-15
