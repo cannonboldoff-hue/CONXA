@@ -185,7 +185,7 @@ flowchart TD
     H --> I[Backend: cmd_finish_group_app_auth]
     I --> J["learn_auth observes LIVE / OUT / RELOAD, then self-tests the result"]
     J --> K{Self-test passed?}
-    K -->|No| L["Window stays open — 'not confirmed yet, keep signing in' (or Save anyway)"]
+    K -->|No| L["Window stays open — 'not confirmed yet, keep signing in' (or Save anyway: your word counts until a check finds you signed out)"]
     L --> H
     K -->|Yes| M[storageState + auth_definition saved to data/groups/group_id/auth/app_id.json]
     M --> N[Every workflow in the group flips to status=ready once all its apps are authenticated]

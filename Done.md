@@ -13,12 +13,12 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | PROD — Product | 3 | PROD-3, 3-DRYRUN, 5 |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
-| TEST — Testing & Cleanup | 1 | TEST-6 |
+| TEST — Testing & Cleanup | 2 | TEST-6, 15 |
 | REC — Recorder | 1 | REC-STALE-1 |
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
-| COMPILE — Compiler Correctness | 1 | COMPILE-3 |
-| **Total** | **106** | |
+| COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
+| **Total** | **108** | |
 
 ---
 
@@ -1529,13 +1529,17 @@ Updater.md` §1.3.
 
 ---
 
-## TEST — Testing & Cleanup (1 done)
+## TEST — Testing & Cleanup (2 done)
 
 ### TEST-6 — Remove dead `refreshSession()` from `runtime/auth_manager.js`
 **Resolved:** 2026-08-17
 - **Resolution:** Removed as part of BUILD-15's authentication-is-pre-flight-only redesign — `refreshSession` would have directly violated that model (a blocking mid-run re-login) had anything ever called it. Deleted the function, its attempt-counter state, and its now-dead `AUTH_FAILURE_URL_RE` copy from `auth_manager.js`; removed its two dedicated tests from `runtime/test/test_auth_recovery.js` (the file's other, unrelated tests — `isAuthFailure`, `_reachedProtectedUrl`, session-encryption fallback — are untouched and still pass). `run.js`'s and `browser.js`'s own (semantically different, deliberately-not-merged) auth regexes now cross-reference each other in comments so a future reader doesn't mistake them for accidental duplication.
 
 ---
+
+### TEST-15 — Two long-standing failing tests (BUILD-73 / TEST-13): router backoff and the test-inputs card
+**Resolved:** 2026-11-15
+`test_llm_router_backoff::test_waits_for_soonest_cooldown_then_succeeds`: the router slept once and re-picked once; a Windows sleep can wake one 15.6 ms clock tick early, so every entry still read as cooled and the request gave up. It now keeps waiting out the remainder inside the same wait budget. `test_test_flow::test_prepare_prefills_recorded_values_and_names_what_cant_be_undone` asserted that asking for the inputs card again reuses the open card; since 2026-11-02 (`fd600d9`) it deliberately replaces it so "Test it" visibly does something, so the test now asserts that.
 
 ## REC — Recorder (1 done)
 
@@ -1716,7 +1720,7 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Description:** `conxa-builder/python/handlers/protocol.py::_stage_runtime_auth` writes `{company}_groups.json` beside the staged sessions; `runtime/` never reads it (`browser.js::_resolveGroup` reads `pack.json`'s `groups`). Either dead, or the sandbox stages a `pack.json` that makes it redundant. Also `target_hosts.js` reads `manifest.login_url` / `entry_url`, which the builder never writes.
 - **Complexity:** S.
 
-## COMPILE — Compiler Correctness (1 done)
+## COMPILE — Compiler Correctness (2 done)
 
 ### COMPILE-3 — `url_changed` means opposite things in the compiler and the runtime
 **Resolved:** 2026-09-30
@@ -1724,3 +1728,9 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Category:** Compiler / Runtime Correctness
 - **Description:** Found while fixing redirect recording (2026-09-30). `compiler/build.py::_build_assertions` emits `url_changed` with `target = <the URL before the action>` and the comment "assert it differs", but `runtime/app/assertions.js` checked `page.url() === target || page.url().startsWith(target)`. Separately, `state_validation.py::capture_state_snapshot` ignored `before=`, so `state_diff.url_changed` was always False.
 - **Complexity:** S-M.
+
+### COMPILE-4 — Fifty identical clicks compiled to one step
+**Resolved:** 2026-11-15
+- **Resolution:** the recorder emits one event per physical click, so identical consecutive clicks are repeated on purpose. `step_anchors.py::clean_steps` now keeps three or more as a count on the first one (`extras.repeat_count`, then `HandlerHints.repeat_count`), the package builder emits them as the runtime-only step type `repeat_click` with a `count` (a new type, not a new field, so an older runtime refuses it instead of clicking once), and the runtime clicks that many times (capped at 200, each through the click-received check, one failed click stops the run). The step name says "(50 times)" and the clicks are no longer reported as "left out". Exactly two identical clicks still fold to one (a double-click arrives as two clicks and a dblclick). Verified on the real 50-click recording: 50 events -> 1 step, count 50, nothing left out.
+- **Category:** Compiler Correctness
+- **Open follow-up:** no question asks "always 50, or a number you choose?"; the count is fixed at what was recorded (edit it in Human Edit is not wired).

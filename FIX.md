@@ -2,50 +2,6 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**A test no longer breaks when you minimize the app or open something over it — 2026-11-14**
-The test window is only drawn while you can see it. When Studio was minimized, covered or had a dialog open, a test could end with "the test browser is not showing the page at its normal size", and a failed test could hang for half a minute before showing its picture. Now the test page keeps its size and its place whether or not it is on screen, a new tab is given its size straight away, and Conxa takes the failure picture through the app itself instead of waiting for a window that is not drawing.
-— 2026-11-14
-
-**The workflow summary now shows how each step is checked — 2026-11-14**
-Before, the summary listed only the actions, so you could not see how Conxa would know each one worked. Now every step has small "Check that…" lines under it, numbered like 4a and 4b. Anyone can read the checks without opening the editor, and the total count appears at the bottom.
-— 2026-11-14
-
-**A Google Drive upload no longer fails on a harmless "Maximized" notice — 2026-11-14**
-A test run stopped at the Drive upload step saying the app reported "Maximized", even though that is only a notice Drive reads out when its upload panel opens. Conxa had wrongly learned that word as an error word while watching the recording. It now learns error words only from steps that did not finish successfully. Rebuild the workflow once so the old wrong word is dropped.
-— 2026-11-14
-
-**A test that really worked no longer ends as "needs a decision" or "still working" — 2026-11-14**
-A test uploaded a file to Google Drive successfully every time, but Conxa ended two runs asking you to decide about a popup that was only the little preview card Drive shows when the mouse rests on a file, and parked the third run forever because a finished upload's progress bar never left the screen. Conxa now looks again after moving the pointer away before it stops on a popup, stops waiting for a progress bar that has not moved, and no longer counts a word that was already on the page as proof that a step worked. The test browser also keeps your mouse and keys off the page while a test runs, so a hover can't spoil it.
-This means a working workflow is no longer reported as stuck, and a step is only called done when something actually changed because of it.
-— 2026-11-14
-
-**The browser now lets go for the person's turn, and keeps your hands off the rest of the time — 2026-11-14**
-While a workflow runs in the app's browser, a stray click or a mouse resting on the page can change what the page shows and throw the run off. The test browser already ignored your clicks; now the Run window in Conxa Execute does too. When a step is meant for you, like entering a code or solving a check, the browser now opens up so you can click, then closes again once you press Done.
-This means a run can't be spoiled by an accidental click, and you are never locked out of a step that needs you.
-— 2026-11-14
-
-**The helper that suggests what proves a step worked now talks to the right address — 2026-11-14**
-Studio can ask an outside helper which kinds of proof fit each step. We had guessed the wrong address and the wrong way of asking, so it could never have answered. It now uses the address and format the provider documents, and it reuses the same key as the other models.
-This means the next workflow you record can actually get those suggestions.
-— 2026-11-14
-
-**The earlier fixes now work for any website, not just the one that showed the problems — 2026-11-14**
-Some of the first fixes only treated what we saw on one recording. They now follow general rules. When an app shows an upload or a save, Studio only trusts the "finished" message that appears in the same place as the progress, so a window notice or a tooltip can't pass for proof. It no longer builds a check out of words you just clicked or typed, since those are only true for your recording. The upload step is found by what it is (a file chooser), not by where it sits on the page. Only things you actually typed or picked are asked about as "typed". A workflow's sign-in status now follows your current sign-ins instead of a stale copy, and the recording message counts what you did, not what the page did by itself.
-— 2026-11-14
-
-**A broken build step is now shown, and a test that can't prove the upload no longer says "passed" — 2026-11-14**
-When a recording was built, one helper step could crash without telling anyone. That left some steps with no description, refused your answer to "How can we tell it worked?", and still ended with a plain "passed". Now a crashed build step shows a clear "Part of the build failed" message with a Build again button, and the reason is one click away. The test card says "Couldn't confirm it finished" when nothing proved the work was done, and Approve only opens after you press "I checked — it worked".
-Studio also no longer mixes up menu entries (it called "File upload" by the name of the entry above it), no longer treats on-screen clutter like "maximized" as proof an upload worked, no longer asks about "things you typed" that were really page changes, and drops old checks that only fit the file you recorded with.
-— 2026-11-14
-
-**Studio can now add smarter proof that a step really worked — 2026-11-14**
-After a step that sends, saves or downloads something, Studio has to know the work really happened, not just that a button was pressed. Until now fixed rules chose how to check that. Studio can now ask a small, fast decision helper which kinds of proof fit each step, and it can add four new kinds: the page moved on and stayed there, what you entered shows up again on the page, what you entered is still there when the page is opened again, and a later step that needs the result worked. Each new check is only added when your recording really contains what it needs, none of them can stop a run on its own, and if the helper is off or unreachable everything works as before. These have been tested in isolation but not yet on a real website.
-— 2026-11-14
-
-**The test browser now fills three quarters of the window with nothing beside it — 2026-11-14**
-While the test browser was open, a thin strip of two small icons sat on its right edge and took space from the browser. That strip is now hidden while the browser is open, and the browser always takes 75% of the window. The strip comes back as soon as you close or hide the browser.
-— 2026-11-14
-
 **A first hands-off test run of the Build Studio, and what it found — 2026-11-15**
 Instead of a person clicking through the app, a script drove the Build Studio and its recording browser to record, build and test three small workflows. It showed the whole trip works, but found that a second new workflow in the same group can't be tested the first time (the test says it can't find the workflow). A full written report is in the testing folder.
 — 2026-11-15
@@ -216,4 +172,40 @@ A mail workflow was built that opens a pre-filled message from a link carrying t
 
 **Building a "do this for every row" loop by hand, and a safety that depends on step names — 2026-11-15**
 A repeat-for-each-row step was added to the mail workflow and it built, but the list of rows could not be supplied, so the values in the message link stayed as raw placeholders and nothing was sent. A hand-added click step had no name, and the "test without sending" mode decides what to hold back from the step's name, so that click was not held back.
+— 2026-11-15
+
+**A workflow that runs many times in a row no longer freezes — 2026-11-15**
+After about thirty runs in a row, the program that runs workflows could stop dead and never finish, and not even its own time limit could stop it. It was filling an output channel that nobody was reading, and on Windows that blocks the whole program. Conxa now writes that copy of its log in the background and drops lines when nobody is listening, so a run can never get stuck on it. A 40-run test that used to freeze every time now finishes.
+— 2026-11-15
+
+**A failed test now names the step that really failed — 2026-11-15**
+When a test failed, the card sometimes blamed the step before the one that broke, and a "couldn't confirm" message could show an internal step name. The card now takes the failing step from what the test itself reports, and every step carries a plain description for messages like this.
+— 2026-11-15
+
+**Steps that pick a row from a list are checked more carefully — 2026-11-15**
+Conxa used to tie almost every click to "its row" using any text in that row, even a price shared by two products or the button's own label, so a perfectly good step could refuse to run. Now a row is used only where it is needed, it is named by something that appears in that row alone, and a step that can't be undone asks you "is this the row you mean?" in the chat instead of showing an internal error and leaving you stuck.
+— 2026-11-15
+
+**A click that never reached its button no longer counts as done — 2026-11-15**
+A click could be sent, land on a banner in front of the button or on nothing, and the test still said it finished. A banner that covers a button and cannot be closed used to end the test as "Done, please check" without any click happening; it now fails with "Another element was covering the target", and a banner Conxa knows how to close is closed and the click lands. Conxa also asks the page where the click went; if it did not reach the button, the step fails in plain words and the pop-up helper gets its chance. A drag that had nothing to pick up also fails loudly instead of doing nothing, and an address that still contains an empty placeholder is refused instead of being opened.
+— 2026-11-15
+
+**Menu items that only appear when hovered are now found — 2026-11-15**
+Some menus show their items only while the mouse rests on the menu, and recordings don't keep that hover unless it was switched on. When a button never shows up, Conxa now moves the pointer over the parts around it, the way a person would, and tries again. If it still does not show up, the step fails as before.
+— 2026-11-15
+
+**Sign-in on sites Conxa can't check no longer sends you around in circles — 2026-11-15**
+On sites where the logged-in and logged-out pages look the same, "Save anyway" kept saying the sign-in was unconfirmed and Studio asked you to sign in again forever. Now your "I'm signed in" counts, for recording and for test runs, and it is withdrawn only if Conxa finds clear proof that you are signed out. The chat message also no longer calls an unconfirmed sign-in "expired".
+— 2026-11-15
+
+**Steadier steps for link tabs, mail pages and typed addresses — 2026-11-15**
+Conxa now picks something that is truly unique on the page for each link (a tab's own address or marker) instead of a label that changes by itself, such as "Pull requests 58". A signed-in address in a page title no longer blocks the build, a misspelt address that only showed the browser's error page is not kept as a step, a typed address right after a click is no longer mistaken for the click's result, and a drag keeps what it picked up. A page's heading is no longer used to name a text box.
+— 2026-11-15
+
+**Clicking something fifty times is no longer turned into one click — 2026-11-15**
+Recording fifty clicks on the same button used to become a single click, with a note that forty-nine were "left out". Conxa now keeps it as one step that repeats the click, shows "(50 times)" in its name, and stops at the first click that fails. A step like this only runs on a newer Conxa: an older one refuses it clearly instead of clicking once and saying it is done.
+— 2026-11-15
+
+**Smaller fixes from the same test run — 2026-11-15**
+The second workflow you record now builds before its first test instead of failing with "Skill not found". The Studio test limit is now thirty minutes, so a long workflow can finish a test. Local addresses such as http://localhost work in the new-workflow form. Rejected edits now explain themselves in plain words. The test card's switch is now called "Keep the AI helper off" and no longer says "Safe test", because it never held back steps that can't be undone. A hand-added click is held back in a dry run when Conxa can't tell whether it is safe. The recorder keeps the steps already taken if a page closes itself, and a leftover recording view no longer blocks the next recording. The update and rollback code now recognises the real version folder names (this takes effect with the next program update), and the sync address now points at a route that exists.
 — 2026-11-15

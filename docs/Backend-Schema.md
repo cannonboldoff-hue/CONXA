@@ -189,6 +189,8 @@ class GroupApp(BaseModel):
     storage_state_path: str    # Absolute path to this app's captured session (local only)
     last_error: str            # Most recent capture failure, if any
     check_note: str            # why the last probe was inconclusive ("" if it reached a verdict); never blocks recording
+    person_confirmed_at: float | None  # 2026-11-15: set by "Save anyway" (the person said "I'm signed in" on a site Conxa
+                                       # cannot check). An `unverified` probe then keeps checked_at; only `expired` clears it.
     checked_at: float | None   # Unix timestamp of the last actual probe verdict (any
                                 # check_group_sessions_sync call), None if never probed since
                                 # capture. Distinct from captured_at ("a session file

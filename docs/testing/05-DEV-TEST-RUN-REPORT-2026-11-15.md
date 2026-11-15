@@ -1111,3 +1111,16 @@ The leg's Human Edit step is "wrap the per-row steps in a loop over the three ro
 
 My driver script and helpers (`lib.js` and friends) live in the session scratchpad. If you want to keep
 them, I can move them into the repo (for example under `scripts/dev-drive/`).
+
+## 46. After the investigation: corrections to this report (2026-11-15)
+
+A root-cause investigation of every finding above (plan: `docs/testing/` run-fix plan; fixes listed in `FIX.md` for 2026-11-15) found these statements to be wrong or incomplete. Read this section before relying on the sections it names.
+
+- **Sections 14.1 and 34 (20-file loop).** The saved workflow holds 20 clicks and 20 download markers and **no loop**. The "loop" in the chat was prose. The failure at the 10th file is most likely the public file list changing that day (section 34), not a loop limit. Not root-caused further.
+- **Sections 9 and 10.2 (Buy Now).** The saved step is **not** marked as irreversible. The refusal came from a row binding built from the button's own label ("Buy Now"), which can never match once the label changes. Cause and fix: row bindings are now created only where they tell rows apart (and name a row by text found in that row alone).
+- **Section 30.2 (saucedemo).** The add-to-cart steps had a unique test id and were still bound to a **price** shared by two products. Fixed the same way.
+- **Sections 10.5 and 12.3 (labels from the pane scale).** The recorder names an element from the event's own target, not from the click point, so wrong labels ("Clicked Shapeshifter") were **not** a driver artifact. The cause was the sibling-caption walk picking a page heading; fixed.
+- **Sections 36.2, 37.1, 39 (Gmail subject).** The recording itself shows the subject text typed into the **To recipients** field (focus was left there by the script). The compile did not drop a subject step; there was no subject typed into the Subject box. A driver artifact. The Gmail build block (an address in the page title) and the rich-text check were real and are fixed.
+- **Section 34 (soak freeze).** Caused by an unread stderr pipe, not by a counter at 30: all five frozen runtimes stopped at 114-115 KB of log. Verified fixed: 40 of 40 runs with an unread pipe.
+- **Section 11.5 (50 clicks to 1), section 45 (loop rows).** Still open feature work; see `TODO.md`.
+
