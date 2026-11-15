@@ -83,7 +83,7 @@ Also grep `server.log`'s `/__log?` lines to confirm which button was actually cl
 | **R2** | `?v=t3` | Studio Run Test (ceiling 2) | **Fails** deterministically with `recovery_ceiling_reached`, no screenshots taken. This is the negative control — Studio must never spend tokens even when it could theoretically recover further. |
 | **R3** | `?v=t3` | Claude Desktop `execute_skill` | Tier A fails, then `agent_recovery_requested` → Claude replies a `candidate_index` → `agent_override_applied` → run resumes and completes. Server log must show exactly `t3:target` clicked — never a decoy, even though decoys are present (ranking + uniqueness gate must both hold). |
 | **R4** | `?v=gone` | Claude Desktop | Claude either declines honestly or its nomination is rejected (`agent_override_rejected`) → a clean, typed failure naming the step. A "success" here is a ranking/gating regression — file it immediately if you see one. |
-| **R5** | `?v=gone` again, same session | Claude Desktop | Budget/stagnation guards should bite: `retry_budget_exhausted` or `recovery_stagnant_stop` in the log. The failure should get *cheaper* on this second attempt, never more expensive. |
+| **R5** | `?v=gone` again, same session | Claude Desktop | Budget/stagnation guards should bite: `retry_budget_exhausted` or `recovery_stagnant_stop` in the log. The failure must stay bounded and never get more expensive. It does not get cheaper: 2026-11-15 measured 21.3 s on every repeat. |
 
 **R5 gotcha:** to reach it, call `execute_skill` again **plainly** (no `resume_from`) — repeating the
 whole failing step from a fresh navigate is what accumulates recovery rounds toward the stagnation
@@ -131,8 +131,8 @@ params this time, real DOM edits:
 **What a full pass proves:** Tier A is a real free self-heal path (not theoretical), the ceiling
 contract holds in both directions (Studio never overspends, MCP can still escalate), Tier B ranks
 honestly even under decoy competition and always closes through the uniqueness gate ("AI
-nominates, runtime verifies" — never "AI clicks"), and failure is bounded and gets cheaper on
-repeat, never more expensive.
+nominates, runtime verifies" — never "AI clicks"), and failure is bounded (it does not get cheaper on
+repeat, and never more expensive).
 
 **Where failures go:** `TODO.md` **EXEC-23** (a genuinely missed interactable), **EXEC-4** (Tier B
 handoff shape), or `cascade.js`/`resolution.js` directly — attach the R-number and its log excerpt

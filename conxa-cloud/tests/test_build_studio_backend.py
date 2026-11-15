@@ -310,16 +310,16 @@ def test_installer_publish_rewrites_pack_with_cloud_tracking(backend, monkeypatc
     assert rewritten["skill_pack_version"] == "1.2.3"
     assert rewritten["release_notes"] == "Release message"
     assert rewritten["installer_version"] == "v2"
-    # tracking_url/sync_endpoint are now trusted verbatim from the cloud's response
-    # (already correctly versioned server-side) rather than reconstructed locally.
-    assert rewritten["tracking"]["tracking_url"] == "https://internal.example/api/tracking/render/events"
+    # The path is the cloud's (already versioned server-side); the host is the cloud Studio published to
+    # (CLOUD-27: a dev cloud can still be configured with the production address).
+    assert rewritten["tracking"]["tracking_url"] == "https://apis.conxa.in/api/tracking/render/events"
     assert rewritten["tracking"]["tracking_token"] == "cloud-token"
     assert rewritten["sync_endpoint"] == "https://apis.conxa.in/api/v1/workflows/v2/render/skill-packs/delta"
     assert rewritten["sync_token"] == "sync-token"
     assert publish_info["slug"] == "render"
     assert publish_info["version"] == "1.2.3"
     assert publish_info["workspace_id"] == "wrk_123"
-    assert publish_info["tracking_url"] == "https://internal.example/api/tracking/render/events"
+    assert publish_info["tracking_url"] == "https://apis.conxa.in/api/tracking/render/events"
     assert publish_info["tracking_token_present"] is True
     assert publish_info["sync_endpoint"] == rewritten["sync_endpoint"]
     assert any("workspace wrk_123" in entry["message"] for entry in logs)
@@ -724,7 +724,7 @@ def test_finish_group_app_auth_saves_a_definition_that_passes_self_test(backend,
         reached_wait_url = False
         browser_open = True
 
-        async def learn_auth(self, login_url, existing_definition):
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
             assert login_url == "https://example.test/login"
             assert existing_definition is None  # this app had no prior definition (first Connect)
             return learned, ""
@@ -781,7 +781,7 @@ def test_finish_group_app_auth_reconnect_keeps_still_valid_definition_unchanged(
         reached_wait_url = False
         browser_open = True
 
-        async def learn_auth(self, login_url, existing_definition):
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
             assert login_url == "https://example.test/login"
             assert existing_definition == existing
             return existing_definition, ""  # site unchanged -> same object returned
@@ -838,7 +838,7 @@ def test_finish_group_app_auth_hand_closed_leaves_existing_definition_untouched(
         reached_wait_url = False
         browser_open = False  # closed by hand -> no learn_auth attempt
 
-        async def learn_auth(self, login_url, existing_definition):
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
             raise AssertionError("browser_open=False must skip learning entirely")
 
         async def stop(self):
@@ -889,7 +889,7 @@ def test_finish_group_app_auth_keeps_window_open_when_self_test_fails(backend, m
         reached_wait_url = False
         browser_open = True
 
-        async def learn_auth(self, login_url, existing_definition):
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
             return None, "A signed-out browser also read as signed in."
 
         async def stop(self):
@@ -935,7 +935,7 @@ def test_finish_group_app_auth_force_skips_learning_and_saves_with_no_definition
         reached_wait_url = False
         browser_open = True
 
-        async def learn_auth(self, login_url, existing_definition):
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
             raise AssertionError("force=true must skip learning entirely")
 
         async def stop(self):
@@ -1469,3 +1469,9 @@ def test_finishing_a_sign_in_promotes_its_pending_file(backend, monkeypatch, tmp
     b.cmd_finish_group_app_auth({"session_id": "sess-1", "group_id": group.id, "app_id": app_id}, "rid")
     assert json.loads(saved.read_text(encoding="utf-8"))["cookies"][0]["name"] == "half"
     assert not pending.exists()
+
+def test_rebase_to_cloud_keeps_path_and_uses_studios_cloud(backend):
+    b, _ = backend
+    got = b._rebase_to_cloud("https://apis.conxa.in/api/v1/workflows/3/acme/tracking/events", "http://127.0.0.1:8000/")
+    assert got == "http://127.0.0.1:8000/api/v1/workflows/3/acme/tracking/events"
+    assert b._rebase_to_cloud("", "http://127.0.0.1:8000") == ""

@@ -384,7 +384,7 @@ Events: `layer_recovered layer:2 tier2_a11y`, `repair_event`, `agent_recovery_re
 | R2 | `?v=t3` | Studio Run Test (ceiling 2) | FAILS deterministically with `recovery_ceiling_reached`, no screenshots. Negative control: sandbox never spends tokens |
 | R3 | `?v=t3` | Claude Desktop `execute_skill` | Full Tier B loop: fail Tier A → `agent_recovery_requested` → Claude replies candidate_index → `agent_override_applied` → resumes and completes. Server log: exactly `t3:target`, NOT a decoy (ranking + uniqueness gate) |
 | R4 | `?v=gone` | Claude Desktop | Claude declines honestly or nomination rejected (`agent_override_rejected`) → clean typed failure naming the step. A "success" here = ranking/gating regression |
-| R5 | `?v=gone` again, same session | Claude Desktop | Budget/stagnation guards bite: `retry_budget_exhausted`, `recovery_stagnant_stop`. Failure gets cheaper, never more expensive |
+| R5 | `?v=gone` again, same session | Claude Desktop | Budget/stagnation guards bite: `retry_budget_exhausted`, `recovery_stagnant_stop`. Failure stays bounded. Do not expect a cheaper repeat: the 2026-11-15 run took the same 21.3 s on each of six failures (05 report) |
 
 Pass criteria: R0–R1 exact clicks, R2 fails zero-token, R3 one real click + candidate_index (not a
 literal selector), R4 fails cleanly, R5 guards fire. Deviations map to: ceiling wiring /
@@ -406,7 +406,7 @@ Against a local HTML page or S1/S2 with manual edits between runs:
 
 **What this proves on pass:** T2 is a real free self-heal path; the ceiling contract holds both
 ways; T3 ranks honestly under decoy competition and closes through the uniqueness gate ("AI
-nominates, runtime verifies"); failure is bounded and gets cheaper.
+nominates, runtime verifies"); failure is bounded (it does not get cheaper on repeat).
 **Where failures go:** EXEC-23 (missed interactable), EXEC-4 (T3 handoff shape), cascade modules
 (`cascade.js`/`resolution.js`) with R1 logs attached.
 

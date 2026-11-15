@@ -257,8 +257,8 @@ def get_execute_contexts(request: Request) -> dict[str, Any]:
 
 @router.get("/entitlements/installer-domain")
 def get_installer_domain_route(request: Request) -> dict[str, Any]:
-    """Unverified, workspace-supplied domain used to name paid-plan
-    installers — see docs/PRD.md §11 and TODO.md PROD-6."""
+    """Unverified, workspace-supplied domain. Any plan may set it (cosmetic only); paid plans use it
+    to name the installer, Free ignores it — see docs/PRD.md §11 and TODO.md PROD-6."""
     principal = current_principal(request)
     require_admin(principal)
     return {"domain": get_installer_domain(principal.workspace_id)}

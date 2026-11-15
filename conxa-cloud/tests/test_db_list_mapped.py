@@ -46,3 +46,19 @@ def test_a_caller_cannot_change_what_the_cache_holds(tmp_path):
         first = db.db_list_mapped("things", lambda d: {"n": d["n"]})
         first[0]["n"] = 999
         assert db.db_list_mapped("things", lambda d: {"n": d["n"]})[0]["n"] == 1
+
+
+def test_two_different_mapping_functions_never_share_cached_results(tmp_path):
+    a, b = _store(tmp_path)
+    with a, b:
+        db._MAPPED_CACHE.clear()
+        db.db_set("things", "x", {"n": 1})
+
+        def double(doc):
+            return doc["n"] * 2
+
+        def negate(doc):
+            return -doc["n"]
+
+        assert db.db_list_mapped("things", double) == [2]
+        assert db.db_list_mapped("things", negate) == [-1], "a different function must not get double()'s answer"

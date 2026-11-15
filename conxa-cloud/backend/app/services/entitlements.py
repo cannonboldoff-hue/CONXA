@@ -1488,8 +1488,9 @@ def ensure_white_label_allowed(principal: Principal, *, custom_branding: bool) -
 
 
 def get_installer_domain(workspace_id: str) -> str:
-    """Unverified, workspace-supplied domain used to name paid-plan installers
-    (see docs/PRD.md §11). No proof of ownership yet — see TODO.md PROD-6."""
+    """Unverified, workspace-supplied domain. Any plan may set it (cosmetic only); paid plans use it
+    to name the installer, Free ignores it and gets a random name (see docs/PRD.md §11).
+    No proof of ownership yet — see TODO.md PROD-6."""
     row = db_get(INSTALLER_DOMAIN_NS, workspace_id)
     return str(row.get("domain") or "") if isinstance(row, dict) else ""
 

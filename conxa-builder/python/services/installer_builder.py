@@ -25,8 +25,8 @@ def build_installer(
     # Ensure all deps (NSIS, runtime) are at the latest cloud version before packaging.
     # This is a safety net for sessions started before a dep release was available.
     #
-    # Must resolve the same way backend.py resolves self._cloud_api (env-aware, dev
-    # defaults to the local dev cloud) — defaulting straight to prod here would make a
+    # Must resolve to the same cloud backend.py publishes to (it reads CONXA_CLOUD_API and
+    # defaults to the local cloud whatever the environment; this is env-aware) — defaulting straight to prod here would make a
     # Dev build silently fetch deps from apis.conxa.in even though everything else
     # (publish, sync_endpoint, tracking_url) was resolved against the local dev cloud.
     from conxa_core.config import active_environment, settings as _core_settings

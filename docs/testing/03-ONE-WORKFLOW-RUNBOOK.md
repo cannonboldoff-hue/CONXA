@@ -175,7 +175,7 @@ R#  Result: PASS | PASS-WITH-NOTES | FAIL | CRASH
 | **R2** | Replay with overridden inputs: name `Second Pass`, email `second@test.local`, search `Banana`, filter `ASCI White` | Every value followed — Banana clicked not Apple; ASCI White detail opens. Then zero-result probe: rerun searching `zzzqqqxxx` → LOUD failure at the results step, never clicking whatever's on screen |
 | **R3** | Re-run R1 with env `CONXA_ACTION_TIMEOUT_MS=1200` | Slower; log which steps needed recovery and at which tier; still zero LLM. Answers "how much headroom do the defaults have" (B-6, G.1) |
 | **R4** | Kill mid-run: close the runtime browser during Segment F (or drop Wi-Fi for 30 s after Segment D) | Clean typed failure NAMING the step. Not success, not hang, no zombie Chromium (`Get-Process chrome,node`) (H-3, G.2, G.3) |
-| **R5** | Two `execute_skill` calls back-to-back on this skill | Strictly sequential (host_lock), both succeed, no interleaving (H-7) |
+| **R5** | Two `execute_skill` calls back-to-back on this skill | Strictly sequential (host_lock), both succeed, no interleaving (H-7). Only when the skill names a target host: with none, `host_lock` takes no lock and the two calls run side by side outside a host panel (2026-11-15) |
 | **R6** | This skill + a tiny wiki skill (Random article) SIMULTANEOUSLY; then mid-flight `cancel_execution` with the wiki run_id | Timestamps OVERLAP (parallelism); cancel kills only the wiki run, mega finishes untouched (H-8, G.4, G.5) |
 | **R6b** | Chain probe: `execute_sequence` with a second skill consuming Segment H's noted date (H-6) | Output→input chaining works |
 | **R7** | Two throwaway micro-recordings: Excalidraw draw/move; reCAPTCHA demo submit | Fast clean refusals at first canvas-only action / CAPTCHA — minimal token burn (H-11/H-12). These cost LLM tokens by design — note them |
@@ -208,7 +208,7 @@ Cannot merge — needs elements that break ON PURPOSE per variant.
 | R2 | `?v=t3` | Studio Run Test (ceiling 2) | FAILS with `recovery_ceiling_reached`, zero tokens |
 | R3 | `?v=t3` | Claude Desktop | Full T3: `agent_recovery_requested` → candidate_index → `agent_override_applied` → completes; clicked `t3:target`, not a decoy |
 | R4 | `?v=gone` | Claude Desktop | Honest decline or `agent_override_rejected` → clean typed failure. A "success" here = ranking regression |
-| R5 | `?v=gone` again | Claude Desktop | `retry_budget_exhausted` / `recovery_stagnant_stop` — failure gets cheaper |
+| R5 | `?v=gone` again | Claude Desktop | `retry_budget_exhausted` / `recovery_stagnant_stop` if a guard bites. Failure stays bounded; do not expect it to get cheaper (2026-11-15: 21.3 s every time) |
 
 43. Live self-heal legs (edit page between runs, zero proxy calls expected):
     rename label → heals T2 (D.1); wrap in another div (D.2); change label AND structure AND

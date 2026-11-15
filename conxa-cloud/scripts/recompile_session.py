@@ -1,16 +1,23 @@
 """Recompile a recorded session and dump the compile report.
 
 Usage: python scripts/recompile_session.py <session_id>
+
+The compiler's LLM calls go through the metered cloud connection that Build Studio installs. This script
+installs the same one, so it needs a signed-in Studio token:
+  CONXA_TOKEN       the token Studio sends to the cloud (required)
+  CONXA_CLOUD_API   the cloud address (default http://127.0.0.1:8000)
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT.parent / "conxa-builder" / "python"))  # services.llm_proxy_client
 
 
 def main() -> int:
@@ -19,6 +26,21 @@ def main() -> int:
         return 1
 
     session_id = sys.argv[1]
+
+    token = os.environ.get("CONXA_TOKEN", "").strip()
+    if not token:
+        print("CONXA_TOKEN is not set. The compiler needs Build Studio's cloud connection for its LLM calls: "
+              "set CONXA_TOKEN to a signed-in Studio token (and CONXA_CLOUD_API if the cloud is not on 127.0.0.1:8000).")
+        return 1
+    from conxa_core import llm as core_llm
+    from services.llm_proxy_client import LLMProxyClient
+
+    core_llm.set_router(LLMProxyClient(
+        os.environ.get("CONXA_CLOUD_API", "http://127.0.0.1:8000"),
+        token_provider=lambda: token,
+        client_header=os.environ.get("CONXA_PROXY_CLIENT", "build-studio"),
+        usage_class="compile",
+    ))
 
     from conxa_compile.compiler.build import compile_skill_package
     from conxa_core.config import settings

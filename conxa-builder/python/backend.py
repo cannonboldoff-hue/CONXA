@@ -260,6 +260,14 @@ class Backend(
     def _cloud_api_base(self) -> str:
         return (self._cloud_api or "https://apis.conxa.in").rstrip("/")
 
+    @staticmethod
+    def _rebase_to_cloud(url: str, cloud_api: str) -> str:
+        """Keep an absolute address's path (and query) but put it on `cloud_api`. Empty stays empty."""
+        if not url:
+            return ""
+        parts = urlparse(url)
+        return f"{cloud_api.rstrip('/')}{parts.path}" + (f"?{parts.query}" if parts.query else "")
+
     def _auto_publish_enabled(self) -> bool:
         if os.environ.get("CONXA_DISABLE_AUTO_PUBLISH") == "1":
             return False
@@ -602,6 +610,9 @@ class Backend(
         from conxa_core.sync_paths import sync_delta_path
 
         sync_url = str(published.get("sync_url") or sync_delta_path(company_slug, generation))
+        # The reply's absolute tracking address is built from the cloud's own configured base, which in a
+        # dev setup can still name production. Studio keeps the path and uses the cloud it just published to.
+        tracking["tracking_url"] = self._rebase_to_cloud(tracking.get("tracking_url", ""), cloud_api)
         pack["tracking"] = tracking
         pack["sync_endpoint"] = f"{cloud_api}{sync_url}"
         pack["sync_token"] = sync_token

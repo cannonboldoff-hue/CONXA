@@ -105,7 +105,7 @@ reliability, not missing architecture.
 | Agent-mediated (Tier B) recovery: ranked candidate digest → verified override → resume, no wrong-decoy click | ✅ proven | WF-7 drill R3, 2026-09-03 |
 | Studio deterministic ceiling: zero-token negative control (no agent tokens spent even when recovery is theoretically possible) | ✅ proven | WF-7 drill R2, 2026-09-03 |
 | Honest decline when no plausible match exists (no wrong-guess click) | ✅ proven | WF-7 drill R4, 2026-09-03 |
-| Retry-budget / stagnation guard stops runaway recovery spend, cost drops on repeat failure | ✅ proven | WF-7 drill R5, 2026-09-03 |
+| Retry-budget / stagnation guard stops runaway recovery spend, cost drops on repeat failure | ⚠️ not reproduced 2026-11-15 (21.3 s on every repeat, see 05 report) | WF-7 drill R5, 2026-09-03 |
 | Identity survives real DOM drift (rename, restructure, delayed render, stale recorded position) | ✅ proven | WF-7 Suite D.1–D.3/D.5, 2026-09-03 |
 | Never assumes stale/leftover page state is current — always verifies or self-navigates | ✅ proven | WF-7 Suite D.4, 2026-09-03 |
 | Relational/anchor-based identity resolves correctly on a real live site under real position drift, including resolver.js's ambiguous-candidates fall-through with no per-item testid | ✅ proven | WF-7 Suite D.6, 2026-09-03 |
@@ -180,7 +180,7 @@ MCP protocol Claude Desktop uses, with `recovery.log`/`runtime.log` evidence for
 | R2 | `?v=t3`, Studio ceiling 2 | Deterministic `recovery_ceiling_reached` failure, **zero** agent tokens spent — the negative control |
 | R3 | `?v=t3`, real MCP ceiling 4, 2 decoys present | `agent_recovery_requested` → ranked `candidate_index` digest → `agent_override_applied` → resumed and completed, exact target clicked, decoys never touched |
 | R4 | `?v=gone`, no plausible match | Clean typed failure — no wrong-guess click when nothing on the page matches |
-| R5 | `?v=gone` repeated, same session | `recovery_stagnant_stop` fired on the 3rd identical-fingerprint round; that response was plain text — cheaper than the armed rounds before it |
+| R5 | `?v=gone` repeated, same session | `recovery_stagnant_stop` fired on the 3rd identical-fingerprint round; that response was plain text — cheaper than the armed rounds before it. (2026-11-15 re-run: not reproduced, every failure took 21.3 s.) |
 
 **Caveat (honest, not a failure):** R1 passed by resolving through `resolver.js`'s primary
 durability-ranked signal walk (a surviving `css-id` signal), not through the Tier 2 a11y recovery
@@ -205,7 +205,7 @@ closes that gap directly:
   Studio spends nothing even when recovery is theoretically possible; R4 proves the agent itself
   declines rather than guessing when nothing matches.
 - **Cost discipline is real, not theoretical:** R5's stagnation guard measurably cut the cost of a
-  repeated identical failure instead of re-sending the full payload forever.
+  repeated identical failure instead of re-sending the full payload forever. (Not reproduced on 2026-11-15: every repeat took 21.3 s; see the 05 report.)
 
 One real bug found and fixed in the course of this drill (not a workflow gap): `resume_from`
 without a matching `step_overrides` entry used to silently replay from a blank page with a
