@@ -49,10 +49,14 @@ function route(req, res) {
     return html(`<button data-testid="send" id="send">Send</button><div id="done" hidden>Sent</div>
       <script>document.getElementById('send').onclick = () => { document.getElementById('done').hidden = false; };</script>`, "Submit");
   }
+  if (parts[0] === "upload") return setTimeout(() => send(200, "text/plain", "ok"), 400); // a real upload takes a request
   if (parts[0] === "drive") {
     return html(`<input type="file" multiple data-testid="drive-upload"><div id="status">idle</div>
       <script>document.querySelector('[data-testid=drive-upload]').addEventListener('change', function () {
-        document.getElementById('status').textContent = 'Uploaded: ' + Array.from(this.files).map((f) => f.name).sort().join(',');
+        var names = Array.from(this.files).map((f) => f.name).sort().join(',');
+        var status = document.getElementById('status');
+        status.textContent = 'Uploading...';
+        fetch('/upload', { method: 'POST', body: names }).then(function () { status.textContent = 'Uploaded: ' + names; });
       });</script>`, "Drive");
   }
   if (parts[0] === "decision") {
