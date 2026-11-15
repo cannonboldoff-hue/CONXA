@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_list_kv, using_database
+from conxa_core.sync_paths import sync_delta_path
 from conxa_core.storage.skill_pack_store import (
     get_skill_pack,
     get_or_create_skill_pack,
@@ -321,10 +322,10 @@ def _publish_skill_pack_impl(
         published_at = time.time()
         api_base = _api_base(request)
         if installer_version:
-            sync_url_path = f"/api/v1/workflows/{installer_version}/{slug}/skill-packs/delta"
+            sync_url_path = sync_delta_path(slug, installer_version)
             tracking_url_path = f"/api/v1/workflows/{installer_version}/{slug}/tracking/events"
         else:
-            sync_url_path = f"/api/v1/skill-packs/{slug}/delta"
+            sync_url_path = sync_delta_path(slug, None)
             tracking_url_path = f"/api/tracking/{slug}/events"
         tracking = {
             "enabled": True,

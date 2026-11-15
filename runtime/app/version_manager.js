@@ -16,7 +16,41 @@
 const fs   = require("fs");
 const path = require("path");
 
-const VERSION_DIR_RE = /^v\d+\.\d+\.\d+([-+].+)?$/;
+// Real folders are `app-v1.2.0` / `host-v1.2.0` / `app-v0.0.0-local.<timestamp>` (release tag
+// names); skill folders are plain `v1.2.3`. Optional app-/host- prefix, then v<maj>.<min>.<patch>[-pre][+build].
+const VERSION_DIR_RE = /^(?:(app|host)-)?v(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$/;
+
+function parseVersionDir(name) {
+  const m = VERSION_DIR_RE.exec(String(name));
+  if (!m) return null;
+  return {
+    name,
+    prefix: m[1] || "",
+    version: `${m[2]}.${m[3]}.${m[4]}`,
+    nums: [Number(m[2]), Number(m[3]), Number(m[4])],
+    prerelease: m[5] ? m[5].split(".") : [],
+    build: m[6] || "",
+  };
+}
+
+// semver precedence: numeric core, then a release beats any prerelease, then prerelease
+// identifiers left to right (numeric ones numerically, numeric < alphanumeric).
+function _compareParsed(a, b) {
+  for (let i = 0; i < 3; i++) if (a.nums[i] !== b.nums[i]) return a.nums[i] - b.nums[i];
+  if (!a.prerelease.length || !b.prerelease.length) return b.prerelease.length - a.prerelease.length;
+  const n = Math.max(a.prerelease.length, b.prerelease.length);
+  for (let i = 0; i < n; i++) {
+    const x = a.prerelease[i], y = b.prerelease[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const xn = /^\d+$/.test(x), yn = /^\d+$/.test(y);
+    if (xn && yn) return Number(x) - Number(y) || 0;
+    if (xn !== yn) return xn ? -1 : 1;
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
 
 function _junctionType() {
   return process.platform === "win32" ? "junction" : "dir";
@@ -80,19 +114,19 @@ function listVersions(componentDir) {
   try { entries = fs.readdirSync(componentDir, { withFileTypes: true }); } catch (_) { return []; }
 
   const versions = entries
-    .filter((e) => e.isDirectory() && VERSION_DIR_RE.test(e.name))
+    .filter((e) => e.isDirectory() && parseVersionDir(e.name))
     .map((e) => {
       const dir = path.join(componentDir, e.name);
       let releasedAt = "";
       try { releasedAt = JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).released_at || ""; }
       catch (_) {}
-      return { name: e.name, dir, releasedAt };
+      return { name: e.name, dir, releasedAt, parsed: parseVersionDir(e.name) };
     });
 
   versions.sort((a, b) => {
     if (a.releasedAt && b.releasedAt && a.releasedAt !== b.releasedAt)
       return b.releasedAt.localeCompare(a.releasedAt);
-    return b.name.localeCompare(a.name, undefined, { numeric: true });
+    return _compareParsed(b.parsed, a.parsed) || b.name.localeCompare(a.name, undefined, { numeric: true });
   });
   return versions;
 }
@@ -114,7 +148,8 @@ function isValidVersionDir(dir, requiredFiles) {
 // `protect` (absolute paths) — used to guarantee the version live immediately before
 // an activation survives it, so a same-activation rollback never needs a re-download.
 function _prune(componentDir, keep, protect) {
-  const protectedSet = new Set((protect || []).filter(Boolean).map((d) => path.resolve(d)));
+  // `current` is always protected, whatever the caller passed.
+  const protectedSet = new Set([...(protect || []), resolveCurrent(componentDir)].filter(Boolean).map((d) => path.resolve(d)));
   const versions = listVersions(componentDir); // newest first
   let kept = 0;
   for (const v of versions) {
@@ -152,7 +187,10 @@ function activate(componentDir, newVersionDir, options = {}) {
 function rollback(componentDir) {
   const cur = resolveCurrent(componentDir);
   const curName = cur ? path.basename(cur) : null;
-  const candidate = listVersions(componentDir).find((v) => v.name !== curName);
+  const all = listVersions(componentDir);
+  const at = all.findIndex((v) => v.name === curName);
+  // Prefer the next-older version; only if none is older, any other retained one.
+  const candidate = all.slice(at + 1).find((v) => v.name !== curName) || all.find((v) => v.name !== curName);
   if (!candidate) return null;
   _linkCurrent(componentDir, candidate.dir);
   return { version: candidate.name };
@@ -163,6 +201,7 @@ module.exports = {
   resolveCurrent,
   currentVersion,
   listVersions,
+  parseVersionDir,
   isValidVersionDir,
   activate,
   rollback,

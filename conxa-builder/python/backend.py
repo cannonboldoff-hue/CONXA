@@ -599,7 +599,9 @@ class Backend(
 
         # sync_url/tracking_url are already correctly versioned by the cloud (see
         # publish_routes._publish_skill_pack_impl) — just qualify the relative sync_url.
-        sync_url = str(published.get("sync_url") or f"/api/v1/workflows/{generation}/{company_slug}/skill-packs/delta")
+        from conxa_core.sync_paths import sync_delta_path
+
+        sync_url = str(published.get("sync_url") or sync_delta_path(company_slug, generation))
         pack["tracking"] = tracking
         pack["sync_endpoint"] = f"{cloud_api}{sync_url}"
         pack["sync_token"] = sync_token

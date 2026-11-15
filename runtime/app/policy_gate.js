@@ -27,6 +27,10 @@ const httpClient = require("./http_client");
 
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // re-fetch in the background once cache is >1h old
 
+// When a policy fetch last failed, per cloud address + workspace; see loadPolicy.
+const _fetchFailedAt = new Map();
+const FETCH_FAILURE_COOLDOWN_MS = Number(process.env.CONXA_POLICY_FAIL_COOLDOWN_MS) || 60 * 1000;
+
 function _cachePath(dataDir, workspaceId) {
   return path.join(dataDir, "policy", `${workspaceId}.json`);
 }
@@ -90,7 +94,19 @@ async function loadPolicy(opts = {}) {
     return { status: "cache", doc: cached };
   }
 
+  // An unreachable cloud used to cost every run the full fetch timeout (5 s) before it started. After a failed
+  // fetch the next ones are skipped for a short while. A governed workspace is unaffected in what it enforces: it
+  // already falls back to its verified cache (and to "expired" when that runs out) whenever a fetch fails.
+  const failKey = `${apiUrl}|${workspaceId}`;
+  const failedAt = _fetchFailedAt.get(failKey);
+  if (!forceFetch && failedAt != null && now - failedAt < FETCH_FAILURE_COOLDOWN_MS) {
+    if (cached) return { status: (cached.expires_at || 0) * 1000 < now ? "expired" : "cache", doc: cached };
+    return { status: "absent", doc: null };
+  }
+
   const result = await _fetchAndVerify({ apiUrl, workspaceId, trackingToken, publicKeyB64 });
+  if (result.status === "fetch_failed") _fetchFailedAt.set(failKey, now);
+  else _fetchFailedAt.delete(failKey);
   if (result.status === "ok") {
     const doc = { ...result.doc, _cached_at: now };
     _writeCache(dataDir, workspaceId, doc);
@@ -201,4 +217,5 @@ function evaluate(doc, { skills = [], hosts = [], nowMs } = {}) {
   return { allow: true };
 }
 
-module.exports = { loadPolicy, evaluate, probeTimezoneSupport, _localTimeInZone };
+module.exports = {
+  _resetFetchFailures: () => _fetchFailedAt.clear(), loadPolicy, evaluate, probeTimezoneSupport, _localTimeInZone };

@@ -273,3 +273,26 @@ test("loadPolicy reports expired when the cached policy's own expires_at has pas
     assert.strictEqual(result.status, "expired");
   });
 });
+
+// W10: an unreachable cloud used to cost every run the full fetch timeout. After one failed fetch the next ones are skipped
+// for a short while, and a governed workspace still falls back to its verified cache.
+test("loadPolicy: after a failed fetch the next run does not wait for the network again", async () => {
+  policyGate._resetFetchFailures();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "policy-cooldown-"));
+  let hits = 0;
+  const server = http.createServer((_req, res) => { hits++; res.statusCode = 500; res.end("down"); });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const apiUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const opts = { dataDir, apiUrl, workspaceId: "wrk_cd", trackingToken: "t", publicKeyB64: "" };
+    assert.strictEqual((await policyGate.loadPolicy(opts)).status, "absent");
+    const first = hits;
+    assert.ok(first >= 1);
+    assert.strictEqual((await policyGate.loadPolicy(opts)).status, "absent");
+    assert.strictEqual(hits, first, "no second request while the cool-down lasts");
+    assert.ok((await policyGate.loadPolicy({ ...opts, forceFetch: true })) && hits > first, "an explicit refresh still asks");
+  } finally {
+    server.close();
+    policyGate._resetFetchFailures();
+  }
+});

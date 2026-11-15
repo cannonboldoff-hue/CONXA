@@ -130,6 +130,7 @@ def _write_skill_packs_format(
     """
     from conxa_core.config import active_environment
     from conxa_core.config import settings
+    from conxa_core.sync_paths import sync_delta_path
     from conxa_core.workspace import workspace_dir_slug
 
     company      = workspace_dir_slug(workspace_id)
@@ -373,7 +374,7 @@ def _write_skill_packs_format(
         "skills":             merged_skills,
         "skill_groups":       merged_skill_groups,
         "groups":             merged_groups,
-        "sync_endpoint":      f"{api_base}/skill-packs/{company}/delta",
+        "sync_endpoint":      f"{api_base}{sync_delta_path(company)}",
         "built_at":           datetime.now(timezone.utc).isoformat(),
     }
 
