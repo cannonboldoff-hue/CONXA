@@ -99,6 +99,8 @@ _WORDING: dict[str, str] = {
     "for_each_rows_must_be_object": "Something went wrong saving this step's rows settings. Please try again.",
     "for_each_as_must_be_non_empty_string": "Give each repeated item a name before saving.",
     "for_each_items_must_be_valid_input_id": "Choose which list of inputs to repeat over from the list.",
+    "for_each_columns_must_be_unique_names": "A table loop needs one to twelve column names, each different, starting with a letter.",
+    "for_each_table_needs_columns": "A loop over a table needs the names of its columns.",
     "for_each_max_iterations_must_be_integer": "The maximum number of repeats must be a whole number.",
     "for_each_max_iterations_out_of_range": "That number of repeats is outside the allowed range. Use a different value.",
     "for_each_on_row_error_invalid": "Choose what happens when one row fails from the list.",

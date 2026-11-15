@@ -64,6 +64,7 @@ const {
   resolveStep,
   enumerateRows,
   splitListInput,
+  readTableRows,
 } = require("./resolution");
 const {
   stepAssertions,
@@ -195,6 +196,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     if (cause.ambiguous) err.ambiguous = true;
     if (cause.resolveMiss) err.resolveMiss = true;
     if (Array.isArray(cause.signalCounts)) err.signalCounts = cause.signalCounts;
+    if (Array.isArray(cause.ambiguousCandidates)) err.ambiguousCandidates = cause.ambiguousCandidates;
     if (cause.entityNotFound) err.entityNotFound = true;
     if (cause.entityAbsent) err.entityAbsent = true;
     if (cause.tabNotFound) err.tabNotFound = true;
@@ -655,6 +657,7 @@ async function executeOneStep(ctx, state, steps, i) {
   const frame = { page: null };
   if (!state.stepPath) state.stepPath = [];
   state.stepPath.push(i);
+  const startedAt = Date.now();
   try {
     return await runStepFrame(ctx, state, steps, i, frame);
   } catch (e) {
@@ -664,6 +667,9 @@ async function executeOneStep(ctx, state, steps, i) {
     throw e;
   } finally {
     state.stepPath.pop();
+    // How long the whole step took (resolve, act, completion gate, proof). With the "completion" event's own
+    // `waited`, it shows where a slow step spent its time (EXEC-61). Nested steps report their own.
+    try { ctx.tracker.emit("step_ms", { si: i, ms: Date.now() - startedAt }); } catch (_) {}
   }
 }
 
@@ -904,7 +910,9 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // GATE/VERIFY, tab resolution, dry-run's destructive-skip — all of it, for free), which is
   // exactly why executeOneStep was extracted out of a flat loop in the first place. See
   // runForEachStep below.
-  if (step.type === "for_each") {
+  // "for_each_rows" is the same loop with a table of values per row. It is its own step type so an engine that does
+  // not know it refuses the step ("Unrecognized step type") instead of looping over text and saying Done.
+  if (step.type === "for_each" || step.type === "for_each_rows") {
     await runForEachStep(ctx, state, step, page, i);
     state.hasExecutedStep = true;
     state.prevStepType = step.type;
@@ -1403,9 +1411,22 @@ async function runForEachStep(ctx, state, step, page, i) {
   // EXEC-38 items source: a loop driven by a named runtime input (comma-separated text) instead
   // of a DOM row scan — no live page to enumerate, so no container/entity-binding scoping
   // applies to the body (entityRoots already no-ops when a body step carries none).
-  const rowIds = step.items
-    ? splitListInput(state.inputs[step.items], cap)
-    : await enumerateRows(page, spec, cap);
+  // A rows loop (`items_rows`): the named input is a table, one object per row, with the declared `columns`.
+  // Row ids are positions (a table may repeat a value, and a resumed run must find the same row again).
+  let tableRows = null;
+  if (step.items_rows) {
+    try {
+      tableRows = readTableRows(state.inputs[step.items_rows], step.columns, cap);
+    } catch (tableErr) {
+      ctx.tracker.emit("step_fail", { si: i, fc: "bad_input" });
+      throw stepFailure(step, i, Object.assign(tableErr, { badInput: true }), null, state.warnings);
+    }
+  }
+  const rowIds = tableRows
+    ? tableRows.map((_, n) => String(n))
+    : step.items
+      ? splitListInput(state.inputs[step.items], cap)
+      : await enumerateRows(page, spec, cap);
   ctx.tracker.emit("for_each_start", { si: i, total: rowIds.length, cap });
 
   // Save/restore around the WHOLE loop, not per-iteration — every iteration sets these fresh
@@ -1417,6 +1438,9 @@ async function runForEachStep(ctx, state, step, page, i) {
   const hadIdx = Object.prototype.hasOwnProperty.call(state.inputs, idxKey);
   const prevId = state.inputs[idKey];
   const prevIdx = state.inputs[idxKey];
+  // `row.<column>` names a rows loop binds: remembered and restored the same way as the two above.
+  const colKeys = tableRows ? step.columns.map((c) => `${asName}.${c}`) : [];
+  const prevCols = colKeys.map((k) => [k, Object.prototype.hasOwnProperty.call(state.inputs, k), state.inputs[k]]);
 
   let processed = 0;
   let failed = 0;
@@ -1447,8 +1471,9 @@ async function runForEachStep(ctx, state, step, page, i) {
   try {
     for (let idx = startIdx; idx < rowIds.length; idx++) {
       const resumingRow = idx === startIdx && !!resume;
-      state.inputs[idKey] = rowIds[idx];
+      state.inputs[idKey] = tableRows ? tableRows[idx][step.columns[0]] : rowIds[idx];
       state.inputs[idxKey] = idx;
+      if (tableRows) for (const c of step.columns) state.inputs[`${asName}.${c}`] = tableRows[idx][c];
       if (!resumingRow) for (const n of bodyOutputs) delete state.inputs[n];
       try {
         for (let j = resumingRow ? startBody : 0; j < bodySteps.length; j++) {
@@ -1479,6 +1504,7 @@ async function runForEachStep(ctx, state, step, page, i) {
     state.loopCursor = null;
     if (hadId) state.inputs[idKey] = prevId; else delete state.inputs[idKey];
     if (hadIdx) state.inputs[idxKey] = prevIdx; else delete state.inputs[idxKey];
+    for (const [k, had, val] of prevCols) { if (had) state.inputs[k] = val; else delete state.inputs[k]; }
   }
   for (const n of bodyOutputs) {
     if (perRow[n].length) state.inputs[n] = perRow[n]; else delete state.inputs[n];
@@ -1492,7 +1518,7 @@ async function runForEachStep(ctx, state, step, page, i) {
   // less than everything) actually done. Pushing into state.warnings surfaces it in the same
   // "Warning:\n..." block the final result text already appends (server.js's _allWarnings).
   if (rowIds.length === 0) {
-    state.warnings.push(`Loop at step ${i + 1} found no items to process — "${step.items || "rows"}" was empty.`);
+    state.warnings.push(`Loop at step ${i + 1} found no items to process — "${step.items_rows || step.items || "rows"}" was empty.`);
   } else if (failed > 0) {
     state.warnings.push(`Loop at step ${i + 1}: ${failed} of ${rowIds.length} item(s) failed and were skipped (on_row_error: continue).`);
   }

@@ -178,6 +178,41 @@ function splitListInput(raw, cap) {
   return out;
 }
 
+// A rows loop's table: an array of objects (or its JSON text, which is how a form or a schedule hands it over), each
+// holding a text value for every declared column. Unlike a list, nothing is dropped or merged: a row the caller wrote
+// is a row that runs. A table that is not that shape throws a plain sentence naming the first problem, never a row
+// that quietly runs with a blank (an empty {{row.to}} is how a message goes to nobody).
+const COLUMN_NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+function readTableRows(raw, columns, cap) {
+  if (!Array.isArray(columns) || !columns.length || !columns.every((c) => typeof c === "string" && COLUMN_NAME_RE.test(c))
+      || new Set(columns).size !== columns.length) {
+    throw new Error("This loop's table has no valid column names, so it was not run. Edit the loop's columns.");
+  }
+  let table = raw;
+  if (typeof table === "string") {
+    if (!table.trim()) return [];
+    try { table = JSON.parse(table); } catch (_) { throw new Error("The table of values for this loop is not a list of rows. Give one row per line, each with its columns."); }
+  }
+  if (table === undefined || table === null) return [];
+  if (!Array.isArray(table)) throw new Error("The table of values for this loop is not a list of rows. Give one row per line, each with its columns.");
+  const out = [];
+  for (let n = 0; n < table.length; n++) {
+    if (out.length >= cap) break;
+    const row = table[n];
+    if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error(`Row ${n + 1} of the table is not a set of values by column (${columns.join(", ")}).`);
+    const clean = {};
+    for (const c of columns) {
+      const v = row[c];
+      if (v === undefined || v === null || typeof v === "object" || String(v).trim() === "") {
+        throw new Error(`Row ${n + 1} of the table has no value for "${c}", so the loop was not run.`);
+      }
+      clean[c] = String(v).trim();
+    }
+    out.push(clean);
+  }
+  return out;
+}
+
 // BUILD-30: a virtualized grid (AG Grid, react-window, TanStack Virtual, ...) only renders the
 // rows currently in the scrolled viewport, so a step's target/row can be entirely absent from
 // the DOM until scrolled into range — indistinguishable, before this, from genuine breakage.
@@ -287,9 +322,21 @@ async function resolveStep(page, step, inputs, scrollState) {
     const why = (result.tied || []).map(t =>
       `${t.selector} → ${t.matches} matches, margin ${t.margin} (need ${DEFAULT_UNIQUE_MARGIN}): ` +
       t.top.map(c => `${c.role || "?"} "${String(c.name || "").slice(0, 40)}" ${c.score}`).join(" | ")).join("; ");
+    // The names the tie was between, as data (max 3, no scores): Studio tells the person which ones.
+    const seenCand = new Set();
+    const ambiguousCandidates = [];
+    for (const t of result.tied || []) {
+      for (const c of t.top || []) {
+        const name = String(c.name || "").trim().slice(0, 40);
+        const key = `${c.role || ""}|${name}`;
+        if (!name || seenCand.has(key) || ambiguousCandidates.length >= 3) continue;
+        seenCand.add(key);
+        ambiguousCandidates.push({ role: c.role || "", name });
+      }
+    }
     throw Object.assign(
       new Error(`Ambiguous element resolution (no signal cleared uniqueness gate)${why ? ` [${why}]` : ""}`),
-      { ambiguous: true, signalCounts },
+      { ambiguous: true, signalCounts, ambiguousCandidates },
     );
   }
   throw Object.assign(new Error("Element not found (resolve miss)"), { resolveMiss: true, signalCounts });
@@ -503,6 +550,7 @@ module.exports = {
   isEntityNotFound,
   enumerateRows,
   splitListInput,
+  readTableRows,
   maybeScrollForVirtualization,
   locatorCandidates,
   resolveStep,

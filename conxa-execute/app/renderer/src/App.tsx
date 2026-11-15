@@ -42,6 +42,7 @@ type Field = {
   description: string;
   required: boolean;
   options?: string[]; // select (enum) or multiselect (array of enum'd items)
+  columns?: string[]; // a table input: one row per repeat of a loop, a text value for each column
   multi: boolean;
   date: boolean;
   secret: boolean;
@@ -53,7 +54,8 @@ type Field = {
 function fieldList(schema: Record<string, unknown>): Field[] {
   const raw = Array.isArray(schema.inputs) ? (schema.inputs as Record<string, any>[]) : [];
   return raw.filter((f) => f && f.name).map((f) => {
-    const multi = f.type === "array";
+    const columns: string[] | undefined = f.type === "array" && Array.isArray(f.columns) && f.columns.length ? f.columns.map(String) : undefined;
+    const multi = f.type === "array" && !columns;
     const options: string[] | undefined = multi ? f.items?.enum : f.enum;
     const hasDefault = f.default !== undefined && f.default !== null && String(f.default).trim() !== "";
     return {
@@ -61,10 +63,11 @@ function fieldList(schema: Record<string, unknown>): Field[] {
       description: String(f.description || ""),
       required: !f.optional && !hasDefault,
       options: Array.isArray(options) && options.length ? options : undefined,
+      columns,
       multi,
       date: f.format === "date",
       secret: Boolean(f.sensitive),
-      default: hasDefault ? (multi && !Array.isArray(f.default) ? String(f.default).split(",").map((s) => s.trim()) : f.default) : multi ? [] : "",
+      default: columns ? [] : hasDefault ? (multi && !Array.isArray(f.default) ? String(f.default).split(",").map((s) => s.trim()) : f.default) : multi ? [] : "",
     };
   });
 }
@@ -138,7 +141,7 @@ export function App() {
   const [selected, setSelected] = useState<SkillRow | null>(null);
   const [schema, setSchema] = useState<Record<string, unknown>>({});
   const [inputsError, setInputsError] = useState("");
-  const [values, setValues] = useState<Record<string, string | string[]>>({});
+  const [values, setValues] = useState<Record<string, string | string[] | Record<string, string>[]>>({});
   const [busy, setBusy] = useState(false);
   const [formMsg, setFormMsg] = useState("");
   const [formOk, setFormOk] = useState(true);
@@ -360,7 +363,7 @@ export function App() {
         const sc = (r.schema || {}) as Record<string, unknown>;
         setSchema(sc);
         const fields = fieldList(sc);
-        const next: Record<string, string | string[]> = {};
+        const next: Record<string, string | string[] | Record<string, string>[]> = {};
         for (const f of fields) next[f.name] = f.default;
         setValues(next);
       })
@@ -755,7 +758,26 @@ export function App() {
                 {selected.description && <p className="mt-2 text-[14px] leading-relaxed text-fg-muted">{selected.description}</p>}
                 <div className="mt-8 space-y-4">
                   {inputsError && <p className="text-sm text-err">{inputsError}</p>}
-                  {!inputsError && fields.map((f) => (
+                  {!inputsError && fields.map((f) => f.columns ? (
+                    <div key={f.name} className="block text-sm">
+                      <span className="text-fg-soft">{f.name}{f.required ? " *" : ""}</span>
+                      <div className="mt-1.5 space-y-2">
+                        {((values[f.name] as Record<string, string>[]) || []).map((row, n) => (
+                          <div key={n} className="flex gap-2">
+                            {f.columns!.map((c) => (
+                              <input key={c} className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg-elevated px-3 text-[14.5px] outline-none focus:border-brand/50" placeholder={c} aria-label={`${c}, row ${n + 1}`} value={row[c] ?? ""} disabled={!runtimeOk}
+                                onChange={(e) => setValues((v) => ({ ...v, [f.name]: ((v[f.name] as Record<string, string>[]) || []).map((r, k) => (k === n ? { ...r, [c]: e.target.value } : r)) }))} />
+                            ))}
+                            <button type="button" className="h-11 rounded-xl border border-line px-3 text-sm text-fg-muted hover:text-fg" aria-label={`Remove row ${n + 1}`} disabled={!runtimeOk}
+                              onClick={() => setValues((v) => ({ ...v, [f.name]: ((v[f.name] as Record<string, string>[]) || []).filter((_, k) => k !== n) }))}>Remove</button>
+                          </div>
+                        ))}
+                        <button type="button" className="h-9 rounded-xl border border-line px-4 text-sm text-fg-soft hover:text-fg" disabled={!runtimeOk}
+                          onClick={() => setValues((v) => ({ ...v, [f.name]: [...((v[f.name] as Record<string, string>[]) || []), Object.fromEntries(f.columns!.map((c) => [c, ""]))] }))}>Add a row</button>
+                      </div>
+                      {f.description && <span className="mt-1 block text-xs text-fg-dim">{f.description}</span>}
+                    </div>
+                  ) : (
                     <label key={f.name} className="block text-sm">
                       <span className="text-fg-soft">{f.name}{f.required ? " *" : ""}</span>
                       {f.multi && f.options ? (

@@ -45,7 +45,7 @@ function useAction(threadId: string) {
   return { busy, run }
 }
 
-type InputSpec = { id: string; label: string; type: string; options: string[]; required: boolean; value: string | number | boolean; suspect?: boolean }
+type InputSpec = { id: string; label: string; type: string; options: string[]; required: boolean; value: string | number | boolean; suspect?: boolean; columns?: string[] }
 
 /** Test inputs: fill them in the way a real request would, then run. Nothing is published by a test. */
 export function TestInputsCard({ threadId, item }: CardProps) {
@@ -100,8 +100,21 @@ export function TestInputsCard({ threadId, item }: CardProps) {
           return (
             <div key={s.id}>
               <label htmlFor={`ti-${s.id}`} className="text-sm text-[var(--text-primary)]">{s.label}</label>
-              <span className="ml-2 text-xs text-[var(--text-meta)]">{s.type === 'date' ? 'Date' : s.options.length ? 'Choice' : 'Text'} · {s.required ? 'required' : 'optional'}</span>
-              {s.options.length > 0 ? (
+              <span className="ml-2 text-xs text-[var(--text-meta)]">{s.columns ? 'Table' : s.type === 'date' ? 'Date' : s.options.length ? 'Choice' : 'Text'} · {s.required ? 'required' : 'optional'}</span>
+              {s.columns ? (
+                <>
+                  <textarea
+                    id={`ti-${s.id}`}
+                    rows={4}
+                    value={values[s.id] ?? ''}
+                    placeholder={s.columns.join(' | ')}
+                    onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                    aria-invalid={bad}
+                    className="mt-1 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-raised)] px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand/55"
+                  />
+                  <p className="mt-1 text-xs text-[var(--text-meta)]">One row per line, with {s.columns.join(' | ')} separated by |. The workflow repeats once per row.</p>
+                </>
+              ) : s.options.length > 0 ? (
                 <select
                   id={`ti-${s.id}`}
                   value={values[s.id] ?? ''}

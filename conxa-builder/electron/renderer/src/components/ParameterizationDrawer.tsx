@@ -91,6 +91,7 @@ const TYPE_LABELS: Record<VariableFormRow['varType'], string> = {
   select: 'Choice list',
   multiselect: 'Multiple choice',
   date: 'Date',
+  rows: 'Table (one row per repeat)',
 }
 
 /** Collapsed summary of one variable; clicking it expands the full editor in place. */
@@ -202,7 +203,8 @@ function VariableEditor({
           onValueChange={(v) =>
             onChange({
               ...row,
-              varType: v === 'select' ? 'select' : v === 'multiselect' ? 'multiselect' : v === 'date' ? 'date' : 'text',
+              varType:
+                v === 'select' ? 'select' : v === 'multiselect' ? 'multiselect' : v === 'date' ? 'date' : v === 'rows' ? 'rows' : 'text',
             })
           }
         >
@@ -214,6 +216,7 @@ function VariableEditor({
             <SelectItem value="select">Choice list</SelectItem>
             <SelectItem value="multiselect">Multiple choice</SelectItem>
             <SelectItem value="date">Date</SelectItem>
+            <SelectItem value="rows">Table (one row per repeat)</SelectItem>
           </SelectContent>
         </Select>
         <Input
@@ -231,6 +234,18 @@ function VariableEditor({
           onChange={(e) => onChange({ ...row, defaultValue: e.target.value })}
         />
       </div>
+      {row.varType === 'rows' ? (
+        <div className="flex items-center gap-2">
+          <Label className="text-muted-foreground shrink-0 text-xs">Columns</Label>
+          <Input
+            className="h-8 text-sm"
+            placeholder="to, subject"
+            aria-label="Column names"
+            value={row.columnsText}
+            onChange={(e) => onChange({ ...row, columnsText: e.target.value })}
+          />
+        </div>
+      ) : null}
       {row.varType === 'select' || row.varType === 'multiselect' ? (
         <div className="flex items-center gap-2">
           <Label className="text-muted-foreground shrink-0 text-xs">Options</Label>

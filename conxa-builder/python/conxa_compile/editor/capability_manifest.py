@@ -112,7 +112,7 @@ RUNTIME_NOTES: dict[str, str] = {
     "wait_for_one_of": "Races each option's probe up to timeout_ms; never enters the recovery cascade.",
     "for_each": (
         "max_iterations is REQUIRED at runtime — a missing cap fails the whole run, not just the "
-        "loop. Exactly one of rows.container_selector or items must be set. The loop body runs "
+        "loop. Exactly one of rows.container_selector, items or items_rows (a table input, with its `columns`) must be set. The loop body runs "
         "through the FULL cascade (unlike if_present/try_dismiss bodies)."
     ),
 }

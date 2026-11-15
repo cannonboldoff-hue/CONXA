@@ -460,8 +460,12 @@ def _saved_for_each_step(step: dict[str, Any]) -> dict[str, Any] | None:
     rows = for_each.get("rows") if isinstance(for_each.get("rows"), dict) else {}
     container_selector = str(rows.get("container_selector") or "").strip()
     items = str(for_each.get("items") or "").strip()
-    if bool(container_selector) == bool(items):
-        return None  # neither source, or both — not a runnable loop
+    items_rows = str(for_each.get("items_rows") or "").strip()
+    columns = [str(c).strip() for c in (for_each.get("columns") or []) if str(c).strip()] if isinstance(for_each.get("columns"), list) else []
+    if sum(bool(x) for x in (container_selector, items, items_rows)) != 1:
+        return None  # no source, or more than one — not a runnable loop
+    if items_rows and not columns:
+        return None  # a table loop must say which columns each row has
     nested = _saved_branch_steps_list(for_each.get("steps"))
     if not nested:
         return None
@@ -472,12 +476,17 @@ def _saved_for_each_step(step: dict[str, Any]) -> dict[str, Any] | None:
     if max_iterations <= 0:
         return None
     out: dict[str, Any] = {
-        "type": "for_each",
+        # A table loop is its own step type: an engine that does not know it refuses the step instead of reading the
+        # table as comma-separated text and finishing "Done" (the pack also lists the loop_rows capability).
+        "type": "for_each_rows" if items_rows else "for_each",
         "as": str(for_each.get("as") or "row").strip() or "row",
         "max_iterations": max_iterations,
         "steps": nested,
     }
-    if items:
+    if items_rows:
+        out["items_rows"] = items_rows
+        out["columns"] = columns
+    elif items:
         out["items"] = items
     else:
         out["rows"] = {"container_selector": container_selector}
@@ -861,6 +870,18 @@ def _normalize_saved_skill_inputs(inputs: list[Any]) -> list[dict[str, Any]]:
             row["optional"] = True
         if raw.get("pattern"):
             row["pattern"] = str(raw["pattern"])
+        if str(raw.get("type") or "") == "rows":
+            # A table (EXEC-60): a JSON-Schema array of objects, one per row, a text value for each column.
+            cols = [str(c) for c in (raw.get("columns") or []) if str(c)]
+            row["type"] = "array"
+            row["columns"] = cols
+            row["items"] = {
+                "type": "object",
+                "properties": {c: {"type": "string"} for c in cols},
+                "required": cols,
+                "additionalProperties": False,
+            }
+            row["description"] += f" (a list of rows, each with: {', '.join(cols)})"
         options = raw.get("options")
         if isinstance(options, list) and options:
             option_strs = [str(item) for item in options if str(item)]

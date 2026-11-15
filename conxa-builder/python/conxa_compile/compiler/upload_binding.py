@@ -357,7 +357,8 @@ def apply_bindings_to_compiled_steps(steps: list[Any], events: list[dict[str, An
 
 
 def for_each_loop_variable_names(payload: Any) -> set[str]:
-    """Every ``{{<as>_id}}``/``{{<as>_index}}`` name a `for_each` loop injects at replay time
+    """Every ``{{<as>_id}}``/``{{<as>_index}}`` name a `for_each` loop injects at replay time (and, for a rows loop,
+    ``{{<as>.<column>}}``)
     (EXEC-38), walking both step shapes a caller might hand in: the editor/document shape
     (``step["for_each"] = {"as": ..., "steps": [...]}``) and the flat execution/export shape
     (``{"type": "for_each", "as": ..., "steps": [...]}``). These names are populated by
@@ -375,15 +376,22 @@ def for_each_loop_variable_names(payload: Any) -> set[str]:
         if isinstance(value, dict):
             for_each = value.get("for_each")
             as_name: Any = None
+            columns: Any = None
             if isinstance(for_each, dict):
                 as_name = for_each.get("as")
-            elif value.get("type") == "for_each":
+                columns = for_each.get("columns")
+            elif value.get("type") in ("for_each", "for_each_rows"):
                 as_name = value.get("as")
+                columns = value.get("columns")
             if as_name:
                 as_name = str(as_name).strip()
                 if as_name:
                     names.add(f"{as_name}_id")
                     names.add(f"{as_name}_index")
+                    # A rows loop (EXEC-60) also binds {{<as>.<column>}} for every declared column.
+                    for col in columns if isinstance(columns, list) else []:
+                        if isinstance(col, str) and col.strip():
+                            names.add(f"{as_name}.{col.strip()}")
             for v in value.values():
                 visit(v)
         elif isinstance(value, list):

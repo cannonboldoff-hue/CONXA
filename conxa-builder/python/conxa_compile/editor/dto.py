@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -192,7 +193,10 @@ class SkillInputVariable(BaseModel):
     # "multiselect" is select's multi-valued sibling (a recorded checkbox group — "pick all that
     # apply"): the packaged input row emits a JSON-Schema string ARRAY with an enum'd `items`
     # instead of select's single enum'd string — see _normalize_saved_skill_inputs.
-    type: Literal["text", "select", "date", "multiselect"] = "text"
+    # "rows" is a table: a list of objects, one per row of a `for_each` loop, with the columns named in `columns`
+    # (EXEC-60). The packaged input is a JSON-Schema array of objects (see _normalize_saved_skill_inputs).
+    type: Literal["text", "select", "date", "multiselect", "rows"] = "text"
+    columns: list[str] = Field(default_factory=list)
     # A multiselect's default is comma-joined labels (matching how its `options` field and the
     # renderer's optionsText are already comma-joined text) — no separate list-typed field, so
     # the on-disk shape for every input type stays a flat dict of strings.
@@ -215,6 +219,17 @@ class SkillInputVariable(BaseModel):
         if isinstance(v, list):
             return [str(x) if isinstance(x, (int, float, bool)) else x for x in v]
         return v
+
+    @model_validator(mode="after")
+    def _rows_need_valid_columns(self) -> SkillInputVariable:
+        if self.type == "rows":
+            if not self.columns or len(self.columns) > 12:
+                raise ValueError(f"rows_input_needs_1_to_12_columns:{self.id}")
+            if any(not re.fullmatch(PLACEHOLDER_ID_PATTERN, c or "") for c in self.columns) or len({c for c in self.columns}) != len(self.columns):
+                raise ValueError(f"rows_input_columns_must_be_unique_names:{self.id}")
+        elif self.columns:
+            raise ValueError(f"columns_only_for_rows_input:{self.id}")
+        return self
 
     @model_validator(mode="after")
     def _select_default_must_be_an_option(self) -> SkillInputVariable:

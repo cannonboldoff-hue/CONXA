@@ -564,6 +564,8 @@ def _for_each_info(
     summary = {
         "container_selector": str(rows.get("container_selector") or "").strip(),
         "items": str(for_each.get("items") or "").strip(),
+        "items_rows": str(for_each.get("items_rows") or "").strip(),
+        "columns": [str(c) for c in for_each.get("columns") or []] if isinstance(for_each.get("columns"), list) else [],
         "as": str(for_each.get("as") or "row").strip() or "row",
         "max_iterations": for_each.get("max_iterations"),
         "on_row_error": str(for_each.get("on_row_error") or "stop").strip() or "stop",

@@ -289,3 +289,74 @@ test("an extract in the loop body reports every row's value, in row order", asyn
     HANDLERS.extract = real;
   }
 });
+
+// EXEC-60 — a loop that carries a table: one object per row, several columns, {{row.column}} in the body.
+function rowsForEachStep({ columns = ["to", "subject"], maxIterations = 10, steps, type = "for_each_rows" } = {}) {
+  return {
+    type, items_rows: "mails", columns, as: "row", max_iterations: maxIterations,
+    steps: steps || [{ type: "navigate", url: "https://x.test/compose?to={{row.to}}&su={{row.subject}}&n={{row_index}}" }],
+  };
+}
+
+function mockNavigatingPage(opened) {
+  return {
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+    context: () => idleContext,
+    url: () => "https://x.test",
+    goto: async (u) => { opened.push(u); },
+    locator: () => ({ all: async () => [] }),
+  };
+}
+
+test("for_each_rows: each row's columns reach the body, one iteration per row, and nothing leaks out", async () => {
+  const opened = [];
+  const inputs = { mails: [{ to: "a@x.com", subject: "Hi" }, { to: "b@x.com", subject: "Yo" }] };
+  await runPlan(mockNavigatingPage(opened), [rowsForEachStep()], inputs, 0, "rows-basic", {});
+  assert.deepStrictEqual(opened, [
+    "https://x.test/compose?to=a@x.com&su=Hi&n=0",
+    "https://x.test/compose?to=b@x.com&su=Yo&n=1",
+  ]);
+  assert.ok(!("row.to" in inputs) && !("row_index" in inputs), "loop-local names are removed afterwards");
+});
+
+test("for_each_rows: the table may arrive as JSON text (a form or a schedule hands it over that way)", async () => {
+  const opened = [];
+  await runPlan(mockNavigatingPage(opened), [rowsForEachStep()], { mails: JSON.stringify([{ to: "a@x.com", subject: "Hi" }]) }, 0, "rows-json", {});
+  assert.strictEqual(opened.length, 1);
+});
+
+test("for_each_rows: a row with a missing or blank column stops the run before anything is opened", async () => {
+  for (const [name, table] of [["blank", [{ to: "a@x.com", subject: "" }]], ["absent", [{ to: "a@x.com" }]], ["not-rows", "to,subject"]]) {
+    const opened = [];
+    await assert.rejects(
+      () => runPlan(mockNavigatingPage(opened), [rowsForEachStep()], { mails: table }, 0, `rows-bad-${name}`, {}),
+      (err) => err.badInput === true || /no value for|not a list of rows/.test(err.message),
+      name,
+    );
+    assert.deepStrictEqual(opened, [], `${name}: nothing was opened`);
+  }
+});
+
+test("for_each_rows: identical rows are all run (a row the caller wrote is a row that runs)", async () => {
+  const opened = [];
+  const row = { to: "a@x.com", subject: "Hi" };
+  await runPlan(mockNavigatingPage(opened), [rowsForEachStep()], { mails: [row, { ...row }] }, 0, "rows-dup", {});
+  assert.strictEqual(opened.length, 2);
+});
+
+test("for_each_rows: caps at max_iterations, and an empty table warns instead of reporting a quiet success", async () => {
+  const opened = [];
+  const many = Array.from({ length: 5 }, (_, n) => ({ to: `u${n}@x.com`, subject: "s" }));
+  await runPlan(mockNavigatingPage(opened), [rowsForEachStep({ maxIterations: 2 })], { mails: many }, 0, "rows-cap", {});
+  assert.strictEqual(opened.length, 2);
+  const empty = await runPlan(mockNavigatingPage([]), [rowsForEachStep()], { mails: [] }, 0, "rows-empty", {});
+  assert.match(empty.warnings[0], /found no items to process/);
+});
+
+test("for_each_rows: invalid column names are refused, not guessed", async () => {
+  await assert.rejects(
+    () => runPlan(mockNavigatingPage([]), [rowsForEachStep({ columns: ["to-addr"] })], { mails: [{ "to-addr": "x" }] }, 0, "rows-badcols", {}),
+    (err) => /no valid column names/.test(err.message),
+  );
+});

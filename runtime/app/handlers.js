@@ -3,7 +3,7 @@
 // primitives (best-effort by invariant — never enter the recovery cascade),
 // executeStep, recovery embedding, and agent-override injection.
 const pageScripts = require("./page_scripts");
-const { interpolate, leftoverPlaceholders } = require("./interpolate");
+const { interpolate, leftoverPlaceholders, inputsReferenced } = require("./interpolate");
 const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
 const { capture } = require("./page_geometry");
 const {
@@ -413,7 +413,9 @@ const HANDLERS = {
 
   navigate: async (page, step, inputs) => {
     const url = interpolate(step.url || "", inputs);
-    const left = leftoverPlaceholders(url);
+    // A well-formed {{id}} with no value is blanked by interpolate(), so it never shows up as leftover: name it here.
+    const left = [...leftoverPlaceholders(url),
+      ...inputsReferenced({ url: step.url || "" }, inputs).filter((r) => r.empty).map((r) => `{{${r.id}}}`)];
     if (left.length) {
       // Fail before opening anything, and never retry: no amount of waiting fills in a value that does not exist.
       throw Object.assign(
@@ -1102,7 +1104,7 @@ HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
 // is never one of these by the time executeStep runs — this set only matters if something calls
 // executeStep directly, bypassing run.js (a test harness, say), where the correct behavior is
 // still "do nothing" rather than the throw below.
-const PRE_DISPATCH_STEP_TYPES = new Set(["handover", "agent_span", "for_each", "outcome_fork", "call_workflow"]);
+const PRE_DISPATCH_STEP_TYPES = new Set(["handover", "agent_span", "for_each", "for_each_rows", "outcome_fork", "call_workflow"]);
 
 // What an extract step reads. `source`: text (visible text, the default), value (an input's value) or
 // attribute (named by `attribute`). `pattern`, if given, keeps the first capture group (or the whole

@@ -91,3 +91,14 @@ test("repeat_click clicks `count` times, stops at the first failed click, and is
     assert.strictEqual(calls.length, 3, "one failed click stops the run: never most of them");
   } finally { HANDLERS.click = real; }
 });
+
+test("navigate refuses an address whose placeholder is well-formed but has an empty value", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  let opened = null;
+  const page = { goto: async (u) => { opened = u; } };
+  await assert.rejects(
+    () => HANDLERS.navigate(page, { url: "https://mail.test/?to={{to}}&su={{subject}}" }, { to: "", subject: "Hi" }),
+    (e) => e.badInput === true && /\{\{to\}\}/.test(e.message) && !/subject/.test(e.message),
+  );
+  assert.strictEqual(opened, null, "nothing was opened");
+});

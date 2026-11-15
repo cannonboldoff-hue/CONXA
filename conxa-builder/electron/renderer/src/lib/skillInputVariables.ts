@@ -2,8 +2,9 @@ import type { StepEditorDTO } from '../types/workflow'
 
 /** Must match conxa_compile/editor/placeholder_grammar.py PLACEHOLDER_RE and
  * runtime/run.js's interpolate() exactly — three independent scanners, one grammar
- * (audit finding C3). Whitespace inside the braces (`{{ id }}`) is tolerated by all three. */
-const PLACEHOLDER = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g
+ * (audit finding C3). Whitespace inside the braces (`{{ id }}`) is tolerated by all three.
+ * `{{row.to}}` (one dot) is a column of the current row of a table loop, never an input. */
+const PLACEHOLDER = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)?)\s*\}\}/g
 
 const ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/
 
@@ -27,13 +28,13 @@ export function collectVariableIdsFromSteps(steps: StepEditorDTO[]): string[] {
   for (const step of steps) {
     for (const b of step.parameter_bindings ?? []) {
       const rec = b as { variable_id?: string }
-      if (rec.variable_id) set.add(rec.variable_id)
+      if (rec.variable_id && !rec.variable_id.includes('.')) set.add(rec.variable_id)
     }
     const blob: string[] = []
     collectStringsFromValue(step, blob)
     for (const s of blob) {
       for (const m of s.matchAll(PLACEHOLDER)) {
-        if (m[1]) set.add(m[1])
+        if (m[1] && !m[1].includes('.')) set.add(m[1])
       }
     }
   }
@@ -87,7 +88,7 @@ export function labelFromId(id: string): string {
     .join(' ')
 }
 
-export type InputVariableType = 'text' | 'select' | 'date' | 'multiselect'
+export type InputVariableType = 'text' | 'select' | 'date' | 'multiselect' | 'rows'
 
 export type VariableFormRow = {
   key: string
@@ -95,6 +96,8 @@ export type VariableFormRow = {
   label: string
   varType: InputVariableType
   optionsText: string
+  /** Comma-separated column names of a table ('rows') input, e.g. "to, subject". */
+  columnsText: string
   defaultValue: string
   sensitive: boolean
   optional: boolean
@@ -133,6 +136,7 @@ export function newEmptyRow(): VariableFormRow {
     label: '',
     varType: 'text',
     optionsText: '',
+    columnsText: '',
     defaultValue: '',
     sensitive: false,
     optional: false,
@@ -147,8 +151,17 @@ export function rowsFromServerInputs(inputs: Record<string, unknown>[]): Variabl
       id,
       label: String(raw.label ?? (id ? labelFromId(id) : '')),
       varType:
-        raw.type === 'select' ? 'select' : raw.type === 'multiselect' ? 'multiselect' : raw.type === 'date' ? 'date' : 'text',
+        raw.type === 'select'
+          ? 'select'
+          : raw.type === 'multiselect'
+            ? 'multiselect'
+            : raw.type === 'date'
+              ? 'date'
+              : raw.type === 'rows'
+                ? 'rows'
+                : 'text',
       optionsText: Array.isArray(raw.options) ? (raw.options as unknown[]).map((o) => String(o)).join(', ') : '',
+      columnsText: Array.isArray(raw.columns) ? (raw.columns as unknown[]).map((c) => String(c)).join(', ') : '',
       defaultValue: raw.default == null ? '' : String(raw.default),
       sensitive: raw.sensitive === true,
       optional: raw.optional === true,
@@ -214,6 +227,20 @@ export function rowsToServerPayload(
         }
         rec.default = def
       }
+    } else if (row.varType === 'rows') {
+      const columns = row.columnsText.split(',').map((s) => s.trim()).filter(Boolean)
+      if (!columns.length || columns.length > 12) {
+        return { ok: false, error: `"${id}" is a table: name between 1 and 12 columns, separated by commas.` }
+      }
+      const bad = columns.find((c) => !ID_PATTERN.test(c))
+      if (bad) {
+        return { ok: false, error: `Invalid column name "${bad}". Use letters, numbers, underscore; start with a letter.` }
+      }
+      if (new Set(columns).size !== columns.length) {
+        return { ok: false, error: `"${id}" lists the same column twice.` }
+      }
+      rec.options = []
+      rec.columns = columns
     } else {
       rec.options = []
       const def = row.defaultValue.trim()
@@ -245,6 +272,7 @@ export function addSpottedToRows(
     label: labelFromId(id),
     varType: 'text' as const,
     optionsText: '',
+    columnsText: '',
     defaultValue: '',
     sensitive: false,
     optional: false,

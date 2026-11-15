@@ -58,6 +58,8 @@ def execution_capabilities(steps: list[Any]) -> list[str]:
                 need.add("clipboard")
             if s.get("type") == "call_workflow":
                 need.add("call_workflow")
+            if s.get("type") == "for_each_rows":
+                need.add("loop_rows")
             if s.get("type") == "agent_span":
                 # agent_span_v2: the Browser-Use-style span (any URL, tabs, answers). An older app layer that
                 # only has "agent_span" would misread it, so it refuses the pack.

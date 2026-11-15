@@ -1,0 +1,14 @@
+[
+  { "name": "plain id", "text": "{{a}}", "ids": ["a"] },
+  { "name": "spaces inside the braces", "text": "{{ b_2 }}", "ids": ["b_2"] },
+  { "name": "row column (one dot)", "text": "to={{row.to}}&n={{row_index}}", "ids": ["row.to", "row_index"] },
+  { "name": "row column with spaces", "text": "{{ row.subject }}", "ids": ["row.subject"] },
+  { "name": "two dots is not a placeholder", "text": "{{a.b.c}}", "ids": [] },
+  { "name": "trailing dot is not a placeholder", "text": "{{row.}}", "ids": [] },
+  { "name": "space around the dot is not a placeholder", "text": "{{row . to}}", "ids": [] },
+  { "name": "digit-led id is not a placeholder", "text": "{{1a}}", "ids": [] },
+  { "name": "digit-led column is not a placeholder", "text": "{{row.1}}", "ids": [] },
+  { "name": "hyphen is not a placeholder", "text": "{{a-b}}", "ids": [] },
+  { "name": "empty braces", "text": "{{}}", "ids": [] },
+  { "name": "mixed text", "text": "hi {{a}} and {{row.to}} then {{x-y}}", "ids": ["a", "row.to"] }
+]

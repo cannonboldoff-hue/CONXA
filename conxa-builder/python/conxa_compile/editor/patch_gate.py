@@ -394,6 +394,15 @@ def _validate_for_each_patch(raw: Any) -> None:
     items = raw.get("items")
     if items is not None and not is_valid_placeholder_id(str(items).strip()):
         raise ValueError("for_each_items_must_be_valid_input_id")
+    items_rows = raw.get("items_rows")
+    if items_rows is not None and str(items_rows).strip() and not is_valid_placeholder_id(str(items_rows).strip()):
+        raise ValueError("for_each_items_must_be_valid_input_id")
+    columns = raw.get("columns")
+    if columns is not None:
+        if (not isinstance(columns, list) or not columns or len(columns) > 12
+                or not all(isinstance(c, str) and is_valid_placeholder_id(c.strip()) for c in columns)
+                or len({c.strip() for c in columns}) != len(columns)):
+            raise ValueError("for_each_columns_must_be_unique_names")
     as_name = raw.get("as")
     if as_name is not None and not str(as_name).strip():
         raise ValueError("for_each_as_must_be_non_empty_string")
@@ -427,8 +436,11 @@ def _validate_for_each_source(step: dict[str, Any], raw_patch: Any) -> None:
     eff_rows = effective.get("rows") if isinstance(effective.get("rows"), dict) else {}
     has_selector = bool(str(eff_rows.get("container_selector") or "").strip())
     has_items = bool(str(effective.get("items") or "").strip())
-    if has_selector == has_items:
+    has_table = bool(str(effective.get("items_rows") or "").strip())
+    if sum((has_selector, has_items, has_table)) != 1:
         raise ValueError("for_each_requires_exactly_one_row_source")
+    if has_table and not (isinstance(effective.get("columns"), list) and effective["columns"]):
+        raise ValueError("for_each_table_needs_columns")
 
 
 # `enum: [true]` is what makes "no" end the run: a span answer that doesn't satisfy the

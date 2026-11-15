@@ -82,6 +82,27 @@ def _humanize(intent: str) -> str:
 _DELIBERATE_KINDS = frozenset({"decision_needed", "left_open_unclassified", "couldnt_confirm", "bad_input", "tab_not_found"})
 
 
+def rows_to_text(value: Any, columns: list[str]) -> str:
+    """A table value as the lines the test card shows: one row per line, columns separated by " | "."""
+    if not isinstance(value, list):
+        return ""
+    return "\n".join(" | ".join(str(r.get(c, "")) for c in columns) for r in value if isinstance(r, dict))
+
+
+def rows_from_text(text: Any, columns: list[str], label: str) -> list[dict[str, str]]:
+    """The lines of a table input ("a@x.com | Hello", one row per line) as rows. A line with the wrong number of
+    columns is refused with its line number: a shifted column would send the wrong value to the wrong place."""
+    out: list[dict[str, str]] = []
+    for n, line in enumerate(str(text or "").splitlines(), 1):
+        if not line.strip():
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) != len(columns) or any(not c for c in cells):
+            raise _CommandError("inputs_invalid", f"{label}, line {n}: give {len(columns)} values separated by | ({', '.join(columns)}).")
+        out.append(dict(zip(columns, cells)))
+    return out
+
+
 def _is_deliberate_stop(kind: str | None) -> bool:
     return bool(kind) and (kind in _DELIBERATE_KINDS or str(kind).startswith("fault:"))
 
@@ -145,9 +166,13 @@ class TestFlowMixin:
                 continue
             rid_ = str(row["id"])
             value = last.get(rid_, recorded.get(rid_, row.get("default") or ""))
+            columns = [str(c) for c in row.get("columns") or []] if row.get("type") == "rows" else []
+            if columns:
+                value = value if isinstance(value, str) else rows_to_text(value, columns)
             inputs.append({
                 "id": rid_, "label": _humanize(rid_), "type": row.get("type") or "text",
                 "options": row.get("options") or [], "required": not row.get("optional", False),
+                **({"columns": columns} if columns else {}),
                 "value": value if isinstance(value, (str, int, float, bool)) else "",
                 **({"suspect": True} if rid_ in suspects else {}),
             })
@@ -182,6 +207,11 @@ class TestFlowMixin:
                    if i.get("required") and str(values.get(i["id"], "")).strip() == ""]
         if missing:
             raise _CommandError("inputs_required", f"Fill in: {', '.join(missing)}.")
+        # A table input is typed as lines on the card; the run gets real rows.
+        run_values = dict(values)
+        for spec in card.get("inputs") or []:
+            if spec.get("columns"):
+                run_values[spec["id"]] = rows_from_text(values.get(spec["id"], ""), list(spec["columns"]), str(spec.get("label") or spec["id"]))
         if runtime_state.get_flags(workflow.id).get("testing"):
             raise _CommandError("test_in_progress", "A test of this workflow is already running.")
         guard = bool(payload.get("guard", True))
@@ -192,7 +222,7 @@ class TestFlowMixin:
         harness.update_card(_thread(workflow.id), card["card_id"], sink=sink, state="submitted", actions=[],
                             guard=guard, show_browser=show_browser, use_ai=use_ai, inputs=ran)
         threading.Thread(
-            target=self._tf_background, args=(workflow.id, values, guard, show_browser, use_ai), daemon=True,
+            target=self._tf_background, args=(workflow.id, run_values, guard, show_browser, use_ai), daemon=True,
         ).start()
         return {"ok": True}
 
@@ -441,7 +471,7 @@ class TestFlowMixin:
         already have happened, and the surface a deliberate stop was about. Nothing here is read from message text.
         Empty-handed ({"kind": None, ...}) when no evidence was kept; callers then fall back to the old behaviour."""
         facts: dict[str, Any] = {"kind": None, "took_effect": False, "surface": None, "message": "",
-                                 "failed_step_key": None, "failed_at": None}
+                                 "failed_step_key": None, "failed_at": None, "candidates": []}
         try:
             from conxa_compile.editor.evidence import build_evidence_bundle
             from conxa_core.storage.workflow_store import get_workflow
@@ -458,6 +488,8 @@ class TestFlowMixin:
             facts["message"] = str(ev.get("message") or "")
             surface = ev.get("left_open_surface")
             facts["surface"] = surface if isinstance(surface, dict) else None
+            cands = ev.get("ambiguous_candidates")
+            facts["candidates"] = [str(c.get("name") or "") for c in cands if isinstance(c, dict)] if isinstance(cands, list) else []
         except Exception:  # noqa: BLE001 -- facts are a bonus; a failed test must still report
             pass
         return facts
@@ -585,7 +617,7 @@ class TestFlowMixin:
         # "Couldn't confirm" / "Partly done" already read in plain words and say something an ordinary
         # failure summary would flatten: the work may have happened. Keep their own sentences.
         own = outcome in ("couldnt_confirm", "partly_done")
-        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message, facts["kind"])
+        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message, facts["kind"], facts.get("candidates"))
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:4000],
             summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent and not own,

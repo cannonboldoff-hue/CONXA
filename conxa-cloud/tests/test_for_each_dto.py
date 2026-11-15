@@ -33,6 +33,8 @@ def test_for_each_projects_a_summary_and_nested_body_with_path_addressed_ids():
     assert dto.for_each_summary == {
         "container_selector": "table#invoices tr",
         "items": "",
+        "items_rows": "",
+        "columns": [],
         "as": "row",
         "max_iterations": 50,
         "on_row_error": "stop",

@@ -4,7 +4,9 @@
 // Grammar must match conxa_compile/editor/placeholder_grammar.py PLACEHOLDER_RE exactly —
 // a looser runtime grammar let hyphenated/spaced {{ids}} interpolate here while staying
 // invisible to the compiler/UI scanners and always resolving to "" (audit finding C3).
-const PLACEHOLDER_SOURCE = "\\{\\{\\s*([a-zA-Z][a-zA-Z0-9_]*)\\s*\\}\\}";
+// One optional `.column` part names a column of the current row of a rows loop ({{row.to}});
+// runForEachStep binds it under that dotted name. Shared fixture: test/fixtures/placeholder_cases.json.
+const PLACEHOLDER_SOURCE = "\\{\\{\\s*([a-zA-Z][a-zA-Z0-9_]*(?:\\.[a-zA-Z][a-zA-Z0-9_]*)?)\\s*\\}\\}";
 
 function interpolate(value, inputs) {
   if (typeof value !== "string") return value;

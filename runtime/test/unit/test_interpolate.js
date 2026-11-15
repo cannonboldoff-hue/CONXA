@@ -44,3 +44,17 @@ test("inputsReferenced: tolerates no step, no inputs and cyclic objects", () => 
   const a = { value: "{{x}}" }; a.self = a;
   assert.deepStrictEqual(inputsReferenced(a, null), [{ id: "x", empty: true }]);
 });
+
+// Shared with conxa-cloud/tests/test_placeholder_grammar.py: the two grammars must find the same ids.
+test("placeholder grammar: the shared fixture", () => {
+  const cases = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "fixtures", "placeholder_cases.json"), "utf8"));
+  for (const c of cases) {
+    const ids = [];
+    interpolate(c.text, new Proxy({}, { get: (_, k) => { ids.push(k); return ""; } }));
+    assert.deepStrictEqual(ids, c.ids, c.name);
+  }
+});
+
+test("interpolate: a row column is looked up under its dotted name", () => {
+  assert.strictEqual(interpolate("to={{row.to}}", { "row.to": "a@x.com" }), "to=a@x.com");
+});
