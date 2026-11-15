@@ -216,6 +216,18 @@ def test_done_when_is_the_last_actions_check_not_every_page_load():
     assert build_summary(doc, recorded_actions=2, added_steps=0, name="x", uncertain=0)["done_when"] == ["the file is uploaded"]
 
 
+def test_step_checks_list_live_checks_and_required_assertions_per_step():
+    checks = [
+        {"role": "support", "plain": "the file arrives on this computer"},
+        {"role": "veto", "plain": "an error shows"},
+        {"role": "support", "plain": "a dead one", "calibrated": False, "calibration_basis": ["x"]},
+    ]
+    dl = {"action": "click", "validation": {"effect": {"checks": checks}, "assertions": [{"type": "text_present", "target": "Downloaded", "required": True}]}}
+    bare = {"action": "click"}
+    s = build_summary({"skills": [{"steps": [dl, bare]}]}, recorded_actions=2, added_steps=0, name="x", uncertain=0)
+    assert s["step_checks"] == [["the file arrives on this computer", "“Downloaded” appears"], []]
+
+
 def test_compile_done_settles_rows_whose_end_event_never_came():
     p = CompileProgress()
     p.observe({"phase": "pipeline_start"})

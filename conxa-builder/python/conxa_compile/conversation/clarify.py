@@ -1044,6 +1044,34 @@ def effect_parents(steps: list[dict[str, Any]]) -> list[int | None]:
     return out
 
 
+def _assertion_words(step: dict[str, Any]) -> list[str]:
+    """A step's required checks in everyday words (selector-type checks are left out)."""
+    out: list[str] = []
+    for a in (step.get("validation") or {}).get("assertions") or []:
+        if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
+            if a.get("type") == "text_present":
+                out.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
+            elif a.get("type") == "url_changed":
+                out.append("the page address changes")
+            elif a.get("type") == "state_changed":
+                out.append("the file is uploaded" if _action_name(step) in ("upload", "upload_intent") else "the page changes")
+    return out
+
+
+def step_checks(step: dict[str, Any]) -> list[str]:
+    """What the step is checked against, in plain words, for the summary card's sub-steps: the
+    proof-of-done checks (not vetoes, not ones a test run showed dead) plus required assertions."""
+    out: list[str] = []
+    effect = (step.get("validation") or {}).get("effect") or {}
+    for c in effect.get("checks") or []:
+        if c.get("role") == "veto" or (c.get("calibrated") is False and c.get("calibration_basis")):
+            continue
+        if c.get("plain") and c["plain"] != "the file was chosen":
+            out.append(str(c["plain"]))
+    out += _assertion_words(step)
+    return list(dict.fromkeys(out))[:3]
+
+
 def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: int, name: str, uncertain: int) -> dict[str, Any]:
     """The workflow summary card's data. The counts add up across screens: actions recorded →
     steps compiled → steps now (after answers added some)."""
@@ -1052,15 +1080,7 @@ def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: in
     # The workflow is done when its LAST action did what it should; a check on an earlier step
     # (every page load checks its address changed) says nothing about the goal.
     last = next((s for s in reversed(steps) if _action_name(s) not in _EFFECT_ACTIONS), None)
-    required_checks: list[str] = []
-    for a in ((last or {}).get("validation") or {}).get("assertions") or []:
-        if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
-            if a.get("type") == "text_present":
-                required_checks.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
-            elif a.get("type") == "url_changed":
-                required_checks.append("the page address changes")
-            elif a.get("type") == "state_changed":
-                required_checks.append("the file is uploaded" if _action_name(last) in ("upload", "upload_intent") else "the page changes")
+    required_checks = _assertion_words(last or {})
     inputs = [i for i in doc.get("inputs") or [] if isinstance(i, dict)]
     return {
         "name": name,
@@ -1072,5 +1092,6 @@ def build_summary(doc: dict[str, Any], *, recorded_actions: int, added_steps: in
         "uncertain": uncertain,
         "step_names": names,
         "step_parents": effect_parents(steps),
+        "step_checks": [step_checks(s) for s in steps],
         "done_when": required_checks[:3],
     }

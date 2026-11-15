@@ -318,6 +318,8 @@ type Summary = {
   step_names: string[]
   /** Per step: the index of the action that caused it (a download, a new tab), or null. Display only. */
   step_parents?: (number | null)[]
+  /** Plain-words checks per step, shown as sub-steps (a, b, c) under their action. */
+  step_checks?: string[][]
   done_when: string[]
   goal?: string
   input_names?: string[]
@@ -334,6 +336,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
   const s = item.summary as Summary
   const compiled = s.steps - s.added_steps
   const [expanded, setExpanded] = useState(false)
+  const checkCount = (s.step_checks ?? []).reduce((n, c) => n + c.length, 0)
   const shown = expanded ? s.step_names : s.step_names.slice(0, 6)
   const wf = workflowIdOf(threadId)
   const lifecycleQ = useQuery({ queryKey: ['lifecycle', wf], queryFn: () => getLifecycle(wf), retry: false })
@@ -380,9 +383,17 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
       </div>
       <ol className="space-y-1">
         {shown.map((n, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="w-5 shrink-0 text-right tabular-nums text-[var(--text-meta)]">{i + 1}</span>
-            <span className="text-[var(--text-primary)]">{n}</span>
+          <li key={i}>
+            <div className="flex gap-2">
+              <span className="w-5 shrink-0 text-right tabular-nums text-[var(--text-meta)]">{i + 1}</span>
+              <span className="text-[var(--text-primary)]">{n}</span>
+            </div>
+            {(s.step_checks?.[i] ?? []).map((c, j) => (
+              <div key={j} className="flex gap-2 pl-7 text-[var(--text-secondary)]">
+                <span className="shrink-0 tabular-nums text-[var(--text-meta)]">✓ {i + 1}{String.fromCharCode(97 + j)}</span>
+                <span>Check that {c}</span>
+              </div>
+            ))}
           </li>
         ))}
         {s.step_names.length > 6 && (
@@ -395,7 +406,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         )}
       </ol>
       <p className="mt-3 text-xs text-[var(--text-meta)]">
-        {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''}{s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
+        {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''}{checkCount ? ` · ${checkCount} check${checkCount === 1 ? '' : 's'}` : ''}{s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
         {s.queued ? ` · ${s.queued} thing${s.queued === 1 ? '' : 's'} I was sure about (say “ask me” to check)` : ''}
       </p>
       {s.assumptions && s.assumptions.length > 0 && (
