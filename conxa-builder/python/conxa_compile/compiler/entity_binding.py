@@ -101,23 +101,76 @@ def _row_text_segments(row_outer_html: str) -> list[str]:
     return [s.strip() for s in raw.split("␟") if s.strip()]
 
 
-def _pick_identifier(row: dict[str, Any]) -> str:
+_PRICE_OR_NUMBER = re.compile(r"^[\W_]*\d[\d.,\s]*[\W_]*$")
+
+
+def _row_segment_sets(rows_html: list[str]) -> list[set[str]]:
+    return [{seg.lower() for seg in _row_text_segments(h)} for h in rows_html]
+
+
+def _sibling_rows_html(ev: Step, row: dict[str, Any], parent: dict[str, Any], container_selector: str,
+                       row_tag: str, row_classes: list[str], dom_html: str | None) -> tuple[list[str], bool]:
+    """The outer html of every row beside this one, and whether the list is known to be complete.
+    The full recorded page is the evidence when there is one (the ancestor chain is cut at 2000 characters, so a
+    long list shows only its first rows); the ancestor chain is the fallback."""
+    if dom_html:
+        try:
+            matched = BeautifulSoup(dom_html, "html.parser").select(container_selector)
+        except Exception:  # an unusual selector is not a reason to lose the binding
+            matched = []
+        if len(matched) >= _MIN_SIBLINGS:
+            return [str(m) for m in matched], True
+    parent_html = str(parent.get("outer_html") or "")
+    try:
+        root = BeautifulSoup(parent_html, "html.parser").find(True)
+    except Exception:
+        root = None
+    kids: list[str] = []
+    if root is not None:
+        want = set(row_classes)
+        for child in root.find_all(row_tag, recursive=False):
+            raw = child.get("class") or []
+            raw = raw.split() if isinstance(raw, str) else raw
+            if want and set(strip_dynamic_classes([str(c) for c in raw])) != want:
+                continue
+            kids.append(str(child))
+    return kids, len(parent_html) < _ANCESTOR_HTML_CAP
+
+
+def _own_texts(ev: Step) -> set[str]:
+    """What the clicked control says about itself. It repeats on every row, so it never says which row."""
+    target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
+    keys = ("inner_text", "aria_label", "label_text", "title", "value", "alt", "placeholder")
+    return {str(target.get(k)).strip().lower() for k in keys if str(target.get(k) or "").strip()}
+
+
+def _pick_identifier(row: dict[str, Any], *, own: frozenset[str] | set[str] = frozenset(),
+                     siblings: list[set[str]] | None = None, complete: bool = False) -> str:
+    """The text that picks THIS row out. It must not be the control's own label, and when the other rows are known it
+    must appear in no other row (two products can cost the same; two rows can share a status word). Words win over bare
+    numbers and prices; a code that mixes both (an invoice or order number) is the best of all."""
     candidates = []
     for seg in _row_text_segments(str(row.get("outer_html") or "")):
         if not seg or len(seg) > _MAX_IDENTIFIER_LEN:
             continue
-        if seg.lower() in _NON_IDENTIFYING_TOKENS:
+        if seg.lower() in _NON_IDENTIFYING_TOKENS or seg.lower() in own:
             continue
         if is_low_quality_anchor(seg):
             continue
         candidates.append(seg)
     if not candidates:
         return ""
-    # A segment carrying a digit run (invoice/order/SKU number) is the most durable identity —
-    # prefer it over a plain name, which can repeat (e.g. two rows for the same product).
-    with_digits = [c for c in candidates if re.search(r"\d", c)]
-    pool = with_digits or candidates
-    return max(pool, key=len)
+    if siblings is not None and len(siblings) >= _MIN_SIBLINGS:
+        # The row itself is one of the siblings, so a unique identifier is in exactly one set.
+        unique = [c for c in candidates if sum(1 for sset in siblings if c.lower() in sset) == 1]
+        if unique:
+            candidates = unique
+        elif complete:
+            return ""  # every candidate repeats in another row: nothing here can name this row
+    def score(c: str) -> tuple[int, int, int]:
+        has_letters = bool(re.search(r"[^\W\d_]", c))
+        return (1 if has_letters else 0, 0 if _PRICE_OR_NUMBER.match(c) else 1, len(c))
+    return max(candidates, key=score)
 
 
 # --- is the target one item picked from a list? ----------------------------------------------
@@ -184,10 +237,22 @@ def repeating_peers(ev: Step) -> int:
     return 0
 
 
-def detect_entity_binding(ev: Step) -> EntityBinding | None:
+def detect_entity_binding(
+    ev: Step, *, dom_html: str | None = None, destructive: bool = False, address_unique: bool = False,
+) -> EntityBinding | None:
     """Walk the recorded ancestor chain outward; the first ancestor with >=2 structurally
     matching siblings is treated as the row. Returns None when nothing repeats — there is no
-    wrong row to guard against."""
+    wrong row to guard against.
+
+    A row binding exists to tell rows apart, so it is built only where that is needed and possible:
+    - a step that cannot do harm and whose own address already picks exactly one element on the recorded page
+      (``address_unique``, e.g. a ``data-test`` id) needs no row, and a binding there can only add a way to fail;
+    - the identifier must appear in one row only (see ``_pick_identifier``). When no text can name the row, a step
+      that cannot do harm gets no binding (the runtime still refuses to guess among look-alike elements), while a
+      step that can do harm keeps its best guess, unconfirmed, so a person is asked to check which row it means."""
+    if address_unique and not destructive and dom_html:
+        return None
+    own = _own_texts(ev)
     ancestors = ev.get("ancestors") or []
     for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH)):
         row = ancestors[i] or {}
@@ -199,10 +264,14 @@ def detect_entity_binding(ev: Step) -> EntityBinding | None:
         siblings = _direct_child_count(str(parent.get("outer_html") or ""), row_tag, set(row_classes))
         if siblings < _MIN_SIBLINGS:
             continue
-        identifier = _pick_identifier(row)
+        container_selector = _build_container_selector(parent, row_tag, _css_class_selector(row_classes))
+        rows_html, complete = _sibling_rows_html(ev, row, parent, container_selector, row_tag, row_classes, dom_html)
+        identifier = _pick_identifier(row, own=own, siblings=_row_segment_sets(rows_html) if rows_html else None,
+                                      complete=complete)
+        if not identifier and destructive:
+            identifier = _pick_identifier(row, own=own)  # best guess, left unconfirmed for a person to check
         if not identifier:
             continue
-        container_selector = _build_container_selector(parent, row_tag, _css_class_selector(row_classes))
         return EntityBinding(
             container_selector=container_selector,
             identifier=identifier,

@@ -34,7 +34,7 @@ _ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
 # Kinds an earlier answer is replayed onto: built from the document as compiled, before replay changes it.
 _REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
 # Kinds built afterwards from the document replay left, so their bindings and step keys are current.
-_REOPENED_KINDS = frozenset({"values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
+_REOPENED_KINDS = frozenset({"confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
 
 
 def _thread(workflow_id: str) -> str:

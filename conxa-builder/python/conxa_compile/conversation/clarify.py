@@ -36,7 +36,7 @@ MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
-    "coverage": -1, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "chosen_values": 2.5,
+    "coverage": -1, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
@@ -85,12 +85,15 @@ def step_name(step: dict[str, Any]) -> str:
     own = str(step.get("semantic_description") or "").strip()
     if not own or own == str(step.get("intent") or "").strip():     # the bare intent token is not a description
         own = _action_title(step)
+    hints = step.get("handler_hints") if isinstance(step.get("handler_hints"), dict) else {}
+    times = int(hints.get("repeat_count") or 1)
+    suffix = f" ({times} times)" if times >= 3 else ""   # a click kept as "do this N times" says so
     for text in (own, str(step.get("intent") or "").strip()):
         if text:
             text = _readable(re.sub(r"^Step \d+:\s*", "", text))
             if "_" in text and " " not in text:
                 text = text.replace("_", " ")
-            return text[:1].upper() + text[1:80]
+            return text[:1].upper() + text[1:80] + suffix
     return _action_name(step).replace("_", " ").capitalize() or "This step"
 
 
@@ -607,6 +610,27 @@ def generate_questions(
             step_keys_=[keys[i]], step_name=name,
         ))
 
+    # 2b ─ a step that can't be undone and acts on one row of a list: is it the right row? The publish gate and the
+    #      editor both require this confirmation; without a question nothing in the chat ever asked for it.
+    for i, s in enumerate(steps):
+        eb = s.get("entity_binding")
+        if (s.get("consequence") != "irreversible" or not isinstance(eb, dict) or not eb.get("container_selector")
+                or eb.get("confirmed")):
+            continue
+        ident = str(eb.get("identifier") or "").strip()
+        if not ident or ident.startswith("{{"):
+            continue  # a run input names the row each time; nothing recorded to confirm
+        name = step_name(s)
+        out.append(_question(
+            "confirm_row", f"confirm_row:{keys[i]}", f"Is the row with “{_readable(ident)[:60]}” the one “{name}” should act on?",
+            "This step can’t be undone, so it only ever acts on the row with that text. If the text matches no row, or more than one, it stops instead of guessing.",
+            [
+                {"id": "yes", "label": "Yes, that’s the row", "detail": "Locks it to that row."},
+                {"id": "no", "label": "No, it should pick a different row", "detail": "Nothing changes here. Choose the right row in the editor before this can be published."},
+            ],
+            step_keys_=[keys[i]], step_name=name,
+        ))
+
     # 3 ─ typed values: fixed, or an input the person running it fills in?
     candidates: list[dict[str, Any]] = []
     for i, s in enumerate(steps):
@@ -910,6 +934,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                         "prompt": f"About to run “{name}”, which can’t be undone. Should it go ahead?"})
             return ops, "Someone approves it first"
         return ops, "Goes ahead without asking"
+
+    if kind == "confirm_row":
+        if answer.get("choice") == "yes":
+            ops.append({"op": "patch", "step_key": keys[0], "patch": {"entity_binding": {"confirmed": True}}})
+            return ops, "Only acts on that row"
+        return ops, "Needs the right row chosen in the editor"
 
     if kind == "fork_then":
         how = {"same": "rejoin", "stop": "stop", "end": "end"}.get(str(answer.get("choice") or ""))

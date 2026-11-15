@@ -555,3 +555,30 @@ def test_an_always_this_option_answer_for_a_dropdown_pins_it_through_the_values_
     assert plan["unapplied"] == []
     missing = replay.plan([d], doc, [], {key: 99}.get)                                  # the step is gone: said, not dropped
     assert missing["groups"] == [] and missing["unapplied"] == [{"kind": "value", "choice": "fixed"}]
+
+
+# ── W3: a step that can't be undone and acts on one row asks which row, once ──────────────────────────────────
+
+
+def _row_doc(identifier="Bike Light", confirmed=False):
+    steps = [
+        _step("navigate", "open_cart"),
+        _step("click", "activate_control_remove", consequence="irreversible",
+              entity_binding={"container_selector": "#cart > li", "identifier": identifier, "source": "literal", "confirmed": confirmed}),
+    ]
+    return _doc(steps)
+
+
+def test_an_unconfirmed_row_on_a_step_that_cant_be_undone_is_asked_about():
+    doc = _row_doc()
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = next(q for q in generate_questions(doc, limit=None) if q["kind"] == "confirm_row")
+    assert "Bike Light" in q["title"] and q["step_keys"] == [keys[1]]
+    ops, receipt = plan_answer(q, {"choice": "yes"}, doc)
+    assert ops == [{"op": "patch", "step_key": keys[1], "patch": {"entity_binding": {"confirmed": True}}}]
+    assert plan_answer(q, {"choice": "no"}, doc)[0] == []  # chat never re-points a step: that is Human Edit
+
+
+def test_a_confirmed_row_or_a_row_named_by_the_run_is_not_asked_again():
+    assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(confirmed=True), limit=None))
+    assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(identifier="{{item}}"), limit=None))

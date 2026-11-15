@@ -200,3 +200,91 @@ class TestSerializerWiring:
         step = {"entity_binding": {"container_selector": "", "identifier": "", "source": "literal"}}
         out = _copy_saved_common(step, {"type": "click", "selector": "#delete-btn"})
         assert "entity_binding" not in out
+
+
+# --- when a row binding is worth having (W3: the saucedemo and "Buy Now" cases from the 2026-11-15 run) ---------------
+_SHOP = [
+    ("Sauce Labs Backpack", "$29.99"), ("Sauce Labs Bike Light", "$9.99"), ("Sauce Labs Bolt T-Shirt", "$15.99"),
+    ("Sauce Labs Fleece Jacket", "$49.99"), ("Sauce Labs Onesie", "$7.99"), ("Test.allTheThings() T-Shirt", "$15.99"),
+]
+
+
+def _shop_dom() -> str:
+    items = "".join(
+        f'<div class="inventory_item"><div class="inventory_item_name">{n}</div>'
+        f'<div class="inventory_item_desc">Great product number {i} in the catalogue for everyday carrying</div>'
+        f'<div class="inventory_item_price">{p}</div>'
+        f'<button class="btn" data-test="add-to-cart-{i}">Add to cart</button></div>'
+        for i, (n, p) in enumerate(_SHOP)
+    )
+    return f'<html><body><div class="inventory_list">{items}</div></body></html>'
+
+
+def _shop_event(index: int) -> dict:
+    n, p = _SHOP[index]
+    row_html = (f'<div class="inventory_item"><div class="inventory_item_name">{n}</div>'
+                f'<div class="inventory_item_price">{p}</div><button class="btn">Add to cart</button></div>')
+    # The recorder cuts the parent's html at 2000 characters, so a long list shows only its first rows.
+    parent_html = _shop_dom().split('<div class="inventory_list">')[1][:1500]
+    return {
+        "action": {"action": "click", "value": None},
+        "target": {"inner_text": "Add to cart", "tag": "button", "role": "button"},
+        "ancestors": [
+            {"tag": "div", "id": "", "classes": ["inventory_item"], "outer_html": row_html},
+            {"tag": "div", "id": "", "classes": ["inventory_list"], "outer_html": f'<div class="inventory_list">{parent_html}'},
+            {"tag": "body", "id": "", "classes": [], "outer_html": ""},
+        ],
+    }
+
+
+class TestBindingOnlyWhereItTellsRowsApart:
+    def test_a_price_two_products_share_is_never_the_identifier(self):
+        eb = detect_entity_binding(_shop_event(2), dom_html=_shop_dom())  # Bolt T-Shirt, $15.99 twice in the list
+        assert eb is not None and eb.identifier == "Sauce Labs Bolt T-Shirt"
+
+    def test_the_old_choice_is_gone_even_when_the_list_is_cut_short_in_the_ancestor_chain(self):
+        # Without the full page the cut-off list hides the second $15.99; the page snapshot is what exposes it.
+        with_page = detect_entity_binding(_shop_event(2), dom_html=_shop_dom())
+        assert "$15.99" not in with_page.identifier
+
+    def test_a_harmless_step_with_its_own_unique_address_gets_no_binding(self):
+        assert detect_entity_binding(_shop_event(2), dom_html=_shop_dom(), address_unique=True) is None
+
+    def test_a_step_that_can_do_harm_keeps_its_binding_even_with_a_unique_address(self):
+        eb = detect_entity_binding(_shop_event(1), dom_html=_shop_dom(), address_unique=True, destructive=True)
+        assert eb is not None and eb.identifier == "Sauce Labs Bike Light"
+
+    def test_without_a_page_snapshot_a_unique_address_is_not_trusted(self):
+        # Nothing proves the address is unique when no page was kept, so the row stays.
+        assert detect_entity_binding(_shop_event(2), address_unique=True) is not None
+
+    def test_the_controls_own_label_is_not_the_row_identity(self):
+        # "Buy Now" is on the button itself; the heading beside it is all there is to name the row.
+        row = '<div class="card"><h2>Recovery fixture</h2><button>Buy Now</button></div>'
+        other = '<div class="card"><h2>Second offer</h2><button>Buy Now</button></div>'
+        parent = f'<div id="app">{row}{other}</div>'
+        ev = {
+            "action": {"action": "click", "value": None},
+            "target": {"inner_text": "Buy Now", "tag": "button", "role": "button"},
+            "ancestors": [
+                {"tag": "div", "id": "", "classes": ["card"], "outer_html": row},
+                {"tag": "div", "id": "app", "classes": [], "outer_html": parent},
+                {"tag": "body", "id": "", "classes": [], "outer_html": ""},
+            ],
+        }
+        eb = detect_entity_binding(ev)
+        assert eb is not None and eb.identifier.lower() != "buy now"
+
+    def test_a_harmless_step_with_nothing_that_names_its_row_gets_no_binding(self):
+        row = '<li class="r"><span>Same</span><button>Go</button></li>'
+        ev = {
+            "action": {"action": "click", "value": None},
+            "target": {"inner_text": "Go", "tag": "button", "role": "button"},
+            "ancestors": [
+                {"tag": "li", "id": "", "classes": ["r"], "outer_html": row},
+                {"tag": "ul", "id": "l", "classes": [], "outer_html": f'<ul id="l">{row}{row}</ul>'},
+                {"tag": "body", "id": "", "classes": [], "outer_html": ""},
+            ],
+        }
+        assert detect_entity_binding(ev) is None
+        assert detect_entity_binding(ev, destructive=True) is not None  # kept, unconfirmed, for a person to check

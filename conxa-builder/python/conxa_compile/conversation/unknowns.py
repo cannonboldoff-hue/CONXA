@@ -26,7 +26,7 @@ FACET_OF_KIND: dict[str, str] = {
     "skip_when_empty": "input_domain", "test_followup": "variability", "input_check": "input_domain",
     "missing_item": "alternatives", "fork": "alternatives", "fork_then": "alternatives", "known_popup": "alternatives",
     "popup": "alternatives", "popup_dismiss": "alternatives",
-    "confirm": "consequence", "confirm_before": "consequence",
+    "confirm": "consequence", "confirm_before": "consequence", "confirm_row": "consequence",
     "output": "postcondition", "done_when": "postcondition",
     "dropped_value": "scope", "coverage": "scope",
     "note": "other",
@@ -35,7 +35,7 @@ FACET_OF_KIND: dict[str, str] = {
 # follow-up are different questions about one step).
 _PART = {"confirm_before": "confirm", "popup_dismiss": "popup", "value": "value", "chosen_values": "value", "values": "value"}
 # Never dropped, never pre-answered: a decision popup is not answered for anyone, an irreversible step always asks.
-SAFETY_KINDS = frozenset({"fork", "fork_then", "known_popup", "confirm", "confirm_before"})
+SAFETY_KINDS = frozenset({"fork", "fork_then", "known_popup", "confirm", "confirm_before", "confirm_row"})
 # Questions that change nothing by design (they only inform): they cannot be "vacuous".
 ADVISORY_KINDS = frozenset({"coverage", "dropped_value", "input_check", "note"})
 _PHASE_OPEN = ("open", "queued")
