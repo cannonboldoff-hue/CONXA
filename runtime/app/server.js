@@ -208,6 +208,9 @@ if (cliArgs.includes("--install-playwright")) {
 }
 
 // ─── 4. Logger ────────────────────────────────────────────────────────────────
+// The stderr copy goes through a worker so a parent that never reads stderr cannot freeze this process (stderr_sink.js).
+const _stderrSink = require("./stderr_sink").createStderrSink();
+require("./stderr_sink").takeOverProcessStderr(_stderrSink); // console.error / Node warnings / dependencies too
 function log(level, msg, extra = {}) {
   const line = JSON.stringify({ ts: new Date().toISOString(), level, msg, ...extra }) + "\n";
   try {
@@ -216,7 +219,7 @@ function log(level, msg, extra = {}) {
       fs.renameSync(LOG_FILE, LOG_FILE + ".1");
     fs.appendFileSync(LOG_FILE, line);
   } catch (_) {}
-  process.stderr.write(line);
+  _stderrSink.write(line);
 }
 
 log("info", "runtime_bootstrap", {
@@ -572,8 +575,33 @@ function _toolDefinitions() {
   return [...require("./tool_defs").CORE_TOOL_DEFS, ..._skillToolDefinitions()];
 }
 
+// A pack built or restaged while this process is alive (Build Studio keeps one runtime for a whole session) is not in
+// the index read at start-up. Re-read it from disk, at most once every 2 s so a typo'd skill name cannot make every
+// call scan the packs folder.
+let _indexRescanAt = 0;
+function _refreshSkillIndex() {
+  const now = Date.now();
+  if (now - _indexRescanAt < 2000) return false;
+  _indexRescanAt = now;
+  try {
+    const fresh = skillLoader.loadSkillRegistry(SKILL_PACKS_DIR, CACHE_DIR);
+    skillIndex = fresh;
+    log("info", "skill_index_rescanned", { count: Object.keys(fresh).length });
+    return true;
+  } catch (e) {
+    log("warn", "skill_index_rescan_failed", { error: e.message });
+    return false;
+  }
+}
+
 // ─── Resolve skill from index ─────────────────────────────────────────────────
 function _resolveSkill(skillSlug, workspace_id) {
+  const hit = _resolveSkillInIndex(skillSlug, workspace_id);
+  if (hit || !skillSlug) return hit;
+  return _refreshSkillIndex() ? _resolveSkillInIndex(skillSlug, workspace_id) : null;
+}
+
+function _resolveSkillInIndex(skillSlug, workspace_id) {
   if (!skillSlug) return null;
   const normalSlug = skillSlug.replace(/-/g, "_");
 
@@ -763,6 +791,7 @@ async function _handleTool(name, args, extra) {
 
   // ── list_skills ──────────────────────────────────────────────────────────────
   if (name === "list_skills") {
+    _refreshSkillIndex();
     const filterWorkspace = args.workspace_id ? String(args.workspace_id) : null;
     const skills = Object.values(skillIndex)
       .filter(s => !filterWorkspace || s.workspace_id === filterWorkspace)

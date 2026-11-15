@@ -24,6 +24,7 @@
   ],
   "files": [
     { "name": "server.js",            "profile": "default" },
+    { "name": "stderr_sink.js",       "profile": "default" },
     { "name": "sync.js",              "profile": "default" },
     { "name": "run.js",               "profile": "default" },
     { "name": "browser.js",           "profile": "default" },
