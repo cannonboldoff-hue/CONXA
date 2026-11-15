@@ -107,7 +107,7 @@ class WorkflowFlowMixin:
         runtime_state.set_flags(workflow.id, signing_in=True, recording_discarded=False)
         expired = bool(app.captured_at)
         harness.log_event(_thread(workflow.id),
-                          f"{app.name} {'sign-in expired' if expired else 'needs sign-in'} — opened its sign-in page",
+                          f"{app.name} {('sign-in expired' if app.last_error else 'sign-in could not be confirmed') if expired else 'needs sign-in'} — opened its sign-in page",
                           glyph="warn", sink=sink)
         embedded = bool(started.get("embedded"))
         where = "in the browser on the right" if embedded else "in a browser window"

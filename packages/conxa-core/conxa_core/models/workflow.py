@@ -28,6 +28,10 @@ class GroupApp(BaseModel):
     # capture" — group_auth_status treats that as unverified even if captured_at
     # is set. Set by check_group_sessions_sync callers (recording gate, "Check now").
     checked_at: float | None = None
+    # When the person said "I'm signed in" for a site Conxa has no way to check on its own (its signed-in and
+    # signed-out pages look the same). While set, an inconclusive probe no longer holds the app back from
+    # recording; only positive evidence of being signed out (set_group_app_checked "expired") clears it.
+    person_confirmed_at: float | None = None
     # Why the last probe could not confirm this session either way (timeout, network error,
     # an unrecognised page). Empty when the last probe reached a verdict. Distinct from
     # last_error, which means "known expired" and blocks recording; this never does.

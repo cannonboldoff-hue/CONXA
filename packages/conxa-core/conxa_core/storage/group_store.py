@@ -289,6 +289,26 @@ def set_group_app_auth(group_id: str, app_id: str, storage_state_path: str) -> W
     return save_group(group)
 
 
+PERSON_CONFIRMED_NOTE = "Confirmed by you. Conxa can't check this site's sign-in itself."
+
+
+def set_group_app_person_confirmed(group_id: str, app_id: str) -> WorkflowGroup | None:
+    """The person said "I'm signed in" ("Save anyway") for a site Conxa cannot verify. Recording and runs go ahead on
+    their word; the app is held back again only if a later check finds positive evidence it is signed out."""
+    group = get_group(group_id)
+    if group is None:
+        return None
+    app = _find_app(group, app_id)
+    if app is None:
+        return None
+    now = time.time()
+    app.person_confirmed_at = now
+    app.checked_at = now
+    app.check_note = PERSON_CONFIRMED_NOTE
+    app.last_error = ""
+    return save_group(group)
+
+
 def mark_group_app_unverified(group_id: str, app_id: str) -> WorkflowGroup | None:
     """The app's saved session was rewritten from a browser we never checked (a recording's
     write-back), so the next gate must probe it again. Unlike set_group_app_auth this is not a
@@ -353,13 +373,25 @@ def set_group_app_checked(group_id: str, app_id: str, state: str) -> WorkflowGro
     app = _find_app(group, app_id)
     if app is None:
         return None
+    if state == "expired" and app.person_confirmed_at and not app.auth_definition:
+        # With no learned rule the generic probe can only say "a sign-in form is showing". On the sites where a person's
+        # word was needed that is exactly what a signed-in visit shows too, so it is not evidence against them. A learned
+        # rule (or a run that is sent to sign in mid-way, which records its own error) still overrides their word.
+        state = "unverified"
     if state == "unverified":
+        if app.person_confirmed_at:
+            # Not being able to tell is not evidence the person was wrong. Conxa keeps trusting what they said.
+            app.checked_at = time.time()
+            app.check_note = PERSON_CONFIRMED_NOTE
+            return save_group(group)
         app.checked_at = None
         app.check_note = "Couldn't confirm this session — the app didn't give a clear answer."
         return save_group(group)
     app.checked_at = time.time()
     app.check_note = ""
     app.last_error = "Session expired — sign in again." if state == "expired" else ""
+    if state == "expired":
+        app.person_confirmed_at = None  # positive evidence outranks "I'm signed in"
     return save_group(group)
 
 

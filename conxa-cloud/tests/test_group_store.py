@@ -195,3 +195,32 @@ def test_unclaimed_hosts_treats_ip_addresses_as_their_own_site(tmp_groups_dir):
 def test_unclaimed_hosts_with_no_apps_lists_every_visited_host(tmp_groups_dir):
     group = group_store.create_group("Sales")
     assert group_store.unclaimed_hosts(group.apps, "https://a.example.com", "b.example.org") == ["a.example.com", "b.example.org"]
+
+
+# ---- W6: "I'm signed in" on a site Conxa cannot check -----------------------------------------------------------
+
+def test_a_persons_word_keeps_recording_open_until_a_check_finds_them_signed_out(tmp_groups_dir):
+    group = group_store.create_group("Bank")
+    group = group_store.add_app(group.id, "ParaBank", "https://bank.test/index", "https://bank.test/overview")
+    app_id = group.apps[0].id
+    group_store.set_group_app_auth(group.id, app_id, str(tmp_groups_dir / "state.json"))
+    group_store.mark_group_app_unverified(group.id, app_id)          # what "Save anyway" used to leave: a dead end
+    assert group_store.get_group(group.id).apps[0].checked_at is None
+
+    confirmed = group_store.set_group_app_person_confirmed(group.id, app_id).apps[0]
+    assert confirmed.checked_at is not None and confirmed.person_confirmed_at and not confirmed.last_error
+
+    # The check still cannot tell (the site's signed-in and signed-out pages look alike): the person's word stands.
+    again = group_store.set_group_app_checked(group.id, app_id, "unverified").apps[0]
+    assert again.checked_at is not None and again.person_confirmed_at
+
+    # A generic probe's "expired" (a sign-in form is showing) is no evidence on a site that shows one either way.
+    generic = group_store.set_group_app_checked(group.id, app_id, "expired").apps[0]
+    assert generic.person_confirmed_at and not generic.last_error and generic.checked_at is not None
+
+    # A learned rule saying "signed out" outranks the person's word.
+    group_store.set_group_app_auth_definition(group.id, app_id, {"version": 1})
+    gone = group_store.set_group_app_checked(group.id, app_id, "expired").apps[0]
+    assert gone.last_error and gone.person_confirmed_at is None
+    after = group_store.set_group_app_checked(group.id, app_id, "unverified").apps[0]
+    assert after.checked_at is None, "no word of the person's left to rely on"

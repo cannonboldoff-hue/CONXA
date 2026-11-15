@@ -346,7 +346,7 @@ async function getGroupAuthContext(workspace_id, group, authManager, opts = {}) 
     // decides alone, and success_url, which counts as proof when the landing page matches it.
     batch.push({
       key, stored, navUrl: app.login_url, sessionPath, label: app.name,
-      app: { success_url: app.success_url, auth_definition: app.auth_definition },
+      app: { success_url: app.success_url, auth_definition: app.auth_definition, person_confirmed: app.person_confirmed === true },
     });
     results.push({ app, stored, sessionPath, valid: null, _batchIndex: batch.length - 1 });
   });
@@ -820,6 +820,10 @@ async function _isAuthenticated(session, page, entryUrl, app = {}) {
     if (!definition) await _settleOffLogin(page, observation);
     const baseline = definition ? null : await _signedOutBaseline(session, entryUrl);
     const state = loginSignals.classifySession(observation, baseline, app, { noBaselineOk: Boolean(session.hostOwned) });
+    // A person's "I'm signed in" stands for a site this generic check cannot judge (no learned rule): its login page
+    // looks the same signed in or out, so "expired" and "unverified" are no evidence against them. A run that really
+    // is signed out is still caught mid-run by the sign-in-redirect check.
+    if (!definition && app.person_confirmed === true) return true;
     return state === "ready";
   } catch (_) {
     return false;

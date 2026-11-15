@@ -483,6 +483,7 @@ class GroupsMixin:
             group_auth_dir,
             mark_group_app_unverified,
             set_group_app_auth,
+            set_group_app_person_confirmed,
             set_group_app_auth_definition,
             set_group_app_error,
             update_app,
@@ -539,10 +540,13 @@ class GroupsMixin:
         group = set_group_app_auth(group_id, app_id, str(auth_path))
         if group is None:
             raise _CommandError("group_or_app_not_found", "No such group or app")
-        if definition is None:
-            # Saved without the self-test proving it (Save anyway, or the window closed by hand):
-            # the session is on disk but nothing has confirmed it works, so it must not read as
-            # verified. The next probe (Check all / the recording gate) decides.
+        if definition is None and force:
+            # "Save anyway": the person says they are signed in on a site Conxa cannot characterise. Their word
+            # counts until a check finds positive evidence otherwise (a login form, a redirect to sign-in).
+            group = set_group_app_person_confirmed(group_id, app_id) or group
+        elif definition is None:
+            # The window was closed by hand: the session is on disk but nothing has confirmed it works, so it must
+            # not read as verified. The next probe (Check all / the recording gate) decides.
             group = mark_group_app_unverified(group_id, app_id) or group
 
         app = next((a for a in group.apps if a.id == app_id), None)
