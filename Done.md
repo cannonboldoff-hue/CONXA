@@ -9,7 +9,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | BUILD — Build Studio | 43 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 8 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13 |
+| RT — Runtime | 9 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **112** | |
+| **Total** | **113** | |
 
 ---
 
@@ -1307,7 +1307,7 @@ inferred from `outer_html`, not read directly.
 - **Category:** Cloud
 ---
 
-## RT — Runtime (8 done)
+## RT — Runtime (9 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1418,6 +1418,13 @@ Updater.md` §1.3.
 - **Category:** Runtime
 - **What fixed it:** `run.js` (guard in `executeOneStep`, `state.loopDepth` so it fails closed inside a loop), `server.js` (park + `_meta["conxa/guard"]`, a release-resume that adopts the guard's park and refuses an expired one, step info on `test_phase` log lines), `tool_defs.js`, and a `capabilities: ["test_guard"]` entry written by `build-runtime-app.yml`, `scripts/build-app-local.ps1` and the dev `version.json`. Inert without the argument; never touches `recovery_stage.js` / `retry_budget.js`; app layer only, `MIN_HOST` unchanged. **Needs a new `app-vX.Y.Z` tag to ship.**
 - **Verified:** new `runtime/test/unit/test_guard.js` (7 tests) and the whole runtime unit suite (868 pass). While running it, found the runtime was unloadable at HEAD: commit `ac367ed` had deleted two lines from `runtime/app/date_picker.js` (the `FORMAT_TOKEN_RE` constant and the `formatForDisplay` header), a syntax error that broke every runtime test and the app layer; restored exactly those two lines from `ee83fec`. **Not exercised:** the gate replay (`gate_replay.js`) needs the built host exe.
+
+### RT-14 — Publish the version-folder fix as a host release
+**Resolved:** 2026-11-15
+- **Resolution:** released as `host-v3.2.3` (exe and keytar published, build gates passed). The app layer's `MIN_HOST` in `build-runtime-app.yml` is now `host-v3.2.3`, so older hosts update before taking a new app layer. The first tag attempt failed the golden-path gate because the fixture's Drive page gave an upload nothing that could answer "no" (a gap since 0edee3d, present before this release); the fixture now uploads through a real request, and the tag was moved to the fixed commit before anything was published.
+- **Category:** Runtime
+
+---
 
 ## PROD — Product (4 done)
 

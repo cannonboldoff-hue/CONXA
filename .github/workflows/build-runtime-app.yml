@@ -53,7 +53,9 @@ jobs:
       #     first shipped in a host release with host-v2.0.0.
         # Verified by running runtime/test/e2e/gate_replay.js against both: host-v1.1.2 fails
       # to load the app layer at all, host-v2.0.0 replays to "Done." (2026-08-04).
-      MIN_HOST:    "host-v2.0.0"
+      # host-v3.2.3 (2026-11-15) is the first host whose version_manager.js recognises app-v.../host-v...
+      # folders when rolling back and keeping the last N, so older hosts must update before taking an app layer.
+      MIN_HOST:    "host-v3.2.3"
 
     steps:
       - name: Checkout

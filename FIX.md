@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A new version of the part that runs workflows on customers' computers is out — 2026-11-15**
+The small program that starts workflows on a customer's computer got a fix so it cleans up its old versions correctly and never deletes the one in use or the one before it. It is released as version 3.2.3, and future updates now wait for computers to have it. While releasing, the automatic safety run caught a practice page that finished an upload too instantly to prove anything, so that page now behaves like a real upload.
+— 2026-11-15
+
 **A repeat can now carry a whole table of values — 2026-11-15**
 A workflow that repeats once per item could only carry one value per item, such as a file name. It could not carry a recipient and a subject together. You can now give it a small table, one row per repeat, and each row's values are used in that repeat. If a row has a blank value, nothing runs at all. Older copies of the app refuse such a workflow instead of quietly doing the wrong thing.
 — 2026-11-15
