@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hover fixture</title>
+<!--
+  A menu whose sub-items exist but are hidden until the menu is hovered. The recording only holds the click on
+  "Pricing" (hover capture is off by default), so a replay has nothing that reveals it unless the runtime does what
+  a person does. The page logs what it received into #log (and window.__log) so a test can read it back.
+  ?mode=hidden-forever keeps the sub-menu hidden whatever is hovered (the step must still fail, not pass).
+-->
+<style>
+  body { font-family: sans-serif; padding: 40px; }
+  nav li { list-style: none; display: inline-block; position: relative; padding: 10px 18px; background: #eee; margin-right: 6px; }
+  nav li ul { display: none; position: absolute; left: 0; top: 100%; padding: 0; background: #fff; border: 1px solid #ccc; width: 160px; }
+  nav li:hover ul { display: block; }
+  nav li ul li { display: block; margin: 0; }
+  #log { margin-top: 30px; font-family: monospace; }
+</style>
+</head>
+<body>
+<nav>
+  <ul>
+    <li id="products">Products
+      <ul id="sub"><li><a href="#" id="pricing">Pricing</a></li><li><a href="#" id="docs">Docs</a></li></ul>
+    </li>
+    <li id="about">About</li>
+  </ul>
+</nav>
+<div id="log"></div>
+<script>
+  window.__log = [];
+  function log(name) { window.__log.push(name); document.getElementById("log").textContent = window.__log.join(" | "); }
+  if (new URLSearchParams(location.search).get("mode") === "hidden-forever") document.getElementById("sub").style.setProperty("display", "none", "important");
+  document.getElementById("pricing").addEventListener("click", (e) => { e.preventDefault(); log("pricing"); });
+  document.getElementById("docs").addEventListener("click", (e) => { e.preventDefault(); log("docs"); });
+</script>
+</body>
+</html>

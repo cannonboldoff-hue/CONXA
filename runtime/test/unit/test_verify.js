@@ -13,7 +13,11 @@ function mockPage(url, counts = {}, values = {}) {
     locator: (sel) => ({
       first: () => ({
         waitFor: async () => { if ((counts[sel] || 0) === 0) throw new Error("not attached"); },
-        inputValue: async () => values[sel] ?? "",
+        // The page script runs here against a stand-in element: a string is a text box's value, {text} is a rich-text box.
+        evaluate: async (fn) => {
+          const v = values[sel] ?? "";
+          return fn(typeof v === "object" ? { tagName: "DIV", isContentEditable: true, innerText: v.text } : { tagName: "INPUT", value: v });
+        },
       }),
       count: async () => counts[sel] || 0,
     }),
@@ -451,4 +455,24 @@ test("a failed click does not burn the page-load wait: advisory checks use their
   const r2 = await verifyStep(page, required, {}, null, null, { capMs: 300 });
   assert.strictEqual(r2.pass, false);
   assert.ok(Date.now() - t1 < 3000, "a capped re-check returns quickly");
+});
+
+// W4-a: a rich-text box holds text, not a `value`; and a stored selector naming a generated id that the page rewrote
+// must not decide the verdict when the step's own identity still finds the field.
+test("value_equals reads a rich-text box (contenteditable) by its text", async () => {
+  const page = mockPage("https://mail.example.com/", { "div.body": 1 }, { "div.body": { text: "Hi Alex, your amount is 250." } });
+  const step = { type: "type", validation: { assertions: [
+    { type: "value_equals", target: "div.body", expected: "Hi Alex, your amount is 250.", required: true },
+  ] } };
+  const r = await verifyStep(page, step, {});
+  assert.strictEqual(r.pass, true, JSON.stringify(r));
+});
+
+test("value_equals still fails when the rich-text box holds other text", { timeout: 20000 }, async () => {
+  const page = mockPage("https://mail.example.com/", { "div.body": 1 }, { "div.body": { text: "something else" } });
+  const step = { type: "type", validation: { assertions: [
+    { type: "value_equals", target: "div.body", expected: "Hi Alex", required: true, timeout_ms: 50 },
+  ] } };
+  const r = await verifyStep(page, step, {});
+  assert.strictEqual(r.pass, false);
 });

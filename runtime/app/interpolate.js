@@ -11,6 +11,13 @@ function interpolate(value, inputs) {
   return value.replace(new RegExp(PLACEHOLDER_SOURCE, "g"), (_, key) => String(inputs[key] ?? ""));
 }
 
+// {{...}} left in a string after interpolation: a placeholder the grammar above did not accept (a dot or hyphen in the
+// name, a space) or one that never matched, so it would travel to the page as literal text. In a web address that is
+// never right (the browser encodes it into %7B%7B...%7D%7D and opens a page that does not exist).
+function leftoverPlaceholders(text) {
+  return typeof text === "string" ? (text.match(/\{\{[^{}]*\}\}/g) || []) : [];
+}
+
 // Fields that describe a step to a reader rather than drive it: a {{id}} named there is not
 // something the step's execution depends on.
 const PROSE_KEYS = new Set(["description", "label", "intent", "title", "note", "notes", "why", "_recorded_context", "_anchor_sentence"]);
@@ -53,4 +60,4 @@ function inputsFailingPattern(declared, inputs) {
   return out;
 }
 
-module.exports = { interpolate, inputsReferenced, inputsFailingPattern };
+module.exports = { interpolate, leftoverPlaceholders, inputsReferenced, inputsFailingPattern };

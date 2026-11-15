@@ -13,7 +13,7 @@
  * never "yes". `later_step` is not here: it can only be answered after the later step ran (run.js).
  */
 const pageScripts = require("./page_scripts");
-const { evalOn } = require("./page_eval");
+const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
 const { interpolate } = require("./interpolate");
 const { withFreshTab } = require("./fresh_look");
 const { hasBasis } = require("./effect_probes");
@@ -81,7 +81,9 @@ async function valueEquals(check, { notebook, steps, inputs, registry, resolve }
         const loc = await resolve(tab, fillStep, inputs);
         const type = await loc.getAttribute("type", { timeout: 1500 }).catch(() => null);
         if (String(type || "").toLowerCase() === "password") return CANT;
-        const actual = norm(await loc.inputValue({ timeout: 1500 }));
+        const raw = await evalOn(loc, pageScripts.readFieldValue, undefined, 1500);
+        if (raw === EVAL_TIMED_OUT || typeof raw !== "string") throw new Error("not a field"); // a rich-text box answers too
+        const actual = norm(raw);
         read = true;
         if (actual === expected || actual.includes(expected)) return { answer: "yes" };
       } catch (_) { /* the page may not have loaded the field yet */ }

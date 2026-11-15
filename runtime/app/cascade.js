@@ -14,7 +14,7 @@
 // wrong guess is caught before it acts.
 const { classifyException, remedyFor } = require("./recovery");
 const { appendRecoveryEvent } = require("./recovery_log");
-const { SECONDARY_ACTION_TIMEOUT_MS, CAPTURE_PRESTEP, RECHECK_CAP_MS } = require("./run_config");
+const { SECONDARY_ACTION_TIMEOUT_MS, CAPTURE_PRESTEP, RECHECK_CAP_MS, RECOVERY_VERIFY_CAP_MS } = require("./run_config");
 const { asObject, asArray, isNonIdempotent } = require("./step_utils");
 const { rootCandidates } = require("./resolution");
 const { fingerprintName, stripKeyboardShortcutTail } = require("./accessible_name");
@@ -33,7 +33,7 @@ const { recordOverlayObservation } = require("./overlay_capture");
 const { isDecisionDialog } = require("./fork");
 
 const INTERACTIVE_STEP_TYPES = new Set([
-  "click", "dblclick", "right_click",
+  "click", "dblclick", "right_click", "repeat_click",
   "type", "fill", "focus", "select", "select_option",
   "set_checkbox", "set_radio", "date_pick",
   "drag_drop", "keyboard_shortcut", "upload",
@@ -121,7 +121,7 @@ async function recoverWithSelector(page, step, inputs, selector, onSuccess, base
     await executeStep(page, stepWithSelector(step, selector), inputs);
     if (guard) guard.acted = true;
     if (hasRequiredAssertion(step)) {
-      const verdict = await verifyStep(page, step, inputs, baseline);
+      const verdict = await verifyStep(page, step, inputs, baseline, null, { capMs: RECOVERY_VERIFY_CAP_MS });
       if (guard) guard.lastVerify = verdict;
       if (!verdict.pass) return false;
     }
@@ -173,7 +173,7 @@ async function recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, bas
     await executeStep(page, a11yStep, inputs);
     if (guard) guard.acted = true;
     if (hasRequiredAssertion(step)) {
-      const verdict = await verifyStep(page, step, inputs, baseline);
+      const verdict = await verifyStep(page, step, inputs, baseline, null, { capMs: RECOVERY_VERIFY_CAP_MS });
       if (guard) guard.lastVerify = verdict;
       if (!verdict.pass) return false;
     }

@@ -59,5 +59,8 @@
     "wait_until":      {"run": "handler",   "recovery": false},
     "clipboard_write": {"run": "handler",   "recovery": false},
     "clipboard_read":  {"run": "handler",   "recovery": false}
+  },
+  "packager_only": {
+    "repeat_click": {"run": "handler", "recovery": true, "from": "click", "about": "a click recorded as repeated on purpose; a new TYPE (not a field) so a runtime that predates it refuses the step"}
   }
 }

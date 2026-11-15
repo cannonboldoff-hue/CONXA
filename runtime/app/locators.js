@@ -34,10 +34,20 @@ function markMayHaveActed(err) {
   return err;
 }
 
+// Playwright's own account of an action it never performed: it waited for the element to be visible, enabled, stable and
+// unobscured, and gave up. Nothing was dispatched, so nothing "may have acted" (a click that did fire and then timed out
+// waiting for a navigation says so in its call log and stays marked).
+const NEVER_DISPATCHED_RE = /Timeout \d+ms exceeded[\s\S]*(intercepts pointer events|is not visible|is not enabled|is not stable|element is outside of the viewport)/i;
+function neverDispatched(err) {
+  const msg = String((err && err.message) || "");
+  return NEVER_DISPATCHED_RE.test(msg) && !/scheduled navigations?/i.test(msg);
+}
+
 async function actAndMark(fn, ...args) {
   try {
     return await fn(...args);
   } catch (err) {
+    if (neverDispatched(err) || (err && err.clickNotReceived && !err.mayHaveActed)) throw err;
     throw markMayHaveActed(err);
   }
 }
@@ -71,7 +81,7 @@ async function withLocator(page, step, inputs, selector, timeout, fn) {
         // clicked). Bailing here would remove the auto-wait this loop exists to provide.
         // Ambiguity / recompile-required / bad input cannot be fixed by waiting — surface
         // immediately rather than re-resolving until the action deadline.
-        if (err && (err.ambiguous || err.recompileRequired || err.badInput)) throw err;
+        if (err && (err.ambiguous || err.recompileRequired || err.badInput || err.clickNotReceived)) throw err;
         // BUILD-30: extend the wait once a scroll pass grounded in real evidence has actually
         // run, and only for a miss where no locator was ever produced (mayHaveActed unset) —
         // nothing was acted on, so a longer wait cannot turn a clean failure into a repeated

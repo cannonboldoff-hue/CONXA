@@ -68,6 +68,9 @@ const SETTLE_BUDGET_MS             = envNumber("CONXA_SETTLE_BUDGET_MS", 8000);
 // long: it asks "did the step already land?", and waiting a page-load budget for it multiplied one failed
 // step by every recovery stage until the whole run hit its deadline.
 const RECHECK_CAP_MS               = envNumber("CONXA_RECHECK_CAP_MS", 3000);
+// A required check after a recovery re-dispatch: long enough for a page to load, short enough that a check which can
+// never hold (a wrong one) does not cost the full 60 s once per recovery stage.
+const RECOVERY_VERIFY_CAP_MS       = envNumber("CONXA_RECOVERY_VERIFY_CAP_MS", 15000);
 const SETTLE_POLL_MS               = envNumber("CONXA_SETTLE_POLL_MS", 250);
 
 // EXEC-38: hard ceiling on a for_each loop's row count, independent of (and always <=) the
@@ -98,6 +101,7 @@ module.exports = {
   SETTLE_RETRY_ENABLED,
   SETTLE_BUDGET_MS,
   RECHECK_CAP_MS,
+  RECOVERY_VERIFY_CAP_MS,
   SETTLE_POLL_MS,
   MAX_LOOP_ITERATIONS,
 };

@@ -3,7 +3,7 @@
 // primitives (best-effort by invariant — never enter the recovery cascade),
 // executeStep, recovery embedding, and agent-override injection.
 const pageScripts = require("./page_scripts");
-const { interpolate } = require("./interpolate");
+const { interpolate, leftoverPlaceholders } = require("./interpolate");
 const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
 const { capture } = require("./page_geometry");
 const {
@@ -385,13 +385,43 @@ async function _evaluateCheckLikeStep(page, step, inputs) {
 const WAIT_UNTIL_DEFAULT_MS = 30000;
 const WAIT_UNTIL_MAX_MS = 120000;
 
+// A click, plus the page's own word on where it went. A click Playwright dispatched can still land on something else (a
+// banner in front) or on nothing, and a step that clicked nothing must not be reported as done. Only a click that
+// demonstrably went elsewhere, or nowhere, fails; a reply that cannot be read (the page moved on, the element is gone,
+// the frame is cross-origin) is not a verdict. `clickNotReceived` makes withLocator surface it at once instead of
+// re-clicking: a retry would click the thing in front again.
+async function clickWithWitness(locator) {
+  const target = locator.first();
+  const armed = await evalOn(target, pageScripts.armClickWitness, undefined, 800).catch(() => EVAL_TIMED_OUT);
+  await clickFirst(locator, { timeout: ACTION_TIMEOUT_MS });
+  if (armed !== true) return;
+  const seen = await evalOn(target, pageScripts.readClickWitness, undefined, 800).catch(() => null);
+  if (seen && seen.state === "elsewhere") {
+    throw Object.assign(markMayHaveActed(new Error(`The click did not reach the button: ${seen.where} intercepts pointer events there.`)), { clickNotReceived: true });
+  }
+  if (seen && seen.state === "none") {
+    throw Object.assign(new Error("The click did not reach the button: nothing in the page received it (something intercepts pointer events)."), { clickNotReceived: true });
+  }
+}
+
+const MAX_REPEAT_CLICKS = 200;
+
 const HANDLERS = {
   wait: async (page, step) => {
     await page.waitForTimeout(Math.min(Number(step.ms) || 250, 1000));
   },
 
   navigate: async (page, step, inputs) => {
-    await page.goto(interpolate(step.url || "", inputs), { timeout: PAGE_LOAD_TIMEOUT_MS, waitUntil: "domcontentloaded" });
+    const url = interpolate(step.url || "", inputs);
+    const left = leftoverPlaceholders(url);
+    if (left.length) {
+      // Fail before opening anything, and never retry: no amount of waiting fills in a value that does not exist.
+      throw Object.assign(
+        new Error(`This step's address refers to ${left.join(", ")}, which has no value, so it was not opened. Edit the step's address or supply that value.`),
+        { badInput: true },
+      );
+    }
+    await page.goto(url, { timeout: PAGE_LOAD_TIMEOUT_MS, waitUntil: "domcontentloaded" });
   },
 
   // Browser Back/Forward recorded by the recorder's CDP navigation-history tracking.
@@ -431,11 +461,20 @@ const HANDLERS = {
     });
   },
 
+  // A click the person repeated on purpose ("Add Element" x 50): the compiled step carries `count`. Each click resolves
+  // afresh (the page changes under it) and goes through the same click-received check as a single click, with a short
+  // pause so the page can react. Capped, and one failed click stops the run: never "most of them".
+  repeat_click: async (page, step, inputs) => {
+    const count = Math.max(1, Math.min(Number(step.count) || 1, MAX_REPEAT_CLICKS));
+    for (let n = 0; n < count; n++) {
+      await HANDLERS.click(page, step, inputs);
+      if (n < count - 1) await page.waitForTimeout(60);
+    }
+  },
+
   click: async (page, step, inputs) => {
     await walkHoverChain(page, step, inputs);
-    await withLocator(page, step, inputs, PRIMARY, 0, async locator => {
-      await clickFirst(locator, { timeout: ACTION_TIMEOUT_MS });
-    });
+    await withLocator(page, step, inputs, PRIMARY, 0, locator => clickWithWitness(locator));
   },
 
   // Read one value off the page into a named output. The target comes from the recording, like any
@@ -665,11 +704,17 @@ const HANDLERS = {
 
   drag_drop: async (page, step, inputs) => {
     const { srcSelector, dstSelector } = parseDragSelectors(step, inputs);
-    if (srcSelector && dstSelector) {
-      await withLocatorPair(page, step, inputs, srcSelector, dstSelector, 0, (srcLoc, dstLoc) => {
-        return srcLoc.first().dragTo(dstLoc.first(), { timeout: ACTION_TIMEOUT_MS });
-      });
+    // A drag with only one end used to do nothing and still report "Done". It cannot be run, so say so: a person
+    // fixes it in Human Edit, and recovery must not retry something that was never a complete step.
+    if (!srcSelector || !dstSelector) {
+      throw Object.assign(
+        new Error(`This drag has no ${srcSelector ? "drop target" : "item to pick up"}, so nothing was moved. Edit the step to set both ends.`),
+        { badInput: true },
+      );
     }
+    await withLocatorPair(page, step, inputs, srcSelector, dstSelector, 0, (srcLoc, dstLoc) => {
+      return srcLoc.first().dragTo(dstLoc.first(), { timeout: ACTION_TIMEOUT_MS });
+    });
   },
 
   keyboard_shortcut: async (page, step, inputs) => {
@@ -1230,6 +1275,7 @@ module.exports = {
   runBranchBody,
   HANDLERS,
   executeStep,
+  clickWithWitness,
   enrichStepsWithRecovery,
   applyStepOverrides,
   answerDialog,

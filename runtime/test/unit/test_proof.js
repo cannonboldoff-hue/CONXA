@@ -130,6 +130,11 @@ test("runOutcome and the result's first words", () => {
 test("unconfirmedNote speaks in plain words", () => {
   assert.strictEqual(proof.unconfirmedNote({ intent: "Upload the report" }, 4), `I couldn't confirm that "Upload the report" finished.`);
   assert.strictEqual(proof.unconfirmedNote({}, 4), "I couldn't confirm that step 5 finished.");
+  // Internal names never reach a person: a step type or a snake_case intent falls back to the step number.
+  assert.strictEqual(proof.unconfirmedNote({ type: "try_dismiss", intent: "try_dismiss" }, 6), "I couldn't confirm that step 7 finished.");
+  assert.strictEqual(proof.unconfirmedNote({ type: "click", intent: "activate_control_buy_now" }, 1), "I couldn't confirm that step 2 finished.");
+  assert.strictEqual(proof.unconfirmedNote({ type: "click", intent: "activate_control_buy_now", label: "Click Buy Now" }, 1),
+    `I couldn't confirm that "Click Buy Now" finished.`);
 });
 
 // ── the recording is the expected outcome ──────────────────────────────────────────────────────────

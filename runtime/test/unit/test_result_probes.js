@@ -77,7 +77,7 @@ const valueCheck = { id: "c7", probe: { type: "value_equals", field_step: "k-fil
 const fillStep = { source_step_key: "k-fill", type: "type" };
 function pageWithFreshTab(fieldValue, { fieldType = "text", resolves = true } = {}) {
   const log = { closed: false };
-  const loc = { getAttribute: async () => fieldType, inputValue: async () => fieldValue };
+  const loc = { getAttribute: async () => fieldType, evaluate: async (fn) => fn({ tagName: "INPUT", value: fieldValue }) };
   const tab = { goto: async () => {}, close: async () => { log.closed = true; } };
   const page = new EventEmitter();
   Object.assign(page, { url: () => "https://app.test/items/new", bringToFront: async () => {}, context: () => ({ newPage: async () => tab }) });

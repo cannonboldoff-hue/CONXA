@@ -168,6 +168,71 @@ function getScrollY() {
   return window.scrollY;
 }
 
+// "Did the click reach the element?" asked of the page itself, not of Playwright. A click can be dispatched and still
+// land on something else (a banner in front, a transparent layer) or on nothing, and a step that clicked nothing
+// must not be reported as done. armClickWitness listens, on the window and before the page's own handlers, for the
+// next trusted click; readClickWitness reports where it went. The page's reply is always one of:
+//   received  the click reached the element (or something inside / around it)
+//   elsewhere the click went to another element, which is described
+//   none      no click arrived anywhere
+//   unknown   the page cannot say (the element is gone, the page was replaced): never a failure
+function armClickWitness(el) {
+  try { if (window.__conxaClick && window.__conxaClick.off) window.__conxaClick.off(); } catch (_) { /* stale */ }
+  const w = { el, seen: [] };
+  // The whole path, not ev.target: at the window the target of a click inside a web component is retargeted to the
+  // component's host, which would make a button inside it look like "something else".
+  const onClick = (ev) => { if (ev.isTrusted) w.seen.push(typeof ev.composedPath === "function" && ev.composedPath().length ? ev.composedPath() : [ev.target]); };
+  window.addEventListener("click", onClick, true);
+  w.off = () => window.removeEventListener("click", onClick, true);
+  window.__conxaClick = w;
+  return true;
+}
+
+function readClickWitness() {
+  const w = window.__conxaClick;
+  if (!w) return { state: "unknown" };
+  window.__conxaClick = null;
+  try { w.off(); } catch (_) { /* gone */ }
+  const el = w.el;
+  if (!el || !el.isConnected) return { state: "unknown" };
+  if (!w.seen.length) return { state: "none" };
+  const hit = w.seen.some((path) => path.some((n) => n === el) || path.some((n) => el.contains && n && n.nodeType === 1 && el.contains(n)));
+  if (hit) return { state: "received" };
+  const t = w.seen[0][0];
+  const words = ((t && (t.getAttribute && (t.getAttribute("aria-label") || t.getAttribute("id"))) || t && t.innerText || "") + "").trim().slice(0, 40);
+  return { state: "elsewhere", where: ((t && t.tagName) || "element").toLowerCase() + (words ? ` "${words}"` : "") };
+}
+
+// Where to put the pointer to reveal a hidden element: the centres of its nearest visible ancestors, innermost first
+// (at most three, kept inside the window). A menu item that only shows while its menu is hovered has a visible ancestor
+// (the menu), and hovering it is what a person does. Empty when the element has no visible ancestor.
+function revealHoverPoints(el) {
+  const points = [];
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let node = el.parentElement;
+  while (node && points.length < 3) {
+    const r = node.getBoundingClientRect();
+    const cs = window.getComputedStyle(node);
+    if (r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none") {
+      const x = Math.min(Math.max(r.left + r.width / 2, 1), vw - 1);
+      const y = Math.min(Math.max(r.top + r.height / 2, 1), vh - 1);
+      if (!points.some((p) => Math.abs(p.x - x) < 2 && Math.abs(p.y - y) < 2)) points.push({ x, y });
+    }
+    node = node.parentElement;
+  }
+  return points;
+}
+
+// What a field currently holds, as a person would read it. A text box, text area or list holds a `value`; a
+// rich-text box (Gmail's message body, any editor built on contenteditable) holds text and has no value at all, so
+// asking it for one fails even when the text really is there. Anything else is not a field: null.
+function readFieldValue(el) {
+  const tag = (el.tagName || "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return el.value;
+  if (el.isContentEditable) return el.innerText;
+  return null;
+}
+
 // Cheap, deterministic snapshot of page shape used only to answer "did anything happen" for the
 // state_changed assertion. No LLM, no DOM diffing — three counters compared before vs. after.
 function preStepSignature(sel) {
@@ -807,6 +872,10 @@ module.exports = {
   isDisabled,
   scrollBy,
   getScrollY,
+  readFieldValue,
+  revealHoverPoints,
+  armClickWitness,
+  readClickWitness,
   preStepSignature,
   settleSignature,
   environmentSignature,

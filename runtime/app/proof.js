@@ -152,7 +152,11 @@ function outcomeFromText(text) {
 
 /** Plain-language note for a step that finished without the proof it needed. */
 function unconfirmedNote(step, index) {
-  const what = step && (step.intent || step.type) ? `"${step.intent || step.type}"` : `step ${index + 1}`;
+  // Only words a person would say: the compiler's own description, else an intent that is already a sentence.
+  // A step type or a snake_case intent token ("try_dismiss") is an internal name and never shown.
+  const intent = step && typeof step.intent === "string" ? step.intent.trim() : "";
+  const words = (step && typeof step.label === "string" && step.label.trim()) || (/\s/.test(intent) && !intent.includes("_") ? intent : "");
+  const what = words ? `"${words}"` : `step ${index + 1}`;
   return `I couldn't confirm that ${what} finished.`;
 }
 

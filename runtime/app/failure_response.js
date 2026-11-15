@@ -482,6 +482,8 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       ts: new Date().toISOString(),
       failed_at: failedAt,
       failed_stable_hash: failedStableHash,
+      // The failing step's own key (packaging can drop steps, so a position in the plan is not a position in the document).
+      failed_source_step_key: (failedStep && failedStep.source_step_key) || null,
       step_no: stepNo,
       message: err.message,
       raw_message: err.rawMessage || err.message,

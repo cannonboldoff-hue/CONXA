@@ -20,6 +20,7 @@ const noop = new Set(NOOP_STEP_TYPES);
 const wanted = new Map();
 for (const [kind, v] of Object.entries(contract.kinds)) if (v.step) wanted.set(v.step, v.run);
 for (const [kind, v] of Object.entries(contract.step_only)) wanted.set(kind, v.run);
+for (const [kind, v] of Object.entries(contract.packager_only || {})) wanted.set(kind, v.run);
 
 test("each step type runs the way the contract says", { skip }, () => {
   for (const [type, run] of wanted) {
@@ -46,4 +47,47 @@ test("every pre-dispatch type is in the contract", { skip }, () => {
   for (const type of PRE_DISPATCH_STEP_TYPES) {
     assert.ok(wanted.get(type) === "intercept", `${type}: pre-dispatch type the contract does not call an intercept`);
   }
+});
+
+// A drag with only one end cannot be run. It used to return quietly and the run still said "Done" (W4-b).
+test("drag_drop with no source or no target fails with a plain message instead of doing nothing", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  const page = { locator() { throw new Error("must not look anything up"); } };
+  await assert.rejects(() => HANDLERS.drag_drop(page, { type: "drag_drop", dst_selector: "#drop" }, {}),
+    (e) => e.badInput === true && /item to pick up/.test(e.message));
+  await assert.rejects(() => HANDLERS.drag_drop(page, { type: "drag_drop", src_selector: "#a" }, {}),
+    (e) => e.badInput === true && /drop target/.test(e.message));
+});
+
+// W4-e: an address with a placeholder that has no value is refused, not opened as %7B%7Brow.to%7D%7D.
+test("navigate refuses an address that still contains an unfilled placeholder", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  let opened = null;
+  const page = { goto: async (u) => { opened = u; } };
+  await assert.rejects(
+    () => HANDLERS.navigate(page, { url: "https://mail.test/?to={{row.to}}&su={{subject}}" }, { subject: "Hi" }),
+    (e) => e.badInput === true && /row\.to/.test(e.message) && !/subject/.test(e.message),
+  );
+  assert.strictEqual(opened, null, "nothing was opened");
+  await HANDLERS.navigate(page, { url: "https://mail.test/?su={{subject}}" }, { subject: "Hi" });
+  assert.strictEqual(opened, "https://mail.test/?su=Hi");
+});
+
+test("repeat_click clicks `count` times, stops at the first failed click, and is capped", async () => {
+  const { HANDLERS } = require("../../app/handlers");
+  const real = HANDLERS.click;
+  const calls = [];
+  const page = { waitForTimeout: async () => {} };
+  try {
+    HANDLERS.click = async () => { calls.push(1); };
+    await HANDLERS.repeat_click(page, { type: "repeat_click", count: 7 }, {});
+    assert.strictEqual(calls.length, 7);
+    calls.length = 0;
+    await HANDLERS.repeat_click(page, { type: "repeat_click", count: 99999 }, {});
+    assert.strictEqual(calls.length, 200, "capped");
+    calls.length = 0;
+    HANDLERS.click = async () => { calls.push(1); if (calls.length === 3) throw new Error("the third click failed"); };
+    await assert.rejects(() => HANDLERS.repeat_click(page, { type: "repeat_click", count: 10 }, {}), /third click/);
+    assert.strictEqual(calls.length, 3, "one failed click stops the run: never most of them");
+  } finally { HANDLERS.click = real; }
 });

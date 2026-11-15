@@ -5,7 +5,7 @@ const pageScripts = require("./page_scripts");
 const { interpolate } = require("./interpolate");
 const { PAGE_LOAD_TIMEOUT_MS } = require("./run_config");
 const { asObject, asArray, isNonIdempotent } = require("./step_utils");
-const { rootCandidates } = require("./resolution");
+const { rootCandidates, resolveStep } = require("./resolution");
 const { withDeadline, evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
 
 // Phase 8: post-action VERIFY — check compiled post-condition assertions independently of the
@@ -154,7 +154,7 @@ function assertionTimeout(type, target, declaredMs, required = true) {
   return Math.max(declared, PAGE_LOAD_TIMEOUT_MS);
 }
 
-async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0) {
+async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, step = null) {
   const type = String(a.type || "").toLowerCase();
   const target = interpolate(String(a.target || ""), inputs);
   const required = a.required !== false;
@@ -201,15 +201,30 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0) {
     } else if (type === "value_equals") {
       const expected = interpolate(String(a.expected ?? ""), inputs);
       const normExpected = normText(expected);
+      // Normalized-exact match, else "field contains expected": tolerates masked/formatted fields (phone, currency)
+      // whose raw value never equals the typed text.
+      const matches = (actual) => {
+        if (typeof actual !== "string") return false;
+        const normActual = normText(actual);
+        return normActual === normExpected || (!!normExpected && normActual.includes(normExpected));
+      };
+      const readField = async (loc) => {
+        const v = await evalOn(loc, pageScripts.readFieldValue, undefined, VERIFY_POLL_INTERVAL_MS * 2);
+        return v === EVAL_TIMED_OUT ? null : v; // a rich-text box answers with its text, not a `value`
+      };
       ok = await pollPositive(async () => {
         for (const root of roots) {
           try {
-            const actual = await root.locator(target).first().inputValue({ timeout: VERIFY_POLL_INTERVAL_MS });
-            const normActual = normText(actual);
-            // Normalized-exact match, else fall back to "field contains expected" — tolerates
-            // masked/formatted fields (phone, currency) whose raw value never equals the typed text.
-            if (normActual === normExpected || (!!normExpected && normActual.includes(normExpected))) return true;
+            if (matches(await readField(root.locator(target).first()))) return true;
           } catch (_) { /* try next root */ }
+        }
+        // The stored selector may name something the page rewrites (generated ids change on every render):
+        // ask the step's own identity for the field it typed into.
+        if (step) {
+          try {
+            const loc = await resolveStep(page, step, inputs);
+            if (matches(await readField(loc && loc.first ? loc.first() : loc))) return true;
+          } catch (_) { /* the field is not there (yet) */ }
         }
         return false;
       }, timeout);
@@ -285,7 +300,7 @@ async function verifyStep(page, step, inputs, baseline = null, dialogQueue = nul
   const results = [];
   let failing = null;
   for (const a of assertions) {
-    const result = await evaluateAssertion(roots, page, a, inputs, baseline, capMs);
+    const result = await evaluateAssertion(roots, page, a, inputs, baseline, capMs, step);
     results.push(result);
     if (!result.ok && result.required && !failing) failing = result;
   }

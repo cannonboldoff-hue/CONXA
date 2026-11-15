@@ -113,7 +113,7 @@ const checkRetryBudget = _checkRetryBudget;
 // gets a load wait too — the marker itself is a no-op, but the tab it names may still be
 // mid-navigation (e.g. a target=_blank popup that opens at about:blank).
 const NAVIGATION_STEP_TYPES = new Set([
-  "navigate", "browser_back", "browser_forward", "click", "dblclick", "right_click",
+  "navigate", "browser_back", "browser_forward", "click", "dblclick", "right_click", "repeat_click",
   "keyboard_shortcut",
   "if_present", "try_dismiss", "wait_for_one_of", "outcome_fork",
   "tab_open", "tab_switch", "popup",
@@ -959,7 +959,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // the loop rather than threaded through every handler — the smallest diff that can never
   // half-execute an action by accident. A resolve failure is a real failure (fail closed: a
   // dry run that can't even find its committing step's target is not a clean preview).
-  if (ctx.dryRun && step.destructive === true) {
+  if (ctx.dryRun && (step.destructive === true || step.consequence_unknown === true)) {
     let resolveErr = null;
     try {
       await resolveStep(page, step, state.inputs);
@@ -1188,7 +1188,9 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       if (mayHaveActed) {
         ctx.tracker.emit("settle_retry", { si: i, waited: settle.waitedMs, phase: "verify", ok: settle.settled });
         const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue, { capMs: RECHECK_CAP_MS }).catch(() => null);
-        if (verdict2 && verdict2.pass) {
+        // "Nothing to check" passes verification, but it proves nothing about an action that threw: only a check that
+        // was actually made and held lets a thrown action count as done. Otherwise the step goes on to recovery.
+        if (verdict2 && verdict2.pass && Array.isArray(verdict2.results) && verdict2.results.length) {
           emitVerifyResult(ctx, i, verdict2);
           const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
           await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });

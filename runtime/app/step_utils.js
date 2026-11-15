@@ -21,7 +21,7 @@ function asArray(value) {
 // Lives here, in the dependency-free leaf, because both locators.js and cascade.js need it and
 // cascade.js already depends on locators.js.
 const NON_IDEMPOTENT_STEP_TYPES = new Set([
-  "click", "dblclick", "right_click",
+  "click", "dblclick", "right_click", "repeat_click",
   "keyboard_shortcut", "upload", "drag_drop",
   "set_checkbox", "set_radio",
 ]);

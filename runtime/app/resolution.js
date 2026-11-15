@@ -306,6 +306,23 @@ function isFileInputStep(step) {
   return String(fp.input_type || "").toLowerCase() === "file";
 }
 
+// Hover the nearest visible ancestors of a hidden element, one after another, until it shows. True when it did.
+async function revealByHover(loc, budget) {
+  try {
+    const attached = await loc.waitFor({ state: "attached", timeout: 300 }).then(() => true, () => false);
+    if (!attached) return false;
+    const points = await evalOn(loc, pageScripts.revealHoverPoints, undefined, 1500);
+    if (!Array.isArray(points) || !points.length) return false;
+    const page = loc.page();
+    for (const p of points) {
+      await page.mouse.move(p.x, p.y);
+      const shown = await loc.waitFor({ state: "visible", timeout: Math.min(budget, 900) }).then(() => true, () => false);
+      if (shown) return true;
+    }
+  } catch (_) { /* a reveal that cannot be tried is just the original failure */ }
+  return false;
+}
+
 // Phase 8: pre-action GATE — confirm the element is attached, visible, RAF-stable, and enabled
 // before acting. Budget is confidence-adaptive (a high-confidence step gets a shorter wait).
 // Best-effort: gate failures throw so the caller can try the next candidate / recovery.
@@ -323,7 +340,13 @@ async function gateLocator(loc, step) {
     return;
   }
 
-  await loc.waitFor({ state: "visible", timeout: budget });
+  try {
+    await loc.waitFor({ state: "visible", timeout: budget });
+  } catch (err) {
+    // Hidden until something is hovered (a menu item, a row's action buttons). The recording carries a hover only when
+    // hover capture was on, so a replay can arrive here with nothing to reveal the target: do what a person does.
+    if (!(await revealByHover(loc, budget))) throw err;
+  }
 
   // RAF-stable: bounding box must be unchanged across two animation frames. EXEC-29 Guard A:
   // routed through evalOn/withDeadline rather than a bare loc.evaluate() — this call sits on
