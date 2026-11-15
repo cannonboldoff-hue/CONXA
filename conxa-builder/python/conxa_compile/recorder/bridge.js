@@ -724,8 +724,10 @@
     // 3. aria-labelledby reference
     const labelledBy = el.getAttribute("aria-labelledby");
     if (labelledBy) {
-      const ref = document.getElementById(labelledBy);
-      if (ref) return safeText(ref, 80);
+      // A list of ids names the control by all of them, in order.
+      const refs = labelledBy.split(/\s+/).map(id => document.getElementById(id)).filter(Boolean);
+      const txt = refs.map(r => safeText(r, 80)).filter(Boolean).join(" ").slice(0, 80);
+      if (txt) return txt;
     }
     // 4. <label> sibling in parent
     const parent = el.parentElement;
@@ -744,13 +746,17 @@
     // Only a form control has a caption beside it. A link, a button or a card is named by its own text, and a
     // neighbouring paragraph is not its name ("Clicked Pull requests" for the first pull request in a list).
     if (!_isCaptionedControl(el)) return null;
+    // Earlier siblings first (a caption sits before its box). A caption drawn after the box is read in a second
+    // pass over the box's own siblings only: any further and a paragraph below an unrelated field becomes its name.
+    // A caption that did not exist yet is read again once the page settles (_lateLabel).
+    for (const step of [-1, 1]) {
     let node = el;
-    for (let depth = 0; depth < 8; depth++) {
+    for (let depth = 0; depth < (step < 0 ? 8 : 1); depth++) {
       const container = node.parentElement;
       if (!container) break;
       const children = Array.from(container.children);
       const nodeIdx = children.indexOf(node);
-      for (let i = nodeIdx - 1; i >= 0; i--) {
+      for (let i = nodeIdx + step; i >= 0 && i < children.length; i += step) {
         const sib = children[i];
         if (!sib || sib.contains(el)) continue;
         if (_SKIP_INTERACTIVE.has(sib.tagName.toLowerCase())) continue;
@@ -777,6 +783,15 @@
         if (txt && txt.length >= 2 && txt.length <= 60) return txt;
       }
       node = container;
+    }
+    }
+    // Last resort: the text the control says describes it. Weaker than a caption (it is often help text), so
+    // it is only used when nothing above named the control.
+    const describedBy = el.getAttribute("aria-describedby");
+    if (describedBy) {
+      const refs = describedBy.split(/\s+/).map(id => document.getElementById(id)).filter(Boolean);
+      const txt = refs.map(r => safeText(r, 80)).filter(Boolean).join(" ").slice(0, 80);
+      if (txt && txt.length >= 2 && txt.length <= 60) return txt;
     }
     return null;
   }
@@ -1897,6 +1912,7 @@
         const dc = payload.date_context;
         report({
           _amend: uid,
+          target_label_text: _lateLabel(payload, probe.el),
           state_change: payload.state_change,
           post_condition: payload.post_condition,
           surface_context: payload.surface_context,
@@ -1912,9 +1928,29 @@
     return _finalizeQueue;
   }
 
+  // A caption that was not on the page yet when the step was taken (a late-rendered form) is read again once the
+  // page has settled. Only for a step that has none: a caption is never overwritten.
+  function _lateLabel(payload, el) {
+    try {
+      if ((payload.target && payload.target.label_text) || !el || !el.isConnected) return null;
+      return captureAssociatedLabel(el) || null;
+    } catch (_e) { return null; }
+  }
+
   function finalizeStateWithAfter(payload, after) {
+    const el = payload.state_probe && payload.state_probe.el;   // _applyAfter drops the probe
     _applyAfter(payload, after);
-    return report(payload);
+    const sent = report(payload);
+    if (el && !(payload.target && payload.target.label_text)) {
+      _finalizeQueue = _finalizeQueue
+        .then(() => _waitForDomSettle(300, 1500))
+        .then(() => {
+          const label = _lateLabel(payload, el);
+          if (label && payload.uid) report({ _amend: payload.uid, target_label_text: label });
+        })
+        .catch(() => {});
+    }
+    return sent;
   }
 
   function _applyAfter(payload, after) {

@@ -93,6 +93,7 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
                         if (k in payload) row[k] = payload[k];
                     }
                     if (payload.date_field_after != null && row.date_context) row.date_context.field_display_value_after = payload.date_field_after;
+                    if (payload.target_label_text && row.target && !row.target.label_text) row.target.label_text = payload.target_label_text;
                     return;
                 }
                 window.__events.push(payload);
@@ -1617,3 +1618,41 @@ def test_flush_sends_typing_that_was_still_waiting(page: Page) -> None:
     page.evaluate("() => window.__skillFlush()")
     page.wait_for_timeout(100)
     assert [e["action"]["value"] for e in _type_events(page)] == ["a@b.co"]
+
+
+
+def _label_of(page: Page, selector: str) -> str | None:
+    page.click(selector)
+    page.keyboard.type("x")
+    page.wait_for_timeout(300)
+    return _type_events(page)[0]["target"]["label_text"]
+
+
+def test_label_read_from_aria_labelledby_with_several_ids(page: Page) -> None:
+    _install_bridge(page, '<span id="a">Work</span> <span id="b">email</span><input id="f" aria-labelledby="a b">')
+    assert _label_of(page, "#f") == "Work email"
+
+
+def test_label_drawn_after_the_box_is_read_from_the_next_sibling(page: Page) -> None:
+    _install_bridge(page, '<div><input id="f"><span>Username</span></div>')
+    assert _label_of(page, "#f") == "Username"
+
+
+def test_earlier_caption_wins_over_a_later_sibling(page: Page) -> None:
+    _install_bridge(page, '<div><span>First name</span><input id="f"><span>Help text here</span></div>')
+    assert _label_of(page, "#f") == "First name"
+
+
+def test_aria_describedby_is_the_last_resort_for_a_label(page: Page) -> None:
+    _install_bridge(page, '<div><input id="f" aria-describedby="d"></div><p id="d">Your login name</p>')
+    assert _label_of(page, "#f") == "Your login name"
+
+
+def test_a_caption_rendered_after_the_step_is_added_when_the_page_settles(page: Page) -> None:
+    # The caption does not exist when the person types; the app draws it a moment later (late-rendered form).
+    _install_bridge(page, '<div id="box"><input id="f"></div>')
+    page.click("#f")
+    page.evaluate("() => setTimeout(() => { const s = document.createElement('span'); s.textContent = 'Username'; document.getElementById('box').prepend(s); }, 60)")
+    page.keyboard.type("x")
+    page.wait_for_timeout(900)
+    assert _type_events(page)[0]["target"]["label_text"] == "Username"
