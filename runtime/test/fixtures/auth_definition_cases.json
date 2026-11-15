@@ -170,5 +170,41 @@
       "cookie_names": ["session_token"]
     },
     "expect": { "verdict": "yes" }
+  },
+  {
+    "name": "page status 2xx plus the session cookie -> yes (a site that errors for a visitor)",
+    "definition": {
+      "version": 1,
+      "probe_url": "https://bank.example.com/overview",
+      "signed_out": { "final_path": "", "markers": [], "password_box": false, "doc_denied": "500" },
+      "signed_in": { "final_path": "", "endpoints": [], "doc_ok": "2xx" },
+      "session_keys": ["JSESSIONID"]
+    },
+    "observation": { "final_url": "https://bank.example.com/overview", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": ["JSESSIONID"], "doc_status": 200 },
+    "expect": { "verdict": "yes" }
+  },
+  {
+    "name": "page status equal to the learned signed-out status -> no",
+    "definition": {
+      "version": 1,
+      "probe_url": "https://bank.example.com/overview",
+      "signed_out": { "final_path": "", "markers": [], "password_box": false, "doc_denied": "500" },
+      "signed_in": { "final_path": "", "endpoints": [], "doc_ok": "2xx" },
+      "session_keys": ["JSESSIONID"]
+    },
+    "observation": { "final_url": "https://bank.example.com/overview", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": ["JSESSIONID"], "doc_status": 500 },
+    "expect": { "verdict": "no" }
+  },
+  {
+    "name": "page status unknown (an observer that does not report it) -> unsure, never yes",
+    "definition": {
+      "version": 1,
+      "probe_url": "https://bank.example.com/overview",
+      "signed_out": { "final_path": "", "markers": [], "password_box": false, "doc_denied": "500" },
+      "signed_in": { "final_path": "", "endpoints": [], "doc_ok": "2xx" },
+      "session_keys": ["JSESSIONID"]
+    },
+    "observation": { "final_url": "https://bank.example.com/overview", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": ["JSESSIONID"] },
+    "expect": { "verdict": "unsure" }
   }
 ]

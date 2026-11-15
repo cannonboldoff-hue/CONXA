@@ -160,3 +160,19 @@ def test_self_test_fails_when_reload_does_not_confirm():
     ok, reason = self_test(definition, live, out, reload_obs=broken_reload)
     assert not ok
     assert "reload" in reason.lower()
+
+
+def test_learn_keeps_the_page_status_only_when_signed_out_answers_a_different_class():
+    live = _obs("https://bank.example.com/overview", cookie_names=["JSESSIONID"])
+    out = _obs("https://bank.example.com/overview")
+    live["doc_status"], out["doc_status"] = 200, 500
+    d = learn(live, out, probe_url="https://bank.example.com/overview")
+    assert d["signed_in"]["doc_ok"] == "2xx" and d["signed_out"]["doc_denied"] == "500"
+    live_ok, out_bad, reload_ok = dict(live), dict(out), dict(live)
+    assert self_test(d, live_ok, out_bad, reload_ok) == (True, "")
+
+    # same class both sides, or no status at all: nothing is added, so the definition is unchanged from before
+    out["doc_status"] = 200
+    assert "doc_ok" not in learn(live, out)["signed_in"] and "doc_denied" not in learn(live, out)["signed_out"]
+    del live["doc_status"]
+    assert "doc_denied" not in learn(live, out)["signed_out"]

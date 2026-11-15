@@ -1547,3 +1547,61 @@ def test_the_stop_barrier_waits_for_every_step_number_and_every_open_watch(tmp_p
     assert sess._bridges_settled([state]) is True
     assert sess._bridges_settled([{**state, "open": 1}]) is False       # a watch is still open
     assert sess._bridges_settled([]) is True                            # no page left to ask
+
+
+def test_a_late_caption_fills_an_empty_label_but_never_replaces_one(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "amend-label")
+    sess._consume_payload_sync(_stamped(1))
+    sess._consume_payload_sync(_stamped(2))
+    first_label = (sess.snapshot_events()[0].get("target") or {}).get("label_text") or ""
+    assert first_label == ""
+
+    sess._consume_payload_sync({"_amend": "b1-1", "target_label_text": "Username"})
+    sess._consume_payload_sync({"_amend": "b1-1", "target_label_text": "Something else"})
+
+    assert sess.snapshot_events()[0]["target"]["label_text"] == "Username"
+    assert (sess.snapshot_events()[1]["target"].get("label_text") or "") == ""
+
+
+def test_learning_tries_the_success_address_when_the_sign_in_address_learns_nothing(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "learn-fallback")
+    asked: list[str] = []
+
+    def fake(probe_url, existing=None):
+        asked.append(probe_url)
+        if probe_url.endswith("/login"):
+            return None, "The signed-in page didn't confirm sign-in against what was learned.", True
+        return {"version": 1, "probe_url": probe_url}, "", False
+
+    sess._learn_auth_at_sync = fake
+    definition, reason = sess._perform_learn_auth_sync("https://app.test/login", None, "https://app.test/home/{}")
+    assert definition == {"version": 1, "probe_url": "https://app.test/home/"} and reason == ""
+    assert asked == ["https://app.test/login", "https://app.test/home/"]
+
+
+def test_learning_does_not_retry_when_the_browser_itself_failed(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "learn-no-retry")
+    asked: list[str] = []
+
+    def fake(probe_url, existing=None):
+        asked.append(probe_url)
+        return None, "The login window closed before this could be confirmed.", False
+
+    sess._learn_auth_at_sync = fake
+    assert sess._perform_learn_auth_sync("https://app.test/login", None, "https://app.test/home") == (
+        None, "The login window closed before this could be confirmed.")
+    assert asked == ["https://app.test/login"]
+
+
+def test_a_definition_the_app_already_has_is_tried_at_its_own_address_first(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "learn-existing")
+    asked: list[str] = []
+    existing = {"version": 1, "probe_url": "https://app.test/home"}
+
+    def fake(probe_url, existing_def=None):
+        asked.append(probe_url)
+        return existing, "", False
+
+    sess._learn_auth_at_sync = fake
+    assert sess._perform_learn_auth_sync("https://app.test/login", existing, "https://app.test/home") == (existing, "")
+    assert asked == ["https://app.test/home"]

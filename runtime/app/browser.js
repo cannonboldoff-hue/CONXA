@@ -733,8 +733,10 @@ async function _gatherDefinitionObservation(page, probeUrl) {
     } catch (_) {}
   };
   page.on("response", onResponse);
+  let docStatus = null;
   try {
-    await page.goto(probeUrl, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
+    const nav = await page.goto(probeUrl, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => null);
+    docStatus = nav ? nav.status() : null; // the final document, after redirects
     await page.waitForTimeout(1500).catch(() => {}); // let SPA XHRs fired on load settle
   } finally {
     try { page.off("response", onResponse); } catch (_) {}
@@ -763,6 +765,7 @@ async function _gatherDefinitionObservation(page, probeUrl) {
     markers,
     responses,
     cookie_names: cookieNames,
+    doc_status: docStatus,
   };
 }
 

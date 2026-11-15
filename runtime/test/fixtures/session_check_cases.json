@@ -163,5 +163,21 @@
     "observation": { "final_url": "https://app.acme.com/sso/start", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [] },
     "baseline": { "url": "https://app.acme.com/login", "hasPasswordBox": true },
     "expect": { "state": "expired" }
+  },
+  {
+    "name": "learned page status: the signed-out error status -> expired",
+    "app": {
+      "login_url": "https://bank.example.com/overview",
+      "auth_definition": {
+      "version": 1,
+      "probe_url": "https://bank.example.com/overview",
+      "signed_out": { "final_path": "", "markers": [], "password_box": false, "doc_denied": "500" },
+      "signed_in": { "final_path": "", "endpoints": [], "doc_ok": "2xx" },
+      "session_keys": ["JSESSIONID"]
+    }
+    },
+    "observation": { "final_url": "https://bank.example.com/overview", "password_box": false, "otp_like": false, "markers": [], "responses": [], "cookie_names": [], "doc_status": 500 },
+    "baseline": { "url": "https://bank.example.com/overview", "hasPasswordBox": false },
+    "expect": { "state": "expired" }
   }
 ]

@@ -188,8 +188,10 @@ def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms:
     responses: list[dict] = []
     _on_response = _response_recorder(responses)
     page.on("response", _on_response)
+    doc_status: int | None = None
     try:
-        page.goto(url, wait_until="load", timeout=timeout_ms)
+        nav = page.goto(url, wait_until="load", timeout=timeout_ms)
+        doc_status = nav.status if nav is not None else None  # the final document, after redirects
         page.wait_for_timeout(1500)  # let SPA XHRs fired on load settle before reading responses
     except Exception:  # noqa: BLE001
         pass
@@ -198,7 +200,9 @@ def _navigate_and_observe_sync(page: Any, context: Any, url: str, *, timeout_ms:
             page.remove_listener("response", _on_response)
         except Exception:  # noqa: BLE001
             pass
-    return _gather_page_observation_sync(page, context, responses)
+    obs = _gather_page_observation_sync(page, context, responses)
+    obs["doc_status"] = doc_status
+    return obs
 
 
 SessionProbe = Literal["ready", "expired", "unverified"]
@@ -1059,7 +1063,29 @@ class RecordingSession:
         except Exception:  # noqa: BLE001
             return None
 
-    def _perform_learn_auth_sync(self, login_url: str, existing: dict | None = None) -> tuple[dict | None, str]:
+    def _perform_learn_auth_sync(
+        self, login_url: str, existing: dict | None = None, success_url: str = ""
+    ) -> tuple[dict | None, str]:
+        """Learns at the app's sign-in address; when that learns nothing that survives the self-test, tries the
+        success address too (AUTH-23: on some sites the sign-in page tells signed-in and signed-out apart no better
+        than a coin flip, while the page behind it answers an error or redirects). A definition the app already has
+        is tried first at the address it was learned at, so a still-valid one comes back unchanged."""
+        wait_prefix = (success_url or "").split("{}", 1)[0].strip()
+        urls: list[str] = []
+        for u in ((existing or {}).get("probe_url"), login_url, wait_prefix):
+            if isinstance(u, str) and u.lower().startswith(("http://", "https://")) and u not in urls:
+                urls.append(u)
+        first_reason = ""
+        for i, probe_url in enumerate(urls or [login_url]):
+            definition, reason, retryable = self._learn_auth_at_sync(probe_url, existing)
+            if definition is not None:
+                return definition, ""
+            first_reason = first_reason or reason
+            if not retryable:
+                break
+        return None, first_reason
+
+    def _learn_auth_at_sync(self, login_url: str, existing: dict | None = None) -> tuple[dict | None, str, bool]:
         """Runs on the recorder's OWN thread (called from the pump loop — see the
         _learn_auth_pending check above) because it touches self._context, which only that
         thread may touch. See learn_auth() below for the public, cross-thread-safe entry point.
@@ -1077,11 +1103,11 @@ class RecordingSession:
         keeps the built pack's `_sign_in_setup_drift` check from firing a false "rebuild" demand
         (AUTH-15) on plain re-logins."""
         if self._context is None or not self.browser_open:
-            return None, "The login window closed before this could be confirmed."
+            return None, "The login window closed before this could be confirmed.", False
 
         self._autosave_storage_state_sync(force=True)
         if not self.storage_state_autosave_path or not Path(self.storage_state_autosave_path).is_file():
-            return None, "Nothing was captured to learn from yet."
+            return None, "Nothing was captured to learn from yet.", False
 
         try:
             if self.embedded:
@@ -1093,28 +1119,28 @@ class RecordingSession:
                 finally:
                     live_page.close()
         except Exception as exc:  # noqa: BLE001
-            return None, f"Couldn't check the signed-in page just now: {exc}"
+            return None, f"Couldn't check the signed-in page just now: {exc}", False
 
         out_obs = self._standalone_probe_observation_sync(login_url, storage_state=None)
         if out_obs is None:
-            return None, "Couldn't open a private check of the sign-in page."
+            return None, "Couldn't open a private check of the sign-in page.", False
 
         reload_obs = self._standalone_probe_observation_sync(
             login_url, storage_state=self.storage_state_autosave_path
         )
         if reload_obs is None:
-            return None, "Couldn't confirm the saved session on its own."
+            return None, "Couldn't confirm the saved session on its own.", False
 
         if existing and auth_learning.self_test(existing, live_obs, out_obs, reload_obs)[0]:
-            return existing, ""  # site's setup hasn't changed — keep it byte-identical
+            return existing, "", False  # site's setup hasn't changed — keep it byte-identical
 
         definition = auth_learning.learn(
             live_obs, out_obs, journey_hosts=list(self.journey_hosts), probe_url=login_url
         )
         ok, reason = auth_learning.self_test(definition, live_obs, out_obs, reload_obs)
         if not ok:
-            return None, reason
-        return definition, ""
+            return None, reason, True  # the observations were fine; this address just does not tell them apart
+        return definition, "", False
 
     def _embedded_live_observation_sync(self, login_url: str) -> dict:
         """The LIVE capture in the panel: Electron can't open a page over CDP, so the panel adds
@@ -1133,7 +1159,7 @@ class RecordingSession:
             except Exception:  # noqa: BLE001 — the run may already be closing
                 pass
 
-    async def learn_auth(self, login_url: str, existing: dict | None = None) -> tuple[dict | None, str]:
+    async def learn_auth(self, login_url: str, existing: dict | None = None, success_url: str = "") -> tuple[dict | None, str]:
         """Cross-thread entry point for cmd_finish_group_app_auth (handlers/groups.py), called
         from the Backend's own asyncio loop while the login browser is still open — same
         request/poll bridge start()/stop() use to reach across into the recorder thread. Returns
@@ -1146,7 +1172,7 @@ class RecordingSession:
         if self._context is None or not self.browser_open:
             return None, "The login window closed before this could be confirmed."
         self._learn_auth_done.clear()
-        self._learn_auth_pending = {"login_url": login_url, "existing": existing}
+        self._learn_auth_pending = {"login_url": login_url, "existing": existing, "success_url": success_url}
         while not self._learn_auth_done.is_set():
             await asyncio.sleep(0.05)
         self._learn_auth_pending = None
@@ -2027,6 +2053,7 @@ class RecordingSession:
             if payload.get(k) is not None
         }
         date_after = payload.get("date_field_after")
+        late_label = payload.get("target_label_text")
         try:
             with self._lock:
                 idx = next(
@@ -2038,6 +2065,9 @@ class RecordingSession:
                     return
                 data = self._materialized[idx].model_dump(mode="json")
                 data.update(fields)
+                # A caption the page drew late: only ever fills an empty one, never replaces what was captured.
+                if isinstance(late_label, str) and late_label.strip() and isinstance(data.get("target"), dict)                         and not (data["target"].get("label_text") or "").strip():
+                    data["target"]["label_text"] = late_label.strip()[:80]
                 if date_after is not None and isinstance(data.get("date_context"), dict):
                     data["date_context"]["field_display_value_after"] = date_after
                 self._materialized[idx] = RecordedEvent.model_validate(data)
@@ -3212,7 +3242,9 @@ class RecordingSession:
                     login_url = self._learn_auth_pending.get("login_url", "")
                     existing = self._learn_auth_pending.get("existing")
                     try:
-                        self._learn_auth_result = self._perform_learn_auth_sync(login_url, existing)
+                        self._learn_auth_result = self._perform_learn_auth_sync(
+                            login_url, existing, self._learn_auth_pending.get("success_url", "")
+                        )
                     except Exception as exc:  # noqa: BLE001
                         self._learn_auth_result = (None, f"Couldn't learn sign-in signals: {exc}")
                     finally:

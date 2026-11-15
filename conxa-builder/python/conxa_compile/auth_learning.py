@@ -108,6 +108,23 @@ def _dom_class(definition: dict, observation: dict) -> str | None:
     return "no" if any_present else "yes"
 
 
+def _doc_class(definition: dict, doc_status: int | None) -> str | None:
+    """The page's own HTTP status. Learned only when the signed-out page answers a different class than the
+    signed-in one at the same address (a site that errors for a visitor, ParaBank). "no" is the exact status the
+    signed-out page gave; "yes" is the signed-in class, and only counts once a denied status was learned."""
+    if doc_status is None:
+        return None
+    denied = (definition.get("signed_out") or {}).get("doc_denied")
+    ok = (definition.get("signed_in") or {}).get("doc_ok")
+    if not denied:
+        return None
+    if status_matches_spec(doc_status, str(denied)):
+        return "no"
+    if ok and status_matches_spec(doc_status, str(ok)):
+        return "yes"
+    return None
+
+
 def _session_class(definition: dict, cookie_names: list[str]) -> str | None:
     keys = definition.get("session_keys") or []
     if not keys:
@@ -128,6 +145,7 @@ def evaluate(definition: dict | None, observation: dict | None) -> dict:
         "url": _url_class(definition, _path_of(observation.get("final_url", ""))),
         "network": _network_class(definition, observation.get("responses") or []),
         "dom": _dom_class(definition, observation),
+        "doc": _doc_class(definition, observation.get("doc_status")),
         "session": _session_class(definition, observation.get("cookie_names") or []),
     }
     if "no" in results.values():
@@ -295,7 +313,7 @@ def learn(live_obs: dict, out_obs: dict, journey_hosts: list[str] | None = None,
     live_path = _path_of(live_obs.get("final_url", ""))
     out_path = _path_of(out_obs.get("final_url", ""))
 
-    return {
+    definition = {
         "version": 1,
         "probe_url": probe_url,
         "signed_out": {
@@ -310,6 +328,13 @@ def learn(live_obs: dict, out_obs: dict, journey_hosts: list[str] | None = None,
         "session_keys": session_keys,
         "journey_hosts": journey_hosts or [],
     }
+    # The page's own status, only when signed-in answers 2xx and signed-out answers a different class. Absent
+    # otherwise, so a definition that never needed it stays byte-identical (the pack's sign-in drift check).
+    live_st, out_st = live_obs.get("doc_status"), out_obs.get("doc_status")
+    if isinstance(live_st, int) and isinstance(out_st, int) and live_st // 100 == 2 and out_st // 100 != 2:
+        definition["signed_in"]["doc_ok"] = "2xx"
+        definition["signed_out"]["doc_denied"] = str(out_st)
+    return definition
 
 
 def self_test(definition: dict, live_obs: dict, out_obs: dict, reload_obs: dict) -> tuple[bool, str]:

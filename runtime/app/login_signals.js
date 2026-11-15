@@ -299,6 +299,18 @@ function _domClass(def, observation) {
   return anyPresent ? "no" : "yes";
 }
 
+// The page's own HTTP status; twin of auth_learning.py::_doc_class. Present only in a definition learned from a
+// site whose signed-out page answers a different status class than the signed-in one.
+function _docClass(def, docStatus) {
+  if (docStatus === undefined || docStatus === null) return null;
+  const denied = def.signed_out && def.signed_out.doc_denied;
+  const ok = def.signed_in && def.signed_in.doc_ok;
+  if (!denied) return null;
+  if (statusMatchesSpec(docStatus, String(denied))) return "no";
+  if (ok && statusMatchesSpec(docStatus, String(ok))) return "yes";
+  return null;
+}
+
 function _sessionClass(def, cookieNames) {
   const keys = def.session_keys || [];
   if (!keys.length) return null;
@@ -316,6 +328,7 @@ function evaluateAuthDefinition(definition, observation) {
     url: _urlClass(definition, _pathOf(observation.final_url)),
     network: _networkClass(definition, observation.responses),
     dom: _domClass(definition, observation),
+    doc: _docClass(definition, observation.doc_status),
     session: _sessionClass(definition, observation.cookie_names),
   };
 

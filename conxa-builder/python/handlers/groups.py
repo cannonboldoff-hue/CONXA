@@ -512,7 +512,7 @@ class GroupsMixin:
         learn_reason = ""
         if sess.browser_open and app_before is not None and not force:
             definition, learn_reason = self._loop.run(
-                sess.learn_auth(app_before.login_url, app_before.auth_definition)
+                sess.learn_auth(app_before.login_url, app_before.auth_definition, app_before.success_url or "")
             )
             if definition is None:
                 # Keep the window open — this is NOT a failure, it's "not yet". The renderer
