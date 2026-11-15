@@ -119,6 +119,16 @@ function requiredRungFor(step, { full = false, hasRequiredAssertion = false } = 
   return hasRequiredAssertion ? "accepted" : "performed";
 }
 
+/**
+ * The rung one of a step's own checks (validation.assertions) proves. Words the author said mean "it worked" (only a
+ * person makes a text check required; the compiler writes them advisory), absent before the action and there now
+ * (`fresh`, assertions.js): that finds the result itself, so it proves the work finished. Any other check says only
+ * that the app took the action.
+ */
+function assertionRung(result) {
+  return result && result.type === "text_present" && result.required && result.fresh ? "completed" : "accepted";
+}
+
 /** One run's outcome from what its steps showed. */
 function runOutcome({ stopped = false, partly = false, parked = false, notes = 0 } = {}) {
   if (stopped) return "couldnt_confirm";
@@ -162,6 +172,6 @@ function unconfirmedNote(step, index) {
 
 module.exports = {
   ANSWERS, RUNGS, WITNESSES, VERDICTS, OUTCOMES,
-  judge, nextMove, safeToRepeat, requiredRungFor, runOutcome,
+  judge, nextMove, safeToRepeat, requiredRungFor, assertionRung, runOutcome,
   leadWord, outcomeFromText, unconfirmedNote,
 };

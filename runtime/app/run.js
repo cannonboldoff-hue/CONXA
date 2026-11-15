@@ -452,7 +452,7 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   const checks = [{ rung: "performed", witness: "target", role: "support", answer: "yes" }];
   if (verify && Array.isArray(verify.results) && verify.results.length) {
     for (const r of verify.results) {
-      checks.push({ rung: "accepted", witness: r.type === "value_equals" ? "target" : "renderer", role: "support", answer: r.answer || (r.ok ? "yes" : "no") });
+      checks.push({ rung: proof.assertionRung(r), witness: r.type === "value_equals" ? "target" : "renderer", role: "support", answer: r.answer || (r.ok ? "yes" : "no") });
     }
   } else if (verify) {
     checks.push({ rung: "accepted", witness: "renderer", role: "support", answer: verify.answer || "cant_tell" });

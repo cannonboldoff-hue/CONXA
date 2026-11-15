@@ -23,6 +23,7 @@ import json
 import re
 from typing import Any, Callable
 
+from conxa_compile.compiler.selector_filters import has_personal_email
 from conxa_compile.skill_package_builder_output import (
     _bundle_root,
     _clean_stale_artifacts,
@@ -42,14 +43,12 @@ from conxa_core.storage.json_store import read_skill
 # Main build entry point
 # ─────────────────────────────────────────────────
 
-_ACCOUNT_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
-
-
 def _assert_no_account_text(saved_skill: dict[str, Any], workflow_name: str) -> None:
     """A package is run by other people. If how a step finds its element carries an email address (the recording
     person's own account, read off an account chip), stop the build: it would ship that person's details. The
     compiler no longer produces this; this catches a workflow compiled before that fix. Typed values are not
-    looked at: only the target, identity, signal and selector fields."""
+    looked at: only the target, identity, signal and selector fields. Uses the compiler's own rule
+    (has_personal_email), so sample addresses a page shows ("name@example.com") never stop a build."""
     for block in saved_skill.get("skills") or []:
         for step in (block or {}).get("steps") or []:
             if not isinstance(step, dict):
@@ -62,7 +61,7 @@ def _assert_no_account_text(saved_skill: dict[str, Any], workflow_name: str) -> 
                 sig = {**sig, "context": {k: v for k, v in sig["context"].items() if k not in {"page_title", "page_url", "timing"}}}
             text = json.dumps({"target": step.get("target"), "identity_bundle": step.get("identity_bundle"), "signals": sig,
                                "compiled_selectors": step.get("compiled_selectors")}, default=str)
-            if _ACCOUNT_EMAIL_RE.search(text):
+            if has_personal_email(text):
                 raise ValueError(
                     f"“{workflow_name}” contains someone’s account details (an email address) in how it finds a button. "
                     "Compile the workflow again, then build."

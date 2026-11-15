@@ -314,6 +314,40 @@ def test_done_when_offers_inputs_and_takes_a_typed_check_and_reads_the_current_d
     assert "input:po_number" not in {c["id"] for c in fresh["choices"]}
 
 
+def test_a_typed_check_skips_trailing_steps_that_cannot_hold_one():
+    """A person often scrolls to look at the result after the last real action: the typed check goes on the last
+    step that can carry a check, not on the scroll (the gate would refuse it)."""
+    from conxa_compile.editor.patch_gate import validate_editor_patch
+    from conxa_compile.policy.bundle import get_policy_bundle
+
+    doc = _invoice_doc()
+    steps = doc["skills"][0]["steps"]
+    steps.append({"action": {"action": "scroll", "delta_y": 400}, "intent": "scroll_down"})
+    keys = step_keys(steps)
+    ops, _ = plan_answer(_q(doc, "done_when"), {"selected": [], "custom_text": "Saved"}, doc)
+    (op,) = ops
+    assert op["step_key"] == keys[5]
+    validate_editor_patch(steps[5], op["patch"], get_policy_bundle().data)  # the gate accepts it
+
+
+def test_a_step_with_completion_checks_also_offers_the_typed_values_as_proof():
+    """A form that answers in the page alone (no request): "the app accepted the request" can never hold there, so the
+    person must be able to say "I see what I typed" even when the compiler wrote no text check of its own."""
+    from conxa_compile.conversation.clarify import _done_when_choices
+
+    doc = {"inputs": [{"id": "full_name"}], "skills": [{"steps": [
+        {"action": {"action": "type"}, "value": "{{full_name}}", "input_binding": "full_name"},
+        {"action": {"action": "click"}, "intent": "submit_form", "validation": {"assertions": [], "effect": {
+            "kind": "send", "required_rung": "completed",
+            "checks": [{"id": "c1", "rung": "completed", "witness": "transport", "role": "support",
+                        "probe": {"type": "request_chain", "method": "mutating", "status": "2xx"},
+                        "plain": "the app accepted the request"}]}}},
+    ]}]}
+    choices, _ = _done_when_choices(doc)
+    ids = {c["id"] for c in choices}
+    assert "input:full_name" in ids and any(i.startswith("effect:") for i in ids), ids
+
+
 def test_planning_never_mutates_the_document():
     doc = _invoice_doc()
     before = copy.deepcopy(doc)

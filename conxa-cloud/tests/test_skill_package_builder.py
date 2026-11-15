@@ -1704,3 +1704,6 @@ def test_a_package_never_ships_the_recording_persons_account_details():
     leaky = {"skills": [{"steps": [{"target": {"fallback_selectors": ['label:has-text("Google AccountCannon Boldcannonboldoff@gmail.com") + input']}}]}]}
     with pytest.raises(ValueError, match="account details"):
         _assert_no_account_text(leaky, "Drive upload")
+    # A form's own sample placeholder ("name@example.com") is the page's text, not anyone's account.
+    sample = {"skills": [{"steps": [{"signals": {"selectors": {"aria": '[role="textbox"][name="name@example.com"]'}}}]}]}
+    _assert_no_account_text(sample, "Text box form")

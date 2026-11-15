@@ -228,6 +228,32 @@ def prefilter_selector_candidate(selector: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+# Mail domains reserved for documentation and testing (RFC 2606, RFC 6761). No mailbox can exist there, so an
+# address on one is sample text a page's author wrote (a placeholder like "name@example.com"), never an account.
+_SAMPLE_MAIL_DOMAINS = ("example.com", "example.net", "example.org")
+_SAMPLE_MAIL_TLDS = (".example", ".test", ".invalid", ".localhost")
+
+
+def has_personal_email(text: Any) -> bool:
+    """True when the text carries an email address that can belong to someone. The one rule both the compile-time
+    scrub (drop_personal_target_text) and the build-time check (skill_package_builder) use, so whatever the
+    compiler keeps, the build accepts."""
+    for m in _EMAIL_RE.finditer(str(text or "")):
+        domain = m.group().rsplit("@", 1)[-1].lower()
+        if not (domain.endswith(_SAMPLE_MAIL_TLDS) or any(domain == d or domain.endswith("." + d) for d in _SAMPLE_MAIL_DOMAINS)):
+            return True
+    return False
+
+
+def _without_personal_email(value: Any) -> Any:
+    """The value with every string that carries a personal email blanked, and dropped from lists."""
+    if isinstance(value, str):
+        return "" if has_personal_email(value) else value
+    if isinstance(value, list):
+        return [_without_personal_email(v) for v in value if not (isinstance(v, str) and has_personal_email(v))]
+    if isinstance(value, dict):
+        return {k: _without_personal_email(v) for k, v in value.items()}
+    return value
 
 
 def scrub_email(text: str) -> str:
@@ -236,33 +262,39 @@ def scrub_email(text: str) -> str:
     return " ".join(_EMAIL_RE.sub(" ", str(text or "")).split())
 
 
-# Text an element carries that the recorder copies into the step's identity, selectors and fingerprint.
-_TARGET_TEXT_KEYS = ("label_text", "aria_label", "inner_text", "name", "title", "placeholder", "text")
 # A form label longer than this wrapped several elements (an account chip: "Google Account" + a name + an email).
 _MAX_LABEL_TEXT = 60
 
 
 def drop_personal_target_text(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Events with the text the person's own account put on the page taken out of every target, once, before any
-    selector, fingerprint or binding is built from it. Whatever is built later cannot carry what is not there.
-    A text with an email address in it, or a label too long to be one label, is blanked; nothing else changes.
-    The input events are not modified."""
+    """Events with the text the person's own account put on the page taken out of everything that describes the
+    element (its target, the selectors the recorder built for it, and its surroundings), once, before any selector,
+    fingerprint or binding is built from it. Whatever is built later cannot carry what is not there.
+    A text with a personal email address in it (has_personal_email), or a label too long to be one label, is
+    blanked; nothing else changes. The input events are not modified."""
     out: list[dict[str, Any]] = []
     for ev in events:
-        if isinstance(ev, dict):
-            # A page's title can carry the signed-in address too (Gmail: "Inbox (274) - name@gmail.com - Gmail").
-            # It is saved on every step as context, so cut the address out here, once, like the target text.
-            page = ev.get("page")
-            if isinstance(page, dict) and isinstance(page.get("title"), str) and _EMAIL_RE.search(page["title"]):
-                ev = {**ev, "page": {**page, "title": scrub_email(page["title"])}}
-        target = ev.get("target") if isinstance(ev, dict) else None
-        if not isinstance(target, dict):
+        if not isinstance(ev, dict):
             out.append(ev)
             continue
-        bad = [k for k in _TARGET_TEXT_KEYS
-               if isinstance(target.get(k), str) and (_EMAIL_RE.search(target[k])
-                                                      or (k == "label_text" and len(target[k]) > _MAX_LABEL_TEXT))]
-        out.append({**ev, "target": {**target, **{k: "" for k in bad}}} if bad else ev)
+        # A page's title can carry the signed-in address too (Gmail: "Inbox (274) - name@gmail.com - Gmail").
+        # It is saved on every step as context, so cut the address out here, once, like the target text.
+        page = ev.get("page")
+        if isinstance(page, dict) and isinstance(page.get("title"), str) and _EMAIL_RE.search(page["title"]):
+            ev = {**ev, "page": {**page, "title": scrub_email(page["title"])}}
+        target = ev.get("target")
+        if isinstance(target, dict):
+            target = _without_personal_email(target)
+            if isinstance(target.get("label_text"), str) and len(target["label_text"]) > _MAX_LABEL_TEXT:
+                target["label_text"] = ""
+            if target != ev["target"]:
+                ev = {**ev, "target": target}
+        for key in ("selectors", "context"):
+            if isinstance(ev.get(key), dict):
+                cleaned = _without_personal_email(ev[key])
+                if cleaned != ev[key]:
+                    ev = {**ev, key: cleaned}
+        out.append(ev)
     return out
 _METACHAR_RE = re.compile(r"[>+~|^$]")  # CSS combinators / unsanitisable metacharacters
 

@@ -127,6 +127,13 @@ async function pollNegative(checkAbsentFn, timeoutMs) {
 // Presence-style locator check across every candidate frame root — true as soon as ANY root has
 // a match. Used for selector_present/text_present, where the target is expected to exist
 // SOMEWHERE among the roots (usually just [page], or the step's resolved frame chain).
+// "These words are on the page": contained in an element's text, any letter case. The same meaning as the before-count
+// (page_scripts.countTextOccurrences) and as the question a person answers ("words you should see on the screen"). An
+// exact whole-element match (`text="…"`) never found "Asha Rao" inside "Name:Asha Rao".
+function textSelector(words) {
+  return `internal:text=${JSON.stringify(String(words))}i`;
+}
+
 async function anyRootHasMatch(roots, target) {
   for (const root of roots) {
     try {
@@ -167,6 +174,7 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
   // look (no baseline, an unreadable page) is "cant_tell", never "yes": the step still passes, as it
   // always has, but it is not counted as proof.
   let cantTell = false;
+  let fresh = false;
 
   try {
     if (type === "url_changed") {
@@ -185,19 +193,27 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       // would trivially satisfy "absent" while it's still very much present in another.
       ok = await pollNegative(async () => !(await anyRootHasMatch(roots, target)), timeout);
     } else if (type === "text_present") {
-      ok = await pollPositive(() => anyRootHasMatch(roots, `text=${JSON.stringify(target)}`), timeout);
+      ok = await pollPositive(() => anyRootHasMatch(roots, textSelector(target)), timeout);
       // Same document, and the text was already on the page this many times before the action: finding it again says
       // nothing about the action, so it is "can't tell" unless there is more of it now. Never a new failure.
       const before = ok && baseline && baseline.counts && baseline.counts[target];
+      // New: counted before the action and found absent then (or more of it now). Only such a "yes" could have been
+      // a "no" had the action done nothing, so only it may prove that the work finished (run.js::proveStep).
+      // Measured the same way both times (visible text), so text sitting hidden in the page never counts as new.
+      if (before === 0) {
+        const n = await evalOn(page, pageScripts.countTextOccurrences, target).catch(() => null);
+        fresh = typeof n === "number" && n > 0;
+      }
       if (before > 0 && page.url() === baseline.url) {
         const more = await pollPositive(async () => {
           const n = await evalOn(page, pageScripts.countTextOccurrences, target).catch(() => null);
           return typeof n === "number" && n > before;
         }, Math.min(timeout, 1500));
         if (!more) cantTell = true;
+        fresh = more;
       }
     } else if (type === "text_absent") {
-      ok = await pollNegative(async () => !(await anyRootHasMatch(roots, `text=${JSON.stringify(target)}`)), timeout);
+      ok = await pollNegative(async () => !(await anyRootHasMatch(roots, textSelector(target))), timeout);
     } else if (type === "value_equals") {
       const expected = interpolate(String(a.expected ?? ""), inputs);
       const normExpected = normText(expected);
@@ -259,7 +275,7 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
 
   // An unrecognized type could not be checked at all (it still fails a required assertion, as before).
   const answer = !recognized ? "cant_tell" : !ok ? "no" : cantTell ? "cant_tell" : "yes";
-  return { type, target, required, ok, recognized, answer, elapsed_ms: Date.now() - startedAt };
+  return { type, target, required, ok, recognized, answer, ...(fresh && answer === "yes" ? { fresh: true } : {}), elapsed_ms: Date.now() - startedAt };
 }
 
 // What a set of results proves, in the same four answers. Any required "no" is a "no"; otherwise one

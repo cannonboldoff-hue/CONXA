@@ -31,6 +31,6 @@ def test_the_build_ignores_an_address_in_the_title_that_is_not_shipped():
 
 def test_the_build_still_refuses_an_address_in_how_a_step_finds_its_element():
     with pytest.raises(ValueError):
-        _assert_no_account_text(_doc(target={"primary_selector": 'text="someone@example.com"'}), "Send mail")
+        _assert_no_account_text(_doc(target={"primary_selector": 'text="someone@acme.io"'}), "Send mail")
     with pytest.raises(ValueError):
-        _assert_no_account_text(_doc(signals={"semantic": {"text": "someone@example.com"}}), "Send mail")
+        _assert_no_account_text(_doc(signals={"semantic": {"text": "someone@acme.io"}}), "Send mail")

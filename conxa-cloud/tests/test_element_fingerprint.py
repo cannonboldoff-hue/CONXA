@@ -1004,3 +1004,28 @@ def test_account_text_never_reaches_a_selector_or_fingerprint():
     long_label = drop_personal_target_text([{"target": {"label_text": "x" * 61}}])[0]
     assert long_label["target"]["label_text"] == ""
     assert drop_personal_target_text([{"target": {"label_text": "First name"}}])[0]["target"]["label_text"] == "First name"
+
+
+def test_account_text_is_also_taken_out_of_the_recorders_own_selectors_and_surroundings():
+    """The recorder writes the element's name into `selectors` and `context` as well as `target`: all three are cleaned,
+    so the build-time check can never find what the compile-time scrub left in."""
+    from conxa_compile.compiler.selector_filters import drop_personal_target_text
+
+    ev = {"target": {"aria_label": "Account me@acme.io"},
+          "selectors": {"aria": '[role="button"][name="Account me@acme.io"]', "css": "#acct"},
+          "context": {"siblings": ["Settings", "me@acme.io"], "parent": "header"}}
+    out = drop_personal_target_text([ev])[0]
+    assert out["target"]["aria_label"] == "" and out["selectors"] == {"aria": "", "css": "#acct"}
+    assert out["context"] == {"siblings": ["Settings"], "parent": "header"}
+
+
+def test_a_sample_address_on_a_reserved_domain_is_page_text_not_an_account():
+    """A placeholder like "name@example.com" (RFC 2606/6761 reserved domains) can belong to nobody: it stays a signal."""
+    from conxa_compile.compiler.selector_filters import drop_personal_target_text, has_personal_email
+
+    for sample in ("name@example.com", "you@mail.example.org", "a@b.test", "x@host.invalid"):
+        assert not has_personal_email(sample), sample
+    for real in ("cannon@gmail.com", "jo@example.community", "me@acme.io"):
+        assert has_personal_email(real), real
+    ev = {"target": {"placeholder": "name@example.com"}, "selectors": {"aria": '[role="textbox"][name="name@example.com"]'}}
+    assert drop_personal_target_text([ev])[0] == ev

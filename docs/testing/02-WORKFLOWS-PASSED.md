@@ -611,6 +611,33 @@ WF-5 Part B (Shape B, all-at-once ZIP transfer), Part C (cross-run leakage/reten
 
 ---
 
+## Passed Workflow P-11 — WF-1 Leg C: form fill to approved, publish-ready (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 C demoqa text box r3`,
+`ad31ae0a-7422-46b9-b7e6-6ab7163b8e7c`, group "E2E 2026-11-16", passing run `r_mwiava3f_nek4m`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S3 `demoqa.com/text-box` — Full Name, Email, Current Address, Permanent Address, Submit;
+the page echoes the four values. Driven through Studio's normal controls only: create, record,
+questions answered on purpose, test, approve.
+
+**What was confirmed:** 11 actions recorded; 13 steps, 3 checks after the answers; all four typed
+values became run inputs with the recorded values prefilled; the test passed with no "couldn't
+confirm" warning and the Submit step proven; the echo block showed all four values during the
+replay (read from the page); the workflow reached **Approved** with Publish offered.
+
+**Fixed en route (root causes, all general):** the account-privacy check refused a reserved sample
+address ("name@example.com") and the compile scrub missed the recorder's own selectors; a typed
+"how we know it worked" check was put on a trailing scroll step; email/password inputs had two
+names; "words on the screen" meant an exact whole-line match; and a person's own words check could
+never prove a "send" step on an app that answers in the page without a server request.
+
+**Why this pass matters:** first workflow taken all the way to the approved, publish-ready state under
+the strict end-to-end rule, and it proves Conxa can confirm work on apps that never contact a server
+(client-side forms) by the words the author said mean "it worked".
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

@@ -142,36 +142,21 @@ def derive_input_binding(
     sig = policy.get("signals") if isinstance(policy.get("signals"), dict) else {}
     cred = sig.get("credential_bindings") if isinstance(sig.get("credential_bindings"), dict) else {}
 
-    # Priority 1: label_text → snake_case binding
-    label_text = str(target.get("label_text") or "").strip()
-    if label_text:
-        binding = _snake_case(label_text)
-        if binding:
-            # Check if credential binding matches
-            for ck, template in cred.items():
-                if _snake_case(str(ck)) == binding:
-                    return str(template), binding
-            return f"{{{{{binding}}}}}", binding
+    def _credential(name: str) -> tuple[str, str] | None:
+        # The policy template names the input ("email" -> "{{user_email}}"). The binding is that same name: a
+        # value and binding that disagree ({{user_email}} bound as "email") made one input look like two, so it
+        # was never offered as a "changes each time" value and its test box came up without the recorded value.
+        for ck, template in cred.items():
+            if _snake_case(str(ck)) == name:
+                m = re.fullmatch(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}", str(template))
+                return (str(template), m.group(1)) if m else None
+        return None
 
-    # Priority 2: placeholder → snake_case binding
-    placeholder = str(target.get("placeholder") or "").strip()
-    if placeholder:
-        binding = _snake_case(placeholder)
+    # Priorities 1-3: label_text, then placeholder, then aria_label → snake_case binding
+    for raw in (target.get("label_text"), target.get("placeholder"), target.get("aria_label")):
+        binding = _snake_case(str(raw or "").strip())
         if binding:
-            for ck, template in cred.items():
-                if _snake_case(str(ck)) == binding:
-                    return str(template), binding
-            return f"{{{{{binding}}}}}", binding
-
-    # Priority 3: aria_label → snake_case binding
-    aria_label = str(target.get("aria_label") or "").strip()
-    if aria_label:
-        binding = _snake_case(aria_label)
-        if binding:
-            for ck, template in cred.items():
-                if _snake_case(str(ck)) == binding:
-                    return str(template), binding
-            return f"{{{{{binding}}}}}", binding
+            return _credential(binding) or (f"{{{{{binding}}}}}", binding)
 
     # Priority 4: value pattern detection — skipped for a <select>. Pattern classification is a
     # free-text heuristic ("looks like a phone number", "looks like a number"); a select's value
@@ -182,19 +167,13 @@ def derive_input_binding(
     is_select_target = action_type == "select" or str(target.get("tag") or "").lower() == "select"
     pattern = None if is_select_target else _classify_value_pattern(str(raw_value or ""))
     if pattern:
-        for ck, template in cred.items():
-            if str(ck).lower() == pattern:
-                return str(template), pattern
-        return f"{{{{{pattern}}}}}", pattern
+        return _credential(pattern) or (f"{{{{{pattern}}}}}", pattern)
 
     # Priority 5: input_type (last resort — usually just "text")
     if input_type and input_type != "text":
         # Skip generic "text" — it produces useless {{text}} for every field
-        for ck, template in cred.items():
-            if str(ck).lower() == input_type:
-                return str(template), input_type
         binding = input_type.replace("-", "_")
-        return f"{{{{{binding}}}}}", binding
+        return _credential(binding) or (f"{{{{{binding}}}}}", binding)
 
     # Last fallback: use target name or id if available
     name_attr = str(target.get("name") or "").strip()

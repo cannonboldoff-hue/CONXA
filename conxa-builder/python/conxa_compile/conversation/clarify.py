@@ -397,7 +397,9 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
                 "selected": c["assertion"].get("type") == "text_present"} for c in checks]
     effect_choices, effect_keys = _effect_choices(doc)
-    if choices:  # offered only beside a real check, so an input-only workflow isn't pestered
+    # Offered only beside a real check, so an input-only workflow isn't pestered. A step's completion checks are one:
+    # on an app that answers in the page alone (no request to watch), "what I typed shows up" is the proof left.
+    if choices or effect_choices:
         referenced = " ".join(str(a.get("target") or "") for s in steps
                               for a in (s.get("validation") or {}).get("assertions") or [] if isinstance(a, dict))
         for inp in doc.get("inputs") or []:
@@ -844,6 +846,16 @@ def generate_questions(
 # ── answering ───────────────────────────────────────────────────────────────────────────────
 
 
+def _can_hold_checks(step: dict[str, Any]) -> bool:
+    """Whether the patch gate lets this kind of step carry outcome checks (the gate's own per-kind key sets)."""
+    from conxa_compile.compiler.action_semantics import action_name
+    from conxa_compile.editor.action_registry import action_spec
+    from conxa_compile.editor.capability_manifest import editable_fields
+
+    kind = action_name(step).lower()
+    return not action_spec(kind).marker and "validation.assertions" in editable_fields(kind)
+
+
 def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Turn an answer into ops for existing commands, plus the receipt line shown once applied.
 
@@ -1025,8 +1037,11 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             extra.append({"type": "text_present", "target": custom, "required": True})
         steps = _steps(doc)
         keyed = dict(zip(step_keys(steps), steps))
-        if extra and keyed:
-            by_step.setdefault(list(keyed)[-1], {})
+        # "What you see at the end" belongs on the last step that can hold a check: a trailing scroll, a
+        # download/tab marker or a decision step cannot, and the patch gate would refuse it.
+        end_key = next((k for k in reversed(keyed) if _can_hold_checks(keyed[k])), None)
+        if extra and end_key:
+            by_step.setdefault(end_key, {})
         for key, idxs in by_step.items():
             step = keyed.get(key)
             if step is None:
@@ -1035,7 +1050,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             for j in idxs:
                 if j < len(assertions):
                     assertions[j]["required"] = True
-            if key == list(keyed)[-1]:
+            if key == end_key:
                 assertions += extra
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
         labels = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
