@@ -340,6 +340,30 @@ the first tab (wording only, filed with BUILD-92).
 
 **Final status of WF-1 Leg D: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-13).
 
+### WF-1 Leg E — download a file, then upload it on another site (assigned 2026-11-16)
+Download a file from the-internet's download page, open demoqa's upload page in a new tab, and upload
+that same file. The replay must hand the file over by itself, with no file path typed in by anyone.
+
+**Test 1 — result: PASS (first try, no fixes needed).**
+- Recorded: click `some-file.txt` (downloaded), "+" for a new tab, open demoqa's upload page, pick
+  the file. The file picker was the normal Windows "Open" window, already pointed at the recording's
+  downloads folder.
+- Compiled to 6 steps. The upload step's file is "the file downloaded earlier in this run", not a
+  fixed path and not something a person must type. The test form had no inputs to fill.
+- Two questions were answered on purpose. The tester unticked "the file shows up when the page is
+  opened again", which is not true on this site, and typed `some-file.txt` as the proof instead.
+- The test passed (6 steps, 10 s, all confirmed, no warning), twice. Each run's own folder held the
+  freshly downloaded `some-file.txt`. During the second run the page itself showed
+  `C:\fakepath\some-file.txt` as uploaded. The runtime log shows `execute_success`.
+- Approved with the normal button.
+
+Small things noticed, added to `TODO.md`: the live counter said 5 actions while the saved recording
+said 4 (one was folded away, as the compile message explained); a check the person unticked still
+appears in the plan; and the "What was checked" list says only "Step N: confirmed" with no plain
+description.
+
+**Final status of WF-1 Leg E: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-14).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

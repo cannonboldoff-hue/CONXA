@@ -692,6 +692,26 @@ before this, recording any of them in Studio's own browser crashed the app.
 
 ---
 
+## Passed Workflow P-14 — WF-1 Leg E: download → upload handoff across sites, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 E download upload handoff`,
+`40a91392-6eb2-4ba9-bf81-b052cdc7d5f8`, group "E2E 2026-11-16", passing runs `r_mwimmsso_dpq42` and
+`r_mwimnz8n_cqnvm`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `the-internet.herokuapp.com/download` (click `some-file.txt`) → a new tab opened by the
+person → S3 `demoqa.com/upload-download` (upload that file). 6 compiled steps: navigate, click,
+download_observed, tab_open, navigate, upload with value `{{downloaded_file}}`.
+
+**What was confirmed:** the upload is bound to the file this same run downloads (no `file_path`
+input; the test form asked for nothing); each replay downloaded a fresh `some-file.txt` into its own
+run folder; demoqa echoed `C:\fakepath\some-file.txt` during the replay; the test passed twice with
+every step confirmed and no warning; the workflow reached **Approved**. No fix was needed.
+
+**Why this pass matters:** reconfirms the download→upload handoff (P-1, P-10) under the strict rule,
+through Studio's own browser with a person-opened tab, from recording to publish-ready.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures
