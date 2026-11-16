@@ -785,12 +785,27 @@ function takePromptAnswered() {
   return n > 0;
 }
 
+// How often `needle` is on the screen: the page's visible text, and what visible text boxes hold (a person reads a
+// filled date box as "11/15/2026 on the screen", WF-2 Segment E). Only boxes a person types or reads text in: never a
+// password, a hidden field, or a file picker (its value is the file name an upload check looks for elsewhere).
 function countTextOccurrences(needle) {
-  var hay = String((document.body && document.body.innerText) || "").toLowerCase();
+  // Inside the function: it runs in the page on its own, so nothing outside it exists there.
+  var _TEXT_BOX_TYPES = { "": 1, text: 1, search: 1, email: 1, url: 1, tel: 1, number: 1, date: 1, "datetime-local": 1, month: 1, week: 1, time: 1, textarea: 1 };
   var n = String(needle || "").toLowerCase();
   if (!n) return 0;
+  var parts = [String((document.body && document.body.innerText) || "")];
+  var fields = typeof document.querySelectorAll === "function" ? document.querySelectorAll("input, textarea") : [];
+  for (var i = 0; i < fields.length; i++) {
+    var el = fields[i];
+    var type = String(el.type || "").toLowerCase();
+    if (!_TEXT_BOX_TYPES[type] || el.offsetParent === null) continue;
+    if (typeof el.value === "string" && el.value) parts.push(el.value);
+  }
   var count = 0;
-  for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) count++;
+  for (var p = 0; p < parts.length; p++) {
+    var hay = parts[p].toLowerCase();
+    for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) count++;
+  }
   return count;
 }
 

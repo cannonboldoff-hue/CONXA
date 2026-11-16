@@ -8,6 +8,23 @@ const assert = require("node:assert");
 const { chromium } = require("playwright");
 const { capturePreStepSignature, evaluateAssertion } = require("../../app/assertions");
 
+test("what a visible text box holds is on the screen; a password or file picker is not (WF-2 Segment E)", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<input id=d><input id=p type=password value="11/15/2026x"><p>Date:</p>`);
+    const words = "11/15/2026";
+    const baseline = await capturePreStepSignature(page, [words]);
+    assert.strictEqual(baseline.counts[words], 0, "the password box never counts");
+    await page.fill("#d", words);
+    const r = await evaluateAssertion([page], page, { type: "text_present", target: words, required: true }, {}, baseline);
+    assert.strictEqual(r.ok, true, "the date in the box is found");
+    assert.strictEqual(r.fresh, true, "and it was not there before the step");
+  } finally {
+    await browser.close();
+  }
+});
+
 test("text that appears inside a frame after the step is new, and counts as proof", async () => {
   const browser = await chromium.launch({ headless: true });
   try {

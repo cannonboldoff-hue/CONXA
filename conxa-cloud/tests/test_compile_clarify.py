@@ -493,6 +493,7 @@ def test_a_picked_date_near_today_is_offered_as_relative_and_the_answer_unbinds_
     assert not [q for q in generate_questions(out, today=today, limit=None) if q["kind"] == "relative_date"]
     with pytest.raises(ValueError, match="not_a_date_step"):
         set_date_offset({"skills": [{"steps": [{"action": "click"}]}]}, 0, 1)
+
     with pytest.raises(ValueError, match="date_offset_invalid"):
         set_date_offset(doc, 0, 99999)
 
@@ -648,3 +649,18 @@ def test_a_last_step_with_no_proof_still_gets_asked_how_to_tell_it_worked():
     assert not any(q["kind"] == "done_when" for q in generate_questions(proven))
     # Nothing seen changing: not asked (a workflow with nothing uncertain asks nothing).
     assert not any(q["kind"] == "done_when" for q in generate_questions(_doc([_step("navigate", "open_page"), _step("click", "x")])))
+
+
+def test_a_picked_date_can_always_be_kept_exactly_as_recorded():
+    """WF-2 E: the person wanted the date kept as recorded; the card offered only "1 day before today" or "different every
+    time". All three answers are offered now, and keeping it pins the recorded date and drops its input."""
+    import datetime
+
+    doc = _date_doc()
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    q = next(q for q in generate_questions(doc, today=datetime.date(2026, 10, 24), limit=None) if q["kind"] == "relative_date")
+    assert [c["id"] for c in q["choices"]] == ["relative", "fixed_date", "fixed_input"]
+    assert next(c for c in q["choices"] if c["id"] == "fixed_date")["label"] == "No, always 31 Oct 2026"
+    ops, receipt = plan_answer(q, {"choice": "fixed_date"}, doc)
+    assert ops == [{"op": "patch", "step_key": key, "patch": {"value": "2026-10-31"}}, {"op": "drop_inputs", "ids": ["due_date"]}]
+    assert receipt == "Always the date you picked"

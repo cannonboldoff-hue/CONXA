@@ -10,6 +10,10 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**"You see this on the screen" now counts what is in a box — 2026-11-16**
+If you said "I know it worked when I see 11/15/2026", and that date was showing inside a date box, the test always failed: Build Studio only read the page's own text, never what boxes hold. It now counts what a visible box shows, the way you see it. Passwords and hidden fields are never read. Also, when you keep a picked date exactly as you recorded it, the question "is it always 1 day before today?" now offers "No, always the date I picked", instead of only "different every time".
+— 2026-11-16
+
 **Clicks inside a framed part of a page are now recorded and replayed in place — 2026-11-16**
 Some pages show another small page inside them, like a demo or a form in a frame. When that frame had no name and pointed to a short address, Build Studio forgot the frame was there. The workflow then opened the inner page on its own instead of the real page, and would break on any site where the inner page can't open by itself. Build Studio now keeps such frames and starts the workflow on the real page. Also, when a step's result only shows on the screen and Studio has nothing to offer, it now still asks "How can we tell it worked?" so you can type the words you see. Before, every test ended with "couldn't confirm".
 — 2026-11-16

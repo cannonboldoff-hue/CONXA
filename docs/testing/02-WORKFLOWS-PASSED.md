@@ -814,6 +814,27 @@ navigate to the top page, then a click carrying a one-level `frame_chain`. The c
 
 ---
 
+## Passed Workflow P-19 — WF-2 Segment E: datepicker inside an iframe, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 E datepicker r3`,
+`3a6cae91-cdf4-41bd-93c7-aaae99391d40`, group "E2E 2026-11-16", passing runs `r_mwj5zr5o_jhj6v` and
+`r_mwj61q2g_1jeij`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** `jqueryui.com/datepicker/`. The demo is in a frame. Click the Date box, then day 15.
+Compiled to navigate plus one `date_pick` step (fixed value `2026-11-15`, one-level `frame_chain`),
+which must show "11/15/2026", the value the person typed as proof.
+
+**What was confirmed:** both test runs passed with no warning, and the frame's box ended
+"11/15/2026" (watched live). **Approved.**
+
+**Fixed en route (general):**
+- "Words you see on the screen" checks now read what visible text boxes hold. Passwords, hidden
+  fields and file pickers are never read.
+- The relative-date question always offers "No, always <the recorded date>" next to "N days from
+  today" and "different every time".
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

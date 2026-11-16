@@ -223,7 +223,10 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       // would trivially satisfy "absent" while it's still very much present in another.
       ok = await pollNegative(async () => !(await anyRootHasMatch(roots, target)), timeout);
     } else if (type === "text_present") {
-      ok = await pollPositive(() => anyRootHasMatch(roots, textSelector(target)), timeout);
+      // In an element's text, or in what a visible text box holds (page_scripts.countTextOccurrences): both are "on the
+      // screen" to the person who typed these words as proof.
+      ok = await pollPositive(async () => (await anyRootHasMatch(roots, textSelector(target)))
+        || ((await countTextAcross(page, target)) || 0) > 0, timeout);
       // Same document, and the text was already on the page this many times before the action: finding it again says
       // nothing about the action, so it is "can't tell" unless there is more of it now. Never a new failure.
       const before = ok && baseline && baseline.counts && baseline.counts[target];

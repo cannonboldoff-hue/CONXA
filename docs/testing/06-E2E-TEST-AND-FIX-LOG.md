@@ -676,6 +676,65 @@ page-open step (BUILD-93).
 
 **Final status of WF-2 Segment D: PASSED** (P-18).
 
+### WF-2 Segment E — picking a date from a pop-up calendar inside a frame (assigned 2026-11-16)
+On jQuery UI's "Datepicker" demo, which also runs inside a frame, clicking the date box opens a small
+calendar. The workflow picks a day, and the box filling with that date is the proof. It passed in
+September (P-6) under the older rule.
+
+**Test 1 — result: FAIL.** The recording, the frame and the date pick all worked: the box held
+"11/15/2026" in both test runs, read live. But both tests failed with "The step ran, but the page
+didn't end up where it should have", on the check the tester had typed: "11/15/2026" on the screen.
+
+**What was really wrong (two causes, both general):**
+1. *A "words you see on the screen" check never looked inside text boxes.* It read only the page's
+   text, and a date, name or amount sitting in a box is not part of that text. To a person it is
+   plainly on the screen. So any check on a value shown in a box always failed, on every site.
+   *Fix:* what a visible text box holds now counts as on the screen, the same way before and after
+   the step. Passwords, hidden fields and file pickers are never read.
+2. *The date question had no honest answer.* The person had already said the date stays as
+   recorded. Studio then asked "Is it always 1 day before today?" and the only other answer was "No,
+   it is different every time". Picking it showed the summary "Whoever uses it still fills it in",
+   which was untrue. *Fix:* when the date is fixed, the other answer is now "No, always 15 Nov 2026 —
+   It stays exactly as you recorded it", with a summary to match.
+
+Checked on the real site: the date step's verdict is now "proven".
+
+**Changed:** `runtime/app/page_scripts.js`, `runtime/app/assertions.js`, `conversation/clarify.py`.
+Tests added (runtime: a filled box counts and a password box never does; Python: the date question).
+Runtime: 1399 passed. Python: 3155 passed. Test engine rebuilt and Studio restarted.
+
+Also seen (TODO BUILD-93): the "Which parts change every time?" card had "Due date" ticked in advance,
+just after the person said "Always this one".
+
+**Test 2 (fresh recording) — result: BLOCKED at the date question.** The tester stopped, rightly. The
+date question still offered only "always 1 day before today" or "different every time".
+
+**What was really wrong:** my first fix decided the second answer from whether the date was an input
+*when the questions were made*. Studio makes all its questions at once. At that moment the date was
+still an input, and only became fixed when the person unticked "Due date" on the card before. So the
+wrong pair of answers was already on the card. *Fix:* the date question now always offers all
+three honest answers, whatever was answered before:
+- "Yes, always N days before/after today".
+- "No, always 15 Nov 2026 — It stays exactly as you recorded it". This keeps the recorded date and
+  removes it from the things a user types in.
+- "No, it is different every time".
+
+**Changed:** `conversation/clarify.py`; the test was updated. Python: 3155 passed. Studio restarted.
+
+**Test 3 (fresh recording) — result: PASS.**
+- The date question showed all three answers, and the tester picked "No, always 15 Nov 2026". The
+  built workflow keeps that fixed date and asks the user to type nothing.
+- The tester typed "11/15/2026" as the proof. The check now reads the date box, and it passed.
+- Two test runs: "Step 1: confirmed / Step 2: confirmed", no warning, `execute_success`. Watched
+  live in the second run, the box in the frame went from empty to "11/15/2026" and stayed there
+  until the run ended. Approved.
+
+Also seen (BUILD-93): two questions about the same date (the "always this one?" card about "15",
+then the date card); "Due date" ticked in advance again; the first run's time includes building the
+test copy.
+
+**Final status of WF-2 Segment E: PASSED** (P-19).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

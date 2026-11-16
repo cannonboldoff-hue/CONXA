@@ -759,15 +759,21 @@ def generate_questions(
             when = ("today" if days == 0 else f"{abs(days)} day{'s' if abs(days) != 1 else ''} "
                     f"{'after' if days > 0 else 'before'} today")
             name = step_name(s)
+            binding = str(s.get("input_binding") or "")
+            recorded = str(picker.get("recorded_value") or "")[:10]
+            # All three honest answers, whatever was answered before: questions are made together, so "which parts change"
+            # may still turn the date into an input, or out of one, after this card was made (WF-2 E: "always this date"
+            # was missing and "different every time" was the only other answer).
             out.append(_question(
                 "relative_date", f"relative_date:{keys[i]}", f"Is “{name}” always {when}?",
                 f"You picked {picked.strftime('%d %b %Y')}, and today is {today.strftime('%d %b %Y')}. "
                 "If it is always counted from the day someone uses it, nobody has to type a date.",
                 [
-                    {"id": "relative", "label": f"Yes, always {when}", "detail": "I\u2019ll work out the date on the day. Nothing to type."},
+                    {"id": "relative", "label": f"Yes, always {when}", "detail": "I’ll work out the date on the day. Nothing to type."},
+                    {"id": "fixed_date", "label": f"No, always {picked.strftime('%d %b %Y')}", "detail": "It stays exactly as you recorded it."},
                     {"id": "fixed_input", "label": "No, it is different every time", "detail": "Whoever uses it will pick the date."},
                 ],
-                step_keys_=[keys[i]], days=days, binding=str(s.get("input_binding") or ""),
+                step_keys_=[keys[i]], days=days, binding=binding, recorded_value=recorded,
             ))
 
     # 3c ─ a typed field the person may leave empty: skip the step then, instead of typing nothing.
@@ -938,6 +944,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             if question.get("binding"):
                 ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
             return ops, "Worked out from the day it is used"
+        if answer.get("choice") == "fixed_date":
+            if question.get("recorded_value"):
+                ops.append({"op": "patch", "step_key": keys[0], "patch": {"value": question["recorded_value"]}})
+            if question.get("binding"):
+                ops.append({"op": "drop_inputs", "ids": [question["binding"]]})
+            return ops, "Always the date you picked"
         return ops, "Whoever uses it still fills it in"
 
     if kind == "skip_when_empty":
