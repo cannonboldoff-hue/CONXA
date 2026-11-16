@@ -851,6 +851,29 @@ Also seen: the "Tick what applies" wording on a card that has nothing to tick (B
 
 **Final status of WF-2 Segment C: PASSED** (P-22).
 
+### WF-2 Segments A + B (first half) — a button whose hidden name changes every visit, and a button whose label you change (assigned 2026-11-16)
+On the UI Testing Playground, the "Dynamic ID" page has a button whose hidden internal name changes
+on every visit, so a workflow must not rely on that name. The "Text Input" page has a button whose
+label becomes whatever you type into a box. The workflow clicks the dynamic button, types "Conxa"
+on the second page, and clicks its button. The button then reading "Conxa" is the proof. The
+moving-button half of Segment B is tested separately on the local practice page.
+
+**Test 1 — result: PASS** (no fix needed).
+- 7 actions were recorded, with the second page reached through the site's own links.
+- The changing internal name never got into the workflow: a search of the built package for it, or
+  for anything shaped like it, found nothing.
+- The typed text became an input. The proof is "you see the button name you typed".
+- Three test runs passed, all steps confirmed with no warning. Watched live: the dynamic button had
+  a different hidden name on every load, and the button's label became the value typed in that
+  run, including "Second", not the recorded "Conxa". Approved.
+
+Two other test runs were stopped by the size guard because Studio's window had been minimized. The
+tester did not do that, and it is the second time today (Segment D too). Filed as BUILD-94. Also
+seen (BUILD-93): doubled quotes in "Done when ““set new button name”” appears"; the click on "Text
+Input" is tied to a neighbouring tile's name ("Client Side Delay"), which is harmless here.
+
+**Final status of WF-2 Segments A and B (first half): PASSED** (P-23).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

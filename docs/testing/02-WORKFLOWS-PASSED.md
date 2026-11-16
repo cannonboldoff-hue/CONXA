@@ -896,6 +896,24 @@ text live-observed about 5 s in. No warning, `execute_success`. **Approved.** No
 
 ---
 
+## Passed Workflow P-23 — WF-2 Segments A + B (changing text): dynamic ID and a label you set, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 AB dynamic id text`,
+`c5c3b302-ada5-4a49-bed1-f0a73cbb4ee4`, group "E2E 2026-11-16", passing runs `r_mwjba6zp_yt743`,
+`r_mwjbcx9k_7fa4w`, `r_mwjbiphv_rt5pg`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S2 `uitestingplayground.com`. The workflow clicks "Button with Dynamic ID" (id regenerated
+server-side on every load), follows the site's Home link to "Text Input", types a name and clicks
+the button whose label becomes it. 7 steps, with input `set_new_button_name`.
+
+**What was confirmed:**
+- No raw dynamic id survives anywhere in the package, checked with a UUID scan.
+- Each test load had a different id.
+- The label followed the run's input, including "Second" against a recorded "Conxa", watched live.
+- All steps confirmed, no warning. **Approved.** No fix needed.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

@@ -93,6 +93,10 @@ still open.
 every segment is re-tested to the approved state, one at a time. Segment H (hover) goes first because
 it is the one known to fail.
 
+### Segments A + B (changing text) — dynamic IDs (C.1), changing text (C.3) ✅ re-passed 2026-11-16 under the strict rule
+Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-23**. Segment B's other half
+(moved element, C.4, local `mutator.html`) is still to re-test.
+
 ### Segment C — late-rendered elements (C.5) ✅ re-passed 2026-11-16 under the strict rule
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-22** (`/dynamic_loading/2`).
 
