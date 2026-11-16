@@ -835,6 +835,29 @@ which must show "11/15/2026", the value the person typed as proof.
 
 ---
 
+## Passed Workflow P-20 — WF-2 Segment F: autocomplete pick inside an iframe, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 F autocomplete r2`,
+`0deaa579-abc9-446c-a77a-122a34e154f3`, group "E2E 2026-11-16", passing runs `r_mwj8c5rl_kqygd` and
+`r_mwj8dfnm_jo7qp`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** `jqueryui.com/autocomplete/`, in the demo frame. Type "Ja", wait for the list ("Java",
+"JavaScript"), pick "Java". Compiled to 4 steps with no inputs. The pick checks "Java" on the
+screen, which includes what the box holds.
+
+**What was confirmed:** two test runs, each with all 4 steps confirmed. The box went to "Java"
+(watched live), never "JavaScript". **Approved.**
+
+**Fixed en route (general):**
+- The element scorer gives the same words full credit and contained-in words partial credit,
+  never enough alone to act.
+- A tag-only "role" and an anchor written as code are no longer charged against live candidates.
+  The recorded element scored 0.33 against its own fingerprint.
+- Regression from `c320dba` (2026-09-07, contained-in matching), three days after P-7.
+- Keeping a typed value fixed also rewrites checks written from it, so the input is really dropped.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

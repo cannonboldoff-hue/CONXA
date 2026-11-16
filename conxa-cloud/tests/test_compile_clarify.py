@@ -664,3 +664,20 @@ def test_a_picked_date_can_always_be_kept_exactly_as_recorded():
     ops, receipt = plan_answer(q, {"choice": "fixed_date"}, doc)
     assert ops == [{"op": "patch", "step_key": key, "patch": {"value": "2026-10-31"}}, {"op": "drop_inputs", "ids": ["due_date"]}]
     assert receipt == "Always the date you picked"
+
+
+def test_keeping_a_typed_value_also_rewrites_the_check_written_from_it():
+    """WF-2 F: "Nothing changes" left the input, because the typing step's check said "the box holds {{tags}}" and an input
+    still referenced is never dropped. The check now checks the recorded value, so the input can go."""
+    step = _step("type", "type_tag", value="{{tags}}", input_binding="tags",
+                 validation={"assertions": [{"type": "value_equals", "target": "#tags", "expected": "{{tags}}", "required": True}]})
+    doc = _doc([_step("navigate", "open_page"), step], inputs=[{"id": "tags", "default": "Ja"}])
+    key = step_keys(doc["skills"][0]["steps"])[1]
+    q = {"kind": "values", "choices": [{"id": "tags", "label": "Tags"}], "recorded": {"tags": "Ja"}, "step_keys": [key]}
+    ops, receipt = plan_answer(q, {"selected": []}, doc)
+    assert ops == [
+        {"op": "patch", "step_key": key, "patch": {"value": "Ja", "validation": {"assertions": [
+            {"type": "value_equals", "target": "#tags", "expected": "Ja", "required": True}]}}},
+        {"op": "drop_inputs", "ids": ["tags"]},
+    ]
+    assert receipt == "Nothing changes — everything stays as you recorded"

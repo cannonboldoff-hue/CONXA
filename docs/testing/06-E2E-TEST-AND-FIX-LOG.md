@@ -735,6 +735,54 @@ test copy.
 
 **Final status of WF-2 Segment E: PASSED** (P-19).
 
+### WF-2 Segment F — typing a few letters and picking a suggestion (assigned 2026-11-16)
+On jQuery UI's "Autocomplete" demo (inside a frame), typing "Ja" shows a short list of suggestions
+under the box. The workflow picks "Java", and the box then holding "Java" is the proof. The race:
+the list appears a moment after typing, so a replay must wait for it. It passed in September (P-7)
+under the older rule.
+
+**Test 1 — result: FAIL.** The recording was right: the tester typed "Ja", the list showed "Java"
+and "JavaScript", and "Java" was picked. But both test runs stopped at the pick: *"Couldn't tell
+which of several matching elements to use. It matched “Java”, “JavaScript”."* Also, the tester
+answered "nothing changes" about the typed letters, yet the workflow still asked for "Tags" every run.
+
+**What was really wrong (two causes, both general):**
+1. *An exact name counted no more than a longer name that contains it.* In September, three days
+   after this leg passed, the replay was made to find text that merely *contains* the recorded
+   words. That was on purpose, so that a button whose name gained a keyboard hint still matches. The
+   plan was for the step that picks between candidates to prefer the closer one. But that step gave
+   "Java" and "JavaScript" the same score. Two of its comparisons could also never agree: the
+   recorded "role" was only the tag name ("li"), and the recorded "anchor" was code ("ul#ui-id-1").
+   So even the right item scored only 0.33, below the 0.5 needed. Any list where one option's name
+   is the start of another's ("Edit" / "Edit all", "Save" / "Save as") was affected. *Fix:*
+   - The same words now score full marks, while words merely contained in a longer name score less,
+     and on their own are never enough to click.
+   - A keyboard hint on the live name is ignored first, so September's case still matches exactly.
+   - A role that is only a tag name, and an anchor written as code, are no longer compared with
+     things they can never match.
+   - Checked on the real site: "Java" now scores 1.0 and "JavaScript" 0.4, the whole workflow
+     replays, the box ends "Java", and the last step is proven.
+2. *"Nothing changes" was silently not applied.* Keeping the typed letters fixed changes the typed
+   value, but the typing step's check still said "the box holds {{Tags}}". Studio never removes
+   something a step still uses, so "Tags" stayed. *Fix:* keeping a value fixed now also rewrites any
+   check written from it, so it checks the recorded value and the input can be removed.
+
+**Changed:** `runtime/app/resolver.js`, `conversation/clarify.py`; new test
+`runtime/test/unit/test_resolver_exact_beats_contained.js` (the recorded element matches its own
+fingerprint, exact beats contained, a look-alike alone is refused, the keyboard-hint case still
+holds), and one Python test. Runtime: 1403 passed. Python: 3156 passed. Test engine rebuilt, Studio
+restarted.
+
+Also seen: the suggestion pick is listed as "Clicked “Tags:”" instead of "Java" (BUILD-93).
+
+**Test 2 (fresh recording) — result: PASS.**
+- The tester said "always the same one", unticked "Tags / Ja", and typed "Java" as the proof.
+- The built workflow has no inputs. The typing step checks "Ja", and the pick checks "Java".
+- Both test runs confirmed all 4 steps with no warning and ended in `execute_success`. Watched live,
+  the box went from empty to "Ja" to "Java" each time, and never showed "JavaScript". Approved.
+
+**Final status of WF-2 Segment F: PASSED** (P-20).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

@@ -1067,9 +1067,21 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             literal = recorded.get(binding)
             if not literal:
                 continue  # nothing to restore: leave it an input rather than guess a value
+            token = "{{" + binding + "}}"
             for key, step in keyed.items():
-                if step.get("input_binding") == binding and step.get("value") == "{{" + binding + "}}":
-                    ops.append({"op": "patch", "step_key": key, "patch": {"value": literal}})
+                patch: dict[str, Any] = {}
+                if step.get("input_binding") == binding and step.get("value") == token:
+                    patch["value"] = literal
+                # A check written from the input ("the box holds {{tags}}") keeps the input alive: drop_inputs refuses an
+                # id still referenced, so the answer "nothing changes" was silently not applied (WF-2 F). It checks the
+                # recorded value instead.
+                assertions = (step.get("validation") or {}).get("assertions") or []
+                if any(isinstance(a, dict) and token in str(a.get("target") or "") + str(a.get("expected") or "") for a in assertions):
+                    patch["validation"] = {"assertions": [
+                        {**a, **{k: str(a[k]).replace(token, literal) for k in ("target", "expected") if isinstance(a.get(k), str)}}
+                        if isinstance(a, dict) else a for a in assertions]}
+                if patch:
+                    ops.append({"op": "patch", "step_key": key, "patch": patch})
             fixed.append(binding)
         if fixed:
             ops.append({"op": "drop_inputs", "ids": fixed})

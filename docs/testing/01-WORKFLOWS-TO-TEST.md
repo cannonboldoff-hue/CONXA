@@ -100,7 +100,7 @@ inside the demo frame).
 ### Segment E (remainder) — Nested iframes bonus: datepicker (E.2) ✅ re-passed 2026-11-16 under the strict rule (P-19)
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-6**.
 
-### Segment F — Autocomplete/typeahead race (E.6) ✅ passed 2026-09-04
+### Segment F — Autocomplete/typeahead race (E.6) ✅ re-passed 2026-11-16 under the strict rule (P-20)
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-7**.
 
 ### Segment H — Hover menus (E.8) ✅ passed 2026-11-16 under the strict rule

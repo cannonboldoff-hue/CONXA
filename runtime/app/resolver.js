@@ -1,5 +1,5 @@
 "use strict";
-const { fingerprintName } = require("./accessible_name");
+const { fingerprintName, stripKeyboardShortcutTail } = require("./accessible_name");
 
 // Pure, browser-independent element resolver (Phase 8 — Final Selector Architecture).
 //
@@ -80,41 +80,60 @@ function contradicts(node, fingerprint) {
 
 // Weighted agreement between a candidate node and the recorded fingerprint.
 // Returns a score in [0, 1]. Higher = stronger match.
+// How well a live name/text agrees with the recorded one: the same words count fully, words merely contained in
+// (or containing) the recorded ones count for less. Locators match contained-in on purpose (c320dba: a compiled
+// "File upload" must still find "File upload Alt+C then U"), so this is where "Java" must beat "JavaScript" (WF-2 F).
+// A keyboard-shortcut tail on the live side is dropped first, so that case is an exact match here. Contained-in alone
+// stays under the confidence threshold: a look-alike with only a longer name is never clicked on text alone.
+const CONTAINED_CREDIT = 0.4;
+function textCredit(recorded, live) {
+  const r = norm(recorded);
+  const l = norm(stripKeyboardShortcutTail(str(live)));
+  if (!r || !l) return 0;
+  if (l === r) return 1;
+  return l.includes(r) || r.includes(l) ? CONTAINED_CREDIT : 0;
+}
+
+// A recorded "role" that is only the element's tag, with no role the live extractor can report for it ("li", "div"),
+// cannot be compared with a live role: charging it made the recorded element itself fail its own fingerprint.
+function comparableRole(fp) {
+  const role = norm(fp.role);
+  return !!role && !(role === norm(fp.tag) && !ROLE_ALIASES[role]);
+}
+
+// An anchor written as a selector ("ul#ui-id-1") is not neighbour text and can never agree with it.
+function textAnchor(a) {
+  return !!a && !/^[a-z0-9_-]*[#.[][^\s]*$/i.test(a);
+}
+
 function scoreCandidate(node, fingerprint) {
   if (!node) return 0;
   const fp = fingerprint || {};
   let score = 0;
   let weight = 0;
 
-  const add = (w, agree) => { weight += w; if (agree) score += w; };
+  const add = (w, agree) => { weight += w; score += w * (agree === true ? 1 : (typeof agree === "number" ? agree : 0)); };
 
   const fpTestid = norm(fp.data_testid);
   if (fpTestid) add(0.30, norm(node.testid) === fpTestid);
 
-  const fpRole = norm(fp.role);
-  if (fpRole) add(0.20, roleAgrees(fp.role, node.role));
+  if (comparableRole(fp)) add(0.20, roleAgrees(fp.role, node.role));
 
   // The recorded element's accessible name, by the one function the compiler's rule is mirrored in
   // (accessible_name.js; Python twin identity_bundle.py::_accessible_name).
   const fpName = norm(fingerprintName(fp));
-  if (fpName) {
-    const nodeName = norm(node.name || node.text);
-    add(0.25, nodeName === fpName || (!!nodeName && (nodeName.includes(fpName) || fpName.includes(nodeName))));
-  }
+  if (fpName) add(0.25, textCredit(fpName, node.name || node.text));
 
   const isOptionContent = OPTION_CONTENT_TAGS.has(norm(fp.tag)) || OPTION_CONTENT_TAGS.has(norm(fp.role));
   const fpText = norm(isOptionContent ? "" : fp.inner_text);
-  if (fpText) {
-    const nodeText = norm(node.text);
-    add(0.15, nodeText === fpText || (!!nodeText && nodeText.includes(fpText)));
-  }
+  if (fpText) add(0.15, textCredit(fpText, node.text));
 
   // Absence of neighbour text is not disagreement — the same principle contradicts() encodes.
   // extractDescriptor only collects neighbour text under 60 chars, so an element whose parent
   // and siblings are all long (a datepicker dropdown container, a dense table cell) reports NO
   // neighbours at all. Charging the anchor weight against such a candidate penalises it for a
   // limit of the extractor rather than for any observed mismatch.
-  const anchors = Array.isArray(fp.anchor_phrases) ? fp.anchor_phrases.map(norm).filter(Boolean) : [];
+  const anchors = Array.isArray(fp.anchor_phrases) ? fp.anchor_phrases.map(norm).filter(textAnchor) : [];
   const neighbors = Array.isArray(node.anchorNeighbors) ? node.anchorNeighbors.map(norm).filter(Boolean) : [];
   if (anchors.length && neighbors.length) {
     add(0.10, anchors.some(a => neighbors.some(n => n.includes(a) || a.includes(n))));
