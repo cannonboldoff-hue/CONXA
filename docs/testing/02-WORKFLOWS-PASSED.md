@@ -712,6 +712,27 @@ through Studio's own browser with a person-opened tab, from recording to publish
 
 ---
 
+## Passed Workflow P-15 — WF-1 Leg F: alert, confirm and prompt replayed in Studio, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 F js dialogs r2`,
+`ed9ffcbb-b0b8-4fca-b3fc-5ff30cf4ecd8`, group "E2E 2026-11-16", passing run `r_mwiodbms_96c7f`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `the-internet.herokuapp.com/javascript_alerts` — alert (OK), confirm (OK), prompt (typed
+answer, OK). 7 compiled steps; the prompt answer is the input `dialog_answer`.
+
+**What was confirmed:** replayed with a different answer than recorded (`Conxa second`), the page
+showed "You entered: Conxa second"; the prompt step took 3.4 s; the test passed with no warning; the
+workflow reached **Approved**.
+
+**Fixed en route (root cause, general):** Electron, which Studio's test browser and Conxa Execute are
+built on, does not implement `window.prompt()`, so a recorded prompt could never be answered on
+replay there (P-5 passed in September in a separate Chromium, before tests moved into Studio's own
+browser). In a host-owned browser the runtime now arms the page with the recorded or given answer,
+one-shot, the way the recorder already did.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

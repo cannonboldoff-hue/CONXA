@@ -764,6 +764,27 @@ function completionProbe() {
 
 // How many times `needle` appears in the page's visible text (case-insensitive). Used to see whether an uploaded
 // file's name is on the page, and more times than before the upload. Closes over nothing (re-parsed in the page).
+// Electron draws no window.prompt(): it raises no dialog event and the call does nothing (spike 2026-11-16, an
+// Electron view under CDP: alert and confirm arrive as dialogs, prompt never does). So in a host-owned browser (Build
+// Studio's test pane, Conxa Execute) the run answers a recorded prompt itself, the way the recorder's dialog server
+// does: the next prompt() returns the recorded answer (null = Cancel), once, and puts the page's own prompt back.
+function armPrompt(answer) {
+  var own = window.prompt;
+  window.prompt = function () {
+    window.prompt = own;
+    window.__conxaPromptAnswered = (window.__conxaPromptAnswered || 0) + 1;
+    return answer;
+  };
+  return true;
+}
+
+// Whether an armed prompt() was answered since the last look (and resets the count).
+function takePromptAnswered() {
+  var n = window.__conxaPromptAnswered || 0;
+  window.__conxaPromptAnswered = 0;
+  return n > 0;
+}
+
 function countTextOccurrences(needle) {
   var hay = String((document.body && document.body.innerText) || "").toLowerCase();
   var n = String(needle || "").toLowerCase();
@@ -867,6 +888,8 @@ function seedLocalStorage(entries) {
 
 module.exports = {
   countTextOccurrences,
+  armPrompt,
+  takePromptAnswered,
   extractDescriptor,
   rafStable,
   isDisabled,

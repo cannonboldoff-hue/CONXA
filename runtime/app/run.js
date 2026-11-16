@@ -85,6 +85,8 @@ const {
   enrichStepsWithRecovery,
   applyStepOverrides,
   answerDialog,
+  recordedDialogType,
+  promptAnswer,
 } = require("./handlers");
 const {
   recoverWithSelector,
@@ -1077,6 +1079,12 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     const onDialog = (dialog) => { answerDialog(dialog, nextStep, state.inputs).catch(() => {}); };
     page.once("dialog", onDialog);
     unarmDialog = () => { try { page.off("dialog", onDialog); } catch (_) {} };
+    // A host-owned browser is Electron, which never raises a prompt() (page_scripts.armPrompt): the page is given
+    // the recorded answer instead, in every frame, one-shot. A real Chromium keeps the native dialog path above.
+    if (ctx.hostOwned && recordedDialogType(nextStep) === "prompt") {
+      const answer = nextStep.type === "dialog_dismiss" ? null : promptAnswer(nextStep, state.inputs);
+      await Promise.all(page.frames().map((f) => evalOn(f, pageScripts.armPrompt, answer).catch(() => null)));
+    }
   }
 
   let primaryErr = null;

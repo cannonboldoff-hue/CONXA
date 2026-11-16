@@ -1072,28 +1072,53 @@ async function _drainDialogQueue(ctx) {
 // shape, just at different moments relative to the triggering click. Safe to call twice on the
 // same dialog (a pre-armed answer racing the marker step's own drain): Playwright throws on the
 // second accept()/dismiss() call, caught and ignored here exactly as it always was.
+function _recordedDialog(step) {
+  try {
+    const parsed = JSON.parse((step && step.value) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_e) { return {}; } // non-JSON value: nothing recorded
+}
+
+// "alert" | "confirm" | "prompt" | "" — the kind of dialog this dialog_accept/dialog_dismiss step answers.
+function recordedDialogType(step) {
+  const t = _recordedDialog(step).type;
+  return typeof t === "string" ? t : "";
+}
+
+// The text a recorded prompt answer types (inputs filled in).
+function promptAnswer(step, inputs) {
+  const v = _recordedDialog(step).value;
+  return interpolate(typeof v === "string" ? v : "", inputs);
+}
+
 async function answerDialog(dialog, step, inputs) {
   if (!dialog) return;
   if (step && step.type === "dialog_dismiss") {
     try { await dialog.dismiss(); } catch (_e) { /* dialog already resolved/gone */ }
     return;
   }
-  let text = "";
   try {
-    const parsed = JSON.parse((step && step.value) || "{}");
-    if (parsed && typeof parsed.value === "string") text = parsed.value;
-  } catch (_e) { /* non-JSON value: nothing to type */ }
-  try {
-    await dialog.accept(interpolate(text, inputs));
+    await dialog.accept(promptAnswer(step, inputs));
   } catch (_e) { /* dialog already resolved/gone */ }
 }
 
-HANDLERS["dialog_accept"] = async (_page, step, inputs, ctx) => {
+// A prompt the page answered itself (run.js arms it in a host-owned browser, where no dialog ever arrives): nothing
+// to wait for. Without this the step waited the whole dialog timeout (120 s) for an event Electron never sends.
+async function _answeredInPage(page, ctx) {
+  if (!page || (ctx && ctx.dialogQueue && ctx.dialogQueue.length)) return false;
+  const frames = typeof page.frames === "function" ? page.frames() : [page];
+  const seen = await Promise.all(frames.map((f) => evalOn(f, pageScripts.takePromptAnswered).catch(() => false)));
+  return seen.some((v) => v === true);
+}
+
+HANDLERS["dialog_accept"] = async (page, step, inputs, ctx) => {
+  if (await _answeredInPage(page, ctx)) return;
   const dialog = await _drainDialogQueue(ctx);
   await answerDialog(dialog, step, inputs);
 };
 
-HANDLERS["dialog_dismiss"] = async (_page, step, inputs, ctx) => {
+HANDLERS["dialog_dismiss"] = async (page, step, inputs, ctx) => {
+  if (await _answeredInPage(page, ctx)) return;
   const dialog = await _drainDialogQueue(ctx);
   await answerDialog(dialog, step, inputs);
 };
@@ -1281,6 +1306,8 @@ module.exports = {
   enrichStepsWithRecovery,
   applyStepOverrides,
   answerDialog,
+  recordedDialogType,
+  promptAnswer,
   _dateValueMatches,
   _ensureChoiceMenuOpen,
   readExtractValue,

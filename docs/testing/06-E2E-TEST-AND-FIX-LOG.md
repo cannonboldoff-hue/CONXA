@@ -364,6 +364,59 @@ description.
 
 **Final status of WF-1 Leg E: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-14).
 
+### WF-1 Leg F — the browser's own pop-up boxes: alert, confirm, prompt (assigned 2026-11-16)
+On the-internet's "JavaScript Alerts" page: an alert (OK), a confirm (OK), and a prompt where a short
+text is typed and accepted. The page then shows what was answered, which is the proof.
+
+**Test 1 — result: FAIL.** Recording worked: Studio showed each pop-up box in its own window ("The page
+is asking"), and the tester answered them. The typed prompt answer became an input. Compile was
+fine. But in four test runs the prompt was never answered: the page never showed "You entered:
+...", and the prompt step sat for two minutes. One run ended as "passed — please check" with a "I
+couldn't confirm" warning; it was not approved, because the outcome never happened.
+
+**What was really wrong:** I tested it directly. Build Studio's test browser, and Conxa Execute's
+browser, are built on Electron. Electron shows the plain "OK" box (alert) and the "OK / Cancel" box
+(confirm), but it does **not** support the "type an answer" box (prompt) at all. When a page asks
+for one, nothing happens and no tool can see or answer it. The recorder had already worked around
+this by giving the page its own stand-in for the prompt box; the replay had nothing of the kind. So
+any workflow with a prompt could never be replayed inside Studio or Execute, on any site. It would
+work only in the customer's separate browser. *Kind of problem:* architectural, a gap between how
+recording and replay handle the same browser.
+
+*Fix:* when a replay runs inside Studio's or Execute's browser and the next recorded step answers a
+prompt, the runtime now gives the page a one-time stand-in that returns the recorded answer, or
+"Cancel" if Cancel was recorded. The page's own prompt box is put back right after. The prompt step
+then sees the answer was already given and finishes at once, instead of waiting two minutes. In a
+normal browser nothing changes. Checked in a bare Electron window: the stand-in returned
+"Conxa prompt" for OK and nothing for Cancel.
+
+**Changed:** `runtime/app/page_scripts.js`, `runtime/app/run.js`, `runtime/app/handlers.js`; new test
+`runtime/test/unit/test_prompt_in_host_browser.js`. Runtime suite: 1397 passed, 0 failed. The test
+engine was rebuilt.
+
+Other things the tester noticed, filed in `TODO.md` (BUILD-93): a test that ends "couldn't confirm"
+is still labelled "Test passed" and can be approved; the prompt's test input was empty the first
+time, although the card says recorded values are filled in; a harmless "OK" on a confirm box is
+treated as something that cannot be undone, and the test pauses on it even after the person said
+"no need to ask".
+
+**Test 2 (fresh recording, after the fix) — result: PASS.**
+- Recorded the alert, the confirm and the prompt (answer `Conxa prompt`). Compiled to 7 steps with
+  the prompt answer as an input.
+- Two questions were answered on purpose. "You see the dialog answer on the screen" was ticked as
+  the proof.
+- The test used a *different* answer, `Conxa second`, to prove the run follows the input. The page
+  showed "You entered: Conxa second", read directly from the page during the run.
+- The prompt step took 3.4 seconds (it used to sit for 2 minutes). No warning. The run ended with
+  `execute_success`.
+- The test paused once before the confirm click, Studio's normal "ask before steps that can't be
+  undone" pause, and was continued with the normal button. The workflow was approved.
+
+Also seen: some step names are off by one around the pop-up steps (the execution is right; filed in
+BUILD-93).
+
+**Final status of WF-1 Leg F: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-15).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

@@ -10,6 +10,10 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**Pop-up boxes that ask you to type something now replay inside Build Studio — 2026-11-16**
+Some websites pop up a small box that asks you to type an answer. Build Studio could record your answer, but a test inside Build Studio (and a run inside Conxa Execute) could never give it back. The browser these apps are built on does not support that kind of box at all, so the test waited two minutes and the answer never arrived. A replay now hands the page your recorded answer (or the value you entered for this run) directly, in the same way the recording does. In a normal browser nothing changes.
+— 2026-11-16
+
 **"The screen changes" now counts a new tab the step opened — 2026-11-16**
 If a click's whole job is to open a new tab, the page you clicked on stays exactly the same. The "the screen changes" check only looked at that page, so it said nothing happened and the test failed every time. A new tab that the page itself opened during the step now counts as a change, and a click that really does nothing still fails the check.
 — 2026-11-16

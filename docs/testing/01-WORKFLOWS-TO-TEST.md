@@ -79,11 +79,10 @@ approved, publish-ready state through Studio's normal controls with independent 
 outcome. Each leg that passes is removed from here and recorded in
 [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) (Leg C, the S3 form fill, is there as P-11;
 Leg A, the Wikipedia control baseline, as P-12; Leg D, the new-tab round trip, as P-13; Leg E, the
-download → upload handoff, as P-14). Still to pass:
+download → upload handoff, as P-14; Leg F, native JS dialogs, as P-15). Still to pass:
 
 - Leg B — S1 login + credential grep. The recorder drops sign-in pages by design, so the login is
   done through the group's saved sign-in, not recorded.
-- Leg F — native JS dialogs (S1 `/javascript_alerts`).
 
 Earlier history: legs A, B, D and E passed the `03-ONE-WORKFLOW-RUNBOOK.md` follow-up run on
 2026-09-03, and Leg F passed on 2026-09-04 (P-5). Both runs predate the strict rule above.
