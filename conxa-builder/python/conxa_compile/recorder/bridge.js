@@ -440,6 +440,17 @@
     const tabIndex = n.getAttribute && n.getAttribute("tabindex");
     if (tabIndex !== null && tabIndex !== "-1") return true;
     if ((tag === "div" || tag === "span") && n.getAttribute && n.getAttribute("data-action")) return true;
+    // An icon button a framework wires up in script (React onClick leaves no attribute): it shows the pointing hand and
+    // names itself (title / aria-label), which is how a person knows it is a button and what the step is called.
+    // demoqa's row trash icon (<span title="Delete"><svg>) was dropped as "a click on something that is not a control".
+    // Only when no real control holds it: a titled icon inside a <button>/<a> must still record that button/link.
+    if (n.getAttribute && (n.getAttribute("title") || n.getAttribute("aria-label"))) {
+      try {
+        const holder = n.parentElement && n.parentElement.closest(
+          "button, a[href], input, select, textarea, [role=button], [role=link], [role=menuitem], [role=tab], [role=option]");
+        if (!holder && getComputedStyle(n).cursor === "pointer") return true;
+      } catch (_e) {}
+    }
     return false;
   }
 

@@ -55,7 +55,7 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 6  # 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
+_PROMPT_VERSION = 7  # 7: each step states its 0-based index; 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
 
 
 _RETRY_NOTE = "Your last reply could not be read. Return ONLY the JSON object described, nothing before or after it."
@@ -171,6 +171,20 @@ def _sidecar_write(sidecar: Path | None, key: str, raw: dict[str, Any]) -> None:
         pass  # a pin that can't be written is just a cache miss next time
 
 
+def _zero_based(raw: dict[str, Any], n: int) -> dict[str, Any]:
+    """A reply that counted the steps from 1 (no step 0, and one step numbered past the last) is moved back by one.
+    Left as it was, every description sat on the step after the one it describes (WF-3 Leg A: "Type a name into
+    the search box" on the select-all key). Anything else is left exactly as the model wrote it."""
+    idx = [int(s["index"]) for s in raw.get("steps") or [] if isinstance(s, dict) and isinstance(s.get("index"), int)]
+    if not idx or 0 in idx or max(idx) != n:
+        return raw
+    steps = [{**s, "index": s["index"] - 1} if isinstance(s, dict) and isinstance(s.get("index"), int) else s
+             for s in raw.get("steps") or []]
+    points = [{**p, "step_index": p["step_index"] - 1} if isinstance(p, dict) and isinstance(p.get("step_index"), int) else p
+              for p in raw.get("decision_points") or []]
+    return {**raw, "steps": steps, "decision_points": points}
+
+
 def build_workflow_review(
     steps_context: list[dict[str, Any]],
     *,
@@ -282,7 +296,7 @@ def build_workflow_review(
     if not missed:
         _sidecar_write(sidecar, key, raw)
 
-    graph = _graph_from_raw(raw)
+    graph = _graph_from_raw(_zero_based(raw, len(steps_context)))
     if prior_understanding and prior_understanding.get("goal"):
         graph.goal = str(prior_understanding["goal"])
     if not settings.llm_semantic_suggestions_enabled:

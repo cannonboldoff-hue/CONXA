@@ -255,6 +255,40 @@ def test_a_click_records_the_heading_of_its_section_through_shadow_hosts(page: P
     assert event["section_heading"] == "Customizing the Summary Icon"
 
 
+def test_a_titled_icon_with_a_pointing_hand_is_recorded_as_a_click(page: Page) -> None:
+    # WF-3 A: demoqa's row trash icon (<span title="Delete"><svg>) has its click wired in script, no attribute.
+    _install_bridge(
+        page,
+        """
+        <table><tr><td>Conxa E2</td><td><span id="delete-record-4" title="Delete" style="cursor:pointer">
+          <svg width="16" height="16"><path d="M0 0h16v16H0z"></path></svg></span></td></tr></table>
+        """,
+    )
+
+    page.click("#delete-record-4 path")
+    page.wait_for_timeout(30)
+
+    clicks = _action_events(page, "click")
+    assert len(clicks) == 1
+    assert clicks[0]["target"]["tag"] == "span"
+
+
+def test_a_titled_icon_inside_a_real_button_or_link_still_records_the_button_or_link(page: Page) -> None:
+    _install_bridge(
+        page,
+        """
+        <button id="save" style="cursor:pointer"><span id="save-icon" title="Save">S</span> Save</button>
+        <a id="home" href="#home" style="cursor:pointer"><svg aria-label="Home" width="16" height="16"><path id="home-path" d="M0 0h16v16H0z"></path></svg></a>
+        """,
+    )
+
+    page.click("#save-icon")
+    page.click("#home-path")
+    page.wait_for_timeout(30)
+
+    assert [c["target"]["tag"] for c in _action_events(page, "click")] == ["button", "a"]
+
+
 def test_custom_drawer_role_button_records_click(page: Page) -> None:
     _install_bridge(
         page,

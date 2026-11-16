@@ -96,7 +96,9 @@ limitation in the 2026-09-03 follow-up run (skipped with a warning at build time
 **Sites:** S7 (computer-database.gatling.io) + S5 (saucedemo.com) + S6 (parabank.parasoft.com) ·
 **Tabs:** 1 · The headline showcase.
 
-### Leg A — 50-step warm-up
+### Leg A — 50-step warm-up ✅ passed 2026-11-17 (see **P-26** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md))
+**2026-11-16: S7 (`computer-database.gatling.io`) no longer resolves (no DNS address); the leg runs on
+demoqa.com `/webtables` instead (add 5 records, delete 2 specific rows, search — same CRUD shape).**
 S7: ONE take ~50 actions — search "Apple" → open result → back → filter "IBM" → open → back →
 add 5 computers (≈8 actions each) → delete 2. Note recorder responsiveness/dropped events;
 compile wall time + LLM call count; execute; count first-try successes. PASS ≥95% clean, no silent

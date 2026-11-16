@@ -10,6 +10,22 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**Filling in a form several times now replays every entry — 2026-11-16**
+Recording five new records on one form used to go wrong in three ways. Studio treated the form you opened as a popup to close, so the test failed at the first box. It dropped what you typed in records two to five. And it missed clicks on small icon buttons, like a row's bin icon. All three are fixed. A form you open yourself is part of the task, every record keeps its own details in order, and icon buttons are recorded.
+— 2026-11-16
+
+**Deleting a row and saving a form are now checked properly — 2026-11-17**
+A test could wrongly fail after deleting a table row, because it waited for the bin icon you had just used to still be there. A test could also say "couldn't confirm" after saving a form that works inside the page, because the only proof was a message to the website that such forms never send. Now a delete is proven by the page changing, and a save by what you typed showing up on the page. A request from an ad or another website no longer counts as proof.
+— 2026-11-17
+
+**Step names now match their steps, and a cleared box no longer blocks a test — 2026-11-16**
+In a long recording every step could be described as the step before it, so questions like "can't be undone, approve first?" named the wrong action. Each step now carries its own name. Emptying a search box was also turned into a box the tester had to fill, and an empty answer was refused, so the test could not start. Clearing a box is now just a step. A check could also wait for a value under an old name and fail every run; renaming a value now updates its checks.
+— 2026-11-16
+
+**Entering the same kind of record many times can now repeat over a list — 2026-11-16**
+When you fill in the same form several times with different details, Build Studio now asks whether it should do that for a list it is given each time. Say yes, and your recorded entries become the starting list, which anyone running the workflow can change. Say no, and it always enters exactly what you recorded. If you want someone to approve before anything that can't be undone, the approval comes once, before the list starts.
+— 2026-11-16
+
 **Scrolling down a long page now replays the whole way — 2026-11-16**
 If you scrolled down several times while recording, Build Studio kept only the first, small scroll. On pages that load more as you go down (an endless list or feed), a test then never reached the items further down, and anything you did with them could not work. Each scroll you make is now kept, with its own distance, so the replay goes as far down as you did.
 — 2026-11-16

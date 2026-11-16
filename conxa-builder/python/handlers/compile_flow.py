@@ -34,7 +34,7 @@ _ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
 # Kinds an earlier answer is replayed onto: built from the document as compiled, before replay changes it.
 _REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
 # Kinds built afterwards from the document replay left, so their bindings and step keys are current.
-_REOPENED_KINDS = frozenset({"confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
+_REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
 
 
 def _thread(workflow_id: str) -> str:
@@ -797,6 +797,15 @@ class CompileFlowMixin:
         _clarify_events().answered(workflow_id, question, answer)
         harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, actions=[],
                             step_keys=question.get("step_keys") or [], can_reopen=can_reopen)
+        if any(op.get("op") == "wrap_rows_loop" for op in ops):
+            # Questions about the copies that became one repeated step have nothing left to ask; the re-check below
+            # asks again about the repeated step itself (for example, approve before it starts).
+            from conxa_compile.compiler.step_key import step_keys
+            from conxa_core.storage.json_store import read_skill
+
+            live = ((read_skill(workflow.skill_id) or {}).get("skills") or [{}])[0].get("steps") or []
+            clarify_store.mark_stale(workflow_id, set(step_keys(live)), why="Now part of the repeated steps", keep=qid)
+            self._close_superseded_cards(workflow_id, sink)
         if ops:
             self._flow_reevaluate_safe(workflow_id)       # the answer changed the workflow: it may raise a question it could not before
         self._flow_post_next_question(workflow_id, sink)
@@ -842,21 +851,26 @@ class CompileFlowMixin:
         except Exception:  # noqa: BLE001
             pass
 
+    def _close_superseded_cards(self, workflow_id: str, sink: Any) -> None:
+        """A question whose steps were re-recorded away, or folded into a repeated step, has nothing left to ask:
+        close its card, or it would sit pinned and unanswerable."""
+        from conxa_compile.conversation import clarify_store, harness, thread_store as ts
+
+        for q in (clarify_store.load(workflow_id) or {}).get("questions") or []:
+            if isinstance(q, dict) and q.get("status") == "superseded" and q.get("card_id"):
+                card = ts.get_card(_thread(workflow_id), q["card_id"])
+                if card and card.get("state") in ("open", "failed"):
+                    harness.update_card(_thread(workflow_id), q["card_id"], sink=sink, state="reverted", actions=[],
+                                        receipt=q.get("receipt") or "No longer needed")
+
     def _reask_unanswered(self, workflow_id: str, sink: Any) -> None:
         """A question nobody answered keeps coming back: opening the conversation again (after a restart, a
         recompile, a card that went missing) puts the next one in front of the person. A card already on
         screen is left alone. Never raises: a missing re-ask must not stop the conversation from opening."""
-        from conxa_compile.conversation import clarify_store, harness, runtime_state, thread_store as ts
+        from conxa_compile.conversation import clarify_store, runtime_state
 
         try:
-            # A question whose steps were re-recorded away has nothing left to ask: close its card, or it would
-            # sit pinned and unanswerable.
-            for q in (clarify_store.load(workflow_id) or {}).get("questions") or []:
-                if isinstance(q, dict) and q.get("status") == "superseded" and q.get("card_id"):
-                    card = ts.get_card(_thread(workflow_id), q["card_id"])
-                    if card and card.get("state") in ("open", "failed"):
-                        harness.update_card(_thread(workflow_id), q["card_id"], sink=sink, state="reverted", actions=[],
-                                            receipt=q.get("receipt") or "No longer needed")
+            self._close_superseded_cards(workflow_id, sink)
             flags = runtime_state.get_flags(workflow_id)
             if any(flags.get(k) for k in ("compiling", "testing", "understanding", "watching", "queued", "applying")):
                 return
@@ -1086,6 +1100,20 @@ class CompileFlowMixin:
                     {"skill_id": skill_id, "literal": op["literal"], "name": op["name"], "default": op.get("default") or "",
                      "kind": op.get("kind") or ""}, rid)
                 self._log_edit("parameterize_literal", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "wrap_rows_loop":
+                import copy
+
+                from conxa_compile.editor.workflow_mutations import wrap_repeated_entries
+                from conxa_core.storage.json_store import write_skill
+
+                doc = read_skill(skill_id) or {}
+                self._push_undo(skill_id, copy.deepcopy(doc))
+                try:
+                    write_skill(skill_id, wrap_repeated_entries(doc, op["suggestion"]))
+                except ValueError as exc:
+                    raise _CommandError(str(exc), "The repeated steps changed since this was asked, so the list could not be set up.") from exc
+                self._log_edit("wrap_repeated_entries", skill_id, before, source="clarify", proposal_id=None)
+                added -= int(op["suggestion"].get("block_len") or 0) * (int(op["suggestion"].get("count") or 0) - 1)
             elif kind == "set_date_offset":
                 self.cmd_set_date_offset({"skill_id": skill_id, "step_index": index_of(op["step_key"]), "days": op["days"]}, rid)
                 self._log_edit("set_date_offset", skill_id, before, source="clarify", proposal_id=None)

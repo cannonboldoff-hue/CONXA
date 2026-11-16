@@ -52,9 +52,14 @@ _STATE_VALUES = frozenset({"true", "false", "active", "inactive", "open", "close
                            "transitioning", "selected", "checked", "disabled", "enabled", "visible", "hidden", "current"})
 
 
+# How a widget library wires an element up (Bootstrap's data-toggle="tooltip"), not which element it is: shared by
+# every tooltip or dropdown on the page (WF-3 A: every row's bin icon carries data-toggle="tooltip").
+_WIRING_KEY_RE = re.compile(r"^data-(?:bs-)?(?:toggle|placement|trigger|dismiss|container|delay|animation|html|original-title)$")
+
+
 def is_identity_attr_key(key: str) -> bool:
     k = (key or "").strip().lower()
-    if not k or k in _SKIP_ATTRS or k in _TESTID_KEYS or _STATE_KEY_RE.match(k):
+    if not k or k in _SKIP_ATTRS or k in _TESTID_KEYS or _STATE_KEY_RE.match(k) or _WIRING_KEY_RE.match(k):
         return False
     if k == "role":
         return True

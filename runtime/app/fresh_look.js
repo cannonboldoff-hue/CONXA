@@ -60,7 +60,7 @@ async function freshLook({ page, registry = null, fileName, countBefore, maxMs =
   return withFreshTab(page, registry, async (tab) => {
     const deadline = Date.now() + maxMs;
     for (;;) {
-      const n = await evalOn(tab, pageScripts.countTextOccurrences, fileName, 3000);
+      const n = await evalOn(tab, pageScripts.countPageText, fileName, 3000);
       if (typeof n === "number" && n > countBefore) return { answer: "yes" };
       if (Date.now() >= deadline) return { answer: "no" };
       await sleep(pollMs);

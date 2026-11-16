@@ -36,7 +36,7 @@ MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
-    "coverage": -1, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
+    "coverage": -1, "repeat_rows": -0.5, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
@@ -582,6 +582,34 @@ def generate_questions(
         if limits is not None:
             limits[kind] = limits.get(kind, 0) + 1
 
+    # 0a ─ the same entry made several times with different details (five records added one after another): repeat
+    #      it for a list given each run, or always these same ones? Code found the repeat; the person decides; code
+    #      rewrites (wrap_repeated_entries). The values inside the repeat are this question's, not the "values" one's.
+    def typed(s: dict[str, Any]) -> str | None:
+        v = ((look(s) or {}).get("action") or {}).get("value")
+        return None if v is None or v == "{{REDACTED}}" else str(v)
+
+    from conxa_compile.compiler.loop_suggestion import detect_repeated_entries
+
+    repeat = detect_repeated_entries(steps, typed)
+    repeat_keys: set[str] = set()
+    if repeat:
+        first = keys.index(repeat["start_key"])
+        repeat_keys = set(keys[first:first + repeat["block_len"] * repeat["count"]])
+        n = repeat["count"]
+        cols = ", ".join(_humanize(c["name"]).lower() for c in repeat["columns"])
+        out.append(_question(
+            "repeat_rows", f"repeat_rows:{repeat['start_key']}",
+            f"You entered {n} items the same way, each with a different {cols}. Each time this runs, should it enter a list it is given?",
+            f"It can repeat the same steps for every row of a list. The list starts with the {n} you entered.",
+            [
+                {"id": "list", "label": "Yes, enter each row of a list it is given",
+                 "detail": f"Whoever uses it can change the list. It starts with your {n}."},
+                {"id": "same", "label": f"No, always enter these same {n}", "detail": "It repeats exactly what you recorded."},
+            ],
+            step_keys_=[repeat["start_key"]], suggestion=repeat,
+        ))
+
     # 0 ─ understanding (conversation/understanding.py): the recording against what the person
     # said, and recorded values that aren't typed text. A fallback answer carries no coverage verdict.
     if understanding:
@@ -634,14 +662,33 @@ def generate_questions(
 
     # 2 ─ a step that can't be undone: should a person confirm first?
     for i, s in enumerate(steps):
-        if s.get("consequence") != "irreversible" or i == 0:
+        # Nobody can be asked inside a repeated step (the runtime refuses), so a repeated step that can't be undone is
+        # approved once, before the repeat starts.
+        body = (s.get("for_each") or {}).get("steps") if isinstance(s.get("for_each"), dict) else None
+        inner = next((b for b in body or [] if isinstance(b, dict) and b.get("consequence") == "irreversible"), None)
+        if (s.get("consequence") != "irreversible" and inner is None) or i == 0:
             continue
         prev = steps[i - 1]
         from conxa_compile.editor.patch_gate import is_confirm_only_span
 
         if _action_name(prev) == "agent_span" and is_confirm_only_span(prev):
             continue  # already guarded
-        name = step_name(s)
+        name = step_name(inner if inner is not None else s)
+        if inner is not None:
+            out.append(_question(
+                "confirm", f"confirm:{keys[i]}",
+                f"Each row of the list ends with “{name}”, which can’t be undone. Should someone approve before it starts?",
+                "It will stop once before the first row, say what is about to happen, and wait for a yes or no. "
+                "It can’t stop between rows.",
+                [
+                    {"id": "yes", "label": "Yes, ask for approval first", "detail": "One yes or no question before the list starts."},
+                    {"id": "no", "label": "No, just do it", "detail": "It goes ahead without asking."},
+                ],
+                step_keys_=[keys[i]], step_name=name,
+                prompt=f"About to go through every row of the list, each ending with “{name}”, which can’t be undone. "
+                       "Should it go ahead?",
+            ))
+            continue
         out.append(_question(
             "confirm", f"confirm:{keys[i]}", f"“{name}” can\u2019t be undone. Should someone approve it before it happens?",
             f"It will stop just before “{name}”, show what is about to happen, and wait for a yes or no from whoever is using it.",
@@ -705,6 +752,8 @@ def generate_questions(
             recorded = str((ev.get("action") or {}).get("value") or "")
             if recorded == "{{REDACTED}}":
                 continue
+        if keys[i] in repeat_keys:
+            continue  # asked by the repeat question
         candidates.append({"binding": str(binding), "step_key": keys[i], "recorded": recorded,
                            "fixed_by_event": seq is not None and str(seq) in fixed_events})
     # The person's own description said this exact value is the point of the task: leave it unticked.
@@ -880,6 +929,10 @@ def generate_questions(
             "At the end of your recording I noticed these. Tick the ones that should be true when it works. If a ticked one is not true, it counts as failed. "
             "You can also type your own below.",
             done_choices, multi=True, step_keys_=done_keys, needs_proof=bool(irreversible_without_proof(doc)),
+            # What each input was when recorded: if a later answer fixes it ("nothing changes"), a ticked
+            # "you see it on the screen" checks those words, not an input that no longer exists.
+            recorded={str(st["input_binding"]): v for st in steps
+                      if st.get("input_binding") and (v := typed(st)) is not None},
         ))
     elif unproven_end:
         # Nothing to tick, and nothing proves the last step: its result is only on the screen (a tab's panel, a
@@ -912,6 +965,27 @@ def _can_hold_checks(step: dict[str, Any]) -> bool:
     return not action_spec(kind).marker and "validation.assertions" in editable_fields(kind)
 
 
+def _replace_token(value: Any, token: str, literal: str) -> Any:
+    if isinstance(value, str):
+        return value.replace(token, literal)
+    if isinstance(value, list):
+        return [_replace_token(v, token, literal) for v in value]
+    if isinstance(value, dict):
+        return {k: _replace_token(v, token, literal) for k, v in value.items()}
+    return value
+
+
+def _restore_literal_patch(step: dict[str, Any], binding: str, literal: str) -> dict[str, Any]:
+    """Patch a step typing ``{{binding}}`` back to the recorded words, and every check on it that names the input:
+    plain checks and completion checks alike (WF-3 A: a "the entry shows up" probe kept {{department_5}} alive)."""
+    token = "{{" + binding + "}}"
+    patch: dict[str, Any] = {"value": literal}
+    validation = step.get("validation") if isinstance(step.get("validation"), dict) else {}
+    if token in str(validation):
+        patch["validation"] = _replace_token(validation, token, literal)
+    return patch
+
+
 def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Turn an answer into ops for existing commands, plus the receipt line shown once applied.
 
@@ -936,6 +1010,41 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             ops.append({"op": "drop_inputs", "ids": ["file_path"]})
             return ops, "Always sends the file you recorded"
         return ops, "Whoever uses it picks the file"
+
+    if kind == "repeat_rows":
+        suggestion = question.get("suggestion") or {}
+        if answer.get("choice") == "list":
+            ops.append({"op": "wrap_rows_loop", "suggestion": suggestion})
+            return ops, f"Enters each row of a list it is given (starts with your {suggestion.get('count')})"
+        # Keep every recorded value in the repeated steps (they are this question's, never asked as "values"), and in
+        # any check elsewhere that names one (a last step's "first name appears"), or the input stays alive.
+        steps = _steps(doc)
+        keyed = list(zip(step_keys(steps), steps))
+        start = next((i for i, (k, _) in enumerate(keyed) if k == suggestion.get("start_key")), None)
+        literal_of: dict[str, str] = {}
+        if start is not None:
+            block_len = int(suggestion.get("block_len") or 0)
+            for r, row in enumerate(suggestion.get("rows") or []):
+                at = {int(c["offset"]): row.get(c["name"]) for c in suggestion.get("columns") or []}
+                at.update({int(f["offset"]): f["value"] for f in suggestion.get("fixed") or []})
+                for off, literal in at.items():
+                    i = start + r * block_len + off
+                    step = keyed[i][1] if i < len(keyed) else {}
+                    binding = str(step.get("input_binding") or "")
+                    if literal is not None and binding and step.get("value") == "{{" + binding + "}}":
+                        literal_of[binding] = str(literal)
+        for key, step in keyed:
+            patch: dict[str, Any] = {}
+            for binding, literal in literal_of.items():
+                one = _restore_literal_patch({**step, **patch}, binding, literal)
+                if not (step.get("input_binding") == binding and step.get("value") == "{{" + binding + "}}"):
+                    one.pop("value")
+                patch.update(one)
+            if patch:
+                ops.append({"op": "patch", "step_key": key, "patch": patch})
+        if literal_of:
+            ops.append({"op": "drop_inputs", "ids": sorted(literal_of)})
+        return ops, f"Always enters these same {suggestion.get('count')}"
 
     if kind == "coverage":
         if answer.get("choice") == "incomplete":
@@ -1005,7 +1114,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         if answer.get("choice") == "yes":
             name = question.get("step_name") or "this step"
             ops.append({"op": "insert_review", "before_step_key": keys[0], "title": f"Confirm before “{name}”",
-                        "prompt": f"About to run “{name}”, which can’t be undone. Should it go ahead?"})
+                        "prompt": question.get("prompt") or f"About to run “{name}”, which can’t be undone. Should it go ahead?"})
             return ops, "Someone approves it first"
         return ops, "Goes ahead without asking"
 
@@ -1073,17 +1182,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 continue  # nothing to restore: leave it an input rather than guess a value
             token = "{{" + binding + "}}"
             for key, step in keyed.items():
-                patch: dict[str, Any] = {}
-                if step.get("input_binding") == binding and step.get("value") == token:
-                    patch["value"] = literal
                 # A check written from the input ("the box holds {{tags}}") keeps the input alive: drop_inputs refuses an
                 # id still referenced, so the answer "nothing changes" was silently not applied (WF-2 F). It checks the
                 # recorded value instead.
-                assertions = (step.get("validation") or {}).get("assertions") or []
-                if any(isinstance(a, dict) and token in str(a.get("target") or "") + str(a.get("expected") or "") for a in assertions):
-                    patch["validation"] = {"assertions": [
-                        {**a, **{k: str(a[k]).replace(token, literal) for k in ("target", "expected") if isinstance(a.get(k), str)}}
-                        if isinstance(a, dict) else a for a in assertions]}
+                patch = _restore_literal_patch(step, binding, literal)
+                if not (step.get("input_binding") == binding and step.get("value") == token):
+                    patch.pop("value")
                 if patch:
                     ops.append({"op": "patch", "step_key": key, "patch": patch})
             fixed.append(binding)
@@ -1103,7 +1207,13 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 ops.append({"op": "confirm_effect", "step_key": cid[len("effect:"):]})
                 continue
             if cid.startswith("input:"):
-                extra.append({"type": "text_present", "target": "{{" + cid[len("input:"):] + "}}", "required": True})
+                iid = cid[len("input:"):]
+                declared = {str(i.get("id")) for i in doc.get("inputs") or [] if isinstance(i, dict)}
+                # Fixed by a later answer: check the recorded words. An input that no longer exists would be required
+                # by the built workflow while the person is told it has none (WF-3 A: {{search_term_2}}).
+                target = "{{" + iid + "}}" if iid in declared else str((question.get("recorded") or {}).get(iid) or "")
+                if target:
+                    extra.append({"type": "text_present", "target": target, "required": True})
                 continue
             key, _, idx = cid.rpartition("#")  # step keys may contain "#" themselves
             by_step.setdefault(key, {})[int(idx)] = True

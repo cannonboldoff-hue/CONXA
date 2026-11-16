@@ -52,7 +52,7 @@ const proof = require("./proof");
 const evidence = require("./evidence");
 const effectProbes = require("./effect_probes");
 const { freshLook } = require("./fresh_look");
-const { runLooks, wantedValue } = require("./result_probes");
+const { runLooks, wantedIdentity } = require("./result_probes");
 const { isNonIdempotent } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
@@ -276,7 +276,7 @@ function identityNeedle(step, inputs) {
   const effect = step && step.validation && step.validation.effect;
   const check = effect && Array.isArray(effect.checks) && effect.checks.find((c) => c && c.probe
     && c.probe.type === "row_with_identity" && !(c.calibrated === false && effectProbes.hasBasis(c)));
-  return check ? wantedValue(check.probe.key, inputs) : null;
+  return check ? wantedIdentity(check.probe, inputs) : null;
 }
 
 // How the app this page belongs to words progress, success and failure (learned from its recordings, shipped in

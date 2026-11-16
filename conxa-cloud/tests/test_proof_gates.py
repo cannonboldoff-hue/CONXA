@@ -49,7 +49,7 @@ def test_url_stays_must_not_be_built_without_a_different_landing():
 # ── row_with_identity ──
 def test_row_with_identity_needs_a_value_typed_earlier_on_the_same_page_and_a_save_or_send():
     check = row_with_identity([_typed(), _save()], 1)
-    assert check.probe == {"type": "row_with_identity", "key": "{{item_title}}", "delta": 1} and check.rung == "result_exists"
+    assert check.probe == {"type": "row_with_identity", "key": "{{item_title}}", "keys": ["{{item_title}}"], "delta": 1} and check.rung == "result_exists"
     assert row_with_identity([_save()], 0) is None, "nothing was typed"
     assert row_with_identity([_typed(url="https://app.test/other"), _save()], 1) is None, "typed on another page"
     assert row_with_identity([SkillStep(action={"action": "click"}, url=FORM), _save()], 1) is None, "a click is not a typed value"
@@ -82,3 +82,11 @@ def test_later_step_needs_a_later_step_that_consumes_what_this_one_makes():
     assert later_step([download, other], 0) is None, "nothing later uses it"
     assert later_step([download, SkillStep(action={"action": "upload"}, url=FORM, consumes=["downloaded_file_9"])], 0) is None
     assert later_step([other, upload], 0) is None, "a step that makes nothing"
+
+
+def test_a_save_or_send_after_typing_gets_a_page_side_proof_whatever_the_model_ranked():
+    """WF-3 A (2026-11-16): a page-only form's Submit had only "the app accepted the request", which it never sends."""
+    from conxa_compile.compiler.proof_picker import add_page_side_proof
+    steps = [_typed(), _save()]
+    add_page_side_proof(steps)
+    assert any(c.probe.get("type") == "row_with_identity" for c in steps[1].validation.effect.checks)

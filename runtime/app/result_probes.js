@@ -32,6 +32,17 @@ function wantedValue(template, inputs) {
   return v.length >= MIN_VALUE_CHARS && !v.includes("{{") ? v : null;
 }
 
+/** The first of a check's candidate values (`keys`, nearest typed first, else `key`) long enough to mean something. A
+ *  form's nearest value can be short ("QA") while another field of the same entry identifies it ("e5@acme.io"). */
+function wantedIdentity(probe, inputs) {
+  const keys = Array.isArray(probe && probe.keys) && probe.keys.length ? probe.keys : [probe && probe.key];
+  for (const k of keys) {
+    const v = wantedValue(k, inputs);
+    if (v) return v;
+  }
+  return null;
+}
+
 /** "Moved to the landed address and stayed": needs an address that did NOT match before the action. */
 async function urlStays(check, nb, { maxMs = 3000, settleMs = 600, pollMs = 200 } = {}) {
   const page = nb && nb.page;
@@ -54,13 +65,13 @@ async function urlStays(check, nb, { maxMs = 3000, settleMs = 600, pollMs = 200 
 
 /** "The item is on the page one more time than before": `notebook.nameCountBefore` was counted before the action. */
 async function rowWithIdentity(check, { notebook, inputs }, { maxMs = 4000, pollMs = 400 } = {}) {
-  const want = wantedValue(check.probe && check.probe.key, inputs);
+  const want = wantedIdentity(check.probe, inputs);
   const before = notebook && notebook.nameCountBefore;
   if (!want || !notebook || !notebook.page || typeof before !== "number") return CANT;
   const delta = Math.max(1, Number(check.probe.delta) || 1);
   const deadline = Date.now() + maxMs;
   for (;;) {
-    const n = await evalOn(notebook.page, pageScripts.countTextOccurrences, want, 3000);
+    const n = await evalOn(notebook.page, pageScripts.countPageText, want, 3000);
     if (typeof n === "number" && n >= before + delta) return { answer: "yes" };
     if (Date.now() >= deadline) return { answer: "no" };
     await sleep(pollMs);
@@ -114,4 +125,4 @@ async function runLooks(effect, ctx) {
   return out;
 }
 
-module.exports = { runLooks, urlStays, rowWithIdentity, valueEquals, wantedValue, MIN_VALUE_CHARS };
+module.exports = { runLooks, urlStays, rowWithIdentity, valueEquals, wantedValue, wantedIdentity, MIN_VALUE_CHARS };

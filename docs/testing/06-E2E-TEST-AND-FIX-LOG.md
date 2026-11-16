@@ -938,6 +938,166 @@ the 27. It still picked item 27, because the exact-text signal names it.
 **Final status of WF-2 Segment G: PASSED** (P-25). **WF-2 is now done**: every segment re-passed
 under the strict rule except Segment I (drag and drop), which stays a known limitation.
 
+### WF-3 Leg A — a 50-step warm-up on a computer database (assigned 2026-11-16)
+On the public "computer database" demo (a practice site for load tests; it confirms adds and deletes
+but does not keep them), one long recording does all of this:
+- search "Apple" and open a result, then go back;
+- filter "IBM" and open a result, then go back;
+- add 5 computers, each with a name, two dates and a company;
+- delete 2 computers.
+
+That is about 50 actions. The checks: nothing the person did goes missing, the test replays it all,
+and the site's own "Done!" messages appear.
+
+**Test 1 — BLOCKED: the site is gone.** `computer-database.gatling.io` no longer has an internet
+address. Lookups through two public name servers return no address, and connections fail. Nothing
+could be recorded. This is not a Studio problem, except for one small one: the recording pane showed
+a technical "navigation_error … Call log" banner instead of a plain "this site can't be reached"
+(BUILD-93).
+
+**Replacement:** the leg is about one long recording, not about that site. demoqa's "Web Tables" page
+has the same shape:
+- add 5 records, about 8 actions each;
+- delete 2 particular rows;
+- search the table.
+
+The table lives only in the browser page, so nothing is written anywhere.
+
+**Test 2 (demoqa Web Tables) — result: FAIL**, with four real defects.
+- *Site quirk first:* on demoqa, any delete resets the table to its 3 starting rows. So the tester
+  deleted a starting row first, then added the 5 records, then searched. That is not a Studio fault.
+- **1. Typing in the Add form became "close a popup" steps.** The person opened the form, so it is
+  part of the task, not an interruption. But every field was built as "close it if it shows up",
+  and the replay failed at the first field every time. Answering "keep it as a normal step" 30
+  times (once per field) did not help.
+  *Fix:* the popup hint is dropped where it cannot mean "close it". That is any step that is not a
+  click, and any window an earlier step of the person's own opened. The 30 questions go with it.
+- **2. Records 2–5 lost all their typing.** Two causes:
+  - The typing for a field is stamped a few milliseconds after the click on the next field. A
+    time sort pushed each value after the next click, and the last one after "Submit".
+  - Typing into a fresh copy of the form was merged into the first copy as a "correction".
+  *Fix:* only pop-up answers are put back in time order; everything else keeps the order it
+  happened in. Typing merges only in the very same box, right away. A new box, a later return to a
+  box, and emptying a box are each kept as their own step.
+- **3. The trash-icon click was not recorded.** The icon has no tag or attribute saying "button";
+  the site wires it up in code. *Fix:* a titled or labelled element that shows the pointing hand,
+  with no real button or link around it, counts as a control. A button or link around it still wins.
+- **4. Two same-looking clicks on different elements merged into one.** Seen in review, not live:
+  two rows' "Delete" icons, or two "Add to cart" buttons. Now both run.
+
+Checked by rebuilding the same recording offline: no "close a popup" steps (11 before), 33 typing
+steps with all 5 records, and no popup questions.
+
+Also filed (BUILD-93): the search box is named "Add" after the nearby button.
+
+**Test 3 (fresh recording) — result: FAIL**, but the earlier fixes held:
+- the trash-icon click was recorded;
+- there were no "close a popup" steps;
+- all 5 records' typing was kept, in order.
+
+New defects:
+- **The "the box holds this value" check kept an old name.** Two search-box typings were both called
+  `add`. The second was renamed `add_2`, but only its typed value changed, not its check. The check
+  then waited for the old value and failed every time. *Fix:* a rename now changes the step's checks
+  too, in both places that rename.
+- **Emptying the search box became a required input.** Nobody can supply an empty value, so the
+  test could not even start. *Fix:* emptying a box is a plain step, never an input.
+- **Every step's name described the step before it.** The review model is not told each step's
+  number, so it counts them itself, and here it counted from 1. "Type a name into the search box"
+  sat on the select-all key, and the "can't be undone" questions named the wrong steps. *Fix:* each
+  step now states its number (from 0). A reply that has no step 0 and one step past the last is
+  moved back by one.
+- **"Always enter these same 5" left the inputs in place.** A check on the last step still named
+  them. *Fix:* the answer now fixes those checks too, as the values question already did.
+- Also seen: before the build the model itself asked "How many entries should it add each time?". It
+  understood the repeat. That answer is not yet linked to the repeat question (TODO).
+
+**Test 4 (fresh recording; Studio and the local cloud restarted after the session ended) — result: FAIL.**
+Confirmed fixed live:
+- every step's name matches its step;
+- clearing the box is a plain step;
+- there is no stale `{{add}}` check.
+
+New defects:
+- **The Delete click could never be found.** The bin icon's only way of being found was a full path
+  from the top of the page. The step works inside the row it is bound to (Kierra's), and a path
+  from the page top cannot match there. The test failed at Delete three times, with and without
+  the safety pause, on a page that visibly had the row. Two causes:
+  - Nothing turned the icon's tooltip, "Delete", into a way to find it.
+  - An attribute every tooltip shares (`data-toggle="tooltip"`) was treated as identity.
+
+  *Fix:* an element named only by its tooltip is found by it (`span[title="Delete"]`, unique inside
+  the row). Widget wiring attributes no longer count as identity.
+- **"Always these same 5" left one input behind** (`department 5`). It was named inside a "the
+  entry shows up" completion check, which the answer did not touch. *Fix:* restoring a recorded
+  value replaces it anywhere in the step's checks.
+- **The repeat question came last instead of first.** It was missing from the list of question
+  kinds asked right after the build, so only the later re-check raised it. *Fix:* added.
+
+**Test 5 (fresh recording) — result: FAIL before any step ran.**
+Working now:
+- the repeat question came first;
+- "department 5" was gone;
+- the Delete step had its tooltip signal.
+
+But the test card said "no inputs", while the built workflow demanded one, `search term 2`, and refused to start. Here is
+how it happened. "How can we tell it worked?" offered "You see the search term 2 on the screen", built
+while that value was still an input. The person had already answered that nothing changes, so the
+value had become fixed text. Ticking the option still wrote a check on the old input name, and the
+build then declared that name as a required input again. *Fix:* the question remembers each
+input's recorded words. If the input is gone when the answer is applied, the check looks for those
+words ("Conxa").
+
+Also seen: a 23-minute recording made before a network drop was saved, but then "has no video to
+watch" (its video file was finalised only after the recording pane was closed). The tester recorded
+again (TODO).
+
+**Test 6 (fresh recording) — result: FAIL at Delete, twice.** The workflow now has no inputs and
+the "Conxa" check works. The Delete click happened, and the row went away, but then the step failed.
+Its required check said "the bin icon is still on the page", named by the icon's own page path. Several of Studio's
+waiting rules fall back to the clicked element's own address. "It is there afterwards" would hold even if the
+click did nothing, and after a delete it is the opposite of the result. *Fix:* where waits become
+checks, a wait for the acted-on element itself never becomes one. The Delete step is now proven by
+"the page changed" and its delete completion check. (Rebuilt offline from the same recording to
+confirm.)
+
+**Test 7 (fresh recording) — result: FAIL at the fifth Submit, twice.** The Delete now passes, and so
+do Submits 1–4. The fifth said "couldn't confirm". But Submits 1–4 were not really proven either:
+- demoqa's form saves inside the page and sends nothing to the site. Each Submit's only proof was
+  "the app accepted the request". Submits 1–4 happened to coincide with an ad or analytics write
+  from another website, answered OK. The fifth did not, so the hole showed.
+
+Three general fixes:
+- **A request to another website is background, not proof.** Its failure does not refuse the step
+  either. (Compared by site name; noted as a shortcut.)
+- **A save or send after typing always gets "what you entered now shows up on the page".** Before,
+  this check was added only when the AI ranking model suggested it; now code always adds it.
+- **That check now works on forms like this one:**
+  - It counts the page's text only, not what the form's boxes hold. Counting boxes made the value
+    "move" from box to row with no change.
+  - It tries each value of the entry, nearest first, and uses the first long enough to mean
+    something. The nearest one here, "QA", is too short; the salary "1001" works.
+
+Rebuilt offline: every Submit now has that check.
+
+**Test 8 (fresh recording) — result: PASS.** 77 actions, 79 steps, no inputs.
+- Answers:
+  - same five records each time;
+  - always this Delete;
+  - "No, always fill in these same 5";
+  - no approvals before steps that can't be undone.
+- Both test runs paused before the steps that can't be undone, ran them for real, and confirmed
+  every step. There was no "couldn't confirm".
+- Watched live: the table went from Cierra and Alden to Conxa E1…E5, and Kierra was gone.
+- Every Submit was proven by "what you entered now shows up on the page", using the salary.
+- Approved.
+
+**Final status of WF-3 Leg A: PASSED** (P-26).
+
+**Still to do (asked for by the user):** the "Yes, fill in each row of a list" answer to the
+repeat question is built and unit-tested, but has not yet been run end to end. Code spots the repeat, the model writes the question in plain words, the person chooses, and
+code makes the change. That comes after this leg passes without it.
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

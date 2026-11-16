@@ -830,6 +830,18 @@ function countTextOccurrences(needle) {
   return count;
 }
 
+// How often `needle` is in the page's visible text only, never in what a text box holds. For "one more than before": a
+// form's box holds the value before Save and the new row holds it after, so counting boxes made a saved row look like
+// no change (WF-3 A, demoqa Web Tables).
+function countPageText(needle) {
+  var n = String(needle || "").toLowerCase();
+  if (!n) return 0;
+  var hay = String((document.body && document.body.innerText) || "").toLowerCase();
+  var count = 0;
+  for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) count++;
+  return count;
+}
+
 // (agent_span) Runs inside the page. Numbers every visible interactive element and marks it so the runtime can find
 // the very same element again. Passwords are never read; fields show at most a short current value.
 function gatherCandidates(limit) {
@@ -924,6 +936,7 @@ function seedLocalStorage(entries) {
 
 module.exports = {
   countTextOccurrences,
+  countPageText,
   armPrompt,
   takePromptAnswered,
   extractDescriptor,

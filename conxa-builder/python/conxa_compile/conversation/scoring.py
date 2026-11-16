@@ -27,7 +27,7 @@ CUTS = (0.08, 0.2, 0.4)        # chance wrong x cost: below the first assume, th
 # How much a wrong default hurts, 0..1 (cost of the mistake x how many runs it touches).
 COST: dict[str, float] = {
     "confirm": 1.0, "confirm_before": 1.0, "confirm_row": 1.0, "fork": 1.0, "fork_then": 1.0, "known_popup": 1.0,
-    "upload": 0.8, "value": 0.6, "chosen_values": 0.6, "values": 0.6,
+    "upload": 0.8, "repeat_rows": 1.0, "value": 0.6, "chosen_values": 0.6, "values": 0.6,
     "missing_item": 0.5, "relative_date": 0.5, "note": 0.5, "test_followup": 0.5, "input_check": 0.5,
     "coverage": 0.4, "skip_when_empty": 0.3, "done_when": 0.3, "popup": 0.3, "popup_dismiss": 0.3,
     "output": 0.2, "dropped_value": 0.2,

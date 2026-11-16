@@ -63,6 +63,16 @@ def rewrite_placeholder(value: Any, old: str, new: str) -> Any:
     return re.sub(r"\{\{\s*" + re.escape(old) + r"\s*\}\}", f"{{{{{new}}}}}", value)
 
 
+def rename_binding_in_step(step: SkillStep, old: str, new: str) -> None:
+    """Rename one input everywhere this step names it: its value and its checks. A check left on the old name
+    can never hold once the value is renamed (WF-3 Leg A: the second search box typed {{add_2}} and checked {{add}})."""
+    step.value = rewrite_placeholder(step.value, old, new)
+    validation = getattr(step, "validation", None)
+    for a in (validation.assertions if validation else None) or []:
+        a.target = rewrite_placeholder(a.target, old, new)
+        a.expected = rewrite_placeholder(a.expected, old, new)
+
+
 def build_try_dismiss_from_hint(primary_selector: str, container_signal: str) -> dict[str, Any]:
     """The try_dismiss shape a recorder optional_hint converts into.
 
@@ -90,7 +100,7 @@ def _apply_one(step: SkillStep, kind: str, current: str, proposed: str) -> bool:
     if kind == "rename_binding":
         if not step.input_binding:
             return False
-        step.value = rewrite_placeholder(step.value, step.input_binding, proposed)
+        rename_binding_in_step(step, step.input_binding, proposed)
         step.input_binding = proposed
         return True
 

@@ -138,18 +138,21 @@ def answer_question(workflow_id: str, question_id: str, *, answer: Any, receipt:
     mutate(workflow_id, edit)
 
 
-def mark_stale(workflow_id: str, live_keys: set[str]) -> int:
+def mark_stale(workflow_id: str, live_keys: set[str], *, why: str = "The steps this was about were re-recorded",
+               keep: str | None = None) -> int:
     """Flag answered/skipped questions whose steps no longer exist (a segment was re-recorded over
-    them) as ``stale``; answers about steps that survive are kept as they are. Returns how many."""
+    them, or they became one repeated step) as ``stale``; answers about steps that survive are kept as they are.
+    ``keep`` is the question whose own answer removed them. Returns how many."""
     count = [0]
 
     def edit(data: dict[str, Any]) -> None:
         for q in data.get("questions") or []:
-            if isinstance(q, dict) and q.get("step_keys") and not set(q["step_keys"]) <= live_keys and not q.get("stale"):
+            if (isinstance(q, dict) and q.get("id") != keep and q.get("step_keys")
+                    and not set(q["step_keys"]) <= live_keys and not q.get("stale")):
                 q["stale"] = True
                 if q.get("status") in ("open", "queued"):
                     q["status"] = "superseded"   # nothing left to ask, and not a question left unanswered about
-                    q["receipt"] = "The steps this was about were re-recorded"
+                    q["receipt"] = why
                 count[0] += 1
 
     mutate(workflow_id, edit)

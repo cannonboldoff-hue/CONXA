@@ -22,6 +22,7 @@ changes anything this module decided. This module's own "no LLM" claim above sti
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 from urllib.parse import unquote
@@ -198,3 +199,78 @@ def filter_rejected(suggestions: list[dict[str, Any]], edits: list[dict[str, Any
     if not rejected_keys:
         return suggestions
     return [s for s in suggestions if s.get("upload_step_key") not in rejected_keys]
+
+
+# ── Repeated entries: the same form filled in several times with different details ─────────────────────────────────
+# Code finds the repeat; the person decides (conversation/clarify.py "repeat_rows"); code rewrites
+# (editor/workflow_mutations.py::wrap_repeated_entries). No model decides structure here. Only blocks whose typed
+# values differ count: an identical block repeated is a different shape (a counted repeat), not a list of entries.
+
+_REPEAT_VALUE_ACTIONS = frozenset({"type", "fill"})
+_REPEAT_EXCLUDED = frozenset({"for_each", "for_each_rows", "agent_span", "outcome_fork", "wait_for_one_of"})
+_COLUMN_SUFFIX_RE = re.compile(r"_\d+$")
+_COLUMN_ID_RE = re.compile(r"[^a-z0-9_]+")
+MAX_REPEAT_COLUMNS = 12
+
+
+def _step_action(step: Step) -> str:
+    action = step.get("action") if isinstance(step, dict) else getattr(step, "action", None)
+    return action if isinstance(action, str) else str((action or {}).get("action") or "")
+
+
+def repeat_signature(steps: list[Step]) -> list[tuple[str, str]]:
+    """What each step does to which element, without its values: two copies of a form give the same sequence."""
+    return [(_step_action(s), k.rsplit("#", 1)[0]) for s, k in zip(steps, step_keys(steps))]
+
+
+def _column_name(step: Step, taken: set[str]) -> str:
+    binding = str((step.get("input_binding") if isinstance(step, dict) else getattr(step, "input_binding", "")) or "")
+    base = _COLUMN_SUFFIX_RE.sub("", binding) or "value"
+    base = _COLUMN_ID_RE.sub("_", base.lower()).strip("_") or "value"
+    if not base[0].isalpha():
+        base = f"v_{base}"
+    name, n = base, 2
+    while name in taken:
+        name, n = f"{base}_{n}", n + 1
+    taken.add(name)
+    return name
+
+
+def detect_repeated_entries(steps: list[Step], literal_of: Any) -> dict[str, Any] | None:
+    """The longest run of 2+ back-to-back copies of one block of steps that types different values in each copy.
+
+    ``literal_of(step)`` returns the value the person typed in that step (from the recording), or None. Returns
+    ``{start_key, block_len, count, columns: [{name, offset}], rows: [{name: value}]}`` or None. A typed value that is
+    the same in every copy (a fixed department) stays fixed in the loop; only the ones that differ become columns."""
+    sig = repeat_signature(steps)
+    keys = step_keys(steps)
+    n = len(sig)
+    best: tuple[int, int, int] | None = None  # (covered, -start, block_len) -> larger is better
+    found: dict[str, Any] | None = None
+    for block_len in range(2, n // 2 + 1):
+        start = 0
+        while start + 2 * block_len <= n:
+            block = sig[start:start + block_len]
+            if sig[start + block_len:start + 2 * block_len] != block or any(a in _REPEAT_EXCLUDED for a, _ in block):
+                start += 1
+                continue
+            count = 2
+            while start + (count + 1) * block_len <= n and sig[start + count * block_len:start + (count + 1) * block_len] == block:
+                count += 1
+            offsets = [o for o, (a, _) in enumerate(block) if a in _REPEAT_VALUE_ACTIONS]
+            values = {o: [literal_of(steps[start + c * block_len + o]) for c in range(count)] for o in offsets}
+            varying = [o for o in offsets if all(v is not None for v in values[o]) and len(set(values[o])) > 1]
+            score = (count * block_len, -start, -block_len)
+            if varying and len(varying) <= MAX_REPEAT_COLUMNS and (best is None or score > best):
+                taken: set[str] = set()
+                columns = [{"name": _column_name(steps[start + o], taken), "offset": o} for o in varying]
+                found = {
+                    "start_key": keys[start], "block_len": block_len, "count": count, "columns": columns,
+                    # Typed the same in every copy: the loop keeps typing exactly that.
+                    "fixed": [{"offset": o, "value": str(values[o][0])} for o in offsets
+                              if o not in varying and values[o][0] is not None and len(set(values[o])) == 1],
+                    "rows": [{c["name"]: str(values[c["offset"]][r]) for c in columns} for r in range(count)],
+                }
+                best = score
+            start += count * block_len
+    return found

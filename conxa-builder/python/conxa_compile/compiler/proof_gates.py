@@ -60,14 +60,29 @@ def url_stays(steps: list[SkillStep], i: int) -> EffectCheck | None:
                        plain="the page moved on to its next screen and stayed there")
 
 
+def _typed_in_this_entry(steps: list[SkillStep], i: int) -> list[str]:
+    """Every value the run provides typed on this page since the last step that saved or sent, nearest first."""
+    out: list[str] = []
+    for j in range(i - 1, -1, -1):
+        s = steps[j]
+        if s.validation.effect is not None or s.url != steps[i].url:
+            break
+        if s.input_binding and _action(s) in _TYPING and s.input_binding not in out:
+            out.append(s.input_binding)
+    return out
+
+
 def row_with_identity(steps: list[SkillStep], i: int) -> EffectCheck | None:
     effect = steps[i].validation.effect
-    typed = _typed_before(steps, i)
+    typed = _typed_in_this_entry(steps, i)
     # An upload already has its own "go and look" for the file's name; a second check on it would count it twice.
-    if effect is None or effect.kind not in {"save", "send"} or typed is None:
+    if effect is None or effect.kind not in {"save", "send"} or not typed:
         return None
+    # Every value of the entry, nearest first: the runtime uses the first long enough to mean something
+    # (result_probes.wantedIdentity), so a short nearest one ("QA") does not leave the step unprovable.
+    keys = ["{{" + b + "}}" for b in typed]
     return EffectCheck(rung="result_exists", witness="renderer",
-                       probe={"type": "row_with_identity", "key": "{{" + typed[1] + "}}", "delta": 1},
+                       probe={"type": "row_with_identity", "key": keys[0], "keys": keys, "delta": 1},
                        plain="what you entered now shows up on the page")
 
 

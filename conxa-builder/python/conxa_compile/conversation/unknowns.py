@@ -22,7 +22,7 @@ from conxa_compile.conversation import clarify
 # free-text `note`, which must name its own slot.
 FACET_OF_KIND: dict[str, str] = {
     "value": "variability", "chosen_values": "variability", "values": "variability", "upload": "variability",
-    "relative_date": "provenance",
+    "relative_date": "provenance", "repeat_rows": "variability",
     "skip_when_empty": "input_domain", "test_followup": "variability", "input_check": "input_domain",
     "missing_item": "alternatives", "fork": "alternatives", "fork_then": "alternatives", "known_popup": "alternatives",
     "popup": "alternatives", "popup_dismiss": "alternatives",
@@ -33,7 +33,7 @@ FACET_OF_KIND: dict[str, str] = {
 }
 # Two kinds on the same events are one slot only when they are the same sub-question (a popup's fork and its
 # follow-up are different questions about one step).
-_PART = {"confirm_before": "confirm", "popup_dismiss": "popup", "value": "value", "chosen_values": "value", "values": "value"}
+_PART = {"repeat_rows": "repeat", "confirm_before": "confirm", "popup_dismiss": "popup", "value": "value", "chosen_values": "value", "values": "value"}
 # Never dropped, never pre-answered: a decision popup is not answered for anyone, an irreversible step always asks.
 SAFETY_KINDS = frozenset({"fork", "fork_then", "known_popup", "confirm", "confirm_before", "confirm_row"})
 # Questions that change nothing by design (they only inform): they cannot be "vacuous".

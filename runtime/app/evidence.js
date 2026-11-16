@@ -84,6 +84,21 @@ const MAX_AMBIENT = 500;
  * Limit: an app that sends everything through one endpoint (one /graphql) is all ambient, so its requests prove
  * nothing and the other witnesses must; the step is then unconfirmed rather than wrongly proven.
  */
+// A request to another website (an ad, analytics or chat widget) is not the app taking the work: an ad's write answered
+// 2xx "proved" four page-only form saves that sent nothing (WF-3 A, demoqa). Compared by the last two labels of the
+// host. shortcut: no public-suffix list, so example.co.uk and other.co.uk count as one site; fine until a site on
+// such a suffix shows a false proof.
+function siteOf(url) {
+  try { return new URL(String(url)).hostname.split(".").slice(-2).join("."); } catch (_) { return ""; }
+}
+
+function otherSite(page, url) {
+  let here = "";
+  try { here = siteOf(page.url()); } catch (_) { here = ""; }
+  const there = siteOf(url);
+  return Boolean(here && there && here !== there);
+}
+
 function ambientWatcher({ pagesOf }) {
   const keys = new Set();
   const watched = new WeakSet();
@@ -159,8 +174,9 @@ async function open(o) {
         if (rt !== "xhr" && rt !== "fetch" && !nav) return;
         const template = routeTemplate(req.url());
         const mutation = (rt === "xhr" || rt === "fetch") && MUTATING.has(method);
-        const amb = mutation && ambient.has(endpointKey(method, template));
-        const entry = addEntry({ m: method, t: template, rt: nav ? "document" : rt, pg: pageIndex, at: Date.now(), s: null, sz: null, open: true, mutation, amb, shape: null });
+        const xs = otherSite(page, req.url());
+        const amb = mutation && (ambient.has(endpointKey(method, template)) || xs);
+        const entry = addEntry({ m: method, t: template, rt: nav ? "document" : rt, pg: pageIndex, at: Date.now(), s: null, sz: null, open: true, mutation, amb, xs, shape: null });
         openReqs.set(req, entry);
         // Background traffic is not a sign that the action took the work.
         if (mutation && !amb) { state.started = true; state.mutationStartedAt = entry.at; }
@@ -179,7 +195,7 @@ async function open(o) {
           const len = Number(resp.headers && resp.headers()["content-length"]);
           if (Number.isFinite(len)) entry.sz = len;
         } catch (_) { /* optional */ }
-        if (!entry.mutation) return;
+        if (!entry.mutation || entry.xs) return; // another website's write neither proves nor refuses this step
         const key = endpointKey(entry.m, entry.t);
         if (MUTATION_REFUSED.has(status) || status >= 500) { noteFailure(key, `status ${status}`); return; }
         // An OK answer whose reply says the action failed (storage full, quota, rejected). The body is read
@@ -201,7 +217,7 @@ async function open(o) {
         e.open = false;
         openReqs.delete(req);
         const why = (req.failure() && req.failure().errorText) || "request failed";
-        if (e.mutation && !/ERR_ABORTED/i.test(why)) noteFailure(endpointKey(e.m, e.t), why);
+        if (e.mutation && !e.xs && !/ERR_ABORTED/i.test(why)) noteFailure(endpointKey(e.m, e.t), why);
       } catch (_) { /* not evidence */ }
     });
     on("download", () => { if (!state.closed) { state.downloads++; state.started = true; } });
@@ -312,7 +328,7 @@ async function open(o) {
   nb.baseline = o.baseline || await nb.sample();
   if (o.fileName) {
     try {
-      const n = await evalOn(o.page, pageScripts.countTextOccurrences, o.fileName, 2000);
+      const n = await evalOn(o.page, pageScripts.countPageText, o.fileName, 2000);
       nb.nameCountBefore = typeof n === "number" ? n : null;
     } catch (_) { nb.nameCountBefore = null; }
   }

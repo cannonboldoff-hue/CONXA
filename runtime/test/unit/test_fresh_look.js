@@ -16,7 +16,7 @@ function setup({ counts = [3], url = "https://drive.test/folder", newPageError =
   let calls = 0;
   const tab = {
     goto: async (u) => { log.goto.push(u); },
-    evaluate: async (script, arg) => { log.evaluated.push([script === pageScripts.countTextOccurrences, arg]); return counts[Math.min(calls++, counts.length - 1)]; },
+    evaluate: async (script, arg) => { log.evaluated.push([script === pageScripts.countPageText, arg]); return counts[Math.min(calls++, counts.length - 1)]; },
     close: async () => { log.closed = true; },
   };
   const page = new EventEmitter();
@@ -88,7 +88,7 @@ test("the notebook counts the name on the page BEFORE the action", async () => {
   Object.assign(page, {
     url: () => "https://drive.test/folder",
     mainFrame: () => "main",
-    evaluate: async (script, arg) => (script === pageScripts.countTextOccurrences && arg === "report.pdf" ? 2 : { busyCount: 0, regions: [] }),
+    evaluate: async (script, arg) => (script === pageScripts.countPageText && arg === "report.pdf" ? 2 : { busyCount: 0, regions: [] }),
   });
   const nb = await evidence.open({ page, pagesOf: () => [page], fileName: "report.pdf" });
   assert.strictEqual(nb.nameCountBefore, 2);

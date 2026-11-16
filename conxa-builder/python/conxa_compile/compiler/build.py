@@ -16,7 +16,7 @@ from conxa_compile.compiler.decision_layer import rank_merged_anchors
 from conxa_compile.compiler.action_semantics import commit_intent_hit, is_editable_field_click
 from conxa_compile.compiler.destructive_semantics import classify_consequence, destructive_compiler_step
 from conxa_compile.compiler.effects import build_effect
-from conxa_compile.compiler.proof_picker import run_proof_picker
+from conxa_compile.compiler.proof_picker import add_page_side_proof, run_proof_picker
 from conxa_compile.compiler.step_events import events_for_steps
 from conxa_compile.compiler.video_context import apply_video_context
 from conxa_compile.compiler.commit_ordering import lint_commit_ordering
@@ -57,7 +57,7 @@ from conxa_compile.llm import model_ledger
 from conxa_compile.compiler.second_opinion import (
     apply_second_opinion,
     archive_flagged_steps,
-    rewrite_placeholder,
+    rename_binding_in_step,
 )
 from conxa_compile.compiler.step_key import step_key_index_map, step_keys
 from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
@@ -756,7 +756,10 @@ def _build_assertions(
             required=not required_assigned,
         ))
         required_assigned = True
-    elif wf_type == "element_appear" and wf_target:
+    elif wf_type == "element_appear" and wf_target and wf_target not in _own_selectors(ev, primary_selector):
+        # Several wait rules name the clicked element's own selector. "It is there afterwards" would hold had the
+        # click done nothing, and after a delete it is the opposite of the result (WF-3 A: the row's bin icon was
+        # required to be present after its row was deleted, failing every correct run). Never a check.
         assertions.append(Assertion(
             type="selector_present",
             target=wf_target,
@@ -784,7 +787,8 @@ def _build_assertions(
     # promoted to the enforced post-condition if nothing has claimed that slot yet; everything
     # else (and all required_elements on non-consequential steps) stays advisory.
     sc = validation.success_conditions
-    required_elements = [el for el in (sc.get("required_elements") or [])[:3] if el and isinstance(el, str)]
+    own = _own_selectors(ev, primary_selector)
+    required_elements = [el for el in (sc.get("required_elements") or [])[:3] if el and isinstance(el, str) and el not in own]
     expected_tokens = [tok for tok in (sc.get("expected_text_tokens") or [])[:3] if tok and isinstance(tok, str)]
 
     for i, el in enumerate(required_elements):
@@ -1144,6 +1148,10 @@ def _build_signals(
 def _derive_input_binding(ev: dict[str, Any], policy: dict[str, Any]) -> tuple[Any, str | None]:
     """Delegate to derive_input_binding with priority signals (label_text → placeholder → aria_label → value pattern → input_type)."""
     value, binding = derive_input_binding(ev, policy)
+    # Emptying a box is not a value anyone supplies: as an input it was required and could not be left blank,
+    # so the test could not even start (WF-3 Leg A: clearing the search box).
+    if binding and (ev.get("action") or {}).get("value") == "":
+        return "", None
     # BUILD-38: the person said, while recording, that this typed value stays exactly as recorded.
     # That is their meaning, not a selector — it keeps the literal and drops the input. Absent a
     # hint (the usual case) nothing changes.
@@ -1664,7 +1672,14 @@ def _deduplicate_input_bindings(steps: list[SkillStep]) -> None:
         # Rewrite the {{binding}} token wherever it appears in the value, not only when the
         # value is exactly "{{binding}}" — see rewrite_placeholder, shared with the
         # second-opinion applier so the two renaming paths cannot drift.
-        step.value = rewrite_placeholder(step.value, binding, new_binding)
+        rename_binding_in_step(step, binding, new_binding)
+
+
+def _own_selectors(ev: dict[str, Any], primary_selector: str) -> set[str]:
+    """Every way the recording names the acted-on element itself."""
+    sels = ev.get("selectors") if isinstance(ev.get("selectors"), dict) else {}
+    own = {str(v).strip() for v in sels.values() if isinstance(v, str) and v.strip()}
+    return own | ({primary_selector} if primary_selector else set())
 
 
 def _studio_file_pick(e: dict[str, Any]) -> bool:
@@ -1893,6 +1908,7 @@ def compile_skill_package(
     except Exception:  # noqa: BLE001
         loop_candidates = []
     review_extras: dict[str, Any] = {}
+    _drop_hints_no_popup_explains(steps)
     steps, compile_report, intent_graph = _apply_second_opinion(
         compile_report,
         steps,
@@ -1941,6 +1957,7 @@ def compile_skill_package(
         run_proof_picker(steps, session_root)
     except Exception:  # noqa: BLE001 -- advisory pass: never fail a compile
         pass
+    add_page_side_proof(steps)
 
     # PROD-3-DRYRUN layer 4: advisory stage-then-commit lint — never blocks compile/save/publish.
     commit_ordering_warnings = lint_commit_ordering(steps)
@@ -2092,6 +2109,8 @@ def _review_inputs(
         confidence = confidence_by_index.get(i)
         value = step.value if isinstance(step.value, str) else None
         item: dict[str, Any] = {
+            # Stated, not left to counting: a model that counted from 1 put every step's description on the next one.
+            "index": i,
             "key": keys[i],
             "action": action_name,
             "target_text": (step.identity_bundle.fingerprint.inner_text or "")[:120],
@@ -2263,6 +2282,26 @@ def _element_changing_sequences(events: list[dict[str, Any]]) -> set[Any]:
             out.add((ev.get("extras") or {}).get("sequence"))
     out.discard(None)
     return out
+
+
+def _drop_hints_no_popup_explains(steps: list[SkillStep]) -> None:
+    """Clear an optional-popup hint that cannot mean "close it if it shows up", before the second opinion or the
+    questions read it (both turn a hint into a try_dismiss). Two cases, both general:
+    - the step does not click: typing, focusing or picking a value in a window never dismisses it;
+    - the person's own earlier step opened that window: its check requires it to appear (selector_present on the
+      same container), so it is part of the task, not an interruption.
+    WF-3 A: every field of a self-opened "Add" form became a try_dismiss, and the replay failed at the first one."""
+    opened: set[str] = set()
+    for step in steps:
+        hint = step.optional_hint if isinstance(step.optional_hint, dict) else None
+        if hint:
+            container = str(hint.get("container_signal") or "").strip()
+            name = step.action.get("action") if isinstance(step.action, dict) else step.action
+            if name != "click" or (container and container in opened):
+                step.optional_hint = None
+        for a in (step.validation.assertions if step.validation else []) or []:
+            if a.type == "selector_present" and a.required and a.target:
+                opened.add(str(a.target).strip())
 
 
 def _apply_second_opinion(

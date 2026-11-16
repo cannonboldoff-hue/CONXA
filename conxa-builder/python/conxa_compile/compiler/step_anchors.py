@@ -305,6 +305,16 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                 if action == "scroll":
                     cleaned.append(step)
                     continue
+                refs = ((prev.get("extras") or {}).get("element_ref"), (step.get("extras") or {}).get("element_ref"))
+                other_element = all(refs) and not _same_node(prev, step)
+                cleared = action == "type" and _event_value(step) == "" and _event_value(prev) != ""
+                if other_element or cleared:
+                    # Two rows' "Delete" icons, two "Add to cart" buttons, billing and shipping "Name" boxes: same
+                    # description, different elements, both acted on. Emptying a box you typed in is its own step too.
+                    cleaned.append(step)
+                    if action == "type":
+                        last_type_index[key] = len(cleaned) - 1
+                    continue
                 if action == "click":
                     # The recorder emits one event per physical click (verified: one click, one event), so identical
                     # consecutive clicks are repeated on purpose. Three or more are kept as a count on the first one;
@@ -364,7 +374,20 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
             old_idx = last_type_index[key]
             if 0 <= old_idx < len(cleaned) and cleaned[old_idx] is not None:
                 old_step = cleaned[old_idx]
-                if action_name(old_step) == "type" and _target_key(old_step) == key:
+                # A correction is the SAME box typed in again. A new box that looks the same (a fresh copy of a form
+                # the person fills once per record, WF-3 Leg A) is a new entry: merging it overwrote record 1's value
+                # with record 2's and dropped records 2-5's typing. The recorder's element token tells them apart.
+                refs = ((old_step.get("extras") or {}).get("element_ref"), (step.get("extras") or {}).get("element_ref"))
+                another_box = all(refs) and not _same_node(old_step, step)
+                # A correction merges back only while nothing in between could have used the first value: moving
+                # between boxes of one form is fine, but a button click or a page change in between (five records
+                # added, then the search typed again) makes the later typing its own moment; merging moved it back
+                # to the start of the workflow.
+                in_between = [s for s in cleaned[old_idx + 1:] if s is not None]
+                still_there = all(_target_key(s) == key or (action_name(s) in {"click", "focus", *_VALUE_SET_ACTIONS}
+                                                            and is_editable_target(s)) for s in in_between)
+                cleared = _event_value(step) == "" and _event_value(old_step) != ""
+                if action_name(old_step) == "type" and _target_key(old_step) == key and not another_box and still_there and not cleared:
                     old_payload = dict(old_step.get("action") or {})
                     new_payload = dict(step.get("action") or {})
                     if new_payload.get("value") not in {None, ""}:

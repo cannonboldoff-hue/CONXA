@@ -140,6 +140,13 @@ def generate_deterministic_signals(
     if href_sel and not any(c[1] == href_sel for c in candidates):
         candidates.append(("attr", href_sel))
 
+    # 1d. An icon control named only by its tooltip (a row's bin icon, <span title="Delete">): the title is the name a
+    # person sees. Usually shared by every row; a step bound to one row looks for it inside that row (entity_binding).
+    title = str(target.get("title") or "").strip()
+    tag = str(target.get("tag") or "").lower()
+    if title and '"' not in title and re.fullmatch(r"[a-z][a-z0-9-]*", tag):
+        candidates.append(("attr", f'{tag}[title="{title}"]'))
+
     # 2. role + name (semantic-aria)
     role = str(semantic.get("role") or target.get("role") or "").strip()
     ax_name = _accessible_name(target)

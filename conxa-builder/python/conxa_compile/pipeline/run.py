@@ -165,16 +165,30 @@ def _reorder_by_timestamp(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     without disturbing events that were already in order (the overwhelming majority). A missing
     or unparseable timestamp sorts as if it arrived at its original position (min of all valid
     timestamps minus its index), never reordered past events that do have one."""
-    def _key(pair: tuple[int, dict[str, Any]]) -> tuple[float, int]:
-        idx, ev = pair
+    # Only a dialog answer moves. Every other event keeps arrival order, which is the order the person acted in:
+    # a typing event is stamped when the field loses focus, a few ms AFTER the click on the next field, so sorting
+    # everything by timestamp put each field's typing after the next field's click, and the last one after "Submit"
+    # (WF-3 Leg A: record 1 submitted before its last field was typed, records 2-5 lost all their typing).
+    def _ts(ev: dict[str, Any]) -> float | None:
         raw = ((ev.get("action") or {}).get("timestamp"))
         try:
-            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()
         except (TypeError, ValueError):
-            return (float("-inf"), idx)
-        return (ts, idx)
+            return None
 
-    return [ev for _, ev in sorted(enumerate(events), key=_key)]
+    def _is_answer(ev: dict[str, Any]) -> bool:
+        return str((ev.get("action") or {}).get("action") or "") in ("dialog_accept", "dialog_dismiss") and _ts(ev) is not None
+
+    answers = sorted((ev for ev in events if _is_answer(ev)), key=lambda ev: _ts(ev) or 0.0)
+    out: list[dict[str, Any]] = []
+    for ev in events:
+        if _is_answer(ev):
+            continue
+        at = _ts(ev)
+        while answers and at is not None and (_ts(answers[0]) or 0.0) < at:
+            out.append(answers.pop(0))
+        out.append(ev)
+    return out + answers
 
 
 def pipeline_drops(raw: list[dict[str, Any]], normalized: list[dict[str, Any]]) -> list[dict[str, Any]]:

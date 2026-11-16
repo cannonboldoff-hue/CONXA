@@ -266,7 +266,7 @@ function savePage({ works }) {
     await settle();
   });
   const base = page.evaluate;
-  page.evaluate = async (script, arg) => (script === pageScripts.countTextOccurrences ? (moved ? 2 : 1) : base(script, arg));
+  page.evaluate = async (script, arg) => (script === pageScripts.countPageText ? (moved ? 2 : 1) : base(script, arg));
   page.url = () => (moved ? "https://drive.test/item/9" : "https://drive.test/form");
   return page;
 }

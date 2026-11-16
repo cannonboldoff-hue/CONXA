@@ -112,6 +112,20 @@ def apply_picks(steps: list[SkillStep], i: int, picks: list[tuple[str, float]]) 
     return out
 
 
+def add_page_side_proof(steps: list[SkillStep]) -> None:
+    """Code's floor, whatever the model ranked: a save or send made after typing on the same page gets "what you
+    entered now shows up on the page" unless it already has a check that looks at the page. Its only other proof is
+    "the app accepted the request", which a page-only form never sends; a stray ad or analytics request answered it
+    by chance (WF-3 A: four Submits "proven" that way, the fifth unconfirmed)."""
+    for i, step in enumerate(steps):
+        effect = step.validation.effect
+        if effect is None or effect.kind not in {"save", "send"}:
+            continue
+        if any(c.role != "veto" and c.witness in {"renderer", "fresh_look", "later_step"} for c in effect.checks):
+            continue
+        apply_picks(steps, i, [("row_with_identity", 1.0)])
+
+
 def run_proof_picker(steps: list[SkillStep], session_root: Path | None = None) -> dict[str, Any]:
     """Ask once per step that has an effect and apply the picks. Never raises: the effect checks code built are
     the floor. Returns the report that is also written to ``proof_picks.json``."""

@@ -1677,3 +1677,90 @@ def replace_string_literals_in_skill_document(
     meta["version"] = int(meta.get("version", 1)) + 1
     new_doc["meta"] = meta
     return new_doc, match_count
+
+
+def wrap_repeated_entries(document: dict[str, Any], suggestion: dict[str, Any], *, input_name: str = "entries") -> dict[str, Any]:
+    """Turn N back-to-back copies of one block (``compiler/loop_suggestion.py::detect_repeated_entries``) into one
+    table loop over a ``rows`` input whose default is the N recorded rows. The person chose this ("a list I give each
+    time"); code does every rewrite. One atomic document write, like ``apply_for_each_loop_suggestion``.
+
+    Body = the first copy. A value that differed between copies becomes ``{{row.<column>}}`` (in the step and in any
+    check that names it); a value typed the same in every copy is typed as recorded. Copies 2..N are removed: the
+    rows default keeps every recorded value. Re-checks the repeat on the document as it is now (``suggestion_stale``)."""
+    import json
+
+    from conxa_compile.compiler.loop_suggestion import repeat_signature
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    keys = step_keys(steps)
+    start = keys.index(str(suggestion.get("start_key") or "")) if suggestion.get("start_key") in keys else None
+    block_len, count = int(suggestion.get("block_len") or 0), int(suggestion.get("count") or 0)
+    columns = [c for c in suggestion.get("columns") or [] if isinstance(c, dict)]
+    rows = [r for r in suggestion.get("rows") or [] if isinstance(r, dict)]
+    if start is None or block_len < 1 or count < 2 or not columns or len(rows) != count:
+        raise ValueError("suggestion_stale")
+    end = start + block_len * count
+    sig = repeat_signature(steps)
+    if end > len(steps) or any(sig[start + c * block_len:start + (c + 1) * block_len] != sig[start:start + block_len]
+                               for c in range(1, count)):
+        raise ValueError("suggestion_stale")
+
+    def rewrite(step: dict[str, Any], new_value: str) -> dict[str, Any]:
+        old = str(step.get("value") or "")
+        step["value"], step["input_binding"] = new_value, None
+        validation = step.get("validation") if isinstance(step.get("validation"), dict) else None
+        if validation and old:
+            validation["assertions"] = [
+                {**a, **{k: a[k].replace(old, new_value) for k in ("target", "expected") if isinstance(a.get(k), str)}}
+                if isinstance(a, dict) else a for a in validation.get("assertions") or []]
+        return step
+
+    body = [copy.deepcopy(s) for s in steps[start:start + block_len]]
+    old_ids: set[str] = set()
+    for s in steps[start:end]:
+        _scan_placeholder_ids(s, old_ids)
+    for c in columns:
+        rewrite(body[int(c["offset"])], f"{{{{row.{c['name']}}}}}")
+    for f in suggestion.get("fixed") or []:
+        if isinstance(f, dict):
+            rewrite(body[int(f["offset"])], str(f.get("value") or ""))
+
+    names = [str(c["name"]) for c in columns]
+    wrapper = _new_manual_step("for_each", "")
+    wrapper["intent"] = "repeat_for_each_entry"
+    wrapper["for_each"] = {"items_rows": input_name, "columns": names, "as": "row",
+                           "max_iterations": max(50, count), "on_row_error": "stop", "steps": body}
+    new_steps = steps[:start] + [wrapper] + steps[end:]
+    block["steps"] = new_steps
+    skills[0] = block
+    doc["skills"] = skills
+
+    still: set[str] = set()
+    for s in new_steps:
+        _scan_placeholder_ids(s, still)
+    inputs = [i for i in doc.get("inputs") or []
+              if not (isinstance(i, dict) and str(i.get("id")) in old_ids and str(i.get("id")) not in still)]
+    if any(isinstance(i, dict) and str(i.get("id") or "").lower() == input_name.lower() for i in inputs):
+        raise ValueError(f"duplicate_input_id:{input_name}")
+    inputs.append({"id": input_name, "type": "rows", "columns": names, "label": "Entries",
+                   "default": json.dumps([{n: str(r.get(n, "")) for n in names} for r in rows]),
+                   "description": "One row per entry to add."})
+    _validate_skill_inputs(inputs)
+    doc["inputs"] = inputs
+
+    collapsed = end - start - 1
+    doc = _remap_intent_graph_indices(doc, {i: (i if i < start else start if i == start else None if i < end else i - collapsed)
+                                            for i in range(len(steps))})
+    _invalidate_compile_report(doc)
+    report = doc.get("compile_report")
+    if isinstance(report, dict) and report.get("for_each_suggestions"):
+        doc["compile_report"] = {**report, "for_each_suggestions": []}  # step keys moved
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc

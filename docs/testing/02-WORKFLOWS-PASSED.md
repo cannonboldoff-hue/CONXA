@@ -956,6 +956,40 @@ the local fixture is used.
 
 ---
 
+## Passed Workflow P-26 — WF-3 Leg A: one long recording (77 actions), to approved (strict criteria)
+
+**Date passed:** 2026-11-17 (Build Studio dev, workflow `WF3 A web tables r7`,
+`83e53cf6-c9a2-4254-bc74-af3101142294`, group "E2E 2026-11-16", runs `r_mwjqcykv_dx8jn`, `r_mwjqfm7w_lbnkk`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** demoqa `/webtables`, which replaces the gone computer-database site. One take:
+- search and clear;
+- delete the Kierra row by its bin icon;
+- add 5 records, 14 actions each;
+- search "Conxa".
+
+That is 79 steps, no inputs.
+
+**What was confirmed:** both runs passed the safety pause and ran the steps that can't be undone
+for real. Every step was confirmed and nothing came back "couldn't confirm". The live table ended
+with Conxa E1–E5, and Kierra was gone. **Approved.**
+
+**Fixed en route (general):**
+- the form you open is no longer treated as a popup;
+- each record's typing is kept, in order;
+- icon buttons are recorded;
+- look-alike clicks on different elements are kept apart;
+- a renamed value renames its checks;
+- clearing a box is not an input;
+- the model's step numbering is fixed;
+- the repeat question ("fill in a list?") is added (code finds the repeat, the person decides, code rewrites);
+- a row icon can be found by its tooltip;
+- a wait for the clicked element itself is never a check;
+- another website's requests are not proof;
+- every save or send after typing gets a page-side "it shows up" proof that ignores form boxes and short values.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures
