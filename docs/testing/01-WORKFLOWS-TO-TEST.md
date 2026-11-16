@@ -76,63 +76,18 @@ All six legs passed under the strict end-to-end rule and are recorded in
 
 ---
 
-## WF-2 — Rich-element gauntlet: iframes, dynamic identity, widgets, scroll, hover, drag
+## WF-2 — passed (2026-11-16), except Segment I
 
-**Sites:** S1 (the-internet.herokuapp.com) + S4 (jqueryui.com) + S3 (demoqa.com) +
-S2 (ui-test-automation-playground.blogspot.com) · **Tabs:** 1
+Every segment re-passed under the strict end-to-end rule
+([`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)) and is recorded in
+[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md): H hover (P-17), D iframe (P-18), E datepicker in a
+frame (P-19), F autocomplete (P-20), J shadow-DOM twins (P-21), C late render (P-22), A + B changing
+text (P-23), B moved element (P-24), G infinite scroll (P-25, local `fixtures/infinite-list.html`).
 
-Segments A (dynamic IDs, C.1), C (late-rendered elements, C.5), D (iframe chain preservation,
-E.1), and G (infinite scroll, E.7) all **passed** via the `03-ONE-WORKFLOW-RUNBOOK.md` follow-up
-run, 2026-09-03 — see [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md). Segment B (both halves —
-changing-text C.3 via the runbook, and moved-element C.4 via a standalone fixture run) **passed**
-2026-09-03 — see **P-4** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md). Everything below is
-still open.
-
-**Re-test under the strict end-to-end rule (2026-11-16 campaign,
-[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)):** the earlier passes above predate it, so
-every segment is re-tested to the approved state, one at a time. Segment H (hover) goes first because
-it is the one known to fail.
-
-### Segments A + B (changing text) — dynamic IDs (C.1), changing text (C.3) ✅ re-passed 2026-11-16 under the strict rule
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-23**. Segment B's other half
-(moved element, C.4, local `mutator.html`) re-passed 2026-11-16 too — see **P-24**.
-
-### Segment C — late-rendered elements (C.5) ✅ re-passed 2026-11-16 under the strict rule
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-22** (`/dynamic_loading/2`).
-
-### Segment D — iframe chain (E.1) ✅ passed 2026-11-16 under the strict rule
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-18** (jqueryui.com/tabs, click
-inside the demo frame).
-
-### Segment E (remainder) — Nested iframes bonus: datepicker (E.2) ✅ re-passed 2026-11-16 under the strict rule (P-19)
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-6**.
-
-### Segment F — Autocomplete/typeahead race (E.6) ✅ re-passed 2026-11-16 under the strict rule (P-20)
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-7**.
-
-### Segment H — Hover menus (E.8) ✅ passed 2026-11-16 under the strict rule
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-17**. History below kept for
-reference.
-
-#### (history) Segment H — beta — needed human review
-S1 `/hovers`: hover avatar 2 → "View profile". Did **not** replay reliably in the runbook follow-up
-run despite real recorder/runtime support for hover reveals — see `TODO.md` **EXEC-29a** (split
-out 2026-09-04 from the native-JS-dialog half of this same investigation, which turned out to be
-an unrelated record-ordering/replay-deadlock bug, now resolved — EXEC-29). Downgraded to beta
-(too flaky for unattended replay, requires a human to watch/confirm each run) until an isolated
-repro with `events.jsonl`/`recovery.log` evidence lands a real fix.
-
-### Segment I — Drag and drop (E.9) — confirmed hard limitation
+### Segment I — Drag and drop (E.9) — confirmed hard limitation (not a pass)
 S1 `/drag_and_drop`: box A onto box B; S3 `/sortable`: item 5 to position 1. Reconfirmed as a hard
 limitation in the 2026-09-03 follow-up run (skipped with a warning at build time, unchanged since
-`FIX.md` 2026-08-26) — not a new gap, no further action needed here.
-
-### Segment J — Shadow DOM (C.6) ✅ re-passed 2026-11-16 under the strict rule (P-21)
-Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-8**.
-
-**Where failures go:** EXEC-29 (hover replay); EXEC-5 (#43, already proven — reopen only on
-regression); iframe pipeline issues → TRD "Iframe Pipeline" owners; selector durability → compiler
-items in `TODO.md`.
+`FIX.md` 2026-08-26). Stays open as a known limitation; never counted as passed.
 
 ---
 

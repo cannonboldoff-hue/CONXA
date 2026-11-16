@@ -935,6 +935,27 @@ label (the Tier A heal path) was not exercised.
 
 ---
 
+## Passed Workflow P-25 — WF-2 Segment G: target that exists only after infinite scroll, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 G endless list r2`,
+`df3dc458-61c1-43f0-ac94-db62a787d4b0`, group "E2E 2026-11-16", passing runs incl. `r_mwjdybhr_ubtcn`,
+`r_mwje1e6f_qa16u`, `r_mwje4u8q_yft2i`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** local `fixtures/infinite-list.html`. It starts with 20 items and loads 10 more per scroll
+near the bottom. The workflow does three wheel scrolls, then "Pick item 27". Compiled to navigate, 3
+separate `scroll` steps (600 px each) and the click, which must show "You picked item 27".
+
+**What was confirmed:** five runs, all steps confirmed. Watched live: 20, then 30, the pick, then 40
+items, with the message shown. **Approved.**
+
+**Fixed en route (general):** `clean_steps` dropped consecutive scrolls on the page as duplicates.
+Three scrolls (114/514/914 px) became one 114 px scroll, so replay never loaded content that later
+steps need. Each recorded scroll is now its own step; the pipeline still drops zero-move and
+same-position repeats. the-internet's `/infinite_scroll` has nothing actionable after scrolling, so
+the local fixture is used.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

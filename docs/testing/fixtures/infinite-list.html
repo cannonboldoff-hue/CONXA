@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Endless list</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; }
+  li { padding: 28px 8px; border-bottom: 1px solid #ddd; list-style: none; }
+  #picked { position: fixed; top: 8px; right: 16px; background: #ffd; padding: 6px 10px; }
+  #loading { padding: 12px; color: #777; }
+</style></head>
+<body>
+<h1>Endless list</h1>
+<p>More items load each time you scroll near the bottom. Items past 20 only exist after scrolling.</p>
+<div id="picked" hidden></div>
+<ul id="list"></ul>
+<div id="loading" hidden>Loading more…</div>
+<script>
+  // WF-2 Segment G fixture: a target that exists only after scrolling has loaded it, and that does something
+  // visible when clicked ("You picked item N"), so a replay that did not scroll far enough cannot pass.
+  const list = document.getElementById("list");
+  const loading = document.getElementById("loading");
+  let count = 0, busy = false;
+  function addBatch() {
+    for (let k = 0; k < 10; k++) {
+      count++;
+      const li = document.createElement("li");
+      li.innerHTML = `Item ${count} <button type="button">Pick item ${count}</button>`;
+      const n = count;
+      li.querySelector("button").addEventListener("click", () => {
+        const p = document.getElementById("picked");
+        p.hidden = false;
+        p.textContent = `You picked item ${n}`;
+      });
+      list.appendChild(li);
+    }
+  }
+  addBatch(); addBatch(); // 20 items: taller than a tall pane, so the page scrolls; item 27 still needs a load
+  window.addEventListener("scroll", () => {
+    if (busy || count >= 60) return;
+    if (window.innerHeight + window.scrollY < document.body.scrollHeight - 300) return;
+    busy = true; loading.hidden = false;
+    setTimeout(() => { addBatch(); loading.hidden = true; busy = false; }, 600);
+  });
+</script>
+</body></html>

@@ -895,6 +895,49 @@ appears" (BUILD-93).
 
 **Final status of WF-2 Segment B (second half): PASSED** (P-24).
 
+### WF-2 Segment G — a page that keeps loading more as you scroll (assigned 2026-11-16)
+On the-internet's "Infinite Scroll" page, new paragraphs of filler text are added each time you
+scroll near the bottom. The workflow scrolls until several blocks have loaded, then clicks a
+paragraph that only exists after scrolling. A replay must scroll the same way to reach it. Proof is
+harder here, because the click changes nothing on screen. The proof is that the replay reached and
+clicked that late paragraph, checked independently.
+
+**Test 1 — result: FAIL** (and a poorly chosen test on my part).
+- The click on a filler paragraph was not recorded. That is correct: clicking plain text is not an
+  action, and a person would never record it.
+- But the test exposed a real, general defect. The three scrolls the person made, to 114, 514 and
+  914 pixels down, became *one* scroll of 114 pixels in the built workflow. Studio's cleanup step
+  treated scrolls in a row as duplicates and kept only the first. So a replay scrolls a fraction
+  of the way. On any page that loads more as you scroll, it never loads what later steps need.
+
+*Fix:* every scroll the person made now stays its own step, with its own distance. Scrolls that
+moved nothing, or landed exactly where the last one did, are still removed earlier. They are kept
+separate rather than added up, because such pages load more at each pause near the bottom.
+
+Since the-internet's page has nothing to click after scrolling, I added a small local practice page
+(`fixtures/infinite-list.html`). It is a list that loads 10 more numbered items each time you scroll
+near the bottom. Each item has a "Pick" button, and picking one shows "You picked item N". An item
+past 10 only exists after scrolling, so a replay that does not scroll far enough cannot pass.
+
+**Changed:** `compiler/step_anchors.py`; new test `test_consecutive_scrolls_kept.py`; new fixture.
+Python: 3159 passed. The failures were two known timing-flaky tests, filed under TEST-FLAKE.
+
+**Test 2 — blocked by my practice page.** It was shorter than Studio's tall recording pane, so it
+could not scroll at all. I made the first load 20 taller items (about 1700 px against a 992 px
+pane) and checked it in a plain browser at that size.
+
+**Test 3 (fresh recording) — result: PASS.**
+- Three wheel scrolls, then "Pick item 27". The built workflow keeps **three separate scroll steps**
+  (600 px each) and the click, which must show "You picked item 27".
+- Five test runs all confirmed all 5 steps, with no warning. Watched live in the last run: 20 items,
+  then 30, the pick, then 40, with "You picked item 27" on screen. Approved.
+
+Also seen (BUILD-93): the click's main way of finding the button came out as "Pick item", without
+the 27. It still picked item 27, because the exact-text signal names it.
+
+**Final status of WF-2 Segment G: PASSED** (P-25). **WF-2 is now done**: every segment re-passed
+under the strict rule except Segment I (drag and drop), which stays a known limitation.
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

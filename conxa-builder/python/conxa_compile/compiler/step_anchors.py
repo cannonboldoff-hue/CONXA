@@ -298,6 +298,13 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                 if action in {"browser_back", "browser_forward", "manual_navigate"} or action in MARKER_ACTIONS:
                     cleaned.append(step)
                     continue
+                # Each scroll the pipeline kept moved the page somewhere new (pipeline.run drops ones that moved nothing
+                # or landed where the last one did), and its distance is its own. Keeping only the first made the
+                # replay scroll 114 of the 914 px recorded, so a list that loads more as you scroll never loaded what
+                # later steps need (WF-2 Segment G). Kept apart, not summed: such a list loads at each pause.
+                if action == "scroll":
+                    cleaned.append(step)
+                    continue
                 if action == "click":
                     # The recorder emits one event per physical click (verified: one click, one event), so identical
                     # consecutive clicks are repeated on purpose. Three or more are kept as a count on the first one;
