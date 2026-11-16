@@ -390,7 +390,11 @@ def _unproven_end(doc: dict[str, Any]) -> str | None:
             continue
         validation = s.get("validation") or {}
         effect = validation.get("effect")
-        proven = any(isinstance(a, dict) and a.get("required") for a in validation.get("assertions") or []) \
+        # Only a check the runtime can count as "it finished" (words on the screen that were not there before,
+        # proof.js::assertionRung) proves the end. "“Toggle Me” is on the page" is true before and after the click
+        # alike, so a step carrying only that still ended "couldn't confirm" and the person was never asked (WF-2 J).
+        proven = any(isinstance(a, dict) and a.get("required") and a.get("type") == "text_present"
+                     for a in validation.get("assertions") or []) \
             or (isinstance(effect, dict) and effect.get("checks"))
         seen = s.get("video_context") if isinstance(s.get("video_context"), dict) else {}
         after = str(seen.get("screen_after") or "").strip()

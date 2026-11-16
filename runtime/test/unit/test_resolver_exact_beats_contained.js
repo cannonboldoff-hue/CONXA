@@ -33,3 +33,30 @@ test("a keyboard-shortcut tail on the live name still matches exactly (c320dba)"
   const fp = { tag: "button", role: "button", aria_label: "File upload" };
   assert.ok(scoreCandidate({ role: "button", name: "File upload Alt+C then U", text: "" }, fp) >= 0.99);
 });
+
+// WF-2 Segment J: two identical "Toggle Me" widgets; only the section they sit in (its last heading) differs.
+const TWIN_FP = { tag: "summary", role: "button", inner_text: "Toggle Me", section_heading: "Details" };
+const twin = (heading) => ({ role: "button", name: "Toggle Me", text: "Toggle Me", anchorNeighbors: [], sectionHeading: heading });
+const twinSignals = [{ selector: 'internal:role=button[name="Toggle Me"]', durability: 0.9 }];
+
+test("identical twins in different sections are told apart by their section", () => {
+  const first = twin("Details");
+  const r = resolve(twinSignals, TWIN_FP, rootOf([twin("Customizing the Summary Icon"), first]));
+  assert.strictEqual(r.node, first);
+  assert.ok(r.margin >= 0.15);
+});
+
+test("identical twins in the same section are still refused", () => {
+  const r = resolve(twinSignals, TWIN_FP, rootOf([twin("Details"), twin("Details")]));
+  assert.ok(!r.node && r.ambiguous);
+});
+
+test("a single match whose section heading changed still resolves", () => {
+  const r = resolve(twinSignals, TWIN_FP, rootOf([twin("Renamed section")]));
+  assert.ok(r.node);
+});
+
+test("a pack recorded before section headings existed scores as before", () => {
+  const { section_heading, ...old } = TWIN_FP;
+  assert.strictEqual(scoreCandidate(twin("Details"), old), scoreCandidate(twin("Anything"), old));
+});

@@ -92,6 +92,26 @@ function extractDescriptor(el) {
   // alt/title mirror identity_bundle.py's _accessible_name — an <img>'s only real name is
   // its alt, so without them a live image candidate could never match a fingerprint named
   // from one.
+  // The title of the section the element sits in: the last heading before it, its outermost shadow host standing in
+  // for it. The same rule as the recorder (bridge.js sectionHeading); tells identical twins in different sections apart.
+  let headingOf = el;
+  for (let hops = 0; headingOf && hops < 10; hops++) {
+    const rootNode = typeof headingOf.getRootNode === "function" ? headingOf.getRootNode() : null;
+    if (!rootNode || !rootNode.host) break;
+    headingOf = rootNode.host;
+  }
+  let sectionHeading = "";
+  if (headingOf && typeof headingOf.compareDocumentPosition === "function" && typeof document.querySelectorAll === "function") {
+    const heads = document.querySelectorAll("h1,h2,h3,h4,h5,h6,[role=heading]");
+    for (let i = 0; i < heads.length && i < 1000; i++) {
+      const h = heads[i];
+      if (h === headingOf || h.contains(headingOf)) continue;
+      if (h.compareDocumentPosition(headingOf) & Node.DOCUMENT_POSITION_FOLLOWING) sectionHeading = h.textContent || "";
+      else break;
+    }
+  }
+  sectionHeading = String(sectionHeading).replace(/\s+/g, " ").trim().slice(0, 80);
+
   const placeholder = el.getAttribute("placeholder") || "";
   const altAttr = el.getAttribute("alt") || "";
   const titleAttr = el.getAttribute("title") || "";
@@ -101,6 +121,7 @@ function extractDescriptor(el) {
     text: (el.textContent || "").trim().slice(0, 120),
     testid: el.getAttribute("data-testid") || el.getAttribute("data-test-id") || "",
     anchorNeighbors: neighbors,
+    sectionHeading,
     _hashPayload: hashPayload,
   };
 }

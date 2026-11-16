@@ -681,3 +681,11 @@ def test_keeping_a_typed_value_also_rewrites_the_check_written_from_it():
         {"op": "drop_inputs", "ids": ["tags"]},
     ]
     assert receipt == "Nothing changes — everything stays as you recorded"
+
+
+def test_a_check_that_holds_before_and_after_is_not_proof_so_the_person_is_asked():
+    """WF-2 J: the click's only check was "“Toggle Me” is on the page", true whether the panel opened or not."""
+    seen = {"screen_before": "the panel is closed", "screen_after": "the panel is open"}
+    weak = {"assertions": [{"type": "selector_present", "target": 'text="Toggle Me"', "required": True}]}
+    doc = _doc([_step("navigate", "open_page"), _step("click", "open_panel", video_context=seen, validation=weak)])
+    assert any(q["kind"] == "done_when" for q in generate_questions(doc))

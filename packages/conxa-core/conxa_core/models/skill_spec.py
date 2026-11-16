@@ -221,6 +221,7 @@ class ElementFingerprint(BaseModel):
     css_class_tokens: list[str] = Field(default_factory=list)   # stable class tokens only
     anchor_phrases: list[str] = Field(default_factory=list)     # relational context phrases
     position_hint: dict[str, Any] = Field(default_factory=dict) # normalized x/y as 0.0–1.0
+    section_heading: str = ""  # the last heading before the element (through shadow hosts): tells identical twins apart
 
 
 class ShadowHost(BaseModel):

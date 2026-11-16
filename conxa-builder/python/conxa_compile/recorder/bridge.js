@@ -238,6 +238,28 @@
     return chain;
   }
 
+  // The title of the section the element sits in: the last heading before it in the page, its outermost shadow host
+  // standing in for it. Two identical widgets in different sections ("Toggle Me" under "Details" and under "Customizing
+  // the Summary Icon", WF-2 Segment J) differ only here. The same rule runs on replay (runtime page_scripts.sectionHeading).
+  function sectionHeading(el) {
+    let node = el;
+    for (let hops = 0; node && hops < 10; hops++) {
+      const root = typeof node.getRootNode === "function" ? node.getRootNode() : null;
+      if (!root || !root.host) break;
+      node = root.host;
+    }
+    if (!node || typeof node.compareDocumentPosition !== "function") return "";
+    const heads = document.querySelectorAll("h1,h2,h3,h4,h5,h6,[role=heading]");
+    let near = "";
+    for (let i = 0; i < heads.length && i < 1000; i++) {
+      const h = heads[i];
+      if (h === node || h.contains(node)) continue;
+      if (h.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) near = h.textContent || "";
+      else break;
+    }
+    return String(near).replace(/\s+/g, " ").trim().slice(0, 80);
+  }
+
   function nodeAsElement(node) {
     if (!node) return null;
     if (node.nodeType === 1) return node;
@@ -1633,6 +1655,7 @@
       semantic,
       anchors,
       shadow_path: shadowPath,
+      section_heading: sectionHeading(el),
       visual_placeholder: {
         bbox,
         viewport,

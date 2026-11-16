@@ -120,7 +120,7 @@ S1 `/drag_and_drop`: box A onto box B; S3 `/sortable`: item 5 to position 1. Rec
 limitation in the 2026-09-03 follow-up run (skipped with a warning at build time, unchanged since
 `FIX.md` 2026-08-26) — not a new gap, no further action needed here.
 
-### Segment J — Shadow DOM (C.6) ✅ passed 2026-09-04
+### Segment J — Shadow DOM (C.6) ✅ re-passed 2026-11-16 under the strict rule (P-21)
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-8**.
 
 **Where failures go:** EXEC-29 (hover replay); EXEC-5 (#43, already proven — reopen only on

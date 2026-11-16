@@ -233,6 +233,28 @@ def test_shadow_button_with_empty_own_label_falls_back_to_host_text(page: Page) 
     assert events[0]["shadow_path"][0]["host"].startswith("shadow-btn")
 
 
+def test_a_click_records_the_heading_of_its_section_through_shadow_hosts(page: Page) -> None:
+    # WF-2 Segment J: two identical widgets under different headings differ only in their section.
+    _install_bridge(
+        page,
+        """
+        <h2>Details</h2><shadow-btn>Toggle Me</shadow-btn>
+        <h3>Customizing the Summary Icon</h3><shadow-btn id="second">Toggle Me</shadow-btn>
+        <script>
+          customElements.define('shadow-btn', class extends HTMLElement {
+            connectedCallback() { this.attachShadow({ mode: 'open' }).innerHTML = '<button></button>'; }
+          });
+        </script>
+        """,
+    )
+
+    page.click("#second >> button")
+    page.wait_for_timeout(30)
+
+    (event,) = _events(page)
+    assert event["section_heading"] == "Customizing the Summary Icon"
+
+
 def test_custom_drawer_role_button_records_click(page: Page) -> None:
     _install_bridge(
         page,

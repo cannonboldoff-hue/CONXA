@@ -783,6 +783,58 @@ Also seen: the suggestion pick is listed as "Clicked “Tags:”" instead of "Ja
 
 **Final status of WF-2 Segment F: PASSED** (P-20).
 
+### WF-2 Segment J — clicking a control that lives inside a hidden-structure widget (assigned 2026-11-16)
+Some sites build their controls as self-contained widgets whose insides are hidden from the page
+(a "shadow DOM"). Shoelace is a library of such widgets. September's pass clicked a demo button
+that does nothing visible, so its result could not be proven. This time the workflow opens a
+"Details" panel on Shoelace's Details page, and the panel's text appearing is the proof.
+
+**Test 1 — result: FAIL.** The recording worked, and the first "Toggle Me" panel opened. But both
+test runs stopped with *"Couldn't tell which of several matching elements to use … It matched “Toggle
+Me”, “Toggle Me”, “Disabled”."* The page has two widgets that are exactly alike, both called
+"Toggle Me". The replay rightly refused to guess between them.
+
+**What was really wrong (three causes, all general):**
+1. *Nothing recorded which of two identical widgets was meant.* They have the same name, the same
+   look and the same text. The only difference is the part of the page they sit in: the first is
+   under the heading "Details", the second under "Customizing the Summary Icon". I checked this on
+   the live page. Studio never recorded which section an element is in. Also, the list of
+   hidden-structure containers the element is inside was worked out during recording and then
+   thrown away before saving (since September). *Fix:*
+   - Every click now records its section heading, the last heading above it on the page, through
+     hidden-structure widgets. That list of containers is now saved too.
+   - On replay, an element under the same heading scores higher. This is weighed only when both
+     sides have a heading, so older workflows behave exactly as before.
+   - Checked on the real page: the first "Toggle Me" now wins by a clear margin, and so does the
+     second when that is the one recorded.
+   - Two identical widgets under the *same* heading are still refused, as they must be.
+2. *A check that is always true was taken as proof.* The step's only check was "“Toggle Me” is on
+   the page", which is true whether the panel opened or not. Because a required check existed,
+   Studio did not ask "How can we tell it worked?", and the test could only end "couldn't confirm".
+   *Fix:* only an on-screen words check, the kind a test can count as "it finished", now counts as
+   proof. Otherwise the question is asked.
+3. *(Not yet seen to break a run.)* A promo pop-up was open while recording. Its "No, thanks" click
+   was put aside as having done nothing. In a fresh browser the pop-up did not appear, so this
+   retest will show whether it matters.
+
+**Changed:** `recorder/bridge.js`, `recorder/session.py`, `compiler/build.py`,
+`packages/conxa-core/.../skill_spec.py` (new `section_heading` on the fingerprint),
+`runtime/app/page_scripts.js`, `runtime/app/resolver.js`, `conversation/clarify.py`. Tests added on
+both sides. Python: 3160 passed. Runtime: 1407 passed. Test engine rebuilt, Studio restarted.
+
+**Test 2 (fresh recording) — result: PASS.**
+- The click now records "Details" as its section, and the list of containers it is inside is saved.
+- Studio asked "How will we know it worked?". The tester typed the panel's first words, "Lorem
+  ipsum dolor sit amet".
+- The promo pop-up appears on every fresh load, in the test pane too. The recorded "No, thanks" step
+  closes it.
+- Watched live in both test runs: the pop-up closed, then the *first* "Toggle Me" opened, and the
+  other stayed closed. All 3 steps were confirmed, with no warning and `execute_success`. Approved.
+- The proof is real. I counted on the live page: those words show once before the click (from a
+  panel that is open by default) and twice after. A click that did nothing would fail the check.
+
+**Final status of WF-2 Segment J: PASSED** (P-21).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

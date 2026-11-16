@@ -10,6 +10,10 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**Two identical buttons in different parts of a page can now be told apart — 2026-11-16**
+Some pages show the same control twice, for example two "Toggle Me" panels in different sections of a help page. Build Studio could not tell which one you clicked, so a test stopped with "couldn't tell which of several matching elements to use". It now remembers which section of the page your click was in, by the heading above it, and picks the one in that same section. If two identical controls sit in the same section, it still refuses to guess. Also, a check that is true whether or not the step worked no longer counts as proof, so Build Studio asks you "How can we tell it worked?" instead of ending every test with "couldn't confirm".
+— 2026-11-16
+
 **Picking "Java" no longer gets confused with "JavaScript" — 2026-11-16**
 When a list held two items where one name starts the other ("Java" and "JavaScript", "Save" and "Save as"), a test stopped with "couldn't tell which of several matching elements to use", even though you had clearly picked one. Build Studio now prefers the item whose name matches exactly, and will never click a different item just because its name contains yours. Also, when you answer that something you typed never changes, Build Studio now really stops asking for it every run.
 — 2026-11-16

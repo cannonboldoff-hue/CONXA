@@ -2358,6 +2358,12 @@ class RecordingSession:
             extras["element_ref"] = str(payload["element_ref"])  # the same DOM node, however the page changed it
         if payload.get("stands_in_for"):
             extras["stands_in_for"] = str(payload["stands_in_for"])  # the clicked text box this one replaced
+        # Where the element sits: the shadow hosts it is inside, and its section's heading (bridge.js). The event model
+        # has no field for either, so they ride in extras; shadow_path used to be computed and then dropped here.
+        if isinstance(payload.get("shadow_path"), list) and payload["shadow_path"]:
+            extras["shadow_path"] = [h for h in payload["shadow_path"] if isinstance(h, dict)][:10]
+        if payload.get("section_heading"):
+            extras["section_heading"] = str(payload["section_heading"])[:80]
         if payload.get("uid"):
             extras["uid"] = str(payload["uid"])
             extras["bridge"] = str(payload.get("bridge") or "")

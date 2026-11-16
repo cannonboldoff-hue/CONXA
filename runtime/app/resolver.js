@@ -139,6 +139,13 @@ function scoreCandidate(node, fingerprint) {
     add(0.10, anchors.some(a => neighbors.some(n => n.includes(a) || a.includes(n))));
   }
 
+  // Which section the element sits in (its last heading before it): charged only when both sides have one, so packs
+  // recorded before it existed score as they did. Weighted so twins that agree on role, name and text still clear the
+  // 0.15 margin when only their sections differ (WF-2 Segment J: two "Toggle Me" widgets).
+  const fpHeading = norm(fp.section_heading);
+  const nodeHeading = norm(node.sectionHeading);
+  if (fpHeading && nodeHeading) add(0.15, fpHeading === nodeHeading);
+
   return weight > 0 ? score / weight : 0;
 }
 

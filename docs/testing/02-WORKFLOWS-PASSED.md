@@ -858,6 +858,30 @@ screen, which includes what the box holds.
 
 ---
 
+## Passed Workflow P-21 — WF-2 Segment J: identical shadow-DOM widgets, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 J shadow details r2`,
+`7013dc7d-e168-421e-ba84-e62cf65ea8c8`, group "E2E 2026-11-16", passing runs `r_mwjamnrw_ged7m` and
+`r_mwjaodcx_46dmk`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** `shoelace.style/components/details`. There are two identical `<sl-details summary="Toggle
+Me">`, one under "Details" and one under "Customizing the Summary Icon". The header is
+`summary#header` inside each shadow root. The workflow closes the promo dialog ("No, thanks"), then
+opens the first. It must show "Lorem ipsum dolor sit amet", counted 1 before and 2 after.
+
+**What was confirmed:** in both test runs (watched live) panel 0 opened and the twin (index 2) stayed
+closed. All steps confirmed, no warning. **Approved.**
+
+**Fixed en route (general):**
+- Every click records `section_heading`, the last heading before it through shadow hosts. The
+  resolver scores it (weight 0.15) only when both sides have one, so twins in different sections
+  separate while twins in the same section are still refused.
+- `shadow_path`, computed by the bridge since September but dropped on save, is now saved.
+- Proof: only a required `text_present` (or completion checks) counts as proving the end step. A
+  check that holds either way no longer suppresses "How can we tell it worked?".
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

@@ -433,6 +433,14 @@ def build_signal_reference(ev: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _section_heading(ev: dict[str, Any]) -> str:
+    """The recorded section heading (bridge.js sectionHeading), or "" when it carries an account's email address."""
+    from conxa_compile.compiler.selector_filters import has_personal_email
+
+    text = str((ev.get("extras") or {}).get("section_heading") or "").strip()[:80]
+    return "" if has_personal_email(text) else text
+
+
 def _build_element_fingerprint(ev: dict[str, Any]) -> ElementFingerprint:
     """Extract stable element identity from recorded event signals."""
     target = ev.get("target") or {}
@@ -492,6 +500,7 @@ def _build_element_fingerprint(ev: dict[str, Any]) -> ElementFingerprint:
         input_type=str(semantic.get("input_type") or ""),
         css_class_tokens=class_tokens,
         anchor_phrases=anchor_phrases,
+        section_heading=_section_heading(ev),
         position_hint={
             "x_pct": round(int(bbox.get("x") or 0) / vw, 3),
             "y_pct": round(int(bbox.get("y") or 0) / vh, 3),
@@ -576,7 +585,7 @@ def _build_identity_bundle(
     guid_like_attrs = [data_testid] if data_testid and is_dynamic_id(f"#{data_testid}") else []
 
     # Phase 6: detect and populate shadow_path
-    shadow_path_raw = ev.get("shadow_path") or []
+    shadow_path_raw = ev.get("shadow_path") or (ev.get("extras") or {}).get("shadow_path") or []
     if not shadow_path_raw:
         for sel_key in ("css", "aria"):
             sel_val = str((ev.get("selectors") or {}).get(sel_key) or "")
