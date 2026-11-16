@@ -46,6 +46,19 @@ function popupsOpened(page) {
   return box.n;
 }
 
+// How often `text` is visibly on the page, frames included. A step inside a frame shows its result there (a tab's
+// panel in a demo frame, WF-2 Segment D): counting the top document alone read 0 before and 0 after, so the text
+// could never be "new" and the step never proven. Before and after are counted the same way.
+async function countTextAcross(page, text) {
+  const frames = typeof page.frames === "function" ? page.frames() : [page];
+  let total = null;
+  for (const f of frames) {
+    const n = await evalOn(f, pageScripts.countTextOccurrences, text).catch(() => null);
+    if (typeof n === "number") total = (total || 0) + n;
+  }
+  return total;
+}
+
 async function capturePreStepSignature(page, countTexts = []) {
   try {
     const popups = popupsOpened(page);
@@ -57,7 +70,7 @@ async function capturePreStepSignature(page, countTexts = []) {
     if (countTexts.length) {
       counts = {};
       for (const t of countTexts) {
-        const n = await evalOn(page, pageScripts.countTextOccurrences, t).catch(() => null);
+        const n = await countTextAcross(page, t);
         if (typeof n === "number") counts[t] = n;
       }
     }
@@ -218,12 +231,12 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       // a "no" had the action done nothing, so only it may prove that the work finished (run.js::proveStep).
       // Measured the same way both times (visible text), so text sitting hidden in the page never counts as new.
       if (before === 0) {
-        const n = await evalOn(page, pageScripts.countTextOccurrences, target).catch(() => null);
+        const n = await countTextAcross(page, target);
         fresh = typeof n === "number" && n > 0;
       }
       if (before > 0 && page.url() === baseline.url) {
         const more = await pollPositive(async () => {
-          const n = await evalOn(page, pageScripts.countTextOccurrences, target).catch(() => null);
+          const n = await countTextAcross(page, target);
           return typeof n === "number" && n > before;
         }, Math.min(timeout, 1500));
         if (!more) cantTell = true;

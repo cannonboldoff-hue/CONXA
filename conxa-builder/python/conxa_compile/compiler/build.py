@@ -321,7 +321,12 @@ def _insert_start_navigate_step(
         return steps
     if steps[0].action == "navigate":
         return steps  # the recording already opens with a real navigation
-    url = str((cleaned_events[0].get("page") or {}).get("url") or "").strip()
+    first = cleaned_events[0]
+    url = str((first.get("page") or {}).get("url") or "").strip()
+    # A first step inside a frame reports the frame's own document as its page; the tab is where the recording
+    # started. Opening the frame's document directly drops the frame chain's whole point (WF-2 Segment D).
+    if ((first.get("frame") or {}).get("chain")) and str((first.get("tab") or {}).get("url") or "").strip():
+        url = str(first["tab"]["url"]).strip()
     if not url or url.split(":", 1)[0] == "about":
         return steps
     return [_navigate_step(url, steps[0].tab)] + steps

@@ -93,6 +93,10 @@ still open.
 every segment is re-tested to the approved state, one at a time. Segment H (hover) goes first because
 it is the one known to fail.
 
+### Segment D — iframe chain (E.1) ✅ passed 2026-11-16 under the strict rule
+Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-18** (jqueryui.com/tabs, click
+inside the demo frame).
+
 ### Segment E (remainder) — Nested iframes bonus: datepicker (E.2) ✅ passed 2026-09-04
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-6**.
 

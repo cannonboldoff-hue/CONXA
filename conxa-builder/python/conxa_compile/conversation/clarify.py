@@ -380,6 +380,25 @@ def _effect_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str
     return choices, used
 
 
+def _unproven_end(doc: dict[str, Any]) -> str | None:
+    """Key of the last step that acts and can hold checks, when nothing proves it (no required check, no completion
+    checks) although the recording saw the screen change after it (video_context). Only decides WHETHER to ask: the
+    check itself is the words the person types. None otherwise."""
+    steps = _steps(doc)
+    for key, s in reversed(list(zip(step_keys(steps), steps))):
+        if _action_name(s) == "navigate" or not _can_hold_checks(s):
+            continue
+        validation = s.get("validation") or {}
+        effect = validation.get("effect")
+        proven = any(isinstance(a, dict) and a.get("required") for a in validation.get("assertions") or []) \
+            or (isinstance(effect, dict) and effect.get("checks"))
+        seen = s.get("video_context") if isinstance(s.get("video_context"), dict) else {}
+        after = str(seen.get("screen_after") or "").strip()
+        changed = bool(after) and after != str(seen.get("screen_before") or "").strip()
+        return key if changed and not proven else None
+    return None
+
+
 def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
     wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
@@ -844,12 +863,22 @@ def generate_questions(
 
     # 5 ─ how do we know it worked? Only checks the compiler already wrote, never new selectors.
     done_choices, done_keys = _done_when_choices(doc)
+    unproven_end = None if done_choices else _unproven_end(doc)
     if done_choices:
         out.append(_question(
             "done_when", "done_when", "How can we tell it worked?",
             "At the end of your recording I noticed these. Tick the ones that should be true when it works. If a ticked one is not true, it counts as failed. "
             "You can also type your own below.",
             done_choices, multi=True, step_keys_=done_keys, needs_proof=bool(irreversible_without_proof(doc)),
+        ))
+    elif unproven_end:
+        # Nothing to tick, and nothing proves the last step: its result is only on the screen (a tab's panel, a
+        # message). Without asking, every test ends "couldn't confirm" and the person was never given the chance.
+        out.append(_question(
+            "done_when", "done_when", "How can we tell it worked?",
+            "Type a few words you see on the screen once it has worked, like a heading or a message. "
+            "If you leave this empty, a test can only say it ran, not that it worked.",
+            [], multi=True, step_keys_=[unproven_end], needs_proof=bool(irreversible_without_proof(doc)),
         ))
 
     if kinds is not None:

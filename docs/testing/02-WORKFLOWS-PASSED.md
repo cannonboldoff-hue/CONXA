@@ -787,6 +787,33 @@ not its own step: the runtime reveals the hidden link the way a person would.
 
 ---
 
+## Passed Workflow P-18 — WF-2 Segment D: a click inside an iframe, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 D iframe tabs r4`,
+`30b9b831-817c-4341-8a3d-84d3ef5df716`, group "E2E 2026-11-16", passing runs `r_mwj0ky0k_tg6j2` and
+`r_mwj0mn3h_arwrr`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** `jqueryui.com/tabs/`. The demo runs in `iframe.demo-frame`, which has no id or name, and
+its src is relative. The workflow clicks the third tab inside the frame. Compiled to 2 steps: a
+navigate to the top page, then a click carrying a one-level `frame_chain`. The click must show
+"Mauris eleifend est et turpis", the words the person typed as proof.
+
+**What was confirmed:**
+- Two test runs, watched live: the top page stayed on `/tabs/`, and the frame's panel 3 became
+  visible.
+- "Step 2: confirmed", no warning, `execute_success` both times. **Approved.**
+
+**Fixed en route (general):**
+1. A frame identified only by a relative src was dropped from the chain. It is now kept, checked
+   against the frame's full address.
+2. A recording that starts inside a frame now opens the tab's top page, not the frame's document.
+3. "How can we tell it worked?" is now asked, with a typing box, when the last step has no proof but
+   the recording saw the screen change.
+4. Text checks now count words inside frames too, before and after the step, so a result shown in
+   a frame can prove the step.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

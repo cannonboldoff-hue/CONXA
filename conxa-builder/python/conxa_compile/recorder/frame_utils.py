@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit
 
 from conxa_core.login_paths import ANY_RE, SIGN_IN_PAGE_RE, SSO_HOP_RE
 from conxa_core.models.events import RecordedEvent
@@ -94,7 +94,10 @@ def _iframe_fingerprint_from_attrs(attrs: dict[str, Any], frame_url: str = "") -
     # src_pattern signal (structural, url-based)
     src = str(attrs.get("src") or "").strip()
     if src:
-        url_pattern = _normalize_frame_url_pattern(src)
+        # A relative src ("/resources/demos/tabs/default.html") is as real as an absolute one; checked against the
+        # frame's own address. It used to be dropped, and a frame with no id or name then left the chain entirely,
+        # so its step compiled as if it were on the top page (WF-2 Segment D, 2026-11-16).
+        url_pattern = _normalize_frame_url_pattern(src) or _normalize_frame_url_pattern(urljoin(frame_url, src))
         if url_pattern:
             signals.append({
                 "engine": "css-structural",

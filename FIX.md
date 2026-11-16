@@ -10,6 +10,10 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**Clicks inside a framed part of a page are now recorded and replayed in place — 2026-11-16**
+Some pages show another small page inside them, like a demo or a form in a frame. When that frame had no name and pointed to a short address, Build Studio forgot the frame was there. The workflow then opened the inner page on its own instead of the real page, and would break on any site where the inner page can't open by itself. Build Studio now keeps such frames and starts the workflow on the real page. Also, when a step's result only shows on the screen and Studio has nothing to offer, it now still asks "How can we tell it worked?" so you can type the words you see. Before, every test ended with "couldn't confirm".
+— 2026-11-16
+
 **"How can we tell it worked?" now shows the web address it means — 2026-11-16**
 One of the answers to "How can we tell it worked?" read "The web address looks like" and then stopped, so you couldn't tell what you were agreeing to. It now shows the address in a readable form, for example "the-internet.herokuapp.com/users/…".
 — 2026-11-16

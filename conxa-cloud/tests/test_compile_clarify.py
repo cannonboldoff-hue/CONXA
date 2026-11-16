@@ -625,3 +625,26 @@ def test_an_address_check_is_offered_with_the_address_a_person_can_read():
     assert _address_from_pattern(r"^https://the\-internet\.herokuapp\.com/users/[^/?#]+") == "the-internet.herokuapp.com/users/…"
     assert _address_from_pattern(r"^https://the\-internet\.herokuapp\.com/login") == "the-internet.herokuapp.com/login"
     assert _address_from_pattern("") == ""
+
+
+def test_a_last_step_with_no_proof_still_gets_asked_how_to_tell_it_worked():
+    """WF-2 Segment D: a tab click whose result only shows on the screen had nothing to tick, so the question was never
+    asked and every test ended "couldn't confirm". Now it is asked with only the typing box, and the words become the
+    last step's check."""
+    seen = {"screen_before": "the first tab is showing", "screen_after": "the third tab's panel is showing"}
+    doc = _doc([_step("navigate", "open_page"), _step("click", "open_third_tab", video_context=seen)])
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = next(q for q in generate_questions(doc) if q["kind"] == "done_when")
+    assert q["choices"] == []
+    ops, receipt = plan_answer(q, {"selected": [], "custom_text": "Mauris eleifend"}, doc)
+    (op,) = ops
+    assert op["step_key"] == keys[1]
+    assert op["patch"]["validation"]["assertions"] == [{"type": "text_present", "target": "Mauris eleifend", "required": True}]
+    assert receipt == "You see “Mauris eleifend” on the screen"
+    # Already proven: not asked again.
+    proven = _doc([_step("navigate", "open_page"),
+                   _step("click", "open_third_tab", video_context=seen,
+                         validation={"assertions": [{"type": "text_present", "target": "x", "required": True}]})])
+    assert not any(q["kind"] == "done_when" for q in generate_questions(proven))
+    # Nothing seen changing: not asked (a workflow with nothing uncertain asks nothing).
+    assert not any(q["kind"] == "done_when" for q in generate_questions(_doc([_step("navigate", "open_page"), _step("click", "x")])))

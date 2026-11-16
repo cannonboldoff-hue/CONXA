@@ -597,6 +597,85 @@ different name than the label read. It now shows a readable address, such as
 
 **Final status of WF-2 Segment H: PASSED** (P-17).
 
+### WF-2 Segment D — acting inside a page that sits inside another page (assigned 2026-11-16)
+A frame (iframe) is a page shown inside another page. The September record says its frame steps were
+"not captured in this take", so they were never really passed. None of the local practice pages has
+a frame, so jQuery UI's demo site is used: every demo there runs inside a frame. On the "Tabs" demo
+the workflow clicks the third tab, "Aenean lacinia", inside the frame. That tab's own text appearing
+is the proof.
+
+(A first attempt was cut off by an outside fault in the tester's tools. It is not counted.)
+
+**Test 1 — result: FAIL.** The test ran and the third panel did show. But the tester watched the run
+live and saw why: the replay never went inside a frame at all. It opened the frame's own page on its
+own and clicked there. Studio also asked no "How can we tell it worked?" question, and both test runs
+ended "I couldn't confirm that … finished". Approve was still offered.
+
+**What was really wrong (two causes, both general):**
+
+1. *The frame was dropped from the recording.* Studio remembers a frame by what its tag says: its
+   name, its id, or the address it loads. This frame has no name or id, and its address is written
+   as a short relative address (`/resources/demos/…`) instead of a full `https://…` one. The code
+   that turns an address into a pattern accepted only full addresses, so the frame was left with no
+   way to identify it. A frame with nothing to identify it is silently left out, so the click looked
+   as if it were on the top page. Then the start step was taken from the click's own page address,
+   which for a click inside a frame is the frame's own document. Many sites use frames like this, so
+   on any site whose frame cannot load on its own, the workflow would simply break. I reproduced the
+   drop in a plain browser, outside Studio.
+2. *No question when there is nothing to tick.* "How can we tell it worked?" was asked only when
+   Studio had a ready-made check to offer. When a step's result only shows on the screen, like a tab's
+   text, there was none, so the person was never asked. Every test then had to end "couldn't confirm".
+
+*Fix:*
+- A relative frame address now counts as the frame's identity, checked against the frame's full
+  address.
+- A recording whose first step is inside a frame now starts on the tab's real page.
+- When the last step has no proof but the recording saw the screen change, Studio now asks "How can
+  we tell it worked?" with just a box to type words you see, and those words become the check.
+- **Checked on the real site:** the replay opens the Tabs page, clicks inside the frame, and panel 3
+  shows.
+
+**Changed:** `recorder/frame_utils.py`, `compiler/build.py`, `conversation/clarify.py`. New tests:
+`test_frame_chain_kept.py`, and one more in `test_compile_clarify.py`. Python: 3154 passed, 0 failed.
+
+Also seen: Studio's window was minimized before the first test (the tester didn't do it), and the
+size guard stopped that run with "the test browser is not showing the page at its normal size". That
+is correct behavior, but the message doesn't say why.
+
+**Test 2 (fresh recording) — result: FAIL, one last gap.** Both frame fixes worked:
+- The recording kept the frame, the workflow opens the real Tabs page, and the click happens inside
+  the frame. The tester watched this live in both runs.
+- Studio asked "How can we tell it worked?" with a typing box, and the tester typed the panel's
+  first words.
+
+But both test runs still said "couldn't confirm".
+
+**What was really wrong:** a check only proves a step if its answer could have been "no", so the
+replay counts how often the words are on the screen before the step and again after. Both counts
+read only the top page, never inside its frames. The panel's words live inside the frame, so the
+count was 0 before and 0 after: never "new", so never proof. Any check on words inside a frame had
+the same problem. *Fix:* the words are now counted across the page and all its frames, the same way
+before and after. On the real site, the step's verdict is now "proven".
+
+**Changed:** `runtime/app/assertions.js`; new test `runtime/test/unit/test_text_check_inside_frame.js`.
+Runtime: 1398 passed, 0 failed. The test engine was rebuilt.
+
+Also seen: the typing-only card still says "Tick what applies, then press the arrow." (BUILD-93).
+
+**Test 3 (fresh recording) — result: PASS.**
+- The recording kept the frame. The workflow opens `https://jqueryui.com/tabs/` and clicks the tab
+  inside the frame. The tester watched both runs live: the first tab showed, then the third, all
+  inside the frame, with the top page unchanged.
+- The tester typed the panel's first words on the "How will we know it worked?" card. Both test
+  runs passed with "Step 2: confirmed", no warning, and ended in `execute_success`.
+- Approved.
+
+Also seen: the first question read "The task text is empty. What should this task do each time?",
+which is odd wording for a workflow with no description. The click step is again named like the
+page-open step (BUILD-93).
+
+**Final status of WF-2 Segment D: PASSED** (P-18).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".
