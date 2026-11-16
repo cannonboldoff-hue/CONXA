@@ -171,3 +171,113 @@ minimized-window message says "run the test again", which cannot help; the passe
 log does not record which check proved a step.
 
 **Final status of WF-1 Leg C: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-11).
+
+### WF-1 Leg A — search Wikipedia, open a link, go back (assigned 2026-11-16)
+The control baseline: search "Ada Lovelace", click the "analytical engine" link in the article, then
+press the browser's Back button.
+
+**Test 1 — result: FAIL.** Recording captured 9 actions, including Back (good). Compile finished;
+the questions were sensible and answered (the search words became an input; the link stays fixed).
+The test failed at step 2, both times: *"The element this step needs wasn't found on the page."*
+No click step leaned on a throwaway generated id, which is what this leg was meant to check.
+
+**What was really wrong (two causes, both general):**
+
+1. *Conxa described an element as it looked after the click, not before.* Wikipedia's search box
+   changes itself the moment it is clicked: its role turns from "search box" into "combo box".
+   The recorder read the box when the click finished, so it saved the changed version. On a
+   replay the page is fresh, the box is still a plain "search box", and nothing matched. The tester
+   confirmed this outside Conxa in a plain browser. This affects any element a page changes as
+   soon as you press it (menus, search boxes, buttons that turn into spinners). *Fix:* the recorder
+   now notes the element at the very start of the press, before the page's own code reacts, and
+   uses that description for the step. It does so only when the click finishes on that same
+   element, or on the one the page swapped in for it.
+2. *Pressing Enter was recorded twice.* When you press Enter in a form, the browser presses the
+   form's submit button for you. The recorder saved both the Enter and that automatic "click on
+   Search". A replay would press Enter, land on the article, and then try to click Search again.
+   The same happens with Enter on a focused button. *Fix:* a click the browser makes because of
+   the Enter that was just recorded is no longer saved as a second step. A real mouse click on the
+   button still is.
+
+**Kind of problem:** architectural, in the recorder. The step must describe what a replay will
+meet, and one action of the person must be one step.
+
+**Changed:** `recorder/bridge.js`; new tests in `test_recorder_bridge_js.py`. Python suite: 3137
+passed, 0 failed. Studio restarted before the retest.
+
+**Test 2 (fresh recording, after those fixes) — result: FAIL, same place.** Both recorder fixes
+held: the click was saved as the original "search box", and no phantom "Click Search" appeared.
+But the test still failed at step 2 with the same message.
+
+**What was really wrong this time:** the recorder's description was now right, but the compiler
+threw it away. Wikipedia also removes the box's name tag (`id`) when you click it. Conxa decided
+whether two recorded actions were on "the same box" by comparing their descriptions, so the click
+(old description) and the typing (new description) looked like two different boxes. It then
+believed the typing had no click before it, and added its own "click into the box" step built from
+the *changed* description. With two "click into the box" steps in a row, the review pass judged one
+of them pointless and set aside the right one. *Kind of problem:* architectural. "Is this the same
+element?" was answered from how the element looked, and a page can change how an element looks
+at any moment.
+
+*Fix:* the recorder now gives every element it sees a private token that stays the same for that
+element however the page changes it. The compiler uses that token to know the click and the
+typing are on the same box. The click stays as the step a replay meets first, and no extra click
+is invented. The review pass is no longer allowed to set aside a press that changed the element
+a later step uses, because that press is what makes the later step findable. This is the same kind
+of objective guard it already had for clicks that start a download. Also fixed:
+Studio no longer asks "A few things you typed are not in the workflow" about words that were only
+recorded twice and are still typed by the workflow.
+
+**Changed:** `recorder/bridge.js`, `recorder/session.py`, `compiler/step_anchors.py`,
+`compiler/build.py`, `compiler/second_opinion.py`, `conversation/clarify.py`; new tests in
+`test_phases.py`, `test_second_opinion.py`, `test_compile_ledger.py`. Python suite: 3140 passed,
+0 failed. Studio was stopped once by the computer running low on memory; restarted for the retest.
+
+**Test 3 (fresh recording) — result: FAIL, same place.** The recorder tagged the click and the
+typing with *different* tokens. So my reading of Test 2 was wrong: Wikipedia does not change the
+box, it throws it away and puts a brand-new box in its place. I checked that directly on the live
+site with a plain browser. The click lands on the original box. Right after the click Wikipedia
+removes it, adds a new box, and moves the typing cursor into the new one, and everything typed
+goes there. A plain "focus" (without a click) causes the same swap, so a replay that focuses the
+original box gets the new one too.
+
+*Fix:* the recorder now notices exactly this case. When you type into a focused text box, and the
+text box you clicked just before has disappeared from the page, the new box is noted as standing
+in for the clicked one. The compiler treats such a pair as one box: the click stays as the first
+step (the original box, which is what a fresh page shows), the typing goes to the new box, and no
+extra click is invented. Re-running the compile clean-up on the Test 3 recording, with that note
+added, gives exactly: open page → click the original box → type → Enter → click the link → Back,
+and the click is protected from being set aside. *Kind of problem:* the same architectural one as
+Test 2 ("is this the same element?"), now covering a page that swaps the element instead of
+editing it.
+
+**Changed:** `recorder/bridge.js`, `recorder/session.py`, `compiler/step_anchors.py`; new tests.
+Python suite: 3141 passed, 0 failed. Studio restarted.
+
+**Test 4 (fresh recording) — result: PASS.**
+- The recording showed the new note at work: the typing and the Enter were marked as standing in for
+  the clicked box.
+- The compiled workflow is: open page → click the search box (the original box) → type the search
+  words (an input) → Enter → click "analytical engine" → Back. Nothing was set aside.
+- Questions were answered on purpose. The tester unticked the three suggested checks that were
+  dropdown text, not real page text, and ticked "You see the search words on the screen".
+- The test passed in 30 seconds with every step "confirmed" and no warning. The runtime log shows the
+  run (`r_mwik9npg_iyoiv`) ending with `execute_success` on the Ada Lovelace article. The Back step's
+  required check found the search words there.
+- The workflow was approved with the normal button; the sidebar shows "Approved".
+
+One question still appeared that should not have: "A few things you typed are not in the workflow"
+(about the duplicate typing). The cause: the saved workflow keeps the recorded value in the recording,
+not on the input itself, and my filter only looked at the input. It now also checks what each kept
+step was recorded typing. Covered by an automatic test; it was not seen live yet.
+
+Other small things the tester noticed, filed in `TODO.md` (BUILD-91): the compile is marked
+"failed" in its own report although it worked; checks the person unticked stay on as optional
+extras; check wording shows doubled quotes; the first three "how will we know" options were
+dropdown text, ticked by default; and the run waited about 15 seconds after Enter.
+
+**Final status of WF-1 Leg A: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-12).
+
+Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
+Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
+And a fresh recording that fails on one element is called "may have been redesigned".

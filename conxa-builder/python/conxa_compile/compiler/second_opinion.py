@@ -201,7 +201,7 @@ def _step_causes_observed_effect(steps: list[SkillStep], i: int) -> bool:
 
 
 def archive_flagged_steps(
-    steps: list[SkillStep], findings: list[dict[str, Any]]
+    steps: list[SkillStep], findings: list[dict[str, Any]], *, keep_sequences: set[Any] | None = None,
 ) -> tuple[list[SkillStep], list[dict[str, Any]]]:
     """Remove every step a validated flag_noise finding matched, archiving each
     one in full rather than discarding it.
@@ -236,7 +236,10 @@ def archive_flagged_steps(
         # An outcome fork has no page effect of its own to observe (its job is the branch it
         # takes), which is exactly what flag_noise reads as "did nothing". Never archive one.
         is_fork = (step.action.get("action") if isinstance(step.action, dict) else step.action) == "outcome_fork"
-        if finding is None or is_fork or _step_causes_observed_effect(steps, i):
+        # A step that changed the element a later step acts on (build.py::_element_changing_sequences) is what
+        # makes that later step findable on a replay: never noise.
+        changes_later = step.source_event is not None and step.source_event in (keep_sequences or set())
+        if finding is None or is_fork or changes_later or _step_causes_observed_effect(steps, i):
             kept.append(step)
             continue
         archived.append({

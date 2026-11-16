@@ -203,6 +203,18 @@ def _target_key(step: Step) -> str:
     )
 
 
+def _same_node(a: Step, b: Step) -> bool:
+    """Both steps acted on the same DOM node (the recorder's ``element_ref``), however the page changed it between them.
+    A press that turns a search box into a combobox leaves two different descriptions of one box: the click describes
+    what a replay meets first, the typing what it meets after that click. They stay two steps, and no extra focus built
+    from the later description is put in front of the typing."""
+    ea, eb = a.get("extras") or {}, b.get("extras") or {}
+    ra, rb = ea.get("element_ref"), eb.get("element_ref")
+    # Or the page swapped the clicked text box for a new one the person then typed into (``stands_in_for``).
+    same = bool(ra) and (ra == rb or ra == eb.get("stands_in_for")) or bool(rb) and rb == ea.get("stands_in_for")
+    return same and _tab_signature(a) == _tab_signature(b) and _frame_signature(a) == _frame_signature(b)
+
+
 def _event_value(step: Step) -> str:
     action = step.get("action") or {}
     if isinstance(action, dict):
@@ -403,7 +415,7 @@ def _same_target_focus_prereq(prev: Step | None, step: Step, policy: dict[str, A
     """True when the previous step already focuses/clicks the same field (non-submit)."""
     if prev is None:
         return False
-    if _target_key(prev) != _target_key(step):
+    if _target_key(prev) != _target_key(step) and not _same_node(prev, step):
         return False
     pa = action_name(prev).lower()
     if pa == "focus":

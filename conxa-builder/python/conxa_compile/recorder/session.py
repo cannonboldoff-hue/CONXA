@@ -2288,6 +2288,10 @@ class RecordingSession:
             extras["file_pick"] = self._pending_file_pick
             self._pending_file_pick = None
         # BUILD-80: names this step so the page's later amendment (see _apply_amend_sync) finds it.
+        if payload.get("element_ref"):
+            extras["element_ref"] = str(payload["element_ref"])  # the same DOM node, however the page changed it
+        if payload.get("stands_in_for"):
+            extras["stands_in_for"] = str(payload["stands_in_for"])  # the clicked text box this one replaced
         if payload.get("uid"):
             extras["uid"] = str(payload["uid"])
             extras["bridge"] = str(payload.get("bridge") or "")

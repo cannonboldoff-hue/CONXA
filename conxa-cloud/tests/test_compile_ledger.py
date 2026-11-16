@@ -120,6 +120,23 @@ def test_clarify_asks_about_a_lost_value_but_not_one_a_merged_step_kept():
     assert ops == [] and receipt == "Left out"
 
 
+def test_clarify_does_not_ask_about_words_typed_twice_that_the_workflow_still_types():
+    """Wikipedia re-reports the search box on Enter, so "Ada Lovelace" is recorded twice; clean-up folds the second into
+    the first step. Its words are still the input's recorded value, so nothing was left out."""
+    from conxa_compile.conversation.clarify import generate_questions
+
+    doc = {"inputs": [{"id": "search_wikipedia", "default": "Ada Lovelace"}],
+           "skills": [{"steps": [{"action": {"action": "type"}, "value": "{{search_wikipedia}}", "input_binding": "search_wikipedia"}]}]}
+    twice = [{"sequence": 4, "pass": "cleanup", "action": "type", "value": "Ada Lovelace"}]
+    assert not [q for q in generate_questions(doc, dropped=twice, limit=None) if q["kind"] == "dropped_value"]
+    # As saved by Studio: the input has no default; the kept step's recorded event holds the words.
+    doc["inputs"] = [{"id": "search_wikipedia", "default": None}]
+    recorded = {"action": {"action": "type", "value": "Ada Lovelace"}}
+    assert not [q for q in generate_questions(doc, dropped=twice, limit=None, source_lookup=lambda _s: recorded)
+                if q["kind"] == "dropped_value"]
+    assert [q for q in generate_questions(doc, dropped=twice, limit=None) if q["kind"] == "dropped_value"]
+
+
 def test_the_second_opinion_cache_key_changes_with_the_model(tmp_path, monkeypatch):
     from conxa_compile.llm import workflow_review
 

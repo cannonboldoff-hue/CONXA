@@ -822,6 +822,30 @@ class PhaseTests(unittest.TestCase):
         actions = [(s.get("action") or {}).get("action") for s in out]
         self.assertEqual(actions, ["focus", "type", "focus", "type"])
 
+    def test_a_box_the_page_changes_when_pressed_keeps_the_press_and_gets_no_extra_focus(self) -> None:
+        """Wikipedia's search box turns into a combobox (and loses its id) when clicked. The click and the typing are the
+        same DOM node (element_ref): the click is kept as the focus step (it describes what a replay meets first), and
+        no focus built from the typing's later description is put before the typing."""
+        from conxa_compile.compiler.step_anchors import clean_steps, sanitize_steps_preserving_order
+
+        page = {"url": "https://en.wikipedia.org/wiki/Main_Page", "title": "Wikipedia"}
+        click = {"action": {"action": "click"}, "extras": {"sequence": 1, "element_ref": "b:1"}, "page": page,
+                 "target": {"tag": "input", "id": "searchInput", "aria_label": "Search Wikipedia"},
+                 "selectors": {"css": "#searchInput", "aria": '[aria-label="Search Wikipedia"]'},
+                 "semantic": {"role": "searchbox", "input_type": "search"}}
+        typing = {"action": {"action": "type", "value": "Ada"}, "extras": {"sequence": 2, "element_ref": "b:1"}, "page": page,
+                  "target": {"tag": "input", "aria_label": "Search Wikipedia"},
+                  "selectors": {"css": "div.cdx-search > input", "aria": '[aria-label="Search Wikipedia"]'},
+                  "semantic": {"role": "combobox", "input_type": "search"}}
+        out = sanitize_steps_preserving_order(clean_steps([click, typing], {}), {})
+        self.assertEqual([((s.get("action") or {}).get("action"), (s.get("semantic") or {}).get("role")) for s in out],
+                         [("focus", "searchbox"), ("type", "combobox")])
+        # Live Wikipedia swaps the clicked box for a new node: a different token, linked by stands_in_for.
+        swapped = {**typing, "extras": {"sequence": 2, "element_ref": "b:2", "stands_in_for": "b:1"}}
+        out = sanitize_steps_preserving_order(clean_steps([click, swapped], {}), {})
+        self.assertEqual([((s.get("action") or {}).get("action"), (s.get("semantic") or {}).get("role")) for s in out],
+                         [("focus", "searchbox"), ("type", "combobox")])
+
     def test_compiler_clean_steps_drops_post_type_field_click(self) -> None:
         from conxa_compile.compiler.step_anchors import clean_steps
 

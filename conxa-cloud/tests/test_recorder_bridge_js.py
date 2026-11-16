@@ -419,6 +419,83 @@ def test_focusable_button_click_records_without_immediate_ui_change(page: Page) 
     assert events[0]["target"]["id"] == "submitContact"
 
 
+def test_a_click_describes_the_element_as_it_was_when_the_press_began(page: Page) -> None:
+    """Wikipedia's search box is rebuilt on focus (searchbox -> combobox). A replay meets the box before it is pressed,
+    so the step must describe that state, not the rebuilt one the click event lands on."""
+    _install_bridge(page, """
+      <form id="f"><input id="q" type="search" aria-label="Search Wikipedia"></form>
+      <script>
+        const q = document.getElementById("q");
+        q.addEventListener("focus", () => {
+          q.setAttribute("role", "combobox"); q.id = "q2";    // changed in place on first focus
+          const hint = document.createElement("div"); hint.textContent = "Search suggestions";
+          document.getElementById("f").appendChild(hint);
+        }, { once: true });
+      </script>""")
+    box = page.locator("#q").bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.wait_for_timeout(60)
+
+    clicks = [e for e in _events(page) if e["action"]["action"] == "click"]
+    assert len(clicks) == 1, page.evaluate("window.__raw")
+    assert clicks[0]["target"]["id"] == "q" and clicks[0]["semantic"]["role"] == "searchbox", clicks[0]
+
+
+def test_typing_into_a_box_the_page_swapped_in_for_the_clicked_one_names_the_clicked_box(page: Page) -> None:
+    """Live Wikipedia (2026-11-16): the click lands on #searchInput, then the page replaces it with a new combobox
+    input and focuses that; the typing goes into the new one. The typing says which box it stands in for."""
+    _install_bridge(page, """
+      <form id="f"><input id="searchInput" type="search" aria-label="Search Wikipedia"></form>
+      <script>
+        document.getElementById("searchInput").addEventListener("click", () => setTimeout(() => {
+          const n = document.createElement("input");
+          n.setAttribute("role", "combobox"); n.setAttribute("aria-label", "Search Wikipedia");
+          document.getElementById("f").replaceChildren(n); n.focus();
+        }, 0));
+      </script>""")
+    box = page.locator("#searchInput").bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.wait_for_timeout(60)
+    page.keyboard.type("Ada")
+    page.wait_for_timeout(120)
+
+    events = _events(page)
+    click = next(e for e in events if e["action"]["action"] == "click")
+    typed = next(e for e in events if e["action"]["action"] == "type")
+    assert click["target"]["id"] == "searchInput"
+    assert typed["element_ref"] != click["element_ref"] and typed["stands_in_for"] == click["element_ref"]
+
+
+def test_enter_in_a_form_field_is_one_step_not_also_a_click_on_the_submit_button(page: Page) -> None:
+    """Enter in a field makes the browser click the form's submit button itself. Recording that click as well made a
+    replay press Enter and then click Search again on the next page."""
+    _install_bridge(page, """
+      <form id="f" onsubmit="event.preventDefault(); document.getElementById('out').textContent = 'sent'">
+        <input id="q" aria-label="Search"><button id="go" type="submit">Search</button></form><p id="out"></p>""")
+    page.click("#q")
+    page.keyboard.type("Ada")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(120)
+    assert page.text_content("#out") == "sent"  # the browser really did submit
+    kinds = [(e["action"]["action"], e["target"].get("id")) for e in _events(page)]
+    assert ("keyboard_shortcut", "q") in kinds and ("click", "go") not in kinds, kinds
+    page.click("#go")  # a real click on the button is still a step
+    page.wait_for_timeout(60)
+    assert ("click", "go") in [(e["action"]["action"], e["target"].get("id")) for e in _events(page)]
+
+
+def test_a_click_on_another_element_than_the_press_is_described_at_click_time(page: Page) -> None:
+    _install_bridge(page, '<button id="a">Alpha</button><button id="b">Beta</button>')
+    a, b = page.locator("#a").bounding_box(), page.locator("#b").bounding_box()
+    page.mouse.move(a["x"] + 5, a["y"] + 5)
+    page.mouse.down()
+    page.mouse.move(b["x"] + 5, b["y"] + 5)
+    page.mouse.up()
+    page.evaluate("document.getElementById('b').click()")  # the click event a moved press can end with
+    page.wait_for_timeout(60)
+    assert all(e["target"]["id"] != "a" for e in _events(page) if e["action"]["action"] == "click")
+
+
 def test_password_input_redacts_value(page: Page) -> None:
     _install_bridge(page, '<input id="password" type="password" name="password" />')
 

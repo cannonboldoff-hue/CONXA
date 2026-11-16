@@ -431,6 +431,29 @@ class ArchiveFlaggedStepsTests(unittest.TestCase):
         self.assertEqual(kept, [click, download])
         self.assertEqual(archived, [])
 
+    def test_refuses_to_archive_a_press_that_changed_the_element_a_later_step_uses(self) -> None:
+        """Wikipedia's search box becomes a combobox when pressed: the press is what makes the typing step findable."""
+        from conxa_compile.compiler.build import _element_changing_sequences
+
+        events = [
+            {"action": {"action": "click"}, "extras": {"sequence": 1, "element_ref": "b:1"},
+             "selectors": {"css": "#searchInput"}, "target": {"id": "searchInput", "tag": "input"}},
+            {"action": {"action": "type"}, "extras": {"sequence": 2, "element_ref": "b:1"},
+             "selectors": {"css": "div > input.cdx-text-input__input"}, "target": {"tag": "input"}},
+            {"action": {"action": "click"}, "extras": {"sequence": 3, "element_ref": "b:2"},
+             "selectors": {"css": "a#mwGw"}, "target": {"id": "mwGw", "tag": "a"}},
+        ]
+        keep = _element_changing_sequences(events)
+        self.assertEqual(keep, {1})
+        focus = SkillStep(action={"action": "focus"}, source_event=1)
+        typing = SkillStep(action={"action": "type"}, source_event=2)
+        keys = step_keys([focus, typing])
+        kept, archived = archive_flagged_steps(
+            [focus, typing], [{"step_key": keys[0], "kind": "flag_noise", "proposed": "no_op_action"}],
+            keep_sequences=keep,
+        )
+        self.assertEqual((kept, archived), ([focus, typing], []))
+
     def test_refuses_to_archive_a_click_that_opens_a_file_chooser(self) -> None:
         click = SkillStep(action={"action": "click"})
         upload = SkillStep(action={"action": "upload_intent"}, value="{{downloaded_file}}")

@@ -1658,7 +1658,35 @@
       ancestors: ancestorsChain,
       surrounding_text: surroundingText,
       dom_signature_short: domSigShort,
+      element_ref: elementRef(el),
+      stands_in_for: standsInFor(el),
     };
+  }
+
+  // The text box a person clicked can be swapped for a new one right after the click (Wikipedia's search box is
+  // replaced by a combobox and the focus moves into it), and everything they type then lands in the new box. When the
+  // box acted on now is a focused text box, and the text box clicked last is gone from the page, the new one stands in
+  // for it: the compiler then knows the click and the typing are one box, met first in its old shape.
+  let _lastClicked = null;
+  function standsInFor(el) {
+    const c = _lastClicked;
+    if (!c || c.el === el || c.el.isConnected || Date.now() - c.at > 30000) return null;
+    return el === document.activeElement && isEditableNode(el) ? c.ref : null;
+  }
+
+  // Which DOM node a step acted on, as a token that stays the same however the page changes that node (a search box
+  // that loses its id and turns into a combobox on focus is still the box the person clicked). Recording-time only:
+  // the compiler uses it to tell "the same element" apart, never to find anything on a replay.
+  const _elementRefs = new WeakMap();
+  let _elementRefCount = 0;
+  function elementRef(el) {
+    if (!el || typeof el !== "object") return null;
+    let ref = _elementRefs.get(el);
+    if (!ref) {
+      ref = `${_bridgeId}:${++_elementRefCount}`;
+      _elementRefs.set(el, ref);
+    }
+    return ref;
   }
 
   // Every recorded step leaves the page the moment the person acts, stamped so Python can tell if one
@@ -2340,6 +2368,32 @@
     return tag === "input" || tag === "textarea" || tag === "select" ? "value" : "text";
   }
 
+  // The element as it was when the press began. A page may change or rebuild what was pressed before the click event
+  // arrives (Wikipedia's search box turns from a "searchbox" into a "combobox" the moment it gets focus), and a replay
+  // meets the element in that earlier state. Taken here, in the capture phase, before any page handler runs.
+  let _pressed = null;
+  let _lastEnterAt = 0; // set by the keydown listener below
+  onDoc(
+    "pointerdown",
+    (ev) => {
+      _pressed = null;
+      if (_captureNext || ev.button !== 0) return;
+      const el = eventTargetFromPath(ev);
+      const resolved = el && el.nodeType === 1 ? resolveMeaningfulTarget(el) : null;
+      if (!resolved) return;
+      try { _pressed = { el: resolved, at: Date.now(), payload: serializeTarget(resolved, "click", null) }; } catch (_e) { _pressed = null; }
+    },
+    true
+  );
+  // The press's description, when the click finishes the same press on the same element (changed in place) or on the
+  // element the page put in its place (the pressed one is gone). Anything else is a different gesture.
+  function pressedPayloadFor(resolved) {
+    const p = _pressed;
+    _pressed = null;
+    if (!p || Date.now() - p.at > 2000) return null;
+    return p.el === resolved || !p.el.isConnected ? p.payload : null;
+  }
+
   onDoc(
     "click",
     (ev) => {
@@ -2355,6 +2409,13 @@
         const p = serializeTarget(picked, "extract", null);
         p.extract = { source: _captureSource(picked) };
         finalizeState(p);
+        return;
+      }
+      // Enter in a form field makes the browser click the form's submit button; Enter on a focused button or link
+      // clicks it. That click (no pointer: detail 0) is what the Enter step already does, so it is not a second step:
+      // recorded too, a replay would press Enter and then click again, submitting twice.
+      if (ev.detail === 0 && Date.now() - _lastEnterAt < 150) {
+        _pressed = null;
         return;
       }
       const resolved = resolveMeaningfulTarget(el);
@@ -2379,9 +2440,11 @@
             ariaChoiceAction = { action: ctx.kind === "aria_listbox" ? "select_option" : "set_radio", value: picked ? picked.value : "" };
           }
         } catch (_e) {}
+        const pressed = pressedPayloadFor(resolved);
         const p = ariaChoiceAction
           ? serializeTarget(resolved, ariaChoiceAction.action, ariaChoiceAction.value)
-          : serializeTarget(resolved, "click", null);
+          : pressed || serializeTarget(resolved, "click", null);
+        _lastClicked = isEditableNode(resolved) ? { el: resolved, ref: elementRef(resolved), at: Date.now() } : null;
         finalizeStateAfterSettle(p, clickSettleQuietMs, clickSettleMaxMs);
         return;
       }
@@ -3119,6 +3182,7 @@
     "keydown",
     (ev) => {
       const hasModifier = ev.ctrlKey || ev.metaKey || ev.altKey;
+      if (ev.key === "Enter" && !hasModifier) _lastEnterAt = Date.now();
       if (!hasModifier && !_KEY_ALLOWLIST[ev.key]) return;
       if (ev.key === "Control" || ev.key === "Meta" || ev.key === "Alt" || ev.key === "Shift") return;
       const val = JSON.stringify({

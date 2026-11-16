@@ -1882,6 +1882,7 @@ def compile_skill_package(
     steps, compile_report, intent_graph = _apply_second_opinion(
         compile_report,
         steps,
+        keep_sequences=_element_changing_sequences(cleaned_events),
         skill_id=skill_id,
         page_urls=page_urls,
         visited_hosts=visited_hosts,
@@ -2236,10 +2237,25 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
         ledger.append(entry)
 
 
+def _element_changing_sequences(events: list[dict[str, Any]]) -> set[Any]:
+    """Recorded sequences of steps whose element a LATER step acts on in a different shape (the same DOM node, by the
+    recorder's ``element_ref``, described differently). That later step's description only exists once this one has
+    run (a search box that becomes a combobox when pressed), so this step is never "noise", whatever it looks like."""
+    from conxa_compile.compiler.step_anchors import _same_node, _target_key  # noqa: PLC0415
+
+    out: set[Any] = set()
+    for i, ev in enumerate(events):
+        if any(_same_node(ev, later) and _target_key(ev) != _target_key(later) for later in events[i + 1:]):
+            out.add((ev.get("extras") or {}).get("sequence"))
+    out.discard(None)
+    return out
+
+
 def _apply_second_opinion(
     compile_report: dict[str, Any],
     steps: list[SkillStep],
     *,
+    keep_sequences: set[Any] | None = None,
     skill_id: str,
     page_urls: list[str],
     visited_hosts: list[str],
@@ -2325,7 +2341,7 @@ def _apply_second_opinion(
         noise_findings = [f for f in findings if f.get("kind") == "flag_noise"] if settings.compile_pass("flag_noise") else []
         rewrite_findings = [f for f in findings if f.get("kind") != "flag_noise"]
         applied = apply_second_opinion(steps, rewrite_findings)
-        steps, archived = archive_flagged_steps(steps, noise_findings)
+        steps, archived = archive_flagged_steps(steps, noise_findings, keep_sequences=keep_sequences)
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile
         applied, archived = [], []
         degraded.append({

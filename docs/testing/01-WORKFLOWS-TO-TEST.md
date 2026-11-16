@@ -77,10 +77,9 @@ never `file://`.
 [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)):** a leg counts only once it reaches the
 approved, publish-ready state through Studio's normal controls with independent proof of the
 outcome. Each leg that passes is removed from here and recorded in
-[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) (Leg C, the S3 form fill, is there as P-11).
-Still to pass:
+[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) (Leg C, the S3 form fill, is there as P-11;
+Leg A, the Wikipedia control baseline, as P-12). Still to pass:
 
-- Leg A — Wikipedia control baseline (search, open a link in the article, go back). *In test.*
 - Leg B — S1 login + credential grep. The recorder drops sign-in pages by design, so the login is
   done through the group's saved sign-in, not recorded.
 - Leg D — S1 new-tab/popup round trip (`/windows`).

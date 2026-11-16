@@ -638,6 +638,34 @@ the strict end-to-end rule, and it proves Conxa can confirm work on apps that ne
 
 ---
 
+## Passed Workflow P-12 — WF-1 Leg A: Wikipedia search, link, Back, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 A wikipedia control r4`,
+`71600c18-defc-4259-8371-a1d31e44e3e2`, group "E2E 2026-11-16", passing run `r_mwik9npg_iyoiv`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S11 `en.wikipedia.org` — click the search box, type "Ada Lovelace", Enter, click the lead
+link "analytical engine", browser Back. 6 compiled steps: navigate, focus `#searchInput`, type
+`{{search_wikipedia}}`, Enter, click `role=link[name="analytical engine"]`, browser_back with a
+required "the search words appear" check.
+
+**What was confirmed:** Back is recorded and replayed; no click step leans on a generated id alone
+(the leg's original purpose); the test passed with every step confirmed and no warning; the run
+ended on the Ada Lovelace article (`execute_success`); the workflow reached **Approved**.
+
+**Fixed en route (root causes, all general):** the recorder described an element as it looked after
+the press, and Wikipedia changes its search box when pressed; pressing Enter in a form was recorded
+twice (the key and the browser's own click on the submit button); and the compiler decided "same
+element" from the element's description, so a box the page swapped for a new one on focus produced
+an invented focus step from the wrong description, and the review pass archived the right one. Now
+the recorder tracks each element with a token that survives the page changing or replacing it.
+
+**Why this pass matters:** modern sites routinely rebuild a control the moment it is touched (search
+boxes, rich editors, menus). This is the first proof Conxa records and replays such a control
+correctly, from a fresh page, with no hand fix.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

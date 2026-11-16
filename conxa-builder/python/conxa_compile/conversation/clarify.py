@@ -561,8 +561,15 @@ def generate_questions(
 
     # 0b ─ steps the compile left out that carried a value the person entered: say so, so a
     # real omission is not silent. Advisory: the answer applies nothing (re-record to add it back).
+    # A value the workflow still enters is not lost: typing the same words twice (a field re-reported on Enter) is
+    # folded into one step that carries them, as an input's recorded value or as fixed text.
+    still_used = {str(i.get("default")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("default") not in (None, "")}
+    still_used |= {str(s.get("value")) for s in steps if s.get("value") and "{{" not in str(s.get("value"))}
+    still_used |= {str(((look(s) or {}).get("action") or {}).get("value")) for s in steps
+                   if ((look(s) or {}).get("action") or {}).get("value")}  # what each kept step was recorded typing
     lost = [d for d in dropped or []
-            if isinstance(d, dict) and d.get("value") and d.get("pass") not in _MERGE_PASSES]
+            if isinstance(d, dict) and d.get("value") and d.get("pass") not in _MERGE_PASSES
+            and str(d.get("value")) not in still_used]
     if lost:
         shown = ", ".join(f"“{str(d['value'])[:40]}”" for d in lost[:3])
         out.append(_question(
