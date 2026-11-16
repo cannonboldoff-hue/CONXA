@@ -53,6 +53,17 @@ function makePage(url, title = "My App", passwordBoxes = 0) {
     assert.equal(await isAuthFailure(makePage("https://app.example.com/oauth2/authorize", "Sign in to continue")), true);
   });
 
+  // WF-1 Leg B: a "Log out" click recorded landing on /login. Only THAT step may land there; any other step that
+  // lands on sign-in is still a session that died.
+  await test("the sign-in page a step was recorded landing on → NOT auth failure for that step only", async () => {
+    const logout = { type: "click", validation: { assertions: [{ type: "url_pattern", target: "https://app\\.example\\.com/login", required: false }] } };
+    const other = { type: "click", validation: { assertions: [{ type: "url_pattern", target: "https://app\\.example\\.com/home", required: false }] } };
+    const page = makePage("https://app.example.com/login");
+    assert.equal(await isAuthFailure(page, [], logout), false);
+    assert.equal(await isAuthFailure(page, [], other), true);
+    assert.equal(await isAuthFailure(page, []), true);
+  });
+
   await test("auth hop with no sign-in evidence (an in-app settings page) → NOT auth failure", async () => {
     assert.equal(await isAuthFailure(makePage("https://app.example.com/settings/auth")), false);
   });

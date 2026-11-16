@@ -1,7 +1,7 @@
 """cmd_start_recording gates on EVERY app in the workflow's group being connected and not
 expired (AUTH-16 — the runtime's rule; a workflow that starts on one app routinely crosses
-into another), and every workflow recording writes each app's refreshed session back to its
-own saved file (see FIX.md 2026-08-16) without vouching for it — the next gate re-checks."""
+into another), and a workflow recording writes an app's refreshed session back to its own
+saved file only when the app's sign-in check confirms it is still signed in (2026-11-16)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,16 @@ from conxa_core.storage.workflow_store import create_workflow  # noqa: E402
 from handlers.protocol import _CommandError  # noqa: E402
 from handlers.session import SessionMixin, _refresh_group_app_sessions  # noqa: E402
 import handlers.session as session_module  # noqa: E402
+
+
+@pytest.fixture()
+def probe_says(monkeypatch):
+    """The write-back runs at once (not on a thread) and the sign-in check answers `verdict` for every app."""
+    def _set(verdict):
+        monkeypatch.setattr(session_module, "_in_background", lambda fn: fn())
+        monkeypatch.setattr("conxa_compile.recorder.session.check_group_sessions_sync",
+                            lambda targets, _apps, **_kw: {a.id: verdict for a in targets})
+    return _set
 
 
 class _Harness(SessionMixin):
@@ -152,7 +162,8 @@ def test_workflow_on_an_unmatched_site_is_still_gated(isolated_data_dir, monkeyp
     assert "Render" in exc_info.value.message
 
 
-def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_data_dir):
+def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_data_dir, probe_says):
+    probe_says("ready")
     group = create_group("Sales", workspace_id="wrk_local")
     group, app_id = _captured_app(
         isolated_data_dir,
@@ -185,10 +196,35 @@ def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_d
     after = after_group.apps[0]
     assert after.captured_at is not None and after.captured_at >= before
     assert after.last_error == ""
-    assert after.checked_at is None  # written back, not verified — the next gate re-checks
+    assert after.checked_at is not None  # written back only because the sign-in check said "ready"
 
     saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
     assert saved["cookies"] == [{"name": "session", "domain": "render.test", "path": "/", "value": "new"}]
+    assert not (isolated_data_dir / f"{app_id}.json.candidate").exists()
+
+
+@pytest.mark.parametrize("verdict", ["expired", "unverified"])
+def test_a_recording_that_ended_signed_out_never_replaces_the_saved_session(isolated_data_dir, probe_says, verdict):
+    """the-internet's Logout rewrites rack.session under the same name: no cookie disappears, so only the app's own
+    sign-in check can tell. Signed out (or a site Conxa cannot check) keeps the working session (WF-1 Leg B)."""
+    probe_says(verdict)
+    group = create_group("Sales", workspace_id="wrk_local")
+    group, app_id = _captured_app(
+        isolated_data_dir, group.id, "The Internet", "https://the-internet.test/login", "https://the-internet.test/secure",
+        json.dumps({"cookies": [{"name": "rack.session", "domain": "the-internet.test", "path": "/", "value": "signed-in"}], "origins": []}),
+    )
+    workflow = create_workflow("Log out", "https://the-internet.test/secure", group_id=group.id)
+    merged_dir = isolated_data_dir / "workflows" / workflow.id
+    merged_dir.mkdir(parents=True)
+    (merged_dir / "merged_group_state.json").write_text(json.dumps(
+        {"cookies": [{"name": "rack.session", "domain": "the-internet.test", "path": "/", "value": "signed-out"}], "origins": []}),
+        encoding="utf-8")
+
+    _refresh_group_app_sessions(workflow.id)
+
+    saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    assert saved["cookies"][0]["value"] == "signed-in"
+    assert not (isolated_data_dir / f"{app_id}.json.candidate").exists()
 
 
 def test_refresh_is_a_noop_when_no_recording_ever_happened(isolated_data_dir):
@@ -328,7 +364,8 @@ def test_recently_checked_app_is_not_reprobed(isolated_data_dir, monkeypatch):
     assert calls == []  # freshly checked — no probe needed
 
 
-def test_stop_recording_writes_back_session_before_returning(isolated_data_dir, monkeypatch):
+def test_stop_recording_writes_back_a_session_the_check_confirms(isolated_data_dir, monkeypatch, probe_says):
+    probe_says("ready")
     group = create_group("Sales", workspace_id="wrk_local")
     group, app_id = _captured_app(
         isolated_data_dir,
@@ -421,7 +458,8 @@ def test_write_back_keeps_saved_session_when_recording_ended_signed_out(isolated
     assert [c["name"] for c in _saved(isolated_data_dir, app_id)["cookies"]] == ["session", "user"]
 
 
-def test_write_back_backs_up_the_previous_session(isolated_data_dir):
+def test_write_back_backs_up_the_previous_session(isolated_data_dir, probe_says):
+    probe_says("ready")
     group, app_id, workflow, merged = _group_with_session(isolated_data_dir, ["session", "user"])
     merged.write_text(json.dumps({"cookies": [_cookie("session", "rotated"), _cookie("user", "me")], "origins": []}), encoding="utf-8")
 

@@ -68,27 +68,11 @@ never `file://`.
 
 ---
 
-## WF-1 — Starter marathon: navigation, login, forms, tabs, single-file transfer, alerts
+## WF-1 — passed (2026-11-16)
 
-**Sites:** S11 (en.wikipedia.org) + S1 (the-internet.herokuapp.com) + S3 (demoqa.com) ·
-**Tabs:** up to 3
-
-**Re-test under the strict end-to-end rule (2026-11-16 campaign,
-[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)):** a leg counts only once it reaches the
-approved, publish-ready state through Studio's normal controls with independent proof of the
-outcome. Each leg that passes is removed from here and recorded in
-[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) (Leg C, the S3 form fill, is there as P-11;
-Leg A, the Wikipedia control baseline, as P-12; Leg D, the new-tab round trip, as P-13; Leg E, the
-download → upload handoff, as P-14; Leg F, native JS dialogs, as P-15). Still to pass:
-
-- Leg B — S1 login + credential grep. The recorder drops sign-in pages by design, so the login is
-  done through the group's saved sign-in, not recorded.
-
-Earlier history: legs A, B, D and E passed the `03-ONE-WORKFLOW-RUNBOOK.md` follow-up run on
-2026-09-03, and Leg F passed on 2026-09-04 (P-5). Both runs predate the strict rule above.
-
-**Where failures go (regressions only):** `TODO.md` EXEC-34 (remaining unbounded `.evaluate()`
-sites, unrelated follow-up); EXEC-5 (#43 tab landing, #31/#32 download/upload verification).
+All six legs passed under the strict end-to-end rule and are recorded in
+[`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) as P-11 to P-16. Later workflows that reuse
+"WF-1's known-good" skills can use those.
 
 ---
 

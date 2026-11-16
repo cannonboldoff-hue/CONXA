@@ -255,6 +255,23 @@ def _start_tab(context: Any, url: str) -> tuple[Any, list[dict], Any]:
     return page, responses, on_response
 
 
+def _mark_sign_in_arrival(payload: dict[str, Any]) -> bool:
+    """For a navigation the recorder tagged as caused by the person's own action (the `cause` tagging in the
+    navigation sweep), marks it `to_sign_in` and returns True: arriving on a sign-in page, not doing anything there."""
+    action = payload.get("action") or {}
+    if str(action.get("action") or "") != "manual_navigate":
+        return False
+    try:
+        nav = json.loads(str(action.get("value") or ""))
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(nav, dict) or nav.get("cause") != "action":
+        return False
+    nav["to_sign_in"] = True
+    action["value"] = json.dumps(nav)
+    return True
+
+
 def _probe_group_sessions_sync(targets: list[GroupApp], seed_apps: list[GroupApp]) -> dict[str, SessionProbe]:
     """Is each of `targets` still signed in? The same browser a run uses: ONE Chromium seeded with
     the merged saved sessions of every app in `seed_apps` (newest file first, so a stale shared SSO
@@ -1448,7 +1465,14 @@ class RecordingSession:
                     interacted_at is not None
                     and -1.0 <= (committed_at - interacted_at) <= self._NAV_INTERACTION_WINDOW_S
                 )
-                if renderer_initiated or not to_url or to_url == from_url or is_blank_url(to_url):
+                if not to_url or to_url == from_url or is_blank_url(to_url):
+                    continue
+                if renderer_initiated:
+                    # The page's own navigation right after the person's action (a link, "Log out"): that action
+                    # is already a step, but the page it unloaded can no longer report where it landed (bridge.js
+                    # samples "after" from the old document). Tell that step here, queued behind it.
+                    if after_interaction and not same_document:
+                        self._pending_payloads.put(({"_landing": {"from_url": from_url, "to_url": to_url}}, page, None))
                     continue
                 # Not requested by the page through CDP, but a SPA route change or a navigation
                 # right after a click/submit is still that action's EFFECT, not something the
@@ -1982,6 +2006,9 @@ class RecordingSession:
         if payload.get("_amend"):
             self._apply_amend_sync(payload)
             return
+        if isinstance(payload.get("_landing"), dict):
+            self._apply_landing_sync(payload["_landing"], self._tab_id_for_page(src_page))
+            return
         # Counted on arrival, before any drop below, so a step dropped on purpose (paused, a login page) is not
         # mistaken for one that was lost on the way.
         if payload.get("bridge") and isinstance(payload.get("seq"), int):
@@ -1996,12 +2023,16 @@ class RecordingSession:
             if str((payload.get("semantic") or {}).get("input_type") or "").lower() == "password":
                 self._login_flow.arm()
             if self._login_flow.is_login_step(str((payload.get("page") or {}).get("url") or "")):
-                if len(self._login_drops) < 200:
-                    self._login_drops.append({
-                        "pass": "login_page",
-                        "action": str((payload.get("action") or {}).get("action") or ""),
-                    })
-                return
+                # Except the arrival a person's own click caused ("Log out" landing on the sign-in page): it is
+                # that click's result, not something done on the sign-in page. Kept only for the compiler to fold
+                # onto the click (navigation_effects.py), which drops it otherwise (WF-1 Leg B, 2026-11-16).
+                if not _mark_sign_in_arrival(payload):
+                    if len(self._login_drops) < 200:
+                        self._login_drops.append({
+                            "pass": "login_page",
+                            "action": str((payload.get("action") or {}).get("action") or ""),
+                        })
+                    return
         # Frame-chain/geometry extraction needs Playwright sync-API calls (walking the
         # ancestor chain via frame.evaluate()); safe here since this runs from the plain
         # pump-loop drain, never from inside the expose_binding callback that first received
@@ -2042,6 +2073,36 @@ class RecordingSession:
             except Exception:  # noqa: BLE001 — a UI callback must never break recording
                 pass
 
+    def _apply_landing_sync(self, landing: dict[str, Any], tab_id: str | None) -> None:
+        """Where the person's last action on this tab sent the page, written onto that step as a navigation effect
+        (the same shape navigation_effects.py folds a tagged navigation into). Only fills a step that has no landing
+        and no stronger effect, and only the step taken on the page that was left. Never raises."""
+        from conxa_compile.compiler.navigation_effects import _INTERACTION_ACTIONS, _STRONGER_EFFECTS
+
+        from_url, to_url = str(landing.get("from_url") or ""), str(landing.get("to_url") or "")
+        try:
+            with self._lock:
+                for idx in range(len(self._materialized) - 1, -1, -1):
+                    data = self._materialized[idx].model_dump(mode="json")
+                    if tab_id and str((data.get("tab") or {}).get("id") or "") not in ("", tab_id):
+                        continue
+                    if str((data.get("action") or {}).get("action") or "").lower() not in _INTERACTION_ACTIONS:
+                        continue
+                    if str((data.get("page") or {}).get("url") or "") != from_url:
+                        return  # the last action here was on another page: not the one that navigated
+                    pc = data.get("post_condition") if isinstance(data.get("post_condition"), dict) else {}
+                    if (pc.get("url_delta") or {}).get("after") or str(pc.get("classified_effect") or "") in _STRONGER_EFFECTS:
+                        return
+                    data["post_condition"] = {**pc, "classified_effect": "navigation",
+                                              "url_delta": {"before": from_url, "after": to_url}}
+                    self._materialized[idx] = RecordedEvent.model_validate(data)
+                    break
+                else:
+                    return
+            self._rewrite_events_jsonl(self.data_root / "sessions" / self.session_id)
+        except Exception as exc:  # noqa: BLE001
+            self.binding_errors.append(f"landing_error: {exc!s}")
+
     def _apply_amend_sync(self, payload: dict[str, Any]) -> None:
         """BUILD-80: merge what the page did after a saved step (state change, post condition, the app's words,
         the progress watch) into that step. A step is found by its uid; one that is gone (merged typing, a dropped
@@ -2064,6 +2125,11 @@ class RecordingSession:
                 if idx is None:
                     return
                 data = self._materialized[idx].model_dump(mode="json")
+                # A landing the recorder already wrote (_apply_landing_sync) outlives the old page's own "after" sample.
+                had = data.get("post_condition") if isinstance(data.get("post_condition"), dict) else {}
+                new_pc = fields.get("post_condition")
+                if (had.get("url_delta") or {}).get("after") and isinstance(new_pc, dict) and not (new_pc.get("url_delta") or {}).get("after"):
+                    fields["post_condition"] = {**new_pc, "classified_effect": had.get("classified_effect"), "url_delta": had["url_delta"]}
                 data.update(fields)
                 # A caption the page drew late: only ever fills an empty one, never replaces what was captured.
                 if isinstance(late_label, str) and late_label.strip() and isinstance(data.get("target"), dict)                         and not (data["target"].get("label_text") or "").strip():

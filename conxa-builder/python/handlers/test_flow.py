@@ -74,6 +74,26 @@ def _built_package_has(output_path: str, slug: str) -> bool:
         return False
 
 
+def _sign_in_changed_since_build(workflow: Any) -> bool:
+    """True when the built pack's sign-in setup for this workflow's group differs from the live group (the same
+    rule the test applies before it runs, handlers.protocol._sign_in_setup_drift). Unreadable means build."""
+    import json
+    from pathlib import Path
+
+    from conxa_core.config import settings
+    from conxa_core.workspace import LOCAL_WORKSPACE_ID, workspace_dir_slug
+    from handlers.protocol import _sign_in_setup_drift
+
+    if not getattr(workflow, "group_id", None):
+        return False
+    try:
+        pack_json = json.loads((Path(settings.data_dir) / "skill-packs" / workspace_dir_slug(LOCAL_WORKSPACE_ID) / "pack.json")
+                               .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return True
+    return bool(_sign_in_setup_drift(workflow, pack_json))
+
+
 def _humanize(intent: str) -> str:
     text = str(intent or "").replace("_", " ").strip()
     return (text[:1].upper() + text[1:]) if text else "A step"
@@ -258,6 +278,11 @@ class TestFlowMixin:
         # second, never-edited workflow looked fresh while another workflow's build existed, and its test ended in
         # "Skill not found". Ask the built package itself.
         if not stale and not _built_package_has(pack.build.output_path, workflow.slug):
+            stale = True
+        # The test refuses a pack whose group sign-in setup changed since it was built (_sign_in_setup_drift: a
+        # re-connected app, a learned sign-in). "Run test — builds a fresh test copy first" must then build, or a
+        # person who just signed in again is told to "rebuild" with no way to do it (WF-1 Leg B).
+        if not stale and _sign_in_changed_since_build(workflow):
             stale = True
         if stale:
             self.cmd_build_skill_package({"skill_slug": workflow.slug, "for_test": True}, rid)

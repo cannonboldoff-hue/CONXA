@@ -187,6 +187,28 @@ def test_fold_keeps_a_navigation_the_user_did_on_their_own():
     assert fold_action_caused_navigations(events) == events
 
 
+def test_a_click_that_lands_on_a_sign_in_page_keeps_where_it_landed():
+    """WF-1 Leg B: "Log out" lands on /login. The recorder keeps that arrival (`to_sign_in`) only so it becomes the
+    click's result; anything else on a sign-in page is still dropped, and the arrival is never a step of its own."""
+    login = "https://shop.test/login"
+    click = _click("2026-01-01T00:00:00Z")
+    out = fold_action_caused_navigations([click, _nav("2026-01-01T00:00:01Z", to_url=login, cause="action", to_sign_in=True)])
+    assert out == [click]
+    assert click["post_condition"]["url_delta"]["after"] == login
+    assert fold_action_caused_navigations([_nav("2026-01-01T00:00:01Z", to_url=login, cause="action", to_sign_in=True)]) == []
+
+
+def test_recorder_keeps_only_a_click_caused_arrival_on_a_sign_in_page():
+    from conxa_compile.recorder.session import _mark_sign_in_arrival
+
+    caused = {"action": {"action": "manual_navigate", "value": json.dumps({"to_url": "https://shop.test/login", "cause": "action"})}}
+    assert _mark_sign_in_arrival(caused) is True
+    assert json.loads(caused["action"]["value"])["to_sign_in"] is True
+    typed = {"action": {"action": "manual_navigate", "value": json.dumps({"to_url": "https://shop.test/login", "cause": "user"})}}
+    assert _mark_sign_in_arrival(typed) is False
+    assert _mark_sign_in_arrival({"action": {"action": "click"}}) is False
+
+
 def test_fold_never_crosses_tabs():
     events = [_click("2026-01-01T00:00:00Z", tab="tab_0"), _nav("2026-01-01T00:00:01Z", tab="tab_1")]
     assert fold_action_caused_navigations(events) == events
@@ -384,3 +406,51 @@ def test_a_redirect_that_keeps_the_clicks_link_transition_is_still_the_clicks_ef
 def test_without_a_transition_from_the_browser_the_clock_still_decides():
     got = _drain_with_transition(RecordingSession(session_id="t"), _page(), "")
     assert got["cause"] == "action" and got["cause_source"] == "clock"
+
+
+# ---------------------------------------------------------------- a page load the person's last action caused (WF-1 Leg B)
+
+SECURE = "https://shop.test/secure"
+LOGIN = "https://shop.test/login"
+
+
+def test_a_page_load_right_after_an_action_tells_that_action_where_it_landed():
+    """A link the page follows itself ("Log out") is renderer-initiated, so it is not a step of its own; the old page
+    dies before it can say where it went. The recorder now queues that landing for the step, behind it."""
+    rs, page = RecordingSession(session_id="t"), _page()
+    now = time.monotonic()
+    rs._last_interaction_at[id(page)] = now - 0.5
+    rs._nav_committed_at[id(page)] = now
+    rs._nav_pending_renderer_initiated[id(page)] = now - 0.2
+    rs._nav_cdp_sessions[id(page)] = _Cdp([SECURE, LOGIN], 1)
+    rs._nav_history_state[id(page)] = {"index": 0, "entries": [SECURE]}
+    rs._nav_check_pages.append(page)
+    rs._drain_nav_history_checks_sync()
+    payload, _, _ = rs._pending_payloads.get_nowait()
+    assert payload == {"_landing": {"from_url": SECURE, "to_url": LOGIN}}
+    assert rs._pending_payloads.empty()
+
+
+def test_the_landing_is_written_onto_the_step_taken_on_the_page_that_was_left(tmp_path):
+    from conxa_core.models.events import RecordedEvent
+
+    rs = RecordingSession(session_id="t", data_root=tmp_path)
+    ev = _event("click", "2026-01-01T00:00:00Z", SECURE, "Logout", "logout")
+    ev["tab"] = {"id": "tab_0"}
+    ev["post_condition"] = {"classified_effect": "none", "url_delta": None}
+    rs._materialized.append(RecordedEvent.model_validate(ev))
+    rs._apply_landing_sync({"from_url": SECURE, "to_url": LOGIN}, "tab_0")
+    pc = rs._materialized[-1].model_dump(mode="json")["post_condition"]
+    assert pc["classified_effect"] == "navigation" and pc["url_delta"] == {"before": SECURE, "after": LOGIN}
+    # A landing from a page the last action was not taken on is not that action's.
+    rs._apply_landing_sync({"from_url": "https://shop.test/other", "to_url": "https://shop.test/x"}, "tab_0")
+    assert rs._materialized[-1].model_dump(mode="json")["post_condition"]["url_delta"]["after"] == LOGIN
+
+
+@patch.object(settings, "compile_keep_every_action", False)
+def test_a_last_step_that_lands_on_sign_in_compiles_with_that_landing():
+    click = _event("click", "2026-01-01T00:00:00Z", SECURE, "Logout", "logout")
+    click["post_condition"] = {"classified_effect": "navigation", "url_delta": {"before": SECURE, "after": LOGIN}}
+    pkg = _compile_steps([click], "sess-logout")
+    last = pkg.skills[0].steps[-1]
+    assert [a.target for a in last.validation.assertions if a.type == "url_pattern"] == [r"^https://shop\.test/login"]

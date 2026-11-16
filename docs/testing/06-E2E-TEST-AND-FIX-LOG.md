@@ -417,6 +417,133 @@ BUILD-93).
 
 **Final status of WF-1 Leg F: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-15).
 
+### WF-1 Leg B — sign in, and make sure no password ends up in the package (assigned 2026-11-16)
+Conxa never records what is typed on a sign-in page, by design. So the sign-in is done once through
+the group's own "sign in" step, which saves the session safely. A workflow then starts on the
+signed-in page ("Secure Area") and clicks Logout; the page saying "You logged out of the secure
+area!" proves the run really was signed in. Finally the built package is searched for the
+password and user name, and neither may appear.
+
+**Test 1 — result: BLOCKED.** The group was created and the tester signed in through Studio's sign-in
+browser. Studio could not confirm the sign-in by itself, because the wizard never asks for the page
+you land on, so "Save anyway" was needed. The success address was then set under Edit. The recording
+started signed in on the Secure Area, as it should, and recorded the Logout click. Then every test
+run failed with *"The Internet's saved sign-in expired mid-run."* "Sign in and test again" did not
+open a sign-in window; it ran the same failing test again. After the tester signed in again through
+the group page, every test refused to start: *"Sign-in setup for the E2E Signin group changed
+after the last build. Rebuild the skill package before testing."* The normal screens have no
+control for that.
+
+Password check: no file in the package contains the password. The user name "tomsmith" appears
+once, as text the page shows ("Logged in as tomsmith"), not as anything typed.
+
+**What was really wrong (two causes, both general):**
+
+1. *Finishing a recording overwrote the group's saved sign-in with a signed-out one.* When a
+   recording ends, Studio copies the browser's cookies back into the group's saved sign-in, so that a
+   refreshed session is kept. It was meant to skip this when the recording ended signed out. But it
+   could only notice a sign-out if a session cookie *disappeared*. This site signs you out by
+   rewriting the same cookie, so nothing disappeared, and the signed-out cookie replaced the good
+   one. The tester proved it by using each saved cookie on the site: the old one opened the Secure
+   Area, the new one was sent to the login page. So any workflow that signs out, or any site that
+   signs out this way, silently broke every workflow in its group. *Fix:* the recording's cookies now
+   replace the saved ones only after Studio's own sign-in check (the one behind "Check now") confirms
+   they are still signed in. The check runs in the background after "Finish and save". Signed out, or
+   a site Conxa cannot check, keeps the working session.
+2. *"Run test" and the test itself disagreed on "out of date".* "Run test" rebuilds the test copy only
+   when the workflow was edited after the last build. A separate check refuses the test when the
+   group's sign-in setup changed since the build. A person who just signed in again hit the second
+   with no way to satisfy it. *Fix:* "Run test" now also rebuilds when the sign-in setup changed, using
+   the very same rule.
+
+**Changed:** `handlers/session.py`, `handlers/test_flow.py`; tests updated in
+`test_recording_group_app_scoping_and_writeback.py` plus a new one,
+`test_test_build_follows_sign_in.py`. Python suite: 3144 passed, 0 failed. Smaller sign-in issues
+(wizard never asks for the success address, a stale warning, "Sign in and test again" not opening
+the sign-in window, the user name kept as page text, Studio's own session copy stored unencrypted)
+are filed as AUTH-24.
+
+**Test 2 (new group, fresh recording, after both fixes) — result: FAIL, for a third reason.** Both
+fixes held:
+- The saved sign-in was not replaced after the recording ended signed out. The file was unchanged,
+  and the site still opened the Secure Area with it.
+- "Run test" rebuilt its test copy by itself.
+
+But every test run stopped with "The Internet's saved sign-in expired mid-run", although it plainly
+was not expired: the run opened the Secure Area signed in, and the Logout click worked.
+
+**What was really wrong:** I reproduced it outside Studio. After the click, the page says "You logged
+out of the secure area!". The runtime's "did the app say it failed?" check reads "logged out" as "your
+sign-in ended" and stops the run. The runtime can't tell a deliberate sign-out from an expired one
+because the recording never told it where this click lands. The recorder throws away everything on
+a sign-in page, so a recording never contains anything typed on one. That also threw away the
+*arrival* on the sign-in page, the very result of the Logout click. So any workflow whose real
+result is landing on a sign-in page (signing out, closing an account, ending a session) failed every
+time, on any site. *Kind of problem:* architectural, a gap between what recording keeps and what replay
+needs to judge the result.
+
+*Fix:*
+- **Recording:** an arrival on a sign-in page that the person's own click caused is now kept as
+  that click's result. Nothing done *on* the sign-in page is kept, as before. If such an arrival
+  is not caused by a click, it is still dropped and never becomes a step.
+- **Replay:** at the address *that step* was recorded landing on, a sign-in page or a "you are
+  signed out" message is the step's result, not a dead sign-in. The same rule is used in all four
+  places that judge this. Any *other* step that lands on a sign-in page is still treated as an
+  expired sign-in.
+- **Checked against the real site:** with the recorded landing, the step passed and was proven
+  (the logout message is new, and it is on the recorded address). Without it, the step still fails
+  as before.
+
+**Changed:** `recorder/session.py`, `compiler/navigation_effects.py`, `runtime/app/run.js`,
+`runtime/app/server.js`, `runtime/app/effect_probes.js`. Tests were added to
+`test_redirect_navigation.py` and `runtime/test/unit/test_auth_recovery.js`. Python: 3146
+passed, 0 failed. Runtime: 1397 passed, 0 failed. The test engine was rebuilt and Studio
+restarted.
+
+Known limit: if a sign-in really expires during *recording* at a click, that click now records the
+sign-in page as its landing. A later run where the sign-in expires at that same step is then not
+caught there, but the next step's own check still catches it.
+
+**Test 3 (new group, fresh recording) — result: FAIL, same message.** The tester showed that the
+recording still had no landing for the Logout click. So the runtime half of the fix had nothing to
+use.
+
+**What was really wrong, one level deeper:** the recorder learns where a click led in two ways:
+- **From inside the page itself**, which looks again once the page settles. When the click loads a
+  whole new page, that old page is gone before it can look, so it reports nothing.
+- **From the browser's own record of page loads.** That route skips every load the page itself
+  started, because the click is already a step.
+
+So the click that ends a recording by loading a new page never learns where it went. That is true on
+any site, not only for sign-outs. Earlier steps were partly covered, because the *next* step's address
+shows where the page went. The last step had nothing.
+
+*Fix:* when the browser reports a page load that the page started right after the person's action,
+the recorder now writes the landing straight onto that action. It is queued behind the action, so it
+always arrives after it. A late report from the old page can no longer wipe it out. The landing is
+written only onto the action taken on the page that was left.
+
+**Changed:** `recorder/session.py`. New tests in `test_redirect_navigation.py`: the landing is queued,
+written onto the right step, and a last step that lands on sign-in compiles with that landing.
+Python: 3148 passed. One LLM-router timing test fails about one run in three on its own; this change
+does not touch it. Studio restarted.
+
+**Test 4 (new group, fresh recording) — result: PASS.**
+- The recording now knows the Logout click landed on `/login`. Compile built three checks for that
+  step: the address changes, it lands on the login page, and "You logged out of the secure area!"
+  appears. The last one came from the single question, "How can we tell it worked?", where the
+  tester ticked the address and typed the message.
+- The group's saved sign-in still worked after the recording and after both tests, checked on the
+  site itself.
+- Both test runs passed ("Step 1: confirmed", "Step 2: confirmed"), each ending in `execute_success`
+  on `/login`. There was no "sign-in expired" and no "couldn't confirm". The workflow was approved.
+- No file in the package contains the password. The user name appears only as page text (AUTH-24).
+
+Also seen: the question's tick box says "The web address looks like" without showing the address
+(BUILD-93).
+
+**Final status of WF-1 Leg B: PASSED** (P-16). **All six legs of WF-1 have now passed.**
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

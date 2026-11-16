@@ -2130,7 +2130,7 @@ async function _handleTool(name, args, extra) {
           // Multi-tab: check auth on the tab the step actually failed on, not always the
           // initial tab — a login redirect in a second tab would otherwise go undetected.
           const _failedPage = runErr.failedPage || page;
-          if (failedStep !== null && await isAuthFailure(_failedPage, steps)) {
+          if (failedStep !== null && await isAuthFailure(_failedPage, steps, runErr.failedStep || null)) {
             // The page that actually bounced to a login screen is the right host to resolve
             // the dead app from — for a group pack, entry.manifest.target_url is the START
             // app, which is wrong when a SIBLING app's session is the one that died (see

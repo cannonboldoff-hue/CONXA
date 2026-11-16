@@ -127,7 +127,12 @@ def fold_action_caused_navigations(events: list[dict[str, Any]]) -> list[dict[st
             continue
         cause = _last_interaction(out, _tab_id(ev))
         if not _is_action_caused(ev, nav, cause):
-            out.append(ev)
+            # An arrival on a sign-in page (recorder: `to_sign_in`) is kept only as a click's result; on its own it
+            # is never a step, since signing in is never part of a workflow.
+            if not nav.get("to_sign_in"):
+                out.append(ev)
+            continue
+        if nav.get("to_sign_in") and cause is None:
             continue
         to_url = str(nav.get("to_url") or "")
         if cause is not None and to_url:

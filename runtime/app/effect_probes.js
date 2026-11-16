@@ -45,13 +45,15 @@ function probeRequestChain(check, nb) {
   return { answer: "cant_tell" }; // nothing was sent that this notebook could see: that proves nothing either way
 }
 
-function probeFailureSignal(nb, gate, freshTexts, appFailure) {
+// `signedOut`: the step was recorded landing where it is now (run.js::landedAsRecorded), so "you are signed out" there is
+// its result ("Log out"), not the app refusing it.
+function probeFailureSignal(nb, gate, freshTexts, appFailure, signedOut = false) {
   if (gate && gate.status === "failed") return { answer: "yes", evidence: gate.evidence };
   if (!nb) return { answer: "cant_tell" };
   const refused = nb.mutationFailure();
   if (refused) return { answer: "yes", evidence: `a request to the app failed (${refused.why})` };
   const failure = classifyCompletionFailure(freshTexts, appFailure);
-  if (failure) return { answer: "yes", evidence: `the app said "${failure.evidence}"` };
+  if (failure && !(signedOut && failure.kind === "auth_expired")) return { answer: "yes", evidence: `the app said "${failure.evidence}"` };
   return { answer: "no" };
 }
 
@@ -80,7 +82,7 @@ const hasBasis = (check) => Array.isArray(check.calibration_basis) && check.cali
  * @returns {Array<{id:string, rung:string, witness:string, role:string, answer:string, evidence?:string, identity?:boolean}>}
  *   Checks a test run showed to be dead (`calibrated === false`) are left out: they no longer count toward anything.
  */
-function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null, looks = null } = {}) {
+function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null, looks = null, signedOut = false } = {}) {
   const nb = notebook;
   const freshTexts = nb ? nb.seenNew() : [];
   const out = [];
@@ -93,7 +95,7 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true,
     switch (type) {
       case "input_has_files": r = { answer: executed ? "yes" : "cant_tell" }; break;
       case "request_chain": r = probeRequestChain(check, nb); break;
-      case "failure_signal": r = probeFailureSignal(nb, gate, freshTexts, signals && signals.failure); break;
+      case "failure_signal": r = probeFailureSignal(nb, gate, freshTexts, signals && signals.failure, signedOut); break;
       case "new_text": r = probeNewText(check, nb); break;
       case "download_file": r = probeDownloadFile(nb); break;
       case "fresh_look": r = fresh || { answer: "cant_tell" }; break; // looked at by run.js (fresh_look.js), which opens a tab

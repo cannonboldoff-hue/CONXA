@@ -231,12 +231,13 @@ async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
   const probe = await evalOn(page, pageScripts.faultProbe).catch(() => null);
   const p = probe && probe !== EVAL_TIMED_OUT ? probe : {};
   const seen = pageStatus.recent(page, sinceMs);
-  return classifyFault({
+  const fault = classifyFault({
     alerts: [...(p.alerts || []), ...(p.invalid || [])],
     offline: !!p.offline,
     status: seen ? seen.status : null,
     mayHaveActed,
   });
+  return fault && fault.kind === "auth_expired" && landedAsRecorded(step, page) ? null : fault;
 }
 
 // Completion gate (completion.js): "the action ran" is not "the action finished". Called once a step
@@ -370,6 +371,8 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     throw Object.assign(new Error("Execution cancelled"), { cancelled: true, completionGate: true });
   }
   const deadlineHit = v.status === "still_working" && v.reason === "deadline";
+  // "You logged out" on the page this step was recorded landing on is what the step did, not a failure.
+  if (v.status === "failed" && v.kind === "auth_expired" && landedAsRecorded(step, page)) return { ...v, status: "done" };
   if (v.status !== "failed" && v.status !== "timed_out" && !(deadlineHit && full)) return v;
   if (deadlineHit && full && !state.loopDepth && !state.forkDepth && !ctx.dryRun) {
     // The work is still going and this call is out of time. Pause instead of failing: the run ends "Submitted.", the
@@ -475,7 +478,11 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   const looks = effect && notebook
     ? await runLooks(effect, { notebook, steps: ctx.steps, inputs: state.inputs, registry: ctx.tabs, resolve: resolveStep })
     : null;
-  if (effect) checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, looks, signals: appSignals(ctx, state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0")) }));
+  if (effect) {
+    const onPage = state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0");
+    checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, looks, signals: appSignals(ctx, onPage),
+      signedOut: !!onPage && landedAsRecorded(step, onPage) }));
+  }
 
   const required = proof.requiredRungFor(step, { full, hasRequiredAssertion: hasReq });
   // A raised quorum only counts when a proven test run raised it (a check carries its `calibration_basis`).
@@ -1182,7 +1189,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // fix — running it anyway just burns ~10s against a login page before server.js's own
   // isAuthFailure check (which triggers the re-auth window) gets a turn. Skip straight to
   // stepFailure so that check runs immediately.
-  if (await isAuthFailure(page, steps)) {
+  if (await isAuthFailure(page, steps, step)) {
     ctx.tracker.emit("step_fail", { si: i, fc: "auth_failure" });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
   }
@@ -2316,9 +2323,23 @@ function _isRecordedUrl(steps, url) {
   return steps.some((s) => s && s.type === "navigate" && s.url && bare(s.url) === live);
 }
 
-async function isAuthFailure(page, steps) {
+// The recording saw THIS step land here (its own url_pattern evidence, build.py: a click's navigation): a sign-in
+// page or a "you are signed out" message at that address is the step's result ("Log out"), never a dead session.
+// Scoped to the one step, so an earlier step that lands on sign-in is still a session that expired (WF-1 Leg B).
+function landedAsRecorded(step, page) {
+  let url = "";
+  try { url = page.url(); } catch (_) { return false; }
+  const checks = (step && step.validation && step.validation.assertions) || [];
+  return checks.some((a) => {
+    if (!a || a.type !== "url_pattern" || !a.target || String(a.target).startsWith("#")) return false;
+    try { return new RegExp(a.target).test(url); } catch (_) { return false; }
+  });
+}
+
+async function isAuthFailure(page, steps, step = null) {
   const url = page.url();
   if (_isRecordedUrl(steps, url)) return false;
+  if (step && landedAsRecorded(step, page)) return false;
   const pathname = pathOf(url);
   if (SIGN_IN_PAGE_RE.test(pathname)) return true;
   let titled = false;

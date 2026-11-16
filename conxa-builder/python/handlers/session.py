@@ -65,7 +65,7 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
     import json
 
     from conxa_core.config import settings as _settings
-    from conxa_core.storage.group_store import get_group, mark_group_app_unverified
+    from conxa_core.storage.group_store import get_group
     from conxa_core.storage.storage_state import keeps_session, refresh_app_state
     from conxa_core.storage.workflow_store import get_workflow
 
@@ -79,6 +79,7 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
     if group is None:
         return
     current = json.loads(merged_path.read_text(encoding="utf-8"))
+    candidates = []
     for app in group.apps:
         if not app.storage_state_path or not Path(app.storage_state_path).is_file():
             continue
@@ -90,11 +91,49 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
         keys = (app.auth_definition or {}).get("session_keys") or []
         if not keeps_session(previous, refreshed, keys):
             continue  # the recording ended signed out of this app — keep the saved session
-        state_path.with_name(state_path.name + ".bak").write_text(json.dumps(previous), encoding="utf-8")
-        state_path.write_text(json.dumps(refreshed), encoding="utf-8")
-        # Not a login: the recording may have ended signed out of this app (an expired session
-        # copied straight back). Stamping it verified here hid exactly that from the next gate.
-        mark_group_app_unverified(group.id, app.id)
+        candidates.append((app, state_path, previous, refreshed))
+    if candidates:
+        # A recording can end signed out while every cookie keeps its name (the-internet's Logout rewrites
+        # rack.session; WF-1 Leg B): adopting that state broke every workflow of the group, silently. So the
+        # recording's state replaces the saved one only once the app's own sign-in check says it is signed in.
+        # The check takes seconds, so it runs after "Finish and save" returns; until then the saved one stays.
+        _in_background(lambda: _adopt_signed_in_sessions(group.id, candidates))
+
+
+def _in_background(fn: Any) -> None:
+    import threading
+
+    threading.Thread(target=fn, daemon=True, name="group-session-writeback").start()
+
+
+def _adopt_signed_in_sessions(group_id: str, candidates: list[tuple[Any, Path, dict, dict]]) -> None:
+    """Each candidate app's state from the recording replaces its saved session only when the headless sign-in
+    check (the one behind "Check now") answers "ready" for it. "expired" or "unverified" (a site Conxa cannot
+    check) keeps the saved session: picking up a rotated cookie is not worth risking a signed-out one."""
+    import json
+
+    from conxa_compile.recorder.session import check_group_sessions_sync
+    from conxa_core.storage.group_store import get_group, set_group_app_checked
+
+    group = get_group(group_id)
+    if group is None:
+        return
+    for app, state_path, previous, refreshed in candidates:
+        candidate = state_path.with_name(state_path.name + ".candidate")
+        try:
+            candidate.write_text(json.dumps(refreshed), encoding="utf-8")
+            probe_app = app.model_copy(update={"storage_state_path": str(candidate)})
+            others = [a for a in group.apps if a.id != app.id]
+            verdict = check_group_sessions_sync([probe_app], [probe_app, *others]).get(app.id)
+            if verdict != "ready":
+                continue
+            state_path.with_name(state_path.name + ".bak").write_text(json.dumps(previous), encoding="utf-8")
+            state_path.write_text(json.dumps(refreshed), encoding="utf-8")
+            set_group_app_checked(group.id, app.id, "ready")
+        except Exception:  # noqa: BLE001 — a failed write-back keeps the saved session, as before
+            continue
+        finally:
+            candidate.unlink(missing_ok=True)
 
 
 _PROBE_TTL_S = 600

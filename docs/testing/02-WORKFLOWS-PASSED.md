@@ -733,6 +733,37 @@ one-shot, the way the recorder already did.
 
 ---
 
+## Passed Workflow P-16 — WF-1 Leg B: signed-in start through a group sign-in, logout, no password in the package (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 B secure area logout r4`,
+`ad722abe-24fc-4af8-92d1-2dd79357502e`, group "E2E Signin4 2026-11-16", passing runs
+`r_mwiwpmhv_7pfdq` and `r_mwiwrrlp_bk0nw`). Full diary:
+[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `the-internet.herokuapp.com`. The group's sign-in was done once in Studio's sign-in
+browser (nothing typed there is recorded). The workflow starts on `/secure` signed in and clicks
+Logout. Compiled to 2 steps. Checks on the Logout step: the address changes, it lands on `/login`,
+and "You logged out of the secure area!" appears.
+
+**What was confirmed:**
+- The group's saved sign-in still opened the Secure Area after the recording and after both tests.
+- Two test runs passed, each ending in `execute_success` on `/login`, with no "sign-in expired" and
+  no "couldn't confirm".
+- The workflow reached **Approved**.
+- Credential check: `SuperSecretPassword` appears in no file of the built package or its staged
+  copy. The user name appears only as on-screen page text (filed as AUTH-24).
+
+**Fixed en route (root causes, general):**
+1. A recording that ended signed out overwrote the group's saved sign-in. It is now kept only
+   after the sign-in check confirms it.
+2. "Run test" now rebuilds when the group's sign-in setup changed since the last build.
+3. The recorder lost where a click led whenever the click loaded a new page. It now writes the
+   landing onto that click.
+4. At the address a step was recorded landing on, a sign-in page or a "signed out" message is that
+   step's result, not an expired sign-in.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

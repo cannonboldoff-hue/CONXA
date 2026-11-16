@@ -10,6 +10,14 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**Workflows that end by signing out can now be tested — 2026-11-16**
+A workflow whose last click was "Log out" always failed its test with "your saved sign-in expired", even though the sign-in was fine. When a click loads a new page, Build Studio didn't record where that click led, so a test treated landing on the sign-in page as a broken sign-in. Build Studio now records where such a click lands, on any site. A test then accepts that page, and the "you logged out" message, as the result of that one step. Landing on a sign-in page anywhere else still counts as an expired sign-in.
+— 2026-11-16
+
+**Recording a sign-out no longer signs out the whole group — 2026-11-16**
+When a recording ends, Build Studio copies the browser's sign-in back into the group, so a refreshed sign-in is kept. If the recording signed out (clicking "Log out" on a site), that signed-out state could replace the good one, and every workflow in the group then failed with "sign-in expired". Build Studio now keeps the recording's sign-in only after checking it is still signed in. Also, after you sign in again, "Run test" now rebuilds its test copy by itself, instead of saying "rebuild the skill package" with no way to do it.
+— 2026-11-16
+
 **Pop-up boxes that ask you to type something now replay inside Build Studio — 2026-11-16**
 Some websites pop up a small box that asks you to type an answer. Build Studio could record your answer, but a test inside Build Studio (and a run inside Conxa Execute) could never give it back. The browser these apps are built on does not support that kind of box at all, so the test waited two minutes and the answer never arrived. A replay now hands the page your recorded answer (or the value you entered for this run) directly, in the same way the recording does. In a normal browser nothing changes.
 — 2026-11-16
