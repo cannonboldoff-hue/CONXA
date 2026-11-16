@@ -874,6 +874,27 @@ Input" is tied to a neighbouring tile's name ("Client Side Delay"), which is har
 
 **Final status of WF-2 Segments A and B (first half): PASSED** (P-23).
 
+### WF-2 Segment B (second half) — a button that keeps moving and renaming itself (assigned 2026-11-16)
+The local practice page "Shapeshifter" (`mutator.html`) changes every element's hidden name every 0.7
+seconds. It also moves the one button to the bottom of the page and changes its label at random
+between Go, Send, Do It and Proceed. The workflow types a name and an email and clicks that button.
+The page then saying "Thanks, <name>!" is the proof.
+
+**Test 1 — result: PASS** (no fix needed).
+- The built workflow uses none of the changing hidden names. The boxes are found by their visible
+  hints, and the button by its label plus its place on the page.
+- Name and email became inputs, and the proof is "you see the name on the screen".
+- Five test runs all confirmed all 6 steps, with no warning and no recovery used. Watched live:
+  "Thanks, Mega Test Run!" with the recorded values, and "Thanks, Second Pass!" with new ones.
+  Approved.
+
+Honest limit: the button was found by waiting a few seconds for its label to come round to "Proceed"
+again, which this page always does. A button whose label changed for good would test the deeper
+self-healing; that was not exercised here. Also seen: doubled quotes in "Done when ““name””
+appears" (BUILD-93).
+
+**Final status of WF-2 Segment B (second half): PASSED** (P-24).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

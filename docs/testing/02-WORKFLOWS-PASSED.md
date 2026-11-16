@@ -914,6 +914,27 @@ the button whose label becomes it. 7 steps, with input `set_new_button_name`.
 
 ---
 
+## Passed Workflow P-24 — WF-2 Segment B (moved element): self-renaming, moving button, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 B mutator`, `14d09535-a815-4674-a23a-574af2f2a9b6`,
+group "E2E 2026-11-16", passing runs incl. `r_mwjbrrkg_a71xr`, `r_mwjbujqd_3l93s`, `r_mwjbzlzh_n08o1`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** local `mutator.html` (every 0.7 s: all ids/classes renamed, the button moved to the end of
+body and relabelled among Go/Send/Do It/Proceed). The workflow types name and email, then clicks the
+button. 6 steps with inputs `name` and `user_email`. The click must show `{{name}}`.
+
+**What was confirmed:**
+- No changing id or class in the package.
+- Five runs, all steps confirmed, no recovery tier used. Watched live: "Thanks, Second Pass!" with
+  new inputs.
+- **Approved.** No fix needed.
+
+**Limit:** the button resolved by its label once it cycled back to "Proceed". A permanently changed
+label (the Tier A heal path) was not exercised.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures
