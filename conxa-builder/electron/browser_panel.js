@@ -312,22 +312,35 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   // The page closed itself (window.close() — a sign-in popup finishing): drop its tab.
   view.webContents.once("destroyed", () => _forgetTab(runId, tabId));
   view.setBounds(_HIDDEN); // parked until the renderer reports a rect
-  if (tab.markerUrl) view.webContents.loadURL(tab.markerUrl).catch(() => {});
-  // Both after loadURL: attaching the debugger to a never-navigated view crashes Electron.
-  _emulate(run, tab);
+  // Attaching the debugger to a never-navigated view crashes Electron (the whole app, no message). Our own tabs
+  // load their marker first. A site-opened tab arrives here from inside Chromium's createWindow, before its first
+  // page has started, so its debugger work waits for that page (a recording died on every "open in a new tab" link).
+  const wire = () => {
+    _emulate(run, tab);
+    // The recorder sees every page in Electron (Studio's own window, other runs) through one CDP
+    // context; a tab's devtools target id is how it tells which pages are its run's (`targets`).
+    if (run.kind === "test") return Promise.resolve();
+    const dbg = _debugger(tab);
+    return dbg ? dbg.sendCommand("Target.getTargetInfo").then((r) => { tab.targetId = r.targetInfo.targetId; }, () => {}) : Promise.resolve();
+  };
+  if (tab.markerUrl) {
+    view.webContents.loadURL(tab.markerUrl).catch(() => {});
+    tab.targetReady = wire();
+  } else {
+    tab.targetReady = new Promise((resolve) => {
+      let wired = false;
+      const once = () => { if (wired || view.webContents.isDestroyed()) return; wired = true; wire().then(resolve, resolve); };
+      for (const ev of ["did-navigate", "dom-ready", "did-finish-load"]) view.webContents.once(ev, () => setImmediate(once));
+      // `targets` waits on every tab: a popup that never loads a page (or closes first) must not hold the recorder. It
+      // is then left out of the run's targets until it loads (wired late, it still gets its size and id).
+      setTimeout(resolve, 5000);
+    });
+  }
   // A navigation (the blank marker page -> a real site, which swaps the render process) can drop the
   // override, leaving the page at full size inside a shrunk view: clipped on the right and bottom.
   // So the size is checked (and put right) each time a page is ready, not only when the tab is created.
   for (const ev of ["dom-ready", "did-finish-load"]) {
     view.webContents.on(ev, () => { _ensureGeometry(run, tab).catch(() => {}); if (ev === "dom-ready") _injectTourHint(run, tab); });
-  }
-  // The recorder sees every page in Electron (Studio's own window, other runs) through one CDP
-  // context; a tab's devtools target id is how it tells which pages are its run's (`targets`).
-  if (run.kind !== "test") {
-    const dbg = _debugger(tab);
-    tab.targetReady = dbg
-      ? dbg.sendCommand("Target.getTargetInfo").then((r) => { tab.targetId = r.targetInfo.targetId; }, () => {})
-      : Promise.resolve();
   }
   run.tabs.push(tab);
   if (_win) _win.contentView.addChildView(view);

@@ -10,6 +10,14 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**"The screen changes" now counts a new tab the step opened — 2026-11-16**
+If a click's whole job is to open a new tab, the page you clicked on stays exactly the same. The "the screen changes" check only looked at that page, so it said nothing happened and the test failed every time. A new tab that the page itself opened during the step now counts as a change, and a click that really does nothing still fails the check.
+— 2026-11-16
+
+**Build Studio no longer closes when a website opens a new tab while you record — 2026-11-16**
+Clicking a link that opens a new tab (like "Click Here" on a "multiple windows" page, a sign-in popup or a share window) while recording made the whole Build Studio app close with no message. Studio was setting up its connection to the new tab before the tab had loaded anything, which crashes the app. It now waits until the new tab's first page has started, and never waits more than a few seconds, so recording carries on and the new tab shows up inside the recording.
+— 2026-11-16
+
 **A search box the page replaces when you click it now records correctly — 2026-11-16**
 On Wikipedia, clicking the search box makes the page throw that box away and put a new one in its place, and what you type goes into the new one. Build Studio thought these were two different boxes, so it made up an extra "click into the box" step from the new box's look and set your real click aside. A test then failed straight away, because a fresh page only has the original box. Build Studio now keeps track of which box replaced which, so your click and your typing stay one box. It also stops asking "a few things you typed are not in the workflow" about words that were only recorded twice.
 — 2026-11-16

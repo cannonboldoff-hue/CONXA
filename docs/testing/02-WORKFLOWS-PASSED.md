@@ -666,6 +666,32 @@ correctly, from a fresh page, with no hand fix.
 
 ---
 
+## Passed Workflow P-13 — WF-1 Leg D: site-opened tabs and a switch back, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF1 D new tab round trip r3`,
+`fe1a05f0-d5bd-4433-977d-4bf8bdbb71bd`, group "E2E 2026-11-16", passing run `r_mwima47v_024b1`).
+Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `the-internet.herokuapp.com/windows` — click "Click Here" (the site opens `/windows/new`
+in a new tab, heading "New Window"), switch back to the first tab in Studio's tab strip, click
+"Elemental Selenium" (opens `elementalselenium.com` in another tab). 8 compiled steps across 3 tabs:
+navigate, click, tab_open, popup, tab_switch, click, tab_open, popup.
+
+**What was confirmed:** both site-opened tabs were recorded inside Studio's own browser and compiled
+as their own steps; the switch back was compiled and the second click ran on the original tab; the
+first test passed with all steps confirmed and no warning, with no fix applied; the workflow reached
+**Approved**.
+
+**Fixed en route (root causes, both general):** Build Studio closed outright whenever a website
+opened a new tab during a recording (the debugger was attached to the tab before its first page,
+which crashes Electron), and "The screen changes" could never pass for a click whose effect is a new
+tab (only the clicked page was compared).
+
+**Why this pass matters:** "open in a new tab" links, sign-in popups and share windows are everywhere;
+before this, recording any of them in Studio's own browser crashed the app.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures

@@ -113,7 +113,7 @@ test("a narrow panel letterboxes the view, centres it and shrinks the page by th
   assert.deepStrictEqual(view.bounds, { x: 360, y: 240, width: 1280, height: 720 });
 });
 
-test("a site-opened popup is adopted as a tab with its opener, at the run's size and scale", () => {
+test("a site-opened popup is adopted as a tab with its opener, at the run's size and scale", async () => {
   const openerId = last.tabs[0].id;
   const opener = added[added.length - 1];
   panel.setActiveBounds("rec", openerId, { x: 0, y: 0, width: 960, height: 540 }); // s = 0.75
@@ -125,6 +125,10 @@ test("a site-opened popup is adopted as a tab with its opener, at the run's size
   const pop = last.tabs[1];
   assert.strictEqual(pop.opener, openerId);
   assert.strictEqual(pop.active, true, "the popup comes to the front, as in a browser");
+  // Attaching the debugger inside createWindow, before the popup's first page, crashed the whole app (WF-1 Leg D).
+  assert.strictEqual(chromiumMade.attached, false, "no debugger before the popup's first page");
+  chromiumMade.handlers["did-navigate"]();
+  await new Promise((r) => setImmediate(r));
   assert.strictEqual(lastMetrics(chromiumMade).params.scale, 0.75);
   assert.strictEqual(chromiumMade.url, "", "a popup is not sent to a marker — Chromium navigates it itself");
   assert.strictEqual(opener.visible, false, "the opener is hidden");
@@ -158,6 +162,7 @@ test("a record run lists its tabs' devtools target ids, popups included; a test 
   const wc = added[added.length - 1].webContents;
   const popWc = new FakeWebContents();
   wc.openHandler({ url: "" }).createWindow({ webContents: popWc, webPreferences: {} });
+  popWc.handlers["did-navigate"](); // its first page: only now is its id asked for
   const { targets } = await panel.targetsOf("rec2");
   assert.deepStrictEqual(targets.map((t) => t.targetId), [wc.targetId, popWc.targetId]);
   assert.strictEqual(targets[1].opener, tabId);

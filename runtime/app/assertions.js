@@ -30,8 +30,25 @@ const STATE_CHANGED_TEXT_LEN_TOLERANCE = 20;
 
 // Cheap, deterministic snapshot of page shape used only to answer "did anything happen" for the
 // state_changed assertion. No LLM, no DOM diffing — three counters compared before vs. after.
+// How many new tabs/windows this page has opened (Playwright's per-page "popup" event: window.open, a target=_blank
+// link). Counted from the first baseline taken on the page, so a step whose whole effect is opening a tab ("Click
+// Here" -> /windows/new) is a change even though its own page stays exactly as it was. Per page, never the whole
+// context: a borrowed host browser also holds other runs' pages.
+const _popupCounts = new WeakMap();
+function popupsOpened(page) {
+  if (!page || typeof page.on !== "function") return null;
+  let box = _popupCounts.get(page);
+  if (!box) {
+    box = { n: 0 };
+    _popupCounts.set(page, box);
+    try { page.on("popup", () => { box.n += 1; }); } catch (_) { return null; }
+  }
+  return box.n;
+}
+
 async function capturePreStepSignature(page, countTexts = []) {
   try {
+    const popups = popupsOpened(page);
     const url = page.url();
     const sig = await evalOn(page, pageScripts.preStepSignature, STATE_CHANGED_SELECTOR);
     // How many times each text the step will look for is already on the page, so a later "it is there" can be told
@@ -51,7 +68,7 @@ async function capturePreStepSignature(page, countTexts = []) {
     // real page, which is a false positive on the exact guard meant to catch a repeated action.
     if (!sig || sig === EVAL_TIMED_OUT) return null;
     const { textLen, interactiveCount } = sig;
-    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}) };
+    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}), ...(popups !== null ? { popups } : {}) };
   } catch (_) {
     return null;
   }
@@ -253,6 +270,9 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
         cantTell = true;
       } else {
         ok = await pollPositive(async () => {
+          // A tab this page opened since the baseline is the action's effect, whatever the page itself shows.
+          const popups = popupsOpened(page);
+          if (typeof baseline.popups === "number" && typeof popups === "number" && popups > baseline.popups) return true;
           const after = await capturePreStepSignature(page);
           if (!after) cantTell = true;
           return !after

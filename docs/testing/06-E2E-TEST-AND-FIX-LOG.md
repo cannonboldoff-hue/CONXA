@@ -278,6 +278,68 @@ dropdown text, ticked by default; and the run waited about 15 seconds after Ente
 
 **Final status of WF-1 Leg A: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-12).
 
+### WF-1 Leg D — open a new tab and come back (assigned 2026-11-16)
+On the-internet's "Multiple Windows" page: click "Click Here" (the site opens a new tab), check it
+says "New Window", switch back to the first tab, then click "Elemental Selenium". Tests that each
+step runs in the tab it was recorded in.
+
+**Test 1 — result: BLOCKED (crash).** The moment "Click Here" was clicked during recording, the whole
+Build Studio app closed with no message. This happened three times, including once with a real mouse
+click and no test script attached, so a person would hit it too. Nothing could be recorded.
+
+**What was really wrong:** when a website opens a new tab during a recording, Studio sets up its
+connection to that tab (to size the page and to know the tab belongs to this recording) straight
+away, inside the browser's own "create the tab" moment, before the tab has loaded anything. The
+code's own comment already warned that doing this on a tab that never loaded a page crashes the app.
+Tabs Studio opens itself load a page first, so they were safe; tabs a website opens were not. Test
+runs were not affected because they skip that connection. *Kind of problem:* architectural, in the
+app shell. Any "opens in a new tab" link, sign-in popup or share window would close Studio while
+recording.
+
+*Fix:* a tab a website opens is now connected only once its first page has started, and Studio
+never waits on it for more than 5 seconds, so a tab that never loads cannot freeze the recording.
+Checked by hand before handing back: recording `/windows` and clicking "Click Here" now opens the
+new tab inside the recording, and Studio stays up.
+
+**Changed:** `conxa-builder/electron/browser_panel.js`; its tests updated to pin "no connection
+before the first page" (39 passed).
+
+**Test 2 (fresh recording, after the crash fix) — result: passed only after a fix inside Studio, so
+not counted.** Studio stayed up. The new tab was recorded, the switch back to the first tab was
+compiled in, and so was the second link that opens another tab (8 steps). But "How can we tell it
+worked?" offered only one option, "The screen changes", which the tester ticked. The first two
+test runs then failed on the "Elemental Selenium" click: *"The step ran, but the page didn't end up
+where it should have."* Studio's "Find the cause" correctly said the check could never pass, and its
+one-click fix (make that check optional) led to a pass and approval. Strictly, a person should
+not need that detour. (Also noted: the switch back to the first tab is not shown in the list of
+captured actions, although it is in the compiled steps.)
+
+**What was really wrong:** "The screen changes" was checked only on the tab where the click
+happened, by comparing its address, its number of buttons and links, and its amount of text. A
+click whose whole job is to open a new tab leaves its own page exactly as it was, so the check said
+"nothing happened" every time. *Fix:* a new tab or window that this page itself opened during the
+step now counts as a change. It is counted per page, so a tab opened by some other run can never
+make it pass. A click that does nothing still fails the check.
+
+**Changed:** `runtime/app/assertions.js`; new test `runtime/test/unit/test_new_tab_is_a_change.js`.
+Runtime suite: 1395 passed, 0 failed. The test engine was rebuilt.
+
+**Test 3 (fresh recording) — result: PASS.** 4 actions captured (two clicks, two new tabs). They
+compiled to 8 steps: open the page → click "Click Here" → new tab opens → its "New Window" page
+shows → switch back to the first tab → click "Elemental Selenium" → another tab opens → its page
+shows. Studio asked no questions this time; the workflow has no inputs and nothing was unclear.
+The first test passed in under a minute with all 8 steps "confirmed". The runtime log shows run
+`r_mwima47v_024b1` taking each step in order and ending with `execute_success` on the original
+`/windows` tab. Each click's effect is proven by the next step: a "new tab opens" step fails if no
+tab opens. The workflow was approved with the normal button.
+
+Honest notes: this time Studio did not offer "The screen changes" (in Test 2 it had, because that
+compile's review pass happened to suggest it), so the runtime fix from Test 2 was not exercised
+live here; its own browser test covers it. Two step labels say "in the new window" for actions on
+the first tab (wording only, filed with BUILD-92).
+
+**Final status of WF-1 Leg D: PASSED** (added to `02-WORKFLOWS-PASSED.md` as P-13).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".
