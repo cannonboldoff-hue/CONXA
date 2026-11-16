@@ -835,6 +835,22 @@ both sides. Python: 3160 passed. Runtime: 1407 passed. Test engine rebuilt, Stud
 
 **Final status of WF-2 Segment J: PASSED** (P-21).
 
+### WF-2 Segment C — a result that appears only after a few seconds (assigned 2026-11-16)
+On the-internet's "Dynamic Loading 2" page, pressing Start shows a loading bar. After about five
+seconds the words "Hello World!" are added to the page. A replay must wait for them instead of
+giving up early. Those words appearing are the proof.
+
+**Test 1 — result: PASS** (first try, no fix needed).
+- Recorded one click on "Start". Studio asked "How will we know it worked?" with a typing box, and
+  the tester typed "Hello World!".
+- In both test runs the click step waited about 9 seconds. Watched live, the words appeared about 5
+  seconds in, and the step finished only after that. Both runs were confirmed with no warning and
+  `execute_success`. Approved.
+
+Also seen: the "Tick what applies" wording on a card that has nothing to tick (BUILD-93, item 10).
+
+**Final status of WF-2 Segment C: PASSED** (P-22).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

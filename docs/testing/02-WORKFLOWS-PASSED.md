@@ -882,6 +882,20 @@ closed. All steps confirmed, no warning. **Approved.**
 
 ---
 
+## Passed Workflow P-22 — WF-2 Segment C: late-rendered result, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 C late render`,
+`740a014c-fcc7-4e91-9ae6-5281d0e6f2ba`, group "E2E 2026-11-16", passing runs `r_mwjax3kn_graas` and
+`r_mwjayl8q_kxtse`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `/dynamic_loading/2`. Click Start; "Hello World!" is added about 5 s later. The click
+must show "Hello World!" (typed by the person as proof).
+
+**What was confirmed:** in both runs the click step waited for the late text (about 9 s), with the
+text live-observed about 5 s in. No warning, `execute_success`. **Approved.** No fix needed.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures
