@@ -10,6 +10,14 @@ A simple practice form with an Email box could not be tested at all: Build Studi
 Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
 — 2026-11-16
 
+**"How can we tell it worked?" now shows the web address it means — 2026-11-16**
+One of the answers to "How can we tell it worked?" read "The web address looks like" and then stopped, so you couldn't tell what you were agreeing to. It now shows the address in a readable form, for example "the-internet.herokuapp.com/users/…".
+— 2026-11-16
+
+**Questions no longer name the wrong item from a misread video — 2026-11-16**
+On a page with several items that look alike (three profile pictures), Build Studio asked "which one should it open?" and offered "Always the third one — as you recorded it", even though you had picked the second. The mistake came from the part that watches the recording video. Picking that answer could have built a workflow that opens the wrong item. Now, if a question says "first", "third" and so on but the recording itself never shows that, Build Studio uses its own plain wording, "Always this one, as you recorded it", which is always true.
+— 2026-11-16
+
 **Workflows that end by signing out can now be tested — 2026-11-16**
 A workflow whose last click was "Log out" always failed its test with "your saved sign-in expired", even though the sign-in was fine. When a click loads a new page, Build Studio didn't record where that click led, so a test treated landing on the sign-in page as a broken sign-in. Build Studio now records where such a click lands, on any site. A test then accepts that page, and the "you logged out" message, as the result of that one step. Landing on a sign-in page anywhere else still counts as an expired sign-in.
 — 2026-11-16

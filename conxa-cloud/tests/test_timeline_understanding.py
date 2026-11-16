@@ -772,6 +772,18 @@ def test_a_quoted_name_the_recording_never_shows_is_counted_and_replaced_as_the_
     assert out["validation_report"]["override"]["ungrounded_name"]["count"] == 1
 
 
+def test_a_which_one_word_the_browser_never_recorded_is_replaced():
+    """WF-2 H: the video model said "the third one"; the person picked the second. A choice worded on the video's
+    reading ("Always the third one — as you recorded it") would pin the wrong item, so code's own wording is used."""
+    out = _validate_button_question("Which one should it open each time?", ("Any of the three", "Always the third one"))
+    q = out["questions"][0]
+    assert q["prompt"].startswith("You picked")
+    assert all("third" not in c["label"] for c in q["choices"])
+    assert out["validation_report"]["override"]["ungrounded_name"]["count"] == 1
+    assert TU.unrecorded_positions("the 2nd row", "") == []                       # nothing recorded to compare with
+    assert TU.unrecorded_positions("the second step", "second step") == []         # the page itself says it
+
+
 def test_a_web_address_in_a_label_is_counted_and_replaced():
     out = _validate_button_question("Same button?", ("Always https://x.io/a", "A different one"))
     assert out["questions"][0]["prompt"].startswith("You picked")

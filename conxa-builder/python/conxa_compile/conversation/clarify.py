@@ -101,6 +101,14 @@ def _humanize(binding: str) -> str:
     return binding.replace("_", " ").strip().capitalize()
 
 
+def _address_from_pattern(pattern: str) -> str:
+    """A compiled address pattern (generalize_url_pattern) the way a person reads an address:
+    ``^https://shop\\.test/users/[^/?#]+`` -> ``shop.test/users/…``."""
+    text = re.sub(r"\[\^[^\]]*\][+*]", "…", pattern.strip().lstrip("^").rstrip("$"))
+    text = re.sub(r"^https?://", "", text.replace("\\", ""))
+    return _readable(text).strip()
+
+
 def _quoted(text: str) -> str:
     """``“text”`` for a person, without doubling the quotes when ``readable`` already added them
     (a target that is only a ``{{token}}`` comes back already quoted)."""
@@ -391,7 +399,9 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
         if t == "url_changed":
             return "The web address at the top of the browser changes"
         if t == "url_pattern":
-            return f"The web address looks like {_readable(str(a.get('pattern') or a.get('value') or ''))[:60]}"
+            # The compiled pattern lives in `target` (build.py); it used to be read from keys it never has: a blank label.
+            shown = _address_from_pattern(str(a.get("target") or a.get("pattern") or a.get("value") or ""))
+            return f"The web address looks like {shown[:60]}" if shown else "The web address at the top of the browser changes"
         return "The screen changes"
 
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",

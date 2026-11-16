@@ -616,3 +616,12 @@ def test_an_unconfirmed_row_on_a_step_that_cant_be_undone_is_asked_about():
 def test_a_confirmed_row_or_a_row_named_by_the_run_is_not_asked_again():
     assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(confirmed=True), limit=None))
     assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(identifier="{{item}}"), limit=None))
+
+
+def test_an_address_check_is_offered_with_the_address_a_person_can_read():
+    """It was offered as "The web address looks like " with nothing after it: the pattern is kept in `target`."""
+    from conxa_compile.conversation.clarify import _address_from_pattern
+
+    assert _address_from_pattern(r"^https://the\-internet\.herokuapp\.com/users/[^/?#]+") == "the-internet.herokuapp.com/users/…"
+    assert _address_from_pattern(r"^https://the\-internet\.herokuapp\.com/login") == "the-internet.herokuapp.com/login"
+    assert _address_from_pattern("") == ""

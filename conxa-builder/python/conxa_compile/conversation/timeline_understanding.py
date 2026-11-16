@@ -485,12 +485,14 @@ def _norm(text: object) -> str:
     return " ".join(str(text or "").replace("“", '"').replace("”", '"').split()).casefold()
 
 
-def _recording_text(merged: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> str:
-    """Everything the recording says, as one casefolded string: the haystack a quoted name must come from."""
+def _recording_text(merged: list[dict[str, Any]], candidates: list[dict[str, Any]], video: bool = True) -> str:
+    """Everything the recording says, as one casefolded string: the haystack a quoted name must come from.
+    ``video=False`` leaves out what the video model said it saw, keeping only what the browser recorded."""
     parts: list[str] = []
     for r in merged:
         parts += [str(r.get(k) or "") for k in ("target", "value", "url", "title")]
-        parts += [str(v) for v in (r.get("segment") or {}).values() if isinstance(v, (str, int, float))]
+        if video:
+            parts += [str(v) for v in (r.get("segment") or {}).values() if isinstance(v, (str, int, float))]
         parts += [str(b) for b in r.get("dialog_buttons") or []]
         parts.append(str((r.get("control") or {}).get("recorded") or ""))
     for c in candidates:
@@ -506,10 +508,23 @@ def ungrounded_names(text: object, haystack: str) -> list[str]:
     return [n for m in _QUOTED.finditer(str(text or "")) if (n := _norm(m.group(1) or m.group(2))) and n not in haystack]
 
 
+_POSITION = re.compile(r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|(?:[1-9]|10)(?:st|nd|rd|th))\b", re.I)
+
+
+def unrecorded_positions(text: object, recorded: str) -> list[str]:
+    """Which-one words ("the third one") the browser's own record never shows. The video model can misread which of
+    several alike items was picked (WF-2 H: it said "third", the recording says user2), and a choice worded on that
+    ("Always the third one — as you recorded it") would pin the wrong item for a person who trusts it."""
+    if not recorded:
+        return []
+    return [m.group(1) for m in _POSITION.finditer(str(text or "")) if m.group(1).casefold() not in recorded]
+
+
 def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[str, Any],
                        values: dict[str, dict[str, Any]], taken: set[str],
                        no_upload_question: frozenset[str] = frozenset(),
-                       report: dict[str, Any] | None = None, haystack: str = "") -> list[dict[str, Any]]:
+                       report: dict[str, Any] | None = None, haystack: str = "",
+                       recorded: str = "") -> list[dict[str, Any]]:
     report = {} if report is None else report
     out: list[dict[str, Any]] = []
     for q in raw_questions or []:
@@ -566,6 +581,8 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
         words = [prompt, why, *(c["label"] for c in choices)]
         machine = any(has_machine_words(w) for w in words)
         invented = [n for w in words for n in ungrounded_names(w, haystack)]
+        if effect == "value":                    # which item was picked is the browser's to say, not the video's
+            invented += [p for w in words for p in unrecorded_positions(w, recorded)]
         if machine:
             _log(report, "override", "machine_words", f"{effect}:prompt")
         if invented:
@@ -719,7 +736,8 @@ def validate(raw: Any, merged: list[dict[str, Any]], candidates: list[dict[str, 
     # An upload of a file the workflow downloaded itself has no question (see must_ask), whoever asks.
     no_upload = frozenset(r["row_ref"] for r in _events(merged) if r.get("action") in _UPLOAD_ACTIONS) \
         - {m["row"] for m in must if m["effect"] == "upload"}
-    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload, report, haystack)
+    questions = _checked_questions(raw.get("questions"), rows, by_ref, values, taken, no_upload, report, haystack,
+                                   recorded=_recording_text(merged, candidates, video=False))
     # The prompt tells the model never to ask about a gap; code enforces it. A free-form note on a
     # row the model itself called a gap is that same question. Only notes: a value, fork or upload
     # question on such a row is about the action, not about the gap.

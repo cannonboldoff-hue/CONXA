@@ -544,6 +544,59 @@ Also seen: the question's tick box says "The web address looks like" without sho
 
 **Final status of WF-1 Leg B: PASSED** (P-16). **All six legs of WF-1 have now passed.**
 
+### WF-2 Segment H — a menu that appears only when the mouse rests on a picture (assigned 2026-11-16)
+On the-internet's "Hovers" page, three user pictures show a name and a "View profile" link only
+while the mouse rests on them. The workflow rests on picture 2 and clicks its "View profile". The
+page that opens (`/users/2`) is the proof. This failed to replay reliably in September (EXEC-29a).
+
+**Test 1 — result: FAIL (on the questions, not the replay).** The replay itself now works: two test
+runs both opened `/users/2`, and the workflow could be approved. Studio does not record the mouse
+resting as its own step. On replay, when the link is hidden, it rests the mouse where a person would
+until the link shows.
+
+But Studio's one question was built on a wrong fact. The program that watches the recording video
+said the person rested on the *third* picture. The browser's own record says the second (user2). The
+question offered only "It can be any of the three" or "Always the third one — It stays exactly as you
+recorded it". A non-technical person would trust the second answer and get a workflow that may open
+the wrong profile. The tester got it right only by typing their own answer, which an ordinary
+person should never need to do.
+
+**What was really wrong:** Studio already checks the question's *quoted names* against what the
+browser recorded, and swaps in its own plain wording when one was never seen. It did not check words
+that say *which one* of several alike items ("first", "third", "2nd"). Those came from the video
+reading and were taken on trust. *Kind of problem:* general. Any page with several alike items (rows,
+cards, pictures) could get a question that names the wrong one.
+
+*Fix:* in a "which one?" question, a position word that the browser's own record does not show
+(what the video saw does not count) now makes Studio use its plain wording: "You picked “View
+profile”…", with "Always this one — It stays exactly as you recorded it." That is true, because the
+recording itself knows which one was picked.
+
+**Changed:** `conversation/timeline_understanding.py`; test added to `test_timeline_understanding.py`.
+Python: 3150 passed, 0 failed. Studio restarted.
+
+Also filed (BUILD-93): the click step is named "Open the Hovers page with the profile icons"; the
+"proposed change" card shows internal field names; the "web address looks like" tick box shows no
+address.
+
+**Test 2 (fresh recording; only offered answers, nothing typed) — result: PASS.**
+- The video reading said "second" correctly this time, and Studio asked its own plain question:
+  "You picked “View profile”. Next time, is it always this one, or a different one each time?"
+  The tester picked "Always this one". The new check had nothing to catch in this run; its
+  automatic test covers the misread case.
+- The compiled click is tied to the picture captioned "name: user2".
+- Two test runs passed with no warning. In both, the test pane went `/hovers` → `/users/2`,
+  watched live, and never showed `/users/1` or `/users/3`. Both ended in `execute_success` on
+  `/users/2`. Approved.
+
+**One more fix from this test:** the "How can we tell it worked?" tick box read "The web address looks
+like " with nothing after it (seen in three tests now). The address check keeps its pattern under a
+different name than the label read. It now shows a readable address, such as
+"the-internet.herokuapp.com/users/…". Changed `conversation/clarify.py`, with a test added. Python:
+3151 passed.
+
+**Final status of WF-2 Segment H: PASSED** (P-17).
+
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".

@@ -88,13 +88,22 @@ changing-text C.3 via the runbook, and moved-element C.4 via a standalone fixtur
 2026-09-03 — see **P-4** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md). Everything below is
 still open.
 
+**Re-test under the strict end-to-end rule (2026-11-16 campaign,
+[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)):** the earlier passes above predate it, so
+every segment is re-tested to the approved state, one at a time. Segment H (hover) goes first because
+it is the one known to fail.
+
 ### Segment E (remainder) — Nested iframes bonus: datepicker (E.2) ✅ passed 2026-09-04
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-6**.
 
 ### Segment F — Autocomplete/typeahead race (E.6) ✅ passed 2026-09-04
 Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-7**.
 
-### Segment H — Hover menus (E.8) 🧪 beta — needs human review
+### Segment H — Hover menus (E.8) ✅ passed 2026-11-16 under the strict rule
+Moved to [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md) — see **P-17**. History below kept for
+reference.
+
+#### (history) Segment H — beta — needed human review
 S1 `/hovers`: hover avatar 2 → "View profile". Did **not** replay reliably in the runbook follow-up
 run despite real recorder/runtime support for hover reveals — see `TODO.md` **EXEC-29a** (split
 out 2026-09-04 from the native-JS-dialog half of this same investigation, which turned out to be

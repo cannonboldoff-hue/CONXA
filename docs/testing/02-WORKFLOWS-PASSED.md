@@ -764,6 +764,29 @@ and "You logged out of the secure area!" appears.
 
 ---
 
+## Passed Workflow P-17 — WF-2 Segment H: hover-revealed link, to approved (strict criteria)
+
+**Date passed:** 2026-11-16 (Build Studio dev, workflow `WF2 H hover profile r2`,
+`c5f4f1bd-cb57-41be-bc91-35a27c81aa2b`, group "E2E 2026-11-16", passing runs `r_mwixmfv6_lkgzs` and
+`r_mwixo39j_8q5lq`). Full diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**Shape:** S1 `/hovers`. Rest the mouse on picture 2 with real mouse movement, then click its
+"View profile". Compiled to 2 steps. The click is tied to the "name: user2" caption, and the hover is
+not its own step: the runtime reveals the hidden link the way a person would.
+
+**What was confirmed:**
+- Answered with offered choices only, nothing typed.
+- Two test runs each went `/hovers` → `/users/2`, watched live, never another profile, each
+  ending in `execute_success`.
+- **Approved.** This closes EXEC-29a's "hover doesn't replay reliably" for this page.
+
+**Fixed en route (general):**
+- A which-one word in a question ("the third one") that the browser's own record doesn't show now
+  falls back to Studio's plain wording. The video reader had misread the picked item.
+- The address check's tick box now shows the address instead of a blank.
+
+---
+
 ## Passed support checks folded into P-1/P-2 (resolved en route)
 
 These were tracked as break predictions / gaps and are now resolved — their regression fixtures
