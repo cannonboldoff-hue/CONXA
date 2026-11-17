@@ -19,6 +19,8 @@ from conxa_compile.compiler.selector_filters import (
 )
 from conxa_compile.compiler.named_attrs import (
     backfill_attrs_from_snapshot,
+    css_attr,
+    is_stable_attr_value,
     synthesize_attr_selector,
 )
 from conxa_compile.compiler.selector_score import rank_by_durability
@@ -28,6 +30,8 @@ from conxa_core.models.skill_spec import IdentitySignal
 _EXCLUDED_ROLES = frozenset({
     "none", "presentation", "div", "span", "input", "path", "svg", "g", "generic",
 })
+
+_FORM_FIELD_TAGS = frozenset({"input", "select", "textarea"})
 
 # Engines for which we skip the selector_passes_filters check (internal: grammar passes it)
 _NATIVE_ENGINES = frozenset({"testid", "role", "text_based", "relational"})
@@ -147,6 +151,15 @@ def generate_deterministic_signals(
     if title and '"' not in title and re.fullmatch(r"[a-z][a-z0-9-]*", tag):
         candidates.append(("attr", f'{tag}[title="{title}"]'))
 
+    # 1e. A form field's own `name`: the key the site submits it under, so it outlives layout and wording changes. A
+    # form drawn as an unlabelled table has nothing else that tells its boxes apart (WF-3 D: nine Bill Pay boxes all
+    # `input.input`). Kept only when the saved page shows it picks this one field: a radio group shares one name.
+    field_name = str(target.get("name") or "").strip()
+    if tag in _FORM_FIELD_TAGS and field_name and dom_html and is_stable_attr_value(field_name):
+        name_sel = f"{tag}{css_attr('name', field_name)}"
+        if uniqueness_gate(name_sel, dom_html, absent_ok=False):
+            candidates.append(("attr", name_sel))
+
     # 2. role + name (semantic-aria)
     role = str(semantic.get("role") or target.get("role") or "").strip()
     ax_name = _accessible_name(target)
@@ -213,14 +226,17 @@ def generate_deterministic_signals(
         # fabricated, and shipping it wastes the two highest-durability slots on signals that
         # can only ever miss at replay. The relational signal is probed by its role base — the
         # `>> right-of=` chain is not statically countable, and it inherits the same name.
+        # The runtime resolves a relational signal by its role base alone (resolve_adapter.js drops the `>> right-of=`
+        # part), so the base is what decides whether it picks one element: four "FIND TRANSACTIONS" buttons are four
+        # matches with or without the anchor.
+        probe = sel.split(">>")[0].strip() if engine == "relational" else sel
         if engine in ("role", "relational"):
-            probe = sel.split(">>")[0].strip() if engine == "relational" else sel
             if resolves_to_nothing(probe, dom_html, a11y_tree):
                 continue
         # absent_ok=True: a 0-match verdict here means "couldn't confirm", not "not unique" — see
         # uniqueness_gate's docstring. Without it, snapshot gaps (e.g. a modal captured before it
         # mounted) wrongly stamped real, durable selectors as unverified.
-        unique = uniqueness_gate(sel, dom_html, a11y_tree, absent_ok=True)
+        unique = uniqueness_gate(probe, dom_html, a11y_tree, absent_ok=True)
         # Known to match several elements on the recorded page (a zero count was let through above as "can't
         # verify"): it must not outrank a signal that does pick one. Text and names that carry a digit run follow
         # a number that changes by itself, so they rank below the same signal without one.
@@ -237,6 +253,8 @@ def generate_deterministic_signals(
             source="compiler",
         ))
 
+    # The caps above can move a signal below one ranked after it; the first signal is the one shown and promoted.
+    signals.sort(key=lambda s: s.durability, reverse=True)
     return dedup_by_orthogonality(signals)
 
 

@@ -122,7 +122,7 @@ Re-compile Leg B's session via `conxa-cloud/scripts/recompile_session.py <sessio
 fingerprints/selectors between the two SkillPackages. Identical = PASS; differing selectors =
 IdentityBundle/grammar nondeterminism.
 
-### Leg D — Banking marathon (100+ steps, many page types)
+### Leg D — Banking marathon (100+ steps, many page types) ✅ passed 2026-11-17 (see **P-29** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md))
 S6 (`john`/`demo`): login → Accounts Overview → Transfer Funds ×3 (verify each) → Pay Bills ×2 →
 Find Transactions (date range, then amount) → Open New Account → logout. Naturally 100–140 actions
 across many page types — unlike Leg B's repetitive loop.

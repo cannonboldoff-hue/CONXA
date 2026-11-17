@@ -307,3 +307,57 @@ class TestBindingOnlyWhereItTellsRowsApart:
         }
         eb = detect_entity_binding(ev, destructive=True)
         assert eb is not None and eb.identifier == "Sauce Labs Bolt T-Shirt"
+
+
+# WF-3 D r2 (ParaBank, link clicks with no saved page): 22 steps were bound to rows that did not exist or did not last.
+_ACCOUNT_ROWS = [
+    '<tr><td><a href="activity.htm?id=12567">12567</a></td><td>$136.46</td><td>$136.46</td></tr>',
+    '<tr><td><a href="activity.htm?id=12678">12678</a></td><td>-$105.31</td><td>$0.00</td></tr>',
+    '<tr><td><a href="activity.htm?id=12789">12789</a></td><td>$123.33</td><td>$123.33</td></tr>',
+]
+
+
+def _account_link_event(destructive_intent: bool = False) -> dict:
+    return {
+        "action": {"action": "click", "value": None},
+        "target": {"tag": "a", "role": "link", "inner_text": "12567"},
+        "semantic": {"role": "link"},
+        "ancestors": [
+            {"tag": "td", "id": "", "classes": [], "outer_html": '<td><a href="activity.htm?id=12567">12567</a></td>'},
+            {"tag": "tr", "id": "", "classes": [], "outer_html": _ACCOUNT_ROWS[0]},
+            {"tag": "tbody", "id": "", "classes": [], "outer_html": "<tbody>" + "".join(_ACCOUNT_ROWS) + "</tbody>"},
+        ],
+    }
+
+
+class TestNoBindingWhereNoRowIsNeeded:
+    def test_side_by_side_layout_panels_are_not_rows(self):
+        panels = '<div id="leftPanel"><ul><li><a>Accounts Overview</a></li><li><a>Update Contact Info</a></li></ul></div><div id="rightPanel"><p>Welcome</p></div>'
+        ev = {
+            "action": {"action": "click", "value": None},
+            "target": {"tag": "a", "role": "link", "inner_text": "Accounts Overview"},
+            "semantic": {"role": "link"},
+            "ancestors": [
+                {"tag": "li", "id": "", "classes": [], "outer_html": "<li><a>Accounts Overview</a></li>"},
+                {"tag": "ul", "id": "", "classes": [], "outer_html": "<ul><li><a>Accounts Overview</a></li><li><a>Update Contact Info</a></li></ul>"},
+                {"tag": "div", "id": "leftPanel", "classes": [], "outer_html": panels.split('<div id="rightPanel">')[0]},
+                {"tag": "div", "id": "bodyPanel", "classes": [], "outer_html": f'<div id="bodyPanel">{panels}</div>'},
+            ],
+        }
+        assert detect_entity_binding(ev) is None
+
+    def test_a_link_named_by_its_own_row_text_needs_no_binding(self):
+        assert detect_entity_binding(_account_link_event()) is None
+
+    def test_a_step_that_can_do_harm_keeps_its_row_binding(self):
+        assert detect_entity_binding(_account_link_event(), destructive=True) is not None
+
+    def test_a_short_recorded_value_inside_a_balance_is_not_the_row_input(self):
+        from conxa_core.models.skill_spec import EntityBinding
+
+        class _Step:
+            entity_binding = EntityBinding(container_selector="tbody > tr", identifier="$136.46", source="literal", confirmed=False)
+
+        step = _Step()
+        upgrade_entity_binding_identifiers([step], {"account_type": "1", "amount": "136"})
+        assert (step.entity_binding.identifier, step.entity_binding.source) == ("$136.46", "literal")

@@ -168,3 +168,39 @@ def test_bundle_backfills_attr_signal_for_pre_fix_recording_without_target_attri
     signals = generate_deterministic_signals(ev, html, None)
     by_engine = {s.engine: s.selector for s in signals}
     assert by_engine["attr"] == '[data-key="19"]'
+
+
+# WF-3 D (ParaBank Bill Pay): nine boxes in an unlabelled table, every one `input.input`. Only the form field's own
+# `name` tells them apart; it used to reach the fallbacks and never the signals, so the type step failed as ambiguous.
+_BILL_PAY = (
+    '<html><body><form><table>'
+    '<tr><td><b>Payee Name:</b></td><td><input class="input" name="payee.name"></td></tr>'
+    '<tr><td><b>Account #:</b></td><td><input class="input" name="payee.accountNumber"></td></tr>'
+    '<tr><td>Kind</td><td><input type="radio" name="kind" value="a"><input type="radio" name="kind" value="b"></td></tr>'
+    '</table></form></body></html>'
+)
+
+
+def _field_event(name: str, input_type: str = "text") -> dict:
+    return {
+        "target": {"tag": "input", "role": "textbox", "name": name, "label_text": "Account #:", "attributes": {}},
+        "semantic": {"role": "textbox", "input_type": input_type},
+        "selectors": {"css": "input.input", "aria": f'input[name="{name}"]'},
+    }
+
+
+def test_a_unique_form_field_name_leads_the_identity_bundle():
+    signals = generate_deterministic_signals(_field_event("payee.accountNumber"), dom_html=_BILL_PAY)
+    assert (signals[0].engine, signals[0].selector, signals[0].unique_at_compile) == (
+        "attr", 'input[name="payee.accountNumber"]', True,
+    )
+
+
+def test_a_name_shared_by_a_radio_group_is_not_an_identity():
+    signals = generate_deterministic_signals(_field_event("kind", "radio"), dom_html=_BILL_PAY)
+    assert not any(s.selector.startswith("input[name=") for s in signals)
+
+
+def test_a_form_field_name_is_not_used_without_the_saved_page():
+    signals = generate_deterministic_signals(_field_event("payee.accountNumber"), dom_html=None)
+    assert not any(s.selector.startswith("input[name=") for s in signals)

@@ -1034,3 +1034,15 @@ the approved package. AI-written wording (descriptions, intents, one input name)
 TODO BUILD-97. Evidence: diary in [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
 
 **What this proves Conxa can do now:** rebuilding a long workflow never moves where a step clicks.
+
+## Passed Workflow P-29 — WF-3 Leg D: ParaBank banking marathon, to approved (2026-11-17)
+One take (93 actions → 88 steps, 22 checks, 4 inputs): sign in, Accounts Overview, 3 transfers each
+checked on the overview, 2 full bill payments, Find Transactions by date range and by amount, Open
+New Account, sign out. Test passed with every step confirmed in 1 min 06 s; Approved. Proven on the
+bank's own records: transfers of 15.15/16.16/17.17 and new account 46755 with its $90. Bill payments
+not visible on this demo site (loan account lists no transactions). Evidence: workflow
+`wf3-d-bank-marathon-r2-067c16df`, session `a6722389-8188-4b4c-85e4-57d9c6bf14d9`, run
+`r_mwk111tv_0rygn`; diary in [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** a long multi-page money journey with large look-alike forms and
+account lists replays with every step proven, without locking clicks to rows that change.

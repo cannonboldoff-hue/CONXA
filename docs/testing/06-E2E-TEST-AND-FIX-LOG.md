@@ -1,8 +1,8 @@
 # End-to-end test and fix log (started 2026-11-16)
 
 > **Progress (2026-11-17):** 19 workflows (WF-1…WF-19). Fully passed: WF-1, WF-2 (Segment I is a
-> confirmed limitation). WF-3 Legs A, B and C passed. **Next:** WF-3 Leg D (banking marathon).
-> Remaining: WF-3 D, WF-4…WF-19. Latest commit: `5a39460`.
+> confirmed limitation). WF-3 (all legs) passed. **Next:** WF-4.
+> Remaining: WF-4…WF-19. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1148,3 +1148,29 @@ step descriptions, intent names, the name of the sort-menu input (`product_sort_
 folder, and skips inputs the Studio path passes. Both filed as BUILD-97. No code was changed.
 
 **Final status of WF-3 Leg C: PASSED** (P-28).
+
+### WF-3 Leg D — ParaBank banking marathon (2026-11-17)
+**Test 1 — FAIL at step 35 of 77** (Bill Pay account number): "Couldn't tell which of several matching
+elements to use." All 9 Bill Pay boxes shared one address; each box's unique `name` was never used to
+find it. The four "Find Transactions" buttons had the same problem, and a box caption climbed out of
+its form to the site's tagline. *Fix:* a form box is found by its own unique name when the saved page
+shows only one; a button next to a landmark keeps the landmark's uniqueness; the best address is
+tried first; a caption search stops at the box's own form.
+
+**Test 2 (fresh recording, 93 actions) — FAIL at step 10 of 88** (open the receiving account): "Bound
+record could not be uniquely located on the page". The build had tied 22 clicks to "the row holding
+X" without asking: two side-by-side page panels were taken for a list, a menu value "1" was found
+inside balances like "$136.46", and account links were tied to a balance that changes. *Fix:* only
+real data rows count; a harmless click named by its own row text needs no row lock; a recorded value
+matches a whole value, never part of one. Steps are now named by their caption ("Type into 'Amount'").
+The rule "never act on a different row" was kept as is (alternatives filed as BUILD-99).
+
+**Test 3 (same recording, built again) — PASS, Approved.** 88 steps, 22 checks, 4 inputs; every step
+confirmed in 1 min 06 s with no "couldn't confirm". Checked on the bank's own records: transfers of
+exactly 15.15, 16.16 and 17.17 left account 12456 today, and new savings account 46755 holds its $90.
+Caveat: the two bill payments cannot be seen on this demo site (they pay from a loan account that
+lists no transactions); only Studio's confirmed "Bill Payment Complete" page proves them.
+Workflow `wf3-d-bank-marathon-r2-067c16df`, session `a6722389-8188-4b4c-85e4-57d9c6bf14d9`, run
+`r_mwk111tv_0rygn`. Recording was 93 actions, short of the 100–140 the leg suggests.
+
+**Final status of WF-3 Leg D: PASSED** (P-29). **WF-3 is complete.**

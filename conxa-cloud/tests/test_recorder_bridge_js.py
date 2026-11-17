@@ -1820,3 +1820,43 @@ def test_a_button_input_is_not_named_after_hidden_page_text(page: Page) -> None:
     page.wait_for_timeout(150)
     labels = [e["target"].get("label_text") for e in _events(page)]
     assert all("JavaScript" not in str(lab or "") for lab in labels), labels
+
+
+# WF-3 D (ParaBank Transfer Funds): a form of bare text captions under a page banner.
+_TRANSFER_FORM = """
+<div id="topPanel"><p class="caption">Experience the difference</p></div>
+<div><h1>Transfer Funds</h1>
+  <form id="transferForm" onsubmit="return false">
+    <p><b>Amount:</b> $<input id="amount" type="text" name="input"></p>
+    <div>
+      From account #
+      <select id="fromAccountId" class="input"><option value="1">12345</option><option value="2">12456</option></select>
+      to account #
+      <select id="toAccountId" class="input"><option value="1">12345</option><option value="2">12456</option></select>
+    </div>
+    <div><input type="submit" class="button" value="Transfer"></div>
+    <div><select id="memo" class="input"><option value="a">A</option><option value="b">B</option></select></div>
+  </form>
+</div>
+"""
+
+
+def test_a_caption_written_as_bare_text_names_the_dropdown_after_it(page: Page) -> None:
+    _install_bridge(page, _TRANSFER_FORM)
+    page.select_option("#toAccountId", "2")
+    page.wait_for_timeout(80)
+    assert _action_events(page, "select")[0]["target"]["label_text"] == "to account #"
+
+
+def test_a_dropdown_with_no_caption_in_its_form_is_not_named_after_the_page_banner(page: Page) -> None:
+    _install_bridge(page, _TRANSFER_FORM)
+    page.select_option("#memo", "b")
+    page.wait_for_timeout(80)
+    assert _action_events(page, "select")[0]["target"]["label_text"] in (None, "")
+
+
+def test_a_radio_is_not_named_after_the_option_before_it(page: Page) -> None:
+    _install_bridge(page, '<form><input type="radio" name="g" id="m"> Male <input type="radio" name="g" id="f"> Female</form>')
+    page.click("#f")
+    page.wait_for_timeout(80)
+    assert _events(page)[-1]["target"]["label_text"] != "Male"

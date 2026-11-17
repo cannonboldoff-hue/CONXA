@@ -82,7 +82,7 @@ def filter_identity_attrs(raw: dict[str, Any] | None) -> dict[str, str]:
     return out
 
 
-def _css_attr(name: str, value: str) -> str:
+def css_attr(name: str, value: str) -> str:
     esc = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'[{name}="{esc}"]'
 
@@ -95,13 +95,13 @@ def _data_keys(attrs: dict[str, str]) -> list[str]:
 
 
 def _ladder(tag: str, role: str, name: str, value: str) -> list[str]:
-    attr = _css_attr(name, value)
+    attr = css_attr(name, value)
     steps = [attr]
     if role:
-        steps.append(f'{_css_attr("role", role)}{attr}')
+        steps.append(f'{css_attr("role", role)}{attr}')
     tag_c = (tag or "").strip().lower()
     if tag_c and role:
-        steps.append(f'{tag_c}{_css_attr("role", role)}{attr}')
+        steps.append(f'{tag_c}{css_attr("role", role)}{attr}')
     elif tag_c:
         steps.append(f"{tag_c}{attr}")
     return steps

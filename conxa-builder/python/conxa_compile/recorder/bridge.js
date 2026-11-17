@@ -781,6 +781,15 @@
     // Only a form control has a caption beside it. A link, a button or a card is named by its own text, and a
     // neighbouring paragraph is not its name ("Clicked Pull requests" for the first pull request in a list).
     if (!_isCaptionedControl(el)) return null;
+    // A caption written as bare text right before the box ("to account # <select>") is not an element, so the walk
+    // below never sees it. Not for a tick box or radio: its caption comes after it, and the text before it is the
+    // previous option's ("<radio> Male <radio> Female").
+    let prevNode = /^(radio|checkbox)$/i.test(el.getAttribute("type") || "") ? null : el.previousSibling;
+    while (prevNode && prevNode.nodeType === 3 && !prevNode.textContent.trim()) prevNode = prevNode.previousSibling;
+    if (prevNode && prevNode.nodeType === 3) {
+      const txt = prevNode.textContent.replace(/\s+/g, " ").trim();
+      if (txt.length >= 2 && txt.length <= 60) return txt;
+    }
     // Earlier siblings first (a caption sits before its box). A caption drawn after the box is read in a second
     // pass over the box's own siblings only: any further and a paragraph below an unrelated field becomes its name.
     // A caption that did not exist yet is read again once the page settles (_lateLabel).
@@ -820,6 +829,9 @@
         if (txt && _MONTH_YEAR_EXACT_RE.test(txt.trim())) continue;
         if (txt && txt.length >= 2 && txt.length <= 60) return txt;
       }
+      // A field's caption is inside its own form: above it is the page's banner (ParaBank's tagline
+      // "Experience the difference" named an account dropdown).
+      if (container.tagName === "FORM") break;
       node = container;
     }
     }

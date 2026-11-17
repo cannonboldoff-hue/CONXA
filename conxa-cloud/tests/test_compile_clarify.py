@@ -689,3 +689,13 @@ def test_a_check_that_holds_before_and_after_is_not_proof_so_the_person_is_asked
     weak = {"assertions": [{"type": "selector_present", "target": 'text="Toggle Me"', "required": True}]}
     doc = _doc([_step("navigate", "open_page"), _step("click", "open_panel", video_context=seen, validation=weak)])
     assert any(q["kind"] == "done_when" for q in generate_questions(doc))
+
+
+def test_a_dropdown_step_is_named_by_its_caption_not_its_option_list():
+    # WF-3 D r2: "Choose in “12345 12456 12567 …”" when no description was written.
+    from conxa_compile.conversation.clarify import step_name
+
+    fp = {"tag": "select", "role": "combobox", "inner_text": "12345 12456 12567", "label_text": "to account #"}
+    assert step_name({"action": "select", "identity_bundle": {"fingerprint": fp}}) == "Choose in “to account #”"
+    box = {"tag": "input", "role": "textbox", "label_text": "Amount:"}
+    assert step_name({"action": "type", "identity_bundle": {"fingerprint": box}}) == "Type into “Amount”"

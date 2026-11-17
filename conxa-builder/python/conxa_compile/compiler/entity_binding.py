@@ -265,7 +265,10 @@ def detect_entity_binding(
         row = ancestors[i] or {}
         parent = ancestors[i + 1] or {}
         row_tag = str(row.get("tag") or "").strip().lower()
-        if not row_tag:
+        # Only a data row can name a record. Two layout panels side by side are not a list (WF-3 D: ParaBank's menu
+        # links were bound to `#bodyPanel > div` "Update Contact Info", the other panel's text).
+        if not row_tag or not _names_a_data_row(row, row_tag) \
+                or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
             continue
         row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
         siblings = _direct_child_count(str(parent.get("outer_html") or ""), row_tag, set(row_classes))
@@ -273,6 +276,17 @@ def detect_entity_binding(
             continue
         container_selector = _build_container_selector(parent, row_tag, _css_class_selector(row_classes))
         rows_html, complete = _sibling_rows_html(ev, row, parent, container_selector, row_tag, row_classes, dom_html)
+        # The control's own words appear in this row only (an account number link): its own address already picks the
+        # row, and a binding on other row text (a balance that changes after a transfer) only adds a way to fail.
+        # Holds on a cut list too: a step that cannot do harm without a binding still never acts on a look-alike guess.
+        if not destructive and own and len(rows_html) >= _MIN_SIBLINGS:
+            others = _row_segment_sets(rows_html)
+            mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
+            same = next((n for n, sset in enumerate(others) if mine and mine <= sset), None)
+            if same is not None:
+                others.pop(same)
+            if any(t in mine and not any(t in sset for sset in others) for t in own):
+                return None
         identifier = _pick_identifier(row, own=own, siblings=_row_segment_sets(rows_html) if rows_html else None,
                                       complete=complete)
         if not identifier and destructive:
@@ -312,12 +326,15 @@ def upgrade_entity_binding_identifiers(steps: list[Any], input_literal_values: d
         eb = getattr(step, "entity_binding", None)
         if eb is None or eb.source != "literal" or not eb.identifier:
             continue
-        ident_lower = eb.identifier.lower()
+        ident_lower = " ".join(eb.identifier.lower().split())
         for name, literal in input_literal_values.items():
-            literal_lower = literal.lower().strip()
+            literal_lower = " ".join(literal.lower().split())
             if not literal_lower:
                 continue
-            if literal_lower in ident_lower or ident_lower in literal_lower:
+            # The whole value only ("12345" in "Invoice #12345"): a select's recorded value "1" is inside "$136.46", and
+            # a row named by part of what was typed is not the row the typed value names (WF-3 D made every balance a
+            # phantom {{account type}} input).
+            if re.search(rf"(?<![\w.,]){re.escape(literal_lower)}(?![\w.,])", ident_lower):
                 eb.identifier = "{{%s}}" % name
                 eb.source = "input"
                 break

@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from conxa_compile.display_text import clean_name
 from conxa_compile.compiler.step_key import step_keys
+from conxa_compile.compiler.identity_bundle import _OPTION_CONTENT_TAGS
 from conxa_core.config import settings
 from conxa_core.models.prose_binding import readable as _readable
 
@@ -74,7 +75,10 @@ def _action_title(step: dict[str, Any]) -> str:
         return f"Go to {url[:60]}" if url else ""
     if act in _LABELLED_VERBS:
         fp = (step.get("identity_bundle") or {}).get("fingerprint") or {}
-        label = clean_name(next((fp.get(f) for f in _LABEL_FIELDS if str(fp.get(f) or "").strip()), ""))
+        # A dropdown's inner text is its whole option list ("12345 12456 …"), not its name.
+        fields = _LABEL_FIELDS[1:] if {str(fp.get("tag") or "").lower(), str(fp.get("role") or "").lower()} & _OPTION_CONTENT_TAGS \
+            else _LABEL_FIELDS
+        label = clean_name(next((fp.get(f) for f in fields if str(fp.get(f) or "").strip()), "")).rstrip(" :")
         return f"{_LABELLED_VERBS[act]} {_quoted(label)}" if label else ""
     return ""
 

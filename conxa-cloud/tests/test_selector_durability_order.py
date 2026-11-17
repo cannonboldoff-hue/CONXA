@@ -437,3 +437,25 @@ def test_bundle_top_signal_is_role_for_named_button() -> None:
     assert top_display == 'role=button[name="New"]', (
         f"Expected role display string; got {top_display!r}"
     )
+
+
+# WF-3 D (ParaBank Find Transactions): four "FIND TRANSACTIONS" buttons, one per search form, each with its own id.
+# The runtime resolves a relational signal by its role base only, so it is no more unique than that base; and the
+# bundle's first signal (the one shown and promoted) is the best one left after the caps, the button's own id.
+def test_relational_signal_is_as_ambiguous_as_its_role_base_and_the_id_leads() -> None:
+    html = "<html><body>" + "".join(
+        f'<form><span>Find by {k}</span><button id="{k}" class="button">FIND TRANSACTIONS</button></form>'
+        for k in ("findById", "findByDate", "findByDateRange", "findByAmount")
+    ) + "</body></html>"
+    a11y = {"aria_snapshot": "\n".join('- button "FIND TRANSACTIONS"' for _ in range(4))}
+    ev = {
+        "target": {"tag": "button", "role": "button", "inner_text": "FIND TRANSACTIONS", "attributes": {}},
+        "semantic": {"role": "button"},
+        "selectors": {"css": "#findByDateRange", "text_based": 'text="FIND TRANSACTIONS"'},
+        "anchors": [{"element": "Find by Date Range", "relation": "near"}],
+    }
+    signals = generate_deterministic_signals(ev, dom_html=html, a11y_tree=a11y)
+    assert signals[0].selector == "#findByDateRange"
+    relational = [s for s in signals if s.engine == "relational"]
+    assert relational and not relational[0].unique_at_compile
+    assert [s.durability for s in signals] == sorted((s.durability for s in signals), reverse=True)
