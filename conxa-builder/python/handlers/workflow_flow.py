@@ -117,11 +117,14 @@ class WorkflowFlowMixin:
             why = "your saved sign-in has expired, so sign in again"
         else:
             why = "I couldn’t confirm your saved sign-in is still active, so sign in again"
+        # A test that paused on an expired sign-in comes back here too; it goes on testing, not recording.
+        retest = bool(runtime_state.get_flags(workflow.id).get("retest_after_sign_in"))
         self._flow_say(
             workflow.id,
-            f"Before recording: {app.name} — {why}. I’ve opened its sign-in page {where} — sign in as you "
-            f"normally do, including any two-step code. I’ll notice when you’re in and carry on by myself "
-            f"(or press “I’m signed in”). Nothing is recorded yet. The sign-in "
+            f"{'Before testing again' if retest else 'Before recording'}: {app.name} — {why}. I’ve opened its sign-in "
+            f"page {where} — sign in as you normally do, including any two-step code. I’ll notice when you’re in and "
+            f"{'test again with the same inputs' if retest else 'carry on'} by myself (or press “I’m signed in”). "
+            f"{'' if retest else 'Nothing is recorded yet. '}The sign-in "
             f"is saved for all of {group_name}, so the next workflow in this group skips this step.",
             sink,
         )
@@ -130,7 +133,7 @@ class WorkflowFlowMixin:
             refs={"group_id": workflow.group_id, "app_id": app.id, "session_id": started["session_id"],
                   "embedded": embedded},
             app_name=app.name, login_url=started.get("login_url") or app.login_url, group_name=group_name,
-            actions=["done", "cancel"],
+            retest=retest, actions=["done", "cancel"],
         )
         threading.Thread(target=self._flow_watch_sign_in, args=(workflow.id, card["card_id"], started["session_id"]),
                          daemon=True).start()

@@ -161,8 +161,15 @@ def _pick_identifier(row: dict[str, Any], *, own: frozenset[str] | set[str] = fr
     if not candidates:
         return ""
     if siblings is not None and len(siblings) >= _MIN_SIBLINGS:
-        # The row itself is one of the siblings, so a unique identifier is in exactly one set.
-        unique = [c for c in candidates if sum(1 for sset in siblings if c.lower() in sset) == 1]
+        # Unique = in no OTHER row. The row itself may be missing from the evidence (a long list's html is cut short),
+        # so take it out once if it is there rather than assume it is: otherwise text this row shares with one other
+        # row ("$15.99") counted as unique and the row's own name, absent from the cut list, did not.
+        others = list(siblings)
+        mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
+        same = next((i for i, sset in enumerate(others) if mine and mine <= sset), None)  # <=: the row's html may be cut
+        if same is not None:
+            others.pop(same)
+        unique = [c for c in candidates if not any(c.lower() in sset for sset in others)]
         if unique:
             candidates = unique
         elif complete:

@@ -288,3 +288,22 @@ class TestBindingOnlyWhereItTellsRowsApart:
         }
         assert detect_entity_binding(ev) is None
         assert detect_entity_binding(ev, destructive=True) is not None  # kept, unconfirmed, for a person to check
+
+    def test_a_row_cut_out_of_the_list_is_still_named_by_its_own_text_not_a_shared_price(self):
+        # WF-3 Leg B cart: the ancestor chain kept only the first rows. The Bolt T-Shirt row was not among them, the red
+        # tee ($15.99 too) was, so the price looked unique and the name looked absent. Without a page snapshot.
+        def row(i: int) -> str:
+            n, p = _SHOP[i]
+            return (f'<div class="cart_item"><div class="name">{n}</div><div class="price">{p}</div>'
+                    f'<button class="btn">Remove</button></div>')
+        ev = {
+            "action": {"action": "click", "value": None},
+            "target": {"inner_text": "Remove", "tag": "button", "role": "button"},
+            "ancestors": [
+                {"tag": "div", "id": "", "classes": ["cart_item"], "outer_html": row(2)},
+                {"tag": "div", "id": "", "classes": ["cart_list"], "outer_html": f'<div class="cart_list">{row(5)}{row(4)}'},
+                {"tag": "body", "id": "", "classes": [], "outer_html": ""},
+            ],
+        }
+        eb = detect_entity_binding(ev, destructive=True)
+        assert eb is not None and eb.identifier == "Sauce Labs Bolt T-Shirt"

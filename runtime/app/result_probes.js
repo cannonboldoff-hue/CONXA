@@ -63,16 +63,18 @@ async function urlStays(check, nb, { maxMs = 3000, settleMs = 600, pollMs = 200 
   }
 }
 
-/** "The item is on the page one more time than before": `notebook.nameCountBefore` was counted before the action. */
+/** "The item is on the page one more time than before" (or, for a delete, fewer times): `notebook.nameCountBefore` was
+ *  counted before the action. */
 async function rowWithIdentity(check, { notebook, inputs }, { maxMs = 4000, pollMs = 400 } = {}) {
   const want = wantedIdentity(check.probe, inputs);
   const before = notebook && notebook.nameCountBefore;
   if (!want || !notebook || !notebook.page || typeof before !== "number") return CANT;
-  const delta = Math.max(1, Number(check.probe.delta) || 1);
+  // A negative delta is a delete: the row's text shows that many times fewer. Nothing happening answers "no" either way.
+  const delta = Math.trunc(Number(check.probe.delta)) || 1;
   const deadline = Date.now() + maxMs;
   for (;;) {
     const n = await evalOn(notebook.page, pageScripts.countPageText, want, 3000);
-    if (typeof n === "number" && n >= before + delta) return { answer: "yes" };
+    if (typeof n === "number" && (delta < 0 ? before > 0 && n <= before + delta : n >= before + delta)) return { answer: "yes" };
     if (Date.now() >= deadline) return { answer: "no" };
     await sleep(pollMs);
   }

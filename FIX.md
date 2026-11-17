@@ -2,83 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**Forms with an email box can be tested again — 2026-11-16**
-A simple practice form with an Email box could not be tested at all: Build Studio said the workflow "contains someone's account details" and stopped, with no way forward. The address it found was only the form's own hint, "name@example.com", which can never belong to a real person. Build Studio now tells sample addresses apart from real ones, and it removes a real address everywhere while it builds, not only at the very end. Two smaller problems from the same test are fixed too: typing your own "this is how I know it worked" words is no longer refused when you scrolled at the end, and an email or password box now keeps your recorded value in the test form and is offered in "which of these change every time".
-— 2026-11-16
-
-**Recording a box that changes when you click it, and pressing Enter in a form — 2026-11-16**
-Some boxes change the moment you click them; Wikipedia's search box is one. Build Studio used to remember the box as it looked after the click, so a test started on a fresh page could not find it. It now remembers the box as it was when you pressed it. Also, pressing Enter in a form used to be saved twice: once as the key, and once as a click on the Search button that the browser makes for you. A test would then search and click Search again on the next page. Now it is saved once.
-— 2026-11-16
-
-**Filling in a form several times now replays every entry — 2026-11-16**
-Recording five new records on one form used to go wrong in three ways. Studio treated the form you opened as a popup to close, so the test failed at the first box. It dropped what you typed in records two to five. And it missed clicks on small icon buttons, like a row's bin icon. All three are fixed. A form you open yourself is part of the task, every record keeps its own details in order, and icon buttons are recorded.
-— 2026-11-16
-
 **Deleting a row and saving a form are now checked properly — 2026-11-17**
 A test could wrongly fail after deleting a table row, because it waited for the bin icon you had just used to still be there. A test could also say "couldn't confirm" after saving a form that works inside the page, because the only proof was a message to the website that such forms never send. Now a delete is proven by the page changing, and a save by what you typed showing up on the page. A request from an ad or another website no longer counts as proof.
 — 2026-11-17
 
-**Step names now match their steps, and a cleared box no longer blocks a test — 2026-11-16**
-In a long recording every step could be described as the step before it, so questions like "can't be undone, approve first?" named the wrong action. Each step now carries its own name. Emptying a search box was also turned into a box the tester had to fill, and an empty answer was refused, so the test could not start. Clearing a box is now just a step. A check could also wait for a value under an old name and fail every run; renaming a value now updates its checks.
-— 2026-11-16
-
-**Entering the same kind of record many times can now repeat over a list — 2026-11-16**
-When you fill in the same form several times with different details, Build Studio now asks whether it should do that for a list it is given each time. Say yes, and your recorded entries become the starting list, which anyone running the workflow can change. Say no, and it always enters exactly what you recorded. If you want someone to approve before anything that can't be undone, the approval comes once, before the list starts.
-— 2026-11-16
-
-**Scrolling down a long page now replays the whole way — 2026-11-16**
-If you scrolled down several times while recording, Build Studio kept only the first, small scroll. On pages that load more as you go down (an endless list or feed), a test then never reached the items further down, and anything you did with them could not work. Each scroll you make is now kept, with its own distance, so the replay goes as far down as you did.
-— 2026-11-16
-
-**Two identical buttons in different parts of a page can now be told apart — 2026-11-16**
-Some pages show the same control twice, for example two "Toggle Me" panels in different sections of a help page. Build Studio could not tell which one you clicked, so a test stopped with "couldn't tell which of several matching elements to use". It now remembers which section of the page your click was in, by the heading above it, and picks the one in that same section. If two identical controls sit in the same section, it still refuses to guess. Also, a check that is true whether or not the step worked no longer counts as proof, so Build Studio asks you "How can we tell it worked?" instead of ending every test with "couldn't confirm".
-— 2026-11-16
-
-**Picking "Java" no longer gets confused with "JavaScript" — 2026-11-16**
-When a list held two items where one name starts the other ("Java" and "JavaScript", "Save" and "Save as"), a test stopped with "couldn't tell which of several matching elements to use", even though you had clearly picked one. Build Studio now prefers the item whose name matches exactly, and will never click a different item just because its name contains yours. Also, when you answer that something you typed never changes, Build Studio now really stops asking for it every run.
-— 2026-11-16
-
-**"You see this on the screen" now counts what is in a box — 2026-11-16**
-If you said "I know it worked when I see 11/15/2026", and that date was showing inside a date box, the test always failed: Build Studio only read the page's own text, never what boxes hold. It now counts what a visible box shows, the way you see it. Passwords and hidden fields are never read. Also, when you keep a picked date exactly as you recorded it, the question "is it always 1 day before today?" now offers "No, always the date I picked", instead of only "different every time".
-— 2026-11-16
-
-**Clicks inside a framed part of a page are now recorded and replayed in place — 2026-11-16**
-Some pages show another small page inside them, like a demo or a form in a frame. When that frame had no name and pointed to a short address, Build Studio forgot the frame was there. The workflow then opened the inner page on its own instead of the real page, and would break on any site where the inner page can't open by itself. Build Studio now keeps such frames and starts the workflow on the real page. Also, when a step's result only shows on the screen and Studio has nothing to offer, it now still asks "How can we tell it worked?" so you can type the words you see. Before, every test ended with "couldn't confirm".
-— 2026-11-16
-
-**"How can we tell it worked?" now shows the web address it means — 2026-11-16**
-One of the answers to "How can we tell it worked?" read "The web address looks like" and then stopped, so you couldn't tell what you were agreeing to. It now shows the address in a readable form, for example "the-internet.herokuapp.com/users/…".
-— 2026-11-16
-
-**Questions no longer name the wrong item from a misread video — 2026-11-16**
-On a page with several items that look alike (three profile pictures), Build Studio asked "which one should it open?" and offered "Always the third one — as you recorded it", even though you had picked the second. The mistake came from the part that watches the recording video. Picking that answer could have built a workflow that opens the wrong item. Now, if a question says "first", "third" and so on but the recording itself never shows that, Build Studio uses its own plain wording, "Always this one, as you recorded it", which is always true.
-— 2026-11-16
-
-**Workflows that end by signing out can now be tested — 2026-11-16**
-A workflow whose last click was "Log out" always failed its test with "your saved sign-in expired", even though the sign-in was fine. When a click loads a new page, Build Studio didn't record where that click led, so a test treated landing on the sign-in page as a broken sign-in. Build Studio now records where such a click lands, on any site. A test then accepts that page, and the "you logged out" message, as the result of that one step. Landing on a sign-in page anywhere else still counts as an expired sign-in.
-— 2026-11-16
-
-**Recording a sign-out no longer signs out the whole group — 2026-11-16**
-When a recording ends, Build Studio copies the browser's sign-in back into the group, so a refreshed sign-in is kept. If the recording signed out (clicking "Log out" on a site), that signed-out state could replace the good one, and every workflow in the group then failed with "sign-in expired". Build Studio now keeps the recording's sign-in only after checking it is still signed in. Also, after you sign in again, "Run test" now rebuilds its test copy by itself, instead of saying "rebuild the skill package" with no way to do it.
-— 2026-11-16
-
-**Pop-up boxes that ask you to type something now replay inside Build Studio — 2026-11-16**
-Some websites pop up a small box that asks you to type an answer. Build Studio could record your answer, but a test inside Build Studio (and a run inside Conxa Execute) could never give it back. The browser these apps are built on does not support that kind of box at all, so the test waited two minutes and the answer never arrived. A replay now hands the page your recorded answer (or the value you entered for this run) directly, in the same way the recording does. In a normal browser nothing changes.
-— 2026-11-16
-
-**"The screen changes" now counts a new tab the step opened — 2026-11-16**
-If a click's whole job is to open a new tab, the page you clicked on stays exactly the same. The "the screen changes" check only looked at that page, so it said nothing happened and the test failed every time. A new tab that the page itself opened during the step now counts as a change, and a click that really does nothing still fails the check.
-— 2026-11-16
-
-**Build Studio no longer closes when a website opens a new tab while you record — 2026-11-16**
-Clicking a link that opens a new tab (like "Click Here" on a "multiple windows" page, a sign-in popup or a share window) while recording made the whole Build Studio app close with no message. Studio was setting up its connection to the new tab before the tab had loaded anything, which crashes the app. It now waits until the new tab's first page has started, and never waits more than a few seconds, so recording carries on and the new tab shows up inside the recording.
-— 2026-11-16
-
-**A search box the page replaces when you click it now records correctly — 2026-11-16**
-On Wikipedia, clicking the search box makes the page throw that box away and put a new one in its place, and what you type goes into the new one. Build Studio thought these were two different boxes, so it made up an extra "click into the box" step from the new box's look and set your real click aside. A test then failed straight away, because a fresh page only has the original box. Build Studio now keeps track of which box replaced which, so your click and your typing stay one box. It also stops asking "a few things you typed are not in the workflow" about words that were only recorded twice.
-— 2026-11-16
-
-**Your own "this is how I know it worked" words now count — 2026-11-16**
-On a form that shows its result right on the page without contacting a server, a test could never pass: Build Studio waited for the server to answer, which never happens there, and stopped with "couldn't confirm". On top of that, the words you typed as proof had to match a whole line exactly, so "Asha Rao" was not found inside "Name:Asha Rao". Now your words are found anywhere in the page's text, and when they were not on the page before the step and are there after it, that counts as proof the step finished. Studio also offers "You see the name you typed on the screen" as a choice whenever a step needs proof.
-— 2026-11-16
-
+**Long shopping runs: choosing from a dropdown, removing items and "Continue" now work — 2026-11-17**
+A shop workflow that sorted products, filled a cart, removed items and checked out failed on its second step: the sort menu showed "Name (Z to A)" but Studio compared it with the hidden code behind it. Now either one counts. Picking from a menu with the keyboard is saved as one clean step, a removed item is found by its name instead of a price another item shares, and removing an item is proven by it disappearing from the page. Buttons that only move you forward, like "Continue" or "Next", no longer ask "this can't be undone"; paying, deleting and placing an order still do.
+— 2026-11-17

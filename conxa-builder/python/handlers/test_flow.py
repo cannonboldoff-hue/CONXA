@@ -455,6 +455,13 @@ class TestFlowMixin:
             return "passed"
         if status == "needs_sign_in":
             runtime_state.set_flags(workflow_id, sign_in_expired=True)
+            # "Sign in and test again" re-runs with the last test's inputs; a first test that paused here had saved none.
+            from conxa_core.storage.workflow_store import save_workflow
+
+            paused = get_workflow(workflow_id)
+            if paused is not None:
+                paused.last_test_inputs = dict(inputs)
+                save_workflow(paused)
             push(state="needs_sign_in", steps_ran=len(rows), seconds=elapsed, detail=str(result.get("message") or "")[:300],
                  actions=["test_again"])
             harness.log_event(thread, "Test paused — sign-in expired", glyph="warn", sink=sink,

@@ -109,7 +109,7 @@ degradation warnings.
 > `02-WORKFLOWS-PASSED.md`. It proves scale + multi-host reliability but doesn't run saucedemo's
 > specific 6×-loop-then-checkout script below, so Leg B stays open.
 
-### Leg B — 100+ step flagship ⭐
+### Leg B — 100+ step flagship ⭐ ✅ passed 2026-11-17 (see **P-27** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md))
 S5: ONE continuous take of this loop **6× without pausing** (≈120 actions): sort Z→A → add 2
 products → cart → remove 1 → continue shopping. After loop 6: full checkout → First/Last/Zip →
 Finish → "Thank you" assertion → logout. Inspect review: loops deduplicated? intents sane at

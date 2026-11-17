@@ -727,7 +727,9 @@
   function _isCaptionedControl(el) {
     try {
       const tag = el.tagName.toLowerCase();
-      if (tag === "input" || tag === "select" || tag === "textarea") return true;
+      // A button drawn as an <input> (submit, reset, button, image) is named by its own value, like any button.
+      if (tag === "input") return !/^(submit|reset|button|image)$/.test((el.getAttribute("type") || "").toLowerCase());
+      if (tag === "select" || tag === "textarea") return true;
       if (el.isContentEditable) return true;
       return _CAPTIONED_ROLES.test((el.getAttribute("role") || "").toLowerCase());
     } catch (_) { return false; }
@@ -793,6 +795,9 @@
         const sib = children[i];
         if (!sib || sib.contains(el)) continue;
         if (_SKIP_INTERACTIVE.has(sib.tagName.toLowerCase())) continue;
+        // Text nobody can see is no caption: a <noscript> ("You need to enable JavaScript to run this app."), a
+        // <script>, a hidden element. Their innerText is their raw text because they are not drawn.
+        if (!sib.getClientRects().length) continue;
         // A sibling that itself CONTAINS a live control (a react-select-style wrapper <div>
         // around a hidden <input>, an ARIA combobox/listbox, a contenteditable) is that OTHER
         // field's own container, not a caption for this one -- its visible text is that other
@@ -2346,6 +2351,8 @@
   function emitEditableChange(el, force) {
     const target = resolveEditableTarget(el);
     if (!target) return;
+    // A native list is recorded by its "change" event only. Its keyboard and input echoes are the same pick, not typing.
+    if (target.tagName && target.tagName.toLowerCase() === "select") return;
     const compareValue = editableComparisonValue(target);
     const previous = lastEditableValueByElement.get(target);
     if (!force && previous === compareValue) return;
@@ -3225,6 +3232,9 @@
         modifiers: { ctrl: ev.ctrlKey, shift: ev.shiftKey, alt: ev.altKey, meta: ev.metaKey },
       });
       const el = document.activeElement || document.body;
+      // Arrows, Enter and Escape on a native list only move through its options; the pick they make is recorded by
+      // "change". Replayed, an arrow would move the choice again.
+      if (!hasModifier && ev.key !== "Tab" && el.tagName && el.tagName.toLowerCase() === "select") return;
       const p = serializeTarget(el, "keyboard_shortcut", val);
       requestAnimationFrame(() => finalizeState(p));
     },

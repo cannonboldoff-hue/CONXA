@@ -90,3 +90,22 @@ def test_a_save_or_send_after_typing_gets_a_page_side_proof_whatever_the_model_r
     steps = [_typed(), _save()]
     add_page_side_proof(steps)
     assert any(c.probe.get("type") == "row_with_identity" for c in steps[1].validation.effect.checks)
+
+
+def test_a_delete_on_one_row_gets_what_you_removed_is_gone_whatever_the_model_ranked():
+    """WF-3 Leg B (2026-11-17): a cart kept in the browser sends no request, so a Remove had no check that could answer."""
+    from conxa_compile.compiler.proof_picker import add_page_side_proof
+    from conxa_core.models.skill_spec import EntityBinding
+    ev = {"action": {"action": "click"}, "target": {"inner_text": "Remove"}}
+    effect = build_effect(ev, destructive=True, consequence="irreversible")
+    assert effect is not None and effect.kind == "delete"
+    row = EntityBinding(container_selector="div.cart_list > div.cart_item", identifier="Sauce Labs Onesie", source="literal")
+    remove = SkillStep(action={"action": "click"}, url=FORM, entity_binding=row, validation=ValidationBlock(effect=effect))
+    no_row = SkillStep(action={"action": "click"}, url=FORM,
+                       validation=ValidationBlock(effect=build_effect(ev, destructive=True, consequence="irreversible")))
+    steps = [remove, no_row]
+    add_page_side_proof(steps)
+    gone = [c for c in remove.validation.effect.checks if c.probe.get("type") == "row_with_identity"]
+    assert len(gone) == 1 and gone[0].probe["delta"] == -1 and gone[0].probe["key"] == "Sauce Labs Onesie"
+    assert gone[0].rung == "result_exists"
+    assert not any(c.probe.get("type") == "row_with_identity" for c in no_row.validation.effect.checks), "no row, no check"

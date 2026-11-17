@@ -1,5 +1,9 @@
 # End-to-end test and fix log (started 2026-11-16)
 
+> **Progress (2026-11-17):** 19 workflows (WF-1…WF-19). Fully passed: WF-1, WF-2 (Segment I is a
+> confirmed limitation). WF-3 Legs A and B passed. **Next:** WF-3 Leg C (compile determinism).
+> Remaining: WF-3 C–D, WF-4…WF-19. Latest commit: `5a39460`.
+
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
 the bottom. Each entry says which workflow was tested, what happened, why, and what was changed.
@@ -1101,3 +1105,32 @@ code makes the change. That comes after this leg passes without it.
 Smaller notes, filed in `TODO.md`: after Enter the typed search words were saved a second time, so
 Studio asked "A few things you typed are not in the workflow — is that okay?" about a duplicate.
 And a fresh recording that fails on one element is called "may have been redesigned".
+
+### WF-3 Leg B — saucedemo 6× sort/add/cart/remove loop, then checkout (2026-11-17)
+Deviations (site limits): loop 6 adds 1 product (only 6 exist); sort chosen by keyboard (the native
+dropdown list cannot be clicked by the test driver).
+
+**Test 1 — FAIL at step 2 of 79** (sort pick): "Verification failed: value_equals". The check expected
+the menu's label "Name (Z to A)"; the page reported its hidden code "za". Seven more defects in the
+compiled workflow. Fixes (general, not site-specific):
+- A dropdown check accepts the label or the code.
+- A keyboard pick is one step: the recorder no longer saves the menu's typing/arrow echoes, and compile
+  drops them from older recordings (this also removed six bogus required inputs).
+- A removed cart row is keyed on its product name, not a price another row shares; a Remove is proven
+  by "what you removed is gone from the page" (the site sends nothing on remove).
+- A button drawn as an input is a button (named "continue", not nearby noscript text) and is proven by
+  its page change.
+- "Sign in and test again" keeps the test inputs; the sign-in card says "test again", not "recording".
+- **Owner decision (BUILD-95 (1)):** buttons whose words only move forward (Continue, Next, Back,
+  Sign in) are no longer "can't be undone"; pay, delete and order words still ask.
+
+**Test 2 (fresh recording) — PASS, Approved.** 75 events → 56 steps, 37 checks, 3 inputs (first/last
+name, zip). 15 questions answered on purpose (6 Remove asks, 6 row locks all by name). Test runs
+7 min 33 s and 6 min 57 s, every step confirmed, no "couldn't confirm"; Human Edit not needed. Watched
+live: 5 items, total $107.95, then "Thank you for your order!", then the login page.
+Workflow `wf3-b-shop-loop-r2-8835a512`, session `535a5e6a-e5b3-4204-bdbd-6e30ea079e1f`.
+Caveat: the workflow has no "Thank you" check of its own (BUILD-95 (4)); chat's attempt to add one
+failed ("assert step has no element selector to read text from") and was undone. Manual stopwatch
+time not taken. New issues filed as BUILD-96.
+
+**Final status of WF-3 Leg B: PASSED** (P-27).

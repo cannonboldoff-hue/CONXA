@@ -1013,3 +1013,16 @@ live in unit tests; re-confirm via the corresponding workflows in `01-WORKFLOWS-
   class of sites/mechanics not previously covered.
 - If a later re-run of anything in this file fails, move it back to `01-WORKFLOWS-TO-TEST.md`
   with a dated regression note and lower the dashboard accordingly.
+
+## Passed Workflow P-27 — WF-3 Leg B: saucedemo 6× shop loop + checkout, to approved (2026-11-17)
+One continuous take: 6× (sort Z→A, add products, open cart, remove one, continue shopping), then
+checkout with first/last name and zip, Finish, logout. 75 events → 56 steps, 37 checks, 3 inputs.
+Two test runs passed with every step confirmed (7 min 33 s, 6 min 57 s); Approved without Human Edit.
+Outcome proven independently: cart of 5, total $107.95, "Thank you for your order!", logged out.
+Deviations: loop 6 added 1 product (site has 6); sort chosen by keyboard. No in-workflow "Thank you"
+check yet (TODO BUILD-95 (4)). Evidence: workflow `wf3-b-shop-loop-r2-8835a512`, session
+`535a5e6a-e5b3-4204-bdbd-6e30ea079e1f`, runs `r_mwjvl2yf_vzbac`, `r_mwjwzo02_op1cn`; diary in
+[`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** a long repetitive shop journey with native dropdowns, cart row
+removal on a site that sends no requests, and forward-only buttons, replayed and verified end to end.

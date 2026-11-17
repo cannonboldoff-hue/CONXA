@@ -16,6 +16,7 @@ function mockPage(url, counts = {}, values = {}) {
         // The page script runs here against a stand-in element: a string is a text box's value, {text} is a rich-text box.
         evaluate: async (fn) => {
           const v = values[sel] ?? "";
+          if (v && v.selected) return fn({ tagName: "SELECT", value: v.selected.value, selectedOptions: [v.selected] }); // a native list
           return fn(typeof v === "object" ? { tagName: "DIV", isContentEditable: true, innerText: v.text } : { tagName: "INPUT", value: v });
         },
       }),
@@ -186,6 +187,17 @@ test("value_equals fails when the field holds an unrelated value", async () => {
   const r = await verifyStep(page, step, {});
   assert.strictEqual(r.pass, false);
   assert.strictEqual(r.channel, "value_equals");
+});
+
+// A native list's value ("za") differs from the label a step records ("Name (Z to A)"): either one proves the pick.
+test("value_equals on a list matches the chosen option's label or its value, not another option", { timeout: 70000 }, async () => {
+  const page = mockPage("https://x.test", {}, { "#sort": { selected: { label: "Name (Z to A)", value: "za" } } });
+  const check = async (expected) => (await verifyStep(page, { type: "select", validation: { assertions: [
+    { type: "value_equals", target: "#sort", expected, required: true, timeout_ms: 50 },
+  ] } }, {})).pass;
+  assert.strictEqual(await check("Name (Z to A)"), true);
+  assert.strictEqual(await check("za"), true);
+  assert.strictEqual(await check("Name (A to Z)"), false);
 });
 
 test("value_equals interpolates the expected value from inputs", async () => {

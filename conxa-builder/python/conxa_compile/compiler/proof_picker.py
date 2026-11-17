@@ -116,10 +116,11 @@ def add_page_side_proof(steps: list[SkillStep]) -> None:
     """Code's floor, whatever the model ranked: a save or send made after typing on the same page gets "what you
     entered now shows up on the page" unless it already has a check that looks at the page. Its only other proof is
     "the app accepted the request", which a page-only form never sends; a stray ad or analytics request answered it
-    by chance (WF-3 A: four Submits "proven" that way, the fifth unconfirmed)."""
+    by chance (WF-3 A: four Submits "proven" that way, the fifth unconfirmed). A delete on one row of a list gets
+    "what you removed is gone from the page" the same way (WF-3 Leg B: a cart kept in the browser)."""
     for i, step in enumerate(steps):
         effect = step.validation.effect
-        if effect is None or effect.kind not in {"save", "send"}:
+        if effect is None or effect.kind not in {"save", "send", "delete"}:
             continue
         if any(c.role != "veto" and c.witness in {"renderer", "fresh_look", "later_step"} for c in effect.checks):
             continue

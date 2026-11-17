@@ -72,6 +72,15 @@ test("row_with_identity must not pass: a short, common or unresolved value says 
   assert.deepStrictEqual(await rowWithIdentity(rowCheck, { notebook: noBaseline, inputs: { item_title: "Quarterly plan" } }, rowOpts), { answer: "cant_tell" });
 });
 
+// A delete on one row (WF-3 Leg B, a cart kept in the browser): the row's own text shows one time fewer.
+test("row_with_identity for a delete: yes only when the row's text shows fewer times than before", async () => {
+  const gone = { id: "c9", probe: { type: "row_with_identity", key: "Sauce Labs Onesie", delta: -1 } };
+  assert.deepStrictEqual(await rowWithIdentity(gone, { notebook: { page: countingPage([1, 0]), nameCountBefore: 1 }, inputs: {} }, rowOpts), { answer: "yes" });
+  assert.deepStrictEqual(await rowWithIdentity(gone, { notebook: { page: countingPage([1]), nameCountBefore: 1 }, inputs: {} }, rowOpts), { answer: "no" });
+  // Not on the page before: its absence afterwards proves nothing.
+  assert.deepStrictEqual(await rowWithIdentity(gone, { notebook: { page: countingPage([0]), nameCountBefore: 0 }, inputs: {} }, rowOpts), { answer: "no" });
+});
+
 // ── value_equals ──
 const valueCheck = { id: "c7", probe: { type: "value_equals", field_step: "k-fill", value: "{{item_title}}" } };
 const fillStep = { source_step_key: "k-fill", type: "type" };

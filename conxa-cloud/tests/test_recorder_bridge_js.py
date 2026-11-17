@@ -1789,3 +1789,34 @@ def test_a_caption_rendered_after_the_step_is_added_when_the_page_settles(page: 
     page.keyboard.type("x")
     page.wait_for_timeout(900)
     assert _type_events(page)[0]["target"]["label_text"] == "Username"
+
+
+def test_a_keyboard_pick_in_a_native_list_is_one_select_step(page: Page) -> None:
+    """Focusing a list and pressing the down arrow changes its value. That is one pick: recording the arrow and the
+    list's value as typing as well made four steps, and a replayed arrow moved the choice again (WF-3 Leg B)."""
+    _install_bridge(page, """
+      <select id="sort" aria-label="Sort products"><option value="az">Name (A to Z)</option>
+        <option value="za">Name (Z to A)</option></select><button id="next">Next</button>""")
+    page.focus("#sort")
+    page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(120)
+    page.click("#next")
+    page.wait_for_timeout(120)
+    kinds = [(e["action"]["action"], e["target"].get("id")) for e in _events(page)]
+    on_list = [k for k in kinds if k[1] == "sort"]
+    assert on_list == [("select", "sort")], kinds
+    assert _action_events(page, "select")[0]["action"]["value"] == "za"
+
+
+def test_a_button_input_is_not_named_after_hidden_page_text(page: Page) -> None:
+    """A submit <input> is named by its own value, and a <noscript> above the form is never anyone's caption."""
+    _install_bridge(page, """
+      <noscript>You need to enable JavaScript to run this app.</noscript>
+      <div><form onsubmit="event.preventDefault()"><div><input id="first" placeholder="First Name"></div>
+        <div><input id="go" type="submit" value="Continue"></div></form></div>""")
+    page.click("#go")
+    page.click("#first")
+    page.keyboard.type("Ada")
+    page.wait_for_timeout(150)
+    labels = [e["target"].get("label_text") for e in _events(page)]
+    assert all("JavaScript" not in str(lab or "") for lab in labels), labels

@@ -65,7 +65,7 @@ export function SignInCard({ threadId, item }: CardProps) {
     <CardShell
       glyph={glyph}
       title={state === 'saved' ? `Signed in to ${app}` : `Sign in to ${app}`}
-      meta={state === 'saved' ? 'Saved for the whole group' : state === 'cancelled' ? 'Cancelled' : 'Sign-in only — recording starts by itself once you’re signed in'}
+      meta={state === 'saved' ? 'Saved for the whole group' : state === 'cancelled' ? 'Cancelled' : item.retest === true ? 'Sign-in only — the test runs again by itself once you’re signed in' : 'Sign-in only — recording starts by itself once you’re signed in'}
       footer={
         state === 'waiting' ? (
           <>

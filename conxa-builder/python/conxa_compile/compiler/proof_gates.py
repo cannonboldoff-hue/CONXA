@@ -9,7 +9,8 @@ step's own identity bundle.
   url_stays          the compiler saw this step land on a different address (an advisory ``url_pattern`` assertion)
                      and that address is not the one the step started on.
   row_with_identity  a save or send, after a value the run enters was typed on the same page: that value must show
-                     up on the page one more time than before (``runtime/app/result_probes.js``).
+                     up on the page one more time than before (``runtime/app/result_probes.js``). A delete on one row
+                     of a list: that row's identifying text must show one time fewer.
   value_equals       a save, after such a value was typed: a fresh copy of the page must still hold it. Rung
                      ``completed``, not ``result_exists``: a form that restores a draft shows the value without
                      any save, so it must never meet the bar that "the recorded result is absent" raises.
@@ -74,6 +75,13 @@ def _typed_in_this_entry(steps: list[SkillStep], i: int) -> list[str]:
 
 def row_with_identity(steps: list[SkillStep], i: int) -> EffectCheck | None:
     effect = steps[i].validation.effect
+    row = steps[i].entity_binding
+    if effect is not None and effect.kind == "delete" and row is not None and str(row.identifier or "").strip():
+        # A delete on one row: that row's own text shows on the page one time fewer. A page-only app (a cart kept in
+        # the browser) sends no request, so "the app accepted the request" can never answer there (WF-3 Leg B).
+        return EffectCheck(rung="result_exists", witness="renderer",
+                           probe={"type": "row_with_identity", "key": row.identifier, "keys": [row.identifier], "delta": -1},
+                           plain="what you removed is gone from the page")
     typed = _typed_in_this_entry(steps, i)
     # An upload already has its own "go and look" for the file's name; a second check on it would count it twice.
     if effect is None or effect.kind not in {"save", "send"} or not typed:

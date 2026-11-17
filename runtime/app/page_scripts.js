@@ -246,10 +246,15 @@ function revealHoverPoints(el) {
 
 // What a field currently holds, as a person would read it. A text box, text area or list holds a `value`; a
 // rich-text box (Gmail's message body, any editor built on contenteditable) holds text and has no value at all, so
-// asking it for one fails even when the text really is there. Anything else is not a field: null.
+// asking it for one fails even when the text really is there. A list answers with what it shows (the chosen
+// option's label, "Name (Z to A)") and its value ("za") together: a step may have recorded either, and callers
+// match by "contains". Anything else is not a field: null.
 function readFieldValue(el) {
   const tag = (el.tagName || "").toUpperCase();
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return el.value;
+  if (tag === "SELECT") {
+    return Array.from(el.selectedOptions || []).map((o) => o.label + "\n" + o.value).join("\n");
+  }
+  if (tag === "INPUT" || tag === "TEXTAREA") return el.value;
   if (el.isContentEditable) return el.innerText;
   return null;
 }

@@ -8,6 +8,7 @@ selector/vision-anchor choices.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -251,6 +252,24 @@ def _navigation_detected(prev_submit: Step, current: Step) -> bool:
     return bool(before and after and before != after)
 
 
+def _native_list_echo(step: Step) -> bool:
+    """Typing or an arrow/Enter/Escape press on a native <select>. Its ``select`` event already holds the pick; older
+    recordings also carry these echoes, and replayed they move the choice again (WF-3 Leg B)."""
+    if str((step.get("target") or {}).get("tag") or "").lower() != "select":
+        return False
+    action = action_name(step)
+    if action == "type":
+        return True
+    if action != "keyboard_shortcut":
+        return False
+    try:
+        key = json.loads(_event_value(step) or "{}")
+    except ValueError:
+        return False
+    mods = key.get("modifiers") if isinstance(key, dict) and isinstance(key.get("modifiers"), dict) else {}
+    return isinstance(key, dict) and key.get("key") != "Tab" and not any(mods.get(m) for m in ("ctrl", "alt", "meta"))
+
+
 def _truncate_after_terminal_submit(policy: dict[str, Any]) -> bool:
     wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
     return bool(wf.get("truncate_after_terminal_submit", False))
@@ -266,6 +285,8 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
     pending_submit: Step | None = None
     use_submit_truncate = _truncate_after_terminal_submit(pol)
     for raw in steps:
+        if _native_list_echo(raw):
+            continue
         step = dict(raw)
         step = _normalize_prep_click_to_focus(step, pol)
         action = action_name(step)
@@ -325,6 +346,9 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                     extras["repeat_sequences"] = [s for s in folded if s is not None]
                     extras["repeat_count"] = len(folded) + 1
                     cleaned[-1] = {**prev, "extras": extras}
+                    continue
+                if action == "select":
+                    cleaned[-1] = step  # picked again in the same list: the last pick is the one that stands
                     continue
                 if action == "type":
                     prev_payload = dict(prev.get("action") or {})

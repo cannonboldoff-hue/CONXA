@@ -3,6 +3,7 @@ state_validation + validation_planner)."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from conxa_compile.compiler.intent_access import get_effective_intent
@@ -35,6 +36,10 @@ def is_editable_target(step: Step) -> bool:
     semantic = step.get("semantic") or {}
     input_type = str(semantic.get("input_type") or "").lower()
     if input_type in {"file", "radio", "checkbox"}:
+        return False
+    # A button drawn as an <input> holds no text to type either: a click on it presses it (saucedemo's checkout
+    # "Continue" was planned as a box to type into, so its move to the next page was never checked).
+    if input_type in {"submit", "button", "reset", "image"}:
         return False
     return True
 
@@ -78,14 +83,34 @@ def looks_like_submit(step: Step, policy: dict[str, Any]) -> bool:
     return False
 
 
+def _has_word(text: str, token: str) -> bool:
+    return bool(token) and re.search(r"(?<![a-z0-9])" + re.escape(token) + r"(?![a-z0-9])", text) is not None
+
+
+def only_moves_forward(step: Step, policy: dict[str, Any]) -> bool:
+    """A control whose own words only move a person through the app ("Continue", "Continue Shopping", "Next", "Back",
+    "Sign in") and name no commit ("Place order", "Pay now", "Confirm", "Submit order"). Whole words: "Continue" is
+    navigation, "Discontinue" is not."""
+    wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
+    nav = [str(t).lower() for t in (wf.get("navigation_text_tokens") or [])]
+    commit = [str(t).lower() for t in (wf.get("submit_text_tokens") or []) if str(t).lower() not in nav]
+    semantic = step.get("semantic") or {}
+    target = step.get("target") or {}
+    text = " ".join(str(v or "") for v in (semantic.get("normalized_text"), target.get("inner_text"),
+                                           target.get("name"), target.get("aria_label"))).lower()
+    return any(_has_word(text, t) for t in nav) and not any(_has_word(text, t) for t in commit)
+
+
 def commit_intent_hit(step: Step, policy: dict[str, Any]) -> bool:
-    """Whether effective intent + submit heuristics indicate a commit / primary action."""
+    """Whether effective intent + submit heuristics indicate a commit / primary action. A button that only moves
+    forward is not one, even as a form's submit button: it can be undone by going back, so it is never asked about as
+    a step that can't be undone and carries no "the app accepted the request" proof (WF-3 Leg B, owner decision)."""
     wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
     subs = [str(s).lower() for s in (wf.get("commit_intent_substrings") or ["submit", "confirm"])]
     intent = get_effective_intent(step.get("semantic") or {}).lower()
     if any(sub in intent for sub in subs):
         return True
-    return looks_like_submit(step, policy)
+    return looks_like_submit(step, policy) and not only_moves_forward(step, policy)
 
 
 def detect_hover_precondition(ev: Step, prev_ev: Step | None) -> bool:

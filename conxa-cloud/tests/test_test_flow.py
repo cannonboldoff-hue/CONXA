@@ -744,6 +744,14 @@ def test_an_expired_sign_in_pauses_the_test_and_never_starts_auto_fix(env):
     assert started == []
 
 
+def test_a_test_paused_on_sign_in_keeps_its_inputs_for_sign_in_and_test_again(env):
+    # WF-3 Leg B: the first test paused before any result was saved, so the re-test ran with no inputs at all.
+    b, wf, _out = env
+    _fake_test(b, steps=[("open_new_invoice", False)], outcome="needs_sign_in")
+    b._tf_run_test(wf.id, {"first_name": "Ada"}, guard=True, show_browser=False, attempt=1, auto=False)
+    assert get_workflow(wf.id).last_test_inputs == {"first_name": "Ada"}
+
+
 def test_the_next_test_clears_the_expired_sign_in_flag(env):
     b, wf, _out = env
     _fake_test(b, steps=[("open_new_invoice", False)], outcome="needs_sign_in")

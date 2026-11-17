@@ -58,6 +58,7 @@
       "complete purchase",
       "confirm"
     ],
+    "navigation_text_tokens": ["sign in", "log in", "login", "continue", "next", "back", "previous"],
     "submit_intent_substrings": ["submit"],
     "commit_intent_substrings": ["submit", "confirm", "buy_now", "buy_it_now", "complete_purchase", "place_order", "pay_now"],
     "submit_button_types": ["submit", "button"],
