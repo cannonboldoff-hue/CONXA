@@ -1188,7 +1188,7 @@ Disabled, then gone; nothing left behind. Known: the pick keeps the fixed name (
 
 **Leg E: BLOCKED** (needs a sign-up and posts a public review).
 
-### WF-5 — files at scale (2026-11-17)
+### WF-14 — files at scale (old WF-5 Parts B–D; renumbered 2026-11-17)
 Run on a local practice server that logs each received file with its fingerprint (dummy files only;
 real public file-sharing sites blocked). The cloud AI key hit its weekly limit mid-run; the owner
 raised it.

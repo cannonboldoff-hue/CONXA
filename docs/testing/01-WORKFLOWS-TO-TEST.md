@@ -24,7 +24,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-1 | Starter marathon: search, form, tabs, download→upload, JS dialogs, sign-in | ✅ passed 2026-11-16 (P-11…P-16) | — |
 | WF-2 | Tricky elements: iframes, hover, shadow DOM, late render, moving/renaming, infinite scroll | ✅ passed 2026-11-16 (P-17…P-25); drag-drop is a limitation | — |
 | WF-3 | Scale: 77, 120 and 93-action takes; compile determinism | ✅ passed 2026-11-17 (P-26…P-29) | — |
-| WF-4 | Real apps: HR SPA, checkout maths, two-site relay, language flip, reviews | 🔄 in progress | Yes |
+| WF-4 | Real apps: HR SPA, checkout maths, two-site relay, language flip, reviews | ✅ A–D passed 2026-11-17 (P-30…P-33); E blocked (sign-up + public review) | — |
 | WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ⏳ | Yes |
 | WF-6 | False success: a pass that didn't really happen | ⏳ | Yes (local fixture) |
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ⏳ | Yes |
@@ -34,7 +34,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-11 | Loops, inputs and hostile input data | ⏳ | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ⏳ | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ⏳ | Yes (Studio part) |
-| WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | ⏳ | Ask first (public file hosts) |
+| WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | 🔄 14.1–14.2, 14.4–14.7 passed (P-34…P-36); 14.3, 14.8 open | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ⏳ | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ⏳ | Partly |
@@ -194,7 +194,7 @@ Generated text only on public demos. **Failures go to:** EXEC-10; wrong entity �
 
 ---
 
-## WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate — Parts B–D passed 2026-11-17 (P-34…P-36); real public file hosts blocked
+## WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate
 
 **Why first after WF-4:** these rules protect every customer workflow, and breaking them needs no
 outside site. **Site:** S3 `/text-box` (a fresh recording, not the approved P-11 one) + fixture
@@ -427,7 +427,7 @@ The real-agent pause/resume part (bad answers, re-ask limit, park timeout) is in
 
 ---
 
-## WF-14 — Files at scale
+## WF-14 — Files at scale — 🔄 partly passed 2026-11-17 (P-34…P-36): 14.1 (local stand-in), 14.2 (20 files), 14.4–14.7 pass; 14.2 pilot pre-check, 14.3, 14.8 not run; real public hosts blocked
 
 **Ask the owner before starting** (uploads go to public file hosts). Generated dummy files only.
 Already passed: interleaved one-at-a-time download→upload identity at n=5 (P-10).
