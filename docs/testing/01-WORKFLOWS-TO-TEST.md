@@ -117,7 +117,7 @@ length? Package + execute, time it, then **do the task manually once with a stop
 the comparison number. Fill the metrics table (events/steps, compile time/calls, exec time,
 first-try rate, manual time, Human Edit needed?).
 
-### Leg C — Compile determinism at scale
+### Leg C — Compile determinism at scale ✅ passed 2026-11-17 (see **P-28** in [`02-WORKFLOWS-PASSED.md`](02-WORKFLOWS-PASSED.md))
 Re-compile Leg B's session via `conxa-cloud/scripts/recompile_session.py <session_id>` and diff
 fingerprints/selectors between the two SkillPackages. Identical = PASS; differing selectors =
 IdentityBundle/grammar nondeterminism.

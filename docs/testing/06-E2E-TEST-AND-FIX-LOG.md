@@ -1,8 +1,8 @@
 # End-to-end test and fix log (started 2026-11-16)
 
 > **Progress (2026-11-17):** 19 workflows (WF-1…WF-19). Fully passed: WF-1, WF-2 (Segment I is a
-> confirmed limitation). WF-3 Legs A and B passed. **Next:** WF-3 Leg C (compile determinism).
-> Remaining: WF-3 C–D, WF-4…WF-19. Latest commit: `5a39460`.
+> confirmed limitation). WF-3 Legs A, B and C passed. **Next:** WF-3 Leg D (banking marathon).
+> Remaining: WF-3 D, WF-4…WF-19. Latest commit: `5a39460`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1134,3 +1134,17 @@ failed ("assert step has no element selector to read text from") and was undone.
 time not taken. New issues filed as BUILD-96.
 
 **Final status of WF-3 Leg B: PASSED** (P-27).
+
+### WF-3 Leg C — compile determinism at scale (2026-11-17)
+Leg B's recording (session `535a5e6a…`) was built three more times on copies of Studio's data, using
+Studio's own compile path. **Result: PASS.** All three builds and the approved package match exactly
+on step count and order (56), and on every element address, identity record, wait, frame/tab chain,
+consequence and branch rule. Zero differences in any pair. Each build took about 108 s.
+
+What does change between builds is the AI-written meaning (allowed to vary, but worth tightening):
+step descriptions, intent names, the name of the sort-menu input (`product_sort_order` in two builds,
+`name_a_to_z` in the third, which a person would see), empty phases, and one optional address check.
+`scripts/recompile_session.py` is out of date: it needs a cloud token, writes into the real session
+folder, and skips inputs the Studio path passes. Both filed as BUILD-97. No code was changed.
+
+**Final status of WF-3 Leg C: PASSED** (P-28).

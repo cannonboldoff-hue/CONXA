@@ -1026,3 +1026,11 @@ check yet (TODO BUILD-95 (4)). Evidence: workflow `wf3-b-shop-loop-r2-8835a512`,
 
 **What this proves Conxa can do now:** a long repetitive shop journey with native dropdowns, cart row
 removal on a site that sends no requests, and forward-only buttons, replayed and verified end to end.
+
+## Passed Workflow P-28 — WF-3 Leg C: compile determinism at 56 steps (2026-11-17)
+Leg B's recording compiled three more times (Studio's compile path, on copied data): identical step
+count/order and identical selectors, identity bundles, waits, frame/tab chain versus each other and
+the approved package. AI-written wording (descriptions, intents, one input name) varied — filed as
+TODO BUILD-97. Evidence: diary in [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** rebuilding a long workflow never moves where a step clicks.
