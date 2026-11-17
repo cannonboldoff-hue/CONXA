@@ -167,7 +167,9 @@ def _fork_question(key: str, state: dict[str, Any], fork_copy: ForkCopy | None, 
         {"id": "ask_human", "label": "Stop and ask a person each time", "detail": "It waits on the popup until someone tells it what to do."},
         {"id": "stop", "label": "Stop completely", "detail": "Treat this popup as a problem and end here."},
     ]
-    title = f"A message box called “{popup}” can pop up here. What should happen when it does?"
+    # A box with no title of its own is named by its buttons: "a message box called “a popup”" read as nonsense (WF-4 A).
+    title = (f"A message box called “{popup}” can pop up here. What should happen when it does?" if sig.get("title")
+             else f"A message box{_with_buttons(sig.get('button_labels'))} can pop up here. What should happen when it does?")
     if fork_copy is not None:
         try:
             reworded = fork_copy({
@@ -206,7 +208,7 @@ def _fork_then_question(key: str, state: dict[str, Any]) -> dict[str, Any] | Non
     return _question(
         "fork_then", f"fork_then:{key}:{state['id']}",
         f"If someone picks {names} instead{f' of “{recorded}”' if recorded else ''}, do the next steps still make sense?",
-        f"The “{popup}” message box can go different ways. You only recorded one of them, so I can\u2019t be sure the steps after it fit the others.",
+        (f"The “{popup}” message box" if sig.get("title") else "This message box") + " can go different ways. You only recorded one of them, so I can\u2019t be sure the steps after it fit the others.",
         [
             {"id": "same", "label": "Yes, carry on with the same steps", "detail": "It continues exactly as recorded after any choice."},
             {"id": "stop", "label": "No, stop there", "detail": "If someone picks another choice, the choice is made and the run stops. Nothing after it runs."},
@@ -216,14 +218,23 @@ def _fork_then_question(key: str, state: dict[str, Any]) -> dict[str, Any] | Non
     )
 
 
+def _with_buttons(labels: Any) -> str:
+    """ " with the buttons “Yes, Delete” and “No, Cancel”" for a box with no title, or "" when it has no buttons."""
+    names = [f"“{str(l).strip()}”" for l in (labels or []) if str(l).strip() and str(l).strip() not in ("×", "x", "X")][:3]
+    if not names:
+        return ""
+    return f" with the button{'s' if len(names) > 1 else ''} " + (" and ".join([", ".join(names[:-1]), names[-1]]) if len(names) > 1 else names[0])
+
+
 def _known_popup_question(key: str, name: str, popup: dict[str, Any]) -> dict[str, Any]:
     """A popup the app map saw after this same step in other workflows. Fixed wording: the map holds
     no model-written text, and the only things offered are adding it (asks a person by default) or not."""
-    title = str(popup.get("title") or "a popup")
+    title = str(popup.get("title") or "")
     labels = [str(l) for l in popup.get("button_labels") or []][:4]
+    called = f" called “{title}”" if title else _with_buttons(labels)
     return _question(
         "known_popup", f"known_popup:{key}:{popup.get('id')}",
-        f"Your other workflows sometimes see a message box called “{title}” after “{name}”. Should this one be ready for it too?",
+        f"Your other workflows sometimes see a message box{called} after “{name}”. Should this one be ready for it too?",
         f"It has these buttons: {', '.join(labels)}. It didn’t appear while you recorded this one, but it could show up when someone really uses it.",
         [
             {"id": "add", "label": "Yes, be ready for it", "detail": "If it shows up, a person gets asked what to do. If not, it carries on. This adds a short pause at this step."},
@@ -415,9 +426,14 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
     keys = step_keys(steps)
     checks: list[dict[str, Any]] = []
     for i in range(max(0, len(steps) - 3), len(steps)):
-        for j, a in enumerate((steps[i].get("validation") or {}).get("assertions") or []):
+        assertions = (steps[i].get("validation") or {}).get("assertions") or []
+        # A step that landed on another page (its landing is a url_pattern) was last seen on the page it left: words
+        # from that moment are often a search box's suggestions, gone once it works. Offered, never ticked for the
+        # person (WF-4 Leg C: ticked, they failed every run). An unticked check cannot fail a run.
+        landed = any(isinstance(a, dict) and a.get("type") == "url_pattern" for a in assertions)
+        for j, a in enumerate(assertions):
             if isinstance(a, dict) and a.get("type") in _ASSERTION_TYPES and not a.get("required"):
-                checks.append({"id": f"{keys[i]}#{j}", "step_key": keys[i], "assertion": a})
+                checks.append({"id": f"{keys[i]}#{j}", "step_key": keys[i], "assertion": a, "landed": landed})
 
     def describe(a: dict[str, Any]) -> str:
         t = a.get("type")
@@ -432,7 +448,7 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
         return "The screen changes"
 
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
-                "selected": c["assertion"].get("type") == "text_present"} for c in checks]
+                "selected": c["assertion"].get("type") == "text_present" and not c["landed"]} for c in checks]
     effect_choices, effect_keys = _effect_choices(doc)
     # Offered only beside a real check, so an input-only workflow isn't pestered. A step's completion checks are one:
     # on an app that answers in the page alone (no request to watch), "what I typed shows up" is the proof left.
@@ -990,6 +1006,86 @@ def _restore_literal_patch(step: dict[str, Any], binding: str, literal: str) -> 
     return patch
 
 
+def _words_in(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
+    """The step after which ``words`` were on the screen while recording (its step key); "" when the saved pages were
+    read and none shows them, None when there is no recording to read or no step brought them up. Typed as "how we
+    know it worked", they belong on the step that brought them up, not on the last step: WF-4 Leg B's "Thank you for
+    your order" was checked after logging out, where it is gone.
+
+    A saved page is taken a moment after its step, often after the next step too (one copy is reused while nothing
+    changes), so it is placed by the last step that shares it. When that page has another address than the first step
+    sharing it, the words came with that address: their step is the last thing done before it first showed. Otherwise
+    it is the last press (click, Enter) after the last copy without the words, up to the first copy with them; with none
+    there, the first press after it that still shares that copy; with none at all, the first other action there.
+    shortcut: placed by copy order, not capture time (the recorder saves none); revisit if a check lands one step off."""
+    from conxa_compile.compiler.navigation_effects import _INTERACTION_ACTIONS
+    from conxa_core.storage.session_events import read_session_events
+    from conxa_core.storage.snapshots import read_dom_snapshot
+    from conxa_compile.compiler.selector_filters import _parse_soup
+
+    session = str((doc.get("meta") or {}).get("source_session_id") or "")
+    needle = _words_in(words)
+    if not session or not needle:
+        return None
+    try:
+        events = read_session_events(session)
+    except Exception:  # noqa: BLE001 — no recording to read: the caller keeps its own placement
+        return None
+
+    def visible_text(html: str) -> str:
+        soup = _parse_soup(html)
+        for tag in soup(["script", "style", "noscript", "template"]):
+            tag.decompose()
+        # A result panel kept hidden until the step shows it (ParaBank's "Transfer Complete!"): not on the screen yet.
+        for tag in soup.find_all(lambda t: t.has_attr("hidden") or t.get("aria-hidden") == "true" or re.search(
+                r"display\s*:\s*none|visibility\s*:\s*hidden", str(t.get("style") or ""), re.I)):
+            if not tag.decomposed:
+                tag.decompose()
+        return _words_in(soup.get_text(" "))
+
+    def action(i: int) -> str:
+        return str((events[i].get("action") or {}).get("action") or "").lower()
+
+    page = [str((e.get("page") or {}).get("url") or "").split("#", 1)[0] for e in events]
+    hashes = [str((e.get("snapshot") or {}).get("dom_hash") or "") for e in events]
+    shows: dict[str, bool] = {}
+    for h in set(hashes) - {""}:
+        html = read_dom_snapshot(session, h) or ""
+        shows[h] = needle in visible_text(html) if html else False
+    first = next((i for i, h in enumerate(hashes) if shows.get(h)), None)
+    if first is None:
+        return "" if shows else None
+    last_sharing = max(i for i, h in enumerate(hashes) if h == hashes[first])
+    seen_on = page[last_sharing]
+    if page[first] != seen_on:
+        arrived = next(i for i in range(first, len(events)) if page[i] == seen_on)
+        cause = next((i for i in range(arrived - 1, -1, -1) if action(i) in _INTERACTION_ACTIONS), None)
+    else:
+        without = max((i for i in range(first) if hashes[i] and not shows.get(hashes[i])), default=-1)
+        pressed = [i for i in range(without + 1, last_sharing + 1) if action(i) in ("click", "dblclick", "keyboard_shortcut", "submit")]
+        acted = [i for i in range(without + 1, last_sharing + 1) if action(i) in _INTERACTION_ACTIONS]
+        upto = [i for i in pressed if i <= first]
+        # Late beats early: a check one step late still sees words that stay on the screen; one step early fails.
+        cause = upto[-1] if upto else (pressed or acted or [None])[0]
+    if cause is None:
+        return None  # on screen before anything was done: no step brought them up
+    seq = (events[cause].get("extras") or {}).get("sequence")
+    steps = _steps(doc)
+    best = None
+    for key, step in zip(step_keys(steps), steps):
+        src = step.get("source_event")
+        if isinstance(src, int) and isinstance(seq, int) and src <= seq:
+            if src == seq and not _can_hold_checks(step):
+                return ""  # brought up by a step that holds no checks (a popup's answer): the caller says so
+            if _can_hold_checks(step):
+                best = key
+    return best
+
+
 def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Turn an answer into ops for existing commands, plus the receipt line shown once applied.
 
@@ -1221,15 +1317,27 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 continue
             key, _, idx = cid.rpartition("#")  # step keys may contain "#" themselves
             by_step.setdefault(key, {})[int(idx)] = True
-        if custom:
-            extra.append({"type": "text_present", "target": custom, "required": True})
         steps = _steps(doc)
         keyed = dict(zip(step_keys(steps), steps))
         # "What you see at the end" belongs on the last step that can hold a check: a trailing scroll, a
         # download/tab marker or a decision step cannot, and the patch gate would refuse it.
         end_key = next((k for k in reversed(keyed) if _can_hold_checks(keyed[k])), None)
+        # Typed words go on the step that brought them up on screen while recording; only words no saved page shows
+        # are checked at the end, and the receipt says so.
+        custom_key = (step_where_words_appear(doc, custom) if custom else None)
+        custom_unseen = custom_key == ""
+        custom_key = custom_key or end_key
+        # Words that show only after a popup's answer cannot be checked: a decision step holds no checks, and the step
+        # before it runs before the answer (WF-4 Leg A: "Successfully Deleted" after "Yes, Delete").
+        order = list(keyed)
+        after_fork = bool(custom) and custom_unseen and custom_key in keyed and any(
+            _action_name(keyed[k]) == "outcome_fork" for k in order[order.index(custom_key) + 1:])
+        if after_fork:
+            custom_key = None
         if extra and end_key:
             by_step.setdefault(end_key, {})
+        if custom and custom_key:
+            by_step.setdefault(custom_key, {})
         for key, idxs in by_step.items():
             step = keyed.get(key)
             if step is None:
@@ -1240,10 +1348,19 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                     assertions[j]["required"] = True
             if key == end_key:
                 assertions += extra
+            if custom and key == custom_key:
+                assertions.append({"type": "text_present", "target": custom, "required": True})
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
         labels = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
-        if custom:
-            labels.append(f"You see “{custom}” on the screen")
+        if after_fork:
+            labels.append(f"I can’t check “{custom}” yet: it shows after the answer to the popup at the end, and a "
+                          "check can’t go there. A test will show whether it appears")
+        elif custom and custom_unseen:
+            labels.append(f"You see “{custom}” on the screen at the very end. I didn’t see these words while you "
+                          "recorded: if they show up earlier, tell me after which step")
+        elif custom:
+            where = step_name(keyed[custom_key]) if custom_key and custom_key != end_key else ""
+            labels.append(f"You see “{custom}” on the screen" + (f" after “{where}”" if where else ""))
         return ops, "; ".join(labels) if labels else "No checks needed"
 
     return ops, ""

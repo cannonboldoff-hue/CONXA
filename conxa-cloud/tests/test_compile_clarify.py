@@ -169,6 +169,17 @@ def test_questions_cover_the_places_only_the_recorder_knows_and_are_capped_and_o
     assert [c["selected"] for c in done["choices"]] == [True, False, False, False]
 
 
+def test_words_seen_as_a_step_landed_elsewhere_are_offered_but_not_ticked():
+    # WF-4 Leg C: Enter in a search box landed on the article; the words were the box's suggestions on the page it left.
+    doc = _doc([_step("keyboard_shortcut", "submit_search", validation={"assertions": [
+        {"type": "url_changed", "required": True},
+        {"type": "text_present", "target": "T-Shirt (Migos song)", "required": False},
+        {"type": "url_pattern", "target": r"^https://en\.wikipedia\.org/wiki/T\-shirt", "required": False}]})])
+    done = next(q for q in generate_questions(doc) if q["kind"] == "done_when")
+    words = next(c for c in done["choices"] if "Migos" in c["label"])
+    assert words["selected"] is False
+
+
 def test_a_workflow_with_nothing_uncertain_asks_nothing():
     doc = _doc([_step("navigate", "open_page"), _step("click", "save_changes")])
     assert generate_questions(doc) == []
@@ -699,3 +710,91 @@ def test_a_dropdown_step_is_named_by_its_caption_not_its_option_list():
     assert step_name({"action": "select", "identity_bundle": {"fingerprint": fp}}) == "Choose in “to account #”"
     box = {"tag": "input", "role": "textbox", "label_text": "Amount:"}
     assert step_name({"action": "type", "identity_bundle": {"fingerprint": box}}) == "Type into “Amount”"
+
+
+def test_typed_words_go_on_the_step_that_brought_them_up(monkeypatch):
+    """WF-4 Leg B: "Thank you for your order" was put on the last step (Log out), where it is gone. The saved pages show
+    it first on a copy taken late (its event's address is still the step-two page), so the copy is placed by the last
+    event that shares it: the order-complete page, which Finish opened."""
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+
+    def ev(seq, action, url, snap):
+        return {"action": {"action": action}, "page": {"url": url}, "extras": {"sequence": seq}, "snapshot": {"dom_hash": snap}}
+
+    two, done, home = "https://shop.test/step-two", "https://shop.test/complete", "https://shop.test/inventory"
+    events = [ev(1, "scroll", two, "late"), ev(2, "click", two, "late"), ev(3, "manual_navigate", done, "late"),
+              ev(4, "click", done, "late"), ev(5, "click", home, "inv"), ev(6, "click", home, "inv")]
+    pages = {"late": "<h2>Thank you   for your order!</h2>", "inv": "<button>Logout</button>"}
+    monkeypatch.setattr(se, "read_session_events", lambda _s: events)
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: pages.get(h))
+    steps = [_step("click", "finish", source_event=2, semantic_description="Finish the order"),
+             _step("click", "back_home", source_event=4), _step("click", "open_menu", source_event=5),
+             _step("click", "logout", source_event=6)]
+    doc = _doc(steps)
+    doc["meta"]["source_session_id"] = "s1"
+    keys = step_keys(steps)
+    q = {"kind": "done_when", "choices": [], "step_keys": []}
+    ops, receipt = plan_answer(q, {"selected": [], "custom_text": "Thank you for your order"}, doc)
+    assert [o["step_key"] for o in ops] == [keys[0]]
+    assert ops[0]["patch"]["validation"]["assertions"] == [
+        {"type": "text_present", "target": "Thank you for your order", "required": True}]
+    # Words no saved page shows stay at the end, and the receipt says they were not seen.
+    ops, receipt = plan_answer(q, {"selected": [], "custom_text": "See you soon"}, doc)
+    assert [o["step_key"] for o in ops] == [keys[3]] and "didn’t see these words" in receipt
+
+
+@pytest.mark.parametrize("copies, want", [
+    # Leg B's shape on one address: the scroll's copy was taken after Finish; Finish is the next press sharing it.
+    ({"0": "before", "1": "late", "2": "late", "3": "late"}, 2),
+    # A saved message: the Save click's own copy has the words; the click on the box before it is not the cause.
+    ({"0": "before", "1": "before", "2": "late", "3": "late"}, 2),
+])
+def test_typed_words_on_a_page_that_keeps_its_address(monkeypatch, copies, want):
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+
+    acts = ["click", "scroll", "click", "click"]
+    events = [{"action": {"action": a}, "page": {"url": "https://shop.test/a"}, "extras": {"sequence": i + 1},
+               "snapshot": {"dom_hash": copies[str(i)]}} for i, a in enumerate(acts)]
+    pages = {"before": "<p>Order</p><script>var t='Saved it'</script>", "late": "<p>Saved it</p>"}
+    monkeypatch.setattr(se, "read_session_events", lambda _s: events)
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: pages.get(h))
+    from conxa_compile.conversation.clarify import step_where_words_appear
+
+    steps = [_step(a, f"s{i}", source_event=i + 1) for i, a in enumerate(acts)]
+    doc = _doc(steps)
+    doc["meta"]["source_session_id"] = "s1"
+    assert step_where_words_appear(doc, "saved it") == step_keys(steps)[want]
+
+
+def test_check_first_before_a_delete_is_applied_even_when_the_built_step_is_not_irreversible():
+    """WF-4 Leg A: "Check first" was asked about the bin icon (it only opens "Are you sure?", so it was built as
+    reversible and no confirm question existed). The answer was reported as matching nothing, and the delete would
+    have run without asking. A person's own request to be asked always lands."""
+    from conxa_compile.conversation import replay
+
+    steps = [_step("click", "search", source_event=25), _step("click", "delete_user", source_event=27,
+                                                           semantic_description="Delete the user"),
+             _step("outcome_fork", "handle_popup", source_event=28)]
+    doc = _doc(steps)
+    keys = step_keys(steps)
+    d = {"kind": "confirm_before", "event_ids": [27], "choice": "confirm"}
+    plan = replay.plan([d], doc, [], dict(zip(keys, (25, 27, 28))).get)
+    assert plan["unapplied"] == []
+    (g,) = plan["groups"]
+    assert [o["op"] for o in g["ops"]] == ["insert_review"] and g["ops"][0]["before_step_key"] == keys[1]
+    # The event's step is gone: asked before the last step before it, still never dropped.
+    plan = replay.plan([d], doc, [], dict(zip(keys, (25, 99, 98))).get)
+    assert plan["groups"][0]["ops"][0]["before_step_key"] == keys[0]
+    # "Delete without checking" still changes nothing.
+    assert replay.plan([{**d, "choice": "no_confirm"}], doc, [], dict(zip(keys, (25, 27, 28))).get) == {"groups": [], "unapplied": []}
+
+
+def test_a_popup_without_a_title_is_named_by_its_buttons():
+    from conxa_compile.conversation.clarify import _fork_question
+
+    q = _fork_question("k#1", {"id": "dialog_popup", "signature": {"button_labels": ["×", "No, Cancel", "Yes, Delete"]},
+                               "options": [{"id": "yes", "label": "Yes, Delete", "recorded": True}]}, None, None)
+    assert q["title"].startswith("A message box with the buttons “No, Cancel” and “Yes, Delete” can pop up here")
+    assert "a popup" not in q["title"]

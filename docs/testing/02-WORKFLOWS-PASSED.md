@@ -1046,3 +1046,17 @@ not visible on this demo site (loan account lists no transactions). Evidence: wo
 
 **What this proves Conxa can do now:** a long multi-page money journey with large look-alike forms and
 account lists replays with every step proven, without locking clicks to rows that change.
+
+## Passed Workflows P-30…P-33 — WF-4 Legs D, C, B, A: real-app journeys, to approved (2026-11-17)
+- **P-30 Leg D** (`wf4-d-i18n-wiki-r5-06fd6288`): Wikipedia search lands on /wiki/Automation; pointed at
+  German Wikipedia it reaches "Automatisierung" (address check stays English, BUILD-101).
+- **P-31 Leg C** (`wf4-c-relay-two-sites-r6-42b65468`): shop search → captured price (Rs. 400, matches
+  the site) → Wikipedia search, run `r_mwk5pvol_g5yjk`.
+- **P-32 Leg B** (`wf4-b-shop-checkout-r3-62513831`): sort, 3 cheapest, checkout, "Thank you" check on
+  Finish; 3 passing runs; total $36.69 proven on the page.
+- **P-33 Leg A** (`wf4-a-hr-user-crud-r6-10e21758`, run `r_mwkg40p5_zpark`): OrangeHRM add user via
+  suggestion pick, edit to Disabled, delete after a person's approval; demo API proof; nothing left.
+Leg E blocked (needs sign-up and a public review). Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** real apps with suggestion lists, two-site relays, language
+switches and approval-gated deletes record and replay as the person did them.

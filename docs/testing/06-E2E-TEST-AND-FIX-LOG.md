@@ -1,8 +1,9 @@
 # End-to-end test and fix log (started 2026-11-16)
 
-> **Progress (2026-11-17):** 19 workflows (WF-1…WF-19). Fully passed: WF-1, WF-2 (Segment I is a
-> confirmed limitation). WF-3 (all legs) passed. **Next:** WF-4.
-> Remaining: WF-4…WF-19. Latest commit: see `git log`.
+> **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
+> see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Fully passed: WF-1, WF-2
+> (Segment I is a confirmed limitation), WF-3. **In progress:** WF-4 (Legs A, C, D tested and fixed).
+> Remaining: WF-4…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -38,27 +39,9 @@ the bottom. Each entry says which workflow was tested, what happened, why, and w
 
 ## Plan: every workflow, sorted
 
-| WF | What | Can it be done here? |
-|---|---|---|
-| WF-1 | Starter marathon (Wikipedia, the-internet, demoqa) | Yes. Sign-in leg uses the group's saved sign-in, not a recording |
-| WF-2 | Rich elements (iframes, hover, drag, shadow DOM) | Yes |
-| WF-3 | Scale (50 to 100+ steps) | Partly: Leg A and C yes; B and D need sign-in on shop/bank sites |
-| WF-4 | Real apps (HR app, shop, two-site, language flip, reviews) | Partly: C and D yes; A/B/E need sign-in or posting on public demos |
-| WF-5 | Many files | Partly: public file hosts receive uploads (ask first) |
-| WF-6 | Branch steps | Yes |
-| WF-7 | Recovery drill | Yes (Studio part); agent part needs an MCP client |
-| WF-8 | Break tests | Yes (local) |
-| WF-9 | Mega workflow | Partly (sign-in segments as above) |
-| WF-10 | Chaos and odd inputs | Partly |
-| WF-11 | Plan limits (cloud only) | No browser workflow; API checks only |
-| WF-12 | Go / no-go checklist | Blocked for the clean-computer, billing and update phases |
-| WF-13 | Sheets to Gmail, GitHub PR merge | Changes real accounts: ask the owner first |
-| WF-14 | AI review step | Yes |
-| WF-15 | Hand-over step (CAPTCHA) | Needs a person to solve the CAPTCHA |
-| WF-16 | Intelligent compiler tour | Yes |
-| WF-17 | Copilot chat | Yes |
-| WF-18 | Sign-in everywhere | Partly |
-| WF-19 | Conxa Execute app | Separate app, not Build Studio |
+The plan is the status board at the top of [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md)
+(renumbered in run order on 2026-11-17). WF-1…WF-4 kept their numbers, so every diary entry below
+still matches; for any other old number, use the map at the bottom of that file.
 
 ---
 
@@ -1174,3 +1157,33 @@ Workflow `wf3-d-bank-marathon-r2-067c16df`, session `a6722389-8188-4b4c-85e4-57d
 `r_mwk111tv_0rygn`. Recording was 93 actions, short of the 100–140 the leg suggests.
 
 **Final status of WF-3 Leg D: PASSED** (P-29). **WF-3 is complete.**
+
+### WF-4 — real-app journeys (2026-11-17)
+**Leg D (Wikipedia search, then the same on German Wikipedia).** An early take falsely passed on the
+wrong article: typing was saved after its Enter, so the run searched "Au". *Fix:* typing is saved
+before the click or key that follows it, never re-sent when the page unloads; old recordings are
+repaired at build. A search box with no id is now found through its form's id, which works in any
+language. **PASS, Approved.** German flip reached "Automatisierung" by language-neutral signals and
+then failed only its English address check (left as is, BUILD-101).
+
+**Leg C (copy a shop price, then search Wikipedia).** The Search click was set aside as "did nothing"
+(the page change was credited to a repeated typing), and ad frames hid the move to Wikipedia. *Fix:*
+as above, plus only the main page's loads count, a click after which the page moved is never set
+aside, and a captured value never becomes a run input. **PASS, Approved;** the price read back
+(Rs. 400) matches the shop's own search page.
+
+**Leg B (saucedemo checkout).** The typed check "Thank you for your order" went on the last step
+(logout), where it is gone. *Fix:* a typed check goes on the step after which its words were on
+screen; chat can now move a check through a change card. **PASS, Approved** (3 runs; total $36.69,
+"Thank you for your order!"); chat move and undo verified.
+
+**Leg A (OrangeHRM: add user, edit to Disabled, delete).** Three failures:
+- The employee suggestion is picked on mouse-down and vanishes, so no click was saved. *Fix:* such a
+  press is recorded as the click.
+- **Safety:** the person's "Check first" for the delete was silently dropped. *Fix:* it always lands
+  as an approval before the delete click.
+- Boxes were found by a style they only have while focused. *Fix:* passing-state classes are dropped.
+**PASS, Approved:** run paused for approval before delete; the demo's own API showed the user created,
+Disabled, then gone; nothing left behind. Known: the pick keeps the fixed name (BUILD-102 (6)).
+
+**Leg E: BLOCKED** (needs a sign-up and posts a public review).

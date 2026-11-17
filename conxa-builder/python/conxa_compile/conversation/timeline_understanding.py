@@ -177,7 +177,8 @@ def _events(merged: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in merged if r.get("kind") == "event"]
 
 
-def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] | None = None) -> list[dict[str, Any]]:
+def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] | None = None,
+                             cut_labels: list[str] | None = None) -> list[dict[str, Any]]:
     """Recorded values that may be specific to this recording: page addresses, clicked items known
     only by their label, and text typed into a field. ``{ref, kind, event_ids, row_refs, recorded, literal}``.
     ``cuts`` (out-param) counts, per bucket, the distinct values left out because the bucket was full."""
@@ -211,6 +212,8 @@ def candidates_from_timeline(merged: list[dict[str, Any]], cuts: dict[str, int] 
             if counts[bucket] >= caps[bucket]:
                 if cuts is not None:
                     cuts[bucket] = cuts.get(bucket, 0) + 1
+                if cut_labels is not None:  # named, so "2 more values were left out" can say which
+                    cut_labels.append(display_label(recorded if kind == "control" else (row.get("target") or recorded), 60))
                 continue
             counts[bucket] += 1
             # ``recorded`` / ``literal`` stay raw (matching and replay use them); ``label`` is what a person reads.
@@ -948,7 +951,8 @@ def understand_timeline(
     from conxa_core.llm.client import TIMELINE_UNDERSTANDING_PROMPT_VERSION  # noqa: PLC0415 -- pulls in settings
 
     cuts: dict[str, int] = {}
-    candidates = candidates_from_timeline(merged, cuts)
+    cut_labels: list[str] = []
+    candidates = candidates_from_timeline(merged, cuts, cut_labels)
     result: dict[str, Any] = {"source": "none", "candidates": candidates, "goal": "", "values": {},
                               "gaps": [], "short_summary": "", "detailed_summary": [], "decided": [], "questions": []}
     if not _events(merged):
@@ -961,7 +965,7 @@ def understand_timeline(
         print(f"[timeline_understanding] {payload['rows_omitted']} of {len(merged)} rows not sent", file=sys.stderr)
     # What the caps hid, counted so it can be said out loud instead of silently under-asking.
     limits = {**({"rows": {"total": len(merged), "omitted": payload["rows_omitted"]}} if payload.get("rows_omitted") else {}),
-              **({"candidates": cuts} if cuts else {})}
+              **({"candidates": cuts, "left_out": [x for x in cut_labels if x][:5]} if cuts else {})}
     if limits:
         result["limits"] = limits
     caller = call or _default_call

@@ -448,15 +448,40 @@ def resolves_to_nothing(
 
 
 def dedup_by_orthogonality(signals: list["IdentitySignal"]) -> list["IdentitySignal"]:
-    """Keep the highest-durability signal per orthogonality class; drop the rest."""
+    """Keep the highest-durability signal per orthogonality class; drop the rest. A signal known to match several
+    elements never takes its class's slot from one that picks this element: both stay, in durability order, so the
+    resolver tries the other when the first ties (WF-4 Leg A: three boxes shared `input.oxd-input`, and the unique
+    path was dropped)."""
     best: dict[str, "IdentitySignal"] = {}
+    best_unique: dict[str, "IdentitySignal"] = {}
     for sig in signals:
         oc = sig.orthogonality_class
         if oc not in best or sig.durability > best[oc].durability:
             best[oc] = sig
+        if sig.unique_at_compile and (oc not in best_unique or sig.durability > best_unique[oc].durability):
+            best_unique[oc] = sig
     # Return in original durability-descending order
-    kept = set(id(s) for s in best.values())
+    kept = {id(s) for s in best.values()} | {id(s) for s in best_unique.values()}
     return [s for s in signals if id(s) in kept]
+
+
+# What a control is doing right now, written into its class: a whole token ("active", "is-open") or a modifier
+# ("oxd-input--focus", "Mui-focused", "nav-item-active", "is-open"). Not "is-primary": a variant, not a state. Unique while the person types, absent on a fresh page.
+_STATE_WORDS = ("focus|focused|focus-visible|focus-within|hover|hovered|active|selected|disabled|expanded|collapsed|"
+                "open|opened|closed|checked|pressed|loading|dragging|current|visited|invalid|valid|dirty|touched|pristine|"
+                "error|filled|has-value|empty")
+_STATE_CLASS_RE = re.compile(
+    rf"^(?:(?:is|has|state)-)?(?:{_STATE_WORDS})$|--(?:{_STATE_WORDS})$|[-_](?:focus|focused|hover|hovered|active|selected|"
+    r"checked|pressed|expanded|disabled)$", re.I)
+_CLASS_TOKEN_RE = re.compile(r"\.(-?[_a-zA-Z][\w-]*)")
+
+
+def drop_state_classes(css: str) -> str:
+    """``css`` without class tokens that name a passing state (see _STATE_CLASS_RE). A segment left with no class keeps
+    its tag. Mirrors bridge.js::isStateClass, which leaves them out of new recordings."""
+    if not css or "." not in css:
+        return css
+    return _CLASS_TOKEN_RE.sub(lambda m: "" if _STATE_CLASS_RE.search(m.group(1)) else m.group(0), css)
 
 
 def pii_bind(

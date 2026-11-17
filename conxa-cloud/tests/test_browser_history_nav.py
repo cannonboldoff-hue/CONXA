@@ -296,6 +296,30 @@ def test_recorder_stale_renderer_flag_does_not_suppress_later_manual_navigate() 
     assert id(page) not in rs._nav_pending_renderer_initiated
 
 
+def test_only_the_main_frame_asking_to_navigate_marks_the_page_as_navigating_itself() -> None:
+    """WF-4 Leg C: an ad frame reloading itself flagged the tab as navigating on its own, so the address the person
+    typed next (another site) was never recorded as a step."""
+    handlers: dict = {}
+
+    class _Cdp:
+        def send(self, method: str):
+            if method == "Page.getFrameTree":
+                return {"frameTree": {"frame": {"id": "MAIN"}}}
+            return {"currentIndex": 0, "entries": [{"url": "https://a.test/"}]}
+
+        def on(self, name, fn):
+            handlers[name] = fn
+
+    page = _fake_page()
+    rs = RecordingSession(session_id="test-nav")
+    rs._context = SimpleNamespace(new_cdp_session=lambda _p: _Cdp())
+    rs._ensure_nav_history_session_sync(page)
+    handlers["Page.frameRequestedNavigation"]({"frameId": "AD-FRAME"})
+    assert id(page) not in rs._nav_pending_renderer_initiated
+    handlers["Page.frameRequestedNavigation"]({"frameId": "MAIN"})
+    assert id(page) in rs._nav_pending_renderer_initiated
+
+
 def test_build_step_compiles_manual_navigate_to_a_navigate_step(tmp_path: Path) -> None:
     from conxa_compile.policy.bundle import get_policy_bundle
 

@@ -615,7 +615,7 @@ def test_candidates_past_a_bucket_cap_are_counted_and_reach_the_saved_understand
     cuts: dict[str, int] = {}
     assert len(TU.candidates_from_timeline(rows, cuts)) == TU.MAX_CLICK_CANDIDATES and cuts == {"click": 3}
     out = TU.understand_timeline(rows, "x", call=lambda t, p, ms: None)
-    assert out["limits"] == {"candidates": {"click": 3}}
+    assert out["limits"] == {"candidates": {"click": 3}, "left_out": ["Item number 7", "Item number 8", "Item number 9"]}
     assert "limits" not in TU.understand_timeline(rows[:2], "x", call=lambda t, p, ms: None)
 
 
@@ -804,3 +804,16 @@ def test_a_reply_with_machine_words_or_invented_names_is_graded_weak_so_the_mode
     ok = TU.validate({"goal": "g", "decided": [{"row": "r1", "text": "You press “New folder”.", "reason": "x"}],
                       "values": judged}, merged, cands)
     assert ok["decided"] and TU._grade(ok, cands, {})[0] == "ok"
+
+
+def test_values_left_out_by_the_caps_are_named_in_the_note():
+    """WF-4 Leg B: "2 more values to check were left out" gave no way to see which."""
+    from handlers.understand_flow import limits_sentence
+
+    merged = [event(n, "click", f"Item {n}") for n in range(1, TU.MAX_CLICK_CANDIDATES + 3)]
+    cuts: dict = {}
+    labels: list = []
+    TU.candidates_from_timeline(merged, cuts, labels)
+    assert labels == [f"Item {TU.MAX_CLICK_CANDIDATES + 1}", f"Item {TU.MAX_CLICK_CANDIDATES + 2}"]
+    said = limits_sentence({"candidates": cuts, "left_out": labels})
+    assert said.startswith("2 more values to check were left out (“Item 7”, “Item 8”)")

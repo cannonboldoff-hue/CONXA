@@ -95,6 +95,21 @@ def plan(
             for q in matched:
                 ops, receipt = clarify.plan_answer(q, answer, doc)
                 groups.append({"label": q["title"], "ops": ops, "receipt": receipt, "qid": q["id"], "answer": answer, "value": None})
+            # "Check first" is the person's own request: it holds even when the built step was not judged irreversible
+            # (a bin icon that only opens "Are you sure?" is reversible on its own), so no confirm question exists.
+            # Asked before the step that event became, or the last one before it. WF-4 Leg A: it was dropped.
+            numbered = [e for e in events if isinstance(e, int)]
+            if not matched and kind == "confirm_before" and d["choice"] == "confirm" and numbered:
+                own = [k for k, _s in keyed if event_id_of_step_key(k) in events]
+                before = [k for k, _s in keyed if isinstance(event_id_of_step_key(k), int)
+                          and event_id_of_step_key(k) <= min(numbered)]
+                where = (own or before[-1:] or [None])[0]
+                if where is not None:
+                    step = dict(keyed)[where]
+                    q = {"kind": "confirm", "step_keys": [where], "step_name": clarify.step_name(step)}
+                    ops, receipt = clarify.plan_answer(q, answer, doc)
+                    groups.append({"label": "Check first", "ops": ops, "receipt": receipt, "qid": None, "answer": answer, "value": None})
+                    matched = [q]
             # "Leave it as recorded" changes nothing by design; only an answer that asked for a change is owed a report.
             if not matched and d["choice"] in _CHANGES:
                 unapplied.append({"kind": kind, "choice": d["choice"]})

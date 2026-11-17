@@ -270,6 +270,41 @@ def _native_list_echo(step: Step) -> bool:
     return isinstance(key, dict) and key.get("key") != "Tab" and not any(mods.get(m) for m in ("ctrl", "alt", "meta"))
 
 
+def _bare_url(step: Step, key: str) -> str:
+    return str((step.get(key) or {}).get("url") or "").split("#", 1)[0]
+
+
+def _typing_flushed_at_unload(steps: list[Step]) -> list[Step]:
+    """Put typing the page sent only as it unloaded back before the press that unloaded it.
+
+    The recorder holds typing for a moment before sending it. Press Enter or click Search within that moment and the
+    page leaves first: the typing arrives last, after the press (recordings made before bridge.js flushed it first).
+    Replayed in that order the press submits the old text and the typing lands on the next page (WF-4 Leg D: typed
+    "Automation", replay searched "Au"), or the text is typed twice (WF-4 Leg C). Such typing is the last thing its page
+    sent, and the tab had already moved on when it arrived. It moves back past exactly one press, never past a click
+    on its own box (that click came first). shortcut: old recordings only; delete once none are left to recompile."""
+    out = list(steps)
+    last_of_doc: dict[str, int] = {}
+    for i, s in enumerate(out):
+        bridge = (s.get("extras") or {}).get("bridge")
+        if bridge:
+            last_of_doc[bridge] = i
+    for i in range(1, len(out)):
+        step, prev = out[i], out[i - 1]
+        bridge = (step.get("extras") or {}).get("bridge")
+        if action_name(step) != "type" or not bridge or last_of_doc.get(bridge) != i:
+            continue
+        # In a frame, `page.url` is the frame's own address and never the tab's: that tells nothing about leaving.
+        if (prev.get("extras") or {}).get("bridge") != bridge or _frame_signature(step) \
+                or _bare_url(step, "page") == _bare_url(step, "tab"):
+            continue
+        press = action_name(prev)
+        enter = press == "keyboard_shortcut" and '"Enter"' in _event_value(prev)
+        if enter or (press == "click" and not _same_node(prev, step)):
+            out[i - 1], out[i] = step, prev
+    return out
+
+
 def _truncate_after_terminal_submit(policy: dict[str, Any]) -> bool:
     wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
     return bool(wf.get("truncate_after_terminal_submit", False))
@@ -284,7 +319,7 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
     last_type_index: dict[str, int] = {}
     pending_submit: Step | None = None
     use_submit_truncate = _truncate_after_terminal_submit(pol)
-    for raw in steps:
+    for raw in _typing_flushed_at_unload(steps):
         if _native_list_echo(raw):
             continue
         step = dict(raw)

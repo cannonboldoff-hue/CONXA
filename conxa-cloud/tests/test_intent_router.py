@@ -85,6 +85,20 @@ def test_the_model_can_only_choose_an_allowed_action():
     assert ask(None) is None and ask("nonsense") is None
 
 
+def test_a_change_request_is_never_routed_to_opening_the_editor():
+    """WF-4 Leg B: "move that check to the Finish step" got only an "Open Human Edit" link; chat makes the change
+    itself, on a card the person confirms. The editor still opens by its own words."""
+    seen: list[str] = []
+
+    def call(_task, body, _t):
+        seen.append(body["user_text"])
+        return {"action": "edit"}
+
+    assert route_intent("Please move that check to the Finish step", ["test", "edit"], call=call) is None
+    assert "edit:" not in seen[0]
+    assert route_intent("open human edit", ["test", "edit"], call=_never)["action"] == "edit"
+
+
 def test_a_failing_model_degrades_to_conversation():
     def boom(*_a):
         raise RuntimeError("cloud down")

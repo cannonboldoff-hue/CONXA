@@ -540,6 +540,34 @@ def test_enter_in_a_form_field_is_one_step_not_also_a_click_on_the_submit_button
     assert ("click", "go") in [(e["action"]["action"], e["target"].get("id")) for e in _events(page)]
 
 
+def test_typing_still_on_its_debounce_is_recorded_before_the_enter_that_submits_it(page: Page) -> None:
+    """WF-4 Leg D: typed "Automation" and pressed Enter inside the debounce; the typing arrived after the Enter, so the
+    replay pressed Enter on the old text. A long debounce keeps the typing pending when Enter is pressed."""
+    _install_bridge(page, '<form onsubmit="event.preventDefault()"><input id="q" aria-label="Search"></form>',
+                    {"input_debounce_ms": 2000})
+    page.click("#q")
+    page.keyboard.type("Ada")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(120)
+    rows = [e for e in _events(page) if e["action"]["action"] != "click"]
+    assert [e["action"]["action"] for e in rows] == ["type", "keyboard_shortcut"], rows
+    assert rows[0]["action"]["value"] == "Ada"
+
+
+def test_leaving_the_page_does_not_record_already_sent_typing_again(page: Page) -> None:
+    """WF-4 Leg C: type, click Search; the box's change event re-armed the debounce, and the unload flush sent the same
+    text a second time after the click, which hid the click's page change from the recorder."""
+    _install_bridge(page, '<input id="q" aria-label="Search"><button id="go">Search</button>')
+    page.click("#q")
+    page.keyboard.type("tshirt")
+    page.wait_for_timeout(80)            # the debounce sends it
+    page.click("#go")                     # change event re-arms the debounce
+    page.evaluate("() => window.dispatchEvent(new Event('beforeunload'))")
+    page.evaluate("() => window.__skillFlush()")
+    page.wait_for_timeout(60)
+    assert [e["action"]["value"] for e in _type_events(page)] == ["tshirt"]
+
+
 def test_a_click_on_another_element_than_the_press_is_described_at_click_time(page: Page) -> None:
     _install_bridge(page, '<button id="a">Alpha</button><button id="b">Beta</button>')
     a, b = page.locator("#a").bounding_box(), page.locator("#b").bounding_box()
@@ -1860,3 +1888,46 @@ def test_a_radio_is_not_named_after_the_option_before_it(page: Page) -> None:
     page.click("#f")
     page.wait_for_timeout(80)
     assert _events(page)[-1]["target"]["label_text"] != "Male"
+
+
+def test_suggestions_that_close_are_not_recorded_as_new_words(page: Page) -> None:
+    """WF-4 Leg C: Enter closed Wikipedia's suggestion list; its hidden links read as glued new words
+    ("T-shirt (Redirected from Tshirt)Style of …"), offered as "how we know it worked" and failing every run."""
+    _install_bridge(page, """
+      <input id="q" aria-label="Search">
+      <div id="s"><a href="#a"><span>T-shirt</span><br><span>Style of shirt</span></a></div>
+      <script>document.getElementById("q").addEventListener("keydown", e => {
+        if (e.key === "Enter") document.getElementById("s").style.display = "none"; });</script>""")
+    page.click("#q")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(150)
+    enter = next(e for e in _events(page) if e["action"]["action"] == "keyboard_shortcut")
+    diff = (enter.get("state_change") or {}).get("dom_diff") or {}
+    assert not any("Style" in line for line in diff.get("added") or []), diff
+    assert any(line.endswith("T-shirt Style of shirt") for line in diff.get("removed") or []), diff
+
+
+def test_a_suggestion_picked_on_press_and_removed_is_still_recorded_as_its_click(page: Page) -> None:
+    """WF-4 Leg A (OrangeHRM employee box): the list picks on press, fills the box and removes the option before the
+    button is released, so no click event fires. The pick was lost, and the box's fill was saved as typing."""
+    _install_bridge(page, """
+      <input id="emp" aria-label="Employee"><div id="list"></div><button id="other">Other</button>
+      <script>
+        const box = document.getElementById("emp"), list = document.getElementById("list");
+        box.addEventListener("input", () => { list.innerHTML = '<div role="option" id="opt">Amelia Brown</div>'; });
+        list.addEventListener("mousedown", (e) => {
+          if (e.target.id !== "opt") return;
+          e.preventDefault(); box.value = "Amelia  Brown"; box.blur(); list.innerHTML = "";
+        });
+      </script>""")
+    page.click("#emp")
+    page.keyboard.type("Amelia")
+    page.wait_for_timeout(80)
+    box = page.locator("#opt").bounding_box()
+    page.mouse.click(box["x"] + 5, box["y"] + 5)
+    page.wait_for_timeout(200)
+    rows = [(e["action"]["action"], e["action"].get("value"), e["target"].get("inner_text") or e["target"].get("id"))
+            for e in _events(page)]
+    assert ("type", "Amelia", "emp") in rows, rows
+    assert not any(a == "type" and v == "Amelia  Brown" for a, v, _ in rows), rows
+    assert any(a == "click" and "Amelia Brown" in str(t) for a, _v, t in rows), rows

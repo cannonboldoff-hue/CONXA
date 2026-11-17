@@ -206,6 +206,15 @@ def generate_deterministic_signals(
         # durable identity — keep it instead of losing the channel entirely.
         if not selector_passes_filters(css_sel):
             css_sel = salvage_deep_css_tail(css_sel)
+    # 5b. A form field with no id of its own, inside a form that has one: the form's id and the field's `name` are the
+    # site's own keys, the same in every language. The box a page swaps in on focus has no id, and its other signals are
+    # wording (title, aria-label) that a German Wikipedia translates (WF-4 Leg D). Only when it picks this one field.
+    form_id = re.match(r"form#([a-zA-Z][\w-]*)", str((ev.get("context") or {}).get("form_context") or ""))
+    if (not re.search(r"#[a-zA-Z][\w-]*", css_sel) and form_id and tag in _FORM_FIELD_TAGS and field_name
+            and dom_html and is_stable_attr_value(field_name) and is_stable_attr_value(form_id.group(1))):
+        scoped = f"form#{form_id.group(1)} {tag}{css_attr('name', field_name)}"
+        if selector_passes_filters(scoped) and uniqueness_gate(scoped, dom_html, absent_ok=False):
+            css_sel = scoped
     if css_sel:
         engine = "css-id" if re.search(r"#[a-zA-Z][\w-]*", css_sel) else "css-structural"
         candidates.append((engine, css_sel))

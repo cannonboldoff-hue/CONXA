@@ -29,6 +29,7 @@ from conxa_compile.editor.patch_gate import (
     CHECK_ASSERT_ALLOWED_KEYS,
     DEFAULT_ALLOWED_KEYS,
     EXTRACT_ALLOWED_KEYS,
+    FORK_ALLOWED_KEYS,
     FOR_EACH_ALLOWED_KEYS,
     HANDOVER_ALLOWED_KEYS,
     NAVIGATE_ALLOWED_KEYS,
@@ -135,6 +136,8 @@ _PER_KIND_ALLOWED_KEYS: dict[str, frozenset[str]] = {
     "wait_for_one_of": BRANCH_ALLOWED_KEYS,
     "for_each": FOR_EACH_ALLOWED_KEYS,
     "extract": EXTRACT_ALLOWED_KEYS,
+    # A decision step: only its words. Missing here, it was offered checks the gate refuses (WF-4 Leg A).
+    "outcome_fork": FORK_ALLOWED_KEYS,
 }
 
 # The eight assertion `type` values the runtime's verifyStep actually evaluates

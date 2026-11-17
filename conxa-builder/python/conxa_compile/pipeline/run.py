@@ -13,6 +13,7 @@ from conxa_compile.pipeline.dedupe import (
     dedupe_scroll_events,
     drop_superseded_focus_events,
 )
+from conxa_compile.compiler.selector_filters import drop_state_classes
 from conxa_compile.pipeline.enrich import enrich_event
 from conxa_compile.pipeline.selectors import canonicalize_selectors
 from conxa_compile.pipeline.signals import apply_signal_budget
@@ -59,7 +60,10 @@ def _clean_context(ctx: dict[str, Any]) -> dict[str, Any]:
 def _clean_one(ev: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     row = dict(ev)
     row["target"] = _clean_target(dict(row.get("target") or {}))
-    selectors, selector_meta = canonicalize_selectors(dict(row.get("selectors") or {}), policy)
+    raw_selectors = dict(row.get("selectors") or {})
+    if raw_selectors.get("css"):
+        raw_selectors["css"] = drop_state_classes(str(raw_selectors["css"]))
+    selectors, selector_meta = canonicalize_selectors(raw_selectors, policy)
     row["selectors"] = selectors
     extras = dict(row.get("extras") or {})
     extras.update(selector_meta)

@@ -204,3 +204,53 @@ def test_a_name_shared_by_a_radio_group_is_not_an_identity():
 def test_a_form_field_name_is_not_used_without_the_saved_page():
     signals = generate_deterministic_signals(_field_event("payee.accountNumber"), dom_html=None)
     assert not any(s.selector.startswith("input[name=") for s in signals)
+
+
+# WF-4 Leg D (Wikipedia in German): the search box the page swaps in on focus has no id, two boxes on the search page
+# share name="search", and its title and aria-label are English words. Its form's id and its own name are the same in
+# every language, and together they pick the one box.
+_WIKI = (
+    '<html><body><form id="searchform"><input name="search" role="combobox" title="Search Wikipedia [alt-f]"></form>'
+    '<form id="search"><input name="search" id="ooui-php-1"></form></body></html>'
+)
+
+
+def _swapped_box(form_context: str) -> dict:
+    return {
+        "target": {"tag": "input", "role": "combobox", "name": "search", "aria_label": "Search Wikipedia",
+                   "title": "Search Wikipedia [alt-f]", "attributes": {}},
+        "semantic": {"role": "combobox"},
+        "selectors": {"css": "", "aria": '[aria-label="Search Wikipedia"]'},
+        "context": {"form_context": form_context},
+    }
+
+
+def test_a_box_without_an_id_is_found_by_its_forms_id_and_its_name():
+    signals = generate_deterministic_signals(_swapped_box("form#searchform"), dom_html=_WIKI)
+    scoped = [s for s in signals if s.engine == "css-id"]
+    assert [(s.selector, s.unique_at_compile) for s in scoped] == [('form#searchform input[name="search"]', True)]
+
+
+def test_a_form_without_an_id_gives_no_scoped_name():
+    signals = generate_deterministic_signals(_swapped_box("form"), dom_html=_WIKI)
+    assert not any("form#" in s.selector for s in signals)
+
+
+# WF-4 Leg A (OrangeHRM): the box was recorded while focused, so its address carried "oxd-input--focus" and matched
+# nothing on a fresh page; the unique path was dropped in favour of it.
+def test_a_state_class_never_reaches_an_address():
+    from conxa_compile.compiler.selector_filters import drop_state_classes
+
+    assert drop_state_classes("div.g > input.oxd-input.oxd-input--focus") == "div.g > input.oxd-input"
+    assert drop_state_classes("li.nav-item.active > a.Mui-focused.MuiLink") == "li.nav-item > a.MuiLink"
+    assert drop_state_classes("button.is-primary.is-open") == "button.is-primary"     # a variant stays
+
+
+def test_a_shared_css_does_not_push_out_the_one_path_that_picks_the_box():
+    html = ('<html><body><form><div><label>Username</label><div><input class="oxd-input"></div></div>'
+            '<div><label>Password</label><div><input class="oxd-input"></div></div></form></body></html>')
+    ev = {"target": {"tag": "input", "role": "textbox", "label_text": "Username", "attributes": {}},
+          "semantic": {"role": "textbox"},
+          "selectors": {"css": "input.oxd-input", "xpath": "/html/body/form/div[1]/div/input"}}
+    engines = [(s.engine, s.unique_at_compile) for s in generate_deterministic_signals(ev, dom_html=html)]
+    assert ("css-structural", False) in engines and ("xpath", True) in engines

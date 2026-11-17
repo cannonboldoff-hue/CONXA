@@ -111,8 +111,11 @@ def _apply_one(step: SkillStep, kind: str, current: str, proposed: str) -> bool:
         # input_binding to None (a download-populated placeholder must never become a
         # user-facing input), which the old `step.input_binding or ...` guard read as "unbound"
         # and clobbered — the exact bug this comment used to describe without enforcing.
+        # A read-a-value step's `value` is the name of what it reads, not something typed: made an input, the person
+        # was asked to supply the price the step was meant to read (WF-4 Leg C).
         if (
             step.input_binding
+            or step.extract
             or not isinstance(step.value, str)
             or not step.value
             or PLACEHOLDER_RE.search(step.value)
@@ -210,6 +213,26 @@ def _step_causes_observed_effect(steps: list[SkillStep], i: int) -> bool:
     return False
 
 
+def _page_moved_on_after(steps: list[SkillStep], i: int) -> bool:
+    """True when the next step on the same tab was recorded on a different page and no navigate of the person's own
+    sits between them: the page moved on after step i, so the recorder's "no effect" for it was never observed (a
+    Search click whose results page loaded after the recorder looked, WF-4 Leg C)."""
+    def page_url(s: SkillStep) -> str:
+        return str(((s.signals or {}).get("context") or {}).get("page_url") or "")
+
+    def tab(s: SkillStep) -> str:
+        return str((s.tab or {}).get("id") or "")
+
+    here = page_url(steps[i])
+    for later in steps[i + 1:]:
+        name = later.action.get("action") if isinstance(later.action, dict) else later.action
+        if is_marker_action(name) or tab(later) != tab(steps[i]):
+            continue
+        there = page_url(later)
+        return name != "navigate" and bool(here and there) and there != here
+    return False
+
+
 def archive_flagged_steps(
     steps: list[SkillStep], findings: list[dict[str, Any]], *, keep_sequences: set[Any] | None = None,
 ) -> tuple[list[SkillStep], list[dict[str, Any]]]:
@@ -249,7 +272,8 @@ def archive_flagged_steps(
         # A step that changed the element a later step acts on (build.py::_element_changing_sequences) is what
         # makes that later step findable on a replay: never noise.
         changes_later = step.source_event is not None and step.source_event in (keep_sequences or set())
-        if finding is None or is_fork or changes_later or _step_causes_observed_effect(steps, i):
+        if finding is None or is_fork or changes_later or _step_causes_observed_effect(steps, i) \
+                or _page_moved_on_after(steps, i):
             kept.append(step)
             continue
         archived.append({

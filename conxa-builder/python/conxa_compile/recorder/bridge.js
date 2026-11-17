@@ -476,6 +476,15 @@
     return null;
   }
 
+  // A class that names what the element is doing right now ("oxd-input--focus", "Mui-focused", "active"): it is there
+  // while the person types and gone on a fresh page, so it is never part of an address. Mirrors
+  // selector_filters.py::_STATE_CLASS_RE (which also cleans recordings made before this).
+  const _STATE_WORDS = "focus|focused|focus-visible|focus-within|hover|hovered|active|selected|disabled|expanded|collapsed|" +
+    "open|opened|closed|checked|pressed|loading|dragging|current|visited|invalid|valid|dirty|touched|pristine|error|filled|has-value|empty";
+  const _STATE_CLASS_RE = new RegExp("^(?:(?:is|has|state)-)?(?:" + _STATE_WORDS + ")$|--(?:" + _STATE_WORDS + ")$|" +
+    "[-_](?:focus|focused|hover|hovered|active|selected|checked|pressed|expanded|disabled)$", "i");
+  function isStateClass(c) { return _STATE_CLASS_RE.test(c); }
+
   function buildCssPath(el) {
     if (!el || el.nodeType !== 1) return "";
     const parts = [];
@@ -490,6 +499,7 @@
       }
       if (cur.classList && cur.classList.length) {
         const cls = Array.from(cur.classList)
+          .filter((c) => !isStateClass(c))
           .slice(0, classSliceMax)
           .map((c) => "." + cssEscapeIdent(c))
           .join("");
@@ -1019,12 +1029,19 @@
 
   function interactiveSignature(root) {
     const scope = root || document;
-    const els = Array.from(scope.querySelectorAll(INTERACTIVE_SEL)).slice(0, 120);
+    // Only what a person can see, on one line each. A hidden element's innerText is its raw text with no breaks
+    // ("T-shirt (Redirected from Tshirt)Style of …"), so a search box's suggestions closing read as new words that
+    // appeared, and a visible one's line breaks split it into several "elements" (WF-4 Leg C).
+    const els = [];
+    for (const el of scope.querySelectorAll(INTERACTIVE_SEL)) {
+      if (typeof el.checkVisibility !== "function" || el.checkVisibility()) els.push(el);
+      if (els.length >= 120) break;
+    }
     return els.map(el => {
       const tag = el.tagName.toLowerCase();
       const tid = el.getAttribute("data-testid") || el.getAttribute("data-test-id") || "";
       const al  = el.getAttribute("aria-label") || "";
-      const txt = (el.innerText || el.value || "").trim().slice(0, 60);
+      const txt = (el.innerText || el.value || "").replace(/\s+/g, " ").trim().slice(0, 60);
       return `${tag}|${tid}|${al}|${txt}`;
     }).join("\n");
   }
@@ -2369,6 +2386,9 @@
     const previous = lastEditableValueByElement.get(target);
     if (!force && previous === compareValue) return;
     lastEditableValueByElement.set(target, compareValue);
+    // Changed while the person presses something else (an autocomplete fills the box from the suggestion pressed):
+    // that is the press's effect, replayed by the press, not typing. Their own typing was sent at the press.
+    if (_pressing && _pressing !== target && !(target.contains && target.contains(_pressing))) return;
     const value = isSensitiveEditable(target) ? "{{REDACTED}}" : readEditableValue(target);
     const p = serializeTarget(target, "type", value);
     p.action.value = value;
@@ -2386,6 +2406,16 @@
       if (!target) return;
       emitEditableChange(target, !!force);
     }, inputDebounceMs);
+  }
+
+  // Typing still waiting on its debounce is sent now, before the press that uses it (Enter, a Search click) or the
+  // page's unload. Sent after, a replay presses Enter on the old text and types the new text on the next page. Never
+  // forced: a value already sent is not sent again (a forced send after a Search click recorded the search twice).
+  function flushPendingInput() {
+    if (!inputTimer) return;
+    clearTimeout(inputTimer);
+    inputTimer = null;
+    if (lastInputEl) emitEditableChange(lastInputEl, false);
   }
 
   function rememberEditableBaseline(el) {
@@ -2425,6 +2455,7 @@
   // arrives (Wikipedia's search box turns from a "searchbox" into a "combobox" the moment it gets focus), and a replay
   // meets the element in that earlier state. Taken here, in the capture phase, before any page handler runs.
   let _pressed = null;
+  let _pressing = null; // the element under a press still in progress (see emitEditableChange)
   let _lastEnterAt = 0; // set by the keydown listener below
   onDoc(
     "pointerdown",
@@ -2434,7 +2465,30 @@
       const el = eventTargetFromPath(ev);
       const resolved = el && el.nodeType === 1 ? resolveMeaningfulTarget(el) : null;
       if (!resolved) return;
+      flushPendingInput();
+      // A value set in the box being left before this press, with no typing events (seen since it got focus).
+      const focused = activeEditableTarget();
+      if (focused && focused !== resolved && !focused.contains(resolved) && lastEditableValueByElement.has(focused)) {
+        emitEditableChange(focused, false);
+      }
+      _pressing = resolved;
       try { _pressed = { el: resolved, at: Date.now(), payload: serializeTarget(resolved, "click", null) }; } catch (_e) { _pressed = null; }
+    },
+    true
+  );
+  // A suggestion list that picks on press and removes the pressed option before the button is released never gets a
+  // click event (OrangeHRM's employee box, WF-4 Leg A): the pick was lost and the list stayed open on replay. A press
+  // whose element is gone by then, and that no click took, is recorded as that click.
+  onDoc(
+    "pointerup",
+    () => {
+      const p = _pressed;
+      _pressing = null;
+      setTimeout(() => {
+        if (!p || _pressed !== p || p.el.isConnected) return;
+        _pressed = null;
+        finalizeStateAfterSettle(p.payload, clickSettleQuietMs, clickSettleMaxMs);
+      }, 60);
     },
     true
   );
@@ -2453,6 +2507,7 @@
       trace("event", { t: "click" });
       let el = eventTargetFromPath(ev);
       if (!el || el.nodeType !== 1) return;
+      flushPendingInput();
       if (_captureNext) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -3235,6 +3290,7 @@
     "keydown",
     (ev) => {
       const hasModifier = ev.ctrlKey || ev.metaKey || ev.altKey;
+      _pressing = null; // a press that never ended (released outside the page) does not outlast the next key
       if (ev.key === "Enter" && !hasModifier) _lastEnterAt = Date.now();
       if (!hasModifier && !_KEY_ALLOWLIST[ev.key]) return;
       if (ev.key === "Control" || ev.key === "Meta" || ev.key === "Alt" || ev.key === "Shift") return;
@@ -3247,6 +3303,7 @@
       // Arrows, Enter and Escape on a native list only move through its options; the pick they make is recorded by
       // "change". Replayed, an arrow would move the choice again.
       if (!hasModifier && ev.key !== "Tab" && el.tagName && el.tagName.toLowerCase() === "select") return;
+      flushPendingInput();
       const p = serializeTarget(el, "keyboard_shortcut", val);
       requestAnimationFrame(() => finalizeState(p));
     },
@@ -3261,11 +3318,7 @@
   // (HubSpot micro-frontend pattern: window object persists but document is replaced).
   window.addEventListener("beforeunload", function () {
     window.__SKILL_BRIDGE_V1__ = false;
-    if (inputTimer) {
-      clearTimeout(inputTimer);
-      inputTimer = null;
-      if (lastInputEl) emitEditableChange(lastInputEl, true);
-    }
+    flushPendingInput();
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
@@ -3282,11 +3335,7 @@
   window.__skillFlush = function () {
     _cutAll = true;
     try {
-      if (inputTimer) {
-        clearTimeout(inputTimer);
-        inputTimer = null;
-        if (lastInputEl) emitEditableChange(lastInputEl, true);
-      }
+      flushPendingInput();
       emitPendingHover("flush");
     } catch (_e) {}
     return _state();

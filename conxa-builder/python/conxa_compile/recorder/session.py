@@ -1321,10 +1321,18 @@ class RecordingSession:
             self._nav_history_state[key] = state
         try:
             session.send("Page.enable")
+            # Only the page's own frame asking to navigate counts. An ad frame reloading itself (automationexercise.com
+            # does it every few seconds) made the address the person then typed look like the page's doing, and the
+            # step to the next site was never recorded (WF-4 Leg C). The main frame keeps its id across navigations.
+            try:
+                main_frame = str(session.send("Page.getFrameTree")["frameTree"]["frame"]["id"])
+            except Exception:  # noqa: BLE001 — unknown: count every frame, as before
+                main_frame = ""
             session.on(
                 "Page.frameRequestedNavigation",
-                lambda _evt, k=key: self._nav_pending_renderer_initiated.__setitem__(
-                    k, time.monotonic()
+                lambda evt, k=key, m=main_frame: (
+                    self._nav_pending_renderer_initiated.__setitem__(k, time.monotonic())
+                    if not m or str((evt or {}).get("frameId") or m) == m else None
                 ),
             )
             session.on(

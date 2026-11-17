@@ -57,7 +57,9 @@ def limits_sentence(limits: Any) -> str:
         parts.append(f"I could only read the first {int(rows['total']) - int(rows['omitted'])} of {rows['total']} steps")
     left_out = sum(int(n) for n in (limits.get("candidates") or {}).values())
     if left_out:
-        parts.append(f"{left_out} more value{'s' if left_out != 1 else ''} to check {'were' if left_out != 1 else 'was'} left out")
+        named = ", ".join(f"“{n}”" for n in (limits.get("left_out") or [])[:5] if n)
+        parts.append(f"{left_out} more value{'s' if left_out != 1 else ''} to check {'were' if left_out != 1 else 'was'} left out"
+                     + (f" ({named})" if named else ""))
     return (" and ".join(parts) + ". Check the end of the workflow carefully.") if parts else ""
 
 

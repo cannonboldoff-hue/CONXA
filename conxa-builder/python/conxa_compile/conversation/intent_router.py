@@ -22,6 +22,7 @@ _COMMANDISH = re.compile(
     r"done|discard|fix|start|ask|question|retry|open|go|show|take)\b", re.I)
 _OPEN_WORDS = re.compile(r"\b(open|go to|take me|show me|switch to|jump to|work on)\b", re.I)
 MAX_COMMAND_CHARS = 200
+_PHRASE_ONLY = frozenset({"edit"})  # reached by its own words ("open human edit"), never by a model's routing
 
 Caller = Callable[[str, dict[str, Any], int], "dict[str, Any] | None"]
 
@@ -67,6 +68,11 @@ def route_intent(
     if len(norm) > MAX_COMMAND_CHARS or not _COMMANDISH.search(norm):
         return None
 
+    # Opening the editor is never a model's reading of a change request: chat makes that change itself (a change card
+    # the person confirms). Routed, "move that check to the Finish step" only got an "Open Human Edit" link (WF-4 B).
+    options = [o for o in options if o.id not in _PHRASE_ONLY]
+    if not options:
+        return None
     inputs: list[str] = []
     if known_inputs is not None and "test" in allowed:
         try:

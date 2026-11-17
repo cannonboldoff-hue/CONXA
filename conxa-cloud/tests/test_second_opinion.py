@@ -277,6 +277,14 @@ class ApplySecondOpinionTests(unittest.TestCase):
         )
         self.assertEqual(step.input_binding, "already_bound")
 
+    def test_parameterize_literal_never_turns_a_read_value_into_an_input(self) -> None:
+        # WF-4 Leg C: "Capture a value" on a price became a run input the person was asked to fill in.
+        step = SkillStep(action={"action": "extract"}, value="rs_400", extract={"source": "text"})
+        keys = step_keys([step])
+        self.assertEqual(apply_second_opinion(
+            [step], [{"step_key": keys[0], "kind": "parameterize_literal", "current": "rs_400", "proposed": "price"}]), [])
+        self.assertEqual((step.value, step.input_binding), ("rs_400", None))
+
     def test_parameterize_literal_never_repoints_a_download_upload_binding(self) -> None:
         # Regression: upload_binding.py deliberately writes {{downloaded_file}} into `value`
         # while setting input_binding to None (a download-populated placeholder must never
@@ -417,6 +425,23 @@ class ArchiveFlaggedStepsTests(unittest.TestCase):
         )
         self.assertEqual(kept, [step])
         self.assertEqual(archived, [])
+
+    def test_refuses_to_archive_a_click_after_which_the_page_moved_on(self) -> None:
+        # WF-4 Leg C: the Search click's results page loaded after the recorder looked, so it read "no effect".
+        def on(url: str, action: str) -> SkillStep:
+            return SkillStep(action={"action": action}, signals={"context": {"page_url": url}}, tab={"id": "tab_0"})
+
+        click, scroll = on("https://shop.test/products", "click"), on("https://shop.test/products?search=tshirt", "scroll")
+        keys = step_keys([click, scroll])
+        kept, archived = archive_flagged_steps(
+            [click, scroll], [{"step_key": keys[0], "kind": "flag_noise", "proposed": "no_op_action"}])
+        self.assertEqual((kept, archived), ([click, scroll], []))
+        # The page staying put, or the person's own navigate explaining the change, still lets a real no-op go.
+        for after in (on("https://shop.test/products", "scroll"), on("https://other.test/", "navigate")):
+            keys = step_keys([click, after])
+            kept, archived = archive_flagged_steps(
+                [click, after], [{"step_key": keys[0], "kind": "flag_noise", "proposed": "no_op_action"}])
+            self.assertEqual(kept, [after])
 
     def test_refuses_to_archive_a_click_that_triggers_a_download(self) -> None:
         # This is the exact real-world shape that shipped broken: a "no visible page change"
