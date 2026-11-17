@@ -1061,7 +1061,7 @@ Leg E blocked (needs sign-up and a public review). Diary: [`06-E2E-TEST-AND-FIX-
 **What this proves Conxa can do now:** real apps with suggestion lists, two-site relays, language
 switches and approval-gated deletes record and replay as the person did them.
 
-## Passed Workflows P-34…P-36 — WF-5 Parts B, C, D: files at scale, to approved (2026-11-17)
+## Passed Workflows P-34…P-36 — WF-14 (old WF-5 Parts B–D): files at scale, to approved (2026-11-17)
 Local practice server logging each file's fingerprint; dummy files only.
 - **P-34 Part B** (`WF5 B zip bulk btn r1`, workflow `61b1561a-bd17-4982-bb59-199db2ac42b9`, run
   `r_mwkuglyp_albxy`): download a zip of 20, choose all 20 on a choose-then-Upload page, press Upload.

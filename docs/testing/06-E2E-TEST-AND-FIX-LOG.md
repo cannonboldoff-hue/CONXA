@@ -1,9 +1,9 @@
 # End-to-end test and fix log (started 2026-11-16)
 
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
-> see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Fully passed: WF-1, WF-2
-> (Segment I is a confirmed limitation), WF-3. **In progress:** WF-4 (Legs A, C, D tested and fixed).
-> Remaining: WF-4…WF-21. Latest commit: see `git log`.
+> see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
+> a confirmed limitation), WF-3, WF-4 (A–D; E blocked). WF-14 (files) mostly passed (14.3, 14.8 open).
+> **Next:** WF-5 (Studio's guardrails). Remaining: WF-5…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
