@@ -78,11 +78,12 @@ const hasBasis = (check) => Array.isArray(check.calibration_basis) && check.cali
 
 /**
  * @param {object} effect  the step's validation.effect
- * @param {{notebook: object|null, gate: object|null, executed: boolean}} ctx
+ * @param {{notebook: object|null, gate: object|null, filesChosen: {answer: string}|null}} ctx  filesChosen: the file box
+ *   read back after the pick (handlers.js upload); without it "the file was chosen" is "can't tell", never "yes".
  * @returns {Array<{id:string, rung:string, witness:string, role:string, answer:string, evidence?:string, identity?:boolean}>}
  *   Checks a test run showed to be dead (`calibrated === false`) are left out: they no longer count toward anything.
  */
-function evaluateChecks(effect, { notebook = null, gate = null, executed = true, signals = null, fresh = null, looks = null, signedOut = false } = {}) {
+function evaluateChecks(effect, { notebook = null, gate = null, filesChosen = null, signals = null, fresh = null, looks = null, signedOut = false } = {}) {
   const nb = notebook;
   const freshTexts = nb ? nb.seenNew() : [];
   const out = [];
@@ -93,7 +94,7 @@ function evaluateChecks(effect, { notebook = null, gate = null, executed = true,
     const type = check.probe && check.probe.type;
     let r;
     switch (type) {
-      case "input_has_files": r = { answer: executed ? "yes" : "cant_tell" }; break;
+      case "input_has_files": r = { answer: (filesChosen && filesChosen.answer) || "cant_tell" }; break;
       case "request_chain": r = probeRequestChain(check, nb); break;
       case "failure_signal": r = probeFailureSignal(nb, gate, freshTexts, signals && signals.failure, signedOut); break;
       case "new_text": r = probeNewText(check, nb); break;

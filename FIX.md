@@ -21,3 +21,7 @@ On a bank site, a test stopped on the Bill Pay form because all nine boxes looke
 **Searches, suggestions and "check first" now record and replay faithfully — 2026-11-17**
 Several real sites tripped up Build Studio: a Search click was thrown away, typing was saved in the wrong order so a run searched the wrong word, a name picked from a suggestion list was never recorded, and boxes were found by a look they only have while you type in them. All of these are fixed, so the steps replay as you did them. Most importantly, when you ask Studio to "check first" before a delete, it now always pauses for your approval there. A check you type in your own words also lands on the step where those words appear, and you can ask chat to move a check.
 — 2026-11-17
+
+**Downloading and uploading many files now works on more sites — 2026-11-17**
+After downloading a file, Build Studio sometimes saved your next click twice, so the test failed on a click that no longer made sense. That is fixed. Pages where you choose files first and then press Upload can now pass their test: Studio checks that the files were really chosen, then checks the upload when you press the button. A first passing test also no longer gets thrown away, and a check you type must be something that appears only after the step, not words already on the screen.
+— 2026-11-17

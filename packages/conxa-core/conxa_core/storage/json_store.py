@@ -20,7 +20,9 @@ def skills_dir() -> Path:
     return p
 
 
-def write_skill(skill_id: str, document: dict[str, Any]) -> Path:
+def write_skill(skill_id: str, document: dict[str, Any], *, keep_test: bool = False) -> Path:
+    """``keep_test``: the change was learned from the test run that just passed (Proof-of-Done calibration), so that
+    test still stands for the new document. Every other update makes the workflow need testing again."""
     document = bind_prose(scrub_surrogates(document))
     is_update = read_skill(skill_id) is not None
     db_set("skills", skill_id, document)  # the durable copy — Postgres, or db.py's own KV fallback
@@ -32,7 +34,7 @@ def write_skill(skill_id: str, document: dict[str, Any]) -> Path:
         # canonical one, so this failing doesn't lose data, but silently returning
         # `path` as if it were written is misleading to anyone who stats/reads it directly.
         warnings.warn(f"Secondary skill file write failed for {skill_id!r} at {path}: {exc}", stacklevel=2)
-    if is_update:
+    if is_update and not keep_test:
         try:
             from conxa_core.storage.workflow_store import invalidate_workflow_test_by_skill  # noqa: PLC0415
             invalidate_workflow_test_by_skill(skill_id)

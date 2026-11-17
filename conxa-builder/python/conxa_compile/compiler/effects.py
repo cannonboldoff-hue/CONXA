@@ -63,6 +63,8 @@ _DESIRED: dict[str, tuple[str, int]] = {
     "send": ("result_exists", 2),
     "save": ("completed", 1),
     "long_job": ("completed", 1),
+    # Picking files on a page that sends them only when a button is pressed: the box holding the files is all it does.
+    "choose_files": ("accepted", 1),
 }
 
 _RUNG_INDEX = {r: i for i, r in enumerate(EFFECT_RUNGS)}
@@ -78,6 +80,11 @@ def classify_kind(ev: dict[str, Any], *, consequence: str = "", is_commit: bool 
     navigation: their direct effect is already their assertion). Deterministic: the action type first, then the
     button's own words, then what the recorder saw (a progress window) and the compiler's consequence label."""
     action = str((ev.get("action") or {}).get("action") or "").lower()
+    extras = ev.get("extras") if isinstance(ev.get("extras"), dict) else {}
+    if extras.get("choose_files"):
+        return "choose_files"
+    if extras.get("completes_upload"):
+        return "upload"   # the press that sent the files chosen just before (choose_file_presses)
     if action in {"upload", "upload_intent"}:
         return "upload"
     if action == "download_observed":
@@ -178,7 +185,12 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
     def add(**kw: Any) -> None:
         checks.append(EffectCheck(id=f"c{len(checks) + 1}", **kw))
 
-    if kind == "upload":
+    picked = str((ev.get("action") or {}).get("action") or "").lower() in {"upload", "upload_intent"}
+    if kind == "choose_files":
+        # Read back from the file box after the pick (runtime handlers.js): never "the step ran".
+        add(rung="accepted", witness="target", probe={"type": "input_has_files"}, plain="the files were chosen")
+        return checks
+    if kind == "upload" and picked:
         add(rung="performed", witness="target", probe={"type": "input_has_files"},
             plain="the file was chosen")
     if kind == "download":
@@ -195,7 +207,7 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
             continue
         add(rung="completed", witness="renderer", probe={"type": "new_text", "words": words},
             plain=f"the app says “{' '.join(words)}”")
-    if kind == "upload":
+    if kind == "upload" and picked:
         # Go and look: open the same page again in a separate tab and see whether the uploaded file's name is there,
         # and more times than before the upload. Read-only (a GET of the page already open); needs a single named file.
         add(rung="result_exists", witness="fresh_look", probe={"type": "fresh_look", "expect": "file_name"},
@@ -236,6 +248,70 @@ def build_effect(
         on=EffectOn(),
         words=app_words(ev),
     )
+
+
+_PRESS_ACTIONS = frozenset({"click", "dblclick", "submit", "keyboard_shortcut"})
+
+
+def _ms(ev: dict[str, Any]) -> float | None:
+    from conxa_compile.compiler.navigation_effects import _timestamp
+    t = _timestamp(ev)
+    return None if t is None else t * 1000
+
+
+def _app_reacted(ev: dict[str, Any]) -> bool:
+    """The app visibly did something after this action: a new address, a dialog, progress, or a message of its own.
+    A page echoing the chosen file names is not the app taking them."""
+    post = ev.get("post_condition") if isinstance(ev.get("post_condition"), dict) else {}
+    return (str(post.get("classified_effect") or "none") not in {"none", "value_set"}
+            or bool(ev.get("post_watch")) or bool(ev.get("surface_context")))
+
+
+def choose_file_presses(events: list[dict[str, Any]], requests: dict[str, Any] | None) -> dict[int, int]:
+    """``{upload sequence: press sequence}`` for each file pick that sent nothing, whose files a later press on the same
+    page sent (a "choose files, then press Upload" page). Such a pick is built as ``choose_files`` (proven by the file box
+    holding the files) and the press carries the upload's checklist and is gated like an upload.
+
+    Needs the recorder's request log (``requests.json``): without it nobody can say the pick sent nothing, so a recording
+    made before 2026-11-17 keeps the upload as the step that does the work. A pick that sent a request, or after which
+    the app reacted, is the upload itself. Only presses on the same tab and address before the next pick count, and only
+    the first of them that sent a data-changing request."""
+    if not isinstance(requests, dict) or not isinstance(requests.get("mutating"), list):
+        return {}
+    sent = sorted(float(r["t"]) for r in requests["mutating"] if isinstance(r, dict) and isinstance(r.get("t"), (int, float)))
+
+    def window(i: int) -> tuple[float, float] | None:
+        t0 = _ms(events[i])
+        if t0 is None:
+            return None
+        nxt = next((t for t in (_ms(e) for e in events[i + 1:]) if t is not None and t > t0), t0 + 10_000)
+        return t0, min(nxt, t0 + 10_000)
+
+    def sent_in(i: int) -> bool | None:
+        w = window(i)
+        return None if w is None else any(w[0] <= t < w[1] for t in sent)
+
+    def where(ev: dict[str, Any]) -> tuple[str, str]:
+        tab = ev.get("tab") if isinstance(ev.get("tab"), dict) else {}
+        return str(tab.get("id") or "tab_0"), str((ev.get("page") or {}).get("url") or "").split("#", 1)[0]
+
+    def action(ev: dict[str, Any]) -> str:
+        return str((ev.get("action") or {}).get("action") or "").lower()
+
+    out: dict[int, int] = {}
+    for i, ev in enumerate(events):
+        if action(ev) not in {"upload", "upload_intent"} or _app_reacted(ev) or sent_in(i) is not False:
+            continue
+        for j in range(i + 1, len(events)):
+            later = events[j]
+            if where(later) != where(ev) or action(later) in {"upload", "upload_intent"}:
+                break
+            if action(later) in _PRESS_ACTIONS and sent_in(j):
+                seq_u, seq_p = (ev.get("extras") or {}).get("sequence"), (later.get("extras") or {}).get("sequence")
+                if isinstance(seq_u, int) and isinstance(seq_p, int):
+                    out[seq_u] = seq_p
+                break
+    return out
 
 
 def desired_witnesses(kind: str) -> int:

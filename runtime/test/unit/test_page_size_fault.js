@@ -65,3 +65,11 @@ test("runPlan: a page the host repairs runs the step normally", async () => {
   assert.strictEqual(repairs.length, 1);
   assert.ok(!events.some(([c, d]) => c === "step_fail" && d.fc === "fault_page_size"));
 });
+
+test("runPlan: a page with no width (the window is minimized) says to bring the window back", async () => {
+  pageWidth = 0; repairFixesPage = false; repairs.length = 0;
+  await assert.rejects(
+    runPlan(page(), [{ type: "navigate", url: "https://app.test/next" }], {}, 0, "slug-size-hidden", OPTS([])),
+    (err) => err.faultKind === "page_size" && /minimized or hidden/.test(err.message) && /Bring the window back/.test(err.message),
+  );
+});

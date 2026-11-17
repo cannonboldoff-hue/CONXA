@@ -1060,3 +1060,17 @@ Leg E blocked (needs sign-up and a public review). Diary: [`06-E2E-TEST-AND-FIX-
 
 **What this proves Conxa can do now:** real apps with suggestion lists, two-site relays, language
 switches and approval-gated deletes record and replay as the person did them.
+
+## Passed Workflows P-34…P-36 — WF-5 Parts B, C, D: files at scale, to approved (2026-11-17)
+Local practice server logging each file's fingerprint; dummy files only.
+- **P-34 Part B** (`WF5 B zip bulk btn r1`, workflow `61b1561a-bd17-4982-bb59-199db2ac42b9`, run
+  `r_mwkuglyp_albxy`): download a zip of 20, choose all 20 on a choose-then-Upload page, press Upload.
+  Server got exactly 20 files, fingerprints matching; a single pass stuck and Approve worked.
+- **P-35 Part C:** three replays with different 20-file sets; separate run folders, no leakage, 7-day
+  sweep verified.
+- **P-36 Part D:** same-named downloads kept with numbered names, none overwritten; a pop-up download
+  saved once.
+Real public file hosts blocked (real services). Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** bulk download-then-upload with byte-exact delivery, on both
+upload-on-choose and choose-then-press-Upload pages, with no cross-run file leakage.

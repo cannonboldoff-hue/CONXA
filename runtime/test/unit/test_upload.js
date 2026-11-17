@@ -358,3 +358,70 @@ test("an upload via a plain file_path directory never deletes its files", async 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// BUILD-103 (3): "the files were chosen" is read back from the file box, never assumed because the step ran.
+function boxPage(keepsFiles) {
+  const el = { multiple: true, files: [] };
+  return {
+    locator: () => ({
+      count: async () => 1,
+      first: () => ({
+        setInputFiles: async (paths) => { el.files = keepsFiles ? paths.map((p) => ({ name: path.basename(p) })) : []; },
+        evaluate: async (fn) => fn(el),
+      }),
+    }),
+  };
+}
+const pick = (kind) => ({ type: "upload", value: "{{file_path}}", _explicit_selector: "#f", validation: { effect: { kind } } });
+
+test("a file pick the page keeps is proven by the box holding exactly the chosen files", async () => {
+  const dir = makeTempDir(["a.pdf", "b.pdf"]);
+  try {
+    const io = {};
+    await executeStep(boxPage(true), pick("choose_files"), { file_path: dir }, io);
+    assert.deepStrictEqual(io.filesChosen, { answer: "yes" });
+    await assert.rejects(() => executeStep(boxPage(false), pick("choose_files"), { file_path: dir }, {}),
+      /file box did not take the chosen files/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a page that sends the files on pick and empties its box is not failed, only 'can't tell'", async () => {
+  const dir = makeTempDir(["a.pdf"]);
+  try {
+    const io = {};
+    await executeStep(boxPage(false), pick("upload"), { file_path: dir }, io);
+    assert.deepStrictEqual(io.filesChosen, { answer: "cant_tell" });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runPlan: a file pick the page keeps is proven by its box and needs no 'it finished' signal", async () => {
+  const { runPlan } = require("../../app/run");
+  const dir = makeTempDir(["a.pdf", "b.pdf"]);
+  try {
+    const pageOf = (keeps) => Object.assign(boxPage(keeps), {
+      url: () => "https://app.test/upload", title: async () => "Upload", mainFrame: () => "main",
+      context: () => ({ on: () => {} }), on: () => {}, waitForLoadState: async () => {}, waitForTimeout: async () => {},
+      evaluate: async () => null, screenshot: async () => Buffer.from(""),
+    });
+    const stepOf = () => {
+      const step = { ...pick("choose_files"), intent: "Choose the files" };
+      step.validation.effect = { kind: "choose_files", required_rung: "accepted", target_rung: "accepted",
+        quorum: { witnesses: 1 }, checks: [{ id: "c1", rung: "accepted", witness: "target", role: "support", probe: { type: "input_has_files" } }] };
+      return step;
+    };
+    const events = [];
+    const result = await runPlan(pageOf(true), [stepOf()], { file_path: dir }, 0, "slug-choose", { tracker: { emit: (c, d) => events.push([c, d]) } });
+    const s = result.proof.steps[0];
+    assert.deepStrictEqual([s.verdict, s.required], ["proven", "accepted"]);
+    assert.deepStrictEqual(result.proof.notes, []);
+    assert.ok(!events.some(([c]) => c === "completion"), "a pick starts no work: no upload wait");
+    // A box that did not take the files is no proof, however the step ran.
+    await assert.rejects(runPlan(pageOf(false), [stepOf()], { file_path: dir }, 0, "slug-choose-empty", { tracker: { emit: () => {} } }));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

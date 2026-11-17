@@ -62,3 +62,29 @@ def test_the_step_name_says_how_many_times():
 
     assert step_name({"semantic_description": "Click Add Element", "handler_hints": {"repeat_count": 50}}).endswith("(50 times)")
     assert "times" not in step_name({"semantic_description": "Click Add Element", "handler_hints": {"repeat_count": 1}})
+
+
+def _bridged(bridge, seq, ts, ref):
+    e = copy.deepcopy(_minimal_click_event())
+    e["action"]["timestamp"] = ts
+    e["page"] = {"url": "http://app.test/dl.html"}
+    e["extras"] = {"sequence": seq, "bridge": bridge, "element_ref": f"{bridge}:{ref}", "uid": f"{bridge}-{ref}"}
+    return e
+
+
+def test_one_click_reported_by_two_bridges_in_one_page_is_one_step():
+    """WF-5 Part B: after a download a second bridge sat beside the first; one click came in twice, 7 ms apart."""
+    first = _bridged("bgsruyvw", 3, "2026-11-17T08:55:20.455Z", 2)
+    echo = _bridged("0an0offe", 4, "2026-11-17T08:55:20.462Z", 1)
+    echo["post_condition"] = {"classified_effect": "navigation"}
+    cleaned = _clean([first, echo])
+    assert len(cleaned) == 1
+    assert int(cleaned[0]["extras"].get("repeat_count") or 1) == 1
+    assert cleaned[0]["extras"]["sequence"] == 3
+    assert cleaned[0]["post_condition"] == {"classified_effect": "navigation"}   # the effect only the echo carried
+
+
+def test_the_same_button_clicked_again_after_the_page_reloaded_stays_two_steps():
+    a = _bridged("bgsruyvw", 1, "2026-11-17T08:55:20.000Z", 1)
+    b = _bridged("0an0offe", 2, "2026-11-17T08:55:21.500Z", 1)
+    assert len(_clean([a, b])) == 2

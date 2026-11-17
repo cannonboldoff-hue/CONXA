@@ -781,7 +781,9 @@ def _build_assertions(
     # URL or visible DOM on its own — most sites don't react until a later, separate submit), so
     # without this they'd compile with zero assertions. Folded into the same evidence-less-commit
     # fallback below rather than its own branch.
-    is_upload_action = action in {"upload", "upload_intent"}
+    # A pick that only fills the file box (a later press sends the files: effects.py::choose_file_presses) changes nothing
+    # an assertion could see; its proof is the box holding the files (its ``choose_files`` effect).
+    is_upload_action = action in {"upload", "upload_intent"} and not (ev.get("extras") or {}).get("choose_files")
 
     # success_conditions evidence: for a consequential click, the first required_element is
     # promoted to the enforced post-condition if nothing has claimed that slot yet; everything
@@ -1748,6 +1750,25 @@ def prepare_compile_events(
     return _insert_tab_markers(cleaned_events)
 
 
+def _mark_choose_file_presses(events: list[dict[str, Any]], session_root: Path) -> None:
+    """Mark each file pick that sent nothing and the later press that sent its files (effects.choose_file_presses), so
+    the pick is built as "choose the files" and the press carries the upload's checklist. Reads the recorder's request
+    log; a recording without one is left as it is."""
+    from conxa_compile.compiler.effects import choose_file_presses
+
+    try:
+        log = json.loads((session_root / "requests.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    pairs = choose_file_presses(events, log)
+    for ev in events:
+        seq = (ev.get("extras") or {}).get("sequence")
+        if seq in pairs:
+            ev["extras"] = {**(ev.get("extras") or {}), "choose_files": True}
+        elif seq in pairs.values():
+            ev["extras"] = {**(ev.get("extras") or {}), "completes_upload": next(u for u, p in pairs.items() if p == seq)}
+
+
 def compile_skill_package(
     events: list[dict[str, Any]],
     *,
@@ -1798,6 +1819,7 @@ def compile_skill_package(
     # content-derived path) instead of an LLM token — see workflow_review.py's
     # module docstring for the quality trade this accepts.
     page_urls = sorted({(ev.get("page") or {}).get("url") or "" for ev in cleaned_events} - {""})
+    _mark_choose_file_presses(cleaned_events, session_root)
     steps = [
         _build_step(e, bundle, session_root=session_root, step_index=i)
         for i, e in enumerate(cleaned_events)

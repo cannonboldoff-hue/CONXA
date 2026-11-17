@@ -28,6 +28,9 @@ const NON_IDEMPOTENT_STEP_TYPES = new Set([
 
 function isNonIdempotent(step) {
   const s = asObject(step);
+  // A file pick the page only keeps until a later press sends it (effect kind choose_files): picking again lands the
+  // box in the same state. The press is the step that cannot be done twice.
+  if (s.type === "upload" && asObject(asObject(s.validation).effect).kind === "choose_files") return false;
   if (NON_IDEMPOTENT_STEP_TYPES.has(s.type)) return true;
   // date_pick is a special case, not a blanket type-set entry: a NATIVE <input type=date> re-fill
   // is a genuine no-op (idempotent), but a custom-calendar grid drive

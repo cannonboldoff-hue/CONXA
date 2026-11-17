@@ -194,7 +194,7 @@ Generated text only on public demos. **Failures go to:** EXEC-10; wrong entity �
 
 ---
 
-## WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate
+## WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate — Parts B–D passed 2026-11-17 (P-34…P-36); real public file hosts blocked
 
 **Why first after WF-4:** these rules protect every customer workflow, and breaking them needs no
 outside site. **Site:** S3 `/text-box` (a fresh recording, not the approved P-11 one) + fixture

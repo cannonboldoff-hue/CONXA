@@ -107,6 +107,21 @@ test("requiredRungFor: older steps ask for what their author had", () => {
   assert.strictEqual(proof.requiredRungFor({ validation: { effect: { required_rung: "bogus" } } }), "performed");
 });
 
+test("BUILD-103: the rules follow the effect kind, not the step type", () => {
+  const withKind = (type, kind) => ({ type, validation: { effect: { kind } } });
+  // A file pick the page keeps for a later press: picking again is harmless, and it is not the upload.
+  assert.strictEqual(proof.effectKind(withKind("upload", "choose_files")), "choose_files");
+  assert.strictEqual(proof.safeToRepeat(withKind("upload", "choose_files")), true);
+  // The press that sends those files is the upload: never done twice.
+  assert.strictEqual(proof.effectKind(withKind("click", "upload")), "upload");
+  assert.strictEqual(proof.safeToRepeat(withKind("click", "upload")), false);
+  // A pack built before effects: its upload steps are uploads.
+  assert.strictEqual(proof.effectKind({ type: "upload" }), "upload");
+  const { isNonIdempotent } = require("../../app/step_utils");
+  assert.strictEqual(isNonIdempotent(withKind("upload", "choose_files")), false);
+  assert.strictEqual(isNonIdempotent({ type: "upload" }), true);
+});
+
 test("safeToRepeat: uploads and destructive steps are not", () => {
   assert.strictEqual(proof.safeToRepeat({ type: "upload" }), false);
   assert.strictEqual(proof.safeToRepeat({ type: "click", destructive: true }), false);

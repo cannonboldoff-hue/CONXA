@@ -7,6 +7,7 @@ const assert = require("node:assert");
 const Module = require("module");
 
 const cleared = [];
+const willDownload = {};
 let targetSeq = 0;
 class FakeWebContents {
   constructor() {
@@ -59,7 +60,7 @@ const realLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "electron") {
     return {
-      session: { fromPartition: (p) => ({ clearStorageData: async () => { cleared.push(p); }, on: () => {} }) },
+      session: { fromPartition: (p) => ({ clearStorageData: async () => { cleared.push(p); }, on: (ev, fn) => { if (ev === "will-download") willDownload[p] = fn; } }) },
       WebContentsView: FakeView,
     };
   }
@@ -169,6 +170,30 @@ test("a record run lists its tabs' devtools target ids, popups included; a test 
   panel.newView("t3");
   assert.deepStrictEqual((await panel.targetsOf("t3")).targets, []);
   await panel.closeRun("rec2");
+});
+
+test("a tab a site opened only to download a file closes during a recording, as in Chrome", async () => {
+  panel.newView("rec3", { kind: "record", viewport: { width: 1280, height: 720 } });
+  const wc = added[added.length - 1].webContents;
+  const popWc = new FakeWebContents();
+  wc.openHandler({ url: "" }).createWindow({ webContents: popWc, webPreferences: {} });
+  const run = () => last;
+  assert.strictEqual(run().tabs.length, 2);
+  const partition = [...Object.keys(willDownload)].find((p) => p.includes("rec3"));
+  const item = { getURL: () => "http://app.test/d/file.txt", getFilename: () => "file.txt", getTotalBytes: () => 3,
+    getReceivedBytes: () => 0, setSavePath() {}, on() {}, once() {}, cancel() {} };
+  willDownload[partition]({}, item, popWc);           // its first navigation became the download: still blank
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(run().tabs.length, 1, "the blank tab is gone");
+  assert.strictEqual(popWc.destroyed, true);
+  // A tab that showed a page stays.
+  const pageWc = new FakeWebContents();
+  wc.openHandler({ url: "" }).createWindow({ webContents: pageWc, webPreferences: {} });
+  pageWc.url = "http://app.test/report";
+  willDownload[partition]({}, item, pageWc);
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(run().tabs.length, 2);
+  await panel.closeRun("rec3");
 });
 
 test("unknown kinds and empty viewports are refused", () => {

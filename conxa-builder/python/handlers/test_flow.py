@@ -628,7 +628,7 @@ class TestFlowMixin:
                 return 0
             doc, changed = calibrate_effects(doc, observed)
             if changed:
-                write_skill(skill_id, doc)
+                write_skill(skill_id, doc, keep_test=True)   # learned from this very pass: it still stands
             return changed
         except Exception:  # noqa: BLE001
             return 0

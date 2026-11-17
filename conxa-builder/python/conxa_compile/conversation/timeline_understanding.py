@@ -276,6 +276,9 @@ def must_ask(merged: list[dict[str, Any]]) -> list[dict[str, str]]:
             name = str(data.get("suggested_filename") or "").strip() if isinstance(data, dict) else ""
             if name:
                 downloaded.add(name)
+            # Files taken out of a downloaded zip are the workflow's own too: the build hands them to the upload.
+            members = data.get("zip_members") if isinstance(data, dict) else None
+            downloaded.update(str(m).strip() for m in members or [] if str(m).strip())
         elif r.get("dialog") == "decision":
             out.append({"row": r["row_ref"], "effect": "fork"})
         elif r.get("action") in _UPLOAD_ACTIONS:

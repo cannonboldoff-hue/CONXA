@@ -155,6 +155,8 @@ function sweepOldRuns(runsBaseDir, maxAgeMs = RUN_RETENTION_MS, excludeRunId = n
 }
 
 const PAGE_SIZE_MESSAGE = "The test browser is not showing the page at its normal size, so a click could land in the wrong place and this step could not be trusted. Run the test again.";
+// A minimized (or hidden) window leaves the page no size at all: say how to bring it back.
+const PAGE_HIDDEN_MESSAGE = "The window showing the test browser is minimized or hidden, so the page could not be shown and this step could not be trusted. Bring the window back and run the test again.";
 
 function stepFailure(step, stepIndex, cause, preShot, warnings) {
   // Shaped once here (the single funnel every step failure passes through) rather than at each
@@ -333,7 +335,7 @@ function stallAfterMs(step) {
 }
 
 async function confirmCompletedInner(ctx, state, step, i, page, completion, preShot) {
-  const full = step.type === "upload" || step === ctx.lastActStep;
+  const full = proof.effectKind(step) === "upload" || step === ctx.lastActStep;
   const mode = full ? "full" : "short";
   const warn = (text) => { if (text && !state.warnings.includes(text)) state.warnings.push(text); };
   if (!completion.baseline) {
@@ -342,7 +344,7 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     ctx.tracker.emit("completion", { si: i, mode, st: "cant_tell", waited: 0 });
     return { status: "cant_tell", reason: "no_baseline" };
   }
-  const upload = step.type === "upload";
+  const upload = proof.effectKind(step) === "upload";
   const v = await waitForCompletion(page, {
     baseline: completion.baseline,
     sinceMs: completion.sinceMs,
@@ -447,9 +449,9 @@ function leftOpenRecord(effect, open) {
   return { title: open.title || "", buttons: fork.probeLabelsRaw(open).slice(0, 8), blocks: open.blocks === false ? false : null };
 }
 
-async function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null } = {}) {
+async function proveStep(ctx, state, step, i, { verify = null, gate = null, recovered = false, preShot = null, notebook = null, filesChosen = null } = {}) {
   const hasReq = hasRequiredAssertion(step);
-  const full = (step.type === "upload" || step === ctx.lastActStep) && !!gate;
+  const full = (proof.effectKind(step) === "upload" || step === ctx.lastActStep) && !!gate;
   // The step's own checklist (compiled from the recording) applies only when the gate ran: with the completion
   // gate off, or on a step it never gated, nothing here may be stricter than before.
   const effect = gate && step.validation && step.validation.effect && Array.isArray(step.validation.effect.checks)
@@ -467,6 +469,11 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   }
   const g = gateAnswer(gate);
   if (g) checks.push({ rung: "completed", witness: "renderer", role: "support", answer: g });
+  // A file pick the page keeps for a later press is proven by the box holding the files, read back (handlers.js). It
+  // starts no work, so no gate runs for it; the press that sends the files is gated like an upload.
+  if (proof.effectKind(step) === "choose_files") {
+    checks.push({ rung: "accepted", witness: "target", role: "support", answer: (filesChosen && filesChosen.answer) || "cant_tell" });
+  }
   // Go and look: the one witness that asks the app afresh. It opens the same page in a separate tab and reads it, so it
   // runs only when the step carries that check and the check has not been shown to be dead on this site.
   let fresh = null;
@@ -480,7 +487,7 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     : null;
   if (effect) {
     const onPage = state.prevPage || ctx.tabs && ctx.tabs.pages && ctx.tabs.pages.get("tab_0");
-    checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, executed: true, fresh, looks, signals: appSignals(ctx, onPage),
+    checks.push(...effectProbes.evaluateChecks(effect, { notebook, gate, filesChosen, fresh, looks, signals: appSignals(ctx, onPage),
       signedOut: !!onPage && landedAsRecorded(step, onPage) }));
   }
 
@@ -1051,7 +1058,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     } else {
       ctx.tracker.emit("step_fail", { si: i, fc: "fault_page_size" });
       appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "page_size", source: "geometry", live: Array.isArray(geometry.live) ? geometry.live : null });
-      throw stepFailure(step, i, Object.assign(new Error(PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
+      const hidden = Array.isArray(geometry.live) && geometry.live[0] === 0;
+      throw stepFailure(step, i, Object.assign(new Error(hidden ? PAGE_HIDDEN_MESSAGE : PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
     }
   }
   noteBackground(ctx);
@@ -1096,7 +1104,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
 
   let primaryErr = null;
   try {
-    await executeStep(page, step, state.inputs, { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue });
+    const io = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
+    await executeStep(page, step, state.inputs, io);
     // Phase 8: independent post-condition verification.
     const verdict = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
     // Fleet-visible audit: one event per step that actually carries assertions, pass or fail,
@@ -1110,7 +1119,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       });
     }
     const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-    await proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook });
+    await proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook, filesChosen: io.filesChosen });
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -1226,12 +1235,13 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       } else {
         ctx.tracker.emit("settle_retry", { si: i, waited: settle.waitedMs, phase: "action", ok: settle.settled });
         try {
-          await executeStep(page, step, state.inputs, { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue });
+          const io2 = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
+          await executeStep(page, step, state.inputs, io2);
           const verdict2 = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
           emitVerifyResult(ctx, i, verdict2);
           if (verdict2.pass) {
             const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
-            await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
+            await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook, filesChosen: io2.filesChosen });
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;

@@ -3314,10 +3314,21 @@
   installDocumentListeners();
 
   // Flush pending typed input and hover before the frame unloads (e.g., form submit in iframe).
-  // Also reset the window flag so the pump loop re-injects the bridge after document.open()
-  // (HubSpot micro-frontend pattern: window object persists but document is replaced).
+  // A download link (or a navigation that is cancelled) fires beforeunload but keeps this document. So the window
+  // flag is lowered only when the document really goes (pagehide): lowered here, the pump found the page "without a
+  // bridge" and installed a second one beside this one, and every later action on the page was recorded twice (WF-5).
+  // The watch cut below is lifted again by the person's next touch on this page, which proves the page stayed.
+  let _leaving = false;
+  function _stayed(ev) {
+    if (ev.isTrusted && _leaving) { _leaving = false; _cutAll = false; }
+  }
+  window.addEventListener("pointerdown", _stayed, true);
+  window.addEventListener("keydown", _stayed, true);
+  window.addEventListener("pagehide", function () { window.__SKILL_BRIDGE_V1__ = false; }, true);
+  // Back from the back-forward cache: this bridge is alive again, so no second one may be installed.
+  window.addEventListener("pageshow", function (ev) { if (ev.persisted) window.__SKILL_BRIDGE_V1__ = true; }, true);
   window.addEventListener("beforeunload", function () {
-    window.__SKILL_BRIDGE_V1__ = false;
+    _leaving = true;
     flushPendingInput();
     if (hoverTimer) {
       clearTimeout(hoverTimer);
@@ -3334,6 +3345,7 @@
   window.__skillState = _state;
   window.__skillFlush = function () {
     _cutAll = true;
+    _leaving = false;
     try {
       flushPendingInput();
       emitPendingHover("flush");

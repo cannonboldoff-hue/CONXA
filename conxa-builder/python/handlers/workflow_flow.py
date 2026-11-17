@@ -685,9 +685,11 @@ class WorkflowFlowMixin:
         card = self._flow_card(workflow.id, str(payload.get("card_id") or ""))
         sid, _sess = self._flow_session(card)
         is_variant = bool((card.get("refs") or {}).get("variant_of") or (card.get("refs") or {}).get("segment_from"))
+        # Card first, like Finish's "saving": closing the browser below would otherwise look like a browser closed by
+        # hand to the watcher, which re-offered Save / Discard.
+        harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", actions=[], sink=sink)
         self.cmd_cancel_recording({"session_id": sid, "workflow_id": workflow.id}, rid)
         runtime_state.set_flags(workflow.id, recording=False, recording_paused=False, recording_discarded=not is_variant)
-        harness.update_card(_thread(workflow.id), card["card_id"], state="discarded", actions=[], sink=sink)
         return {"ok": True}
 
     def cmd_flow_set_varies(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:

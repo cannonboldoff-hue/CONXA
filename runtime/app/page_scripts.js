@@ -921,6 +921,11 @@ function acceptsMultiple(el) {
   return el.multiple === true;
 }
 
+// The names of the files a file box holds now (null when it is not a file box).
+function chosenFileNames(el) {
+  return el && el.files ? Array.from(el.files).map((f) => f.name) : null;
+}
+
 function elementText(el) {
   return (el.innerText || el.textContent || "").trim();
 }
@@ -980,6 +985,7 @@ module.exports = {
   firstMouseMove,
   dismissLabelInfo,
   acceptsMultiple,
+  chosenFileNames,
   elementText,
   clipboardWrite,
   clipboardRead,

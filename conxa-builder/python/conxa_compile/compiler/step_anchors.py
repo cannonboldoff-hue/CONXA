@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from conxa_compile.compiler.action_semantics import action_name, is_editable_target, looks_like_submit
+from conxa_compile.compiler.navigation_effects import _timestamp
 from conxa_compile.compiler.selector_filters import is_dynamic_id, selector_passes_filters
 from conxa_compile.compiler.selector_score import ordered_selector_strings, rank_labeled_selector_candidates
 from conxa_compile.editor.action_registry import MARKER_ACTIONS
@@ -305,6 +306,28 @@ def _typing_flushed_at_unload(steps: list[Step]) -> list[Step]:
     return out
 
 
+_BRIDGE_ECHO_MS = 50
+
+
+def _bridge_echo(prev: Step, step: Step) -> bool:
+    """The same action on the same target reported by two recorder bridges living in one page, a few ms apart: one
+    physical act, not two (a person cannot act twice that fast, and one bridge never reports one act twice). Before
+    2026-11-17 a download link made the page look bridgeless and a second bridge was installed beside the first (WF-5
+    Part B: "Go to the upload page" compiled twice and the copy failed the test). Caller checks action and target.
+    shortcut: old recordings only; delete once none are left to recompile."""
+    ba, bb = (prev.get("extras") or {}).get("bridge"), (step.get("extras") or {}).get("bridge")
+    if not ba or not bb or ba == bb or _bare_url(prev, "page") != _bare_url(step, "page"):
+        return False
+    ta, tb = _timestamp(prev), _timestamp(step)
+    return ta is not None and tb is not None and abs(tb - ta) * 1000 <= _BRIDGE_ECHO_MS
+
+
+def _merge_echo(prev: Step, step: Step) -> Step:
+    """Keep the first report; take from the echo only what the first lacks (its after-effect may have arrived on the
+    echo alone)."""
+    return {**prev, **{k: v for k, v in step.items() if v and not prev.get(k)}}
+
+
 def _truncate_after_terminal_submit(policy: dict[str, Any]) -> bool:
     wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
     return bool(wf.get("truncate_after_terminal_submit", False))
@@ -340,6 +363,9 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
             prev_action = action_name(prev or {})
             prev_key = _target_key(prev or {})
             if action == prev_action and key == prev_key and prev is not None:
+                if _bridge_echo(prev, step):
+                    cleaned[-1] = _merge_echo(prev, step)
+                    continue
                 # Navigation actions carry no element key (empty target), so the generic
                 # same-action-same-key test above matches ANY two consecutive ones. Two real
                 # consecutive Backs — or two address-bar edits to different URLs — must never

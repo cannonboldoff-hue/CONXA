@@ -768,6 +768,25 @@ def test_typed_words_on_a_page_that_keeps_its_address(monkeypatch, copies, want)
     assert step_where_words_appear(doc, "saved it") == step_keys(steps)[want]
 
 
+def test_typed_words_already_on_the_screen_when_the_step_was_pressed_are_not_a_check(monkeypatch):
+    """WF-5: the page heading "Five downloads" was accepted as the proof of the downloads. It was on the screen before
+    the first click, so seeing it afterwards says nothing. The recorder describes each press as the page was then."""
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+
+    events = [{"action": {"action": a}, "page": {"url": "https://app.test/dupes"}, "extras": {"sequence": i + 1,
+               "section_heading": "Five downloads"}, "snapshot": {"dom_hash": "same"}}
+              for i, a in enumerate(["click", "download_observed", "click"])]
+    monkeypatch.setattr(se, "read_session_events", lambda _s: events)
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: "<h1>Five downloads</h1><a>Get file</a>")
+    steps = [_step("click", "get_1", source_event=1), _step("click", "get_2", source_event=3)]
+    doc = _doc(steps)
+    doc["meta"]["source_session_id"] = "s1"
+    q = {"kind": "done_when", "choices": [], "step_keys": []}
+    ops, receipt = plan_answer(q, {"selected": [], "custom_text": "Five downloads"}, doc)
+    assert ops == [] and "already on the screen" in receipt
+
+
 def test_check_first_before_a_delete_is_applied_even_when_the_built_step_is_not_irreversible():
     """WF-4 Leg A: "Check first" was asked about the bin icon (it only opens "Are you sure?", so it was built as
     reversible and no confirm question existed). The answer was reported as matching nothing, and the delete would

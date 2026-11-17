@@ -16,6 +16,7 @@ const {
 const { asObject, asArray, unique } = require("./step_utils");
 const { pollPositive } = require("./assertions");
 const fs = require("fs");
+const path = require("path");
 const { DOWNLOAD_ONLY_PLACEHOLDER_RE, resolveUploadPaths } = require("./uploads");
 const {
   locatorCandidates,
@@ -744,7 +745,7 @@ const HANDLERS = {
     await capture(page, { type: "png", timeout: SECONDARY_ACTION_TIMEOUT_MS });
   },
 
-  upload: async (page, step, inputs) => {
+  upload: async (page, step, inputs, ctx) => {
     const rawValue = String(step.value || "");
     const resolved = interpolate(rawValue, inputs);
     // Only the compiler-controlled downloaded_files_dir placeholder qualifies for cleanup — a
@@ -802,7 +803,18 @@ const HANDLERS = {
           ), { badInput: true });
         }
       }
-      return locator.setInputFiles(filePaths, { timeout: ACTION_TIMEOUT_MS });
+      await locator.setInputFiles(filePaths, { timeout: ACTION_TIMEOUT_MS });
+      // The witness for "the files were chosen": the box itself, read back, never "the step ran". Unreadable is "can't
+      // tell". A page that sends the files the moment they are picked often empties its box at once, so only a pick
+      // the page keeps for a later press (effect kind choose_files) fails on a box that holds other files or none.
+      const held = await evalOn(locator, pageScripts.chosenFileNames).catch(() => EVAL_TIMED_OUT);
+      const wanted = filePaths.map((f) => path.basename(f)).sort();
+      const same = Array.isArray(held) && held.length === wanted.length && [...held].sort().every((n, k) => n === wanted[k]);
+      const keeps = asObject(asObject(step.validation).effect).kind === "choose_files";
+      if (keeps && Array.isArray(held) && !same) {
+        throw new Error(`the file box did not take the chosen files (it holds ${held.length} of ${wanted.length})`);
+      }
+      if (ctx) ctx.filesChosen = { answer: same ? "yes" : "cant_tell" };
     });
 
     // setInputFiles above only confirms the file was attached, not that any upload to a server

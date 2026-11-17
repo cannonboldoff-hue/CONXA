@@ -1231,7 +1231,7 @@ a selector, so there is nothing for chat to re-point.
 
 ```
 validation.effect = {
-  kind:           upload | download | delete | send | save | long_job
+  kind:           upload | download | delete | send | save | long_job | choose_files
   required_rung:  performed | accepted | completed | result_exists   # what the runtime requires, capped at what its probes can prove
   target_rung:    ...                                                # what the design wants; a recompile raises required_rung toward it
   identity:       { name: "{{file_name}}" }                          # reserved for stage 5 (the right item, not any item)
@@ -1246,7 +1246,16 @@ validation.effect = {
 }
 ```
 
-Probe types: `input_has_files`, `request_chain` (a data-changing request answered 2xx without an error body), `failure_signal`
+**`choose_files`** (BUILD-103): a file pick on a page that sends the files only when a later button is pressed. Its one
+check is `input_has_files` at rung `accepted` (`required_rung: accepted`), and that press carries `kind: upload` with the
+upload checklist. The runtime keys its rules on the kind, not the step type (`proof.js::effectKind`): an `upload` (or, in a
+pack without effects, an `upload` step) gets the full completion gate and is never repeated; a `choose_files` step is not
+gated and is safe to repeat. Built only when the recorder's request log shows the pick sent nothing and the press sent a
+data-changing request: **`requests.json`** beside `events.jsonl`, `{mutating: [{t: epoch ms, method}]}` for every
+POST/PUT/PATCH/DELETE a recorded page sent, no address or body. A recording without it compiles as before.
+
+Probe types: `input_has_files` (the file box read back after the pick holds exactly the chosen files; "the step ran" is never a
+"yes", unreadable is `cant_tell`), `request_chain` (a data-changing request answered 2xx without an error body), `failure_signal`
 (a **veto**: its answer "yes" means the failure was seen), `new_text` (value-free words that must appear, taken from the recorder's
 `post_watch`), `download_file` run today (`runtime/app/effect_probes.js`); `fresh_look` (upload only: the file's name appears on a fresh load of the same page, more often than before; lifts `required_rung` only after a clean test saw it work) run today; `url_stays` (`{pattern}`: the page now matches it, did not before the action, and still does), `row_with_identity` (`{key: "{{input}}", delta}`: the value is on the page `delta` more times than before), `value_equals` (`{field_step, value}`: a fresh tab re-reads that earlier step's field) and `later_step` (`{step}`: a later step that consumes what this one made ran) run today and are added only by the proof picker's gates (TRD, compile section); none answers `not_yet`. A check a test run showed to be dead
 (`calibrated: false`) no longer counts. An older runtime ignores `effect` (it is carried to `execution.json` by

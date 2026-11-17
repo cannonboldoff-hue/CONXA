@@ -101,7 +101,7 @@ class Assertion(BaseModel):
 # identity bundle), and the LLM never writes one.
 EFFECT_RUNGS = ("performed", "accepted", "completed", "result_exists")
 EFFECT_WITNESSES = ("target", "renderer", "transport", "filesystem", "fresh_look", "later_step")
-EFFECT_KINDS = ("upload", "download", "delete", "send", "save", "long_job")
+EFFECT_KINDS = ("upload", "download", "delete", "send", "save", "long_job", "choose_files")
 # The probe types a check may name. The runtime evaluates all of them (effects.py::RUNTIME_PROBES); an older runtime
 # answers "cant_tell" for one it does not know, so a compiled pack never claims a proof it cannot make.
 EFFECT_PROBES = (
@@ -155,7 +155,8 @@ class EffectOn(BaseModel):
 
 class Effect(BaseModel):
     """What "done" means for a step. [contract]"""
-    kind: Literal["upload", "download", "delete", "send", "save", "long_job"]
+    # choose_files: a file pick that sends nothing (the page sends the files on a later press, which is the "upload").
+    kind: Literal["upload", "download", "delete", "send", "save", "long_job", "choose_files"]
     # What the runtime requires today (capped at what its probes can prove) and what the design wants. They differ
     # until stage 5 can prove "the right item is really there"; recompiling then raises required_rung.
     required_rung: Literal["performed", "accepted", "completed", "result_exists"] = "completed"

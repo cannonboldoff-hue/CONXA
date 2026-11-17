@@ -1681,6 +1681,24 @@ def test_a_chosen_file_is_watched_too(page: Page, tmp_path) -> None:
     assert any("complete" in item["words"] for item in watch["final_status"]), watch
 
 
+def test_a_download_link_keeps_the_page_one_bridge_and_its_later_watches(page: Page) -> None:
+    """WF-5 Part B: a download link fires beforeunload but the page stays. The bridge lowered its flag there, the
+    recorder's check then installed a second bridge, and the next click was recorded twice; the leave also cut every
+    later progress watch on the page."""
+    page.route("**/files.zip", lambda route: route.fulfill(
+        body=b"PK", headers={"Content-Type": "application/zip", "Content-Disposition": "attachment; filename=files.zip"}))
+    _install_bridge(page, _UPLOAD_TRAY_HTML + '<a id="dl" href="http://wf5.test/files.zip">Download files</a>')
+    with page.expect_download():
+        page.click("#dl")
+    page.wait_for_timeout(200)
+
+    assert page.evaluate("() => window.__SKILL_BRIDGE_V1__ === true"), "the page still has its bridge"
+    page.click("#upload")
+    watch = _wait_for_event(page, "click", watch=True).get("post_watch")
+    assert watch is not None and not watch.get("cut_by_stop"), watch
+    assert any("complete" in item["words"] for item in watch["final_status"]), watch
+
+
 def test_the_progress_words_of_a_non_english_app_are_recorded_in_its_own_language(page: Page) -> None:
     _install_bridge(
         page,

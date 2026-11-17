@@ -336,6 +336,18 @@ def test_a_file_the_workflow_downloaded_itself_is_not_asked_about_again():
     assert TU.must_ask(other) == [{"row": "r5", "effect": "upload"}]              # a file from elsewhere still is
 
 
+def test_files_taken_from_a_zip_the_workflow_downloaded_are_not_asked_about():
+    """WF-5 Part B: 20 PDFs from a downloaded zip were uploaded; "Is the file the same every time?" was asked, and the
+    build then fed the upload from the download anyway, so the answer did nothing."""
+    zipped = [event(3, "click", "Download files"),
+              event(4, "download_observed", value=json.dumps({"suggested_filename": "files.zip",
+                                                              "zip_members": ["report-01.pdf", "report-02.pdf"]})),
+              event(5, "upload_intent", "", value=json.dumps([{"name": "report-01.pdf"}, {"name": "report-02.pdf"}]))]
+    assert TU.must_ask(zipped) == []
+    stranger = zipped[:2] + [event(5, "upload_intent", "", value=json.dumps([{"name": "report-01.pdf"}, {"name": "x.pdf"}]))]
+    assert TU.must_ask(stranger) == [{"row": "r5", "effect": "upload"}]
+
+
 def test_a_model_upload_question_on_a_self_downloaded_file_is_dropped():
     out = TU.validate({"questions": [{"effect": "upload", "row": "r5", "prompt": "Same file?", "best_guess": "each_run"}]},
                       LISTED, TU.candidates_from_timeline(LISTED))

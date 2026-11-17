@@ -87,8 +87,10 @@ test("the checklist is answered from the notebook: request accepted, completion 
   await settle();
   await nb.sample(); // sees TRAY
   await nb.sample(); // sees DONE
+  // "The file was chosen" comes only from the file box read back after the pick, never from the step having run.
   const got = answers(evaluateChecks(effect(), { notebook: nb, gate: { status: "done" } }));
-  assert.deepStrictEqual(got, { c1: "yes", c2: "yes", c3: "yes", c4: "no" });
+  assert.deepStrictEqual(got, { c1: "cant_tell", c2: "yes", c3: "yes", c4: "no" });
+  assert.strictEqual(answers(evaluateChecks(effect(), { notebook: nb, gate: { status: "done" }, filesChosen: { answer: "yes" } })).c1, "yes");
   nb.close();
 });
 
@@ -154,7 +156,8 @@ test("runPlan: an upload whose request was accepted and whose completion text ap
   const s = result.proof.steps[0];
   assert.deepStrictEqual([s.verdict, s.rung, s.required, s.effect_kind], ["proven", "completed", "completed", "upload"]);
   assert.deepStrictEqual(result.proof.notes, []);
-  assert.deepStrictEqual(Object.fromEntries(s.checks.filter((c) => c.id).map((c) => [c.id, c.answer])), { c1: "yes", c2: "yes", c3: "yes", c4: "no" });
+  // c1 (the file box) is not read here: this step is a press, not a file pick.
+  assert.deepStrictEqual(Object.fromEntries(s.checks.filter((c) => c.id).map((c) => [c.id, c.answer])), { c1: "cant_tell", c2: "yes", c3: "yes", c4: "no" });
 });
 
 test("runPlan: the app answering OK with a reply that says the upload failed stops the run as a failure, not 'couldn't confirm'", async () => {
@@ -330,4 +333,18 @@ test("runPlan must not pass: when the named later step does not exist, the downl
   const result = await runPlan(livePage([CLEAN, CLEAN, TRAY, DONE]), downloadThenUpload("k-deleted"), {}, 0, "slug-later-gone", { tracker: tracker() });
   assert.strictEqual(result.proof.steps[0].verdict, "couldnt_confirm");
   assert.ok(result.proof.notes.some((n) => /Download the report/.test(n)), "the run still says it could not confirm the download");
+});
+
+test("BUILD-103: a press that sends files picked earlier is gated like an upload, even when it is not the last action", async () => {
+  const page = livePage([CLEAN, DONE], async (p) => {
+    const r = req("POST", "https://drive.test/upload/abc123");
+    p.emit("request", r); p.emit("response", resp(r, 200, { id: "f1" })); p.emit("requestfinished", r);
+    await settle();
+  });
+  const t = tracker();
+  const plan = [...stepWith(effect()), { type: "keyboard_shortcut", value: "Tab", intent: "Move on" }];
+  await runPlan(page, plan, {}, 0, "slug-press-upload", { tracker: t });
+  const gate = t.events.find(([c, d]) => c === "completion" && d.si === 0);
+  assert.ok(gate, "the press was gated");
+  assert.strictEqual(gate[1].mode, "full", "an upload's full wait, not the short one");
 });

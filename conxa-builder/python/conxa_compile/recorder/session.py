@@ -473,6 +473,10 @@ class RecordingSession:
     # _frame_snapshots, which only sees a frame if it's still around at the ~1s sample tick.
     # This catches a frame that attaches and detaches faster than any polling interval.
     _frame_lifecycle: list[dict] = field(default_factory=list)
+    # When each data-changing request (POST/PUT/PATCH/DELETE) left a recorded page: {"t": epoch ms, "method"}. No address
+    # or body, so nothing the person typed. Written as requests.json; the compiler reads which step sent work to the app
+    # (an upload whose file pick sent nothing and whose Upload button did, compiler/effects.py::choose_file_presses).
+    _mutating_requests: list[dict] = field(default_factory=list)
     # Wall-clock (monotonic) of each frame's most recent attach/navigate event, keyed by Python
     # object identity (stable for the frame's lifetime, unlike its URL which is empty mid-
     # transition). Used to defer bridge-install checks away from the exact instant a frame is
@@ -1996,6 +2000,11 @@ class RecordingSession:
                 (session_dir / "login_drops.json").write_text(json.dumps(self._login_drops), encoding="utf-8")
             except OSError:
                 pass
+        if not self.auth_mode:
+            try:
+                (session_dir / "requests.json").write_text(json.dumps({"mutating": self._mutating_requests}), encoding="utf-8")
+            except OSError:
+                pass
         self._write_diagnostics_sync(session_dir)
 
     def _should_merge_typing(self, prev: RecordedEvent, curr: RecordedEvent) -> bool:
@@ -3061,9 +3070,20 @@ class RecordingSession:
         page.on("filechooser", lambda chooser: self._on_file_chooser(chooser))
         page.on("framenavigated", lambda frame: self._on_page_navigated(page, frame))
         if not self.auth_mode:
+            page.on("request", self._on_request)
             page.on("frameattached", self._on_frame_attached)
             page.on("framenavigated", self._on_frame_navigated)
             page.on("framedetached", self._on_frame_detached)
+
+    _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+    def _on_request(self, request: Any) -> None:
+        try:
+            method = str(request.method or "").upper()
+        except Exception:  # noqa: BLE001
+            return
+        if method in self._MUTATING_METHODS and len(self._mutating_requests) < 5000:
+            self._mutating_requests.append({"t": int(time.time() * 1000), "method": method})
 
     def _on_context_page(self, page: Any) -> None:
         self._page = page

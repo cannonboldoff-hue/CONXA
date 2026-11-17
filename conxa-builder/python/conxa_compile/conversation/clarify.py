@@ -1010,9 +1010,24 @@ def _words_in(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
+ALREADY_SHOWN = "already-shown"  # never a step key (those are a hash and #n)
+
+
+def _press_time_text(ev: dict[str, Any]) -> str:
+    """What the recorder saw around the element as the press began, before the action could change anything."""
+    extras = ev.get("extras") if isinstance(ev.get("extras"), dict) else {}
+    ctx = ev.get("context") if isinstance(ev.get("context"), dict) else {}
+    target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
+    parts = [str(extras.get("section_heading") or ""), str(ev.get("surrounding_text") or ""), str(target.get("inner_text") or "")]
+    parts += [str(a.get("element") or "") for a in ev.get("anchors") or [] if isinstance(a, dict)]
+    parts += [str(x).split(":", 1)[-1] for x in ctx.get("siblings") or []]
+    return " | ".join(parts)
+
+
 def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     """The step after which ``words`` were on the screen while recording (its step key); "" when the saved pages were
-    read and none shows them, None when there is no recording to read or no step brought them up. Typed as "how we
+    read and none shows them, None when there is no recording to read or no step brought them up, ``ALREADY_SHOWN`` when they
+    were on the screen before the step that would hold them. Typed as "how we
     know it worked", they belong on the step that brought them up, not on the last step: WF-4 Leg B's "Thank you for
     your order" was checked after logging out, where it is gone.
 
@@ -1073,6 +1088,11 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
         cause = upto[-1] if upto else (pressed or acted or [None])[0]
     if cause is None:
         return None  # on screen before anything was done: no step brought them up
+    # On the screen already when the person pressed (the recorder describes the press as the page was then: its section
+    # heading, the text around it): seeing them afterwards says nothing about whether it worked. WF-5: a page heading
+    # ("Five downloads") was accepted as the proof. Saved copies cannot tell: one copy may be taken after the press.
+    if needle in _words_in(_press_time_text(events[cause])):
+        return ALREADY_SHOWN
     seq = (events[cause].get("extras") or {}).get("sequence")
     steps = _steps(doc)
     best = None
@@ -1325,6 +1345,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         # Typed words go on the step that brought them up on screen while recording; only words no saved page shows
         # are checked at the end, and the receipt says so.
         custom_key = (step_where_words_appear(doc, custom) if custom else None)
+        already = custom_key == ALREADY_SHOWN
+        custom_key = None if already else custom_key
         custom_unseen = custom_key == ""
         custom_key = custom_key or end_key
         # Words that show only after a popup's answer cannot be checked: a decision step holds no checks, and the step
@@ -1336,6 +1358,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             custom_key = None
         if extra and end_key:
             by_step.setdefault(end_key, {})
+        if already:
+            custom_key = None
         if custom and custom_key:
             by_step.setdefault(custom_key, {})
         for key, idxs in by_step.items():
@@ -1352,7 +1376,10 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 assertions.append({"type": "text_present", "target": custom, "required": True})
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
         labels = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
-        if after_fork:
+        if already:
+            labels.append(f"I didn’t add “{custom}” as a check: it was already on the screen before that part ran, so "
+                          "seeing it can’t tell whether it worked. Tell me words that only show once it’s done")
+        elif after_fork:
             labels.append(f"I can’t check “{custom}” yet: it shows after the answer to the popup at the end, and a "
                           "check can’t go there. A test will show whether it appears")
         elif custom and custom_unseen:

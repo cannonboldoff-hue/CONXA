@@ -101,9 +101,19 @@ function nextMove(verdict, c = {}) {
   }
 }
 
+/**
+ * The kind of work a step does: its effect's kind. A pack built before effects existed has none; its upload steps are
+ * uploads. A file pick the page keeps until a later press is "choose_files", and that press is the "upload".
+ */
+function effectKind(step) {
+  const e = step && step.validation && step.validation.effect;
+  if (e && e.kind) return String(e.kind);
+  return step && step.type === "upload" ? "upload" : null;
+}
+
 /** Steps that cannot safely be done twice. Pre-effect (published) workflows have no consequence label. */
 function safeToRepeat(step) {
-  return !(step && (step.destructive === true || step.type === "upload"));
+  return !(step && (step.destructive === true || effectKind(step) === "upload"));
 }
 
 /**
@@ -172,6 +182,6 @@ function unconfirmedNote(step, index) {
 
 module.exports = {
   ANSWERS, RUNGS, WITNESSES, VERDICTS, OUTCOMES,
-  judge, nextMove, safeToRepeat, requiredRungFor, assertionRung, runOutcome,
+  judge, nextMove, effectKind, safeToRepeat, requiredRungFor, assertionRung, runOutcome,
   leadWord, outcomeFromText, unconfirmedNote,
 };

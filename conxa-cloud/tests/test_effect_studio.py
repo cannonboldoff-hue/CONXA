@@ -123,7 +123,7 @@ def test_the_mixin_calibrates_a_stored_skill_and_never_raises(monkeypatch, tmp_p
     import conxa_core.storage.json_store as js
 
     monkeypatch.setattr(js, "read_skill", lambda sid: copy.deepcopy(store["doc"]))
-    monkeypatch.setattr(js, "write_skill", lambda sid, d: store.__setitem__("doc", d))
+    monkeypatch.setattr(js, "write_skill", lambda sid, d, **_kw: store.__setitem__("doc", d))
     # a pass that rested on "the step ran" alone is not learned from
     assert TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "no"}]}]) == 0
     n = TestFlowMixin._tf_calibrate("sk1", [{"source_step_key": key, "checks": [{"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "yes"}, {"id": "c4", "answer": "no"}]}])
@@ -211,3 +211,27 @@ def test_a_hand_edit_cannot_strip_the_check_that_proves_an_irreversible_step_fin
     only_veto["checks"] = [c for c in only_veto["checks"] if c["role"] == "veto"]
     with pytest.raises(ValueError, match="irreversible_step_requires_completion_check"):
         _gate(step, {"validation": {"effect": only_veto}})
+
+
+def test_calibrating_from_a_passing_test_keeps_that_test_passed(monkeypatch, tmp_path):
+    """WF-5 / BUILD-96 (1): the calibration written after a clean pass reset the workflow to "not tested", so Approve
+    said "The workflow changed since that test" and a second run was needed. It is learned from that very pass."""
+    from conxa_core.config import settings
+    from conxa_core.storage.json_store import write_skill
+    from conxa_core.storage.workflow_store import create_workflow, get_workflow, save_workflow, set_workflow_test_result
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    doc = _doc(_step("upload", "Upload the file", UPLOAD()))
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    write_skill("sk_keep", doc)
+    wf = create_workflow("Upload", "https://app.test/")
+    wf.skill_id = "sk_keep"
+    save_workflow(wf)
+    set_workflow_test_result(wf.id, status="passed", inputs={}, run_id="r1")
+    n = TestFlowMixin._tf_calibrate("sk_keep", [{"source_step_key": key, "checks": [
+        {"id": "c1", "answer": "yes"}, {"id": "c2", "answer": "yes"}, {"id": "c4", "answer": "no"}]}])
+    assert n == 1
+    assert get_workflow(wf.id).last_test_status == "passed"
+    write_skill("sk_keep", doc)                       # any other change still asks for a new test
+    assert get_workflow(wf.id).last_test_status == "never"

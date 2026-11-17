@@ -1187,3 +1187,25 @@ screen; chat can now move a check through a change card. **PASS, Approved** (3 r
 Disabled, then gone; nothing left behind. Known: the pick keeps the fixed name (BUILD-102 (6)).
 
 **Leg E: BLOCKED** (needs a sign-up and posts a public review).
+
+### WF-5 — files at scale (2026-11-17)
+Run on a local practice server that logs each received file with its fingerprint (dummy files only;
+real public file-sharing sites blocked). The cloud AI key hit its weekly limit mid-run; the owner
+raised it.
+
+**Part B, test 1 — FAIL:** after a download, the next click was saved twice and the copy failed. The
+page fired "about to leave" for the download, so the recorder thought it had gone and installed a
+second copy of itself. *Fix:* the recorder resets only when the page really closes; builds merge
+echoes from two copies. "Is the file the same every time?" is no longer asked for files from a
+downloaded zip.
+
+**Part B, test 2 — passed only on a page that uploads on choose.** On "choose files, then press
+Upload" the choose step could never be proven. **Owner decision:** choosing files is proven by the
+file box holding them (and may be retried); the upload checks move to the Upload press. Also fixed:
+the first passing test was wiped by Studio's own calibration save; a blank tab left by a download-only
+pop-up closes; check words already on screen before a step are refused.
+
+**Part B, test 3 — PASS, Approved.** One test run passed and stuck. The server received exactly 20
+files in one upload, every fingerprint matching. **Part C — PASS:** three runs with different file
+sets used separate folders, nothing leaked, folders older than 7 days were swept. **Part D — PASS:**
+three same-named downloads kept as same.txt, same (2).txt, same (3).txt; a pop-up download saved once.

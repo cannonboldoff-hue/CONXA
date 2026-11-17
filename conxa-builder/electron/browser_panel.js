@@ -487,7 +487,7 @@ const _hooked = new Set();
 function _hookDownloads(partition) {
   if (_hooked.has(partition)) return;
   _hooked.add(partition);
-  session.fromPartition(partition).on("will-download", (_e, item) => {
+  session.fromPartition(partition).on("will-download", (_e, item, wc) => {
     // A shared partition outlives runs, so the owner is looked up per download, not captured once.
     const owner = [..._runs].find(([, r]) => r.partition === partition);
     if (!owner) { item.cancel(); return; }
@@ -527,7 +527,18 @@ function _hookDownloads(partition) {
     }));
     run.downloads.push(entry);
     _emit(runId);
+    _closeDownloadOnlyTab(runId, run, wc);
   });
+}
+
+// As Chrome does: a tab the site opened only to fetch a file never shows a page, so it closes once the download starts
+// instead of staying open blank. Recording only: a test run keeps every tab as the runtime opened it.
+function _closeDownloadOnlyTab(runId, run, wc) {
+  if (run.kind !== "record" || !wc) return;
+  const tab = run.tabs.find((t) => t.view.webContents === wc);
+  const url = tab ? String(wc.getURL() || "") : "x";
+  if (!tab || tab.markerUrl || !tab.opener || (url && !url.startsWith("about:blank"))) return;
+  closeTab(runId, tab.id).catch(() => {});
 }
 
 const _describeDownload = (d) => ({

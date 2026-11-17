@@ -242,6 +242,30 @@ def test_discard_saves_nothing_and_the_lifecycle_says_so(env):
     assert "Recording discarded" not in _events(wf.id)
 
 
+def test_discard_closing_the_browser_does_not_ask_save_or_discard_again(env, monkeypatch):
+    """WF-5: Discard closed the browser, and the closed-browser watcher then offered Save / Discard again."""
+    b, reg, group, wf, calls, _st, _out = env
+    _mark_signed_in(group)
+    b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    card = _cards(wf.id, "recording")[0]
+    reg.sessions["rec1"].events = [{"a": 1}] * 3
+
+    def slow_cancel(payload, rid):
+        reg.sessions["rec1"].browser_open = False   # the browser is gone while the stop is still finishing
+        time.sleep(0.2)
+        seen.append(_cards(wf.id, "recording")[0]["state"])
+        return {"ok": True}
+
+    seen: list[str] = []
+
+    monkeypatch.setattr(b, "cmd_cancel_recording", slow_cancel)
+    b.cmd_flow_discard_recording({"workflow_id": wf.id, "card_id": card["card_id"]}, "r")
+    time.sleep(0.1)
+    assert seen == ["discarded"], "the card never offers Save / Discard while the browser closes"
+    done = _cards(wf.id, "recording")[0]
+    assert done["state"] == "discarded" and done["actions"] == []
+
+
 def test_a_browser_closed_by_hand_offers_to_save_what_was_captured(env):
     b, reg, group, wf, calls, _st, _out = env
     _mark_signed_in(group)
