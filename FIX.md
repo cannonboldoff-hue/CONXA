@@ -29,3 +29,7 @@ After downloading a file, Build Studio sometimes saved your next click twice, so
 **Studio's questions can't be dodged, and "type your own answer" really does what you ask — 2026-11-18**
 A workflow with unanswered questions could still be test-run from the Publish page, and typing nonsense as an answer marked a question as done, even one about a step that can't be undone. Both are closed now: an open question blocks testing, approving and releasing everywhere. The "type your own answer" box is now a real third choice: Studio turns what you write into a change you can see and apply, and the question only closes once the change is made. Saving an unchanged step no longer resets your approval, a chat rename no longer quietly changes how a step finds its button, and tests keep running while Studio is minimized.
 — 2026-11-18
+
+**A test can no longer say "it works" when nothing happened — 2026-11-18**
+If a page popped up a message such as "Session expired" and saved nothing, Build Studio quietly closed the message and reported the test as passed. Now any unexpected message ends the test and shows you what it said, and a final step that never finished can never count as a pass. A click that has already sent your data to the site is never repeated, so nothing gets sent twice, and a dropped connection is reported in seconds instead of almost a minute.
+— 2026-11-18

@@ -2,8 +2,8 @@
 
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
-> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **Next:** WF-6 (false success). Remaining: WF-6…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6. WF-14 (files) mostly passed (14.3, 14.8 open).
+> **Next:** WF-7 (wrong row, right button). Remaining: WF-7…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1233,3 +1233,24 @@ Checks 5.1–5.12, on demoqa's text box and a local page that tells the AI to br
   wording leftovers filed as BUILD-105.
 
 **Final status of WF-5: PASSED** (P-37).
+
+### WF-6 — false success (2026-11-18)
+A local practice page (scratch folder, every request logged) fakes each way a pass could lie: a
+button that does nothing, a cover over it, a background ping, stale content, a server error, a
+dropped or offline connection, a pop-up, a rejected field, an empty value, a closed tab and a result
+drawn on a canvas. Every verdict was compared with the server's own record.
+
+**Test 1 — 6.1 to 6.5 PASS; 6.6 FAIL, top severity.** A click that showed "Session expired. Please
+try again." and saved nothing was reported as "Test passed … It works". Studio closed the pop-up on
+its own and treated the last, unfinished step as fine. Also seen: a click that had sent data was
+clicked about 8 more times, and a dropped connection took 51 s to give a vague message. *Fix:*
+- an unexpected pop-up ends the run and quotes it;
+- a last step that is still unfinished can never pass ("please check" at best);
+- a step that already sent data is never clicked again;
+- a dropped connection is a site problem, reported in about 6 s.
+
+**Test 2 — 6.1 to 6.10 all PASS.** Each failure mode is reported as a failure or "please check",
+the click happens once, and the decoy on another tab is never touched. Smaller wording notes and a
+mid-run yes/no pop-up gap are in BUILD-106.
+
+**Final status of WF-6: PASSED** (P-38).

@@ -30,7 +30,7 @@ const { interpolate } = require("./interpolate");
 const { MAX_CALL_DEPTH } = require("./call_workflow");
 const fork = require("./fork");
 const pageStatus = require("./page_status");
-const { classifyFault, faultMessage } = require("./fault_classify");
+const { classifyFault, alertFault, faultMessage } = require("./fault_classify");
 const appKnowledge = require("./app_knowledge");
 const {
   PAGE_LOAD_TIMEOUT_MS,
@@ -222,21 +222,54 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
   return err;
 }
 
+// Steps that answer a popup the step before them opened: a native dialog waiting for one of them is expected.
+const POPUP_OWNERS = new Set(["dialog_accept", "dialog_dismiss", "outcome_fork"]);
+
+// A native alert() no step answers (the recording never saw it): the app said something mid-run ("Session expired").
+// It is taken off the queue, closed with its only button (an alert asks nothing, so closing it decides nothing) and
+// returned as a fault quoting it. Null when none is waiting or `owner` (the step that would answer it) is a popup step.
+// A confirm() or prompt() is a question and is never answered here.
+function unexpectedAlert(ctx, owner) {
+  if (owner && POPUP_OWNERS.has(owner.type)) return null;
+  const q = ctx && Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue : null;
+  const at = q ? q.findIndex((d) => d && typeof d.type === "function" && d.type() === "alert") : -1;
+  if (at < 0) return null;
+  const [d] = q.splice(at, 1);
+  Promise.resolve().then(() => d.accept()).catch(() => {}); // already closed (an Electron view closes it itself)
+  return alertFault(typeof d.message === "function" ? d.message() : "");
+}
+
+// Ends the run on an unexpected alert. The action already ran, so the failure never enters recovery (a re-click could
+// do the work twice): `completionGate` sends it straight out, like every other after-the-action stop.
+function failOnUnexpectedAlert(ctx, state, step, i, owner, preShot) {
+  const f = unexpectedAlert(ctx, owner);
+  if (!f) return;
+  ctx.tracker.emit("step_fail", { si: i, fc: `fault_${f.kind}` });
+  appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: f.kind, source: "alert" });
+  const cause = Object.assign(new Error(faultMessage(f)), { fault: true, faultKind: f.kind, actionMayHaveTakenEffect: true });
+  throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), { completionGate: true });
+}
+
 // EXEC-49 — is this failed step's page showing the app's own refusal? Null when it is not, when a
 // popup is asking the person to choose (that is a decision, never a fault), when the step is a fork
-// (it handles its own popups), or when a native dialog has the renderer blocked.
-async function detectFault(ctx, page, step, { mayHaveActed, sinceMs }) {
+// (it handles its own popups), or when a native dialog the next step answers has the renderer blocked.
+// An alert nobody answers, and a data-changing request whose connection dropped, are faults.
+async function detectFault(ctx, page, step, { mayHaveActed, sinceMs, nextStep = null, notebook = null }) {
   if (step.type === "outcome_fork") return null;
+  const alert = unexpectedAlert(ctx, nextStep);
+  if (alert) return alert;
   if (ctx.dialogQueue && ctx.dialogQueue.length) return null;
   const dlg = await evalOn(page, pageScripts.dialogProbe).catch(() => null);
   if (dlg && dlg !== EVAL_TIMED_OUT && fork.isDecisionDialog(dlg)) return null;
   const probe = await evalOn(page, pageScripts.faultProbe).catch(() => null);
   const p = probe && probe !== EVAL_TIMED_OUT ? probe : {};
   const seen = pageStatus.recent(page, sinceMs);
+  const lost = notebook ? notebook.mutationFailure() : pageStatus.mutationFailure(page, sinceMs);
   const fault = classifyFault({
     alerts: [...(p.alerts || []), ...(p.invalid || [])],
     offline: !!p.offline,
     status: seen ? seen.status : null,
+    dropped: lost ? lost.why : null,
     mayHaveActed,
   });
   return fault && fault.kind === "auth_expired" && landedAsRecorded(step, page) ? null : fault;
@@ -363,6 +396,8 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
   ctx.tracker.emit("completion", { si: i, mode, st: v.status, waited: v.waitedMs, ...(v.still ? { still: 1 } : {}), ...(v.busyWhat ? { bw: v.busyWhat } : {}) });
   warn(v.warning);
   if (v.status === "handoff") {
+    // A native alert no later step answers is the app speaking, not a popup to hand on: stop on it.
+    if (v.reason === "native_dialog") failOnUnexpectedAlert(ctx, state, step, i, completion.nextStep, preShot);
     // A popup left open by the plan's final step has no next step to answer it: put it to the same
     // rules as any other unrecorded popup. Anywhere else the next step's own popup handling owns it.
     if (v.reason === "decision_popup" && step === ctx.lastStep) await popupLeftBehind(ctx, state, step, i, page, preShot);
@@ -496,7 +531,10 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   const quorum = effect && effect.quorum
     ? { witnesses: effect.checks.some(effectProbes.hasBasis) ? effect.quorum.witnesses : 1, identityRequired: !!effect.quorum.identity_required }
     : undefined;
-  const j = proof.judge(checks, { requiredRung: required, quorum });
+  let j = proof.judge(checks, { requiredRung: required, quorum });
+  // "Still working" waits for the next step to take over. After the plan's last step nothing does: the work was never
+  // seen to finish (or its checks were never read), so it is "couldn't confirm", never a pass.
+  if (j.verdict === "still_working" && step === ctx.lastStep) j = { verdict: "couldnt_confirm", rung: j.rung };
   const onUnverified = step.validation && step.validation.effect && step.validation.effect.on
     && String(step.validation.effect.on.unverified || "").startsWith("handover") ? "handover" : "fail";
   const move = proof.nextMove(j.verdict, { idempotent: proof.safeToRepeat(step), attended: !ctx.scheduled, onUnverified });
@@ -706,6 +744,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     return;
   }
   if (ctx.onStep) ctx.onStep(i, { path: state.stepPath.slice(), step });
+  // An alert the previous step left behind, which this step does not answer: the app spoke between steps.
+  failOnUnexpectedAlert(ctx, state, step, i, step, null);
 
   // EXEC-49 P5 (G8): the agent looked at the page and said this is not a moved element. Honour it by
   // ending the run with its reason: a verdict can only make a run stop sooner, never act further.
@@ -1089,6 +1129,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // race with the old drain path (answerDialog tolerates being called twice on one dialog —
   // see its comment in handlers.js).
   const nextStep = steps[i + 1];
+  completion.nextStep = nextStep;
   let unarmDialog = null;
   if (nextStep && (nextStep.type === "dialog_accept" || nextStep.type === "dialog_dismiss")) {
     const onDialog = (dialog) => { answerDialog(dialog, nextStep, state.inputs).catch(() => {}); };
@@ -1106,6 +1147,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   try {
     const io = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
     await executeStep(page, step, state.inputs, io);
+    failOnUnexpectedAlert(ctx, state, step, i, nextStep, preShot);
     // Phase 8: independent post-condition verification.
     const verdict = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
     // Fleet-visible audit: one event per step that actually carries assertions, pass or fail,
@@ -1266,11 +1308,25 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // rate limit, duplicate data, a rejected form, a record that is gone). Re-finding the element
   // cannot fix that and an agent round would only spend tokens, so stop here with a typed reason.
   // Runs only for a step that already failed, after settle so a transient "Saving..." alert is gone.
-  const fault = await detectFault(ctx, page, step, { mayHaveActed, sinceMs: stepStartedAt });
+  const fault = await detectFault(ctx, page, step, { mayHaveActed, sinceMs: stepStartedAt, nextStep, notebook: completion.notebook });
   if (fault) {
     ctx.tracker.emit("step_fail", { si: i, fc: `fault_${fault.kind}` });
     appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: fault.kind, source: fault.source });
     throw stepFailure(step, i, Object.assign(new Error(faultMessage(fault)), { fault: true, faultKind: fault.kind }), preShot, state.warnings);
+  }
+
+  // The step's action ran and sent data to the app (a save, a submit), but its result never showed. Doing it again
+  // could save or send twice, and no recovery stage can tell, so nothing re-runs it: the run stops and says so.
+  // Background traffic seen on earlier steps is not counted (evidence.js). Only steps that cannot be done twice
+  // have a notebook, so a fill or a plain read still recovers as before.
+  if (mayHaveActed && completion.notebook && completion.notebook.mutationStarted()) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "sent_no_result" });
+    appendRecoveryEvent({ event: "recovery_skipped", slug: ctx.slug, step_index: i, reason: "action-sent-request" });
+    const cause = Object.assign(new Error(
+      "This step sent its data to the app, but the result it showed when it was recorded didn't appear. "
+      + "It was not tried again, so nothing is sent twice. Check the app before running this again."),
+    { fault: true, faultKind: "unconfirmed", actionMayHaveTakenEffect: true, recoveryHaltReason: "action-sent-request" });
+    throw stepFailure(step, i, cause, preShot, state.warnings);
   }
 
   // EXEC-24 — seed the guard with what we already know about the primary attempt. Two ways
@@ -2251,6 +2307,8 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   } finally {
     closeNotebook(ctx); // however the plan ends, no listener outlives it
   }
+  // The run is not over while an alert nobody answered is still up: the app spoke after the last step.
+  if (endedAt === null && steps.length) failOnUnexpectedAlert(ctx, state, steps[steps.length - 1], steps.length - 1, null, null);
   resolveLaterProofs(state, ran);
 
   return {

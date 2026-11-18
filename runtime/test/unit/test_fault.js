@@ -171,3 +171,60 @@ test("runPlan: a navigation that ends in a 403 stops the run as a typed fault, s
   assert.ok(events.some(([c, d]) => c === "step_fail" && d.fc === "fault_no_permission"));
   assert.ok(!events.some(([c]) => c === "repair_event"), "no recovery was attempted");
 });
+
+// ─── WF-6: an alert nobody answers, and a dropped connection ───────────────────────────────
+
+const { alertFault } = require("../../app/fault_classify");
+
+function fakeDialog(type, message) {
+  const d = { type: () => type, message: () => message, accepted: 0 };
+  d.accept = async () => { d.accepted++; };
+  return d;
+}
+
+test("alertFault types an alert by its words and always quotes it", () => {
+  const f = alertFault("Session expired. Please try again.");
+  assert.strictEqual(f.kind, "auth_expired");
+  assert.strictEqual(faultMessage(f), 'Your sign-in to the app ended: "Session expired. Please try again."');
+  const g = alertFault("Hello there");
+  assert.strictEqual(g.kind, "alert");
+  assert.strictEqual(faultMessage(g), 'The app showed a message: "Hello there"');
+  assert.strictEqual(faultMessage(alertFault("")), "The app showed a message (it had no text)");
+});
+
+test("a dropped connection on a data-changing request is a network fault; a cancelled or blocked one is not", () => {
+  for (const why of ["net::ERR_EMPTY_RESPONSE", "net::ERR_CONNECTION_RESET", "net::ERR_INTERNET_DISCONNECTED"]) {
+    const f = classifyFault({ dropped: why });
+    assert.strictEqual(f.kind, "network", why);
+    assert.strictEqual(faultMessage(f), "The app could not be reached (the connection dropped before the app answered)");
+  }
+  for (const why of ["net::ERR_ABORTED", "net::ERR_BLOCKED_BY_CLIENT", "net::ERR_FAILED", "status 422"]) {
+    assert.strictEqual(classifyFault({ dropped: why }), null, why);
+  }
+});
+
+test("detectFault: an alert no step answers is a fault, closed and taken off the queue; one the next step answers is not", async () => {
+  const alert = fakeDialog("alert", "Session expired. Please try again.");
+  const ctx = { dialogQueue: [alert] };
+  assert.strictEqual(await detectFault(ctx, mockPage(), { type: "click" }, { mayHaveActed: true, sinceMs: 0, nextStep: { type: "dialog_accept" } }), null);
+  assert.strictEqual(ctx.dialogQueue.length, 1, "the next step's dialog is left for it");
+  const f = await detectFault(ctx, mockPage(), { type: "click" }, { mayHaveActed: true, sinceMs: 0, nextStep: { type: "click" } });
+  assert.strictEqual(f.kind, "auth_expired");
+  assert.strictEqual(ctx.dialogQueue.length, 0);
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(alert.accepted, 1, "an alert's only button closes it");
+});
+
+test("detectFault: a confirm() is a question, never closed or typed as a fault here", async () => {
+  const confirm = fakeDialog("confirm", "Delete this?");
+  const ctx = { dialogQueue: [confirm] };
+  assert.strictEqual(await detectFault(ctx, mockPage(), { type: "click" }, { mayHaveActed: true, sinceMs: 0 }), null);
+  assert.strictEqual(confirm.accepted, 0);
+});
+
+test("detectFault: a data-changing request whose connection dropped during the step is a network fault", async () => {
+  const notebook = { mutationFailure: () => ({ at: Date.now(), key: "POST /api/greet", why: "net::ERR_EMPTY_RESPONSE" }) };
+  const f = await detectFault(CTX, mockPage(), { type: "click" }, { mayHaveActed: true, sinceMs: 0, notebook });
+  assert.strictEqual(f.kind, "network");
+  assert.strictEqual(f.source, "connection");
+});

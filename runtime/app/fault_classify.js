@@ -46,12 +46,21 @@ function short(text) {
   return String(text == null ? "" : text).replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
-/** @param {{alerts?: string[], offline?: boolean, status?: number|null, mayHaveActed?: boolean}} evidence
- *  @returns {{kind: string, source: "offline"|"status"|"text", evidence: string} | null} */
-function classifyFault({ alerts = [], offline = false, status = null, mayHaveActed = false } = {}) {
+// A data-changing request the app never answered because the connection went away (the server closed it,
+// the network dropped). Chromium's own words for it. A request the page or the browser cancelled or blocked
+// (ERR_ABORTED, ERR_BLOCKED_BY_CLIENT, a CORS ERR_FAILED) is not the app's doing and is left out.
+const DROPPED_RE = /ERR_(EMPTY_RESPONSE|CONNECTION_(RESET|CLOSED|REFUSED|FAILED|TIMED_OUT)|INTERNET_DISCONNECTED|NETWORK_CHANGED|TIMED_OUT|NAME_NOT_RESOLVED|ADDRESS_UNREACHABLE)\b/i;
+
+/** @param {{alerts?: string[], offline?: boolean, status?: number|null, dropped?: string|null, mayHaveActed?: boolean}} evidence
+ *  `dropped`: why a data-changing request this step started failed with no answer (the browser's error text).
+ *  @returns {{kind: string, source: "offline"|"status"|"connection"|"text", evidence: string} | null} */
+function classifyFault({ alerts = [], offline = false, status = null, dropped = null, mayHaveActed = false } = {}) {
   if (offline) return { kind: "network", source: "offline", evidence: "the browser is offline" };
   const fromStatus = statusKind(status);
   if (fromStatus) return { kind: fromStatus, source: "status", evidence: `the app answered with status ${Number(status)}` };
+  if (dropped && DROPPED_RE.test(String(dropped))) {
+    return { kind: "network", source: "connection", evidence: "the connection dropped before the app answered" };
+  }
   if (!mayHaveActed) return null;
   const texts = (Array.isArray(alerts) ? alerts : []).map(short).filter(Boolean);
   for (const [kind, re] of TEXT_RULES) {
@@ -85,6 +94,15 @@ function classifyCompletionFailure(texts, appFailure = null) {
   return null;
 }
 
+// A native alert() nobody recorded: the app is telling the person something mid-run ("Session expired", "Could not
+// save"). The run cannot carry on as if nothing was said, so it is always a fault, typed by its words when they say
+// what went wrong and quoted either way.
+function alertFault(text) {
+  const t = short(text);
+  if (!t) return { kind: "alert", source: "alert", evidence: "it had no text" };
+  return classifyFault({ alerts: [t], mayHaveActed: true }) || { kind: "alert", source: "text", evidence: t };
+}
+
 const PLAIN = {
   auth_expired: "Your sign-in to the app ended",
   no_permission: "The app says you don't have access to this",
@@ -93,6 +111,7 @@ const PLAIN = {
   duplicate: "The app says this already exists",
   validation: "The app rejected what was entered",
   not_found: "The app says this is gone or was never there",
+  alert: "The app showed a message",
 };
 
 function faultMessage(fault) {
@@ -100,4 +119,4 @@ function faultMessage(fault) {
   return fault.source === "text" ? `${lead}: "${fault.evidence}"` : `${lead} (${fault.evidence})`;
 }
 
-module.exports = { KINDS, classifyFault, classifyCompletionFailure, faultMessage, statusKind, NEEDS_ACTED };
+module.exports = { KINDS, classifyFault, alertFault, classifyCompletionFailure, faultMessage, statusKind, NEEDS_ACTED };

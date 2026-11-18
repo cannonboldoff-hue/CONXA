@@ -1086,3 +1086,14 @@ C, I, J, K. Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
 
 **What this proves Conxa can do now:** the safety rules hold no matter which button, chat phrase or
 page text a person (or a hostile page) uses.
+
+## Passed Workflow P-38 — WF-6: false success, all 10 checks (2026-11-18)
+On a local practice page that logs every request, each fake-success case was reported as a failure or
+"please check", never a pass: a no-op button, a covered button, background-only traffic, stale content,
+a 500, a dropped and an offline connection, an unexpected "Session expired" pop-up (quoted), a rejected
+field, an empty value, a closed tab (decoy never clicked) and an unreadable canvas result. A step that
+sent data was never clicked twice. Workflows "WF-6 false success main" (`292b3de1-…`), "WF-6 capture
+value", "WF-6 two tabs". Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** a "Test passed" means the result really happened, and a failed
+send is never repeated.

@@ -26,7 +26,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-3 | Scale: 77, 120 and 93-action takes; compile determinism | ✅ passed 2026-11-17 (P-26…P-29) | — |
 | WF-4 | Real apps: HR SPA, checkout maths, two-site relay, language flip, reviews | ✅ A–D passed 2026-11-17 (P-30…P-33); E blocked (sign-up + public review) | — |
 | WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ✅ passed 2026-11-18 (P-37) | — |
-| WF-6 | False success: a pass that didn't really happen | ⏳ | Yes (local fixture) |
+| WF-6 | False success: a pass that didn't really happen | ✅ passed 2026-11-18 (P-38) | — |
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ⏳ | Yes |
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ⏳ | Yes |
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ⏳ | Yes |
@@ -222,7 +222,7 @@ outside site. **Site:** S3 `/text-box` (a fresh recording, not the approved P-11
 
 ---
 
-## WF-6 — False success: a pass must mean the thing happened
+## ✅ WF-6 — False success: a pass must mean the thing happened — passed 2026-11-18 (P-38)
 
 **Why:** a run that says "done" when nothing happened is the most expensive bug a customer can find.
 **Site:** fixture `false-success.html`, seeded from `runtime/test/fixtures/proof_must_not_pass.json`.

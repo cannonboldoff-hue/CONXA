@@ -432,3 +432,79 @@ test("runPlan: an upload that finishes is proven at 'completed'", async () => {
   assert.deepStrictEqual(result.proof.notes, []);
   assert.deepStrictEqual([result.proof.steps[0].verdict, result.proof.steps[0].rung], ["proven", "completed"]);
 });
+
+// ─── WF-6: false success ───────────────────────────────────────────────────────────────────
+
+function fakeDialog(type, message) {
+  const d = { type: () => type, message: () => message, accepted: 0 };
+  d.accept = async () => { d.accepted++; };
+  return d;
+}
+const SAVE = [{ type: "keyboard_shortcut", value: "Enter", intent: "Save the greeting",
+  validation: { assertions: [{ type: "text_present", target: "Thanks,", required: true }] } }];
+
+test("runPlan: an alert the final step raises ends the run as a fault quoting it, never a pass", async () => {
+  const events = [];
+  const dialogQueue = [];
+  const alert = fakeDialog("alert", "Session expired. Please try again.");
+  const page = runPage([CLEAN, CLEAN]);
+  page.keyboard.press = async (k) => { page.pressed.push(k); dialogQueue.push(alert); };
+  const tracker = { emit: (code, data) => events.push([code, data]) };
+  await assert.rejects(
+    runPlan(page, SAVE, {}, 0, "slug-wf6-alert", { tracker, dialogQueue }),
+    (err) => {
+      assert.strictEqual(err.fault, true);
+      assert.strictEqual(err.faultKind, "auth_expired");
+      assert.strictEqual(err.completionGate, true);
+      assert.match(err.message, /Your sign-in to the app ended: "Session expired\. Please try again\."/);
+      return true;
+    },
+  );
+  assert.deepStrictEqual(page.pressed, ["Enter"], "never repeated");
+  assert.strictEqual(alert.accepted, 1);
+  assert.ok(!events.some(([c]) => c === "tier_ok" || c === "repair_event"), "not reported ok, not recovered");
+});
+
+test("runPlan: an alert that opens while the final step's result is awaited still ends the run", async () => {
+  const dialogQueue = [];
+  const page = runPage([CLEAN, TRAY, TRAY, TRAY]);
+  page.keyboard.press = async (k) => { page.pressed.push(k); setTimeout(() => dialogQueue.push(fakeDialog("alert", "Could not save")), 60); };
+  await assert.rejects(
+    runPlan(page, ACT, {}, 0, "slug-wf6-late-alert", { tracker: { emit: () => {} }, dialogQueue }),
+    (err) => err.fault === true && /The app showed a message: "Could not save"/.test(err.message),
+  );
+  assert.deepStrictEqual(page.pressed, ["Enter"]);
+});
+
+test("runPlan: a final step whose checks could not be read (a question left open) is never a plain pass", async () => {
+  const dialogQueue = [];
+  const confirm = fakeDialog("confirm", "Leave this page?");
+  const page = runPage([CLEAN, CLEAN]);
+  page.keyboard.press = async (k) => { page.pressed.push(k); dialogQueue.push(confirm); };
+  const result = await runPlan(page, SAVE, {}, 0, "slug-wf6-still", { tracker: { emit: () => {} }, dialogQueue });
+  assert.strictEqual(result.proof.steps[0].verdict, "couldnt_confirm");
+  assert.deepStrictEqual(result.proof.notes, [`I couldn't confirm that "Save the greeting" finished.`]);
+  assert.strictEqual(confirm.accepted, 0, "a question is never answered on anyone's behalf");
+});
+
+test("runPlan: a step that sent data but showed no result is never done again", async () => {
+  const events = [];
+  const handlers = {};
+  const page = runPage([CLEAN, CLEAN]);
+  page.on = (ev, fn) => { (handlers[ev] = handlers[ev] || []).push(fn); };
+  const post = { method: () => "POST", url: () => "https://drive.test/api/greet", resourceType: () => "fetch", isNavigationRequest: () => false };
+  page.keyboard.press = async (k) => { page.pressed.push(k); for (const fn of handlers.request || []) fn(post); };
+  const tracker = { emit: (code, data) => events.push([code, data]) };
+  await assert.rejects(
+    runPlan(page, SAVE, {}, 0, "slug-wf6-sent", { tracker }),
+    (err) => {
+      assert.strictEqual(err.recoveryHaltReason, "action-sent-request");
+      assert.strictEqual(err.actionMayHaveTakenEffect, true);
+      assert.match(err.message, /sent its data to the app.*not tried again/);
+      return true;
+    },
+  );
+  assert.deepStrictEqual(page.pressed, ["Enter"], "pressed exactly once");
+  assert.ok(events.some(([c, d]) => c === "step_fail" && d.fc === "sent_no_result"));
+  assert.ok(!events.some(([c]) => c === "repair_event" || c === "tier_ok"));
+});
