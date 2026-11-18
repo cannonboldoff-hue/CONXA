@@ -111,7 +111,11 @@ async function withLocator(page, step, inputs, selector, timeout, fn) {
         ? "The containing frame/iframe could not be located — cannot validate an element selector inside it"
         : validation.reason === "no-match"
           ? "Agent recovery selector matched no element on the page"
-          : "Agent recovery selector was ambiguous (no candidate cleared the uniqueness margin)";
+          : validation.reason === "entity-not-found"
+            ? "Bound record could not be uniquely located on the page — refusing an agent selector outside it"
+            : validation.reason === "lookalike"
+              ? "Agent recovery selector picked one of several look-alike elements the recording cannot tell apart — refusing to choose"
+              : "Agent recovery selector was ambiguous (no candidate cleared the uniqueness margin)";
       throw Object.assign(
         new Error(message),
         { overrideValidationFailed: true, overrideReason: validation.reason, overrideCandidates: validation.candidates },

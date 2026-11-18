@@ -31,7 +31,10 @@ Everything else from 01 (WF-1…WF-10) folds into the phases below.
    - the-internet.herokuapp.com: `tomsmith` / `SuperSecretPassword!`
    - saucedemo.com: `standard_user` / `secret_sauce`
    - Juice Shop: register a throwaway account
-3. Build Studio open, workspace group created, Clerk auth done.
+3. Build Studio open, workspace group created, Clerk auth done. **After any runtime change** run
+   `scriptsuild-app-local.ps1` (with `CONXA_STUDIO_HOME` set to the Studio home you test with), then
+   **restart Build Studio**: the test sandbox copies the new runtime only at startup, so until the restart its
+   `version.json` still shows the old build and the test runs old code.
 4. MCP client connected — `list_skills` works.
 5. Terminal tailing logs:
    ```powershell

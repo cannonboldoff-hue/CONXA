@@ -49,14 +49,27 @@ function popupsOpened(page) {
 // How often `text` is visibly on the page, frames included. A step inside a frame shows its result there (a tab's
 // panel in a demo frame, WF-2 Segment D): counting the top document alone read 0 before and 0 after, so the text
 // could never be "new" and the step never proven. Before and after are counted the same way.
-async function countTextAcross(page, text) {
+// `ending`: count only where the text ends a line (pageScripts.countTextEnding), see endsInBoundValue.
+async function countTextAcross(page, text, ending = false) {
   const frames = typeof page.frames === "function" ? page.frames() : [page];
   let total = null;
   for (const f of frames) {
-    const n = await evalOn(f, pageScripts.countTextOccurrences, text).catch(() => null);
+    const n = await (ending ? evalOn(f, pageScripts.countTextEnding, text) : evalOn(f, pageScripts.countTextOccurrences, text))
+      .catch(() => null);
     if (typeof n === "number") total = (total || 0) + n;
   }
   return total;
+}
+
+// True when a check's words end in a record value this run acts on (`step._bound_values`, every bound row's identifier,
+// set by run.js::runPlan). "Saved Carol" then must not be found inside "Saved Carol Ann": the look-alike record.
+function endsInBoundValue(step, target) {
+  const norm = (v) => String(v || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const t = norm(target);
+  return asArray(step && step._bound_values).some((v) => {
+    const w = norm(v);
+    return !!w && t.endsWith(w) && (t.length === w.length || !/[\p{L}\p{N}]/u.test(t[t.length - w.length - 1]));
+  });
 }
 
 async function capturePreStepSignature(page, countTexts = []) {
@@ -225,8 +238,12 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
     } else if (type === "text_present") {
       // In an element's text, or in what a visible text box holds (page_scripts.countTextOccurrences): both are "on the
       // screen" to the person who typed these words as proof.
-      ok = await pollPositive(async () => (await anyRootHasMatch(roots, textSelector(target)))
-        || ((await countTextAcross(page, target)) || 0) > 0, timeout);
+      // Words ending in the run's record are matched only where they end a line ("Saved Carol", "Saved Carol."), never
+      // inside a longer look-alike ("Saved Carol Ann"): an element-text match is a substring, so it is not used then.
+      const strict = endsInBoundValue(step, target);
+      const count = (t) => countTextAcross(page, t, strict);
+      ok = await pollPositive(async () => (!strict && await anyRootHasMatch(roots, textSelector(target)))
+        || ((await count(target)) || 0) > 0, timeout);
       // Same document, and the text was already on the page this many times before the action: finding it again says
       // nothing about the action, so it is "can't tell" unless there is more of it now. Never a new failure.
       const before = ok && baseline && baseline.counts && baseline.counts[target];
@@ -234,12 +251,12 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       // a "no" had the action done nothing, so only it may prove that the work finished (run.js::proveStep).
       // Measured the same way both times (visible text), so text sitting hidden in the page never counts as new.
       if (before === 0) {
-        const n = await countTextAcross(page, target);
+        const n = await count(target);
         fresh = typeof n === "number" && n > 0;
       }
       if (before > 0 && page.url() === baseline.url) {
         const more = await pollPositive(async () => {
-          const n = await countTextAcross(page, target);
+          const n = await count(target);
           return typeof n === "number" && n > before;
         }, Math.min(timeout, 1500));
         if (!more) cantTell = true;

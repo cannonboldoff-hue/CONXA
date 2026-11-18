@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from conxa_compile.compiler.action_policy import no_recovery_block
+from conxa_compile.compiler.entity_binding import template_identifier
 from conxa_compile.compiler.second_opinion import build_try_dismiss_from_hint
 from conxa_compile.compiler.patch import revalidate_step
 from conxa_compile.compiler.loop_suggestion import replace_url_literal, url_contains_literal
@@ -1629,7 +1630,9 @@ def parameterize_literal(
         if isinstance(eb, dict) and eb.get("identifier") and "{{" not in str(eb["identifier"]):
             ident = str(eb["identifier"]).lower().strip()
             if needle in ident or ident in needle:
-                eb["identifier"] = token
+                # Only the literal part becomes the input ("Invoice #{{invoice}}"): the runtime matches a cell whole.
+                templated = template_identifier(str(eb["identifier"]).strip(), literal, name) if needle in ident else token
+                eb["identifier"] = templated if "{{" in templated else token
                 eb["source"] = "input"
                 changed += 1
     if not changed:

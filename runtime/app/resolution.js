@@ -13,7 +13,7 @@ const {
   VIRTUAL_SCROLL_MAX_PASSES,
 } = require("./run_config");
 const { unique, asObject, asArray } = require("./step_utils");
-const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { evalOn, countOn, withDeadline, DEFAULT_EVAL_DEADLINE_MS, EVAL_TIMED_OUT } = require("./page_eval");
 
 // Frame roots are driven solely by identity_bundle.frame_chain (durability-ranked signals per
 // iframe level). Each frame signal selector is a CSS attribute selector (iframe[name=…] etc.),
@@ -84,6 +84,7 @@ async function entityRoots(roots, step, inputs) {
   // count, or a page that hasn't rendered the list. Only that case may be skipped by on_missing.
   let listPresent = false;
   let anyMatch = false;
+  let several = false; // more than one row shows it: said as such, never "not found" (WF-7 S2)
   for (const root of roots) {
     if (!root || typeof root.locator !== "function") continue;
     let count = 0;
@@ -93,15 +94,22 @@ async function entityRoots(roots, step, inputs) {
       // (a locator that can't be counted unfiltered simply never proves the list is there)
       const total = typeof all.count === "function" ? await countOn(all) : EVAL_TIMED_OUT;
       if (total !== EVAL_TIMED_OUT && total > 0) listPresent = true;
-      rows = all.filter({ hasText: wanted });
-      const n = await countOn(rows);
-      count = n === EVAL_TIMED_OUT ? 0 : n; // fail closed on a hung count — never guess a match
-      if (n === EVAL_TIMED_OUT || n > 0) anyMatch = true;
+      // A row counts only when it shows the value whole (pageScripts.rowsHoldingWholeValue): its own text (a for_each
+      // row's identifier), one cell, or one field. Never a substring: with Carol gone, `hasText` "Carol" picked the
+      // "Carol Ann" row and the test passed (WF-7).
+      const hits = await withDeadline(() => all.evaluateAll(pageScripts.rowsHoldingWholeValue, wanted),
+        Date.now() + DEFAULT_EVAL_DEADLINE_MS, EVAL_TIMED_OUT);
+      if (!Array.isArray(hits)) { anyMatch = true; continue; } // fail closed on a hung look — never guess a match
+      rows = hits.map(i => all.nth(i));
+      count = rows.length;
+      if (count > 0) anyMatch = true;
+      if (count > 1) several = true;
     } catch (_) { count = 0; anyMatch = true; }
-    if (count === 1) out.push(rows.first());
+    if (count === 1) out.push(rows[0]);
   }
   // Non-enumerable so the result still compares equal to a plain array of roots.
   Object.defineProperty(out, "absent", { value: out.length === 0 && listPresent && !anyMatch, enumerable: false });
+  Object.defineProperty(out, "several", { value: out.length === 0 && several, enumerable: false });
   return out;
 }
 
@@ -116,7 +124,7 @@ function isEntityNotFound(step, roots) {
 // EXEC-38 — the inverse of entityRoots: given a for_each step's row spec, list every row
 // matching the container selector (top-level page only — no iframe scoping in this first cut)
 // and derive each row's own full text as its identifier. entityRoots later re-locates that exact
-// row with `.filter({ hasText: identifier })`, so using the row's own full text as its own
+// row by that whole text (pageScripts.rowsHoldingWholeValue), so using the row's own full text as its own
 // identifier is self-consistent by construction — it always matches itself, and if two rows
 // happen to share identical text, entityRoots's existing "exactly one match" gate fails that
 // iteration closed rather than guessing, which is the correct non-guessing behavior, not a bug
@@ -299,8 +307,10 @@ async function resolveStep(page, step, inputs, scrollState) {
     }
     if (isEntityNotFound(step, roots)) {
       throw Object.assign(
-        new Error("Bound record could not be uniquely located on the page — refusing to act on a different row"),
-        { entityNotFound: true, entityAbsent: roots.absent === true },
+        new Error(roots.several
+          ? "Bound record matches more than one row on the page — refusing to guess which one to act on"
+          : "Bound record could not be uniquely located on the page — refusing to act on a different row"),
+        { entityNotFound: true, entityAbsent: roots.absent === true, entitySeveral: roots.several === true },
       );
     }
   }
@@ -438,14 +448,18 @@ async function validateOverrideSelector(page, step, inputs) {
   const selector = interpolate(step._explicit_selector || "", inputs);
   if (!selector) return { valid: false, reason: "missing-selector", candidates: [] };
 
-  const roots = await rootCandidates(page, step, inputs);
-  if (isFrameNotFound(step, roots)) {
+  const frameRoots = await rootCandidates(page, step, inputs);
+  if (isFrameNotFound(step, frameRoots)) {
     // Distinct from "no-match": the agent's selector was never even tried, because the
     // containing frame itself couldn't be located — telling the agent "no element matched"
     // here would be misleading (it would keep proposing element selectors forever, when the
     // real problem is the frame is gone/changed identity).
     return { valid: false, reason: "frame-not-found", candidates: [] };
   }
+  // A step bound to a row is fixed inside that row only: the agent never picks a look-alike in another row, and a row
+  // that is missing or shown twice is refused here as it is on the primary path (WF-7).
+  const roots = await entityRoots(frameRoots, step, inputs);
+  if (isEntityNotFound(step, roots)) return { valid: false, reason: "entity-not-found", candidates: [] };
 
   const descriptors = [];
   for (const root of roots) {
@@ -461,21 +475,40 @@ async function validateOverrideSelector(page, step, inputs) {
   }
 
   if (!descriptors.length) return { valid: false, reason: "no-match", candidates: [] };
-  if (descriptors.length === 1) return { valid: true, loc: descriptors[0]._loc };
 
   const fp = bundleFingerprint(asObject(step.identity_bundle), interpolate, inputs);
-  const scored = descriptors
-    .map(d => ({ d, s: scoreCandidate(d, fp) }))
-    .sort((a, b) => b.s - a.s);
-  const margin = scored[0].s - (scored[1] ? scored[1].s : 0);
-  if (margin >= OVERRIDE_UNIQUE_MARGIN && scored[0].s >= OVERRIDE_CONFIDENCE_THRESHOLD) {
-    return { valid: true, loc: scored[0].d._loc };
+  let chosen = null;
+  if (descriptors.length === 1) {
+    chosen = { d: descriptors[0], s: scoreCandidate(descriptors[0], fp) };
+  } else {
+    const scored = descriptors
+      .map(d => ({ d, s: scoreCandidate(d, fp) }))
+      .sort((a, b) => b.s - a.s);
+    const margin = scored[0].s - (scored[1] ? scored[1].s : 0);
+    if (margin >= OVERRIDE_UNIQUE_MARGIN && scored[0].s >= OVERRIDE_CONFIDENCE_THRESHOLD) chosen = scored[0];
+  }
+  if (chosen) {
+    // An agent selector narrow enough to match one element (`>> nth=2`, a row path, a numbered candidate) still
+    // only names a position when the recording cannot tell that element from another one on the page: the third of
+    // five identical Edit buttons. That is the choice the resolver refuses (uniqueMargin), so the agent cannot make it.
+    if (await hasLookalikes(roots, step, inputs, fp, chosen.s)) return { valid: false, reason: "lookalike", candidates: [] };
+    return { valid: true, loc: chosen.d._loc };
   }
   return {
     valid: false,
     reason: "ambiguous",
     candidates: descriptors.slice(0, 20).map(d => ({ role: d.role, name: d.name, text: d.text, testid: d.testid })),
   };
+}
+
+// True when the step's own recorded signals find two or more elements that score within the uniqueness margin of
+// `score`: the recording cannot say which of them it meant. Per signal, so one element found by two signals counts once.
+async function hasLookalikes(roots, step, inputs, fp, score) {
+  const signals = asArray(asObject(step && step.identity_bundle).signals).filter(s => s && s.selector);
+  if (!signals.length) return false;
+  const map = await gatherCandidates(roots, signals, interpolate, inputs);
+  return signals.some(sig => (map[sig.selector] || [])
+    .filter(d => scoreCandidate(d, fp) > score - OVERRIDE_UNIQUE_MARGIN).length >= 2);
 }
 
 const FRAME_INVENTORY_CAP = 50;

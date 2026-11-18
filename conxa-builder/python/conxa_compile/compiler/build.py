@@ -23,6 +23,10 @@ from conxa_compile.compiler.commit_ordering import lint_commit_ordering
 from conxa_compile.compiler.entity_binding import (
     collect_input_literal_values,
     detect_entity_binding,
+    POSITIONAL_ENGINES,
+    edited_values,
+    row_action_in_list,
+    typed_values,
     upgrade_entity_binding_identifiers,
 )
 from conxa_compile.compiler.input_binding import derive_input_binding
@@ -1184,6 +1188,8 @@ def _build_step(
     session_root: Path,
     step_index: int,
     graph_intent_token: str | None = None,
+    typed_before: list[str] | None = None,
+    edited: set[str] | frozenset[str] = frozenset(),
 ) -> SkillStep:
     policy = bundle.data
     action_payload = optimize_scroll(ev)
@@ -1401,15 +1407,22 @@ def _build_step(
     # A step that cannot do harm and whose own address is already unique on the recorded page needs no row binding
     # (entity_binding.py says why). "Unique" counts only durable engines (test id, attribute, role): a unique
     # positional path or generated id can change on the next visit, and the row is what would still find it.
+    address_unique = any(
+        getattr(sig, "unique_at_compile", False) and getattr(sig, "durability", 0.0) >= 0.9
+        for sig in (identity_bundle.signals or [])
+    )
     entity_binding = detect_entity_binding(
         ev_with_intent,
         dom_html=dom_html,
         destructive=bool(identity_bundle.destructive),
-        address_unique=any(
-            getattr(sig, "unique_at_compile", False) and getattr(sig, "durability", 0.0) >= 0.9
-            for sig in (identity_bundle.signals or [])
-        ),
+        address_unique=address_unique,
+        typed_before=typed_before,
+        edited=edited,
     )
+    # A row's Edit/Delete that no row binding names is never found by its place in the list: with only look-alike
+    # signals left the runtime refuses to choose (uniqueMargin) instead of acting on whoever is third now (WF-7 7.1).
+    if entity_binding is None and not address_unique and row_action_in_list(ev_with_intent, dom_html=dom_html):
+        identity_bundle.signals = [s for s in identity_bundle.signals or [] if s.engine not in POSITIONAL_ENGINES]
     signals = _build_signals(
         ev,
         resolved_intent=intent,
@@ -1820,8 +1833,12 @@ def compile_skill_package(
     # module docstring for the quality trade this accepts.
     page_urls = sorted({(ev.get("page") or {}).get("url") or "" for ev in cleaned_events} - {""})
     _mark_choose_file_presses(cleaned_events, session_root)
+    # What was typed before each step names the row a search (or a new entry) produced; text the workflow types over
+    # never names a row (compiler/entity_binding.py).
+    edited = edited_values(cleaned_events)
     steps = [
-        _build_step(e, bundle, session_root=session_root, step_index=i)
+        _build_step(e, bundle, session_root=session_root, step_index=i,
+                    typed_before=typed_values(cleaned_events[:i]), edited=edited)
         for i, e in enumerate(cleaned_events)
     ]
     # A value the person marked "read this" while recording becomes an extract step (needs the 1:1

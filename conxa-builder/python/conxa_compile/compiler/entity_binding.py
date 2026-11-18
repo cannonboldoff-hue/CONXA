@@ -137,6 +137,19 @@ def _sibling_rows_html(ev: Step, row: dict[str, Any], parent: dict[str, Any], co
     return kids, len(parent_html) < _ANCESTOR_HTML_CAP
 
 
+def _same_row(others: list[set[str]], mine: set[str], own: frozenset[str] | set[str]) -> int | None:
+    """Which of the saved page's rows is the recorded one. Its html may be cut short (``mine <= row``), or the page was
+    saved just after the action changed the row (Edit became Save, the email became a box): then it is the row sharing
+    the most identifying text with the recorded one (WF-7 7.1: Carol's changed row counted as "another row named
+    Carol", so nothing named her row and her Edit went unbound)."""
+    exact = next((i for i, sset in enumerate(others) if mine and mine <= sset), None)
+    if exact is not None:
+        return exact
+    ident = {t for t in mine if t not in _NON_IDENTIFYING_TOKENS and t not in own}
+    best = max(range(len(others)), key=lambda i: len(ident & others[i]), default=None)
+    return best if best is not None and ident & others[best] else None
+
+
 def _own_texts(ev: Step) -> set[str]:
     """What the clicked control says about itself. It repeats on every row, so it never says which row."""
     target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
@@ -166,7 +179,7 @@ def _pick_identifier(row: dict[str, Any], *, own: frozenset[str] | set[str] = fr
         # row ("$15.99") counted as unique and the row's own name, absent from the cut list, did not.
         others = list(siblings)
         mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
-        same = next((i for i, sset in enumerate(others) if mine and mine <= sset), None)  # <=: the row's html may be cut
+        same = _same_row(others, mine, own)
         if same is not None:
             others.pop(same)
         unique = [c for c in candidates if not any(c.lower() in sset for sset in others)]
@@ -244,8 +257,84 @@ def repeating_peers(ev: Step) -> int:
     return 0
 
 
+def _whole_value_in(value: str, text: str) -> bool:
+    """``value`` appears in ``text`` as a whole value ("12345" in "Invoice #12345", never "1" in "$136.46")."""
+    v = " ".join(value.lower().split())
+    return bool(v) and re.search(rf"(?<![\w.,]){re.escape(v)}(?![\w.,])", " ".join(text.lower().split())) is not None
+
+
+def typed_values(events: list[Step]) -> list[str]:
+    """What the person typed, in order: the values a later row can be the result of (a search, a new entry).
+    Keys and hidden (password) fields are never a row's identity."""
+    out: list[str] = []
+    for ev in events:
+        action = ev.get("action") or {}
+        if str(action.get("action") or "").lower() not in ("type", "fill"):
+            continue
+        if str((ev.get("semantic") or {}).get("input_type") or "").lower() == "password":
+            continue
+        value = str(action.get("value") or "").strip()
+        if 2 <= len(value) <= _MAX_IDENTIFIER_LEN and "{{" not in value:
+            out.append(value)
+    return out
+
+
+def edited_values(events: list[Step]) -> set[str]:
+    """The text a field held before the person typed over it (an inline-edited email, a renamed title). That text
+    changes when the run saves, so naming the row by it would make the next run miss the row."""
+    out: set[str] = set()
+    for ev in events:
+        if str((ev.get("action") or {}).get("action") or "").lower() not in ("type", "fill"):
+            continue
+        tag = str((ev.get("target") or {}).get("tag") or "").strip().lower()
+        parent_html = str(((ev.get("ancestors") or [{}])[0] or {}).get("outer_html") or "")
+        if tag not in ("input", "textarea") or not parent_html:
+            continue
+        try:
+            fields = BeautifulSoup(parent_html, "html.parser").find_all(tag)
+        except Exception:
+            continue
+        # shortcut: every field of that kind in the field's own parent, not the one field; a parent rarely holds two.
+        for field in fields:
+            old = field.get_text() if tag == "textarea" else field.get("value")
+            if isinstance(old, str) and old.strip():
+                out.add(old.strip().lower())
+    return out
+
+
+def _searched_row_binding(ev: Step, typed_before: list[str]) -> EntityBinding | None:
+    """A data row that shows a value the person typed earlier is that value's row: the result of a search, or the
+    entry just added. It is bound even when it is the only row (a search that finds one record shows one row; on the
+    next run it may show none, or a look-alike elsewhere on the page), so the run acts on that row or stops."""
+    if not typed_before:
+        return None
+    ancestors = ev.get("ancestors") or []
+    for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH)):
+        row = ancestors[i] or {}
+        parent = ancestors[i + 1] or {}
+        row_tag = str(row.get("tag") or "").strip().lower()
+        if not row_tag or not _names_a_data_row(row, row_tag)                 or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
+            continue
+        segments = _row_text_segments(str(row.get("outer_html") or ""))
+        for value in reversed(typed_before):  # the latest typed value is the one this row answers
+            # (the control's own label is not excluded here: a field's label is often the row's name, and a value the
+            # person typed is never a label repeated on every row unless it is one of these words)
+            if value.lower() in _NON_IDENTIFYING_TOKENS:
+                continue
+            if any(_whole_value_in(value, seg) for seg in segments):
+                row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
+                return EntityBinding(
+                    container_selector=_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
+                    identifier=value,
+                    source="literal",
+                    confirmed=False,
+                )
+    return None
+
+
 def detect_entity_binding(
     ev: Step, *, dom_html: str | None = None, destructive: bool = False, address_unique: bool = False,
+    typed_before: list[str] | None = None, edited: set[str] | frozenset[str] = frozenset(),
 ) -> EntityBinding | None:
     """Walk the recorded ancestor chain outward; the first ancestor with >=2 structurally
     matching siblings is treated as the row. Returns None when nothing repeats — there is no
@@ -256,7 +345,13 @@ def detect_entity_binding(
       (``address_unique``, e.g. a ``data-test`` id) needs no row, and a binding there can only add a way to fail;
     - the identifier must appear in one row only (see ``_pick_identifier``). When no text can name the row, a step
       that cannot do harm gets no binding (the runtime still refuses to guess among look-alike elements), while a
-      step that can do harm keeps its best guess, unconfirmed, so a person is asked to check which row it means."""
+      step that can do harm keeps its best guess, unconfirmed, so a person is asked to check which row it means.
+
+    A row showing a value typed earlier in the recording (``typed_before``: a search, a new entry) is bound by that value
+    before any of this (``_searched_row_binding``). Text the workflow itself types over (``edited``) never names a row."""
+    searched = _searched_row_binding(ev, list(typed_before or []))
+    if searched is not None:
+        return searched
     if address_unique and not destructive and dom_html:
         return None
     own = _own_texts(ev)
@@ -282,15 +377,16 @@ def detect_entity_binding(
         if not destructive and own and len(rows_html) >= _MIN_SIBLINGS:
             others = _row_segment_sets(rows_html)
             mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
-            same = next((n for n, sset in enumerate(others) if mine and mine <= sset), None)
+            same = _same_row(others, mine, own)
             if same is not None:
                 others.pop(same)
             if any(t in mine and not any(t in sset for sset in others) for t in own):
                 return None
-        identifier = _pick_identifier(row, own=own, siblings=_row_segment_sets(rows_html) if rows_html else None,
-                                      complete=complete)
+        not_identity = own | set(edited)
+        identifier = _pick_identifier(row, own=not_identity,
+                                      siblings=_row_segment_sets(rows_html) if rows_html else None, complete=complete)
         if not identifier and destructive:
-            identifier = _pick_identifier(row, own=own)  # best guess, left unconfirmed for a person to check
+            identifier = _pick_identifier(row, own=not_identity)  # best guess, left unconfirmed for a person to check
         if not identifier:
             continue
         return EntityBinding(
@@ -300,6 +396,39 @@ def detect_entity_binding(
             confirmed=False,
         )
     return None
+
+
+# Signals that find an element only by where it sits: the third Edit button is someone else's after the list re-sorts.
+POSITIONAL_ENGINES = frozenset({"xpath", "css-structural"})
+
+
+def row_action_in_list(ev: Step, *, dom_html: str | None = None) -> bool:
+    """True for a control repeated on the rows of a list (every row's Edit or Delete): only a row binding can say which
+    row it acts on. A control whose own words name its row (an account number link, the one Save) is not one."""
+    own = _own_texts(ev)
+    if not own:
+        return False
+    ancestors = ev.get("ancestors") or []
+    for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH)):
+        row = ancestors[i] or {}
+        parent = ancestors[i + 1] or {}
+        row_tag = str(row.get("tag") or "").strip().lower()
+        if not row_tag or not _names_a_data_row(row, row_tag)                 or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
+            continue
+        row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
+        container_selector = _build_container_selector(parent, row_tag, _css_class_selector(row_classes))
+        rows_html, _ = _sibling_rows_html(ev, row, parent, container_selector, row_tag, row_classes, dom_html)
+        if len(rows_html) < _MIN_SIBLINGS:
+            continue
+        others = _row_segment_sets(rows_html)
+        mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
+        same = _same_row(others, mine, own)
+        if same is not None:
+            others.pop(same)
+        if any(t in mine and not any(t in sset for sset in others) for t in own):
+            return False
+        return any(t in sset for t in own for sset in others)
+    return False
 
 
 def collect_input_literal_values(events: list[Step], policy: dict[str, Any]) -> dict[str, str]:
@@ -334,7 +463,15 @@ def upgrade_entity_binding_identifiers(steps: list[Any], input_literal_values: d
             # The whole value only ("12345" in "Invoice #12345"): a select's recorded value "1" is inside "$136.46", and
             # a row named by part of what was typed is not the row the typed value names (WF-3 D made every balance a
             # phantom {{account type}} input).
-            if re.search(rf"(?<![\w.,]){re.escape(literal_lower)}(?![\w.,])", ident_lower):
-                eb.identifier = "{{%s}}" % name
+            if _whole_value_in(literal_lower, ident_lower):
+                # Only the typed part becomes the input ("Invoice #{{invoice_no}}"): the runtime matches a row's cell as
+                # a whole value, so "12346" alone would never equal the cell "Invoice #12346".
+                eb.identifier = template_identifier(" ".join(eb.identifier.split()), literal, name)
                 eb.source = "input"
                 break
+
+
+def template_identifier(identifier: str, literal: str, name: str) -> str:
+    """``identifier`` with the whole-value occurrence of ``literal`` replaced by ``{{name}}``, the rest kept as recorded."""
+    v = re.escape(" ".join(literal.split()))
+    return re.sub(rf"(?<![\w.,]){v}(?![\w.,])", lambda _m: "{{%s}}" % name, identifier, count=1, flags=re.IGNORECASE)

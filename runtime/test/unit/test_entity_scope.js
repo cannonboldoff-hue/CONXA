@@ -6,22 +6,22 @@ const assert = require("node:assert");
 
 const { entityRoots, isEntityNotFound } = require("../../app/resolution");
 
-// Minimal Playwright-shaped fake: root.locator(sel) -> a "rows" locator whose .filter({hasText})
-// returns a narrowed locator supporting .count()/.first(), matching the real chain entityRoots
-// drives (root.locator(container_selector).filter({hasText}).count()/.first()).
+// Minimal Playwright-shaped fake: root.locator(sel) -> a "rows" locator supporting .count(), .evaluateAll() and
+// .nth(), the real chain entityRoots drives.
+// A row is "cell | cell | cell": each cell is an element, the row's text is the cells joined by tabs. The real page
+// script (pageScripts.rowsHoldingWholeValue) runs over these fake elements.
+function fakeRow(text) {
+  const cells = text.split(" | ");
+  return { innerText: cells.join("\t"), querySelectorAll: () => cells.map(c => ({ tagName: "TD", innerText: c })) };
+}
 function fakeRoot(rowTexts) {
   return {
     locator(containerSelector) {
       return {
         _containerSelector: containerSelector,
         async count() { return rowTexts.length; },
-        filter({ hasText }) {
-          const matches = rowTexts.filter(t => t.includes(hasText));
-          return {
-            async count() { return matches.length; },
-            first() { return { _row: matches[0] }; },
-          };
-        },
+        async evaluateAll(fn, arg) { return fn(rowTexts.map(fakeRow), arg); },
+        nth(i) { return { _row: rowTexts[i] }; },
       };
     },
   };
@@ -51,7 +51,7 @@ test("zero matches: fails closed to []", async () => {
 });
 
 test("two matches (ambiguous): fails closed to [], never picks one", async () => {
-  const root = fakeRoot(["Invoice #12345 (draft)", "Invoice #12345 (final)"]);
+  const root = fakeRoot(["Invoice #12345 | draft", "Invoice #12345 | final"]);
   const out = await entityRoots([root], STEP, {});
   assert.deepStrictEqual(out, []);
 });
@@ -63,7 +63,8 @@ test("unresolved {{input}} identifier: fails closed without querying the page", 
 });
 
 test("identifier resolves from a run input via interpolate", async () => {
-  const step = { entity_binding: { container_selector: "table tr", identifier: "{{invoice_no}}" } };
+  // the input is the typed part of the cell's text (compiler/entity_binding.py::template_identifier)
+  const step = { entity_binding: { container_selector: "table tr", identifier: "Invoice #{{invoice_no}}" } };
   const root = fakeRoot(["Invoice #55555"]);
   const out = await entityRoots([root], step, { invoice_no: "55555" });
   assert.strictEqual(out.length, 1);
@@ -90,7 +91,7 @@ test("absent is true only when the list is there and holds no matching record", 
   assert.deepStrictEqual(none, []);
   assert.strictEqual(none.absent, true);
 
-  const ambiguous = await entityRoots([fakeRoot(["Invoice #12345 a", "Invoice #12345 b"])], STEP, {});
+  const ambiguous = await entityRoots([fakeRoot(["Invoice #12345 | a", "Invoice #12345 | b"])], STEP, {});
   assert.deepStrictEqual(ambiguous, []);
   assert.strictEqual(ambiguous.absent, false);                         // more than one match is not "absent"
 
@@ -104,4 +105,50 @@ test("absent is true only when the list is there and holds no matching record", 
   const unresolved = await entityRoots([fakeRoot(["Invoice #1"])], { entity_binding: { ...STEP.entity_binding, identifier: "{{inv}}" } }, {});
   assert.deepStrictEqual(unresolved, []);
   assert.notStrictEqual(unresolved.absent, true);                      // an input nobody supplied is not a missing record
+});
+
+// WF-7 S2: "more than one row shows it" is told apart from "it isn't there", so the person is not told a duplicate
+// record "wasn't found". Neither case ever acts on a row.
+test("several is true only when more than one row shows the record", async () => {
+  const dupes = await entityRoots([fakeRoot(["Invoice #12345 | a", "Invoice #12345 | b"])], STEP, {});
+  assert.deepStrictEqual(dupes, []);
+  assert.strictEqual(dupes.several, true);
+  assert.strictEqual(dupes.absent, false);
+
+  const none = await entityRoots([fakeRoot(["Invoice #1"])], STEP, {});
+  assert.strictEqual(none.several, false);
+  const found = await entityRoots([fakeRoot(["Invoice #12345"])], STEP, {});
+  assert.strictEqual(found.several, false);
+});
+
+// WF-7 7.6: a search that finds nothing leaves only a look-alike row elsewhere ("Recently edited"). The step bound to
+// the searched value fails before acting, and says the record isn't on the page.
+test("resolveStep refuses a look-alike row when the searched record is not on the page", async () => {
+  const { resolveStep } = require("../../app/resolution");
+  const step = {
+    entity_binding: { container_selector: "tbody > tr", identifier: "{{search_by_name}}", source: "input" },
+    identity_bundle: { signals: [{ selector: "internal:text=\"Edit\"", durability: 0.85 }], fingerprint: {}, frame_chain: [] },
+  };
+  const page = fakeRoot(["Eve | eve@example.com | Edit Delete"]);
+  await assert.rejects(resolveStep(page, step, { search_by_name: "zzzqqq" }),
+    (err) => err.entityNotFound === true && err.entityAbsent === true && /could not be uniquely located/.test(err.message));
+  const twice = fakeRoot(["Carol | carol@example.com | Edit", "Carol | carol@example.com | Edit"]);
+  await assert.rejects(resolveStep(twice, step, { search_by_name: "Carol" }),
+    (err) => err.entityNotFound === true && err.entitySeveral === true && /more than one row/.test(err.message));
+});
+
+// WF-7 7.swap: with Carol's row gone and "Carol Ann" in its place, `hasText` ("Carol" is in "Carol Ann") picked
+// Carol Ann's row and the test passed. A row counts only when a cell (or the row's whole text, a for_each row) is the
+// value itself, compared without case or extra spaces.
+test("a longer look-alike is not the bound row: Carol Ann never stands in for Carol", async () => {
+  const step = { entity_binding: { container_selector: "tbody > tr", identifier: "Carol" } };
+  const swapped = await entityRoots([fakeRoot(["Alice | a@x | Edit", "Carol Ann | ca@x | Edit"])], step, {});
+  assert.deepStrictEqual(swapped, []);
+  assert.strictEqual(swapped.absent, true);                            // provably absent, not "more than one"
+  const both = await entityRoots([fakeRoot(["Carol Ann | ca@x | Edit", "carol  | c@x | Edit"])], step, {});
+  assert.strictEqual(both.length, 1);
+  assert.strictEqual(both[0]._row, "carol  | c@x | Edit");             // case and spaces do not matter
+  const whole = await entityRoots([fakeRoot(["Bob | b@x", "Carol | c@x"])],
+    { entity_binding: { container_selector: "tr", identifier: "Carol\tc@x" } }, {});
+  assert.strictEqual(whole.length, 1);                                 // a for_each row: its own whole text
 });

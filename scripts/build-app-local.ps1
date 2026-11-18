@@ -49,10 +49,20 @@ Push-Location $RuntimeDir
 try { node check_app_layer_files.js; if ($LASTEXITCODE -ne 0) { throw "app-layer-files.json guard failed" } }
 finally { Pop-Location }
 
+# One build at a time: an exclusive handle on a lock file, released by Windows when this process ends (even on a
+# crash). Two overlapping builds used to leave the sandbox copy incomplete ("no usable app layer").
+New-Item -ItemType Directory -Force -Path $DepsRoot | Out-Null
+$lockPath = Join-Path (Split-Path -Parent $DepsRoot) ".conxa-app-build.lock"
+try { $buildLock = [System.IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
+catch { throw "Another build-app-local.ps1 is running for $StudioHome. Wait for it to finish." }
+
 $stamp = Get-Date -Format "yyyyMMddHHmmss"
 $appVersion = "app-v0.0.0-local.$stamp"
 $versionDest = Join-Path $DepsRoot $appVersion
-New-Item -ItemType Directory -Force -Path $versionDest | Out-Null
+# Built next to deps\conxa-app, never inside it, then renamed in whole: Studio's sandbox staging scans
+# deps\conxa-app and must never see a half-written version.
+$buildDir = Join-Path (Split-Path -Parent $DepsRoot) ".conxa-app-building.$stamp"
+New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 
 $manifest = Get-Content (Join-Path $RuntimeDir "app-layer-files.json") -Raw | ConvertFrom-Json
 
@@ -61,7 +71,7 @@ $hashes = @{}
 foreach ($entry in $manifest.files) {
   $f = $entry.name
   $src = Join-Path $RuntimeDir "app\$f"
-  $out = Join-Path $versionDest $f
+  $out = Join-Path $buildDir $f
   # Flag sets mirror build-runtime-app.yml's "Obfuscate app JS files" step exactly;
   # per-profile rationale lives in app-layer-files.json's $comment.
   $obArgs = @($src, "--output", $out,
@@ -103,12 +113,14 @@ $versionJson = @{
 } | ConvertTo-Json -Depth 5
 # No-BOM write: Windows PowerShell 5.1's `Out-File -Encoding utf8` prepends a BOM, which makes
 # bootstrap.js's JSON.parse of version.json fail (silently — "no usable app layer").
-[System.IO.File]::WriteAllText((Join-Path $versionDest "version.json"), $versionJson, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $buildDir "version.json"), $versionJson, (New-Object System.Text.UTF8Encoding($false)))
 
+Move-Item -LiteralPath $buildDir -Destination $versionDest
 # Only one version needed locally — drop any other (a stale local build, or a
-# real download from Build Installer) so resolution is unambiguous.
+# real download from Build Installer) so resolution is unambiguous. After the move, so there is never none.
 Get-ChildItem $DepsRoot -Directory | Where-Object { $_.Name -ne $appVersion } |
   ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
+$buildLock.Dispose()
 
 Write-Host "-----------------------------------------------------------------"
 Write-Host "App layer rebuilt: $versionDest ($($hashes.Count) modules)"

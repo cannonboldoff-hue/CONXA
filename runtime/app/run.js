@@ -53,7 +53,7 @@ const evidence = require("./evidence");
 const effectProbes = require("./effect_probes");
 const { freshLook } = require("./fresh_look");
 const { runLooks, wantedIdentity } = require("./result_probes");
-const { isNonIdempotent } = require("./step_utils");
+const { isNonIdempotent, asArray, asObject } = require("./step_utils");
 const { checkRetryBudget: _checkRetryBudget, clearRetryBudget } = require("./retry_budget");
 const {
   rootCandidates,
@@ -2190,6 +2190,12 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     // not be confirmed, and where the run stopped because a risky one could not be.
     proof: { steps: [], notes: [], stopped: null, later: [] },
   };
+  // The record values this run acts on (every bound row's identifier): a text check ending in one must not pass on a
+  // longer look-alike ("Saved Carol" in "Saved Carol Ann", assertions.js::endsInBoundValue). Each step gets the list.
+  // shortcut: top-level steps only; a for_each body's checks still match as before. Upgrade if a loop checks a name.
+  const boundValues = [...new Set(asArray(steps).map((s) => asObject(asObject(s).entity_binding).identifier)
+    .filter(Boolean).map((id) => interpolate(String(id), inputs).trim()).filter(Boolean))];
+  if (boundValues.length) steps = steps.map((s) => (s && typeof s === "object" ? { ...s, _bound_values: boundValues } : s));
 
   // Multi-tab: each step declares which tab it runs on (step.tab — see tabs.js). The registry
   // binds tab_0 to startPage and starts listening for new pages immediately, before any step

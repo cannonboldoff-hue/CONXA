@@ -1097,3 +1097,14 @@ value", "WF-6 two tabs". Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-F
 
 **What this proves Conxa can do now:** a "Test passed" means the result really happened, and a failed
 send is never repeated.
+
+## Passed Workflow P-39 — WF-7: wrong row, right button, all 8 checks (2026-11-18)
+Local table fixture logging the row id of every click and save. Shuffled rows, a missing, duplicated,
+paged-away or look-alike ("Carol Ann") row, a no-match search, a name typed as an input, twin rows
+with identical text and three users sharing a display name: every write hit the intended record, or
+the run stopped before clicking. 7.7/7.8 on local stand-ins. Workflows `e7853bf4-…` (Carol edit),
+`37282d4e-…` (search→edit), `8b4ffabf-…` (name input), `15a6acf4-…` (twins), `916dc01a-…` (same
+display name). Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** a row action acts on the exact record it was recorded on, or
+not at all — including in AI recovery.

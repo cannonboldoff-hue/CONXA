@@ -15,6 +15,8 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"Timeout \d+ms exceeded", re.I), "The page didn’t respond in time."),
     (re.compile(r"net::ERR_NAME_NOT_RESOLVED", re.I), "That website’s address couldn’t be found."),
     (re.compile(r"net::ERR_CONNECTION|net::ERR_INTERNET_DISCONNECTED", re.I), "Couldn’t connect to the website. Check your internet connection."),
+    (re.compile(r"Bound record matches more than one row", re.I), "More than one row on the page matches the item this step works on, so the test stopped instead of guessing which one to use."),
+    (re.compile(r"Bound record could not be uniquely located", re.I), "The item this step works on isn’t on the page, so the test stopped instead of acting on a different one."),
     (re.compile(r"Ambiguous element resolution", re.I), "Couldn’t tell which of several matching elements to use. The page may have changed since you recorded it."),
     (re.compile(r"Element not found \(resolve miss\)", re.I), "The element this step needs wasn’t found on the page."),
     (re.compile(r"Containing frame could not be located", re.I), "The embedded section holding this element couldn’t be found. The page may have changed."),

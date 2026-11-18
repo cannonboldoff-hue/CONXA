@@ -211,7 +211,7 @@ function absentRecordPage() {
   const row = { count: async () => 0, first: () => ({}) };
   return mockPage({
     waitForTimeout: async () => {},
-    locator: () => ({ count: async () => 2, filter: () => row, all: async () => [] }),
+    locator: () => ({ count: async () => 2, filter: () => row, all: async () => [], evaluateAll: async () => [] }),
   });
 }
 const BOUND_CLICK = {

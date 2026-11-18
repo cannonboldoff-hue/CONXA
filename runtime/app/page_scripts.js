@@ -835,6 +835,49 @@ function countTextOccurrences(needle) {
   return count;
 }
 
+// The rows (indexes) that show `wanted` as a whole value: the row's own text, one element's text, or one field's
+// value, compared after collapsing whitespace and case. A row that says "Carol Ann" does not hold "Carol" (WF-7).
+// Run over every row at once (locator.evaluateAll): a field's value is not text, so no text filter may come first.
+function rowsHoldingWholeValue(rows, wanted) {
+  var norm = function (v) { return String(v || "").replace(/\s+/g, " ").trim().toLowerCase(); };
+  var want = norm(wanted);
+  var out = [];
+  if (!want) return out;
+  for (var r = 0; r < rows.length && r < 2000; r++) {
+    var row = rows[r];
+    var hit = norm(row.innerText || row.textContent) === want;
+    var els = !hit && typeof row.querySelectorAll === "function" ? row.querySelectorAll("*") : [];
+    for (var i = 0; i < els.length && i < 500 && !hit; i++) {
+      var el = els[i];
+      var isField = /^(INPUT|TEXTAREA|SELECT)$/.test(String(el.tagName || ""));
+      hit = norm(isField ? el.value : (el.innerText || el.textContent)) === want;
+    }
+    if (hit) out.push(r);
+  }
+  return out;
+}
+
+// How often `needle` ends a line of the page's visible text (or a visible box's value), with at most closing
+// punctuation after it: "Saved Carol" in "Saved Carol." but not in "Saved Carol Ann". For a check whose words end in
+// the record the run acts on, where a longer look-alike record must not count.
+function countTextEnding(needle) {
+  var n = String(needle || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!n) return 0;
+  var parts = String((document.body && document.body.innerText) || "").split(/[\n\t]+/);
+  var fields = typeof document.querySelectorAll === "function" ? document.querySelectorAll("input, textarea") : [];
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].offsetParent !== null && typeof fields[i].value === "string") parts.push(fields[i].value);
+  }
+  var count = 0;
+  for (var p = 0; p < parts.length; p++) {
+    var hay = parts[p].replace(/\s+/g, " ").trim().toLowerCase();
+    for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) {
+      if (/^[\s.!?,;:)\]"'”]*$/.test(hay.slice(at + n.length))) count++;
+    }
+  }
+  return count;
+}
+
 // How often `needle` is in the page's visible text only, never in what a text box holds. For "one more than before": a
 // form's box holds the value before Save and the new row holds it after, so counting boxes made a saved row look like
 // no change (WF-3 A, demoqa Web Tables).
@@ -945,6 +988,8 @@ function seedLocalStorage(entries) {
 }
 
 module.exports = {
+  rowsHoldingWholeValue,
+  countTextEnding,
   countTextOccurrences,
   countPageText,
   armPrompt,

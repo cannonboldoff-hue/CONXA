@@ -1354,3 +1354,26 @@ def test_an_address_check_names_the_address():
     p = {"command": "patch_step", "field": "validation.assertions", "step_label": "“Open”",
          "preview": {"before": [], "after": [{"type": "url_pattern", "expected": "demoqa.com/text-box"}]}}
     assert "text-box" in proposal_summary(p)
+
+
+def test_dropping_an_input_names_its_row_by_the_recorded_value_and_removes_the_input(env):
+    """WF-7: a row bound to {{search_by_name}} kept the unticked input alive, so the run still asked for it."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    doc = read_skill(skill_id)
+    doc["inputs"] = list(doc.get("inputs") or []) + [{"id": "search_by_name", "type": "text"}]
+    doc["skills"][0]["steps"].append({"action": {"action": "click"}, "intent": "Edit row",
+                                      "entity_binding": {"container_selector": "tbody > tr",
+                                                         "identifier": "{{search_by_name}}", "source": "input"}})
+    write_skill(skill_id, doc)
+    b._apply_clarify_ops(skill_id, [{"op": "drop_inputs", "ids": ["search_by_name"],
+                                     "literals": {"search_by_name": "Carol"}}], "rid2")
+    after = read_skill(skill_id)
+    assert after["skills"][0]["steps"][-1]["entity_binding"]["identifier"] == "Carol"
+    assert after["skills"][0]["steps"][-1]["entity_binding"]["source"] == "literal"
+    assert not any(i.get("id") == "search_by_name" for i in after.get("inputs") or [])

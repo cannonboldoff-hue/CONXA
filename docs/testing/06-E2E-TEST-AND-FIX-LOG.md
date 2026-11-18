@@ -2,8 +2,8 @@
 
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
-> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **Next:** WF-7 (wrong row, right button). Remaining: WF-7…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7. WF-14 (files) mostly passed (14.3, 14.8 open).
+> **Next:** WF-8 (recorder under attack). Remaining: WF-8…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1254,3 +1254,29 @@ the click happens once, and the decoy on another tab is never touched. Smaller w
 mid-run yes/no pop-up gap are in BUILD-106.
 
 **Final status of WF-6: PASSED** (P-38).
+
+### WF-7 — wrong row, right button (stop-ship class, 2026-11-18)
+A local table page with identical Edit/Delete buttons on every row; the server logs the row id of
+every click and save, so "which record was really changed" is proven, not inferred.
+
+**Test 1 — 7.1 to 7.5 PASS; 7.6 FAIL, top severity.** A search that found nobody still edited a
+different person (Eve, from a "Recently edited" panel) and reported "Test passed". A lone search
+result was not treated as a row, so the Edit click was found by position. *Fix:* a row action after a
+search is tied to the searched value even when it is the only row; a missing row stops before acting.
+
+**Test 2 — 7.6 PASS; 7.1 FAIL, top severity (regression).** The fix stopped tying a row to a value the
+workflow edits (her email) but chose nothing instead, so a shuffled table edited Bob. *Fix:* the
+clicked row is recognised even when the saved copy shows it already open, so it is tied to "Carol";
+a repeated row button with no tie can no longer be found by position, and the AI recovery step can
+never pick one of several identical buttons.
+
+**Test 3 — FAIL, top severity.** With Carol gone and "Carol Ann" in her place, Carol Ann was edited
+and the test passed ("Saved Carol" matched "Saved Carol Ann"). *Fix:* a row counts only when a cell,
+field or the row itself is exactly the value; a check ending in that value needs it to end there.
+
+**Test 4 — 7.1 to 7.8 all PASS.** Shuffles, a missing, duplicated, moved or look-alike row, a
+no-match search, twin rows with identical text and three users with the same display name: every
+write landed on the intended record or nothing was clicked. 7.7 and 7.8 ran on local stand-ins (the
+public sites have no row buttons / would delete real demo data). Runtime builds are now atomic.
+
+**Final status of WF-7: PASSED** (P-39).

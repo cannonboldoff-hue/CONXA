@@ -727,7 +727,7 @@ def generate_questions(
                 or eb.get("confirmed")):
             continue
         ident = str(eb.get("identifier") or "").strip()
-        if not ident or ident.startswith("{{"):
+        if not ident or "{{" in ident:
             continue  # a run input names the row each time; nothing recorded to confirm
         name = step_name(s)
         out.append(_question(
@@ -877,27 +877,32 @@ def generate_questions(
                 step_keys_=[keys[i]], binding=binding,
             ))
 
-    # 3d ─ a step acting on a record the run names: what if that record is not on the page?
+    # 3d ─ a step acting on a record the run names: what if that record is not on the page? Asked once per record: the
+    #      steps on one row (Edit, type, Save) all meet the same missing row, so one answer covers them all.
     missing_seen = 0
+    by_row: dict[tuple[str, str], list[int]] = {}
     for i, s in enumerate(steps):
         eb = s.get("entity_binding")
-        if (isinstance(eb, dict) and eb.get("container_selector") and str(eb.get("identifier") or "").startswith("{{")
+        if (isinstance(eb, dict) and eb.get("container_selector") and "{{" in str(eb.get("identifier") or "")
                 and not s.get("on_missing")):
-            missing_seen += 1
-            if missing_seen > 2:
-                cut("missing_item")
-                continue
-            name = step_name(s)
-            out.append(_question(
-                "missing_item", f"missing_item:{keys[i]}", f"What should “{name}” do if the item can\u2019t be found on the page?",
-                "This step works on one particular item. It might be gone, for example if someone already dealt with it.",
-                [
-                    {"id": "skip", "label": "Skip it and keep going", "detail": "Only when the list is showing and the item is clearly not in it."},
-                    {"id": "ask", "label": "Stop and ask a person", "detail": "It waits with the browser open until someone sorts it out."},
-                    {"id": "fail", "label": "Stop and show an error", "detail": "Treat a missing item as a problem."},
-                ],
-                step_keys_=[keys[i]],
-            ))
+            by_row.setdefault((str(eb["container_selector"]), str(eb["identifier"])), []).append(i)
+    for row_steps in by_row.values():
+        i, s = row_steps[0], steps[row_steps[0]]
+        missing_seen += 1
+        if missing_seen > 2:
+            cut("missing_item")
+            continue
+        name = step_name(s)
+        out.append(_question(
+            "missing_item", f"missing_item:{keys[i]}", f"What should “{name}” do if the item can\u2019t be found on the page?",
+            "This step works on one particular item. It might be gone, for example if someone already dealt with it.",
+            [
+                {"id": "skip", "label": "Skip it and keep going", "detail": "Only when the list is showing and the item is clearly not in it."},
+                {"id": "ask", "label": "Stop and ask a person", "detail": "It waits with the browser open until someone sorts it out."},
+                {"id": "fail", "label": "Stop and show an error", "detail": "Treat a missing item as a problem."},
+            ],
+            step_keys_=[keys[j] for j in row_steps],
+        ))
 
     # 1b ─ popups that need a decision (outcome forks): never answered silently.
     for i, s in enumerate(steps):
@@ -1334,7 +1339,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
 
     if kind == "missing_item":
         if answer.get("choice") in ("skip", "ask"):
-            ops.append({"op": "patch", "step_key": keys[0], "patch": {"on_missing": answer["choice"]}})
+            # Every step on that row: a skip that covered only the first would fail on the next one.
+            ops.extend({"op": "patch", "step_key": key, "patch": {"on_missing": answer["choice"]}} for key in keys)
             return ops, ("Skipped if the item isn’t there" if answer["choice"] == "skip"
                          else "Asks a person if the item isn’t there")
         return ops, "Stops and shows an error"
@@ -1453,7 +1459,14 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                     ops.append({"op": "patch", "step_key": key, "patch": patch})
             fixed.append(binding)
         if fixed:
-            ops.append({"op": "drop_inputs", "ids": fixed})
+            drop: dict[str, Any] = {"op": "drop_inputs", "ids": fixed}
+            # A row named by the input (compiler/entity_binding.py) is named by the recorded value again.
+            rows = {b: recorded[b] for b in fixed if any(isinstance(st.get("entity_binding"), dict)
+                                                         and "{{" + b + "}}" in str(st["entity_binding"].get("identifier") or "")
+                                                         for st in steps)}
+            if rows:
+                drop["literals"] = rows
+            ops.append(drop)
         kept = [c["label"] for c in question.get("choices") or [] if c["id"] in selected]
         return ops, (", ".join(kept) if kept else "Nothing changes — everything stays as you recorded")
 

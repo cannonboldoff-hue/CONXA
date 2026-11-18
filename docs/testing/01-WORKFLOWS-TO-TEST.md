@@ -27,7 +27,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-4 | Real apps: HR SPA, checkout maths, two-site relay, language flip, reviews | ✅ A–D passed 2026-11-17 (P-30…P-33); E blocked (sign-up + public review) | — |
 | WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ✅ passed 2026-11-18 (P-37) | — |
 | WF-6 | False success: a pass that didn't really happen | ✅ passed 2026-11-18 (P-38) | — |
-| WF-7 | Wrong row, right button ⭐ (stop-ship class) | ⏳ | Yes |
+| WF-7 | Wrong row, right button ⭐ (stop-ship class) | ✅ passed 2026-11-18 (P-39) | — |
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ⏳ | Yes |
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ⏳ | Yes |
 | WF-10 | Branches and popups: optional, decision, unrecorded | ⏳ | Yes |
@@ -249,7 +249,7 @@ test. **Studio's verdict must match the fixture's `/__log?` lines every time.**
 
 ---
 
-## WF-7 — Wrong row, right button ⭐ stop-ship class
+## ✅ WF-7 — Wrong row, right button ⭐ stop-ship class — passed 2026-11-18 (P-39; 7.7/7.8 on local stand-ins)
 
 **Why:** finance, HR and payroll buyers will ask one question: "can it ever delete the wrong
 record?" **Sites:** fixture `rows.html`, S3 `/webtables`, S10, S8 (user from WF-4 Leg A).

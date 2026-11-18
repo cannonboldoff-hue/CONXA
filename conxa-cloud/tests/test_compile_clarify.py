@@ -472,6 +472,38 @@ def test_clarify_offers_skip_when_empty_and_missing_item_and_each_answer_is_one_
     assert not {"skip_when_empty", "missing_item"} & {q["kind"] for q in generate_questions(doc, limit=None)}
 
 
+
+def test_the_steps_on_one_row_share_one_missing_item_question_and_its_answer():
+    """WF-7: Edit, the email box and Save all act on the searched row. A skip that covered only Edit would fail on the
+    next step, and asking three times is noise."""
+    from conxa_compile.conversation.clarify import plan_answer
+
+    row = {"container_selector": "tbody > tr", "identifier": "{{search_by_name}}"}
+    doc = {"inputs": [], "skills": [{"steps": [
+        {"action": "click", "intent": "Edit row", "entity_binding": dict(row)},
+        {"action": "type", "intent": "Type email", "value": "new@example.com", "entity_binding": dict(row)},
+        {"action": "click", "intent": "Save row", "entity_binding": dict(row)},
+    ]}]}
+    keys = step_keys(doc["skills"][0]["steps"])
+    qs = [q for q in generate_questions(doc, limit=None) if q["kind"] == "missing_item"]
+    assert len(qs) == 1 and qs[0]["step_keys"] == keys
+    ops, _ = plan_answer(qs[0], {"choice": "skip"}, doc)
+    assert ops == [{"op": "patch", "step_key": k, "patch": {"on_missing": "skip"}} for k in keys]
+
+
+def test_a_value_that_stops_changing_names_its_row_by_the_recorded_text_again():
+    """A row bound to {{search_by_name}} kept the input alive after it was unticked (drop_inputs refuses an id still
+    referenced), so every run still asked for it."""
+    from conxa_compile.conversation.clarify import plan_answer
+
+    doc = _doc([
+        _step("type", "type_name", value="{{search_by_name}}", input_binding="search_by_name"),
+        _step("click", "edit_row", entity_binding={"container_selector": "tbody > tr", "identifier": "{{search_by_name}}"}),
+    ])
+    q = {"kind": "values", "choices": [{"id": "search_by_name"}], "recorded": {"search_by_name": "Carol"}}
+    ops, _ = plan_answer(q, {"selected": []}, doc)
+    assert ops[-1] == {"op": "drop_inputs", "ids": ["search_by_name"], "literals": {"search_by_name": "Carol"}}
+
 # ── relative dates ──────────────────────────────────────────────────────────────────────────
 
 

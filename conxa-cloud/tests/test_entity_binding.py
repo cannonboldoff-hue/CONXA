@@ -7,6 +7,8 @@ from conxa_compile.compiler.destructive_semantics import classify_consequence
 from conxa_compile.compiler.entity_binding import (
     collect_input_literal_values,
     detect_entity_binding,
+    edited_values,
+    typed_values,
     upgrade_entity_binding_identifiers,
 )
 from conxa_compile.skill_package_builder_saved_skill import _copy_saved_common
@@ -121,7 +123,8 @@ class TestIdentifierUpgrade:
         step = _Step(eb)
         input_values = {"invoice_no": "12345"}
         upgrade_entity_binding_identifiers([step], input_values)
-        assert step.entity_binding.identifier == "{{invoice_no}}"
+        # only the typed part is the input: the runtime matches the row's text whole, never a part of it (WF-7)
+        assert step.entity_binding.identifier == "Invoice #{{invoice_no}} Delete"
         assert step.entity_binding.source == "input"
 
     def test_no_match_leaves_literal_untouched(self):
@@ -361,3 +364,156 @@ class TestNoBindingWhereNoRowIsNeeded:
         step = _Step()
         upgrade_entity_binding_identifiers([step], {"account_type": "1", "amount": "136"})
         assert (step.entity_binding.identifier, step.entity_binding.source) == ("$136.46", "literal")
+
+
+# ── WF-7: search, then act on the one result ───────────────────────────────────────────────────────────────────
+
+_CAROL = ('<tr data-id="103"><td>Carol</td><td class="em">carol@example.com</td>'
+          '<td><button class="edit" type="button">Edit</button> <button class="del" type="button">Delete</button></td></tr>')
+
+
+def _search_result_event(row_html: str = _CAROL, body: str | None = None) -> dict:
+    """The Edit button on the only row a search left in the table (WF-7 7.6)."""
+    return {
+        "action": {"action": "click", "value": None},
+        "target": {"tag": "button", "classes": ["edit"], "inner_text": "Edit", "role": "button"},
+        "ancestors": [
+            {"tag": "td", "id": None, "classes": [], "outer_html": '<td><button class="edit" type="button">Edit</button></td>'},
+            {"tag": "tr", "id": None, "classes": [], "outer_html": row_html},
+            {"tag": "tbody", "id": None, "classes": [], "outer_html": f"<tbody>{body or row_html}</tbody>"},
+            {"tag": "table", "id": None, "classes": [], "outer_html": ""},
+        ],
+    }
+
+
+def _typed(value: str, *, input_type: str = "text", parent_html: str = "") -> dict:
+    return {"action": {"action": "type", "value": value}, "semantic": {"input_type": input_type},
+            "target": {"tag": "input"}, "ancestors": [{"tag": "label", "outer_html": parent_html}]}
+
+
+class TestSearchedRowBinding:
+    def test_the_only_row_a_search_found_is_bound_to_the_searched_value(self):
+        """It was left unbound (one row is "not a list"), so a search that found nothing clicked an Edit elsewhere."""
+        eb = detect_entity_binding(_search_result_event(), typed_before=typed_values([_typed("Carol")]))
+        assert eb is not None and eb.identifier == "Carol" and eb.container_selector == "tbody > tr"
+        assert eb.confirmed is False
+
+    def test_a_unique_address_does_not_skip_the_searched_row(self):
+        eb = detect_entity_binding(_search_result_event(), dom_html="<html></html>", address_unique=True,
+                                   typed_before=["Carol"])
+        assert eb is not None and eb.identifier == "Carol"
+
+    def test_it_becomes_the_run_input_the_search_types(self):
+        from types import SimpleNamespace
+
+        step = SimpleNamespace(entity_binding=detect_entity_binding(_search_result_event(), typed_before=["Carol"]))
+        upgrade_entity_binding_identifiers([step], {"search_by_name": "Carol"})
+        assert step.entity_binding.identifier == "{{search_by_name}}" and step.entity_binding.source == "input"
+
+    def test_one_row_and_nothing_typed_stays_unbound(self):
+        assert detect_entity_binding(_search_result_event()) is None
+        assert detect_entity_binding(_search_result_event(), typed_before=["Dave"]) is None  # not this row's text
+
+    def test_part_of_a_word_is_not_the_searched_value(self):
+        assert detect_entity_binding(_search_result_event(), typed_before=["Car"]) is None
+
+    def test_passwords_and_keys_are_never_a_row_identity(self):
+        assert typed_values([_typed("Carol", input_type="password"), _typed("x"),
+                             {"action": {"action": "keyboard_shortcut", "value": "Carol"}}]) == []
+
+    def test_text_the_workflow_types_over_never_names_the_row(self):
+        """The row was named by the email the run itself edits, so the next run could not find it (WF-7 S2)."""
+        rows = "".join(_CAROL.replace("103", str(n)).replace("Carol", name).replace("carol", name.lower())
+                       for n, name in ((101, "Alice"), (102, "Bob"), (103, "Carol")))
+        ev = _search_result_event(body=rows)
+        assert detect_entity_binding(ev).identifier == "carol@example.com"  # the longest unique text, by default
+        edited = edited_values([_typed("carol.s@example.com",
+                                       parent_html='<td class="em"><input class="emi" value="carol@example.com"></td>')])
+        assert edited == {"carol@example.com"}
+        assert detect_entity_binding(ev, edited=edited).identifier == "Carol"
+
+
+def test_a_refused_row_says_whether_it_was_missing_or_matched_more_than_once():
+    """WF-7 S2: two matching rows were reported as "wasn't found"."""
+    from conxa_compile.conversation.failure_summary import summarize
+
+    several = summarize("Step 5 (click) failed: Bound record matches more than one row on the page — refusing to guess "
+                        "which one to act on", "entity_not_found")
+    missing = summarize("Step 5 (click) failed: Bound record could not be uniquely located on the page — refusing to "
+                        "act on a different row", "entity_not_found")
+    assert "More than one row" in several and "isn’t on the page" in missing
+
+
+# ── WF-7 7.1: edit the email on Carol's row (third of five) ────────────────────────────────────────────────────
+
+_NAMES = ("Alice", "Bob", "Carol", "Dave", "Eve")
+
+
+def _people(names=_NAMES, *, carol_editing: bool = False) -> str:
+    out = []
+    for n, name in enumerate(names, start=101):
+        email = f"{name.lower()}@example.com"
+        if carol_editing and name == "Carol":  # the page is saved just after the click: her row is already open
+            out.append(f'<tr data-id="{n}"><td>{name}</td><td class="em"><input class="emi" placeholder="Email" '
+                       f'value="{email}"/></td><td><button class="save" type="button">Save</button> '
+                       f'<button class="del" type="button">Delete</button></td></tr>')
+        else:
+            out.append(_CAROL.replace("103", str(n)).replace("Carol", name).replace("carol", name.lower()))
+    return "".join(out)
+
+
+_EDITED = {"carol@example.com"}
+
+
+def test_the_edited_row_is_named_by_the_text_the_run_leaves_alone_even_on_a_page_saved_after_the_click():
+    """The saved page showed Carol's row already open (no email text, Save instead of Edit). It counted as another row
+    named "Carol", the email was rightly excluded, and nothing was left: Edit went unbound and edited Bob's row."""
+    ev = _search_result_event(body=_people())
+    dom = f"<html><body><table><tbody>{_people(carol_editing=True)}</tbody></table></body></html>"
+    eb = detect_entity_binding(ev, dom_html=dom, edited=_EDITED)
+    assert eb is not None and eb.identifier == "Carol" and eb.container_selector == "tbody > tr"
+
+
+def test_a_repeated_row_action_is_told_apart_from_a_control_that_names_its_row():
+    from conxa_compile.compiler.entity_binding import row_action_in_list
+
+    assert row_action_in_list(_search_result_event(body=_people())) is True             # every row has an Edit
+    assert row_action_in_list(_search_result_event()) is False                          # one row: nothing to mix up
+    save = _search_result_event(row_html=_people(("Carol",), carol_editing=True), body=_people(carol_editing=True))
+    save["target"] = {"tag": "button", "classes": ["save"], "inner_text": "Save", "role": "button"}
+    assert row_action_in_list(save) is False                                            # the one Save names its row
+
+
+def test_an_unbound_row_action_keeps_no_signal_that_finds_it_by_position(tmp_path, monkeypatch):
+    """Backstop: when no text names the row, the third Edit is not "the row's Edit" after the list re-sorts. Without
+    the positional path the remaining look-alike signals tie, and the runtime refuses instead of acting."""
+    from conxa_compile.compiler.build import _build_step
+    from conxa_compile.policy.bundle import get_policy_bundle
+
+    same = "".join(f'<tr><td>Pending</td><td><button class="edit" type="button">Edit</button></td></tr>' for _ in range(3))
+    ev = _search_result_event(row_html='<tr><td>Pending</td><td><button class="edit" type="button">Edit</button></td></tr>',
+                              body=same)
+    ev.update({"tab": {"id": "tab_0", "index": 0}, "page": {"url": "http://localhost/rows.html", "title": ""},
+               # (no role: without the saved accessibility tree a role signal cannot be counted, so it reads as unique)
+               "target": {"tag": "button", "classes": ["edit"], "inner_text": "Edit"},
+               "selectors": {"text_based": 'text="Edit"', "xpath": "/html[1]/body[1]/table[1]/tbody[1]/tr[3]/td[2]/button[1]"}})
+    ev["action"]["timestamp"] = "2026-11-18T00:00:00Z"
+    from conxa_compile.compiler import build
+
+    monkeypatch.setattr(build, "_load_step_snapshot", lambda _ev, _sid: (f"<html><body><table><tbody>{same}</tbody></table></body></html>", None))
+    step = _build_step(ev, get_policy_bundle(), session_root=tmp_path, step_index=0)
+    assert step.entity_binding is None
+    engines = {s.engine for s in step.identity_bundle.signals}
+    assert "xpath" not in engines and engines, engines
+    # a control with nothing to confuse it with keeps its path
+    lone = dict(ev, ancestors=_search_result_event()["ancestors"])
+    monkeypatch.setattr(build, "_load_step_snapshot", lambda _ev, _sid: (f"<html><body><table><tbody>{_CAROL}</tbody></table></body></html>", None))
+    assert "xpath" in {s.engine for s in _build_step(lone, get_policy_bundle(), session_root=tmp_path, step_index=0).identity_bundle.signals}
+
+
+def test_an_upgraded_row_name_keeps_the_text_around_the_typed_value():
+    from conxa_compile.compiler.entity_binding import template_identifier
+
+    assert template_identifier("Invoice #12345", "12345", "invoice_no") == "Invoice #{{invoice_no}}"
+    assert template_identifier("Carol", "carol", "search_by_name") == "{{search_by_name}}"
+    assert template_identifier("Carolann", "Carol", "x") == "Carolann"            # never part of a word

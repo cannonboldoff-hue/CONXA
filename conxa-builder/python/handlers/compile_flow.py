@@ -1255,7 +1255,7 @@ class CompileFlowMixin:
         """Run an answer's ops through the commands a reviewer would use. Returns steps added."""
         from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
         from conxa_compile.editor.workflow_mutations import _scan_placeholder_ids
-        from conxa_core.storage.json_store import read_skill
+        from conxa_core.storage.json_store import read_skill, write_skill
 
         added = 0
 
@@ -1332,6 +1332,23 @@ class CompileFlowMixin:
                 self._log_edit("set_date_offset", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "drop_inputs":
                 doc = read_skill(skill_id) or {}
+                # A row named by a value that stops being an input is named by the recorded value again
+                # (compiler/entity_binding.py bound it to "{{id}}"); otherwise it would keep the input alive.
+                literals = op.get("literals") or {}
+                restored = False
+                for s in ((doc.get("skills") or [{}])[0] or {}).get("steps") or []:
+                    eb = s.get("entity_binding") if isinstance(s, dict) else None
+                    ident = str((eb or {}).get("identifier") or "")
+                    named = [b for b, lit in literals.items() if lit and "{{" + b + "}}" in ident]
+                    for b in named:
+                        ident = ident.replace("{{" + b + "}}", literals[b])
+                    if named:
+                        eb["identifier"] = ident
+                        if "{{" not in ident:
+                            eb["source"] = "literal"
+                        restored = True
+                if restored:
+                    write_skill(skill_id, doc)
                 referenced: set[str] = set()
                 for s in ((doc.get("skills") or [{}])[0] or {}).get("steps") or []:
                     if isinstance(s, dict):

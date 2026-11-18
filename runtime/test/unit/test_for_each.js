@@ -34,10 +34,9 @@ function mockRowsPage(rowTexts, { missingButtonAt = -1 } = {}) {
 
   const containerLocator = {
     all: async () => { calls.enumerate++; return rows; },
-    filter: ({ hasText }) => {
-      const match = rows.find((r) => r.text.includes(hasText));
-      return { count: async () => (match ? 1 : 0), first: () => match };
-    },
+    // the row's whole text is its identifier (enumerateRows), checked by the real page script
+    evaluateAll: async (fn, arg) => fn(rows.map((r) => ({ innerText: r.text, querySelectorAll: () => [] })), arg),
+    nth: (i) => rows[i],
   };
 
   return {
