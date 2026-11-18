@@ -49,13 +49,13 @@ from conxa_compile.llm.llm_cache import cache_key, read_cached, write_cached
 from conxa_compile.llm.openapi_client import TRUNCATED_MARKER, infer_workflow_review
 from conxa_compile.llm.workflow_intent import _graph_from_raw
 from conxa_compile.llm.model_ledger import log as _log
-from conxa_compile.llm.workflow_semantics import _validate_findings
+from conxa_compile.llm.workflow_semantics import _validate_effects, _validate_findings
 
 _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 7  # 7: each step states its 0-based index; 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
+_PROMPT_VERSION = 8  # 8: also judges whether each step can be undone (effects); 7: 7: each step states its 0-based index; 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
 
 
 _RETRY_NOTE = "Your last reply could not be read. Return ONLY the JSON object described, nothing before or after it."
@@ -91,7 +91,7 @@ def _review_in_windows(
     total = len(steps_context)
     merged: dict[str, Any] = {
         "goal": "", "steps": [], "decision_points": [], "expected_end_state": {},
-        "suggestions": [], "understanding": None, "loop_copy": [],
+        "suggestions": [], "effects": [], "understanding": None, "loop_copy": [],
     }
     earlier: list[dict[str, str]] = []
     state = {"missed": 0, "dead": False}
@@ -139,6 +139,7 @@ def _review_in_windows(
                 point = {**point, "step_index": point["step_index"] + start}
             merged["decision_points"].append(point)
         merged["suggestions"].extend(raw.get("suggestions") or [])
+        merged["effects"].extend(raw.get("effects") or [])
         if first:
             merged.update(goal=raw.get("goal") or "", understanding=raw.get("understanding"),
                           loop_copy=raw.get("loop_copy") or [])
@@ -215,7 +216,7 @@ def build_workflow_review(
     reopened here."""
     ledger: dict[str, Any] = {}  # what the guards below drop, counted (model_ledger); read back as extras_out["ledger"]
     if extras_out is not None:
-        extras_out.update(understanding=None, loop_copy=[], ledger=ledger)
+        extras_out.update(understanding=None, loop_copy=[], effects=[], ledger=ledger)
     if not steps_context:
         return WorkflowIntentGraph(), []
 
@@ -297,6 +298,10 @@ def build_workflow_review(
         _sidecar_write(sidecar, key, raw)
 
     graph = _graph_from_raw(_zero_based(raw, len(steps_context)))
+    # What each step does to the app's data, as the model judged it from the step's meaning (never from a word list).
+    # Kept even when suggestions are switched off: it is a safety fact, not a suggestion.
+    if extras_out is not None:
+        extras_out["effects"] = _validate_effects(raw.get("effects"), steps_context=steps_context, report=ledger)
     if prior_understanding and prior_understanding.get("goal"):
         graph.goal = str(prior_understanding["goal"])
     if not settings.llm_semantic_suggestions_enabled:

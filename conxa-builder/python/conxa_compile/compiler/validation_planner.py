@@ -342,6 +342,7 @@ def infer_success_conditions(
             "required_elements": [],
             "forbidden_elements": [],
             "expected_text_tokens": _merge_tokens(text_change[:8]),
+            "control_text": list(state_diff.get("control_text") or []),
             "state_diff_strength": strength,
             "state_diff_as_hint": True,
         }
@@ -368,6 +369,7 @@ def infer_success_conditions(
         "required_elements": required_from_diff,
         "forbidden_elements": removed[:24],
         "expected_text_tokens": _merge_tokens((text_change[:8] + ephemeral)[:8]),
+        "control_text": list(state_diff.get("control_text") or []),
         "page_url_hint": page_url[:500],
         "state_diff_strength": strength,
         "state_diff_as_hint": True,

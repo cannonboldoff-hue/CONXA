@@ -1980,3 +1980,20 @@ def test_a_press_or_drag_on_a_canvas_is_recorded_as_an_unsupported_gesture_not_a
     assert [e["action"]["action"] for e in events] == ["unsupported_gesture", "unsupported_gesture", "click"]
     assert [json.loads(e["action"]["value"])["moved"] for e in events[:2]] == [True, False]
     assert events[0]["target"]["tag"] == "canvas"
+
+
+def test_words_that_appear_after_a_click_are_recorded_as_the_result_not_the_control(page: Page) -> None:
+    """W4: state_change.result_diff holds the page's new words ("Saved!"); a new button's label stays in dom_diff only."""
+    _install_bridge(
+        page,
+        '<button id="go" onclick="document.body.insertAdjacentHTML(\'beforeend\', '
+        '\'<p>Saved!</p><button>Undo</button>\')">Save</button>',
+    )
+    page.click("#go")
+    page.wait_for_function(
+        "() => window.__events.some((e) => e.state_change && e.state_change.result_diff)", timeout=5000,
+    )
+    change = _events(page)[0]["state_change"]
+    assert "Saved!" in change["result_diff"]["added"]
+    assert not any("Undo" in line for line in change["result_diff"]["added"])
+    assert any("Undo" in line for line in change["dom_diff"]["added"])

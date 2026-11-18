@@ -156,7 +156,12 @@ def derive_input_binding(
         return None
 
     # Priorities 1-3: label_text, then placeholder, then aria_label → snake_case binding
-    for raw in (target.get("label_text"), target.get("placeholder"), target.get("aria_label")):
+    # A caption only found by looking at the text near the box (the recorder says so with label_nearby) can be a
+    # neighbouring button's ("Add" beside a search box); the box's own placeholder or aria-label then comes first.
+    own_first = bool(target.get("label_nearby")) and (target.get("placeholder") or target.get("aria_label"))
+    candidates = (target.get("placeholder"), target.get("aria_label"), target.get("label_text")) if own_first else (
+        target.get("label_text"), target.get("placeholder"), target.get("aria_label"))
+    for raw in candidates:
         binding = _snake_case(str(raw or "").strip())
         if binding:
             return _credential(binding) or (f"{{{{{binding}}}}}", binding)

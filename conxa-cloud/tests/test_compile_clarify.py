@@ -299,7 +299,8 @@ def test_done_when_only_ever_makes_an_existing_text_url_or_state_check_required(
     (op,) = ops
     assert op["step_key"] == keys[5]
     asserts = op["patch"]["validation"]["assertions"]
-    assert asserts[0]["required"] is True and asserts[1]["required"] is False
+    # The ticked check is required; the one left unticked is retired, not kept as a check the run still evaluates.
+    assert [a["required"] for a in asserts] == [True]
     assert {a["type"] for a in asserts} <= {"text_present", "url_changed", "url_pattern", "state_changed"}
     assert receipt == "You see the words “Invoice sent” on the screen"
 

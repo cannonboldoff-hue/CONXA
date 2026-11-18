@@ -55,3 +55,11 @@ def test_state_class_rule_is_one_rule_in_recorder_and_compiler():
     assert words == sf._STATE_WORDS
     tail = re.search(r'"\[-_\]\(\?:([^)]*)\)\$"', bridge).group(1)
     assert f"[-_](?:{tail})$" in sf._STATE_CLASS_RE.pattern
+
+
+def test_a_saved_event_keeps_the_fields_the_compiler_reads():
+    """RecordedEvent drops undeclared target fields; value_label and label_nearby must survive validation."""
+    from conxa_core.models.events import TargetDom
+
+    kept = TargetDom.model_validate({"tag": "input", "value_label": "Transfer", "label_nearby": True}).model_dump()
+    assert kept["value_label"] == "Transfer" and kept["label_nearby"] is True

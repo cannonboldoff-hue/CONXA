@@ -95,10 +95,20 @@ def build_try_dismiss_from_hint(primary_selector: str, container_signal: str) ->
     }
 
 
+_GENERIC_INPUT_NAMES = frozenset({"text", "number", "value", "input", "field", "item", "record_name", "page_address"})
+
+
+def _is_made_up_input_name(name: str) -> bool:
+    """A de-duplicated name (``email_2``) or a generic fallback: the cases where code had no label to name it from."""
+    return bool(re.search(r"_\d+$", name)) or name in _GENERIC_INPUT_NAMES
+
+
 def _apply_one(step: SkillStep, kind: str, current: str, proposed: str) -> bool:
     """Write one finding onto one step. Returns whether anything changed."""
     if kind == "rename_binding":
-        if not step.input_binding:
+        # An input named from the field's own label or placeholder is named by code and stays: the same recording
+        # must give the same input names on every compile (BUILD-97). Only a name code had to make up may be reworded.
+        if not step.input_binding or not _is_made_up_input_name(step.input_binding):
             return False
         rename_binding_in_step(step, step.input_binding, proposed)
         step.input_binding = proposed
@@ -193,6 +203,28 @@ def apply_second_opinion(steps: list[SkillStep], findings: list[dict[str, Any]])
         ):
             applied.append(item)
     return applied
+
+
+def apply_effect_judgements(steps: list[SkillStep], effects: list[dict[str, Any]]) -> int:
+    """Write the model's "can this be undone?" judgement onto each step it names, as meaning only
+    (``signals.semantic.effect_judgement``; never a target, selector, wait or address). Code reads it through
+    action_semantics.judged_irreversible. Returns how many steps were judged."""
+    by_key = dict(zip(step_keys(steps), steps))
+    written = 0
+    for item in effects or []:
+        step = by_key.get(str(item.get("step_key") or ""))
+        if step is None:
+            continue
+        semantic = step.signals.setdefault("semantic", {}) if isinstance(step.signals, dict) else None
+        if semantic is None:
+            continue
+        previous = semantic.get("effect_judgement") if isinstance(semantic.get("effect_judgement"), dict) else {}
+        judgement = {k: item[k] for k in ("reversible", "kind", "confidence", "reason") if k in item}
+        if previous.get("person"):
+            judgement["person"] = previous["person"]  # a person's answer is never replaced by a rebuild's judgement
+        semantic["effect_judgement"] = judgement
+        written += 1
+    return written
 
 
 def _step_causes_observed_effect(steps: list[SkillStep], i: int) -> bool:

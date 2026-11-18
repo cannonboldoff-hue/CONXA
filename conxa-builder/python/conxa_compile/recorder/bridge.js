@@ -751,6 +751,20 @@
     } catch (_) { return false; }
   }
 
+  // True when the control's caption is tied to it by markup (<label for>, an enclosing or neighbouring <label>,
+  // aria-labelledby); false when it was only guessed from the text near the box (captureAssociatedLabel rule 6).
+  function labelIsExplicit(el) {
+    try {
+      if (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) return true;
+      if (el.closest("label") || el.getAttribute("aria-labelledby")) return true;
+      const parent = el.parentElement;
+      if (parent && Array.from(parent.querySelectorAll("label")).some(l => l !== el && !l.contains(el))) return true;
+      const gp = parent && parent.parentElement;
+      if (gp && Array.from(gp.querySelectorAll("label")).some(l => !l.contains(el))) return true;
+    } catch (_) {}
+    return false;
+  }
+
   function captureAssociatedLabel(el) {
     // A menu entry, option or tab sits among siblings of its own kind, and a hidden file input sits among the
     // page's other controls: the nearest preceding text there is a DIFFERENT control's name ("New folder" for
@@ -1032,6 +1046,28 @@
   // `root` scopes the query (defaults to the whole document) — used by conditional-state
   // detection below to fingerprint just the descendants of one container.
   const INTERACTIVE_SEL = 'button,a[href],input:not([type="hidden"]),select,textarea,[role="button"],[role="link"],[data-testid],[data-test-id]';
+
+  // What the page SAYS, as opposed to what it lets you press: headings, alerts, status lines, paragraphs and cells
+  // that a person can see, one per line. A result ("Thank you for your order!", "Transfer Complete!") is words like
+  // these, never a control's label, so it is read separately from interactiveSignature (the W4 result evidence).
+  const RESULT_SEL = 'h1,h2,h3,h4,h5,h6,[role="heading"],[role="alert"],[role="status"],[aria-live],p,td,li,dd,span.message,div.message';
+  function resultSignature() {
+    const lines = [];
+    const seen = new Set();
+    for (const el of document.querySelectorAll(RESULT_SEL)) {
+      if (lines.length >= 150) break;
+      if (typeof el.checkVisibility === "function" && !el.checkVisibility()) continue;
+      // A container whose text is just its children's would repeat them: take the leaf-most element only.
+      if (el.querySelector && el.querySelector(RESULT_SEL)) continue;
+      // A control's own label is not a result.
+      if (el.closest && el.closest("button,a[href],[role=button],[role=link],[role=menuitem],[role=tab],[role=option],select,option,label")) continue;
+      const txt = (el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120);
+      if (txt.length < 3 || seen.has(txt)) continue;
+      seen.add(txt);
+      lines.push(txt);
+    }
+    return lines.join("\n");
+  }
 
   function interactiveSignature(root) {
     const scope = root || document;
@@ -1694,6 +1730,7 @@
         name,
         placeholder: el.getAttribute("placeholder") || null,
         label_text: captureAssociatedLabel(el),
+        label_nearby: !labelIsExplicit(el),
         // Real accessible-name sources for non-form elements. An <img>'s name is its alt;
         // without it the compiler had nothing but captureAssociatedLabel's last-resort
         // "nearest surrounding text" walk, which names an avatar after the paragraph above it.
@@ -1727,6 +1764,7 @@
       state_probe: {
         before,
         dom_before: interactiveSignature(),
+        result_before: (function () { try { return resultSignature(); } catch (_e) { return ""; } })(),
         el,
         dialog_before: !!_queryOpenDialog(),
         expanded_before: el.getAttribute ? el.getAttribute("aria-expanded") : null,
@@ -2116,6 +2154,14 @@
       after,
       // DOM diff: elements added/removed since the action fired
       dom_diff: _computeDomDiff(domBefore, domAfter),
+      // Words that appeared on this same page after the action (null when none, or when the page was left).
+      result_diff: (function () {
+        try {
+          const before = payload.state_probe && payload.state_probe.result_before;
+          if (typeof before !== "string") return null;
+          return _computeDomDiff(before, resultSignature());
+        } catch (_e) { return null; }
+      })(),
     };
     // Feed the recent-appearance ring buffer (Priority 2) — a second consumer of this same
     // dom_diff, used by the *next* action's detectOptionalContainer to tell "just appeared" from

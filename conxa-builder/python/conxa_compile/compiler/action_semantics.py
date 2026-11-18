@@ -101,10 +101,39 @@ def only_moves_forward(step: Step, policy: dict[str, Any]) -> bool:
     return any(_has_word(text, t) for t in nav) and not any(_has_word(text, t) for t in commit)
 
 
+# Below this the model's answer is treated as "cannot tell", which means "cannot be undone": the person is asked.
+MIN_JUDGEMENT_CONFIDENCE = 0.6
+
+
+def judged_irreversible(step: Step) -> bool | None:
+    """Whether a model judged this step as one that cannot be undone, from what the step means in the workflow
+    (``semantic.effect_judgement``, written at compile by second_opinion.apply_effect_judgements); None when no one
+    judged it (a package compiled before the judgement existed, or a step that cannot change data).
+
+    The person's own answer ("ask me before this" / "just go ahead") is stored beside the judgement and beats it.
+    A judgement the model was not sure of counts as irreversible: wrongly letting an irreversible step run
+    unasked is the costly mistake, wrongly asking about a harmless one is not."""
+    semantic = step.get("semantic") if isinstance(step.get("semantic"), dict) else {}
+    judgement = semantic.get("effect_judgement")
+    if not isinstance(judgement, dict):
+        return None
+    person = judgement.get("person")
+    if person in ("irreversible", "reversible"):
+        return person == "irreversible"
+    try:
+        confidence = float(judgement.get("confidence"))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return judgement.get("reversible") is not True or confidence < MIN_JUDGEMENT_CONFIDENCE
+
+
 def commit_intent_hit(step: Step, policy: dict[str, Any]) -> bool:
     """Whether effective intent + submit heuristics indicate a commit / primary action. A button that only moves
     forward is not one, even as a form's submit button: it can be undone by going back, so it is never asked about as
     a step that can't be undone and carries no "the app accepted the request" proof (WF-3 Leg B, owner decision)."""
+    judged = judged_irreversible(step)
+    if judged is not None:
+        return judged  # a model judged what the step does; the word lists below are only for steps no one judged
     wf = policy.get("workflow") if isinstance(policy.get("workflow"), dict) else {}
     subs = [str(s).lower() for s in (wf.get("commit_intent_substrings") or ["submit", "confirm"])]
     intent = get_effective_intent(step.get("semantic") or {}).lower()

@@ -66,7 +66,8 @@ def default_answer(q: dict[str, Any], doc: dict[str, Any]) -> tuple[dict[str, An
     """The answer that edits nothing (what the compiler already did) with its receipt, or None if every
     answer edits the workflow. Never raises."""
     ids = [c.get("id") for c in q.get("choices") or []]
-    tries = [{"selected": ids}, {"selected": []}] if q.get("multi") else [{"choice": c} for c in ids]
+    # `assume`: this is the compiler's own default standing in for an answer, so nothing is retired or rewritten.
+    tries = [{"selected": ids, "assume": True}, {"selected": [], "assume": True}] if q.get("multi") else [{"choice": c} for c in ids]
     for answer in tries:
         try:
             ops, receipt = clarify.plan_answer(q, answer, doc)

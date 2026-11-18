@@ -56,13 +56,18 @@ def _action_name(step: dict[str, Any]) -> str:
     return str(a if isinstance(a, str) else (a or {}).get("action") or "").lower()
 
 
-_LABEL_FIELDS = ("inner_text", "aria_label", "title", "alt", "placeholder", "label_text")
+_LABEL_FIELDS = ("inner_text", "aria_label", "title", "alt", "placeholder", "value_label", "label_text")
 _LABELLED_VERBS = {
     "click": "Click", "dblclick": "Double-click", "right_click": "Right-click", "hover": "Hover over",
     "fill": "Type into", "type": "Type into", "select": "Choose in", "select_option": "Choose in",
     "set_checkbox": "Tick", "set_radio": "Choose", "extract": "Read",
 }
-_PLAIN_ACTIONS = {"scroll": "Scroll the page", "upload_intent": "Choose the file to upload", "upload": "Upload a file"}
+_PLAIN_ACTIONS = {
+    "scroll": "Scroll the page", "upload_intent": "Choose the file to upload", "upload": "Upload a file",
+    "tab_switch": "Switch to another tab", "tab_open": "A new tab opens", "handover": "A person takes over",
+    "agent_span": "A person confirms before the next step",
+    "dialog_accept": "Answer the pop-up message with OK", "dialog_dismiss": "Answer the pop-up message with Cancel",
+}
 
 
 def _action_title(step: dict[str, Any]) -> str:
@@ -467,7 +472,8 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
         return "The screen changes"
 
     choices = [{"id": c["id"], "label": describe(c["assertion"]), "detail": "",
-                "selected": c["assertion"].get("type") == "text_present" and not c["landed"]} for c in checks]
+                "selected": c["assertion"].get("type") == "text_present" and not c["landed"]
+                            and c["assertion"].get("source") != "control"} for c in checks]
     effect_choices, effect_keys = _effect_choices(doc)
     # Offered only beside a real check, so an input-only workflow isn't pestered. A step's completion checks are one:
     # on an app that answers in the page alone (no request to watch), "what I typed shows up" is the proof left.
@@ -1612,6 +1618,18 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             custom_key = None
         if custom and custom_key:
             by_step.setdefault(custom_key, {})
+        # A check that was offered and left unticked is retired: it is gone from the step, not kept as an advisory
+        # check the run still evaluates (BUILD-91 (2)). A check can be added back in Human Edit.
+        offered: dict[str, set[int]] = {}
+        for c in question.get("choices") or []:
+            cid = str(c.get("id") or "")
+            if answer.get("assume") or cid.startswith(("effect:", "input:")) or "#" not in cid:
+                continue
+            key, _, idx = cid.rpartition("#")
+            if idx.isdigit() and cid not in selected:
+                offered.setdefault(key, set()).add(int(idx))
+        for key in offered:
+            by_step.setdefault(key, {})
         for key, idxs in by_step.items():
             step = keyed.get(key)
             if step is None:
@@ -1620,6 +1638,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             for j in idxs:
                 if j < len(assertions):
                     assertions[j]["required"] = True
+            retired = {j for j in offered.get(key, set()) if j < len(assertions) and not assertions[j].get("required")}
+            assertions = [a for j, a in enumerate(assertions) if j not in retired]
             if key == end_key:
                 assertions += extra
             if custom and key == custom_key:

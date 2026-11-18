@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from conxa_compile.compiler.action_semantics import action_name, commit_intent_hit
+from conxa_compile.compiler.action_semantics import action_name, commit_intent_hit, judged_irreversible
 from conxa_compile.compiler.intent_access import get_effective_intent
 from conxa_compile.confidence.uncertainty import default_destructive_tokens
 
@@ -36,6 +36,9 @@ def label_has_destructive_word(label: str, policy: dict[str, Any] | None = None)
 
 
 def step_has_destructive_intent(step: Step, policy: dict[str, Any]) -> bool:
+    judged = judged_irreversible(step)
+    if judged is not None:
+        return judged  # a model judged this step from what it means; the intent words below are for unjudged steps
     semantic = step.get("semantic") or {}
     if semantic.get("is_destructive") is True:
         return True
@@ -65,6 +68,9 @@ def classify_consequence(step: Step, policy: dict[str, Any]) -> str:
     action = action_name(step).lower()
     if action in _READ_ONLY_ACTIONS:
         return "read_only"
+    # A model's judgement reaches every kind it judged (an OK on a "delete?" box is a dialog answer, not a click).
+    if judged_irreversible(step) is True:
+        return "irreversible"
     if action == "click" and (destructive_compiler_step(step, policy) or commit_intent_hit(step, policy)):
         return "irreversible"
     return "reversible"

@@ -2,6 +2,14 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Studio asks "can this be undone?" by understanding the step, not by its button's words — 2026-11-18**
+Before, a button called "Continue" was waved through and one called "Finish" could trigger a needless warning, because Studio only looked at the words. Now the same review that reads your recording also judges what each step really does, and when it is unsure it plays safe and asks you. The results page now also tells apart words the page showed from the names of buttons, so "how we know it worked" offers real results first and unticked options really disappear.
+— 2026-11-18
+
+**Old-style websites are now on the testing list — 2026-11-18**
+So far we have only tried Studio on modern websites and simple test pages. Older websites, like the classic Salesforce screens, are built very differently and may trip it up. We added a task to try Studio on real old websites we can log in to. This shows us the problems before a customer finds them.
+— 2026-11-18
+
 **Studio now knows when each page picture was taken — 2026-11-18**
 When you type "how we know it worked", Studio has to work out which click brought those words up. It used to guess from the order of the saved pictures, and could be one step off. Each picture now notes the time it was taken, so the words are tied to the right click. The live list while recording also shows when you switch to another tab.
 — 2026-11-18

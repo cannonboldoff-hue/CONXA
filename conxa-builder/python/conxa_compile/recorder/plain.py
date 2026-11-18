@@ -28,7 +28,16 @@ def _clip(text: str, n: int = _MAX) -> str:
 
 def _name_of(target: dict[str, Any]) -> str:
     """The best human name for an element: what a person would call it."""
-    for key in ("aria_label", "label_text", "placeholder", "inner_text", "title", "alt", "name"):
+    # The compiler's own name for the element first, so the live list, the step list and the input names agree
+    # (a search box is its placeholder, not the "Add" button next to it).
+    from conxa_compile.compiler.identity_bundle import _accessible_name
+
+    named = _clip(_accessible_name(target))
+    if named:
+        return named
+    # Otherwise the element's own words before a caption found near it: a suggestion in a list is "Java",
+    # not the field's caption "Tags:".
+    for key in ("aria_label", "inner_text", "title", "alt", "label_text", "placeholder", "name"):
         v = _clip(target.get(key) or "")
         if v:
             return v

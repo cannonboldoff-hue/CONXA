@@ -93,6 +93,9 @@ class Assertion(BaseModel):
     timeout_ms: int = 5000
     # If True, assertion failure halts execution. If False, records a warning only.
     required: bool = True
+    # Where a text check's words came from: "result" (words the page showed after the action) or "control" (the label
+    # of a button or link that appeared). A control's label is weak proof of a result, so it is never pre-ticked.
+    source: str = ""
 
 
 # Proof of Done (docs/Backend-Schema.md section 3.4z). A step's `effect` says what must be true afterwards for

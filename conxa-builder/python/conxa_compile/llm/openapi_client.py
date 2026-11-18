@@ -222,6 +222,7 @@ def infer_workflow_review(
         "decision_points": _as_list(data.get("decision_points")),
         "expected_end_state": _as_dict(data.get("expected_end_state")),
         "suggestions": _as_list(data.get("suggestions")),
+        "effects": _as_list(data.get("effects")),
         "understanding": dict(data["understanding"]) if isinstance(data.get("understanding"), dict) else None,
         "loop_copy": [r for r in _as_list(data.get("loop_copy")) if isinstance(r, dict)],
     }

@@ -59,6 +59,7 @@ from conxa_compile.compiler.selector_score import (
 from conxa_compile.compiler.stable_hash import compute_stable_hash
 from conxa_compile.llm import model_ledger
 from conxa_compile.compiler.second_opinion import (
+    apply_effect_judgements,
     apply_second_opinion,
     archive_flagged_steps,
     rename_binding_in_step,
@@ -820,12 +821,14 @@ def _build_assertions(
         if promote:
             required_assigned = True
 
+    control_words = {str(w).lower() for w in (sc.get("control_text") or [])}
     for tok in expected_tokens:
         assertions.append(Assertion(
             type="text_present",
             target=tok,
             timeout_ms=min(wf_timeout, 5000),
             required=False,
+            source="control" if tok.lower() in control_words else "result",
         ))
 
     # Consequential clicks (and uploads — see is_upload_action above) that still have no enforced
@@ -885,8 +888,8 @@ def _build_structural_fingerprint(steps: list[SkillStep]) -> dict[str, Any]:
         fp = step.identity_bundle.fingerprint
         primary = step.target.get("primary_selector", "")
         if primary or fp.data_testid or fp.aria_label or fp.inner_text:
+            # No model wording in here: the same recording must fingerprint the same on every compile.
             landmarks.append({
-                "intent": step.intent,
                 "primary_selector": primary,
                 "data_testid": fp.data_testid,
                 "aria_label": fp.aria_label,
@@ -2140,6 +2143,41 @@ def _prose_contradicts_action(prose: str, action: str | None) -> bool:
     return str(action or "").lower() in _NON_NAVIGATING_ACTIONS and bool(_NAVIGATION_WORDS.match(prose or ""))
 
 
+_WORD_RE = re.compile(r"[a-z0-9]{3,}")
+# Words any step's name may share; they say nothing about WHICH element is meant.
+_COMMON_NAME_WORDS = frozenset({
+    "the", "and", "for", "with", "into", "from", "then", "that", "this", "your", "you", "its", "page", "button", "link",
+    "click", "open", "enter", "type", "typed", "select", "choose", "press", "field", "box", "tab", "menu", "item", "new",
+})
+
+
+def _step_own_words(step: SkillStep) -> set[str]:
+    """Words that belong to this step's own element: its name, text, label, placeholder, the row it acts on
+    and a literal value it types. What the model may call the step by; a word that belongs to another step may not."""
+    parts: list[str] = []
+    bundle = getattr(step, "identity_bundle", None)
+    fp = getattr(bundle, "fingerprint", None)
+    if fp is not None:
+        for field in ("inner_text", "aria_label", "placeholder", "label_text", "value_label", "alt", "title"):
+            parts.append(str(getattr(fp, field, "") or ""))
+    binding = getattr(step, "entity_binding", None)
+    parts.append(str(getattr(binding, "identifier", "") or "") if binding is not None else "")
+    value = step.value
+    if isinstance(value, str) and "{{" not in value:
+        parts.append(value)
+    return set(_WORD_RE.findall(" ".join(parts).lower())) - _COMMON_NAME_WORDS
+
+
+def _prose_borrows_from_neighbour(prose: str, own_words: list[set[str]], i: int) -> bool:
+    """True when the prose names something that is another nearby step's element and not this step's own."""
+    near: set[str] = set()
+    for j in range(max(0, i - 2), min(len(own_words), i + 3)):
+        if j != i:
+            near |= own_words[j]
+    foreign = {w for w in _WORD_RE.findall(prose.lower()) if w in near and w not in own_words[i] and w not in _COMMON_NAME_WORDS}
+    return bool(foreign) and bool(own_words[i] or near)
+
+
 def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowIntentGraph) -> int:
     """Write the merged review call's per-step prose onto the already-compiled,
     already-collapsed `steps` list, and backfill `step.intent` from
@@ -2156,10 +2194,14 @@ def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowInten
     Returns the number of steps whose `intent` was backfilled, so the caller
     knows whether the compile report (built before this ran) needs rebuilding."""
     prose_by_index = {s.index: s for s in graph.steps if s.intent}
+    own_words = [_step_own_words(st) for st in steps]
     backfilled = 0
     for i, step in enumerate(steps):
         entry = prose_by_index.get(i)
         prose = entry.intent if entry else None
+        # A name built from a neighbour's words is a line shifted by one: drop it for the step's own wording.
+        if prose and _prose_borrows_from_neighbour(prose, own_words, i):
+            prose = None
         # The model's wording is a guess about what a step does; the step's own action is a fact. A drag, a typed
         # value or a pick described as "Open the page" was wrongly lined up with a neighbour: drop that wording and
         # let the step be described from its own action.
@@ -2315,6 +2357,26 @@ def _sibling_bindings(visited_hosts: list[str], exclude_skill_id: str) -> dict[s
     return {host: sorted(names) for host, names in out.items()}
 
 
+def _extract_label(ev: dict[str, Any], target: dict[str, Any]) -> str:
+    """What a captured value is called: the element's label, then the heading of its section, then the nearest words.
+    Its own text is the value itself when it holds a digit ("Rs. 400"), so that never names it; a label-like text
+    ("Order total") may."""
+    for field in ("aria_label", "label_text", "placeholder", "name"):
+        if str(target.get(field) or "").strip():
+            return str(target[field])
+    own = str(target.get("inner_text") or "").strip()
+    if own and not re.search(r"\d", own):
+        return own
+    heading = str(((ev.get("extras") or {}).get("section_heading")) or "").strip()
+    if heading:
+        return heading
+    for anchor in ev.get("anchors") or []:
+        text = str((anchor or {}).get("element") or "").strip() if isinstance(anchor, dict) else ""
+        if text and not re.search(r"\d", text):
+            return text
+    return ""
+
+
 def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) -> None:
     """Turn each recorded ``extract`` event's step into a read-a-value step.
 
@@ -2337,8 +2399,7 @@ def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) 
         if raw.get("pattern"):
             spec["pattern"] = str(raw["pattern"])[:200]
         target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
-        wanted = str((ev.get("action") or {}).get("value") or "") or str(
-            target.get("aria_label") or target.get("name") or target.get("inner_text") or "")
+        wanted = str((ev.get("action") or {}).get("value") or "") or _extract_label(ev, target)
         base = re.sub(r"[^a-z0-9]+", "_", wanted.lower()).strip("_")[:40].strip("_")
         base = re.sub(r"^[0-9_]+", "", base) or "extracted_value"
         name, n = base, 2
@@ -2520,6 +2581,7 @@ def _apply_second_opinion(
         noise_findings = [f for f in findings if f.get("kind") == "flag_noise"] if settings.compile_pass("flag_noise") else []
         rewrite_findings = [f for f in findings if f.get("kind") != "flag_noise"]
         applied = apply_second_opinion(steps, rewrite_findings)
+        apply_effect_judgements(steps, (extras_out or {}).get("effects") or [])
         steps, archived = archive_flagged_steps(steps, noise_findings, keep_sequences=keep_sequences)
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile
         applied, archived = [], []

@@ -108,6 +108,13 @@ def compare_state(before: dict[str, Any], after: dict[str, Any]) -> dict[str, An
     }
 
 
+def _left_the_page(ev: Step) -> bool:
+    """True when the recorder saw the address change across this step (a landing), so its page diff is the old page's."""
+    ud = ((ev.get("post_condition") or {}).get("url_delta")) or {}
+    before, after = str(ud.get("before") or "").split("#", 1)[0], str(ud.get("after") or "").split("#", 1)[0]
+    return bool(before and after and before != after)
+
+
 def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, Any]:
     """Fold bridge.js's already-recorded page-wide before/after element diff into state_diff.
 
@@ -119,12 +126,20 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
     text_present/selector_present picker something real to work with instead of falling straight
     to an intent-derived guess when the step's own before/after descriptors show no change.
     """
-    dom_diff = ((ev.get("state_change") or {}).get("dom_diff")) or {}
+    sc = ev.get("state_change") or {}
+    dom_diff = sc.get("dom_diff") or {}
     added_lines = [str(x) for x in (dom_diff.get("added") or [])][:20]
-    if not added_lines:
+    # A step that left the page was last seen on the page it left: what "appeared" there is that page's closing
+    # moment (a search box's suggestions), never a result of the step. Nothing is derived from it.
+    if _left_the_page(ev):
+        return state_diff
+    # Words the page showed after the action, on the same page (bridge.js resultSignature): the real results.
+    result_words = [w.strip() for w in ((sc.get("result_diff") or {}).get("added") or []) if isinstance(w, str) and len(w.strip()) >= 3][:6]
+    if not added_lines and not result_words:
         return state_diff
 
-    extra_text: list[str] = []
+    extra_text: list[str] = list(result_words)
+    control_text: list[str] = []
     extra_selectors: list[str] = []
     for line in added_lines:
         parts = line.split("|")
@@ -139,6 +154,7 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
             extra_selectors.append(f'[data-testid="{testid}"]')
         if text and len(text) >= 3:
             extra_text.append(text)
+            control_text.append(text)  # a control's label: weak proof of a result, offered but never pre-ticked
 
     def _dedup(items: list[str]) -> list[str]:
         seen: set[str] = set()
@@ -156,6 +172,7 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
     merged = dict(state_diff)
     merged["new_elements"] = new_elements
     merged["text_change"] = text_change
+    merged["control_text"] = [t for t in _dedup(control_text) if t.lower() not in {w.lower() for w in result_words}]
     merged["evidence_strength"] = _evidence_strength(new_elements, state_diff.get("removed_elements") or [], text_change)
     return merged
 

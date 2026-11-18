@@ -67,6 +67,11 @@ class TargetDom(BaseModel):
     # and fell through to label_text — the nearest surrounding text, which is not a name.
     alt: str | None = None
     title: str | None = None
+    # Must stay declared here (extra="ignore" drops anything else on RecordedEvent.model_validate()):
+    # a button drawn as <input type=submit value="..."> is named by its value; label_nearby says the caption
+    # was only guessed from the text near the box (bridge.js labelIsExplicit), not tied to it by markup.
+    value_label: str | None = None
+    label_nearby: bool | None = None
     # Recorder-captured stable role/data-* attributes (bridge.js::collectIdentityAttrs) —
     # the compiler's named-attr identity signal reads this. Must stay declared here or
     # Pydantic's default extra="ignore" silently drops it on RecordedEvent.model_validate().
@@ -163,6 +168,9 @@ class StateChange(BaseModel):
     # ({"added": [...], "removed": [...]}). Emitted by bridge.js's _computeDomDiff on every
     # action; optional so recordings from before this field existed still validate.
     dom_diff: dict[str, Any] | None = None
+    # Words (headings, alerts, status lines, paragraphs, cells) that appeared on the same page after the action,
+    # as {"added": [...], "removed": [...]}. What a result looks like; never a control's label. bridge.js resultSignature.
+    result_diff: dict[str, Any] | None = None
 
 
 class DateContext(BaseModel):

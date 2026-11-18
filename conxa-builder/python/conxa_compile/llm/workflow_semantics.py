@@ -266,3 +266,52 @@ def _validate_findings(
     for _ in out[cap:]:
         _log(report, "safety", "over_cap")
     return out[:cap]
+
+
+# ── effects: can this step be undone? ────────────────────────────────────────────────────────────────────────────────
+# A MEANING label the model writes from what a step does in the workflow (never from a word on a button). Code only
+# enforces what follows from it (compiler/action_semantics.py::judged_irreversible), and treats a missing or unsure
+# answer as "cannot be undone", so the person is asked.
+_EFFECT_KINDS = frozenset({"moves_forward", "opens", "edits_field", "saves", "sends", "pays", "deletes", "other"})
+_JUDGED_ACTIONS = frozenset({"click", "dblclick", "double_click", "select", "select_option", "set_checkbox", "set_radio",
+                             "upload", "date_pick", "dialog_accept", "outcome_fork"})
+
+
+def _validate_effects(
+    raw_effects: Any,
+    *,
+    steps_context: list[dict[str, Any]],
+    report: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """One judgement per step key at most, only for a step that can change data, with a usable answer."""
+    if not isinstance(raw_effects, list):
+        return []
+    actions = {str(s.get("key") or ""): str(s.get("action") or "").lower() for s in steps_context}
+    out: dict[str, dict[str, Any]] = {}
+    for item in raw_effects:
+        if not isinstance(item, dict):
+            _log(report, "shape", "malformed_item", type(item).__name__)
+            continue
+        key = str(item.get("step_key") or "").strip()
+        if key not in actions:
+            _log(report, "reference", "unknown_step_key", key)
+            continue
+        if actions[key] not in _JUDGED_ACTIONS or key in out:
+            continue
+        reversible = item.get("reversible")
+        kind = str(item.get("kind") or "other").strip()
+        try:
+            confidence = max(0.0, min(1.0, float(item.get("confidence"))))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if not isinstance(reversible, bool):
+            _log(report, "shape", "bad_effect", key)
+            continue
+        out[key] = {
+            "step_key": key,
+            "reversible": reversible,
+            "kind": kind if kind in _EFFECT_KINDS else "other",
+            "confidence": round(confidence, 2),
+            "reason": str(item.get("reason") or "")[:200],
+        }
+    return list(out.values())
