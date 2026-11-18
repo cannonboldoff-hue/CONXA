@@ -31,7 +31,7 @@ def _is_confirm_only_span(step: dict) -> bool:
 
     return is_confirm_only_span(step)
 
-_DECISION_TIMEOUT_S = 170  # just under the runtime's 180 s park window
+_DECISION_TIMEOUT_S = 870  # just under the 15 minute park window a test run is given (workflows.py::_TEST_RUN_ENV)
 
 _waiters: dict[str, dict[str, Any]] = {}
 _waiters_lock = threading.Lock()
@@ -495,6 +495,7 @@ class TestFlowMixin:
             if paused is not None:
                 paused.last_test_inputs = dict(inputs)
                 save_workflow(paused)
+                self._tf_mark_session_expired(paused)
             push(state="needs_sign_in", steps_ran=len(rows), seconds=elapsed, detail=str(result.get("message") or "")[:300],
                  actions=["test_again"])
             harness.log_event(thread, "Test paused — sign-in expired", glyph="warn", sink=sink,
@@ -665,6 +666,34 @@ class TestFlowMixin:
             return changed
         except Exception:  # noqa: BLE001
             return 0
+
+    @staticmethod
+    def _tf_mark_session_expired(workflow: Any) -> None:
+        """The runtime found the saved sign-in dead. Record it on the group's apps, so "Sign in and test again" opens
+        the sign-in window instead of trusting a check made minutes ago and re-running with the same dead session
+        (AUTH-24 (3)). The app whose address the workflow starts on is marked; with no match, every connected one."""
+        from urllib.parse import urlsplit
+
+        from conxa_core.storage.group_store import get_group, set_group_app_checked
+
+        try:
+            group = get_group(workflow.group_id) if workflow.group_id else None
+            if group is None:
+                return
+            host = urlsplit(workflow.target_url or "").hostname or ""
+
+            def on_host(app: Any) -> bool:
+                for known in (app.login_url, app.success_url):
+                    h = urlsplit(known or "").hostname
+                    if h and host and (host == h or host.endswith("." + h) or h.endswith("." + host)):
+                        return True
+                return False
+
+            connected = [a for a in group.apps if a.captured_at and a.storage_state_path]
+            for app in [a for a in connected if on_host(a)] or connected:
+                set_group_app_checked(group.id, app.id, "expired")
+        except Exception:  # noqa: BLE001 — a note about the session must never fail the test card
+            pass
 
     def _tf_failed(self, workflow_id: str, card_id: str, rows: list[dict[str, Any]], message: str, sink: Any, started: float,
                    inputs: dict[str, Any] | None = None, outcome: str | None = None,

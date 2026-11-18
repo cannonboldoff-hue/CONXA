@@ -21,6 +21,11 @@ const nodeNet = require("net");
 const browserPanel = require("./browser_panel");
 const browserControl = require("./browser_control");
 
+// A throw inside any Electron callback (a tab event, an IPC handler) would otherwise raise Electron's blocking error
+// box in the middle of a recording. Log it and carry on: the person's work matters more than that one callback.
+process.on("uncaughtException", (err) => { console.error("[main] uncaught exception:", (err && err.stack) || err); });
+process.on("unhandledRejection", (reason) => { console.error("[main] unhandled rejection:", (reason && reason.stack) || reason); });
+
 // Local skill assets (screenshots, frames) are streamed from disk through this
 // scheme instead of being base64-inlined into every RPC response — see FIX.md.
 // Must be registered before app is ready.
@@ -511,7 +516,8 @@ function createWindow() {
   });
   mainWindow.on("unmaximize", sendMaximizeState);
   // A test keeps running while the window is minimized: the panel holds its pages at their size (BUILD-103 (1)).
-  mainWindow.on("minimize", () => { void browserPanel.setMinimized(true); });
+  // Logged with the time, so "who minimized Studio" (BUILD-94) can be matched against what else happened then.
+  mainWindow.on("minimize", () => { console.error("[main] window minimized at", new Date().toISOString()); void browserPanel.setMinimized(true); });
   mainWindow.on("restore", () => { void browserPanel.setMinimized(false); });
 }
 

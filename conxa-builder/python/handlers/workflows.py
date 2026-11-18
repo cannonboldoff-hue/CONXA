@@ -554,6 +554,11 @@ def _cancel_active_test_run(workflow_id: str) -> None:
         pass
 
 
+
+# A test that pauses before a step that can't be undone waits for the person as long as the run allows: the park window
+# is 3 minutes by default, far too short to read a question and decide (BUILD-96 (3)).
+_TEST_RUN_ENV = {"CONXA_RECOVERY_PARK_TTL_MS": "900000"}
+
 class WorkflowsMixin:
     def cmd_create_workflow(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_core.storage.group_store import get_group
@@ -1334,7 +1339,7 @@ class WorkflowsMixin:
             result = call_runtime_tool(
                 runtime_dir, "execute_skill", run_args,
                 conxa_dir=conxa_dir,
-                env={"CONXA_DATA_DIR": str(test_data_dir)},
+                env={"CONXA_DATA_DIR": str(test_data_dir), **_TEST_RUN_ENV},
                 phase_sink=_phase_sink,
             )
             # No MCP agent is present in a Studio test run to answer an agent span's park/resume
@@ -1345,10 +1350,10 @@ class WorkflowsMixin:
                 result, run_args,
                 call=lambda args: call_runtime_tool(
                     runtime_dir, "execute_skill", args, conxa_dir=conxa_dir,
-                    env={"CONXA_DATA_DIR": str(test_data_dir)}, phase_sink=_phase_sink),
+                    env={"CONXA_DATA_DIR": str(test_data_dir), **_TEST_RUN_ENV}, phase_sink=_phase_sink),
                 cancel_run=lambda run_id: call_runtime_tool(
                     runtime_dir, "cancel_execution", {"run_id": run_id}, conxa_dir=conxa_dir,
-                    env={"CONXA_DATA_DIR": str(test_data_dir)}),
+                    env={"CONXA_DATA_DIR": str(test_data_dir), **_TEST_RUN_ENV}),
                 guard_hook=guard_hook, review_hook=review_hook,
                 guard_requested=guard_requested, previewed=previewed, mark=_mark, fork_hook=fork_hook,
                 answer_popup=popup_answerer,
@@ -1400,7 +1405,7 @@ class WorkflowsMixin:
                     released = call_runtime_tool(
                         runtime_dir, "execute_skill",
                         {k: run_args[k] for k in ("skill", "company", "inputs", "watch", "wait_for_auth")} | {"_handoff_park": True},
-                        conxa_dir=conxa_dir, env={"CONXA_DATA_DIR": str(test_data_dir)}, phase_sink=_phase_sink)
+                        conxa_dir=conxa_dir, env={"CONXA_DATA_DIR": str(test_data_dir), **_TEST_RUN_ENV}, phase_sink=_phase_sink)
                 except (RuntimeToolError, RuntimeError) as exc:
                     raise _CommandError("handoff_failed", f"Could not hand the page over: {exc}") from exc
                 handed_off = _extract_handed_off(released)

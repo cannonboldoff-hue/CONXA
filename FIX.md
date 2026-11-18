@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**"Sign in and test again" now really asks you to sign in — 2026-11-18**
+When a test stopped because the sign-in had run out, pressing "Sign in and test again" could re-run the test with the same expired sign-in. Studio now remembers that the sign-in ran out and opens the sign-in window. A test that pauses to ask before something that cannot be undone now waits 15 minutes instead of 3, and Studio no longer shows a blocking error box if one small background step fails during a recording.
+— 2026-11-18
+
 **Error messages now say what to do in plain words — 2026-11-18**
 Some messages that reached the test card were written for an AI helper ("Call list_skills first") or showed an internal word. They now say things like "Studio couldn't find this workflow in its built copy. Choose Build again, then test it", or "bring Build Studio's window back, then run the test again". A test now checks that no message uses developer words.
 — 2026-11-18

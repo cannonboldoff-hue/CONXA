@@ -1101,11 +1101,20 @@ class RecordingSession:
             if isinstance(u, str) and u.lower().startswith(("http://", "https://")) and u not in urls:
                 urls.append(u)
         first_reason = ""
-        for i, probe_url in enumerate(urls or [login_url]):
-            definition, reason, retryable = self._learn_auth_at_sync(probe_url, existing)
-            if definition is not None:
-                return definition, ""
-            first_reason = first_reason or reason
+        # Pressed right after signing in, the page may still be writing its session: the first look can read as
+        # signed out although the person is signed in (BUILD-98 (4)). One more full look after a short settle, with
+        # the same checks; nothing about what counts as signed in is loosened.
+        for attempt in range(2):
+            if attempt:
+                self._idle_sync(2.5)
+            retryable = False
+            for probe_url in (urls or [login_url]):
+                definition, reason, retryable = self._learn_auth_at_sync(probe_url, existing)
+                if definition is not None:
+                    return definition, ""
+                first_reason = first_reason or reason
+                if not retryable:
+                    break
             if not retryable:
                 break
         return None, first_reason
