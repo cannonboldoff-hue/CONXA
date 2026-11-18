@@ -63,6 +63,7 @@ def compute_stable_hash(element_data: dict[str, Any]) -> str:
     ax_name = (
         str(element_data.get("aria_label") or "")
         or str(element_data.get("name") or "")
+        or str(element_data.get("value_label") or "")
         or str(element_data.get("inner_text") or "")[:80]
     ).strip()
 

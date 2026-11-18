@@ -5,7 +5,7 @@
 // test/fixtures/fingerprint_name_cases.json (run by both languages) and accessible_name_cases.json
 // (the keyboard-shortcut tail).
 //
-// Order: aria_label, alt, title, placeholder, visible text (only for roles that are named from their
+// Order: aria_label, alt, title, placeholder, value_label (a submit/button input's caption), visible text (only for roles that are named from their
 // content, and only when it is short enough to be a name), nearby <label> text (only for form controls).
 // `name` is the HTML form-field attribute, never an ARIA accessible-name source, so it is not used.
 // label_text is gated on form controls because for a link or button it is surrounding context and can
@@ -46,7 +46,7 @@ function fingerprintName(fingerprint) {
     ? innerText : "";
   const fromLabel = LABELLED_TAGS.has(tag) || LABELLED_TAGS.has(role) ? fp.label_text : "";
   return stripKeyboardShortcutTail(String(
-    fp.aria_label || fp.alt || fp.title || fp.placeholder || fromContent || fromLabel || "",
+    fp.aria_label || fp.alt || fp.title || fp.placeholder || fp.value_label || fromContent || fromLabel || "",
   ).trim());
 }
 

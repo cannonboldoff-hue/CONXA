@@ -49,9 +49,33 @@ function extractDescriptor(el) {
 
   const ariaLabel = el.getAttribute("aria-label") || "";
   const nameAttr = el.getAttribute("name") || "";
-  const innerText = (el.textContent || "").trim().slice(0, 80);
-  const axName = (ariaLabel || nameAttr || innerText).trim();
-  const hashPayload = `${tag}|${sortedAttrs}|${axName}`;
+  // The hash input is the recorder's, field for field (compiler/stable_hash.py over bridge.js's
+  // target): tag, only `role` + stable `data-*` attributes (never id/name/type/href/class), and the
+  // name as aria-label || name || visible text. Anything else here and a recorded hash can never match.
+  const shownText = (typeof el.innerText === "string" ? el.innerText : (el.textContent || "")).replace(/\s+/g, " ").trim();
+  const hashAttrs = [];
+  for (const a of Array.from(el.attributes || [])) {
+    const k = a.name.toLowerCase();
+    if (SKIP.has(k) || k === "data-testid" || k === "data-test-id" || k === "data-test" || k === "data-cy") continue;
+    if (k !== "role" && k.indexOf("data-") !== 0) continue;
+    const v = String(a.value || "").trim();
+    const longMixed = v.length >= 16 && !/\s/.test(v) && /[A-Za-z]/.test(v) && /\d/.test(v) && /[A-Z]/.test(v) && /[a-z]/.test(v) && /^[A-Za-z0-9_\-]+$/.test(v);
+    if (!v || v.length > 64 || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) || /^[0-9a-f]{16,}$/i.test(v) || longMixed) continue;
+    hashAttrs.push([k, v]);
+  }
+  const PREF = ["role", "data-key", "data-command", "data-action", "data-value"];
+  hashAttrs.sort((x, y) => {
+    const rx = PREF.indexOf(x[0]) === -1 ? 99 : PREF.indexOf(x[0]);
+    const ry = PREF.indexOf(y[0]) === -1 ? 99 : PREF.indexOf(y[0]);
+    return rx !== ry ? rx - ry : (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
+  });
+  const hashAttrStr = hashAttrs.slice(0, 12).sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)).map(([k, v]) => `${k}=${v}`).join("&");
+  const typeAttr = (el.getAttribute("type") || "").toLowerCase();
+  // A button drawn as <input type=submit value="Transfer"> is named by its value (bridge.js value_label).
+  const valueLabel = tag === "input" && (typeAttr === "submit" || typeAttr === "button" || typeAttr === "reset")
+    ? (el.getAttribute("value") || "") : "";
+  const axName = (ariaLabel || nameAttr || valueLabel || shownText.slice(0, 80)).trim();
+  const hashPayload = `${tag}|${hashAttrStr}|${axName}`;
 
   // Implicit-role best effort. This must cover every tag the compiler can record a role for,
   // not just the interactive ones: resolver.js's roleAgrees() returns false whenever EITHER
@@ -115,10 +139,27 @@ function extractDescriptor(el) {
   const placeholder = el.getAttribute("placeholder") || "";
   const altAttr = el.getAttribute("alt") || "";
   const titleAttr = el.getAttribute("title") || "";
+  // The caption tied to a form control, by the recorder's first two rules (label[for] / enclosing label,
+  // then aria-labelledby). Empty for anything else.
+  let labelText = "";
+  try {
+    const own = el.labels && el.labels.length ? Array.from(el.labels).map(l => l.textContent || "").join(" ") : "";
+    let by = "";
+    const ids = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean);
+    if (!own && ids.length) by = ids.map(i => { const n = document.getElementById(i); return n ? (n.textContent || "") : ""; }).join(" ");
+    labelText = (own || by).replace(/\s+/g, " ").trim().slice(0, 80);
+  } catch (_) {}
   return {
     role,
-    name: (ariaLabel || nameAttr || altAttr || titleAttr || (el.textContent || "").trim() || placeholder).slice(0, 120),
-    text: (el.textContent || "").trim().slice(0, 120),
+    // Same order as the recorder's accessible name (identity_bundle.py::_accessible_name); the form-field
+    // `name` attribute comes last, only for an element with nothing else to be called, and is also compared
+    // as its own field (nameAttr).
+    name: (ariaLabel || altAttr || titleAttr || placeholder || valueLabel || shownText || labelText || nameAttr).slice(0, 120),
+    nameAttr,
+    elId: el.getAttribute("id") || "",
+    inputType: tag === "input" ? (el.getAttribute("type") || "text").toLowerCase() : "",
+    label: labelText,
+    text: shownText.slice(0, 120),
     testid: el.getAttribute("data-testid") || el.getAttribute("data-test-id") || "",
     anchorNeighbors: neighbors,
     sectionHeading,

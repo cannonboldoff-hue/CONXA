@@ -146,6 +146,18 @@ function scoreCandidate(node, fingerprint) {
   const nodeHeading = norm(node.sectionHeading);
   if (fpHeading && nodeHeading) add(0.15, fpHeading === nodeHeading);
 
+  // Language-neutral identity (W1): the element's own id and form-field name, and its input type. They stay the
+  // same when the page is translated, so a box whose visible words changed still agrees on what it is. Each is
+  // charged only when both sides carry it, so a pack recorded before they existed scores as it did.
+  const fpId = str(fp.element_id);
+  if (fpId && node.elId) add(0.20, fpId === node.elId);
+  const fpField = norm(fp.name);
+  if (fpField && norm(node.nameAttr)) add(0.15, fpField === norm(node.nameAttr));
+  const fpType = norm(fp.input_type);
+  if (fpType && norm(node.inputType)) add(0.05, fpType === norm(node.inputType));
+  // The caption tied to the control (label[for], enclosing label, aria-labelledby), recorded as label_text.
+  if (norm(fp.label_text) && norm(node.label)) add(0.10, textCredit(fp.label_text, node.label));
+
   return weight > 0 ? score / weight : 0;
 }
 

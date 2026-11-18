@@ -8,5 +8,7 @@
   {"name": "a link is not named by a neighbouring label", "fingerprint": {"tag": "a", "role": "link", "label_text": "Project"}, "expect": ""},
   {"name": "a keyboard-shortcut hint is not part of the name", "fingerprint": {"tag": "button", "inner_text": "File upload Alt+C then U"}, "expect": "File upload"},
   {"name": "a label-less input is named by its placeholder", "fingerprint": {"tag": "input", "placeholder": "Search services"}, "expect": "Search services"},
-  {"name": "alt names a bare image", "fingerprint": {"tag": "img", "alt": "Company logo"}, "expect": "Company logo"}
+  {"name": "alt names a bare image", "fingerprint": {"tag": "img", "alt": "Company logo"}, "expect": "Company logo"},
+  {"name": "a submit input is named by its value", "fingerprint": {"tag": "input", "value_label": "Transfer"}, "expect": "Transfer"},
+  {"name": "a placeholder wins over a submit value", "fingerprint": {"tag": "input", "placeholder": "Amount", "value_label": "Transfer"}, "expect": "Amount"}
 ]

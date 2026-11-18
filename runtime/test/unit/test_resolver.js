@@ -285,3 +285,15 @@ test("a uniquely matched <select> resolves instead of missing", () => {
   const r = resolve([sig], SELECT_FP, mockRoot({ [sig.selector]: [SELECT_NODE] }));
   assert.ok(r.node, `expected a hit, got ${JSON.stringify(r)}`);
 });
+
+test("W1: language-neutral fields (id, form-field name, input type, label) are charged only when both sides have them", () => {
+  const { scoreCandidate } = require("../../app/resolver");
+  const fp = { tag: "input", element_id: "permanentAddress", name: "permAddr", input_type: "text", label_text: "Permanent Address" };
+  // A page in another language: the words changed, the id and field name did not.
+  const translated = { role: "", name: "Dauerhafte Adresse", nameAttr: "permAddr", elId: "permanentAddress", inputType: "text", label: "Dauerhafte Adresse" };
+  const other = { role: "", name: "Dauerhafte Adresse", nameAttr: "currentAddr", elId: "currentAddress", inputType: "text", label: "Aktuelle Adresse" };
+  assert.ok(scoreCandidate(translated, fp) > scoreCandidate(other, fp));
+  assert.ok(scoreCandidate(translated, fp) >= 0.5, "same id and field name clear the threshold without the words");
+  // A node that does not report them (older descriptor) scores as before.
+  assert.equal(scoreCandidate({ name: "x" }, { tag: "input", element_id: "a", name: "b" }), 0);
+});

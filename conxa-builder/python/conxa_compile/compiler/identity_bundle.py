@@ -321,6 +321,7 @@ def _accessible_name(target: dict[str, Any]) -> str:
         target.get("alt"),
         target.get("title"),
         target.get("placeholder"),
+        target.get("value_label"),
     ]
     role_or_tag = {str(target.get("tag") or "").lower(), str(target.get("role") or "").lower()}
     if role_or_tag & _NAME_FROM_CONTENT_ROLES:

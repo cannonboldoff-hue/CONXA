@@ -1,0 +1,10 @@
+[
+  {"name": "a button named by its text", "html": "<button id=\"go\">Save changes</button>", "selector": "#go"},
+  {"name": "a labelled text box", "html": "<label for=\"em\">Email address</label><input id=\"em\" name=\"email\" type=\"text\">", "selector": "#em"},
+  {"name": "a box named only by its form-field name", "html": "<input id=\"permanentAddress\" name=\"permAddr\" type=\"text\">", "selector": "#permanentAddress"},
+  {"name": "a submit input named by its value", "html": "<input type=\"submit\" value=\"Transfer\">", "selector": "input[type=submit]"},
+  {"name": "a button with role and data attributes", "html": "<button role=\"menuitem\" data-key=\"export\" data-command=\"run\" class=\"is-open btn\">Export</button>", "selector": "button"},
+  {"name": "an element with a generated data value", "html": "<button data-id=\"a1B2c3D4e5F6g7H8\" data-action=\"save\">Save</button>", "selector": "button"},
+  {"name": "text split over lines", "html": "<a href=\"#x\">  Order\n   history  </a>", "selector": "a"},
+  {"name": "aria-label beats everything", "html": "<button aria-label=\"Close dialog\" title=\"x\">X</button>", "selector": "button"}
+]

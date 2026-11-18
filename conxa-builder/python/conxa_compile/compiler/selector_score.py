@@ -163,15 +163,38 @@ def confidence_from_signal_rows(signals: list[dict[str, Any]]) -> float:
     persisted/serialized signal dicts the editor DTOs carry instead of the in-memory
     IdentityBundle/IdentitySignal pydantic objects used during compile.
     """
-    if not signals:
+    rows = [s for s in signals or [] if isinstance(s, dict)]
+    if not rows:
         return 0.0
-    base = max((float(s.get("durability") or 0.0) for s in signals if isinstance(s, dict)), default=0.0)
-    classes = {str(s.get("orthogonality_class") or "") for s in signals if isinstance(s, dict)}
+    # What counts is whether the element can be found uniquely: the best signal that did match
+    # exactly one element on the recorded page. Only with none of those is the strongest-looking
+    # signal discounted.
+    unique = [float(s.get("durability") or 0.0) for s in rows if s.get("unique_at_compile")]
+    base = max(unique) if unique else max(float(s.get("durability") or 0.0) for s in rows)
+    unique_factor = 1.0 if unique else 0.6
+    classes = {str(s.get("orthogonality_class") or "") for s in rows}
     classes.discard("")
-    ortho_factor = 1.0 if len(classes) >= 2 else 0.7
-    has_unique = any(bool(s.get("unique_at_compile")) for s in signals if isinstance(s, dict))
-    unique_factor = 1.0 if has_unique else 0.6
+    # One kind of signal is a penalty only when that signal is weak; a readable id that matched
+    # one element (css-id, 0.45) is a strong signal on its own.
+    ortho_factor = 1.0 if len(classes) >= 2 or base >= _STRONG_SINGLE_SIGNAL else 0.7
     return round(min(1.0, base * ortho_factor * unique_factor), 3)
+
+
+# A signal below this durability is a dynamic id, a positional path or a bare xpath: it may match
+# one element today but says nothing lasting about which one.
+USABLE_SIGNAL_MIN_DURABILITY = 0.25
+_STRONG_SINGLE_SIGNAL = 0.45
+
+
+def has_usable_unique_signal(signals: list[dict[str, Any]]) -> bool:
+    """True when at least one signal matched exactly one element on the recorded page and is not
+    a dynamic, positional or bare-xpath address. A step without one cannot be trusted to find its
+    element again."""
+    return any(
+        isinstance(s, dict) and s.get("unique_at_compile")
+        and float(s.get("durability") or 0.0) >= USABLE_SIGNAL_MIN_DURABILITY
+        for s in signals or []
+    )
 
 
 def rank_by_durability(

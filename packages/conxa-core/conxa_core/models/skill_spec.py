@@ -217,6 +217,8 @@ class ElementFingerprint(BaseModel):
     label_text: str = ""
     alt: str = ""              # <img> accessible name — the only name a bare image has
     title: str = ""            # generic accessible-name fallback for any element
+    value_label: str = ""      # caption of <input type=submit|button|reset>: its value attribute
+    element_id: str = ""       # the element's own id, only when it reads as written by a person (not generated)
     data_testid: str = ""      # data-testid attribute value — highest-stability signal
     input_type: str = ""       # for <input> elements
     css_class_tokens: list[str] = Field(default_factory=list)   # stable class tokens only

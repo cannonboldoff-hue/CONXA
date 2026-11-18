@@ -79,6 +79,7 @@ Each is explained in full in `docs/TRD.md`.
 - The second opinion (`compiler/second_opinion.py`) may write meaning (input bindings, placeholders, phase, `try_dismiss` branches, optional text/URL assertions, archiving no-effect steps). It never touches `target`, `identity_bundle`, `compiled_selectors`, waits or the frame/tab chain. Human Review is the gate.
 - `try_dismiss` branches are built only by `second_opinion.py::build_try_dismiss_from_hint`.
 - Chat edits never touch address keys (`ADDRESS_KEYS` in `editor/capability_manifest.py`). Chat never re-points a step; a person does it in Human Edit.
+- The recorder, compiler and runtime describe an element by one contract: same name order, same hash input, same label rule. `conxa-cloud/tests/test_element_descriptor_agreement.py` runs one fixture (`runtime/test/fixtures/element_descriptor_cases.json`) through all three; change one side and the test fails.
 - Iframe chain is kept verbatim from recording to execution; bounding boxes are page-level. `frame_enter`/`frame_exit` get `no_recovery_block`.
 - An app map (`app_graph/`) stores app shape, never data (all text through `scrub.py`), uses no LLM, and is always rebuilt, never edited.
 

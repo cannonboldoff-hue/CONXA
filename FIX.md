@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Studio no longer calls a workable recording "failed" — 2026-11-18**
+After recording, Studio could say a workflow had failed when every step could in fact find its button or box, just by a weaker kind of address. It now says "failed" only when a step has no reliable way to find what it clicks. The part of Studio that replays the workflow also checks a box's name and label, so a page in another language is still found.
+— 2026-11-18
+
 **A run now leaves a full record on the computer that ran it — 2026-11-18**
 When a workflow failed on someone's computer, the notes it left behind were too thin to say why. Each run now writes down, for every step, how sure it was about the right button and which checks proved the step worked. These notes stay on that computer and are not sent to Conxa Cloud. Two tests that failed now and then for no real reason were also made steady.
 — 2026-11-18

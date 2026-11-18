@@ -65,6 +65,7 @@ from conxa_compile.compiler.second_opinion import (
 )
 from conxa_compile.compiler.step_key import step_key_index_map, step_keys
 from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
+from conxa_compile.compiler.selector_score import has_usable_unique_signal
 from conxa_compile.compiler.selector_grammar import display_to_signal, signal_to_display
 from conxa_compile.compiler.state_validation import capture_state_snapshot, compare_state, merge_dom_diff_evidence, optimize_scroll, scroll_payload, validation_from_diff
 from conxa_compile.compiler.step_anchors import clean_anchors, clean_steps, fix_step_order, generate_stable_selector
@@ -445,6 +446,14 @@ def _section_heading(ev: dict[str, Any]) -> str:
     return "" if has_personal_email(text) else text
 
 
+def _readable_element_id(target: dict[str, Any]) -> str:
+    """The element's own id when a person could have written it (not generated, not a counter)."""
+    from conxa_compile.compiler.selector_score import is_dynamic_id
+
+    el_id = str(target.get("id") or "").strip()
+    return el_id if el_id and not is_dynamic_id(f"#{el_id}") else ""
+
+
 def _build_element_fingerprint(ev: dict[str, Any]) -> ElementFingerprint:
     """Extract stable element identity from recorded event signals."""
     target = ev.get("target") or {}
@@ -500,6 +509,8 @@ def _build_element_fingerprint(ev: dict[str, Any]) -> ElementFingerprint:
         label_text=str(target.get("label_text") or ""),
         alt=str(target.get("alt") or ""),
         title=str(target.get("title") or ""),
+        value_label=str(target.get("value_label") or ""),
+        element_id=_readable_element_id(target),
         data_testid=data_testid,
         input_type=str(semantic.get("input_type") or ""),
         css_class_tokens=class_tokens,
@@ -574,6 +585,7 @@ def _build_identity_bundle(
         "aria_label": str(target.get("aria_label") or ""),
         "name": str(target.get("name") or ""),
         "inner_text": str(target.get("inner_text") or "")[:80],
+        "value_label": str(target.get("value_label") or ""),
         "attributes": target.get("attributes") or {},
     }
     s_hash = compute_stable_hash(element_data)
@@ -919,16 +931,16 @@ def _confidence_from_identity_bundle(bundle: Any) -> float:
     floor is for this element — more orthogonal classes and a unique top signal mean higher
     confidence. No LLM agreement is consulted.
     """
-    signals = list(getattr(bundle, "signals", None) or [])
-    if not signals:
-        return 0.0
-    base = max((float(getattr(s, "durability", 0.0) or 0.0) for s in signals), default=0.0)
-    classes = {str(getattr(s, "orthogonality_class", "") or "") for s in signals}
-    classes.discard("")
-    ortho_factor = 1.0 if len(classes) >= 2 else 0.7
-    has_unique = any(bool(getattr(s, "unique_at_compile", False)) for s in signals)
-    unique_factor = 1.0 if has_unique else 0.6
-    return round(min(1.0, base * ortho_factor * unique_factor), 3)
+    from conxa_compile.compiler.selector_score import confidence_from_signal_rows
+
+    return confidence_from_signal_rows([
+        {
+            "durability": getattr(s, "durability", 0.0),
+            "orthogonality_class": getattr(s, "orthogonality_class", ""),
+            "unique_at_compile": getattr(s, "unique_at_compile", False),
+        }
+        for s in (getattr(bundle, "signals", None) or [])
+    ])
 
 
 def _build_target(
@@ -1553,6 +1565,17 @@ def _build_step(
     return step
 
 
+def _signal_rows(step: SkillStep) -> list[dict[str, Any]]:
+    bundle = getattr(step, "identity_bundle", None)
+    return [
+        {
+            "durability": getattr(sig, "durability", 0.0),
+            "unique_at_compile": getattr(sig, "unique_at_compile", False),
+        }
+        for sig in (getattr(bundle, "signals", None) or [])
+    ]
+
+
 def _build_compile_report(
     steps: list[SkillStep], *, degraded: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
@@ -1560,9 +1583,9 @@ def _build_compile_report(
 
     Status:
     - "ok" if all confidence >= 0.90 and no warnings, and nothing degraded
-    - "review_needed" if any confidence 0.75–0.89, or an optional pass genuinely failed
+    - "review_needed" if any step is less certain, or an optional pass genuinely failed
       (see `degraded`) — a reviewer should look, but nothing here blocks the compile
-    - "failed" if any confidence < 0.75
+    - "failed" only if a step has no unique, lasting way to find its element (or no selector)
 
     `degraded`: entries for an optional, non-primary pass (second opinion, vision-anchor
     prefetch, …) that failed outright rather than being cleanly disabled or finding
@@ -1575,6 +1598,7 @@ def _build_compile_report(
     step_reports: list[dict[str, Any]] = []
     min_confidence = 1.0
     has_warnings = False
+    steps_without_unique = 0
 
     for i, step in enumerate(steps):
         target = step.target or {}
@@ -1602,8 +1626,15 @@ def _build_compile_report(
         source = str(target.get("selector_source") or "heuristic")
         rationale = str(target.get("selector_rationale") or "")
 
+        signal_rows = _signal_rows(step)
+        # A step whose bundle was saved is judged on whether its element can be found uniquely;
+        # one with no bundle (older packages) is still judged on its confidence number.
+        no_unique = (not has_usable_unique_signal(signal_rows)) if signal_rows else confidence < 0.75
+        if no_unique:
+            steps_without_unique += 1
+
         warnings: list[dict[str, str]] = []
-        if confidence < 0.50:
+        if (no_unique if signal_rows else confidence < 0.50):
             warnings.append({
                 "code": "low_selector_confidence",
                 "message": f"Selector confidence {confidence:.2f} is below 0.50 — runtime may need to fall back to vision recovery",
@@ -1616,6 +1647,7 @@ def _build_compile_report(
                 "message": "No selector could be generated — step may fail at runtime",
             })
             has_warnings = True
+            steps_without_unique += 1
 
         if confidence < min_confidence:
             min_confidence = confidence
@@ -1633,12 +1665,14 @@ def _build_compile_report(
 
     degraded_list = list(degraded or [])
 
-    if min_confidence >= 0.90 and not has_warnings and not degraded_list:
-        status = "ok"
-    elif min_confidence >= 0.75:
-        status = "review_needed"
-    else:
+    # "failed" means a step has no unique, lasting way to find its element (or no selector at all);
+    # a step that is merely less certain is "review_needed".
+    if steps_without_unique:
         status = "failed"
+    elif min_confidence >= 0.90 and not has_warnings and not degraded_list:
+        status = "ok"
+    else:
+        status = "review_needed"
 
     from conxa_core.llm import get_router
     router = get_router()

@@ -1693,6 +1693,9 @@
         // "nearest surrounding text" walk, which names an avatar after the paragraph above it.
         alt: el.getAttribute("alt") || null,
         title: el.getAttribute("title") || null,
+        // A button drawn as <input type=submit value="Transfer"> has no inner text: its caption is its value.
+        value_label: tag === "input" && /^(submit|button|reset)$/i.test(el.getAttribute("type") || "")
+          ? (el.getAttribute("value") || null) : null,
         attributes: collectIdentityAttrs(el),
       },
       selectors,
