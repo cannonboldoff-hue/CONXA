@@ -1586,6 +1586,8 @@ says whether an accepted proposal actually worked, not just that a reviewer like
 
 ### 4.1 Telemetry Batch Payload (Runtime → Cloud)
 
+> **Local record vs telemetry (RT-16/17, 2026-11-18).** What the runtime sends here is deliberately small: counts, tiers and outcomes, never a selector, page text or input value. The detail of a run stays on the customer's computer in `logs/recovery.log` (JSONL, scrubbed by `redact.scrubLine`, three older files kept): every line carries `run_id` and `step_key`; `resolve` lines hold the resolver's winning score and margin over the runner-up (or the tied candidates), `proof` lines hold the verdict, rung and each check's witness and answer. The tracker never reads that file, and `runtime/test/unit/test_recovery_log_local_record.js` fails if a `tracker.emit` call carries `checks`, `tied`, `signals` or `candidates`.
+
 ```json
 {
   "rid": "run_abc123",      // run_id
