@@ -35,6 +35,9 @@ ActionKind = Literal[
     "wait", "assert", "screenshot",
     # a value the person marked "read this" while recording; compiles to an `extract` step
     "extract",
+    # a press or drag on a <canvas> (a drawing board, a canvas-drawn app): it has no element to find again, so it is
+    # recorded only to be left out and said plainly at compile (compiler/build.py::prepare_compile_events)
+    "unsupported_gesture",
     # conditional / branch (EXEC-1): optional interstitials — probe + nested step body, never
     # escalate to recovery. See CLAUDE.md Key Invariants.
     "if_present", "try_dismiss", "wait_for_one_of", "outcome_fork",

@@ -1377,3 +1377,23 @@ def test_dropping_an_input_names_its_row_by_the_recorded_value_and_removes_the_i
     assert after["skills"][0]["steps"][-1]["entity_binding"]["identifier"] == "Carol"
     assert after["skills"][0]["steps"][-1]["entity_binding"]["source"] == "literal"
     assert not any(i.get("id") == "search_by_name" for i in after.get("inputs") or [])
+
+
+def test_the_robot_check_answer_inserts_a_hand_over_step_by_code(env):
+    """WF-8 8.13: "Add a hand-over step" puts one where the robot check was, worded for the person who does it."""
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    steps = read_skill(skill_id)["skills"][0]["steps"]
+    added = b._apply_clarify_ops(skill_id, [{"op": "insert_handover", "after_step_key": step_keys(steps)[0],
+                                             "message": "Please do the robot check, then continue."}], "rid2")
+    after = read_skill(skill_id)["skills"][0]["steps"]
+    assert added == 1 and len(after) == len(steps) + 1
+    hand = after[1]
+    assert (hand["action"] if isinstance(hand["action"], str) else hand["action"]["action"]) == "handover"
+    assert hand["value"] == "Please do the robot check, then continue."

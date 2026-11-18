@@ -1765,6 +1765,55 @@
   let _openWatches = 0;
   let _cutAll = false;
 
+  // A value typed into a password-like box can come back in an address (a form sent by GET: "done.html?pw=…"). The
+  // recorder is told its hash, never the value, so it can redact that address everywhere it saves it
+  // (conxa_core/redact.py). Only through Studio's own binding: never relayed to a parent page.
+  function _noteSecret(raw) {
+    const v = String(raw || "");
+    const fn = window["__skillReport"];
+    if (v.length < 4 || typeof fn !== "function") return;
+    try { fn({ _secret: _sha256Hex(v) }); } catch (_e) {}
+  }
+  // SHA-256 of a string's UTF-8 bytes, hex. Synchronous and self-contained: crypto.subtle is missing on plain-http
+  // pages, which are exactly the ones that send forms by GET. Matches conxa_core.redact.secret_hash.
+  function _sha256Hex(text) {
+    const bytes = Array.from(unescape(encodeURIComponent(text)), (c) => c.charCodeAt(0));
+    const K = [];
+    const H = [];
+    let n = 2;
+    for (let found = 0; found < 64; n++) {
+      let prime = true;
+      for (let d = 2; d * d <= n; d++) if (n % d === 0) { prime = false; break; }
+      if (!prime) continue;
+      if (found < 8) H[found] = (Math.pow(n, 1 / 2) * 4294967296) | 0;
+      K[found++] = (Math.pow(n, 1 / 3) * 4294967296) | 0;
+    }
+    const bitLen = bytes.length * 8;
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    for (let s = 56; s >= 0; s -= 8) bytes.push(s >= 32 ? Math.floor(bitLen / 4294967296) >>> (s - 32) & 255 : (bitLen >>> s) & 255);
+    const w = new Array(64);
+    for (let off = 0; off < bytes.length; off += 64) {
+      for (let t = 0; t < 16; t++) w[t] = (bytes[off + 4 * t] << 24) | (bytes[off + 4 * t + 1] << 16) | (bytes[off + 4 * t + 2] << 8) | bytes[off + 4 * t + 3];
+      for (let t = 16; t < 64; t++) {
+        const a = w[t - 15], b = w[t - 2];
+        const s0 = ((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3);
+        const s1 = ((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10);
+        w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+      }
+      let [a, b, c, d, e, f, g, h] = H;
+      for (let t = 0; t < 64; t++) {
+        const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+        const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[t] + w[t]) | 0;
+        const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+        const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+    }
+    return H.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+  }
   function report(payload) {
     if (payload && payload.action && !payload._amend && !payload.uid) {
       payload.bridge = _bridgeId;
@@ -2389,7 +2438,9 @@
     // Changed while the person presses something else (an autocomplete fills the box from the suggestion pressed):
     // that is the press's effect, replayed by the press, not typing. Their own typing was sent at the press.
     if (_pressing && _pressing !== target && !(target.contains && target.contains(_pressing))) return;
-    const value = isSensitiveEditable(target) ? "{{REDACTED}}" : readEditableValue(target);
+    const sensitive = isSensitiveEditable(target);
+    if (sensitive) _noteSecret(readEditableValue(target));
+    const value = sensitive ? "{{REDACTED}}" : readEditableValue(target);
     const p = serializeTarget(target, "type", value);
     p.action.value = value;
     finalizeState(p);
@@ -2457,12 +2508,34 @@
   let _pressed = null;
   let _pressing = null; // the element under a press still in progress (see emitEditableChange)
   let _lastEnterAt = 0; // set by the keydown listener below
+  // A press or drag on a <canvas> (a drawing board, a canvas-drawn app such as Excalidraw) acts on pixels, not on an
+  // element a replay could find again. Recorded as "unsupported_gesture" so the person is told plainly, never as a
+  // click on whatever wraps the canvas (WF-8 8.12: a drawn rectangle became 4 clicks on the board that drew nothing).
+  let _canvasPress = null;
+  const _isCanvas = (el) => !!el && el.nodeType === 1 && String(el.tagName || "").toUpperCase() === "CANVAS";
+  function _emitCanvasGesture(el, moved) {
+    try { finalizeState(serializeTarget(el, "unsupported_gesture", JSON.stringify({ kind: "canvas", moved: !!moved }))); } catch (_e) {}
+  }
+  onDoc(
+    "pointerup",
+    (ev) => {
+      const c = _canvasPress;
+      _canvasPress = null;
+      if (c) _emitCanvasGesture(c.el, Math.abs(ev.clientX - c.x) + Math.abs(ev.clientY - c.y) > 4);
+    },
+    true
+  );
   onDoc(
     "pointerdown",
     (ev) => {
       _pressed = null;
       if (_captureNext || ev.button !== 0) return;
       const el = eventTargetFromPath(ev);
+      if (_isCanvas(el)) {
+        flushPendingInput();
+        _canvasPress = { el, x: ev.clientX, y: ev.clientY };
+        return;
+      }
       const resolved = el && el.nodeType === 1 ? resolveMeaningfulTarget(el) : null;
       if (!resolved) return;
       flushPendingInput();
@@ -2507,6 +2580,7 @@
       trace("event", { t: "click" });
       let el = eventTargetFromPath(ev);
       if (!el || el.nodeType !== 1) return;
+      if (_isCanvas(el) && !_captureNext) return; // its press was recorded as a canvas gesture
       flushPendingInput();
       if (_captureNext) {
         ev.preventDefault();
@@ -2685,7 +2759,7 @@
     "dblclick",
     (ev) => {
       let el = eventTargetFromPath(ev);
-      if (!el || el.nodeType !== 1) return;
+      if (!el || el.nodeType !== 1 || _isCanvas(el)) return; // both presses were recorded as canvas gestures
       const resolved = resolveMeaningfulTarget(el);
       if (!resolved) return;
       const p = serializeTarget(resolved, "dblclick", null);
@@ -2699,6 +2773,7 @@
     (ev) => {
       let el = eventTargetFromPath(ev);
       if (!el || el.nodeType !== 1) return;
+      if (_isCanvas(el)) { _emitCanvasGesture(el, false); return; }
       const resolved = resolveMeaningfulTarget(el) || el;
       const p = serializeTarget(resolved, "right_click", null);
       finalizeStateAfterSettle(p, clickSettleQuietMs, clickSettleMaxMs);

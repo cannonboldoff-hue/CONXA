@@ -244,21 +244,21 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       const count = (t) => countTextAcross(page, t, strict);
       ok = await pollPositive(async () => (!strict && await anyRootHasMatch(roots, textSelector(target)))
         || ((await count(target)) || 0) > 0, timeout);
-      // Same document, and the text was already on the page this many times before the action: finding it again says
-      // nothing about the action, so it is "can't tell" unless there is more of it now. Never a new failure.
-      const before = ok && baseline && baseline.counts && baseline.counts[target];
-      // New: counted before the action and found absent then (or more of it now). Only such a "yes" could have been
-      // a "no" had the action done nothing, so only it may prove that the work finished (run.js::proveStep).
-      // Measured the same way both times (visible text), so text sitting hidden in the page never counts as new.
-      if (before === 0) {
-        const n = await count(target);
-        fresh = typeof n === "number" && n > 0;
-      }
-      if (before > 0 && page.url() === baseline.url) {
-        const more = await pollPositive(async () => {
+      // A "yes" proves the action only if it would have been a "no" had the action done nothing (CLAUDE.md, witness
+      // rule): the words were counted before the action, and there are more of them now. Anything else is "can't
+      // tell", never a new failure: no count before (no baseline, an unreadable page), already there and no more of
+      // them now (even on a new address: a heading both pages show), or found only where the count cannot see (text
+      // sitting hidden, a frame the count did not read). WF-8 8.13: a heading already on the page "proved" a click.
+      // Measured the same way both times (visible text in every frame), so hidden text never counts as new.
+      const before = ok && baseline && baseline.counts ? baseline.counts[target] : undefined;
+      if (ok && typeof before !== "number") cantTell = true;
+      if (typeof before === "number" && ok) {
+        const grew = async () => {
           const n = await count(target);
           return typeof n === "number" && n > before;
-        }, Math.min(timeout, 1500));
+        };
+        // Absent before: the check above already waited for the words, so one count says whether it saw them.
+        const more = before === 0 ? await grew().catch(() => false) : await pollPositive(grew, Math.min(timeout, 1500));
         if (!more) cantTell = true;
         fresh = more;
       }

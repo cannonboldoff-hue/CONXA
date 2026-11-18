@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A fuller record of each run is now on the to-do list — 2026-11-18**
+When a workflow runs on a customer's computer, the local record of what went wrong is thin, so it is hard to see exactly what happened. We added a task to make that record detailed, kept only on the computer. What is sent to Conxa Cloud stays small and limited. This lets us find the cause of a problem from one file without sending private details away.
+— 2026-11-18
+
 **The test plan now tries to break Build Studio on purpose — 2026-11-17**
 The list of workflows still to test repeated the same checks in several places and mostly checked that things work, not that they fail safely. It is now one shorter list, numbered in the order we run it, with the three workflows that already passed kept as passed. Each remaining workflow now has a set of deliberate attacks, such as trying to approve with a question unanswered, making a click silently do nothing, or shuffling rows so the wrong record could be deleted. This lets us find the failures before a customer does.
 — 2026-11-17
@@ -36,4 +40,8 @@ If a page popped up a message such as "Session expired" and saved nothing, Build
 
 **A workflow can no longer change the wrong person's record — 2026-11-18**
 In a list where every row has the same Edit button, Build Studio could click the button in the wrong row and still report success: after a search that found nobody it edited someone from a side panel, after the list was re-sorted it edited whoever sat in the old position, and with "Carol" missing it edited "Carol Ann". Now each row action is tied to the exact person or record it was recorded on. If that exact record isn't there, or there are two of them, the run stops before touching anything, and a near-match name never counts.
+— 2026-11-18
+
+**Recording now keeps exactly what you did, and keeps your passwords to itself — 2026-11-18**
+Pasting or using Ctrl shortcuts in a box used to replay as stray letters, and retyping a box could send the old text, while the test still said it passed. Now a box replays the text it finally held. Middle-clicking a link no longer freezes Build Studio, and a double-click replays as one double-click. Drawing on a whiteboard and "I'm not a robot" checks are no longer turned into fake steps: Studio says plainly that they can't be repeated and, for a robot check, offers a pause where a person does it. Passwords and secret codes are now blanked out everywhere Studio saves or logs them on your computer.
 — 2026-11-18

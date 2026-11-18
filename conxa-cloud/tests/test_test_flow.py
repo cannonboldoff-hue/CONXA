@@ -898,3 +898,25 @@ def test_a_test_ended_at_a_popup_is_kept_on_the_workflow_and_shows_as_partial_in
     assert life["substate"] == "partial" and "Upload options" in life["note"]
     from conxa_core.storage.workflow_store import set_workflow_test_result
     assert set_workflow_test_result(wf.id, status="passed", inputs={}).last_test_outcome is None   # a real result supersedes it
+
+
+def test_a_secret_test_input_is_hidden_on_the_card_and_never_saved(env, monkeypatch):
+    """WF-8 secrets check: a typed password showed as plain text on the card and was saved in the thread."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    doc = read_skill("skill_t1")
+    doc["inputs"].append({"id": "user_password", "type": "text"})
+    write_skill("skill_t1", doc)
+    card_id = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"]
+    spec = {i["id"]: i for i in _cards(wf.id, "test_inputs")[0]["inputs"]}["user_password"]
+    assert spec["type"] == "password" and spec["secret"] is True and spec["value"] == ""
+    ran: list = []
+    monkeypatch.setattr(b, "_tf_background", lambda *a: ran.append(a[1]))
+    b.cmd_flow_test_run({"workflow_id": wf.id, "card_id": card_id,
+                         "inputs": {"po_number": "PO-1", "user_password": "ZzDummyPw!8812"}}, "r")
+    assert ran[0]["user_password"] == "ZzDummyPw!8812"                       # the run gets the real value
+    thread = str(ts.load(f"wf:{wf.id}", limit=200)["items"])
+    assert "ZzDummyPw" not in thread                                         # the thread keeps only a mask
+    assert test_flow.last_test_inputs(get_workflow(wf.id))["user_password"] == "ZzDummyPw!8812"   # this session only

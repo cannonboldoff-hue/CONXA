@@ -14,6 +14,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from conxa_core.redact import MASK, mask_secret_inputs
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_delete, db_list
 from conxa_core.models.workflow import Workflow
@@ -30,15 +31,23 @@ def _workflow_path(workflow_id: str) -> Path:
     return _workflows_dir() / f"{workflow_id}.json"
 
 
+def _without_masked_inputs(data: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A secret test input is saved as a mask (``_write_raw``); read back, it is simply absent, so nothing ever types
+    the mask into a page. A re-run asks for it again."""
+    if isinstance(data, dict) and isinstance(data.get("last_test_inputs"), dict):
+        data = {**data, "last_test_inputs": {k: v for k, v in data["last_test_inputs"].items() if v != MASK}}
+    return data
+
+
 def _read_raw(workflow_id: str) -> dict[str, Any] | None:
     data = db_get("workflows", workflow_id)
     if data is not None:
-        return data
+        return _without_masked_inputs(data)
     path = _workflow_path(workflow_id)
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return _without_masked_inputs(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError) as exc:
         warnings.warn(f"Corrupt workflow file {path}: {exc}", stacklevel=2)
         return None
@@ -46,6 +55,8 @@ def _read_raw(workflow_id: str) -> dict[str, Any] | None:
 
 def _write_raw(workflow: Workflow) -> None:
     d = workflow.model_dump(mode="json")
+    # A password or token typed into a test is never written down (WF-8 secrets check).
+    d["last_test_inputs"] = mask_secret_inputs(d.get("last_test_inputs"))
     db_set("workflows", workflow.id, d)
     try:
         path = _workflow_path(workflow.id)
@@ -181,7 +192,7 @@ def list_workflows(workspace_id: str = "") -> list[Workflow]:
         out: list[Workflow] = []
         for raw in db_items:
             try:
-                raw = _migrate_workspace(raw)
+                raw = _migrate_workspace(_without_masked_inputs(raw))
                 workflow = Workflow.model_validate(raw)
                 if workspace_id and workflow.workspace_id != workspace_id:
                     continue
@@ -205,7 +216,7 @@ def list_workflows(workspace_id: str = "") -> list[Workflow]:
     for path in paths:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
-            raw = _migrate_workspace(raw)
+            raw = _migrate_workspace(_without_masked_inputs(raw))
             workflow = Workflow.model_validate(raw)
             if workspace_id and workflow.workspace_id != workspace_id:
                 continue

@@ -1,0 +1,354 @@
+{
+ "6a8cc76e": [
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:46:47.762Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 1,
+    "element_ref": "hntnf15h:1",
+    "bridge": "hntnf15h"
+   }
+  },
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:46:47.778Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 2,
+    "element_ref": "hntnf15h:1",
+    "bridge": "hntnf15h"
+   }
+  },
+  {
+   "action": {
+    "action": "dblclick",
+    "timestamp": "2026-11-18T07:46:47.786Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 3,
+    "element_ref": "hntnf15h:1",
+    "bridge": "hntnf15h"
+   }
+  },
+  {
+   "action": {
+    "action": "right_click",
+    "timestamp": "2026-11-18T07:46:49.348Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Right-click target",
+    "id": "ctx",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#ctx",
+    "xpath": "/html[1]/body[1]/p[2]/button[1]",
+    "text_based": "text=\"Right-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 4,
+    "element_ref": "hntnf15h:2",
+    "bridge": "hntnf15h"
+   }
+  },
+  {
+   "action": {
+    "action": "keyboard_shortcut",
+    "timestamp": "2026-11-18T07:46:50.877Z",
+    "value": "{\"key\":\"Escape\",\"code\":\"Escape\",\"modifiers\":{\"ctrl\":false,\"shift\":false,\"alt\":false,\"meta\":false}}"
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Right-click target",
+    "id": "ctx",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#ctx",
+    "xpath": "/html[1]/body[1]/p[2]/button[1]",
+    "text_based": "text=\"Right-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 5,
+    "element_ref": "hntnf15h:2",
+    "bridge": "hntnf15h"
+   }
+  },
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:46:54.451Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Plain button",
+    "id": "single",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#single",
+    "xpath": "/html[1]/body[1]/p[4]/button[1]",
+    "text_based": "text=\"Plain button\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 6,
+    "element_ref": "hntnf15h:3",
+    "bridge": "hntnf15h"
+   }
+  }
+ ],
+ "b3cdcdd1": [
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:50:23.161Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 1,
+    "element_ref": "wfam5ulo:1",
+    "bridge": "wfam5ulo"
+   }
+  },
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:50:23.176Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 2,
+    "element_ref": "wfam5ulo:1",
+    "bridge": "wfam5ulo"
+   }
+  },
+  {
+   "action": {
+    "action": "dblclick",
+    "timestamp": "2026-11-18T07:50:23.184Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Double-click target",
+    "id": "dbl",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#dbl",
+    "xpath": "/html[1]/body[1]/p[1]/button[1]",
+    "text_based": "text=\"Double-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 3,
+    "element_ref": "wfam5ulo:1",
+    "bridge": "wfam5ulo"
+   }
+  },
+  {
+   "action": {
+    "action": "right_click",
+    "timestamp": "2026-11-18T07:50:24.742Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Right-click target",
+    "id": "ctx",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#ctx",
+    "xpath": "/html[1]/body[1]/p[2]/button[1]",
+    "text_based": "text=\"Right-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 4,
+    "element_ref": "wfam5ulo:2",
+    "bridge": "wfam5ulo"
+   }
+  },
+  {
+   "action": {
+    "action": "keyboard_shortcut",
+    "timestamp": "2026-11-18T07:50:26.269Z",
+    "value": "{\"key\":\"Escape\",\"code\":\"Escape\",\"modifiers\":{\"ctrl\":false,\"shift\":false,\"alt\":false,\"meta\":false}}"
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Right-click target",
+    "id": "ctx",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#ctx",
+    "xpath": "/html[1]/body[1]/p[2]/button[1]",
+    "text_based": "text=\"Right-click target\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 5,
+    "element_ref": "wfam5ulo:2",
+    "bridge": "wfam5ulo"
+   }
+  },
+  {
+   "action": {
+    "action": "click",
+    "timestamp": "2026-11-18T07:50:29.840Z",
+    "value": null
+   },
+   "target": {
+    "tag": "button",
+    "inner_text": "Plain button",
+    "id": "single",
+    "role": "button"
+   },
+   "selectors": {
+    "css": "#single",
+    "xpath": "/html[1]/body[1]/p[4]/button[1]",
+    "text_based": "text=\"Plain button\""
+   },
+   "page": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "tab": {
+    "url": "http://localhost:8128/mouse.html"
+   },
+   "extras": {
+    "sequence": 6,
+    "element_ref": "wfam5ulo:3",
+    "bridge": "wfam5ulo"
+   }
+  }
+ ]
+}

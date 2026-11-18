@@ -97,6 +97,7 @@ const {
   maybeCapturePreStep,
 } = require("./cascade");
 const { checkGeometry } = require("./page_geometry");
+const { HUMAN_CHECK_MESSAGE, humanCheckBlocking } = require("./human_check");
 const {
   resolveUploadPaths,
   extractZipOnce,
@@ -1101,6 +1102,14 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       const hidden = Array.isArray(geometry.live) && geometry.live[0] === 0;
       throw stepFailure(step, i, Object.assign(new Error(hidden ? PAGE_HIDDEN_MESSAGE : PAGE_SIZE_MESSAGE), { fault: true, faultKind: "page_size" }), null, state.warnings);
     }
+  }
+  // A robot check is never acted on and never retried: the run stops before the step, and only a hand-over step lets a
+  // person do it (human_check.js). A fault, so no recovery tier and no AI ever runs for it.
+  const wall = await humanCheckBlocking(page, step);
+  if (wall) {
+    ctx.tracker.emit("step_fail", { si: i, fc: "fault_human_check" });
+    appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "human_check", source: wall });
+    throw stepFailure(step, i, Object.assign(new Error(HUMAN_CHECK_MESSAGE), { fault: true, faultKind: "human_check" }), null, state.warnings);
   }
   noteBackground(ctx);
   const preShot = await maybeCapturePreStep(page, step);

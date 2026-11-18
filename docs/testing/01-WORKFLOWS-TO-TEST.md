@@ -28,7 +28,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ✅ passed 2026-11-18 (P-37) | — |
 | WF-6 | False success: a pass that didn't really happen | ✅ passed 2026-11-18 (P-38) | — |
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ✅ passed 2026-11-18 (P-39) | — |
-| WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ⏳ | Yes |
+| WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ✅ passed 2026-11-18 (P-40) | — |
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ⏳ | Yes |
 | WF-10 | Branches and popups: optional, decision, unrecorded | ⏳ | Yes |
 | WF-11 | Loops, inputs and hostile input data | ⏳ | Yes |
@@ -274,7 +274,7 @@ Prove every replay with the fixture log (which row id was clicked) or the site's
 
 ---
 
-## WF-8 — Recorder under attack + hard walls
+## ✅ WF-8 — Recorder under attack + hard walls — passed 2026-11-18 (P-40; CAPTCHA solve and autofill blocked)
 
 **Rule being attacked:** a step comes only from something the person did, and every act becomes
 exactly one step. **Sites:** fixture `script-events.html`, S3, S1, S11, S12, S13.

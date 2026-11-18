@@ -22,8 +22,16 @@ def run_track_b(session_dir: Path) -> list[dict[str, Any]]:
     session_dir = Path(session_dir)
     raw = [json.loads(line) for line in (session_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     videos = json.loads((session_dir / "videos.json").read_text(encoding="utf-8"))
-    cleaned = prepare_compile_events(run_pipeline(raw), get_policy_bundle().data)
-    return timed_events(cleaned, videos)
+    piped = run_pipeline(raw)
+    cleaned = prepare_compile_events(piped, get_policy_bundle().data)
+    # Drawing the compile leaves out still owns its stretch of the video, so that stretch is never pinned on the next
+    # action (WF-8 8.12: the rectangle drag described the Selection click). merge_timeline keeps it off the timeline.
+    from conxa_compile.compiler.human_check import in_human_check
+
+    # A robot check left out of the compile is treated the same way.
+    drawn = [{**e, "_left_out": True} for e in piped if e.get("origin") != "script"
+             and ((e.get("action") or {}).get("action") == "unsupported_gesture" or in_human_check(e))]
+    return timed_events(cleaned + drawn, videos)
 
 
 def build_merged_timeline(session_dir: Path, track_a: dict[str, Any], timed: list[dict[str, Any]]) -> list[dict[str, Any]]:

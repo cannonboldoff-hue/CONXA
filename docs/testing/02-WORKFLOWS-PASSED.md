@@ -1108,3 +1108,15 @@ display name). Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md)
 
 **What this proves Conxa can do now:** a row action acts on the exact record it was recorded on, or
 not at all — including in AI recovery.
+
+## Passed Workflow P-40 — WF-8: recorder under attack + hard walls, 13 checks (2026-11-18)
+Bot events ignored; paste, shortcuts and retyping replay the final value; keyboard-only and
+Enter-submit forms; double/right/middle click (no crash); Back/Forward, closed tabs, slow loads, idle
+recordings; empty recordings refused; canvas drawing left out honestly with a blocking question;
+robot checks never a step, hand-over offered; zero copies of typed secrets anywhere on disk and no
+sign-in files in build output. Blocked: real CAPTCHA solve, browser autofill. Workflows include
+`51a08bcf-…` (paste/retype), `60cf5656-…` (Excalidraw), `6e28d456-…` (reCAPTCHA), `cb6b40ea-…`
+(secrets). Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** the recorder captures only what the person really did,
+admits what it can't repeat, and keeps secrets off disk.

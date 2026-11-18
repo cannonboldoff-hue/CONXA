@@ -131,6 +131,10 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
         if len(parts) < 4:
             continue
         testid, text = parts[1].strip(), parts[3].strip()
+        # A form control's line carries its value, not words on the screen (an opacity slider's "100" was offered as
+        # "You see the words “100”", WF-8 8.12); a page-text check can never see it.
+        if parts[0].strip().lower() in ("input", "select", "textarea"):
+            text = ""
         if testid:
             extra_selectors.append(f'[data-testid="{testid}"]')
         if text and len(text) >= 3:

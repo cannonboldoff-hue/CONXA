@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from handlers.protocol import _CommandError, _event_sink, _safe_id, _skill_response
+from handlers.test_flow import last_test_inputs
 
 
 def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any] | None:
@@ -527,7 +528,7 @@ class CopilotMixin:
         _relay(f"Running {workflow.name!r}…")
         try:
             result = self.cmd_test_workflow(
-                {"workflow_id": workflow.id, "inputs": workflow.last_test_inputs, "headless": False},
+                {"workflow_id": workflow.id, "inputs": last_test_inputs(workflow), "headless": False},
                 rid,
             )
         except _CommandError as exc:

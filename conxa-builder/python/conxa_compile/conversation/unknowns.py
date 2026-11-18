@@ -28,16 +28,16 @@ FACET_OF_KIND: dict[str, str] = {
     "popup": "alternatives", "popup_dismiss": "alternatives",
     "confirm": "consequence", "confirm_before": "consequence", "confirm_row": "consequence",
     "output": "postcondition", "done_when": "postcondition",
-    "dropped_value": "scope", "coverage": "scope",
+    "dropped_value": "scope", "coverage": "scope", "unsupported": "scope", "human_check": "alternatives",
     "note": "other",
 }
 # Two kinds on the same events are one slot only when they are the same sub-question (a popup's fork and its
 # follow-up are different questions about one step).
 _PART = {"repeat_rows": "repeat", "confirm_before": "confirm", "popup_dismiss": "popup", "value": "value", "chosen_values": "value", "values": "value"}
 # Never dropped, never pre-answered: a decision popup is not answered for anyone, an irreversible step always asks.
-SAFETY_KINDS = frozenset({"fork", "fork_then", "known_popup", "confirm", "confirm_before", "confirm_row"})
+SAFETY_KINDS = frozenset({"fork", "fork_then", "known_popup", "confirm", "confirm_before", "confirm_row", "unsupported", "human_check"})
 # Questions that change nothing by design (they only inform): they cannot be "vacuous".
-ADVISORY_KINDS = frozenset({"coverage", "dropped_value", "input_check", "note"})
+ADVISORY_KINDS = frozenset({"coverage", "dropped_value", "input_check", "note", "unsupported"})
 _PHASE_OPEN = ("open", "queued")
 
 

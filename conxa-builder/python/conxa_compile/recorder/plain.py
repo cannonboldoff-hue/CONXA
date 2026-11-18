@@ -73,6 +73,8 @@ def describe_event(event: dict[str, Any]) -> dict[str, Any]:
             can_vary = bool(shown_value)
     elif kind_raw == "keyboard_shortcut":
         kind, text = "type", "Pressed a key"
+    elif kind_raw == "unsupported_gesture":
+        text = "Drew or clicked in a drawing area (can’t be recorded yet, so it will be left out)"
     elif kind_raw in ("select", "select_option"):
         kind = "select"
         shown_value = _clip(str(value or ""), 40) or None
@@ -98,6 +100,10 @@ def describe_event(event: dict[str, Any]) -> dict[str, Any]:
         text = "Switched tab"
     elif kind_raw in ("frame_enter", "frame_exit"):
         text = "Moved into a page section" if kind_raw == "frame_enter" else "Moved back out of a page section"
+    from conxa_compile.compiler.human_check import in_human_check
+
+    if in_human_check(event):
+        text, shown_value, can_vary = "Did a robot check (it can’t be repeated automatically; I’ll ask you about it)", None, False
 
     return {
         "sequence": seq,

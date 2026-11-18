@@ -1711,6 +1711,21 @@ def _is_failed_navigation(ev: dict[str, Any]) -> bool:
     return str(action.get("action") or "") == "manual_navigate" and str(page.get("url") or "").startswith("chrome-error://")
 
 
+def _mark_typed_over(entries: list[dict[str, Any]], before: list[dict[str, Any]], kept: list[dict[str, Any]]) -> None:
+    """A dropped value whose box was given a later value that the workflow keeps was typed over, not lost: the box's
+    final value is the one that stands (WF-8 8.3). Named ``typed_over`` so it is never asked about as left out."""
+    from conxa_compile.compiler.step_anchors import _VALUE_SET_ACTIONS, _target_key  # noqa: PLC0415
+
+    by_seq = {(e.get("extras") or {}).get("sequence"): e for e in before}
+    later = [((e.get("extras") or {}).get("sequence"), _target_key(e)) for e in kept
+             if str((e.get("action") or {}).get("action") or "") in _VALUE_SET_ACTIONS]
+    for entry in entries:
+        ev, seq = by_seq.get(entry.get("sequence")), entry.get("sequence")
+        if entry.get("value") and ev is not None and isinstance(seq, int) \
+                and any(isinstance(s, int) and s > seq and k == _target_key(ev) for s, k in later):
+            entry["pass"] = "typed_over"
+
+
 def prepare_compile_events(
     events: list[dict[str, Any]],
     pol: dict[str, Any],
@@ -1720,6 +1735,11 @@ def prepare_compile_events(
     with the understanding-first merge so both see the same event list. ``drop_ledger`` collects
     what was removed when the compiler wants the record."""
     ledger = drop_ledger if drop_ledger is not None else []
+    # No secret-looking value in a web address reaches a compiled step (an older recording saved them unscrubbed:
+    # "done.html?pw=…" after a form sent by GET). The recorder already does this, with the typed secrets too.
+    from conxa_core.redact import scrub_urls  # noqa: PLC0415
+
+    events = [scrub_urls(e) for e in events]
     # Provenance gate, independent of keep-every-action: that setting keeps every action the
     # PERSON took; an event the page's own script fired (recorder `origin == "script"`, e.g. a
     # widget clicking its own account button) is not one, and replay re-runs the page's script by
@@ -1731,6 +1751,19 @@ def prepare_compile_events(
     reachable = [e for e in human if not _is_failed_navigation(e)]
     _record_drops(ledger, human, reachable, "failed_navigation")
     human = reachable
+    # Drawing on a canvas has no element a replay could find again, so it is never a step. Ledgered as "unsupported":
+    # the person is told plainly and must acknowledge it (conversation/clarify.py, "unsupported"), never silently lost.
+    replayable = [e for e in human if str((e.get("action") or {}).get("action") or "") != "unsupported_gesture"]
+    _record_drops(ledger, human, replayable, "unsupported")
+    human = replayable
+    # A robot check (reCAPTCHA, hCaptcha, Turnstile) is a wall no workflow may get past by itself: what the person did
+    # inside it is never a step. Ledgered as "human_check": the person is asked whether someone should do it on each
+    # run (a hand-over step) or it stays out (conversation/clarify.py, "human_check").
+    from conxa_compile.compiler.human_check import in_human_check  # noqa: PLC0415
+
+    outside = [e for e in human if not in_human_check(e)]
+    _record_drops(ledger, human, outside, "human_check")
+    human = outside
     # The signed-in person's own name/email shown on an account chip must not become a selector or fingerprint in a
     # package other people run. Taken out here, once, so nothing built later can carry it.
     events = drop_personal_target_text(human)
@@ -1744,6 +1777,7 @@ def prepare_compile_events(
                    for s in ((e.get("extras") or {}).get("repeat_sequences") or [])}
         if counted:
             ledger[first_new:] = [r for r in ledger[first_new:] if r.get("sequence") not in counted]
+        _mark_typed_over(ledger[first_new:], events, cleaned_events)
     # A navigation an action caused (click Submit -> redirect to /orders/847291) is that action's
     # effect, not a step: drop it and keep only a generalized post-condition on the action.
     # Before _insert_tab_markers so the deliberate navigate it adds for a user-opened tab (and
@@ -1962,6 +1996,8 @@ def compile_skill_package(
         extras_out=review_extras,
         understanding_ctx=understanding_ctx,
     )
+    if any(d.get("pass") == "unsupported" for d in drop_ledger):
+        _describe_without_left_out_drawing(steps)
     if review_extras.get("understanding"):
         # Read back by the question flow (conversation/understanding.py::understand), tied to this
         # compile so a stale file beside the recording can never be mistaken for it.
@@ -2046,6 +2082,23 @@ def compile_skill_package(
 
 _NAVIGATION_WORDS = re.compile(r"^\s*(?:open|go to|navigate|visit|load|browse)(?![a-z])", re.IGNORECASE)
 _NON_NAVIGATING_ACTIONS = frozenset({"type", "fill", "select", "drag_drop", "drag", "set_checkbox", "set_radio", "keyboard_shortcut", "date_pick"})
+
+
+_DRAWING_WORDS = re.compile(r"\b(?:draw\w*|canvas\w*|sketch\w*)\b", re.IGNORECASE)
+
+
+def _describe_without_left_out_drawing(steps: list[SkillStep]) -> None:
+    """When drawing was left out, no kept step may be described as doing it: a model that saw the drawing wrote
+    "Click the canvas to draw the rectangle" on the Selection tool's click (WF-8 8.12). Such a step gets its plain
+    code-built name instead. A control really named for drawing (a "Draw" tool) keeps its words."""
+    from conxa_compile.compiler.input_binding import _snake_case  # noqa: PLC0415
+    from conxa_compile.conversation.clarify import _action_title  # noqa: PLC0415
+
+    for step in steps:
+        title = _action_title(step.model_dump(mode="json")) or str(_step_action_name(step) or "").replace("_", " ").capitalize()
+        if _DRAWING_WORDS.search(f"{step.semantic_description or ''} {step.intent or ''}") and not _DRAWING_WORDS.search(title):
+            step.semantic_description = title
+            step.intent = _snake_case(title) or step.intent
 
 
 def _prose_contradicts_action(prose: str, action: str | None) -> bool:

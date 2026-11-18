@@ -78,26 +78,29 @@ def parse_keyboard_event_value(value: Any) -> str | None:
     Recorder serializes keyboard events as JSON like:
         '{"key":"Enter","code":"Enter","modifiers":{...}}'
 
-    Returns "Enter", "ArrowDown", "Tab", etc. or None if not a keyboard event.
+    Returns "Enter", "ArrowDown", "Tab", "Shift+Tab", "Control+S", etc. or None if not a keyboard event.
+    Modifiers are kept, in the runtime's own order and spelling (runtime locators.js::parseKeyboardShortcut):
+    dropping them replayed Ctrl+A as a typed "A" and Shift+Tab as Tab (WF-8).
     """
     if value is None:
         return None
-    if isinstance(value, dict):
-        key = value.get("key")
-        return str(key) if key else None
-    if not isinstance(value, str):
+    parsed: Any = value
+    if isinstance(value, str):
+        s = value.strip()
+        if not s.startswith("{"):
+            return s
+        try:
+            parsed = json.loads(s)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    if not isinstance(parsed, dict) or not parsed.get("key"):
         return None
-    s = value.strip()
-    if not s.startswith("{"):
-        return s
-    try:
-        parsed = json.loads(s)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if isinstance(parsed, dict):
-        key = parsed.get("key")
-        return str(key) if key else None
-    return None
+    key = str(parsed["key"])
+    mods = parsed.get("modifiers") if isinstance(parsed.get("modifiers"), dict) else {}
+    held = [name for flag, name in (("ctrl", "Control"), ("meta", "Meta"), ("shift", "Shift"), ("alt", "Alt")) if mods.get(flag)]
+    if not held:
+        return key
+    return "+".join([*held, key.upper() if len(key) == 1 else key])
 
 
 def derive_input_binding(

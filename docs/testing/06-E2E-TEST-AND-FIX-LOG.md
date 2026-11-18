@@ -2,8 +2,8 @@
 
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
-> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **Next:** WF-8 (recorder under attack). Remaining: WF-8…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
+> **Paused after WF-8 (owner's request).** **Next:** WF-9 (compiler honesty). Remaining: WF-9…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1280,3 +1280,31 @@ write landed on the intended record or nothing was clicked. 7.7 and 7.8 ran on l
 public sites have no row buttons / would delete real demo data). Runtime builds are now atomic.
 
 **Final status of WF-7: PASSED** (P-39).
+
+### WF-8 — recorder under attack + hard walls (2026-11-18)
+Hostile local pages (bot clicks and typing, paste and shortcuts, mouse tricks, tabs, slow loads,
+idle, canvas, secrets) plus Excalidraw and Google's reCAPTCHA demo. Every result proven from the
+fixture server's log and files on disk.
+
+- **8.2/8.3 — FAIL, top-severity class.** Ctrl+V was saved as "v" and Ctrl+A as "A"; a retyped box
+  kept its first value, so the replay sent "Wrong NameA" and the test passed. *Fix:* editing
+  shortcuts inside a box are dropped (the box's typing holds the result); other shortcuts keep Ctrl;
+  a retyped box keeps its final value.
+- **8.6 — FAIL.** A middle-click froze Studio (uncaught main-process error). *Fix:* new tabs can't
+  throw. Then a double-click sometimes kept a stray click, depending on the AI. *Fix:* always one
+  double-click step.
+- **8.12 — FAIL.** Drawing on Excalidraw became empty clicks and Studio said it "draws a rectangle".
+  *Fix:* drawing is marked "can't be recorded yet", left out with a plain notice and a blocking
+  "I understand" question; step text and summary never claim it.
+- **8.13 — FAIL, top-severity class.** "I'm not a robot" was turned into a step and the test passed
+  on a heading that was already there. *Fix:* robot checks are detected and never a step; a blocking
+  question offers a hand-over step for a person; runs stop at a robot check; and text already on the
+  page before a step can never prove it.
+- **Secrets — FAIL.** Built packages were clean, but a password sent in a page address, and typed
+  test passwords, were saved and logged in clear on this computer. *Fix:* secret-looking address
+  values and anything typed into a password box are blanked everywhere; test passwords are masked.
+- **Final round — all PASS.** 8.1–8.13 pass; a fresh secrets run left zero copies of the new dummy
+  values anywhere on disk or in build output; no sign-in file in any build. Blocked: solving a real
+  CAPTCHA (needs a person) and browser autofill (can't be triggered by the test driver).
+
+**Final status of WF-8: PASSED** (P-40). Campaign paused here at the owner's request.

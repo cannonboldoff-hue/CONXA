@@ -22,6 +22,7 @@ import time
 import uuid
 from typing import Any
 
+from conxa_core.redact import MASK, is_secret_input
 from handlers.protocol import _CommandError, _event_sink, _safe_id
 
 
@@ -35,6 +36,14 @@ _DECISION_TIMEOUT_S = 170  # just under the runtime's 180 s park window
 _waiters: dict[str, dict[str, Any]] = {}
 _waiters_lock = threading.Lock()
 _autofix_stop: dict[str, threading.Event] = {}
+# A password or token typed into a test card, kept only in memory for this Studio session so "test again" can reuse
+# it; it is never saved (the workflow keeps a mask, conxa_core.redact). After a restart the card asks again.
+_secret_test_inputs: dict[str, dict[str, Any]] = {}
+
+
+def last_test_inputs(workflow: Any) -> dict[str, Any]:
+    """The inputs of the workflow's last test, with any secret ones this session still holds."""
+    return {**(getattr(workflow, "last_test_inputs", None) or {}), **_secret_test_inputs.get(getattr(workflow, "id", ""), {})}
 
 
 def _thread(workflow_id: str) -> str:
@@ -189,8 +198,12 @@ class TestFlowMixin:
             columns = [str(c) for c in row.get("columns") or []] if row.get("type") == "rows" else []
             if columns:
                 value = value if isinstance(value, str) else rows_to_text(value, columns)
+            secret = is_secret_input(rid_) and (row.get("type") or "text") == "text"
+            if secret:
+                value = ""   # never pre-filled: the card is saved in the thread
             inputs.append({
-                "id": rid_, "label": _humanize(rid_), "type": row.get("type") or "text",
+                "id": rid_, "label": _humanize(rid_), "type": "password" if secret else (row.get("type") or "text"),
+                **({"secret": True} if secret else {}),
                 "options": row.get("options") or [], "required": not row.get("optional", False),
                 **({"columns": columns} if columns else {}),
                 "value": value if isinstance(value, (str, int, float, bool)) else "",
@@ -239,7 +252,10 @@ class TestFlowMixin:
         show_browser = bool(payload.get("show_browser", True))
         use_ai = bool(payload.get("use_ai", False))
         # Keep what was actually run on the card, so a reload shows those values, not the pre-filled ones.
-        ran = [{**i, "value": values.get(i["id"], i.get("value"))} for i in card.get("inputs") or []]
+        ran = [{**i, "value": MASK if i.get("secret") and values.get(i["id"]) else values.get(i["id"], i.get("value"))}
+               for i in card.get("inputs") or []]
+        _secret_test_inputs[workflow.id] = {i["id"]: values[i["id"]] for i in card.get("inputs") or []
+                                            if i.get("secret") and values.get(i["id"])}
         harness.update_card(_thread(workflow.id), card["card_id"], sink=sink, state="submitted", actions=[],
                             guard=guard, show_browser=show_browser, use_ai=use_ai, inputs=ran)
         threading.Thread(
@@ -888,7 +904,7 @@ class TestFlowMixin:
         from conxa_core.storage.workflow_store import get_workflow
 
         workflow = get_workflow(workflow_id)
-        if workflow is None or not workflow.skill_id or not workflow.last_test_inputs:
+        if workflow is None or not workflow.skill_id or not last_test_inputs(workflow):
             return False
         newest = next((c for c in reversed(ts.fold(ts.read_raw(_thread(workflow_id))))
                        if c.get("kind") == "card" and c.get("card_type") == "test_run"), None)
@@ -899,7 +915,7 @@ class TestFlowMixin:
         except _CommandError:
             return False
         harness.log_event(_thread(workflow_id), "Testing again with your change", glyph="none", sink=sink)
-        threading.Thread(target=self._tf_background, args=(workflow_id, dict(workflow.last_test_inputs), True, True), daemon=True).start()
+        threading.Thread(target=self._tf_background, args=(workflow_id, last_test_inputs(workflow), True, True), daemon=True).start()
         return True
 
 

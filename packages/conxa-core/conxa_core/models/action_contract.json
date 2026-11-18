@@ -44,6 +44,7 @@
     "assert":            {"step": "assert",            "run": "handler",   "recovery": false, "via": "packager"},
     "screenshot":        {"step": "screenshot",        "run": "handler",   "recovery": false, "via": "packager"},
     "extract":           {"step": "extract",           "run": "handler",   "recovery": true,  "via": "packager"},
+    "unsupported_gesture": {"step": null,              "run": "noop",      "recovery": false, "via": "compiler"},
     "if_present":        {"step": "if_present",        "run": "handler",   "recovery": false, "via": "own_builder"},
     "try_dismiss":       {"step": "try_dismiss",       "run": "handler",   "recovery": false, "via": "own_builder"},
     "wait_for_one_of":   {"step": "wait_for_one_of",   "run": "handler",   "recovery": false, "via": "own_builder"},

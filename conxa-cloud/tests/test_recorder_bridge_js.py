@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Iterator
@@ -79,6 +80,7 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
             // Like the recorder's sink: a "bridge ready" announcement is bookkeeping, not an event.
             window.__raw = [];       // everything, in arrival order, before any folding
             window.__gaps = [];
+            window.__secrets = [];   // hashes of password-like values (session.py keeps them in memory only)
             // Mirrors RecordingSession._apply_amend_sync: facts about a step that already left the page are merged
             // into that step by its uid, so tests keep reading one finished row per action.
             window.__skillReport = (payload) => {
@@ -86,6 +88,7 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
                 window.__raw.push(JSON.parse(JSON.stringify(payload)));
                 if (payload._bridge_ready) { window.__ready.push(payload); return; }
                 if (payload._gap) { window.__gaps.push(payload); return; }
+                if (payload._secret) { window.__secrets.push(payload._secret); return; }
                 if (payload._amend) {
                     const row = window.__events.find((e) => e.uid === payload._amend);
                     if (!row) return;
@@ -590,6 +593,11 @@ def test_password_input_redacts_value(page: Page) -> None:
     assert len(events) == 1
     assert events[0]["action"]["value"] == "{{REDACTED}}"
     assert "super-secret" not in str(events[0])
+    # Only its hash reaches the recorder, so an address carrying it can be redacted (WF-8 secrets check).
+    import hashlib
+
+    assert page.evaluate("window.__secrets") == [hashlib.sha256(b"super-secret").hexdigest()]
+    assert "super-secret" not in str(page.evaluate("window.__raw"))
 
 
 def test_focusout_fallback_records_changed_value_without_input_event(page: Page) -> None:
@@ -1949,3 +1957,25 @@ def test_a_suggestion_picked_on_press_and_removed_is_still_recorded_as_its_click
     assert ("type", "Amelia", "emp") in rows, rows
     assert not any(a == "type" and v == "Amelia  Brown" for a, v, _ in rows), rows
     assert any(a == "click" and "Amelia Brown" in str(t) for a, _v, t in rows), rows
+
+
+def test_a_press_or_drag_on_a_canvas_is_recorded_as_an_unsupported_gesture_not_a_click(page: Page) -> None:
+    """WF-8 8.12: drawing on Excalidraw's canvas became plain clicks on the board around it, and the workflow 'drew a
+    rectangle' by clicking nothing."""
+    _install_bridge(
+        page,
+        '<div id="board" role="application" aria-label="Board"><canvas id="c" width="300" height="200"></canvas></div>'
+        '<button id="ok">OK</button>',
+    )
+    page.mouse.move(50, 50)
+    page.mouse.down()
+    page.mouse.move(120, 110, steps=4)
+    page.mouse.up()                      # a drag
+    page.click("#c", position={"x": 20, "y": 20})   # a plain press
+    page.click("#ok")
+    page.wait_for_timeout(60)
+
+    events = _events(page)
+    assert [e["action"]["action"] for e in events] == ["unsupported_gesture", "unsupported_gesture", "click"]
+    assert [json.loads(e["action"]["value"])["moved"] for e in events[:2]] == [True, False]
+    assert events[0]["target"]["tag"] == "canvas"

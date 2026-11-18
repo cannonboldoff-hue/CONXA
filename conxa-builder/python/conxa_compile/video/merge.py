@@ -34,7 +34,7 @@ _KIND_OF_ACTION = {
     "select": "select", "select_option": "select", "date_pick": "select", "scroll": "scroll",
     "navigate": "navigate", "manual_navigate": "navigate", "browser_back": "navigate", "browser_forward": "navigate",
     "upload": "upload", "upload_intent": "upload", "download_observed": "download", "dialog_appeared": "dialog",
-    "dialog_accept": "dialog", "dialog_dismiss": "dialog", "wait": "wait",
+    "dialog_accept": "dialog", "dialog_dismiss": "dialog", "wait": "wait", "unsupported_gesture": "click",
 }
 
 
@@ -153,12 +153,19 @@ def merge_timeline(timed: list[dict[str, Any]], rows: list[dict[str, Any]], spli
     pairs = align(timed, subs, rows)
     row_of_event = {ei: subs[sj]["row"] for ei, sj in pairs}
     matched_rows = set(row_of_event.values())
+    # Drawing the compile leaves out (track_b keeps it for this alignment only) is never a step, so never a row. A
+    # segment it shares describes the drawing, not the other action in it: that action gets no segment rather than the
+    # drawing's words (WF-8 8.12: "Click the canvas to draw the rectangle" on the Selection tool).
+    drawn = {i for i, e in enumerate(timed) if e["ev"].get("_left_out") or (e["ev"].get("action") or {}).get("action") == "unsupported_gesture"}
+    drawn_rows = {row_of_event[i] for i in drawn if i in row_of_event}
 
     items: list[tuple[int, dict[str, Any]]] = []
     for i, e in enumerate(timed):
+        if i in drawn:
+            continue
         ev = e["ev"]
         action = str((ev.get("action") or {}).get("action") or "")
-        row = rows[row_of_event[i]] if i in row_of_event else None
+        row = rows[row_of_event[i]] if i in row_of_event and row_of_event[i] not in drawn_rows else None
         flags = []
         if row is None:
             flags.append("pegasus_missed")

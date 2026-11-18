@@ -211,8 +211,10 @@ if (cliArgs.includes("--install-playwright")) {
 // The stderr copy goes through a worker so a parent that never reads stderr cannot freeze this process (stderr_sink.js).
 const _stderrSink = require("./stderr_sink").createStderrSink();
 require("./stderr_sink").takeOverProcessStderr(_stderrSink); // console.error / Node warnings / dependencies too
+// Every line goes through redact.js: no secret-looking address value or secret run input is ever written down.
+const _redact = require("./redact");
 function log(level, msg, extra = {}) {
-  const line = JSON.stringify({ ts: new Date().toISOString(), level, msg, ...extra }) + "\n";
+  const line = _redact.scrubLine(JSON.stringify({ ts: new Date().toISOString(), level, msg, ...extra })) + "\n";
   try {
     fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
     if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 10 * 1024 * 1024)
@@ -1121,6 +1123,7 @@ async function _handleTool(name, args, extra) {
         return err(`Skill ${run.skill}: the value given for ${badPattern.join(", ")} is not in the expected format. Call get_skill_inputs to see the format.`);
       }
       run.inputs = effectiveInputs;
+      _redact.noteSecrets(effectiveInputs); // their values never reach a log line
 
       const execPath = path.join(entry.skillDir, "execution.json");
       const recPath  = path.join(entry.skillDir, "recovery.json");

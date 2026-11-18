@@ -34,7 +34,7 @@ _ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
 # Kinds an earlier answer is replayed onto: built from the document as compiled, before replay changes it.
 _REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
 # Kinds built afterwards from the document replay left, so their bindings and step keys are current.
-_REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage"})
+_REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage", "unsupported", "human_check"})
 
 
 def _thread(workflow_id: str) -> str:
@@ -407,7 +407,11 @@ class CompileFlowMixin:
         # the renderer re-reads the lifecycle on each one (the caller's `finally` is only the net).
         from conxa_compile.conversation import runtime_state
 
-        dropped = report.get("dropped") or []
+        # Drawing the recording could not keep is said first by code, and the recap gets no goal to restate (given the
+        # person's goal it once said the workflow "draws a rectangle" when it drew nothing, WF-8 8.12).
+        cant = " ".join(filter(None, (clarify.unsupported_sentence(report.get("dropped")),
+                                      clarify.human_check_sentence(report.get("dropped")))))
+        dropped = [d for d in report.get("dropped") or [] if d.get("pass") not in ("unsupported", "human_check")]
         # Facts for the model's recap: kinds and counts only, never the recorded target text (page noise).
         kind_words = {"click": "click", "scroll": "scroll", "navigate": "page visit", "type": "typing step", "fill": "typing step"}
         counts: dict[str, int] = {}
@@ -420,16 +424,22 @@ class CompileFlowMixin:
                "upstream_dedupe": "they were repeats"}.get(
             next(iter(passes)) if len(passes) == 1 else None, "they were repeats, or things the page did on its own")
         left_out = [{"kind": k, "count": n, "reason": why} for k, n in counts.items()]
+        # Said in its own words, never folded into "nothing was left out" (the recap once said exactly that right
+        # after the drawing line, WF-8 8.12).
+        from conxa_compile.llm.compile_recap import DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT, write_recap
+
+        for wall, kind, reason in (("unsupported", "drawing action", DRAWING_LEFT_OUT), ("human_check", "robot check", HUMAN_CHECK_LEFT_OUT)):
+            if (n := sum(1 for d in report.get("dropped") or [] if d.get("pass") == wall)):
+                left_out.append({"kind": kind, "count": n, "reason": reason})
         # The message is written by one model call over these facts (llm/compile_recap.py), before `understanding`
         # clears so the UI stays busy and nothing can be tested meanwhile. No template stands in for it.
         from conxa_compile.conversation import harness
-        from conxa_compile.llm.compile_recap import write_recap
 
         open_qs = [q for q in questions if q.get("status") == "open"]
         coverage = understood.get("coverage") or {}
         recap = write_recap({
             "step_count": len(steps),
-            "goal": str(understood.get("goal_summary") or workflow.task_description or "")[:200],
+            "goal": "" if cant else str(understood.get("goal_summary") or workflow.task_description or "")[:200],
             "has_description": bool(workflow.task_description.strip()),
             "checked_against_description": understood.get("source") == "model",
             "input_names": [str(i["id"]).replace("_", " ") for i in doc_now.get("inputs") or [] if isinstance(i, dict) and i.get("id")],
@@ -442,6 +452,8 @@ class CompileFlowMixin:
             "question_titles": [str(q.get("title")) for q in open_qs][:4],
         })
         runtime_state.set_flags(workflow_id, understanding=False)
+        if cant:
+            harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=cant))
         if recap:
             harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=recap))
         else:
@@ -688,7 +700,10 @@ class CompileFlowMixin:
             uncertain=int(workflow.compile_steps_with_warnings or 0),
         )
         # What the understanding check took the task to be, and which values a run will be asked for.
-        summary["goal"] = str((data.get("understanding") or {}).get("goal_summary") or "")
+        # Not the goal when drawing or a robot check was left out: the workflow does not do what the person set out to do.
+        walls = (doc.get("compile_report") or {}).get("dropped")
+        cant = clarify.unsupported_sentence(walls) or clarify.human_check_sentence(walls)
+        summary["goal"] = "" if cant else str((data.get("understanding") or {}).get("goal_summary") or "")
         summary["input_names"] = [str(i.get("id")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")]
         summary["queued"] = sum(1 for q in data.get("questions") or [] if q.get("status") == "assumed")
         summary["assumptions"] = [a for a in data.get("assumptions") or [] if isinstance(a, dict)
@@ -1281,6 +1296,14 @@ class CompileFlowMixin:
                 # Named for what it asks, not its kind ("Agent span goal" on the test card, WF-5).
                 self.cmd_patch_step({"skill_id": skill_id, "step_index": i,
                                      "patch": {"value": op["prompt"], "semantic_description": op["title"]}}, rid)
+                self._log_edit("insert_step", skill_id, before, source="clarify", proposal_id=None)
+                added += 1
+            elif kind == "insert_handover":
+                # The person asked for it (the robot-check question): a hand-over where the robot check was.
+                i = index_of(op["after_step_key"])
+                self.cmd_insert_step({"skill_id": skill_id, "action_kind": "handover", "insert_after": i}, rid)
+                self.cmd_patch_step({"skill_id": skill_id, "step_index": i + 1,
+                                     "patch": {"value": op["message"], "semantic_description": "A person does the robot check"}}, rid)
                 self._log_edit("insert_step", skill_id, before, source="clarify", proposal_id=None)
                 added += 1
             elif kind == "set_fork_policy":

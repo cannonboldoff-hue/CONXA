@@ -314,12 +314,26 @@ function _addTab(run, runId, view, { label, background = false, marker = true, o
   // A site-opened popup or new tab becomes a tab in the panel, never a stray window. Chromium creates
   // its webContents (createWindow), so window.opener and Playwright's page.opener() keep working;
   // denying and loading the URL into a view of our own crashed Electron in the spike.
-  view.webContents.setWindowOpenHandler(() => ({
+  view.webContents.setWindowOpenHandler((details) => ({
     action: "allow",
+    // Electron calls this from its own event handler: a throw here is an uncaught main-process error that froze Studio
+    // behind a dialog and lost the recording (WF-8 8.6). So it never throws, whatever the way the tab was opened.
     createWindow: (options) => {
-      const nv = new WebContentsView({ webContents: options.webContents, webPreferences: options.webPreferences });
-      _addTab(run, runId, nv, { marker: false, opener: tabId });
-      return nv.webContents;
+      const guest = options && options.webContents;
+      // A middle-click or Ctrl+click (background-tab) can arrive with no webPreferences, and WebContentsView rejects
+      // `undefined`. The guest's preferences were already set by Chromium; this object is only the constructor's.
+      const prefs = options && options.webPreferences && typeof options.webPreferences === "object" ? options.webPreferences : {};
+      // Opened in the background by the person, as in Chrome: it stays behind the current tab.
+      const byPerson = details && details.disposition === "background-tab";
+      try {
+        const nv = new WebContentsView({ webContents: guest, webPreferences: prefs });
+        _addTab(run, runId, nv, { marker: false, opener: tabId, background: byPerson, openedBy: byPerson ? "person" : null });
+        return nv.webContents;
+      } catch (err) {
+        console.error("browser panel: could not open the new tab", err);
+        try { if (guest && !guest.isDestroyed()) guest.close(); } catch (_) { /* best effort */ }
+        return guest; // Electron requires the guest back; it is closed, so no stray window appears
+      }
     },
   }));
   for (const ev of ["page-title-updated", "did-navigate", "did-navigate-in-page", "did-start-loading", "did-stop-loading"]) {

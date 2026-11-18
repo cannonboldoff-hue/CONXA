@@ -19,10 +19,20 @@ from conxa_compile.llm.client import call_llm
 from conxa_compile.llm.llm_cache import cache_key, read_cached, write_cached
 
 _NAMESPACE = "compile_recap"
-_CACHE_VERSION = 1
+_CACHE_VERSION = 3
 _MIN_CHARS, _MAX_CHARS = 40, 900
 _ATTEMPTS = 3
 _SNAKE_ID = re.compile(r"\b[a-z]+_[a-z_]+\b")
+# The reason given for drawing the recording could not keep (handlers/compile_flow.py puts it in ``left_out``).
+DRAWING_LEFT_OUT = "drawing, or clicking in a drawing area, can't be recorded yet"
+HUMAN_CHECK_LEFT_OUT = "a robot check can't be done automatically; only a person may do it"
+# A message must not claim the workflow does what the person did, or gets past a robot check, when one of these
+# walls left part of it out (WF-8 8.12, 8.13).
+_WALLS = (DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT)
+_GETS_PAST = re.compile(r"\b(?:gets?|getting|goes|going) (?:past|through|around)\b|\b(?:solves?|passes|beats?) the robot", re.IGNORECASE)
+# Claims a message must not make when something was left out: the facts say otherwise (WF-8 8.12).
+_NOTHING_LEFT_OUT = re.compile(r"\bnothing (?:was |is |has been )?(?:left out|missed|dropped)", re.IGNORECASE)
+_DOES_ALL_YOU_DID = re.compile(r"\b(?:same thing|everything|exactly what|all) you did\b", re.IGNORECASE)
 
 
 def _problem(message: str, facts: dict[str, Any]) -> str:
@@ -33,6 +43,13 @@ def _problem(message: str, facts: dict[str, Any]) -> str:
         return "it must not contain backticks, braces or names with underscores"
     if facts.get("step_count") and str(facts["step_count"]) not in message:
         return f"it must say the number of steps ({facts['step_count']})"
+    left_out = facts.get("left_out") or []
+    if left_out and _NOTHING_LEFT_OUT.search(message):
+        return "something was left out (see left_out): never say nothing was left out"
+    if any(d.get("reason") in _WALLS for d in left_out) and _DOES_ALL_YOU_DID.search(message):
+        return "part of it was left out, so never say it does what they did"
+    if any(d.get("reason") == HUMAN_CHECK_LEFT_OUT for d in left_out) and _GETS_PAST.search(message):
+        return "the robot check was left out, so never say it gets past it"
     missing = [str(n) for n in facts.get("unsure_steps") or [] if str(n) not in message]
     return f"it must include exactly: {', '.join(missing)}" if missing else ""
 

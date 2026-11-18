@@ -44,3 +44,30 @@ test("text that appears inside a frame after the step is new, and counts as proo
     await browser.close();
   }
 });
+
+// WF-8 8.13: a heading already on the page "proved" the robot-check click. A text check is a witness only if it would
+// have said "no" had the action done nothing: counted before and more of it now.
+test("words already on the page, or with no count before, never prove the step (can't tell, never a failure)", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<h1>Sample Form with ReCAPTCHA</h1><button id=b>Go</button>`);
+    const words = "Sample Form with ReCAPTCHA";
+    const check = { type: "text_present", target: words, required: true };
+    const baseline = await capturePreStepSignature(page, [words]);
+    assert.strictEqual(baseline.counts[words], 1);
+    const same = await evaluateAssertion([page], page, check, {}, baseline);
+    assert.deepStrictEqual([same.ok, same.answer, !!same.fresh], [true, "cant_tell", false], "already there, no more of it");
+
+    const blind = await evaluateAssertion([page], page, check, {}, null);
+    assert.deepStrictEqual([blind.ok, blind.answer], [true, "cant_tell"], "no count before the step");
+    const uncounted = await evaluateAssertion([page], page, check, {}, { ...baseline, counts: {} });
+    assert.strictEqual(uncounted.answer, "cant_tell", "the count could not be read");
+
+    await page.evaluate(() => { document.body.insertAdjacentHTML("beforeend", "<p>Sample Form with ReCAPTCHA</p>"); });
+    const more = await evaluateAssertion([page], page, check, {}, baseline);
+    assert.deepStrictEqual([more.answer, more.fresh], ["yes", true], "more of it now: the action brought it up");
+  } finally {
+    await browser.close();
+  }
+});

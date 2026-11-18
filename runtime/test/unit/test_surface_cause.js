@@ -214,12 +214,13 @@ test("contrast: a text that was not there before and is now is a yes; one still 
   });
 });
 
-test("contrast: a plain text check with no baseline is read as before; every text check is watched", async () => {
+test("a text check with no count from before the step passes but proves nothing; every text check is watched", async () => {
   await withPage(LIST, async (page) => {
     const step = { validation: { assertions: [{ type: "text_present", target: "download" }, BOUND, { type: "selector_present", target: "#x" }] } };
     assert.deepStrictEqual(watchedTexts(step, { file: "X" }), ["download", "X"]);
+    // WF-8 8.13: it would have said "yes" had the action done nothing, so it is no witness (CLAUDE.md).
     const r = await evaluateAssertion([page], page, { type: "text_present", target: "Ada.gitignore", timeout_ms: 600 }, {}, null);
-    assert.strictEqual(r.answer, "yes");
+    assert.deepStrictEqual([r.ok, r.answer], [true, "cant_tell"]);
   });
 });
 

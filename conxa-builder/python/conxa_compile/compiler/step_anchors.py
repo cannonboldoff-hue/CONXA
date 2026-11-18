@@ -271,6 +271,26 @@ def _native_list_echo(step: Step) -> bool:
     return isinstance(key, dict) and key.get("key") != "Tab" and not any(mods.get(m) for m in ("ctrl", "alt", "meta"))
 
 
+_TEXT_EDIT_KEYS = frozenset({"a", "c", "v", "x", "z", "y"})
+
+
+def _text_edit_shortcut(step: Step) -> bool:
+    """Select-all, copy, cut, paste, undo or redo inside a text box. The box's own typing event already holds what these
+    left in it (a paste arrives as typing of the pasted text), and replay fills that value. Replayed, the keys add
+    nothing, or worse: Ctrl+V pastes whatever is on the clipboard of the computer running it (WF-8: the replay typed a
+    literal "v", and "A" after the company name)."""
+    if action_name(step) != "keyboard_shortcut" or not is_editable_target(step) \
+            or str((step.get("target") or {}).get("tag") or "").lower() == "select":
+        return False
+    try:
+        key = json.loads(_event_value(step) or "{}")
+    except ValueError:
+        return False
+    mods = key.get("modifiers") if isinstance(key, dict) and isinstance(key.get("modifiers"), dict) else {}
+    return (isinstance(key, dict) and str(key.get("key") or "").lower() in _TEXT_EDIT_KEYS
+            and bool(mods.get("ctrl") or mods.get("meta")) and not mods.get("alt"))
+
+
 def _bare_url(step: Step, key: str) -> str:
     return str((step.get(key) or {}).get("url") or "").split("#", 1)[0]
 
@@ -343,7 +363,7 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
     pending_submit: Step | None = None
     use_submit_truncate = _truncate_after_terminal_submit(pol)
     for raw in _typing_flushed_at_unload(steps):
-        if _native_list_echo(raw):
+        if _native_list_echo(raw) or _text_edit_shortcut(raw):
             continue
         step = dict(raw)
         step = _normalize_prep_click_to_focus(step, pol)
@@ -411,12 +431,8 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                 if action == "select":
                     cleaned[-1] = step  # picked again in the same list: the last pick is the one that stands
                     continue
-                if action == "type":
-                    prev_payload = dict(prev.get("action") or {})
-                    curr_payload = dict(step.get("action") or {})
-                    if curr_payload.get("value") not in {None, ""}:
-                        prev_payload["value"] = curr_payload.get("value")
-                        prev["action"] = prev_payload
+                if action == "type" and _event_value(step) not in {None, ""}:
+                    cleaned[-1] = step  # the box's final value stands, with its own event as the step's source
                 continue
 
         # Merge noisy click/focus + the field's real value-setting action. An upload_intent
@@ -449,6 +465,13 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                             last_type_index[k] = idx - 1
                         elif idx == i:
                             last_type_index.pop(k, None)
+        elif action == "dblclick" and cleaned and cleaned[-1] is not None and action_name(cleaned[-1]) in {"click", "focus"} \
+                and (_target_key(cleaned[-1]) == key or _same_node(cleaned[-1], step)) \
+                and int((cleaned[-1].get("extras") or {}).get("repeat_count") or 1) <= 2:
+            # A double-click arrives as two clicks and then the dblclick; the dblclick is the act. Kept, the folded click
+            # replayed as a stray single click before it, or not, as the second opinion happened to judge (WF-8 8.6).
+            # shortcut: three or more clicks before a dblclick stay as they are; split the count if that ever shows up.
+            cleaned.pop()
         elif action in _VALUE_SET_ACTIONS and cleaned and cleaned[-1] is not None:
             prev = cleaned[-1]
             if prev is not None and action_name(prev) in {"click", "focus"} and _target_key(prev) == key:
@@ -473,11 +496,12 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
                                                             and is_editable_target(s)) for s in in_between)
                 cleared = _event_value(step) == "" and _event_value(old_step) != ""
                 if action_name(old_step) == "type" and _target_key(old_step) == key and not another_box and still_there and not cleared:
-                    old_payload = dict(old_step.get("action") or {})
-                    new_payload = dict(step.get("action") or {})
-                    if new_payload.get("value") not in {None, ""}:
-                        old_payload["value"] = new_payload.get("value")
-                    old_step["action"] = old_payload
+                    # The later event replaces the earlier one in its place, not only its value: everything after
+                    # the compile looks a step's recording up by its source event (the value a test fills in, the
+                    # "typed but left out" check), and the earlier event still held the typed-over text (WF-8:
+                    # "Final Corp" typed over "Wrong Name", the test ran with "Wrong Name").
+                    if _event_value(step) not in {None, ""}:
+                        cleaned[old_idx] = step
                     last_type_index[key] = old_idx
                     continue
 

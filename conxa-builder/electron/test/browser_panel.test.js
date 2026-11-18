@@ -51,7 +51,14 @@ class FakeWebContents {
   destroy() { this.destroyed = true; if (this.handlers.destroyed) this.handlers.destroyed(); }
 }
 class FakeView {
-  constructor(opts = {}) { this.webContents = opts.webContents || new FakeWebContents(); this.bounds = null; this.visible = true; }
+  constructor(opts = {}) {
+    // As Electron does: a webPreferences key that is not an object throws (a middle-click passed undefined, WF-8 8.6).
+    if ("webPreferences" in opts && (!opts.webPreferences || typeof opts.webPreferences !== "object")) {
+      throw new TypeError("options.webPreferences must be an object");
+    }
+    if (opts.webContents && opts.webContents.failView) throw new Error("view could not be made");
+    this.webContents = opts.webContents || new FakeWebContents(); this.bounds = null; this.visible = true;
+  }
   setBounds(b) { this.bounds = b; }
   setVisible(v) { this.visible = v; }
 }
@@ -636,4 +643,24 @@ test("capture tries once more when a never-drawn view fails its first still", as
   const got = await panel.capture("mini2", tabId, { type: "png" });
   assert.strictEqual(Buffer.from(got.data, "base64").toString(), "png");
   assert.strictEqual(calls, 2);
+});
+
+test("a middle-click or Ctrl+click opens a background tab and never throws out of Electron's window-open path", () => {
+  panel.newView("mid", { kind: "record", viewport: { width: 1280, height: 720 } });
+  const openerId = last.tabs[0].id;
+  const wc = lastPage().webContents;
+  const guest = new FakeWebContents();
+  // Electron hands no webPreferences on this path; passing them through as undefined crashed Studio (WF-8 8.6).
+  const made = wc.openHandler({ url: "http://app.test/next", disposition: "background-tab" }).createWindow({ webContents: guest });
+  assert.strictEqual(made, guest);
+  const tab = last.tabs.find((t) => t.id !== openerId);
+  assert.strictEqual(tab.openedBy, "person");
+  assert.strictEqual(tab.active, false, "it opens behind the current tab, as in Chrome");
+  assert.strictEqual(last.tabs.find((t) => t.id === openerId).active, true);
+  // Whatever fails while wiring the tab, the callback returns the guest (closed) instead of throwing.
+  const broken = Object.assign(new FakeWebContents(), { failView: true });
+  const back = wc.openHandler({ url: "", disposition: "foreground-tab" }).createWindow({ webContents: broken, webPreferences: {} });
+  assert.strictEqual(back, broken);
+  assert.strictEqual(broken.destroyed, true);
+  assert.strictEqual(last.tabs.length, 2);
 });

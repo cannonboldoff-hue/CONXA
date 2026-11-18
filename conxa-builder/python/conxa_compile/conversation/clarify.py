@@ -37,13 +37,14 @@ MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
-    "coverage": -1, "repeat_rows": -0.5, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
+    "human_check": -3, "unsupported": -2, "coverage": -1, "repeat_rows": -0.5, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
 # value on one of them is not "lost" and is never asked about. "not_from_user" is the page's own
 # script (recorder `origin`), which the person never typed or chose, so it is never asked about either.
-_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed", "not_from_user", "login_page"})
+# "typed_over" is text the person replaced in the same box (compiler/build.py::_mark_typed_over): the final value stands.
+_MERGE_PASSES = frozenset({"choice_collapsed", "date_collapsed", "not_from_user", "login_page", "typed_over"})
 SourceLookup = Callable[[dict[str, Any]], "dict[str, Any] | None"]
 
 
@@ -134,6 +135,24 @@ def _question(kind: str, qid: str, title: str, body: str, choices: list[dict[str
         "id": qid, "kind": kind, "title": title, "body": body, "choices": choices, "multi": multi,
         "step_keys": step_keys_ or [], "status": "open", "answer": None, "receipt": "", **extra,
     }
+
+
+def unsupported_sentence(dropped: list[dict[str, Any]] | None) -> str:
+    """The plain line for drawing the recording could not keep ('' when there was none). Code-written, so a summary
+    can never claim the drawing is in the workflow (WF-8 8.12)."""
+    n = sum(1 for d in dropped or [] if isinstance(d, dict) and d.get("pass") == "unsupported")
+    if not n:
+        return ""
+    return (f"Drawing, or clicking in a drawing area, can’t be recorded yet, so "
+            f"{'this action was' if n == 1 else f'these {n} actions were'} left out. The workflow won’t do them.")
+
+
+def human_check_sentence(dropped: list[dict[str, Any]] | None) -> str:
+    """The plain line for a robot check ("I'm not a robot") the recording could not keep ('' when there was none).
+    Code-written, so no summary can say the workflow gets past it (WF-8 8.13)."""
+    if not any(isinstance(d, dict) and d.get("pass") == "human_check" for d in dropped or []):
+        return ""
+    return "A robot check (like “I’m not a robot”) can’t be done automatically, so it was left out."
 
 
 ForkCopy = Callable[[dict[str, Any]], "str | None"]
@@ -640,8 +659,42 @@ def generate_questions(
         if chosen is not None:
             out.append(chosen)
 
+    # 0a ─ drawing on a canvas, left out because nothing can repeat it: said plainly, and the person acknowledges it
+    # before anything can be tested or approved (a workflow that "draws a rectangle" and draws nothing must not pass
+    # as working). A safety-floor kind: never pre-answered, never dropped.
+    cant = unsupported_sentence(dropped)
+    if cant:
+        out.append(_question(
+            "unsupported", "unsupported", "Part of this can’t be repeated",
+            f"{cant} If drawing was the point of the task, this workflow can’t do it yet.",
+            [{"id": "ok", "label": "I understand", "detail": "Keep the other steps, without the drawing."}],
+        ))
+
+    # 0a' ─ a robot check, left out because only a person may do it: a hand-over step lets someone do it on each run,
+    # or it stays out (the site may then refuse the form). Code inserts the hand-over; a safety-floor kind, so test
+    # and approve wait for the answer.
+    walls = [d for d in dropped or [] if isinstance(d, dict) and d.get("pass") == "human_check"]
+    if walls:
+        # Where the check was: after the last step recorded before it (a typing step's synthetic focus shares its
+        # event, so the last one, never the first: the hand-over once landed between the focus and the typing).
+        at = walls[0].get("sequence")
+        before = [k for k, st in zip(keys, steps) if isinstance(st.get("source_event"), int) and isinstance(at, int)
+                  and st["source_event"] < at]
+        anchor = before[-1] if before else (keys[0] if keys else None)
+        can = "A person can do it each time this is used: I can add a hand-over step where it was. " if anchor else ""
+        out.append(_question(
+            "human_check", "human_check", "A robot check can’t be done automatically",
+            f"{human_check_sentence(dropped)} {can}Without it, the site may refuse to go on.",
+            [*([{"id": "handover", "label": "Add a hand-over step", "detail": "Each time, the workflow waits while a person does the robot check."}]
+               if anchor else []),
+             {"id": "leave", "label": "Leave it out", "detail": "The workflow skips the robot check."}],
+            step_keys_=[anchor] if anchor else [],
+        ))
+
     # 0b ─ steps the compile left out that carried a value the person entered: say so, so a
-    # real omission is not silent. Advisory: the answer applies nothing (re-record to add it back).
+    # real omission is not silent. Advisory, so its one choice promises no change: code cannot rebuild a left-out step,
+    # and a "No, they should be there" that changed nothing read as fixed (WF-8). Adding one back is the editor's job.
+    # Text typed over in the same box is never asked ("typed_over" in _MERGE_PASSES).
     # A value the workflow still enters is not lost: typing the same words twice (a field re-reported on Enter) is
     # folded into one step that carries them, as an input's recorded value or as fixed text.
     still_used = {str(i.get("default")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("default") not in (None, "")}
@@ -656,10 +709,9 @@ def generate_questions(
         out.append(_question(
             "dropped_value", "dropped_value", "A few things you typed are not in the workflow. Is that okay?",
             f"You typed these while recording, but they are not in the workflow: {shown}. "
-            "That is normal if you fixed a typo or typed over something while recording.",
+            "If one of them should be there, add it in the editor or record that part again.",
             [
-                {"id": "ok", "label": "Yes, leave them out", "detail": "They were mistakes or typed twice."},
-                {"id": "missing", "label": "No, they should be there", "detail": "I\u2019ll add them in the editor, or you can record again."},
+                {"id": "ok", "label": "Okay", "detail": "Nothing changes. The workflow stays as it is now."},
             ],
         ))
 
@@ -1357,9 +1409,17 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         return ops, ("Trying again with a corrected value" if answer.get("choice") == "wrong" else "Keeping the value — looking at the steps")
 
     if kind == "dropped_value":
-        if answer.get("choice") == "missing":
-            return ops, "A part is missing — add it in the editor before you rely on this"
         return ops, "Left out"
+
+    if kind == "unsupported":
+        return ops, "Kept without the drawing"
+
+    if kind == "human_check":
+        if answer.get("choice") == "handover" and keys:
+            ops.append({"op": "insert_handover", "after_step_key": keys[0],
+                        "message": "Please do the robot check (for example tick “I’m not a robot”), then continue."})
+            return ops, "A person does the robot check each time"
+        return ops, "Left out: the workflow skips the robot check"
 
     if kind == "chosen_values":
         selected = set(answer.get("selected") or [])

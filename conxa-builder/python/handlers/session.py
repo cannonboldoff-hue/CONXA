@@ -40,10 +40,28 @@ def _recording_duration_seconds(events: list[dict[str, Any]]) -> float | None:
     return duration if duration > 0 else None
 
 
+def by_person(e: Any) -> bool:
+    """Something the PERSON did. The recording also holds what the page did by itself (a script's own click), which
+    is never a step (compiler/build.py::prepare_compile_events). Studio's own file picker is the person's choice."""
+    return not (isinstance(e, dict) and e.get("origin") == "script"
+                and not isinstance((e.get("extras") or {}).get("file_pick"), dict))
+
+
+def _empty_reason(events: list[dict[str, Any]]) -> str | None:
+    """Why this recording has nothing to build from, in plain words; None when it has something. Drawing on a canvas
+    is recorded only so it can be said: a recording of nothing else would build a workflow that draws nothing."""
+    if not events:
+        return "No workflow actions were recorded."
+    acts = [e for e in events if by_person(e)]
+    kind = lambda e: (e.get("action") or {}).get("action") if isinstance(e.get("action"), dict) else e.get("action")  # noqa: E731
+    if acts and all(isinstance(e, dict) and kind(e) == "unsupported_gesture" for e in acts):
+        return "Drawing, or clicking in a drawing area, can’t be recorded yet, so nothing in this recording can be repeated."
+    return None
+
+
 def _action_count(events: list[dict[str, Any]]) -> int:
-    """How many things the PERSON did. The recording also holds what the page did by itself (a script's own click),
-    which is never a step; counting it makes "you did 11 things" wrong."""
-    return sum(1 for e in events if not (isinstance(e, dict) and e.get("origin") == "script"))
+    """How many things the PERSON did; counting the page's own acts makes "you did 11 things" wrong."""
+    return sum(1 for e in events if by_person(e))
 
 
 def _capture_gap_count(sess: Any) -> int:
@@ -619,9 +637,9 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import remove_variant
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            if len(events) == 0:
+            if (empty := _empty_reason(events)):
                 remove_variant(workflow_id, session_id)
-                raise _CommandError("empty_recording", "No workflow actions were recorded.")
+                raise _CommandError("empty_recording", empty)
             _refresh_group_app_sessions(workflow_id)
             return {
                 "session_id": session_id,
@@ -637,9 +655,9 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import clear_recording, get_workflow, save_workflow
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            if len(events) == 0:
+            if (empty := _empty_reason(events)):
                 clear_recording(workflow_id)
-                raise _CommandError("empty_recording", "No workflow actions were recorded.")
+                raise _CommandError("empty_recording", empty)
             _refresh_group_app_sessions(workflow_id)
             # Persist every host this recording navigated to (same extraction the
             # compiler later stores in SkillMeta.visited_hosts) so the group page can

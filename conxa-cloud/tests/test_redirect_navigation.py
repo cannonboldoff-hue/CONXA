@@ -358,7 +358,8 @@ def test_user_typed_navigation_still_compiles_to_a_navigate_step():
     pkg = _compile_steps(_recording(_nav_event("2026-01-01T00:01:00Z")), "sess-typed-nav")
     steps = pkg.skills[0].steps
     assert [s.action for s in steps] == ["navigate", "click", "navigate", "click"]
-    assert steps[2].url == ORDER
+    # The address keeps everything but its secret-looking value: a token never ships in a package (WF-8 secrets).
+    assert steps[2].url == ORDER.replace("token=abc123", "token=REDACTED")
 
 
 def test_ledger_says_how_each_folded_navigation_was_decided() -> None:

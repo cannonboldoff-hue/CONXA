@@ -19,7 +19,8 @@ import uuid
 from typing import Any
 
 from handlers.protocol import _CommandError, _emit_event, _event_sink, _safe_id
-from handlers.session import _recorder_registry
+from handlers.session import _action_count, _recorder_registry, by_person
+from handlers.test_flow import last_test_inputs
 
 _WATCH_INTERVAL_S = 1.0
 _SIGN_IN_WATCH_INTERVAL_S = 1.5
@@ -201,7 +202,7 @@ class WorkflowFlowMixin:
 
         runtime_state.set_flags(workflow.id, retest_after_sign_in=False, sign_in_expired=False)
         harness.log_event(_thread(workflow.id), "Testing again with the same inputs", glyph="run", sink=sink)
-        threading.Thread(target=self._tf_background, args=(workflow.id, dict(workflow.last_test_inputs or {}), True, True),
+        threading.Thread(target=self._tf_background, args=(workflow.id, last_test_inputs(workflow), True, True),
                          daemon=True).start()
         return {"next": "test"}
 
@@ -303,10 +304,12 @@ class WorkflowFlowMixin:
 
         def on_event(event: Any) -> None:
             data = event.model_dump(mode="json")
+            if not by_person(data):
+                return  # the page's own act: never a step, so never shown or counted as captured
             row = describe_event(data)
-            counter["n"] = max(counter["n"], int(row.get("sequence") or 0))
+            counter["n"] += 1
             _emit_event(None, phase="recording_event", workflow_id=workflow_id, session_id=session_id,
-                        row=row, count=len(sess.snapshot_events()) if sess is not None else counter["n"])
+                        row=row, count=_action_count(sess.snapshot_events()) if sess is not None else counter["n"])
             if hinter is not None:
                 try:
                     hint = hinter(data)
@@ -361,7 +364,7 @@ class WorkflowFlowMixin:
                 return
             if sess.browser_open:
                 continue
-            count = len(sess.snapshot_events())
+            count = _action_count(sess.snapshot_events())
             runtime_state.set_flags(workflow_id, recording=False, recording_paused=False)
             harness.update_card(_thread(workflow_id), card_id, state="browser_closed", count=count,
                                 actions=["finish", "discard"] if count else ["discard"], sink=sink)
@@ -708,5 +711,5 @@ class WorkflowFlowMixin:
 
         session_id = _safe_id(payload.get("session_id"), "session_id")
         sess = _recorder_registry.get(session_id)
-        rows = [describe_event(e) for e in (sess.snapshot_events() if sess is not None else [])]
+        rows = [describe_event(e) for e in (sess.snapshot_events() if sess is not None else []) if by_person(e)]
         return {"rows": rows, "varies": hints.load(session_id).get("varies", {}), "paused": bool(sess and sess.status().get("paused"))}

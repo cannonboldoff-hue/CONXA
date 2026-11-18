@@ -15,7 +15,7 @@ function appendRecoveryEvent(event) {
     if (fs.existsSync(RECOVERY_LOG) && fs.statSync(RECOVERY_LOG).size > RECOVERY_LOG_MAX) {
       fs.renameSync(RECOVERY_LOG, `${RECOVERY_LOG}.1`);
     }
-    fs.appendFileSync(RECOVERY_LOG, `${JSON.stringify({ ts: new Date().toISOString(), ...event })}\n`);
+    fs.appendFileSync(RECOVERY_LOG, `${require("./redact").scrubLine(JSON.stringify({ ts: new Date().toISOString(), ...event }))}\n`);
   } catch (_) {}
 }
 

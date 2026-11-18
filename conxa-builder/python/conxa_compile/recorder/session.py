@@ -26,6 +26,7 @@ from conxa_core.config import settings
 from conxa_core.metrics.store import metrics
 from conxa_core.models.events import RecordedEvent
 from conxa_core.models.workflow import GroupApp
+from conxa_core.redact import scrub_urls
 from conxa_core.site import same_host
 from conxa_compile import auth_learning
 from conxa_compile.policy.bundle import get_policy_bundle
@@ -449,6 +450,9 @@ class RecordingSession:
     _seen_seqs: dict[str, set[int]] = field(default_factory=dict)
     _flush_last_seq: dict[str, int] = field(default_factory=dict)  # highest step number a bridge said it issued at Stop
     _capture_gaps: list[dict] = field(default_factory=list)
+    # Hashes of what the person typed into password-like boxes (bridge.js reports only the hash). Kept in memory, never
+    # written: every address this session saves has a query value equal to one of them redacted (conxa_core.redact).
+    _secret_hashes: set[str] = field(default_factory=set)
     # True: attach to the panel run whose id is session_id and which already holds a replayed page
     # (re-record from a step), instead of creating a view. See host_view.adopt.
     adopt: bool = False
@@ -1867,6 +1871,9 @@ class RecordingSession:
                     self._traces.append(payload_copy)
                 return
             # A real click the page could not turn into a step: counted, never queued as an event.
+            if isinstance(payload_copy.get("_secret"), str):
+                self._secret_hashes.add(payload_copy["_secret"][:128])
+                return
             gap = payload_copy.get("_gap")
             if isinstance(gap, dict):
                 if len(self._capture_gaps) < 200:
@@ -1948,7 +1955,7 @@ class RecordingSession:
             "capture_gaps": self.capture_gaps(),
         }
         try:
-            out.write_text(json.dumps(diag, indent=2, ensure_ascii=False), encoding="utf-8")
+            out.write_text(json.dumps(scrub_urls(diag, self._secret_hashes), indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception:  # noqa: BLE001
             pass
 
@@ -1994,7 +2001,7 @@ class RecordingSession:
         out = session_dir / "events.jsonl"
         with out.open("w", encoding="utf-8") as f:
             for ev in self._materialized:
-                f.write(json.dumps(ev.model_dump(mode="json"), ensure_ascii=False) + "\n")
+                f.write(json.dumps(scrub_urls(ev.model_dump(mode="json"), self._secret_hashes), ensure_ascii=False) + "\n")
         if self._login_drops:
             try:
                 (session_dir / "login_drops.json").write_text(json.dumps(self._login_drops), encoding="utf-8")
@@ -2002,7 +2009,8 @@ class RecordingSession:
                 pass
         if not self.auth_mode:
             try:
-                (session_dir / "requests.json").write_text(json.dumps({"mutating": self._mutating_requests}), encoding="utf-8")
+                (session_dir / "requests.json").write_text(
+                    json.dumps(scrub_urls({"mutating": self._mutating_requests}, self._secret_hashes)), encoding="utf-8")
             except OSError:
                 pass
         self._write_diagnostics_sync(session_dir)
@@ -2074,6 +2082,7 @@ class RecordingSession:
             else self._tab_context_for_page(page_for_visuals)
         )
         event = self._finalize_payload_sync(page_for_visuals, session_dir, payload)
+        event = RecordedEvent.model_validate(scrub_urls(event.model_dump(mode="json"), self._secret_hashes))
         with self._lock:
             if self._materialized and self._should_merge_typing(self._materialized[-1], event):
                 prev = self._materialized[-1]
