@@ -608,3 +608,32 @@ test("capture stills a tab even while it is hidden, and refuses a run that is no
   assert.strictEqual(Buffer.from((await panel.capture("keep7", "gone", { type: "png" })).data, "base64").toString(), "png", "an unknown tab falls back to the shown one");
   await assert.rejects(() => panel.capture("no-such-run", tabId), /no tab to capture/);
 });
+
+test("a minimized window holds a test page at 1280 wide with an override at zoom 1, and gives the zoom back at restore", async () => {
+  const { tabId } = panel.newView("mini", { viewport: { width: 1280, height: 720, fit: "width" } });
+  panel.setActiveBounds("mini", tabId, { x: 0, y: 0, width: 640, height: 400 }); // s = 0.5, H = 800
+  const wc = lastPage().webContents;
+  await panel.setMinimized(true);
+  assert.deepStrictEqual(lastMetrics(wc).params, { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, scale: 1 },
+    "the last pane height, never 0x0; CDP input is not mapped through a scale, so none");
+  assert.strictEqual(wc.zooms[wc.zooms.length - 1], 1, "an override page is not zoomed as well");
+  panel.newTab("mini", {}); // a tab the run opens while minimized gets the same hold
+  const late = lastPage().webContents;
+  assert.strictEqual(lastMetrics(late).params.width, 1280);
+  await panel.setMinimized(false);
+  assert.strictEqual(wc.commands[wc.commands.length - 1].method, "Emulation.clearDeviceMetricsOverride");
+  assert.strictEqual(wc.zooms[wc.zooms.length - 1], 0.5, "back on the pane's zoom");
+  await panel.setMinimized(false); // a second restore is nothing
+  assert.strictEqual(wc.zooms[wc.zooms.length - 1], 0.5);
+});
+
+test("capture tries once more when a never-drawn view fails its first still", async () => {
+  const { tabId } = panel.newView("mini2");
+  const wc = lastPage().webContents;
+  const real = wc.capturePage.bind(wc);
+  let calls = 0;
+  wc.capturePage = (r, o) => (++calls === 1 ? Promise.reject(new Error("UnknownVizError")) : real(r, o));
+  const got = await panel.capture("mini2", tabId, { type: "png" });
+  assert.strictEqual(Buffer.from(got.data, "base64").toString(), "png");
+  assert.strictEqual(calls, 2);
+});

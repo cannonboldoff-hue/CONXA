@@ -1,0 +1,260 @@
+<title>Question and Answer Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one long reading column; two diagrams (whole journey, one answer), then plain-language detail blocks. */
+:root{--bg:#f6f7f9;--fg:#1c2230;--muted:#5a6376;--line:#c9cfdb;--card:#ffffff;--accent:#2f5bd6;--accent-bg:#e4ebfc;--safe:#b4531a;--safe-bg:#fbeadd;--ok:#1d7a4d;--ok-bg:#dff3e8;--code:#eceff5;
+--display:"Space Grotesk",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10131a;--fg:#e6e9f0;--muted:#a1a9bb;--line:#363e50;--card:#181d28;--accent:#8aa6ff;--accent-bg:#1f2a4a;--safe:#f0a874;--safe-bg:#3a2619;--ok:#6fd3a0;--ok-bg:#16332a;--code:#222938;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10131a;--fg:#e6e9f0;--muted:#a1a9bb;--line:#363e50;--card:#181d28;--accent:#8aa6ff;--accent-bg:#1f2a4a;--safe:#f0a874;--safe-bg:#3a2619;--ok:#6fd3a0;--ok-bg:#16332a;--code:#222938;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--display);line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:2.1rem}h2{font-size:1.45rem}h3{font-size:1.05rem}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+.lead{color:var(--muted);font-size:1.05rem}
+code{background:var(--code);padding:1px 6px;border-radius:4px;font-size:.88em}
+figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+figure .scroll{overflow-x:auto}
+figcaption{color:var(--muted);font-size:.9rem;margin-top:10px;max-width:70ch}
+svg{display:block;width:100%;min-width:640px;height:auto;color:var(--fg);font-family:var(--body)}
+svg text{fill:currentColor;font-size:13px}
+svg .small{font-size:11.5px;opacity:.78}
+svg .t{font-weight:600}
+svg .box{fill:var(--card);stroke:currentColor;stroke-width:1.3}
+svg .q{fill:var(--accent-bg);stroke:var(--accent);stroke-width:1.5}
+svg .safe{fill:var(--safe-bg);stroke:var(--safe);stroke-width:1.5}
+svg .ok{fill:var(--ok-bg);stroke:var(--ok);stroke-width:1.5}
+svg .arr{stroke:currentColor;stroke-width:1.4;fill:none}
+svg .dash{stroke-dasharray:5 4}
+svg .lane{fill:none;stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.rule{border-color:var(--safe);background:var(--safe-bg)}
+.tag{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.steps{counter-reset:s;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px 12px 52px;position:relative;min-width:0}
+.steps li::before{content:counter(s);position:absolute;left:14px;top:12px;width:26px;height:26px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;display:grid;place-items:center;font-size:.85rem}
+.table{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:.92rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+dl{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:8px 16px;margin:0}
+dt{font-weight:600}dd{margin:0;color:var(--muted)}
+@media(max-width:520px){dl{grid-template-columns:1fr}}
+</style>
+
+<main>
+<header>
+<p class="tag">Conxa Build Studio</p>
+<h1>How questions are made, asked and turned into edits</h1>
+<p class="lead">You record a workflow. Conxa then asks you a few questions, and your answers change the workflow. This page shows that whole path, step by step, in everyday words. Every box below matches real code in <code>conxa-builder/python</code>.</p>
+</header>
+
+<section>
+<h2>The whole journey in one picture</h2>
+<p>There are <b>two rounds</b> of questions. Round 1 happens <em>before</em> the workflow is built. Round 2 happens <em>after</em>. The big difference: in round 1 nothing can be edited yet, because the workflow does not exist, so your answers are only written down. In round 2 the workflow exists, so each answer edits it straight away.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 880 1010" role="img" aria-label="Flow from recording, through round 1 questions stored as decisions, the build, round 2 questions that edit the workflow, to the summary and test">
+<defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<rect class="lane" x="10" y="10" width="860" height="395" rx="10"/><text x="24" y="30" class="small t">ROUND 1 · BEFORE THE BUILD · answers are saved, nothing is edited</text>
+<rect class="lane" x="10" y="425" width="860" height="515" rx="10"/><text x="24" y="445" class="small t">ROUND 2 · AFTER THE BUILD · each answer edits the workflow</text>
+
+<rect class="box" x="30" y="50" width="380" height="50" rx="8"/><text x="46" y="73" class="t">1. You finish recording</text><text x="46" y="90" class="small">screen video + list of your clicks and typing</text>
+<text x="440" y="80" class="small">Starts: _flow_start_understand</text>
+<line class="arr" x1="220" y1="100" x2="220" y2="128" marker-end="url(#a1)"/>
+
+<rect class="box" x="30" y="130" width="380" height="58" rx="8"/><text x="46" y="153" class="t">2. Conxa "watches" the recording</text><text x="46" y="171" class="small">cloud video service reads the video; the local track reads your events</text>
+<text x="440" y="153" class="small">Result saved as understanding.json:</text><text x="440" y="170" class="small">goal, values that may change, unclear moments</text>
+<line class="arr" x1="220" y1="188" x2="220" y2="216" marker-end="url(#a1)"/>
+
+<rect class="q" x="30" y="218" width="380" height="58" rx="8"/><text x="46" y="241" class="t">3. Round 1 questions are written</text><text x="46" y="259" class="small">questions_from_understanding: first 5 "open", rest "queued"</text>
+<text x="440" y="241" class="small">Checked by code (question_plan.review):</text><text x="440" y="258" class="small">no duplicates; each names the thing it settles</text>
+<line class="arr" x1="220" y1="276" x2="220" y2="304" marker-end="url(#a1)"/>
+
+<rect class="q" x="30" y="306" width="380" height="58" rx="8"/><text x="46" y="329" class="t">4. You answer, one card at a time</text><text x="46" y="347" class="small">pick a button, or type your own words</text>
+<text x="440" y="329" class="small">Saved as a "decision" in the session folder</text><text x="440" y="346" class="small">(decisions.record). The workflow is not touched.</text>
+<path class="arr dash" d="M30 335 C 6 335 6 247 30 247" marker-end="url(#a1)"/><text x="18" y="300" class="small" transform="rotate(-90 18 300)">next question</text>
+
+<line class="arr" x1="220" y1="364" x2="220" y2="446" marker-end="url(#a1)"/>
+<text x="232" y="402" class="small">every question answered → "Thanks, building it now"</text>
+
+<rect class="box" x="30" y="448" width="380" height="58" rx="8"/><text x="46" y="471" class="t">5. The workflow is built (compiled)</text><text x="46" y="489" class="small">steps made only from what you did; no guessed selectors</text>
+<text x="440" y="471" class="small">Then your saved decisions are replayed:</text><text x="440" y="488" class="small">same edits a button would make (_flow_replay_decisions)</text>
+<line class="arr" x1="220" y1="506" x2="220" y2="534" marker-end="url(#a1)"/>
+
+<rect class="q" x="30" y="536" width="380" height="58" rx="8"/><text x="46" y="559" class="t">6. Round 2 questions are written</text><text x="46" y="577" class="small">clarify.generate_questions reads the built workflow</text>
+<text x="440" y="559" class="small">Many kinds: popups, confirms, values, uploads,</text><text x="440" y="576" class="small">repeated rows, "done when", dates ...</text>
+<line class="arr" x1="220" y1="594" x2="220" y2="622" marker-end="url(#a1)"/>
+
+<rect class="box" x="30" y="624" width="380" height="58" rx="8"/><text x="46" y="647" class="t">7. Sorted and scored</text><text x="46" y="665" class="small">drop pointless / duplicate; ask, confirm or assume</text>
+<text x="440" y="647" class="small">Safety questions always ask. Only 5 shown at a time;</text><text x="440" y="664" class="small">the rest wait as "queued" and come forward later.</text>
+<line class="arr" x1="220" y1="682" x2="220" y2="710" marker-end="url(#a1)"/>
+
+<rect class="q" x="30" y="712" width="380" height="58" rx="8"/><text x="46" y="735" class="t">8. You answer; the answer edits the workflow</text><text x="46" y="753" class="small">plan_answer → list of "ops" → applied all-or-nothing</text>
+<text x="440" y="735" class="small">Detailed in the second picture below.</text>
+<path class="arr dash" d="M410 741 C 450 741 450 650 410 650" marker-end="url(#a1)"/><text x="456" y="700" class="small">re-check: new question?</text>
+<line class="arr" x1="220" y1="770" x2="220" y2="800" marker-end="url(#a1)"/>
+<text x="232" y="790" class="small">no open or queued questions left</text>
+
+<rect class="ok" x="30" y="802" width="380" height="58" rx="8"/><text x="46" y="825" class="t">9. Summary card</text><text x="46" y="843" class="small">"That's everything." version saved, what was assumed</text>
+<text x="440" y="825" class="small">Buttons: Test (and Review if some steps are unsure)</text>
+<line class="arr" x1="220" y1="860" x2="220" y2="888" marker-end="url(#a1)"/>
+<rect class="ok" x="30" y="890" width="380" height="40" rx="8"/><text x="46" y="915" class="t">10. Test, approve, publish</text>
+<text x="440" y="915" class="small">Blocked while any asked question is unanswered.</text>
+<text x="30" y="975" class="small">Blue = question work · Green = finished · Plain = code step</text>
+</svg></div>
+<figcaption>Round 1 (blue, top) only writes your answers down. Round 2 (blue, bottom) turns each answer into real edits. Dashed arrows are loops back to the next question.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>Part 1: Where do the questions come from?</h2>
+<p>Two different "question makers" exist. Neither lets an AI invent edits. Code checks what was recorded and decides what to ask.</p>
+<div class="grid">
+<div class="card"><span class="tag">Round 1 maker</span><h3>The video reader</h3>
+<p>A model watches the screen video and flags moments it is unsure about: "Is this value the same every time, or different each run?" Code then checks every question it proposes (<code>timeline_understanding</code>) and keeps only valid ones. Nothing is added by hand.</p></div>
+<div class="card"><span class="tag">Round 2 maker</span><h3>The workflow reader</h3>
+<p><code>clarify.generate_questions</code> looks at the built workflow and runs detectors, with no model call. Example: it sees a popup in the recording and asks what to do with it. It sees a step that cannot be undone and asks to confirm before it runs.</p></div>
+</div>
+<p><b>Why two rounds?</b> Some things are only knowable once the workflow exists, such as which steps repeat or which step cannot be undone.</p>
+</section>
+
+<section>
+<h2>Part 2: Which questions actually reach you?</h2>
+<p>A raw list of questions can be long and repetitive. Three filters keep it short. Think of them as an editor who strikes out questions that waste your time.</p>
+<ol class="steps">
+<li><b>Name the slot.</b> Each question gets a label for the exact thing it settles (<code>unknowns.annotate</code>), for example "variability / value / event 14". The label uses recorded event ids, not step numbers, so it survives a rebuild that renumbers steps.</li>
+<li><b>Strike the useless ones.</b> A question is "vacuous" if every answer would make the same edits, so asking cannot matter. A second question about a slot already asked is a duplicate. Both are removed (<code>unknowns.vacuous</code>, <code>dedupe</code>) when the ledger runs in "enforce" mode, and only counted in "report" mode. Safety questions are never removed.</li>
+<li><b>Score the rest.</b> <code>scoring.decide</code> multiplies "chance the default is wrong" by "cost if wrong". Low score: keep the default quietly. Medium: keep it and mention it in the summary. High: ask. You can still say "ask me" to open the quiet ones. (Scoring is switched by the <code>clarify_scoring</code> setting: off, shadow or on.)</li>
+</ol>
+<div class="grid">
+<div class="card"><h3>Score to action (round 2)</h3>
+<dl><dt>Under 0.08</dt><dd>assume the default, quietly</dd><dt>0.08 to 0.2</dt><dd>assume and show it in the summary</dd><dt>0.2 to 0.4</dt><dd>one-tap confirm (or wait for a test, for a few kinds; today a deferred question still gets asked)</dd><dt>0.4 or more</dt><dd>ask</dd></dl></div>
+<div class="card"><h3>Learns your habits</h3>
+<p>If you keep giving the same answer for a kind of question on the same app, the chance of "wrong default" drops, so the next workflow asks less (<code>answer_memory</code>). It stores only the shape of the answer, never a value or page text. Safety questions ignore it.</p></div>
+</div>
+<div class="card rule"><span class="tag">Hard rules, not tunable</span>
+<p><b>Safety floor:</b> a decision popup, a step that cannot be undone, or an unsafe guess is <em>always</em> asked.</p>
+<p><b>Round 1 is never assumed:</b> before the build, nothing stands in for your answer.</p>
+<p><b>Every asked question must be answered.</b> No skip, no "later". An unanswered question blocks Test, Approve, Publish and Build Installer. At most 5 are shown at once; the rest come forward as soon as none is open.</p></div>
+</section>
+
+<section>
+<h2>Part 3: What happens when you answer?</h2>
+<h3>Round 1 answers: written down only</h3>
+<p>In <code>_pre_compile_answer</code> your pick is turned into a small record (<code>decisions.decision_from_answer</code>): which question, which events, which choice. It is saved to the session folder. Your card turns green with a receipt, and the next question appears. When the last one is answered, the build starts. After the build, <code>replay.plan</code> matches each decision to the new steps and applies it using the same edit commands a button uses. If a decision matches nothing, Conxa says so in chat and never drops it silently.</p>
+
+<h3>Round 2 answers: applied straight away</h3>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 880 330" role="img" aria-label="Answer to edit pipeline: card click, checks, plan_answer, snapshot, run ops all or nothing, then success path or failure path with restore">
+<defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<rect class="q" x="10" y="40" width="130" height="70" rx="8"/><text x="75" y="70" text-anchor="middle" class="t">You press</text><text x="75" y="88" text-anchor="middle" class="small">a button or type</text><text x="75" y="102" text-anchor="middle" class="small">your own words</text>
+<line class="arr" x1="140" y1="75" x2="170" y2="75" marker-end="url(#a2)"/>
+<rect class="box" x="172" y="40" width="150" height="70" rx="8"/><text x="247" y="64" text-anchor="middle" class="t">Gate checks</text><text x="247" y="82" text-anchor="middle" class="small">still open? words clear?</text><text x="247" y="96" text-anchor="middle" class="small">not too long?</text>
+<line class="arr" x1="322" y1="75" x2="352" y2="75" marker-end="url(#a2)"/>
+<rect class="box" x="354" y="40" width="150" height="70" rx="8"/><text x="429" y="64" text-anchor="middle" class="t">plan_answer</text><text x="429" y="82" text-anchor="middle" class="small">answer → list of "ops"</text><text x="429" y="96" text-anchor="middle" class="small">+ a receipt sentence</text>
+<line class="arr" x1="504" y1="75" x2="534" y2="75" marker-end="url(#a2)"/>
+<rect class="box" x="536" y="40" width="150" height="70" rx="8"/><text x="611" y="64" text-anchor="middle" class="t">Save a snapshot</text><text x="611" y="82" text-anchor="middle" class="small">mark "applying"</text><text x="611" y="96" text-anchor="middle" class="small">(this powers the pencil)</text>
+<line class="arr" x1="686" y1="75" x2="716" y2="75" marker-end="url(#a2)"/>
+<rect class="q" x="718" y="40" width="152" height="70" rx="8"/><text x="794" y="64" text-anchor="middle" class="t">Run the ops</text><text x="794" y="82" text-anchor="middle" class="small">all together or none</text><text x="794" y="96" text-anchor="middle" class="small">_run_clarify_ops</text>
+
+<path class="arr" d="M794 110 L794 160 L650 160" marker-end="url(#a2)"/><text x="802" y="140" class="small">all ops worked</text>
+<path class="arr dash" d="M845 110 L845 275 L650 275" marker-end="url(#a2)"/><text x="852" y="200" class="small" transform="rotate(90 852 200)">one op failed</text>
+
+<rect class="ok" x="150" y="135" width="500" height="100" rx="8"/><text x="165" y="158" class="t">Success path</text>
+<text x="165" y="178" class="small">1. save the answer + receipt   2. remember it for next time (answer_memory)</text>
+<text x="165" y="195" class="small">3. card turns green   4. if the workflow changed, re-check for new questions</text>
+<text x="165" y="212" class="small">5. show the next question, or the summary if none are left</text>
+<rect class="safe" x="150" y="245" width="500" height="70" rx="8"/><text x="165" y="266" class="t">Failure path</text>
+<text x="165" y="284" class="small">The workflow is put back exactly as it was. Undo entries are dropped.</text>
+<text x="165" y="301" class="small">The question reopens. The card says why (for example "changed in Human Edit").</text>
+</svg></div>
+<figcaption>The all-or-nothing step matters: if an answer needs three edits and the second fails, the first is rolled back, so pressing retry can never add steps twice.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>What an answer can actually change</h2>
+<p><code>plan_answer</code> never edits anything itself. It only returns a list of small instructions called "ops". The handler runs each op through the same commands a person uses in Human Edit. So chat, buttons and the editor all reach the same result.</p>
+<div class="table"><table>
+<tr><th>Op</th><th>In plain words</th><th>Typical question</th></tr>
+<tr><td><code>patch</code></td><td>Change one step's value or setting</td><td>"Always send this file?"</td></tr>
+<tr><td><code>parameterize</code></td><td>Turn a typed value into an input that changes every run</td><td>"Is this name different each time?"</td></tr>
+<tr><td><code>insert_review</code></td><td>Add an "ask me before this runs" step</td><td>"Confirm before this step?"</td></tr>
+<tr><td><code>set_fork_policy</code> / <code>flatten_fork</code></td><td>Decide what a recorded popup should do</td><td>Popup choices (a consequential option only runs once you approve it)</td></tr>
+<tr><td><code>add_known_popup_fork</code></td><td>Add a branch for a popup this app is known to show</td><td>"This app often shows a banner. Handle it?"</td></tr>
+<tr><td><code>confirm_effect</code> / <code>confirm_optional</code></td><td>Mark a proof or optional step as accepted</td><td>"Done when ..." checks</td></tr>
+<tr><td><code>delete_step</code></td><td>Remove a step you decided not to keep</td><td>An extract you do not want reported</td></tr>
+<tr><td><code>wrap_rows_loop</code></td><td>Turn repeated entries into one step that loops over a list</td><td>"These look like rows. Use a list?"</td></tr>
+<tr><td><code>set_date_offset</code></td><td>Make a recorded date "N days from today"</td><td>Relative date</td></tr>
+<tr><td><code>drop_inputs</code></td><td>Remove inputs nothing uses any more</td><td>After a "fixed value" answer</td></tr>
+</table></div>
+</section>
+
+<section>
+<h2>Typing your own words</h2>
+<p><b>Yes, every question card has a text box</b> under the options. It says "Or type your own answer and press Enter…" and takes up to 500 characters. The same box exists in round 1 and round 2. One question kind, "done when", has a different box (see the end of this section).</p>
+<p>The key idea: <b>your words are never a free-form instruction.</b> Code (<code>answer_from_words</code>) only tries to read them as <em>exactly one</em> of the options on the card. It never guesses. If it can, that is the same as pressing the button. If it can't, nothing changes and the card tells you why.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 880 400" role="img" aria-label="Your typed words go to answer_from_words; if they match exactly one option the answer follows the normal button path, otherwise the card shows a reason and the question stays open">
+<defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<rect class="q" x="10" y="150" width="140" height="70" rx="8"/><text x="80" y="178" text-anchor="middle" class="t">You type</text><text x="80" y="196" text-anchor="middle" class="small">words, press Enter</text><text x="80" y="210" text-anchor="middle" class="small">(action "own")</text>
+<line class="arr" x1="150" y1="185" x2="190" y2="185" marker-end="url(#a3)"/>
+<rect class="box" x="192" y="120" width="210" height="130" rx="8"/><text x="297" y="144" text-anchor="middle" class="t">answer_from_words</text>
+<text x="297" y="164" text-anchor="middle" class="small">1. empty? too long? no letters?</text><text x="297" y="180" text-anchor="middle" class="small">2. a number like "2"?</text><text x="297" y="196" text-anchor="middle" class="small">3. an option's name inside it?</text><text x="297" y="212" text-anchor="middle" class="small">4. yes / no words?</text><text x="297" y="228" text-anchor="middle" class="small">5. exactly one option fits?</text>
+<path class="arr" d="M402 160 L470 160 L470 70 L520 70" marker-end="url(#a3)"/><text x="410" y="120" class="small">yes: one match</text>
+<path class="arr dash" d="M402 215 L470 215 L470 310 L520 310" marker-end="url(#a3)"/><text x="410" y="270" class="small">none, or more than one</text>
+<rect class="ok" x="522" y="30" width="350" height="110" rx="8"/><text x="537" y="54" class="t">Treated as if you pressed that button</text>
+<text x="537" y="74" class="small">Round 2: plan_answer, snapshot, ops all-or-nothing, receipt</text><text x="537" y="91" class="small">Round 1: saved as a decision, applied after the build</text><text x="537" y="108" class="small">Same safety rules, same pencil to undo</text><text x="537" y="125" class="small">Card shows the receipt of the option it matched</text>
+<rect class="safe" x="522" y="260" width="350" height="110" rx="8"/><text x="537" y="284" class="t">Question stays open, nothing is edited</text>
+<text x="537" y="304" class="small">Card turns to "failed" with a plain reason, for example:</text><text x="537" y="321" class="small">"I couldn't tell which option you mean ..."</text><text x="537" y="338" class="small">You retype, or pick a button. No skip is offered.</text><text x="537" y="355" class="small">Safety questions are never answered by a guess.</text>
+</svg></div>
+<figcaption>The typed box is a second way to press the same buttons. It has no power the buttons do not have.</figcaption>
+</figure>
+<h3>How your words are read (single-choice question)</h3>
+<div class="table"><table>
+<tr><th>You type</th><th>Result</th></tr>
+<tr><td>A number: <code>2</code> or <code>(2)</code></td><td>The 2nd option on the card</td></tr>
+<tr><td>An option's name (or its id) inside your sentence, and only one option is named</td><td>That option</td></tr>
+<tr><td><code>yes</code>, <code>yeah</code>, <code>sure</code>, <code>ok</code>, <code>haan</code>, <code>ji</code> ... or <code>no</code>, <code>nope</code>, <code>nahi</code> ...</td><td>The one option whose label starts with a yes-word or a no-word. If two options fit, it refuses and asks you to pick.</td></tr>
+<tr><td>Both yes and no in one answer</td><td>Refused: "says both yes and no"</td></tr>
+<tr><td>Anything else ("make it faster", "only on Tuesdays")</td><td>Refused: "I couldn't tell which option you mean"</td></tr>
+<tr><td>Empty, only symbols, or more than 500 characters</td><td>Refused with a reason ("Type an answer first", "too long ...")</td></tr>
+</table></div>
+<h3>Tick-list questions (several can apply)</h3>
+<p>Type the option names, or <code>none</code>, or <code>all</code> / <code>everything</code> / <code>both</code>. Every word must be understood. "Full name and email" only counts if both are real options, so an email is never dropped silently. A leftover word it cannot place, or a mix such as a name plus "none", is refused and you are asked to tick instead.</p>
+<h3>What typed words can not do</h3>
+<p>They cannot add a new step, rename something, or point a step somewhere else. Those requests ("also wait 5 seconds", "click the other button") do not match any option, so the card refuses them. Say them in the workflow chat instead, where the change shows as a proposal you can Apply or Undo, or make the change in Human Edit. If you type into the main chat while a question is open, Conxa answers "Still need your answer: <i>the question title</i>" and the question stays open.</p>
+<h3>The "done when" exception</h3>
+<p>This question asks what you should see on the screen when the workflow worked. Its box says "Or type words you should see on the screen when it works" and takes at most 120 characters. Those words are not matched to an option. They are sent along as the check text (<code>custom_text</code>) and become a check that the words appear on screen. Longer text is refused, never cut in half, with: "Type a shorter part of what you see on the screen."</p>
+</section>
+
+<section>
+<h2>Going back and getting new questions</h2>
+<div class="grid">
+<div class="card"><h3>The pencil (undo an answer)</h3><p>Before each round 2 answer, the workflow is saved as a snapshot. The pencil restores it and reopens the question. Round 1 questions are archived (<code>pre_questions.json</code>) so the pencil can rewind to them too, which rebuilds the workflow.</p></div>
+<div class="card"><h3>Follow-up questions</h3><p>An answer can change the workflow so that a new question makes sense. After each edit, <code>_flow_reevaluate</code> runs the detectors again, with no model call, and adds only questions not asked or settled before.</p></div>
+<div class="card"><h3>Rebuilds</h3><p>If the workflow is rebuilt, answers that match the same situation are carried over (<code>_flow_carry_settled</code>) instead of asked again. Questions about steps that no longer exist are marked stale.</p></div>
+<div class="card"><h3>Friendlier wording</h3><p>Questions go out in plain template wording first. A model rewords them in the background afterwards, and every reworded field is validated, so a question never waits on a model.</p></div>
+</div>
+</section>
+
+<section>
+<h2>Words used on this page</h2>
+<dl>
+<dt>Question kind</dt><dd>The type of question, such as popup, confirm, value or upload.</dd>
+<dt>Slot</dt><dd>A label for the one thing a question settles. Two questions on one slot are duplicates.</dd>
+<dt>Decision</dt><dd>A saved round 1 answer waiting for the build.</dd>
+<dt>Op</dt><dd>One small edit instruction produced from an answer.</dd>
+<dt>Compile</dt><dd>Building the runnable workflow from your recording.</dd>
+<dt>Open / queued / assumed</dt><dd>On screen now / waiting its turn / kept at the default without asking.</dd>
+<dt>Human Edit</dt><dd>The step-by-step editor for technical users, one click behind the simple view.</dd>
+</dl>
+</section>
+</main>

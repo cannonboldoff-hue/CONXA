@@ -401,7 +401,47 @@ def _patch_summary(p: dict[str, Any]) -> str:
         return f"Run {where} only when the input {value.get('input')} {word}{tail}"
     if field == "value" and p.get("is_agent_goal"):
         return f"Change what the agent does in {where} to: {_clip(value)}"
+    if field in ("validation", "validation.assertions"):
+        return _checks_summary(p, where)
     return f"Change “{field}” on {where}"
+
+
+def _said(text: Any) -> str:
+    """A check's words as a person reads them: "{{user_email}}" is "the user email you typed"."""
+    t = str(text or "").strip()
+    if t.startswith("{{") and t.endswith("}}"):
+        return f"the {t[2:-2].strip().replace('_', ' ')} you typed"
+    return f"“{_clip(t)}”"
+
+
+def _check_words(a: dict[str, Any]) -> str:
+    kind = a.get("type")
+    if kind == "text_present":
+        return f"the page shows {_said(a.get('target') or a.get('expected'))}"
+    if kind == "text_absent":
+        return f"the page no longer shows {_said(a.get('target') or a.get('expected'))}"
+    if kind == "value_equals":
+        return f"the box holds {_said(a.get('expected'))}"
+    if kind in ("url_changed", "url_pattern"):
+        where = a.get("expected") or a.get("target")
+        return f"the page address matches {_said(where)}" if where else "the page address changes"
+    return "the step's result can be seen"
+
+
+def _checks_summary(p: dict[str, Any], where: str) -> str:
+    """A change to a step's checks in plain words; the exact assertions stay behind "Show exact change"."""
+    def rows(v: Any) -> list[dict[str, Any]]:
+        v = v.get("assertions") if isinstance(v, dict) else v
+        return [a for a in v or [] if isinstance(a, dict)]
+
+    preview = p.get("preview") or {}
+    before, after = rows(preview.get("before")), rows(preview.get("after"))
+    added, removed = [a for a in after if a not in before], [a for a in before if a not in after]
+    parts = [f"also check that {_check_words(a)}" for a in added] + [f"stop checking that {_check_words(a)}" for a in removed]
+    if not parts:
+        return f"Change how {where} is checked"
+    text = " and ".join(parts)
+    return f"After {where}, {text}"
 
 
 def _insert_summary(p: dict[str, Any]) -> str:

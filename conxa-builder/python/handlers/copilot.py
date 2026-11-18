@@ -27,6 +27,50 @@ from typing import Any
 from handlers.protocol import _CommandError, _event_sink, _safe_id, _skill_response
 
 
+def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any] | None:
+    """Chat never touches a step's address keys (CLAUDE.md). The edit commands re-derive shadows inside them (a
+    renamed input re-filled an empty `recovery.intent`, WF-5 5.8), so after a chat change set every step that existed
+    before gets its address keys back byte for byte. Two shadows of a field chat may edit follow that field: the
+    navigate `action.url` / `signals.context.page_url` (from `url`) and `signals.semantic` intents (from `intent`).
+    Branch and loop bodies are edited through their own ops, so they are left as the ops wrote them.
+    Returns the corrected document, or None when nothing had to change."""
+    import copy
+
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.editor.capability_manifest import ADDRESS_KEYS
+
+    guarded_keys = ADDRESS_KEYS - {"branch", "for_each"}
+    old_steps = ((before.get("skills") or [{}])[0] or {}).get("steps") or []
+    doc = copy.deepcopy(after)
+    new_steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    old_by_key = dict(zip(step_keys(old_steps), old_steps))
+    changed = False
+    for key, step in zip(step_keys(new_steps), new_steps):
+        old = old_by_key.get(key)
+        if not isinstance(old, dict) or not isinstance(step, dict):
+            continue
+        for k in guarded_keys:
+            if step.get(k) == old.get(k):
+                continue
+            changed = True
+            if k in old:
+                step[k] = copy.deepcopy(old[k])
+            else:
+                step.pop(k, None)
+        if step.get("url") != old.get("url"):
+            if isinstance(step.get("action"), dict) and "url" in step["action"]:
+                step["action"]["url"] = step.get("url")
+            ctx = (step.get("signals") or {}).get("context") if isinstance(step.get("signals"), dict) else None
+            if isinstance(ctx, dict) and "page_url" in ctx:
+                ctx["page_url"] = step.get("url")
+        if step.get("intent") != old.get("intent"):
+            sem = (step.get("signals") or {}).get("semantic") if isinstance(step.get("signals"), dict) else None
+            for f in ("final_intent", "llm_intent"):
+                if isinstance(sem, dict) and f in sem:
+                    sem[f] = step.get("intent")
+    return doc if changed else None
+
+
 class CopilotMixin:
     def cmd_copilot_turn(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.editor.copilot_proposals import gate_all
@@ -94,6 +138,20 @@ class CopilotMixin:
         return {"reply": result.get("reply") or "", "proposals": proposals}
 
     def cmd_accept_copilot_proposal(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """Every accepted chat / copilot proposal, from a change card or the review panel: the edit, then the
+        address keys put back as they were (``_keep_address_keys``)."""
+        from conxa_core.storage.json_store import read_skill, write_skill
+
+        skill_id = _safe_id(payload.get("skill_id"), "skill_id")
+        before = read_skill(skill_id)
+        result = self._accept_copilot_proposal_unguarded(payload, rid)
+        guarded = _keep_address_keys(before, read_skill(skill_id) or {}) if before else None
+        if guarded is not None:
+            write_skill(skill_id, guarded)
+            result = {**result, **_skill_response(skill_id, guarded)} if isinstance(result, dict) else result
+        return result
+
+    def _accept_copilot_proposal_unguarded(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         # BUILD-26 stage f: a second proposal kind branches here before the patch_step path below
         # even looks at step_key — insert_overlay_branch has no step_key of its own (it inserts a
         # new step, it doesn't edit an existing one).
@@ -153,6 +211,9 @@ class CopilotMixin:
             del undo_stack[depth:]
             write_skill(skill_id, snapshot)
             raise
+        guarded = _keep_address_keys(snapshot, read_skill(skill_id) or {})
+        if guarded is not None:
+            write_skill(skill_id, guarded)
         del undo_stack[depth:]
         undo_stack.append(snapshot)
         self._redo_stacks[skill_id] = []

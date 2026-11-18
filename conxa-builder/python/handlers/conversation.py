@@ -562,6 +562,8 @@ class ConversationMixin:
                 except _CommandError:
                     pass  # a dismissal that can't be logged is still a dismissal
             harness.update_card(thread_id, card_id, state="dismissed", sink=sink)
+            self._wish_not_applied(thread_id, card, "You dismissed that change, so this question is still open. "
+                                                    "Pick one of the options, or type what you want again.", sink)
             return {"ok": True}
 
         if action == "apply":
@@ -575,8 +577,15 @@ class ConversationMixin:
                 self._apply_change_set(skill_id, proposals, rid)
             except _CommandError as exc:
                 harness.update_card(thread_id, card_id, state="failed", error=exc.message, sink=sink)
+                self._wish_not_applied(thread_id, card, f"The change couldn’t be applied ({exc.message}), so this question "
+                                                        "is still open. Pick one of the options, or try again.", sink)
                 return {"ok": False, "code": exc.code, "message": exc.message}
             self._log_edit("accept_copilot_proposal", skill_id, before_doc, source=source, proposal_id=proposal.get("id"))
+            linked = thread_id.startswith("wf:") and bool((card.get("refs") or {}).get("question_id"))
+            if linked:
+                # The person's own answer to a question: applied and saved, so only now does the question close. Its
+                # approval / ticked checks are written here too, so Undo below takes them back with the change.
+                self._close_question_by_wish(thread_id[len("wf:"):], card, rid, sink)
             after = read_skill(skill_id) or {}
             harness.update_card(
                 thread_id, card_id, state="applied", sink=sink,
@@ -584,6 +593,8 @@ class ConversationMixin:
                 applied_version=(after.get("meta") or {}).get("version"),
                 actions=["undo"],
             )
+            if linked:
+                return {"ok": True}
             if thread_id.startswith("wf:"):
                 # A fix for a failed test (Studio's proposal or the person's own words) is tested at once.
                 if not self._tf_retest_after_fix(thread_id[len("wf:"):], sink):
@@ -604,9 +615,40 @@ class ConversationMixin:
                 self.cmd_undo_workflow({"skill_id": skill_id}, rid)
             self._log_edit("undo_workflow", skill_id, before_doc, source="human", proposal_id=proposal.get("id"))
             harness.update_card(thread_id, card_id, state="undone", actions=[], sink=sink)
+            if thread_id.startswith("wf:") and (card.get("refs") or {}).get("question_id"):
+                self._reopen_after_wish_undo(thread_id, card, sink)
             return {"ok": True}
 
         raise _CommandError("card_action_unsupported", f"A change card can’t “{action}”.")
+
+    @staticmethod
+    def _reopen_after_wish_undo(thread_id: str, change_card: dict[str, Any], sink: Any) -> None:
+        """A question closes only while the change that answered it is applied: undoing that change opens it again,
+        which blocks test, approval and publish until it is answered once more."""
+        from conxa_compile.conversation import clarify_store, harness
+
+        workflow_id = thread_id.replace("wf:", "", 1)
+        refs = change_card.get("refs") or {}
+        qid, q_card = str(refs.get("question_id") or ""), str(refs.get("question_card_id") or "")
+        q = clarify_store.get_question(workflow_id, qid)
+        if q is None or q.get("status") != "answered" or "change" not in (q.get("answer") or {}):
+            return  # answered another way since: the undone change was not its answer any more
+        clarify_store.update_question(workflow_id, qid, status="open", answer=None, receipt="")
+        clarify_store.ledger_drop(workflow_id, {qid})
+        harness.update_card(thread_id, q_card, sink=sink, state="open", receipt=None, answer=None, error=None,
+                            can_reopen=False, actions=["choose"],
+                            note="The change from your answer was undone, so this question is open again.")
+
+    @staticmethod
+    def _wish_not_applied(thread_id: str, change_card: dict[str, Any], why: str, sink: Any) -> None:
+        """A typed answer's change was dismissed or refused: its question stays open and says why."""
+        from conxa_compile.conversation import clarify_store, harness
+
+        refs = change_card.get("refs") or {}
+        q_card = str(refs.get("question_card_id") or "")
+        q = clarify_store.get_question(thread_id.replace("wf:", "", 1), str(refs.get("question_id") or "")) if q_card else None
+        if q is not None and q.get("status") != "answered":
+            harness.update_card(thread_id, q_card, sink=sink, state="failed", error=why, note="")
 
     def _card_draft_workflow(self, thread_id: str, card: dict[str, Any], action: str,
                              body: dict[str, Any], rid: str, sink: Any) -> dict[str, Any]:

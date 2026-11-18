@@ -510,6 +510,9 @@ function createWindow() {
     },
   });
   mainWindow.on("unmaximize", sendMaximizeState);
+  // A test keeps running while the window is minimized: the panel holds its pages at their size (BUILD-103 (1)).
+  mainWindow.on("minimize", () => { void browserPanel.setMinimized(true); });
+  mainWindow.on("restore", () => { void browserPanel.setMinimized(false); });
 }
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────

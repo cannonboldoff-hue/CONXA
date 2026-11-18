@@ -479,9 +479,10 @@ def test_a_note_typed_before_the_build_is_handed_to_the_chat_once_nothing_is_lef
         pending = [c for c in _cards(wf.id, "clarify_question") if c["state"] == "open"]
         if not pending:
             break
-        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "own",
-                           "payload": {"custom_text": "fine as it is"}}, "r")
-        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "resume"}, "r")   # the chat hand-off is over
+        q = clarify_store.get_question(wf.id, pending[0]["question_id"])
+        pick = {"selected": []} if q.get("multi") else {"choice": q["choices"][0]["id"]}
+        b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": pending[0]["card_id"], "action": "choose",
+                           "payload": pick}, "r")
     assert done.wait(5) and len(sent) == 1
     assert sent[0]["thread_id"] == f"wf:{wf.id}" and "If nothing matches, stop" in sent[0]["message"]
     b._flow_route_notes(wf.id)                                                           # said once, never repeated
@@ -544,3 +545,17 @@ def test_questions_past_the_cap_are_all_asked_before_the_build_starts(flow, monk
         asked += 1
     assert asked == 2                                   # it came forward on its own: none was left unasked
     assert compiled == [wf.id]                          # and only then did the build start, once
+
+
+def test_a_wish_before_the_build_stays_open_and_says_what_to_do(flow, monkeypatch):
+    """Nothing is built yet, so there is no change to apply: the question stays open, the model never decides it."""
+    from conxa_compile.conversation import harness
+
+    b, wf, _compiled = flow
+    b._flow_understand(wf.id, "rid")
+    monkeypatch.setattr(harness, "map_free_text_to_choice", lambda q, t: pytest.fail("never on a step that can't be undone"))
+    card = _open_cards(wf)[0]
+    assert card["question_kind"] == "confirm_before"
+    r = _answer(b, wf, card, action="own", custom_text="only ask on the first run")
+    assert r["ok"] is False and "chat" in r["message"]
+    assert clarify_store.get_question(wf.id, card["question_id"])["status"] == "open"

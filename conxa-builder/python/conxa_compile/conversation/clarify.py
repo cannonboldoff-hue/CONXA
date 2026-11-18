@@ -1106,6 +1106,147 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     return best
 
 
+# ── an answer typed in the person's own words ───────────────────────────────────────────────────────────────────────
+# Code reads the words into one of the offered choices; nothing else answers a question. Words that name no single
+# choice leave it open, so an irreversible step never falls back to "just do it" on an answer nobody could read.
+OWN_WORDS_MAX = 500
+_YES_WORDS = frozenset({"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "haan", "han", "haa", "ji", "हाँ", "हां", "जी",
+                        "si", "sí", "oui", "ja", "sim", "да", "はい", "是", "对", "نعم", "evet"})
+_NO_WORDS = frozenset({"no", "nope", "nah", "never", "not", "don't", "don’t", "dont", "nahi", "nahin", "नहीं", "नही", "ना",
+                       "non", "nein", "não", "nao", "нет", "いいえ", "不", "否", "لا", "hayır", "hayir"})
+_NONE_WORDS = frozenset({"none", "nothing", "neither", "कोई नहीं", "कुछ नहीं", "koi nahi", "kuch nahi"})
+_ALL_WORDS = frozenset({"all", "everything", "both", "सब", "सभी", "सारे"})
+_FILLER_WORDS = frozenset({"and", "or", "the", "only", "just", "also", "plus", "of", "them", "these", "&", "और", "aur",
+                           "ही", "sirf"})
+_WORD_SPLIT = re.compile(r"[\s,.;:!?()\[\]\"“”।/]+")  # apostrophes stay: "don't" is one word
+
+
+def _starts_with(label: str, words: frozenset[str]) -> bool:
+    first = _WORD_SPLIT.split(label.lower().strip(), maxsplit=1)[0]
+    return first in words
+
+
+def words_unusable(question: dict[str, Any], text: str) -> str:
+    """A plain reason when typed words cannot be an answer at all (blank, too long, no letters or digits, both
+    yes and no); "" when they can. Checked before any option match or model call."""
+    import unicodedata
+
+    raw = unicodedata.normalize("NFKC", str(text or "")).strip()
+    if not raw:
+        return "Type an answer first, or pick one of the options."
+    if len(raw) > OWN_WORDS_MAX:
+        return "That answer is too long. Say what you want in a sentence or two, or pick one of the options."
+    if not any(ch.isalnum() for ch in raw):
+        return "I couldn’t read that as an answer, so this question is still open. Pick one of the options, or type what you want."
+    words = {w for w in _WORD_SPLIT.split(raw.lower()) if w}
+    if not question.get("multi") and words & _YES_WORDS and words & _NO_WORDS:
+        return "Your answer says both yes and no, so this question is still open. Pick one of the options."
+    return ""
+
+
+def _label_words(c: dict[str, Any]) -> set[str]:
+    return {w for w in _WORD_SPLIT.split(str(c.get("label") or "").lower()) if w} | {str(c["id"]).lower()}
+
+
+def answer_from_words(question: dict[str, Any], text: str) -> tuple[dict[str, Any] | None, str]:
+    """Read typed words into one of the question's choices: ``({"choice": id} | {"selected": [ids]}, "")``, or
+    ``(None, why)`` when they name no single choice. Never guesses: anything it cannot place is left to the
+    caller (the person's own wish, turned into a change by the model, or the question stays open)."""
+    import unicodedata
+
+    why = words_unusable(question, text)
+    if why:
+        return None, why
+    low = unicodedata.normalize("NFKC", str(text)).strip().lower()
+    words = {w for w in _WORD_SPLIT.split(low) if w}
+    multi = bool(question.get("multi"))
+    unclear = "That isn’t one of the options."
+    choices = [c for c in question.get("choices") or [] if isinstance(c, dict) and c.get("id")]
+    if not choices:
+        return None, unclear
+
+    def unique_partial(word_set: set[str], among: list[dict[str, Any]]) -> dict[str, Any] | None:
+        # "email" → "User email", "made-up" → "Made-up sample details": every word sits in exactly one option.
+        fits = [c for c in among if word_set and word_set <= _label_words(c)]
+        return fits[0] if len(fits) == 1 else None
+
+    if multi:
+        # Every word must be read: a word that names no option is never dropped silently.
+        rest, hits = low, []
+        for c in sorted(choices, key=lambda c: -len(str(c.get("label") or ""))):
+            label = str(c.get("label") or "").lower().strip()
+            for name in (label, str(c["id"]).lower(), str(c["id"]).lower().replace("_", " ")):
+                if len(name) >= 3 and name in rest:
+                    hits.append(c["id"])
+                    rest = rest.replace(name, " ")
+                    break
+        none = any(n in rest for n in _NONE_WORDS)
+        for n in _NONE_WORDS:
+            rest = rest.replace(n, " ")
+        left = {w for w in _WORD_SPLIT.split(rest) if w and any(ch.isalnum() for ch in w)} - _FILLER_WORDS
+        every = bool(left & _ALL_WORDS)
+        for w in sorted(left - _ALL_WORDS):
+            c = unique_partial({w}, [c for c in choices if c["id"] not in hits])
+            if c is None:
+                return None, unclear
+            hits.append(c["id"])
+        if sum((bool(hits), none, every)) != 1:
+            return None, "Your answer says more than one thing, so this question is still open. Tick what applies."
+        return {"selected": [c["id"] for c in choices if c["id"] in hits] if hits
+                else [c["id"] for c in choices] if every else []}, ""
+
+    m = re.fullmatch(r"\(?(\d{1,2})[).]?", low)
+    if m and 1 <= int(m.group(1)) <= len(choices):
+        return {"choice": choices[int(m.group(1)) - 1]["id"]}, ""
+    bare = " ".join(w for w in _WORD_SPLIT.split(low) if w)
+    exact = [c for c in choices if bare in (str(c["id"]).lower(), " ".join(_WORD_SPLIT.split(str(c.get("label") or "").lower())).strip())]
+    if len(exact) == 1:
+        return {"choice": exact[0]["id"]}, ""
+    yes, no = bool(words & _YES_WORDS), bool(words & _NO_WORDS)
+    if yes != no and not (words - (_YES_WORDS if yes else _NO_WORDS) - _FILLER_WORDS):
+        # A bare yes or no ("no", "नहीं"): the one option that starts with it.
+        side = _YES_WORDS if yes else _NO_WORDS
+        fits = [c for c in choices if str(c["id"]).lower() in side or _starts_with(str(c.get("label") or ""), side)]
+        if len(fits) == 1:
+            return {"choice": fits[0]["id"]}, ""
+    if is_safety_question(question):
+        # A step that can't be undone: only an exact pick, its number or a bare yes/no chooses. Anything more is the
+        # person's own wish and goes to a change they apply, so "wait ten seconds, then continue" never reads as "no".
+        return None, unclear
+    # Whole words only, no word left over: "made-up" → "Made-up sample details", "no, stop" → "No, stop there".
+    c = unique_partial(words - _FILLER_WORDS, choices)
+    if c is not None:
+        return {"choice": c["id"]}, ""
+    return None, unclear
+
+
+_CHECK_WISH = re.compile(
+    r"\b(check|checks|verify|make sure|ensure|confirm|see if|look for|should|must|shows?|appears?|displays?"
+    r"|contains?|title|url|address bar|heading|is visible|is shown)\b", re.I)
+
+
+def describes_a_check(text: str) -> bool:
+    """Typed under "How can we tell it worked?", is this a description of a check ("check the output shows the email
+    I typed") rather than the words to look for on the screen? Then it is the person's wish, not screen text."""
+    return bool(_CHECK_WISH.search(str(text or "")))
+
+
+_SAFETY_KINDS = frozenset({"confirm", "confirm_before", "fork"})  # confirm_before: the same question asked before the build
+
+
+def is_safety_question(question: dict[str, Any]) -> bool:
+    """A question whose options decide whether something that can't be undone happens unasked."""
+    return question.get("kind") in _SAFETY_KINDS
+
+
+def adds_nothing(text: str, choice: dict[str, Any]) -> bool:
+    """True when every word of a typed answer is already in the option (its label or detail), so taking the option
+    drops nothing the person said. A model's mapping onto an option is accepted only then."""
+    words = {w for w in _WORD_SPLIT.split(str(text or "").lower()) if w} - _FILLER_WORDS - _YES_WORDS - _NO_WORDS
+    said = {w for w in _WORD_SPLIT.split(f"{choice.get('label') or ''} {choice.get('detail') or ''}".lower()) if w}
+    return words <= said
+
+
 def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Turn an answer into ops for existing commands, plus the receipt line shown once applied.
 

@@ -275,11 +275,17 @@ def latest_summary(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
+# Cards that stay "open" only to keep their shortcut buttons: they report, they never wait on anyone (WF-5: chat said
+# "three summary cards are waiting on you").
+INFO_CARDS = frozenset({"workflow_summary"})
+
+
 def open_cards(items: list[dict[str, Any]], card_type: str | None = None) -> list[dict[str, Any]]:
     """Cards still waiting on a person (state ``open``), optionally of one type."""
     return [
         i for i in items
-        if i.get("kind") == "card" and i.get("state") == "open" and (card_type is None or i.get("card_type") == card_type)
+        if i.get("kind") == "card" and i.get("state") == "open"
+        and (i.get("card_type") == card_type if card_type else i.get("card_type") not in INFO_CARDS)
     ]
 
 

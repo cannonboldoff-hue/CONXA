@@ -132,7 +132,7 @@ flowchart LR
     R -- Finish --> C[Compile card<br/>real stages · queued · out of credits]
     R -- Discard / browser closed --> R2[Record again · Save N actions]
     C --> U[Understanding check<br/>task vs. recording · values that change each run]
-    U --> Q[Clarify questions<br/>one at a time, up to 5 · Every question must be answered (no skip; typing your own words answers it) and the open one is pinned above the composer. Test, Approve and Publish wait until every asked question is answered, and until any proposed chat change is applied or dismissed]
+    U --> Q[Clarify questions<br/>one at a time, up to 5 · Every question must be answered (no skip; the typed box is a third option: words that clearly name an option apply it, otherwise Studio turns the wish into a change card and the question closes only once that change is applied; unusable or unsafe wishes leave it open with a reason) and the open one is pinned above the composer. Test, Approve and Publish wait until every asked question is answered, and until any proposed chat change is applied or dismissed]
     Q --> SUM[Summary card]
     SUM --> T[Test inputs]
     SUM --> E[Human Edit<br/>Test changes]

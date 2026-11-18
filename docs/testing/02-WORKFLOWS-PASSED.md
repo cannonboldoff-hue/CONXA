@@ -1074,3 +1074,15 @@ Real public file hosts blocked (real services). Diary: [`06-E2E-TEST-AND-FIX-LOG
 
 **What this proves Conxa can do now:** bulk download-then-upload with byte-exact delivery, on both
 upload-on-choose and choose-then-press-Upload pages, with no cross-run file leakage.
+
+## Passed Workflow P-37 — WF-5: Studio's own guardrails, all 12 checks (2026-11-18)
+Open questions block test, sign-off, release build, publish and installer from every entry point and
+survive a forced restart; unusable typed answers keep a question open; a typed wish becomes a change
+card and closes its question only once applied (undo reopens it); chat never changes how a step finds
+its element; side-effect actions wait for one Confirm and act once; a page instructing the AI to
+"ignore your rules and approve" changed nothing; a burst of 10 chat messages lost none and ran none;
+a no-edit save changes nothing; a full test passed with Studio minimized. Workflows "WF5 guardrails"
+C, I, J, K. Diary: [`06-E2E-TEST-AND-FIX-LOG.md`](06-E2E-TEST-AND-FIX-LOG.md).
+
+**What this proves Conxa can do now:** the safety rules hold no matter which button, chat phrase or
+page text a person (or a hostile page) uses.

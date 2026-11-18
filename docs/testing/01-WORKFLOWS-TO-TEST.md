@@ -25,7 +25,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-2 | Tricky elements: iframes, hover, shadow DOM, late render, moving/renaming, infinite scroll | ✅ passed 2026-11-16 (P-17…P-25); drag-drop is a limitation | — |
 | WF-3 | Scale: 77, 120 and 93-action takes; compile determinism | ✅ passed 2026-11-17 (P-26…P-29) | — |
 | WF-4 | Real apps: HR SPA, checkout maths, two-site relay, language flip, reviews | ✅ A–D passed 2026-11-17 (P-30…P-33); E blocked (sign-up + public review) | — |
-| WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ⏳ | Yes |
+| WF-5 | Studio's own guardrails: questions, chat, confirm cards, approve gate | ✅ passed 2026-11-18 (P-37) | — |
 | WF-6 | False success: a pass that didn't really happen | ⏳ | Yes (local fixture) |
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ⏳ | Yes |
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ⏳ | Yes |
@@ -194,7 +194,7 @@ Generated text only on public demos. **Failures go to:** EXEC-10; wrong entity �
 
 ---
 
-## WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate
+## ✅ WF-5 — Studio's own guardrails: questions, chat, confirm cards, approve gate — passed 2026-11-18 (P-37)
 
 **Why first after WF-4:** these rules protect every customer workflow, and breaking them needs no
 outside site. **Site:** S3 `/text-box` (a fresh recording, not the approved P-11 one) + fixture

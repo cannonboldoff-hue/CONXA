@@ -18,6 +18,26 @@ def _body_container(payload: dict[str, Any]) -> str:
     return "for_each" if payload.get("container") == "for_each" else "branch"
 
 
+_EMPTY = (None, "", [], {})
+
+
+def _patch_is_noop(step: dict[str, Any], patch: dict[str, Any]) -> bool:
+    """True when every value the patch sets is already the step's, as the editor shows it: a bare action kind is
+    {"action": kind} with the step's own address, and a null / absent field equals an empty one (WF-5: an unedited
+    "Save step" on a navigate step rewrote `action`, an address key, and revoked the approval)."""
+    def same(cur: Any, new: Any) -> bool:
+        if isinstance(new, dict):
+            return (cur in _EMPTY or isinstance(cur, dict)) and all(same((cur or {}).get(k), v) for k, v in new.items())
+        return cur == new or (cur in _EMPTY and new in _EMPTY)
+
+    act = step.get("action")
+    if not isinstance(act, dict):
+        act = {"action": act or ""}
+    if act.get("action") == "navigate" and not act.get("url") and step.get("url"):
+        act = {**act, "url": step["url"]}
+    return same({**step, "action": act}, patch)
+
+
 class WorkflowEditorMixin:
     def _apply_step_patch(
         self,
@@ -147,6 +167,13 @@ class WorkflowEditorMixin:
             step = self._apply_step_patch(parent_step, patch, in_branch_body=False, previous_step=previous_step,
                                           next_step=following, earlier_steps=steps[:step_index])
             revalidation_target = step
+            if _patch_is_noop(parent_step, patch):
+                # "Save step" with nothing edited: no write, so no new version, no reset test or approval, and the
+                # step's address keeps its exact form (re-deriving turned a bare "navigate" into {"action", "url"}
+                # and added signals.context, WF-5).
+                result = _skill_response(skill_id, snapshot, revalidate_step(parent_step))
+                result.update(self._history_flags(skill_id))
+                return result
 
         steps[step_index] = step
         block["steps"] = steps
@@ -631,6 +658,7 @@ class WorkflowEditorMixin:
         target_workflow = None
         for wf in list_workflows(workspace_id):
             if wf.skill_id == skill_id:
+                self._require_no_unanswered_questions([wf])  # an unanswered question blocks approval
                 wf.edited_at = time.time()
                 wf.signed_off = True
                 save_workflow(wf)

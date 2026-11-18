@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { CardShell } from '@/components/conversation/parts'
+import { CardShell, Disclosure } from '@/components/conversation/parts'
 import { useOpenEdit } from '@/components/conversation/cards/CompileClarifyCards'
 import type { CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
 import { useThreadStore } from '@/store/threadStore'
@@ -54,5 +54,10 @@ export function ActionLinkCard({ threadId, item }: CardProps) {
     else if (target === 'workflow' && item.workflow_id) navigate(`/w/${String(item.workflow_id)}`)
     else toast.error('That isn’t available yet.')
   }
-  return <CardShell title={String(item.title ?? 'Open')} footer={<Button variant="brand" size="sm" onClick={go}>Open</Button>} />
+  // The model's reason may name element addresses: kept one click away, never in the title.
+  return (
+    <CardShell title={String(item.title ?? 'Open')} footer={<Button variant="brand" size="sm" onClick={go}>Open</Button>}>
+      {typeof item.detail === 'string' && item.detail ? <Disclosure label="Technical details">{item.detail}</Disclosure> : null}
+    </CardShell>
+  )
 }

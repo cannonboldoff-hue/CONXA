@@ -234,6 +234,7 @@ class TestFlowMixin:
                 run_values[spec["id"]] = rows_from_text(values.get(spec["id"], ""), list(spec["columns"]), str(spec.get("label") or spec["id"]))
         if runtime_state.get_flags(workflow.id).get("testing"):
             raise _CommandError("test_in_progress", "A test of this workflow is already running.")
+        self._require_allowed(workflow.id, "test")  # the card may predate a question asked since
         guard = bool(payload.get("guard", True))
         show_browser = bool(payload.get("show_browser", True))
         use_ai = bool(payload.get("use_ai", False))
@@ -306,11 +307,25 @@ class TestFlowMixin:
             from conxa_compile.conversation import clarify
             from conxa_core.storage.json_store import read_skill
 
-            steps = clarify._steps(read_skill(workflow.skill_id) or {}) if workflow and workflow.skill_id else []
+            name_doc = (read_skill(workflow.skill_id) or {}) if workflow and workflow.skill_id else {}
+            steps = clarify._steps(name_doc)
             for key, step, parent in zip(clarify.step_keys(steps), steps, clarify.effect_parents(steps)):
                 names[key] = (clarify.step_name(step), parent is not None)
         except Exception:  # noqa: BLE001 -- names are cosmetic; a test must still run without them
-            pass
+            name_doc = {}
+
+        def name_at(index: Any, intent: Any) -> str:
+            """The step the runtime stopped before, by the workflow's own name for it ("Click Submit to send the
+            form"), not its bare kind ("Click", WF-5). Falls back to the runtime's words."""
+            try:
+                from conxa_compile.skill_package_builder_saved_skill import runtime_step_index
+
+                hit = next((n for key, (n, _) in names.items() if runtime_step_index(name_doc, key) == index), None)
+                if hit:
+                    return hit
+            except Exception:  # noqa: BLE001 -- cosmetic
+                pass
+            return _humanize(intent or "")
         card = harness.post_card(thread, "test_run", "running", sink=sink, rows=rows, attempt=attempt, auto=auto,
                                  guard=guard, started_at=started, actions=["stop"])
         card_id = card["card_id"]
@@ -371,7 +386,7 @@ class TestFlowMixin:
             pause.clear()
             pause.update(kind="guard")
             ran = sum(1 for r in rows if r["status"] == "done")
-            push(state="waiting_guard", paused_before=_humanize(info.get("step_intent")), remaining=info.get("remaining"),
+            push(state="waiting_guard", paused_before=name_at(info.get("step_index"), info.get("step_intent")), remaining=info.get("remaining"),
                  ran=ran, actions=["run_rest", "end_here"])
             harness.log_event(thread, "Paused before a step that can’t be undone", glyph="warn", sink=sink,
                               subject=_humanize(info.get("step_intent")))
@@ -438,8 +453,10 @@ class TestFlowMixin:
             if outcome == "done" and workflow is not None and workflow.skill_id:
                 self._tf_calibrate(workflow.skill_id, result.get("proof_steps") or [])
             notes = [str(n) for n in (result.get("notes") or [])][:10]
+            # An approval step's yes is the run's own bookkeeping, not something the workflow read from the app.
+            outputs = {k: v for k, v in (result.get("outputs") or {}).items() if k != "confirmed_to_continue"}
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
-                 outputs=result.get("outputs") or {}, actions=["approve", "test_again"],
+                 outputs=outputs, actions=["approve", "test_again"],
                  outcome=outcome, notes=notes, proof_steps=result.get("proof_steps") or [])
             if outcome == "done_please_check" and notes:
                 text = ("It ran to the end, but I couldn’t confirm everything: " + " ".join(notes)
@@ -485,11 +502,11 @@ class TestFlowMixin:
             return "ended"
         if status == "stopped_at_guard":
             ran = [r["name"] for r in rows if r["status"] == "done"]
-            push(state="ended_before_irreversible", cause=pause.get("kind") or "guard", stopped_before=_humanize(result.get("stopped_intent") or ""),
+            push(state="ended_before_irreversible", cause=pause.get("kind") or "guard", stopped_before=name_at(result.get("stopped_at"), result.get("stopped_intent")),
                  declined=bool(result.get("declined")), steps_ran=len(rows), actions=["test_again"])
             harness.log_event(thread, "Test ended before a step that can’t be undone", glyph="none", sink=sink,
                               subject="Nothing was sent")
-            record_outcome("ended_before_irreversible", _humanize(result.get("stopped_intent") or ""),
+            record_outcome("ended_before_irreversible", name_at(result.get("stopped_at"), result.get("stopped_intent")),
                            step_index=result.get("stopped_at"), reason=pause.get("kind") or "guard")
             return "ended"
         # cancelled by the person

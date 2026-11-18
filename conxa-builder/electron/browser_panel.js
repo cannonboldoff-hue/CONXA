@@ -43,6 +43,11 @@ const _HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
 // (probe, Electron 42: a hidden view stays 1280x720, a 0x0 one reads 0x0). Only the shield, which nothing
 // drives, is still parked at _HIDDEN.
 let _paneHidden = false; // the renderer's pane is covered, folded or gone; cleared by its next real rect
+// The Studio window is minimized. Its views then lay out at 0x0 (one made or sized while minimized reads
+// 0x0 until restore; probe, Electron 42), so a zoomed run's page is held at its size by a metrics override
+// at zoom 1 instead, and put back on its zoom at restore (BUILD-103 (1)). A test keeps running; the window
+// is never brought back up for it.
+let _minimized = false;
 let _lastRect = null; // the last real pane rect, so a run's first view is placed without waiting for a report
 const _validRect = (r) => !!r && r.width > 0 && r.height > 0;
 const _hideView = (view) => view.setVisible(false);
@@ -161,13 +166,34 @@ function _setZoom(tab, z) {
 
 function _emulate(run, tab) {
   if (!run.viewport) return;
-  if (run.kind !== "record") { _setZoom(tab, run.scale); return; }
-  _setZoom(tab, 1); // a test handed to the recorder (adoptRun) must not shrink twice
+  const zoomed = run.kind !== "record";
+  if (zoomed && !_minimized) { _setZoom(tab, run.scale); return; }
+  _setZoom(tab, 1); // a test handed to the recorder (adoptRun) must not shrink twice; an override is not zoomed
   const dbg = _debugger(tab);
   if (!dbg) return;
   return dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
-    width: run.viewport.width, height: run.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
+    width: run.viewport.width, height: run.height, deviceScaleFactor: 1, mobile: false, scale: zoomed ? 1 : run.scale,
   }).catch((err) => console.error("browser_panel: setDeviceMetricsOverride failed", err));
+}
+
+// main.js reports the window's minimize / restore. Only zoomed runs change: a record run's override holds its
+// size already. At restore the override is cleared before the zoom comes back, and the shown run is laid out
+// again, since bounds set while minimized only take effect once the window has a size.
+async function setMinimized(on) {
+  if (_minimized === !!on) return;
+  _minimized = !!on;
+  for (const run of _runs.values()) {
+    if (!run.viewport || run.kind === "record") continue;
+    for (const t of run.tabs) {
+      if (t.view.webContents.isDestroyed() || !t.view.webContents.getURL()) continue; // no debugger before a first page
+      if (!_minimized) {
+        const dbg = _debugger(t);
+        if (dbg) await dbg.sendCommand("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+      await _emulate(run, t);
+    }
+    if (!_minimized && run.shownRect && run.rect && run.activeTabId) _layout(run, run.activeTabId, run.rect);
+  }
 }
 
 // The page's real size, read back, and put right if it drifted. Chromium ignores a repeat of the override
@@ -224,7 +250,10 @@ async function capture(runId, tabId, { type = "jpeg", quality = 80 } = {}) {
   const run = _runs.get(runId);
   const tab = run && (run.tabs.find((t) => t.id === tabId) || run.tabs.find((t) => t.id === run.activeTabId));
   if (!tab || tab.view.webContents.isDestroyed()) throw new Error(`browser_panel: no tab to capture in run ${runId}`);
-  const img = await tab.view.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+  const grab = () => tab.view.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+  // A view never drawn (made while the window was minimized) fails its first capture right after it gets its
+  // size, then answers (probe, Electron 42: "UnknownVizError" once).
+  const img = await grab().catch(() => new Promise((r) => setTimeout(r, 700)).then(grab));
   const buf = type === "png" ? img.toPNG() : img.toJPEG(Math.max(1, Math.min(100, Math.round(Number(quality) || 80))));
   return { data: buf.toString("base64") };
 }
@@ -888,4 +917,4 @@ function selectTab(runId, tabId) {
   return _activate(runId, tabId);
 }
 
-module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, setInputOpen, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry, capture };
+module.exports = { setTourHint, _tourAllowed, init, prepareTestRun, newView, newTab, adoptRun, personTab, closeTab, closeRun, navigate, runEnd, setActiveBounds, setInputOpen, hideAll, selectTab, saveDownload, downloadAction, snapshot, scaleOf, targetsOf, ensureGeometry, capture, setMinimized };

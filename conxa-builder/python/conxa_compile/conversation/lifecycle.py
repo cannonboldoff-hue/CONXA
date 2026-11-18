@@ -147,6 +147,9 @@ def derive_lifecycle(
     # a test (or an approval of the version it would change) until the reply and its card are in.
     if rt.get("replying"):
         actions = [a for a in actions if a not in ("test", "approve")]
+    # An unanswered question blocks test, approval and publish in every state (a sign-in that expired too).
+    if open_q > 0:
+        actions = [a for a in actions if a not in ("test", "approve", "publish")]
 
     # "Ask me": the things the harness was sure about can still be put to the person. Never blocks anything.
     if int(cl.get("assumed") or 0) > 0 and open_q == 0 and "answer_clarify" not in actions and compiled and not (

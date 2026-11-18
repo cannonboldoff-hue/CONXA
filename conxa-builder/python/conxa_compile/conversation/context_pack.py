@@ -99,10 +99,16 @@ def build_context_pack(
     along (e.g. the capability manifest for the proposal call)."""
     fixed: list[str] = []
     if lifecycle:
+        # Current state, read fresh each turn: it wins over anything said earlier in the thread (an approval an edit
+        # has since revoked, a test card that was cancelled), which the transcript below may still show (WF-5).
         fixed.append(
-            "Where this workflow is now: "
+            "Where this workflow is now — current, and it overrides anything earlier in the conversation: "
             + _dumps({k: lifecycle.get(k) for k in ("stage", "substate", "note", "allowed_actions")})
+            + ". Say whether it is approved, tested or waiting only from this. An action not in allowed_actions "
+            "cannot be done now: say so with the note, and never point to a card unless it is listed below as open."
         )
+    if not open_cards and lifecycle:
+        fixed.append("No card is waiting on the person right now.")
     if open_cards:
         fixed.append(
             "Open cards waiting on the person (answer them via the card, never by guessing): "

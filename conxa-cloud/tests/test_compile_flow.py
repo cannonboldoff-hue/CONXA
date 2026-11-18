@@ -261,11 +261,91 @@ def test_a_question_cannot_be_skipped_and_typing_your_own_words_answers_it(env):
     assert exc.value.code == "card_action_unsupported"
     assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"   # nothing ended it
     assert read_skill(skill_id) == before
+    # Words that name no single choice leave it open, and the card says why (WF-5 5.2: 5,000 "a"s answered it).
+    for text in ("a" * 5000, "   ", "😀😀🎉", "yes, don't"):
+        r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                               "payload": {"custom_text": text}}, "r")
+        assert r["ok"] is False and r["code"] == "answer_unclear"
+        assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"
+        card = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == q["card_id"])
+        assert card["state"] == "failed" and card["error"]
+    assert read_skill(skill_id) == before
+    # Words code can read as one choice answer it, and code applies that choice like a picked one.
+    yes = next(c for c in clarify_store.get_question(wf.id, q["question_id"])["choices"] if c["label"].startswith("Yes"))
     r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
-                           "payload": {"custom_text": "ask my manager first"}}, "r")
-    assert r["ok"] and r["to_chat"]
-    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "answered"   # own words count as the answer
-    assert read_skill(skill_id) == before   # and nothing is applied until the chat proposes a change
+                           "payload": {"custom_text": "हाँ"}}, "r")
+    assert r["ok"] and clarify_store.get_question(wf.id, q["question_id"])["answer"]["choice"] == yes["id"]
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "answered"
+
+
+def _wish_env(b, wf, monkeypatch, proposals, mapped=None):
+    from conxa_compile.conversation import harness
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    monkeypatch.setattr(b, "_install_proxy_router", lambda **kw: None)
+    monkeypatch.setattr(harness, "map_free_text_to_choice", lambda q, t: mapped)      # what the model maps it to
+    monkeypatch.setattr(harness, "_propose", lambda **kw: proposals)
+    monkeypatch.setattr(b, "_thread_context", lambda kind, ident, sink: {
+        "skill_id": skill_id, "load_digest": lambda: None, "gate_proposals": lambda raw: raw})
+
+    def apply(sid, props, rid):                                                        # stands in for the gated edit path
+        doc = read_skill(sid)
+        doc["skills"][0]["steps"][1]["semantic_description"] = "changed by the wish"
+        write_skill(sid, doc)
+    monkeypatch.setattr(b, "_apply_change_set", apply)
+    q = next(c for c in _cards(wf.id, "clarify_question") if c["state"] == "open")
+    assert clarify_store.get_question(wf.id, q["question_id"])["kind"] == "confirm"
+    return skill_id, q
+
+
+def test_a_typed_wish_becomes_a_change_and_the_question_closes_only_once_it_is_applied(env, monkeypatch):
+    from conxa_core.storage.json_store import read_skill
+
+    b, wf, _out = env
+    skill_id, q = _wish_env(b, wf, monkeypatch, [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note",
+                                                   "patch": {"semantic_description": "x"}}])
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                           "payload": {"custom_text": "ask my manager by email first"}}, "r")
+    assert r["ok"] and r["pending_change"]
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"     # nothing applied yet
+    change = _cards(wf.id, "pending_change")[-1]
+    assert change["refs"]["question_id"] == q["question_id"]
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": change["card_id"], "action": "apply"}, "r")["ok"]
+    got = clarify_store.get_question(wf.id, q["question_id"])
+    assert got["status"] == "answered" and got["receipt"].startswith("Changed:")
+    steps = read_skill(skill_id)["skills"][0]["steps"]
+    assert steps[1]["semantic_description"] == "changed by the wish"
+    # A typed wish on a step that can't be undone never drops the approval before it.
+    assert "still approves" in got["receipt"]
+    assert any((s.get("action") or {}).get("action") == "agent_span" for s in steps)
+
+
+def test_a_wish_no_safe_change_can_carry_leaves_the_question_open(env, monkeypatch):
+    b, wf, _out = env
+    _skill_id, q = _wish_env(b, wf, monkeypatch, [])                                   # the gate refused every change
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                           "payload": {"custom_text": "do it the other way"}}, "r")
+    assert r["ok"] is False and r["code"] == "wish_not_applied"
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"
+    card = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == q["card_id"])
+    assert card["state"] == "failed" and "still open" in card["error"]
+
+
+def test_a_dismissed_wish_change_leaves_the_question_open(env, monkeypatch):
+    b, wf, _out = env
+    _skill_id, q = _wish_env(b, wf, monkeypatch, [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note",
+                                                    "patch": {"semantic_description": "x"}}])
+    b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                       "payload": {"custom_text": "ask my manager by email first"}}, "r")
+    change = _cards(wf.id, "pending_change")[-1]
+    b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": change["card_id"], "action": "dismiss"}, "r")
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"
+    card = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == q["card_id"])
+    assert card["state"] == "failed" and "dismissed" in card["error"]
 
 
 def test_a_workflow_edited_in_human_edit_meanwhile_fails_the_answer_cleanly(env):
@@ -885,6 +965,48 @@ def test_an_unanswered_question_blocks_testing_approval_publishing_and_an_early_
     assert e.value.code == "unanswered_questions"
 
 
+def test_every_direct_door_refuses_a_workflow_with_an_unanswered_question(env):
+    """WF-5 5.1: the Publish page's Run test went straight to cmd_test_workflow and ran. Every door that
+    tests, approves or builds a release must refuse on its own, not rely on the lifecycle strip."""
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    wf = get_workflow(wf.id)
+    doors = [
+        lambda: b.cmd_test_workflow({"workflow_id": wf.id}, "t"),                          # Publish / group page Run test
+        lambda: b.cmd_sign_off_workflow({"skill_id": wf.skill_id}, "s"),                   # direct approval
+        lambda: b.cmd_build_skill_package({"skill_slug": wf.slug}, "b"),                    # release build
+    ]
+    for door in doors:
+        with pytest.raises(_CommandError) as e:
+            door()
+        assert e.value.code == "unanswered_questions"
+    assert not get_workflow(wf.id).signed_off
+    # A sign-in that expired mid-test offers "test" again, but never past an open question.
+    runtime_state.set_flags(wf.id, sign_in_expired=True)
+    assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+
+
+def test_a_test_of_a_workflow_missing_from_the_built_copy_says_so_plainly(env, monkeypatch):
+    """Not the runtime's "Skill not found: <slug>. Call list_skills." (WF-5 5.1)."""
+    from conxa_core.models.workflow import SkillPack, SkillPackBuild
+    from conxa_core.storage.workflow_store import get_workflow, save_workflow
+
+    b, wf, _out = env
+    wf = get_workflow(wf.id)
+    wf.skill_id, wf.edited_at = "skill_x", 1.0
+    save_workflow(wf)
+    pack = SkillPack(workspace_id="ws", company_slug="c", company_name="C", created_at=0.0, updated_at=0.0,
+                     build=SkillPackBuild(last_built_at=2.0, output_path=str(settings.data_dir / "skill-packs" / "c"), version="0.1.0"))
+    monkeypatch.setattr("conxa_core.storage.skill_pack_store.get_skill_pack", lambda _ws: pack)
+    with pytest.raises(_CommandError) as e:
+        b.cmd_test_workflow({"workflow_id": wf.id}, "t")
+    assert e.value.code == "workflow_not_built"
+    assert "list_skills" not in e.value.message and wf.name in e.value.message
+
+
 def test_opening_the_conversation_asks_an_unanswered_question_again_but_never_stacks_a_second_card(env):
     b, wf, _out = env
     _fake_compile(b, wf)
@@ -960,3 +1082,275 @@ def test_when_the_recap_never_works_no_stand_in_is_posted_and_a_warning_shows(en
     assert not any("ready" in t for t in _texts(wf.id, "assistant_message"))
     assert "Couldn’t write the summary of what was built" in _texts(wf.id, "event")
     assert _cards(wf.id, "clarify_question")  # the questions still follow
+
+
+def test_saving_a_step_with_nothing_edited_writes_nothing(env):
+    """WF-5: Human Edit's "Save step" on an untouched step turned a bare action kind into its object form, bumped
+    the version and reset the test and approval."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    doc = read_skill(skill_id)
+    doc["skills"][0]["steps"][0].update(action="navigate", url="https://billing.example.test/new")
+    write_skill(skill_id, doc)
+    before = read_skill(skill_id)
+    b.cmd_patch_step({"skill_id": skill_id, "step_index": 0,
+                      "patch": {"action": {"action": "navigate"}, "url": "https://billing.example.test/new"}}, "r")
+    assert read_skill(skill_id) == before
+
+
+def test_a_human_edit_link_keeps_element_addresses_behind_details(env):
+    from conxa_compile.conversation import harness
+
+    b, wf, _out = env
+    card = harness.post_editor_hint_card(f"wf:{wf.id}", None, {"reason": 'Use #userEmail, not role=textbox[name="x"]'}, None)
+    assert "role=" not in card["title"] and "#userEmail" in card["detail"]
+    plain = harness.post_editor_hint_card(f"wf:{wf.id}", None, {"reason": "The email box moved"}, None)
+    assert plain["title"].endswith("The email box moved") and not plain["detail"]
+
+
+
+@pytest.mark.parametrize("text,mapped", [
+    ("wait ten seconds, then continue on its own", "no"),   # WF-5 E: closed as "no", the approval gone
+    ("only ask on the first run", "yes"),                   # WF-5 D: closed as "yes", "first run" dropped
+])
+def test_a_wish_on_a_step_that_cant_be_undone_is_never_read_as_an_option(env, monkeypatch, text, mapped):
+    b, wf, _out = env
+    _skill_id, q = _wish_env(b, wf, monkeypatch, [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note",
+                                                    "patch": {"semantic_description": "x"}}], mapped=mapped)
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                           "payload": {"custom_text": text}}, "r")
+    assert r.get("pending_change") is True
+    got = clarify_store.get_question(wf.id, q["question_id"])
+    assert got["status"] == "open" and got.get("answer") is None
+
+
+def test_how_can_we_tell_it_worked_refuses_words_with_no_letters(env):
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    q = {"id": "done_when", "kind": "done_when", "multi": True, "title": "How can we tell it worked?", "choices": [],
+         "step_keys": [], "status": "open", "answer": None, "receipt": ""}
+    clarify_store.mutate(wf.id, lambda d: d["questions"].append(dict(q)))
+    from conxa_compile.conversation import harness
+
+    card = harness.post_card(f"wf:{wf.id}", "clarify_question", "open", sink=None, refs={"question_id": q["id"]},
+                             question_id=q["id"], choices=q["choices"], actions=["choose"])
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "choose",
+                           "payload": {"selected": [], "custom_text": "😀😀🎉"}}, "r")
+    assert r["ok"] is False and r["code"] == "answer_unclear"
+    assert clarify_store.get_question(wf.id, q["id"])["status"] == "open"
+
+
+
+def test_a_new_typed_attempt_or_a_failed_one_leaves_no_stale_change_card(env, monkeypatch):
+    """WF-5 F: a failed attempt left the earlier change card open; chat called it waiting and Test it was refused."""
+    from conxa_compile.conversation import harness
+
+    b, wf, _out = env
+    props = [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note", "patch": {"semantic_description": "x"}}]
+    _skill_id, q = _wish_env(b, wf, monkeypatch, props)
+    send = lambda t: b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",  # noqa: E731
+                                        "payload": {"custom_text": t}}, "r")
+    send("ask my manager by email first")
+    send("ask my manager by text first")
+    assert len([c for c in _cards(wf.id, "pending_change") if c["state"] == "open"]) == 1   # one wish, one live card
+    monkeypatch.setattr(harness, "_propose", lambda **kw: [])
+    assert send("do it some other way")["code"] == "wish_not_applied"
+    assert not [c for c in _cards(wf.id, "pending_change") if c["state"] == "open"]          # a failed attempt leaves none
+    send_choice = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "choose",
+                                     "payload": {"choice": "yes"}}, "r")
+    assert send_choice["ok"]
+
+
+def test_a_failed_proposal_is_tried_once_more(env, monkeypatch):
+    from conxa_compile.conversation import harness
+
+    b, wf, _out = env
+    _skill_id, q = _wish_env(b, wf, monkeypatch, [])
+    calls = []
+    props = [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note", "patch": {"semantic_description": "x"}}]
+    monkeypatch.setattr(harness, "_propose", lambda **kw: (calls.append(1), props if len(calls) == 2 else [])[1])
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                           "payload": {"custom_text": "ask my manager by email first"}}, "r")
+    assert r.get("pending_change") and len(calls) == 2
+
+
+def test_summary_cards_never_count_as_waiting():
+    from conxa_compile.conversation import thread_store as ts
+
+    items = [{"kind": "card", "card_type": "workflow_summary", "state": "open"},
+             {"kind": "card", "card_type": "test_inputs", "state": "open"}]
+    assert [c["card_type"] for c in ts.open_cards(items)] == ["test_inputs"]
+
+
+def test_a_check_change_reads_in_plain_words():
+    from conxa_compile.editor.copilot_proposals import proposal_summary
+
+    p = {"command": "patch_step", "field": "validation.assertions", "step_label": "“Submit”",
+         "preview": {"before": [{"type": "state_changed"}],
+                     "after": [{"type": "state_changed"}, {"type": "text_present", "target": "{{user_email}}"}]}}
+    text = proposal_summary(p)
+    assert text == "After “Submit”, also check that the page shows the user email you typed"
+    assert "validation" not in text
+
+
+def test_a_described_check_is_a_wish_and_long_screen_words_are_refused(env, monkeypatch):
+    """WF-5 F: "check the output shows the email I typed" was saved as words to look for, and 5,000 characters were
+    cut to 120."""
+    from conxa_compile.conversation import harness
+
+    b, wf, _out = env
+    props = [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note", "patch": {"semantic_description": "x"}}]
+    _wish_env(b, wf, monkeypatch, props)
+    q = {"id": "done_when", "kind": "done_when", "multi": True, "title": "How can we tell it worked?", "choices": [],
+         "step_keys": [], "status": "open", "answer": None, "receipt": ""}
+    clarify_store.mutate(wf.id, lambda d: d["questions"].append(dict(q)))
+    card = harness.post_card(f"wf:{wf.id}", "clarify_question", "open", sink=None, refs={"question_id": "done_when"},
+                             question_id="done_when", choices=[], actions=["choose"])
+    pick = lambda t: b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "choose",  # noqa: E731
+                                        "payload": {"selected": [], "custom_text": t}}, "r")
+    assert pick("x" * 300)["code"] == "answer_too_long"
+    r = pick("check the output shows the email I typed")
+    assert r.get("pending_change") and clarify_store.get_question(wf.id, "done_when")["status"] == "open"
+
+
+def test_undoing_a_wishs_change_opens_its_question_again(env, monkeypatch):
+    """BUILD-104 (4): a question is closed only while the change that answered it is applied."""
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    props = [{"id": "p1", "command": "patch_step", "step_key": "k", "field": "note", "patch": {"semantic_description": "x"}}]
+    skill_id, q = _wish_env(b, wf, monkeypatch, props)
+    before = read_skill(skill_id)
+
+    def apply(sid, _props, rid):        # through a real command, so it leaves an undo entry like the real path
+        b.cmd_patch_step({"skill_id": sid, "step_index": 1, "patch": {"semantic_description": "changed by the wish"}}, rid)
+    monkeypatch.setattr(b, "_apply_change_set", apply)
+    b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "own",
+                       "payload": {"custom_text": "ask my manager by email first"}}, "r")
+    change = _cards(wf.id, "pending_change")[-1]
+    b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": change["card_id"], "action": "apply"}, "r")
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "answered"
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": change["card_id"], "action": "undo"}, "r")
+    assert r["ok"], r
+    assert clarify_store.get_question(wf.id, q["question_id"])["status"] == "open"
+    assert read_skill(skill_id)["skills"][0]["steps"] == before["skills"][0]["steps"]     # change and approval both gone
+    assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    card = next(c for c in _cards(wf.id, "clarify_question") if c["card_id"] == q["card_id"])
+    assert card["state"] == "open" and "undone" in card["note"]
+
+
+def test_a_check_wish_lands_on_the_questions_step_even_with_an_approval_step_before_it(env, monkeypatch):
+    """WF-5 H/G: with an approval (agent) step inserted before Submit, the wish never became a change, or changed the
+    approval step's goal instead. The check goes on the question's own step, and no wish touches an agent step."""
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.conversation import harness
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    b.cmd_insert_step({"skill_id": skill_id, "action_kind": "agent_span", "insert_after": 2, "confirm_only": True}, "r")
+    steps = read_skill(skill_id)["skills"][0]["steps"]
+    keys = step_keys(steps)
+    send_key = keys[-1]
+    assert steps[-2]["action"]["action"] == "agent_span" and steps[-1]["intent"] == "send_invoice"
+    monkeypatch.setattr(b, "_install_proxy_router", lambda **kw: None)
+    monkeypatch.setattr(harness, "_propose", lambda **kw: pytest.fail("the template needs no model"))
+    q = {"id": "done_when", "kind": "done_when", "multi": True, "title": "How can we tell it worked?", "choices": [],
+         "step_keys": [send_key], "status": "open", "answer": None, "receipt": ""}
+    clarify_store.mutate(wf.id, lambda d: d["questions"].append(dict(q)))
+    card = harness.post_card(f"wf:{wf.id}", "clarify_question", "open", sink=None, refs={"question_id": "done_when"},
+                             question_id="done_when", choices=[], actions=["choose"])
+    r = b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": card["card_id"], "action": "choose",
+                           "payload": {"selected": [], "custom_text": "after Submit, also check the page shows the description I typed"}}, "r")
+    assert r.get("pending_change"), r
+    change = _cards(wf.id, "pending_change")[-1]
+    assert [p["step_key"] for p in change["proposals"]] == [send_key]
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": change["card_id"], "action": "apply"}, "r")["ok"]
+    after = read_skill(skill_id)["skills"][0]["steps"]
+    assert {"type": "text_present", "target": "{{description}}", "required": True} in after[-1]["validation"]["assertions"]
+    assert after[-2] == steps[-2]                                                     # the approval step is untouched
+    assert clarify_store.get_question(wf.id, "done_when")["status"] == "answered"
+
+
+def test_a_wish_never_changes_an_agent_or_approval_step():
+    from handlers.compile_flow import _without_agent_steps
+
+    doc = {"skills": [{"steps": [{"action": {"action": "agent_span"}, "identity_bundle": {"stable_hash": "a"}},
+                                 {"action": {"action": "click"}, "identity_bundle": {"stable_hash": "c"}}]}]}
+    props = [{"step_key": "a#1", "field": "value", "is_agent_goal": True}, {"step_key": "a#1", "field": "agent_span_allowed"},
+             {"op": "delete_step", "step_key": "a#1"}, {"step_key": "c#1", "field": "validation.assertions"}]
+    assert _without_agent_steps(props, doc) == [props[-1]]
+
+
+def test_an_unedited_save_of_a_navigate_step_with_no_action_object_writes_nothing(env):
+    """WF-5 I: the step stored `action: "navigate"` (so `action.action` was null); Human Edit's Save sent the shown
+    defaults (action with its url, the same checks, an empty check list for an absent one), which bumped the version, revoked the approval
+    and changed an address key."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    u = "https://billing.example.test/new"
+    doc = read_skill(skill_id)
+    doc["skills"][0]["steps"][0].update(
+        action="navigate", url=u, semantic_description="Open the invoice page",
+        validation={"wait_for": {"type": "url_change", "target": u, "timeout": 60000}, "success_conditions": {"url": u}})
+    write_skill(skill_id, doc)
+    before = read_skill(skill_id)
+    shown = {"semantic_description": "Open the invoice page", "url": u, "action": {"action": "navigate", "url": u},
+             "validation": {"wait_for": {"type": "url_change", "target": u, "timeout": 60000},
+                            "success_conditions": {"url": u}, "assertions": []}}
+    b.cmd_patch_step({"skill_id": skill_id, "step_index": 0, "patch": shown}, "r")
+    assert read_skill(skill_id) == before
+    b.cmd_patch_step({"skill_id": skill_id, "step_index": 0, "patch": {**shown, "semantic_description": "Open it"}}, "r")
+    assert read_skill(skill_id)["meta"]["version"] == before["meta"]["version"] + 1      # a real edit still saves
+
+
+def test_a_chat_change_leaves_every_address_key_as_it_was(env):
+    """WF-5 5.8: renaming an input through chat re-derived an empty `recovery.intent` on the step (an address key)."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+    from conxa_compile.editor.capability_manifest import ADDRESS_KEYS
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    doc = read_skill(skill_id)
+    doc["skills"][0]["steps"][1]["recovery"] = {"intent": "", "final_intent": "", "anchors": [], "strategies": []}
+    write_skill(skill_id, doc)
+    before = read_skill(skill_id)["skills"][0]["steps"][1]
+
+    def rename(payload, rid):           # an edit command that re-derives shadows, as cmd_patch_step does
+        d = read_skill(skill_id)
+        s = d["skills"][0]["steps"][1]
+        s.update(value="{{contact}}", input_binding="contact")
+        s["recovery"] = {**s["recovery"], "intent": "enter_po_number", "final_intent": "enter_po_number"}
+        write_skill(skill_id, d)
+        return {}
+    b.cmd_accept_copilot_proposal = rename
+    b._apply_change_set(skill_id, [{"id": "p1"}], "r")
+    after = read_skill(skill_id)["skills"][0]["steps"][1]
+    assert after["value"] == "{{contact}}"                                        # the change itself stands
+    assert {k: after.get(k) for k in ADDRESS_KEYS} == {k: before.get(k) for k in ADDRESS_KEYS}
+
+
+def test_an_address_check_names_the_address():
+    from conxa_compile.editor.copilot_proposals import proposal_summary
+
+    p = {"command": "patch_step", "field": "validation.assertions", "step_label": "“Open”",
+         "preview": {"before": [], "after": [{"type": "url_pattern", "expected": "demoqa.com/text-box"}]}}
+    assert "text-box" in proposal_summary(p)

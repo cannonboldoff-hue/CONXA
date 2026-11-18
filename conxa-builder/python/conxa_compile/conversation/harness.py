@@ -441,9 +441,11 @@ def post_editor_hint_card(thread_id: str, sink: Any, hint: dict[str, Any], diges
                 if isinstance(s, dict) and s.get("step_key") == hint.get("step_key")), None)
     step_index = row.get("step_index") if row and isinstance(row.get("step_index"), int) else None
     where = f"step {step_index + 1}" if step_index is not None else "a step"
+    # A reason that names element addresses (role=…, #id, an xpath) goes behind "Technical details" (WF-5).
+    technical = bool(re.search(r"role=|\[name=|internal:|xpath|//|#[A-Za-z][\w-]*|\bselector\b", reason, re.I))
     return post_card(thread_id, "action_link", "open", sink=sink, action="edit", target="edit",
-                     title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason else ""),
-                     step_index=step_index, actions=["open"])
+                     title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason and not technical else ""),
+                     detail=reason if technical else "", step_index=step_index, actions=["open"])
 
 
 def _route_command(kind: str, message: str, lifecycle: dict[str, Any] | None, load_digest: Any,
@@ -516,6 +518,8 @@ def _proposal_title(p: dict[str, Any]) -> str:
         return "Add a step to dismiss a popup"
     if cmd == "structural_op":
         return "Make it a run input" if p.get("op") == "parameterize" else "Change the steps"
+    if p.get("field") in ("validation", "validation.assertions"):
+        return "Change how a step is checked"
     return f"Change “{p.get('field') or 'a step'}”"
 
 

@@ -160,7 +160,6 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   const [busy, setBusy] = useState(false)
   const [custom, setCustom] = useState('')
   const [own, setOwn] = useState('')
-  const sendChat = useThreadStore((s) => s.send)
   const items = useThreadStore((s) => s.threads[threadId]?.items)
   const qKind = String(item.question_kind ?? '')
   const title = String(item.title ?? '')
@@ -173,17 +172,11 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
     if (r && r.ok === false && r.message) toast.error(r.message)
   }
 
-  // The person's own words: the card closes, then the text goes to chat, which can only propose a change card.
+  // The typed box is a third option: what the person wants when no option says it. Studio applies a clear option
+  // like a click, or proposes a change card below; the backend decides, so a blank answer gets its reason back too.
   const sendOwn = async () => {
-    const text = own.trim()
-    if (!text) return
     setBusy(true)
-    const r = await act(threadId, String(item.card_id), 'own', { custom_text: text })
-    if (r && r.ok === false && r.message) toast.error(r.message)
-    if (r?.to_chat) {
-      await sendChat(threadId, `About “${title}”: ${text}`)
-      await act(threadId, String(item.card_id), 'resume')
-    }
+    await act(threadId, String(item.card_id), 'own', { custom_text: own })
     setBusy(false)
   }
 
@@ -256,6 +249,7 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
           {multi && <span className="text-xs text-[var(--text-meta)]">Tick what applies, then press the arrow.</span>}
           {canCheck && <Button variant="outline" size="sm" disabled={busy} onClick={() => send('checked')}>I’ve checked it — it’s right</Button>}
           {state === 'failed' && typeof item.error === 'string' && <span className="basis-full text-xs text-status-error">✕ {item.error}</span>}
+          {typeof item.note === 'string' && item.note && <span className="basis-full text-xs text-[var(--text-meta)]">{item.note}</span>}
         </>
       }
     >
@@ -292,15 +286,15 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
       </ul>
       <input
         type="text"
-        maxLength={qKind === 'done_when' ? 120 : 500}
+        maxLength={500} // the most any answer may be; screen words over 120 get a reason from the backend, not a silent cut
         value={qKind === 'done_when' ? custom : own}
         disabled={busy}
         onChange={(e) => (qKind === 'done_when' ? setCustom(e.target.value) : setOwn(e.target.value))}
         onKeyDown={(e) => {
           if (e.key === 'Enter') void (qKind === 'done_when' ? next() : sendOwn())
         }}
-        aria-label={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter' : 'Or type your own answer and press Enter'}
-        placeholder={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter…' : 'Or type your own answer and press Enter…'}
+        aria-label={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter' : 'Or type what you want instead and press Enter'}
+        placeholder={qKind === 'done_when' ? 'Or type words you should see on the screen when it works, and press Enter…' : 'Or type what you want instead and press Enter…'}
         className="mt-3 w-full rounded-[8px] border border-[var(--border-default)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
       />
     </CardShell>

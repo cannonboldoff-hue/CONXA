@@ -47,6 +47,72 @@ def _clarify_events():
     return clarify_events
 
 
+def _step_by_key(doc: dict[str, Any], key: str) -> dict[str, Any] | None:
+    from conxa_compile.compiler.step_key import step_keys
+
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    keys = step_keys(steps)
+    return steps[keys.index(key)] if key in keys else None
+
+
+def _is_agent_step(step: dict[str, Any] | None) -> bool:
+    act = (step or {}).get("action")
+    return (act.get("action") if isinstance(act, dict) else act) == "agent_span"
+
+
+def _without_agent_steps(proposals: list[dict[str, Any]], doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """A typed answer never changes an agent or approval step (its goal, its allowed actions, removing it): the
+    approval before a step that can't be undone is not the person's to drop by typing (WF-5 G)."""
+    out = []
+    for p in proposals:
+        keys = {str(p.get(k) or "") for k in ("step_key", "after_step_key", "target_step_key")} - {""}
+        if (p.get("is_agent_goal") or str(p.get("field") or "").startswith("agent_span")
+                or any(_is_agent_step(_step_by_key(doc, k)) for k in keys)):
+            continue
+        out.append(p)
+    return out
+
+
+def _question_step_line(question: dict[str, Any], doc: dict[str, Any]) -> str:
+    """Name the step the question is about by its key, so the model never counts steps (an inserted approval step
+    shifts every number after it, WF-5 H)."""
+    from conxa_compile.conversation import clarify
+
+    for key in question.get("step_keys") or []:
+        step = _step_by_key(doc, key)
+        if step is not None and not _is_agent_step(step):
+            return f" The question is about the step “{clarify.step_name(step)}” (step_key {key}); a new check goes on that step."
+    return ""
+
+
+def _check_wish_template(question: dict[str, Any], text: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """The common wish "also check the page shows the <input> (I typed)", built as one text check on the question's
+    own step from the workflow's declared inputs: a raw proposal for the gate, or [] when the words don't name
+    exactly one input (then the model is asked)."""
+    import re
+
+    from conxa_compile.conversation import clarify
+
+    if not clarify.describes_a_check(text):
+        return []
+    key = next((k for k in question.get("step_keys") or [] if not _is_agent_step(_step_by_key(doc, k))), "")
+    step = _step_by_key(doc, key) if key else None
+    if step is None:
+        return []
+    words = {w for w in re.split(r"[^\w']+", text.lower()) if w}
+    ids = [str(i.get("id")) for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")]
+    full = [i for i in ids if set(i.lower().split("_")) <= words]
+    named = full if len(full) == 1 else [i for i in ids if words & (set(i.lower().split("_")) - {"user", "value"})]
+    if len(named) != 1:
+        return []
+    current = [a for a in (step.get("validation") or {}).get("assertions") or [] if isinstance(a, dict)]
+    check = {"type": "text_present", "target": "{{" + named[0] + "}}", "required": True}
+    if check in current:
+        return []
+    return [{"step_key": key, "field": "validation.assertions", "patch": current + [check],
+             "why": f"Check that the page shows the {named[0].replace('_', ' ')} that was typed in"}]
+
+
 class CompileFlowMixin:
     # ── compile ─────────────────────────────────────────────────────────────────────────────
 
@@ -741,28 +807,38 @@ class CompileFlowMixin:
             self._flow_post_next_question(workflow_id, sink)
             return {"ok": True}
         if action == "own":
-            # The person's own words are the answer. Nothing is applied here: the card sends the text to chat,
-            # whose change cards (Apply / Confirm) are the only way it reaches a step.
-            text = str(body.get("custom_text") or "").strip()
-            if not text:
-                raise _CommandError("invalid_input", "Type your answer first.")
-            receipt = "Answered in your own words — see the chat"
-            wf_own = get_workflow(workflow_id)
-            can = bool(wf_own and wf_own.skill_id and self._save_snapshot(workflow_id, qid, wf_own.skill_id, question))
-            answer = {"custom_text": text[:500]}
-            clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
-            clarify_store.update_question(workflow_id, qid, own_pending=True)
-            clarify_store.ledger_set(workflow_id, question, "answered", "own")
-            _clarify_events().answered(workflow_id, question, answer)
-            harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
-                                can_reopen=can)
-            return {"ok": True, "to_chat": True}
+            # The typed box is a third option: what the person wants when no option says it. Unusable words never
+            # reach the model; words that clearly name an option are applied like a click; anything else is the
+            # person's own wish, turned into a change they apply (_own_wish). The question closes only once it is.
+            text = str(body.get("custom_text") or "")
+            why = clarify.words_unusable(question, text)
+            if why:
+                harness.update_card(thread_id, card_id, sink=sink, state="failed", error=why, note="")
+                return {"ok": False, "code": "answer_unclear", "message": why}
+            words_answer, _ = clarify.answer_from_words(question, text)
+            if words_answer is None:
+                return self._own_wish(thread_id, card, question, text.strip(), rid, sink)
+            action, body = "choose", words_answer
         if action not in ("choose", "retry"):
             raise _CommandError("card_action_unsupported", f"A question can’t “{action}”.")
 
         answer = {"choice": body.get("choice")} if body.get("choice") else {"selected": list(body.get("selected") or [])}
         if body.get("custom_text"):
-            answer["custom_text"] = str(body["custom_text"])
+            custom = str(body["custom_text"]).strip()
+            if question["kind"] == "done_when" and (why := clarify.words_unusable(question, custom)):
+                harness.update_card(thread_id, card_id, sink=sink, state="failed", error=why)   # "😀😀🎉" is no screen text
+                return {"ok": False, "code": "answer_unclear", "message": why}
+            if question["kind"] == "done_when" and clarify.describes_a_check(custom):
+                # "check the output shows the email I typed" describes a check: a wish, applied as a change; the ticks
+                # ride along and are applied with it once the person presses Apply.
+                return self._own_wish(thread_id, card, question, custom, rid, sink,
+                                      keep={"selected": list(answer.get("selected") or [])})
+            if question["kind"] == "done_when" and len(custom) > 120:
+                # Never cut the words silently: a check for half a sentence is not what the person typed.
+                why = "Those words are longer than 120 characters. Type a shorter part of what you see on the screen."
+                harness.update_card(thread_id, card_id, sink=sink, state="failed", error=why)
+                return {"ok": False, "code": "answer_too_long", "message": why}
+            answer["custom_text"] = custom
         workflow = get_workflow(workflow_id)
         doc = read_skill(workflow.skill_id) if workflow and workflow.skill_id else None
         if doc is None:
@@ -790,6 +866,7 @@ class CompileFlowMixin:
                                 error="The workflow changed in Human Edit, so this answer no longer fits." if stale else exc.message)
             return {"ok": False, "code": exc.code, "message": exc.message}
         clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=added)
+        self._drop_wish_cards(workflow_id, qid, sink)
         clarify_store.ledger_set(workflow_id, question, "answered", answer.get("choice") or answer.get("selected"), answer=answer)
         from conxa_compile.conversation import answer_memory
 
@@ -837,6 +914,140 @@ class CompileFlowMixin:
             return True
         except Exception:  # noqa: BLE001
             return False
+
+    # ── the typed box: the person's own wish (third option) ─────────────────────────────────
+
+    def _own_wish(self, thread_id: str, card: dict[str, Any], question: dict[str, Any], text: str,
+                  rid: str, sink: Any, keep: dict[str, Any] | None = None) -> dict[str, Any]:
+        """What the person typed when no option says what they want. The model first checks whether it is one
+        of the options after all (then it is applied like a click); otherwise it proposes a change, through the
+        same gates as a chat change, on a change card the person applies. The question stays open until that
+        change is applied (``_close_question_by_wish``); a wish no safe change can carry leaves it open."""
+        import types
+
+        from conxa_compile.conversation import harness
+
+        workflow_id = thread_id.replace("wf:", "", 1)
+        card_id = card["card_id"]
+        self._drop_wish_cards(workflow_id, question["id"], sink)  # one wish, at most one live change card
+
+        def still_open(why: str) -> dict[str, Any]:
+            harness.update_card(thread_id, card_id, sink=sink, state="failed", error=why, note="")
+            return {"ok": False, "code": "wish_not_applied", "message": why}
+
+        ctx = self._thread_context("wf", workflow_id, sink)
+        if not ctx.get("skill_id"):
+            return still_open("That isn’t one of the options. Pick the closest one; once the workflow is built you can "
+                              "ask for anything else in the chat.")
+        self._install_proxy_router(sink=sink, usage_class="ai_credits")
+        try:
+            from conxa_compile.conversation import clarify
+
+            if not question.get("multi") and not clarify.is_safety_question(question):
+                # The model may say the wish is an option after all, but only one that holds every word of it.
+                pick = harness.map_free_text_to_choice(question, text)
+                choice = next((c for c in question.get("choices") or [] if c.get("id") == pick), None)
+                if choice is not None and clarify.adds_nothing(text, choice):
+                    return self._card_clarify_question(thread_id, card, "choose", {"choice": pick}, rid, sink)
+            from conxa_core.storage.json_store import read_skill
+
+            doc = read_skill(ctx["skill_id"]) or {}
+            # "also check the page shows the email I typed": built by code on the question's own step, no model.
+            proposals = ctx["gate_proposals"](_check_wish_template(question, text, doc))
+            if not proposals:
+                choices = "; ".join(str(c.get("label") or c.get("id")) for c in question.get("choices") or [])
+                context = (f"The person is answering Studio's question “{question.get('title')}”"
+                           f"{' about the step “' + str(question.get('step_name')) + '”' if question.get('step_name') else ''}. "
+                           f"{question.get('body') or ''}\nThe offered options were: {choices}. None of them says what they "
+                           f"want, so they typed their own answer. Propose the change to the workflow that does what they "
+                           f"asked, and only that.{_question_step_line(question, doc)} Never change an agent step or an "
+                           f"approval step (an agent_span).\nTheir answer: {text}")
+                digest = ctx["load_digest"]()
+                for _attempt in range(2):  # the model misses a valid change now and then (WF-5: 1 of 3): one more try
+                    proposals = _without_agent_steps(harness._propose(
+                        message=text, base_pack=types.SimpleNamespace(text=context), digest=digest,
+                        skill_id=ctx["skill_id"], gate_proposals=ctx["gate_proposals"], cancel=threading.Event()), doc)
+                    if proposals:
+                        break
+        except Exception as exc:  # noqa: BLE001 -- out of credits, no network: the question just stays open
+            return still_open(f"I couldn’t work that out just now ({str(exc)[:120]}). Pick one of the options, or try again.")
+        if not proposals:
+            return still_open("I couldn’t turn that into a change Studio can make safely, so this question is still open. "
+                              "Pick one of the options, or say what you want another way.")
+        from conxa_compile.editor.copilot_proposals import proposal_summary
+
+        summaries = [proposal_summary(p) for p in proposals]
+        harness.post_card(
+            thread_id, "pending_change", "open", sink=sink,
+            refs={"skill_id": ctx["skill_id"], "proposal_ids": [p.get("id") for p in proposals],
+                  "question_id": question["id"], "question_card_id": card_id},
+            title=f"Your answer to “{question.get('title')}”", why=f"You asked: “{text}”", proposals=proposals,
+            summaries=summaries, preview=proposals[0].get("preview") if len(proposals) == 1 else None,
+            own_text=text, keep_answer=keep or None, actions=["apply", "dismiss"])
+        harness.update_card(thread_id, card_id, sink=sink, state="open", error="",
+                            note="Your answer needs a change to the workflow. Check it below and press Apply; "
+                                 "this question closes once it is applied.")
+        return {"ok": True, "pending_change": True}
+
+    def _drop_wish_cards(self, workflow_id: str, qid: str, sink: Any) -> None:
+        """Close any change card still offered for this question's earlier typed answer: a new attempt, a picked
+        option or a closed question replaces it, so nothing stale is left to apply twice or to hold "Test it"."""
+        from conxa_compile.conversation import harness, thread_store as ts
+
+        thread = _thread(workflow_id)
+        for c in ts.fold(ts.read_raw(thread)):
+            if (c.get("kind") == "card" and c.get("card_type") == "pending_change" and c.get("state") == "open"
+                    and (c.get("refs") or {}).get("question_id") == qid):
+                harness.update_card(thread, c["card_id"], sink=sink, state="replaced", actions=[])
+
+    def _close_question_by_wish(self, workflow_id: str, change_card: dict[str, Any], rid: str, sink: Any) -> None:
+        """A wish's change was applied and saved: only now is its question answered. A question about a step that
+        can't be undone keeps its approval: a typed wish never removes it (picking "No, just do it" does)."""
+        from conxa_compile.conversation import clarify, clarify_store, harness
+        from conxa_core.storage.json_store import read_skill
+        from conxa_core.storage.workflow_store import get_workflow
+
+        refs = change_card.get("refs") or {}
+        qid, q_card = str(refs.get("question_id") or ""), str(refs.get("question_card_id") or "")
+        question = clarify_store.get_question(workflow_id, qid)
+        if question is None or question.get("status") == "answered":
+            return  # answered another way meanwhile: the change stands on its own
+        thread = _thread(workflow_id)
+        changed = "; ".join(str(s) for s in change_card.get("summaries") or []) or "the workflow"
+        receipt, added = f"Changed: {changed}", 0
+        keep = change_card.get("keep_answer")
+        if isinstance(keep, dict) and keep.get("selected"):
+            # What the person ticked beside their wish ("How can we tell it worked?"), applied with it.
+            workflow = get_workflow(workflow_id)
+            ops, _ = clarify.plan_answer(question, {"selected": keep["selected"]}, read_skill(workflow.skill_id) or {})
+            try:
+                added += self._run_clarify_ops(workflow.skill_id, ops, rid)
+            except _CommandError as exc:
+                harness.update_card(thread, q_card, sink=sink, state="failed", note="",
+                                    error=f"Your change was applied, but what you ticked could not be ({exc.message}). "
+                                          "Pick again to finish.")
+                return
+            n = len(keep["selected"])
+            receipt += f", plus the {n} check{'s' if n != 1 else ''} you ticked"  # short: the ticked labels are long
+        if question.get("kind") == "confirm":
+            workflow = get_workflow(workflow_id)
+            ops, _ = clarify.plan_answer(question, {"choice": "yes"}, read_skill(workflow.skill_id) or {})
+            try:
+                added = self._run_clarify_ops(workflow.skill_id, ops, rid)
+            except _CommandError as exc:
+                harness.update_card(thread, q_card, sink=sink, state="failed", note="",
+                                    error=f"Your change was applied, but the approval before this step could not be kept "
+                                          f"({exc.message}). Pick an option to finish.")
+                return
+            receipt += f". Someone still approves “{question.get('step_name') or 'this step'}” first."
+        answer = {"custom_text": str(change_card.get("own_text") or ""), "change": change_card.get("summaries") or []}
+        clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=added)
+        clarify_store.ledger_set(workflow_id, question, "answered", "own", answer=answer)
+        _clarify_events().answered(workflow_id, question, answer)
+        harness.update_card(thread, q_card, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[], note="",
+                            step_keys=question.get("step_keys") or [], can_reopen=False)
+        self._flow_reevaluate_safe(workflow_id)
+        self._flow_post_next_question(workflow_id, sink)
 
     def _remind_open_question(self, workflow_id: str, sink: Any) -> None:
         """After a typed message the question is still waiting: say so once, naming it. Never raises."""
@@ -1067,7 +1278,9 @@ class CompileFlowMixin:
                     raise _CommandError("cannot_insert", "There is no step to put a confirmation in front of.")
                 self.cmd_insert_step({"skill_id": skill_id, "action_kind": "agent_span", "insert_after": i - 1,
                                       "confirm_only": True}, rid)
-                self.cmd_patch_step({"skill_id": skill_id, "step_index": i, "patch": {"value": op["prompt"]}}, rid)
+                # Named for what it asks, not its kind ("Agent span goal" on the test card, WF-5).
+                self.cmd_patch_step({"skill_id": skill_id, "step_index": i,
+                                     "patch": {"value": op["prompt"], "semantic_description": op["title"]}}, rid)
                 self._log_edit("insert_step", skill_id, before, source="clarify", proposal_id=None)
                 added += 1
             elif kind == "set_fork_policy":

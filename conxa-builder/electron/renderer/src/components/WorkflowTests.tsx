@@ -1,5 +1,7 @@
 
 import { type RefObject, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { getLifecycle } from '@/api/conversationApi'
 import { fetchWorkflow } from '@/api/workflowApi'
 import {
   cancelTestWorkflow,
@@ -68,6 +70,7 @@ const CAUSE_PATTERNS: Array<[RegExp, string]> = [
   [/upload step has no file path/i, 'This step needs a file to upload, but none was provided.'],
   [/^Execution cancelled/i, 'The test was stopped before it finished.'],
   [/Runtime tool call timed out/i, 'The test stopped responding and had to be cancelled.'],
+  [/Skill not found/i, 'This workflow isn’t in the test copy yet. Test it from its conversation; that builds a fresh copy first.'],
 ]
 
 function friendlyCause(text: string): string {
@@ -279,6 +282,10 @@ export function WorkflowTestRow({
   const logRef = useRef<HTMLDivElement>(null)
 
   const stale = isStaleTest(wf, skillPackBuild)
+  // An unanswered question blocks every test (the backend refuses too); "open" is the lifecycle's questions-waiting state.
+  const lifecycleQ = useQuery({ queryKey: ['lifecycle', wf.id], queryFn: () => getLifecycle(wf.id), retry: false })
+  const questionsOpen = lifecycleQ.data?.lifecycle.substate === 'open'
+  const blockedReason = questionsOpen ? 'Answer Studio’s questions first' : stale ? 'Rebuild the skill package first' : undefined
 
   // EXEC-35: visible elapsed time while a test runs, so a stuck "Testing…" reads as
   // "how long has this been going" instead of a static, unreadable label.
@@ -426,7 +433,7 @@ export function WorkflowTestRow({
     setInputDialogOpen(false)
   }
 
-  const canRun = !stale && !running && Boolean(wf.skill_id)
+  const canRun = !stale && !questionsOpen && !running && Boolean(wf.skill_id)
 
   return (
     <div className="overflow-hidden rounded-lg border border-white/8 bg-white/[0.02]">
@@ -434,7 +441,9 @@ export function WorkflowTestRow({
       <div className="flex items-center justify-between gap-3 px-3 py-2.5">
         <div className="min-w-0 overflow-hidden">
           <p className="truncate text-sm font-medium text-white">{wf.name}</p>
-          {stale && (
+          {questionsOpen ? (
+            <p className="mt-0.5 text-xs text-amber-400">Answer Studio’s questions first. Open the workflow’s conversation to answer them.</p>
+          ) : stale && (
             <p className="mt-0.5 text-xs text-amber-400">Edited since last build — rebuild before testing</p>
           )}
           {wf.last_test_status === 'failed' && wf.last_test_error && !runError && logs.length === 0 && (
@@ -458,7 +467,7 @@ export function WorkflowTestRow({
               size="sm"
               onClick={() => void requestRun()}
               disabled={!canRun}
-              title={stale ? 'Rebuild the skill package first' : undefined}
+              title={blockedReason}
             >
               {running ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -486,7 +495,7 @@ export function WorkflowTestRow({
                 size="sm"
                 onClick={() => openInputDialog('run')}
                 disabled={!canRun}
-                title={stale ? 'Rebuild the skill package first' : undefined}
+                title={blockedReason}
               >
                 {running ? (
                   <Loader2 className="size-3.5 animate-spin" />

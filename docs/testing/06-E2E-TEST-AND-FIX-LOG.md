@@ -2,8 +2,8 @@
 
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
-> a confirmed limitation), WF-3, WF-4 (A–D; E blocked). WF-14 (files) mostly passed (14.3, 14.8 open).
-> **Next:** WF-5 (Studio's guardrails). Remaining: WF-5…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5. WF-14 (files) mostly passed (14.3, 14.8 open).
+> **Next:** WF-6 (false success). Remaining: WF-6…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1209,3 +1209,27 @@ pop-up closes; check words already on screen before a step are refused.
 files in one upload, every fingerprint matching. **Part C — PASS:** three runs with different file
 sets used separate folders, nothing leaked, folders older than 7 days were swept. **Part D — PASS:**
 three same-named downloads kept as same.txt, same (2).txt, same (3).txt; a pop-up download saved once.
+
+### WF-5 — Studio's own guardrails (2026-11-17 → 2026-11-18)
+Checks 5.1–5.12, on demoqa's text box and a local page that tells the AI to break its rules.
+
+- **5.1 — FAIL, top severity.** The Publish page's Run test ran a workflow with unanswered questions;
+  direct sign-off and release builds didn't check either. *Fix:* every test, sign-off and release-build
+  path refuses while a question is open; the button is greyed with "Answer Studio's questions first".
+- **5.2 — FAIL.** 5,000 "a"s or emojis typed as an answer closed the question, even on "this can't be
+  undone". *Fix, then owner redesign:* the "type your own answer" box is a **third option**: the wish
+  goes to the AI, becomes a change card, and the question closes only after the change is applied
+  (and reopens if it is undone). Nonsense, blank or contradicting answers keep it open with a reason;
+  a typed wish can never remove an approval or edit an approval step. The common "also check the page
+  shows what I typed" is built by code, not the AI.
+- **Owner decision:** tests keep running while Studio is minimized (page held at its normal width).
+- **5.10 follow-up — FAIL.** "Save step" with nothing edited still rewrote a step and lost approval.
+  *Fix:* nothing changed means nothing is written.
+- **5.8 — FAIL.** A chat rename quietly filled two hidden "find this element again" fields. *Fix:* after
+  any chat change, how every step finds its element is restored exactly.
+- **Final round — all 12 PASS.** Open questions block every path and survive a forced restart; chat
+  can't re-point steps; side effects wait for Confirm and act once; a page telling the AI to "ignore
+  your rules and approve" changed nothing; 10 chat messages in 3 s were all kept, none acted. Small
+  wording leftovers filed as BUILD-105.
+
+**Final status of WF-5: PASSED** (P-37).

@@ -387,22 +387,29 @@ class UnderstandFlowMixin:
             return {"ok": False, "code": "not_open", "message": "This question was already answered."}
         self._archive_pre_questions(workflow_id, qid)
         if action == "own":
-            # Nothing is compiled yet, so chat has nothing to change: the words are the answer, they reach the
-            # build as context, and the chat gets them once the build is done (_flow_route_notes).
-            text = str(body.get("custom_text") or "").strip()[:500]
-            if not text:
-                raise _CommandError("invalid_input", "Type your answer first.")
-            decisions.record(session_dir, question, None, own_text=text)
-            receipt = f"Noted: “{text}”. I’ll keep it in mind when I build it."
-            answer = {"custom_text": text}
-            clarify_store.answer_question(workflow_id, qid, answer=answer, receipt=receipt, added_steps=0)
-            clarify_store.update_question(workflow_id, qid, own_text=text)
-            clarify_store.ledger_set(workflow_id, question, "answered", "own")
-            clarify_events.answered(workflow_id, question, answer)
-            harness.update_card(thread_id, card_id, sink=sink, state="answered", receipt=receipt, answer=answer, actions=[],
-                                can_reopen=True)
-            self._flow_post_next_question(workflow_id, sink)
-            return {"ok": True}
+            # Before the build there is no workflow to change yet: a typed answer counts only as one of the options
+            # (read by code, or by the model when code can't place it). Anything else stays open with a reason.
+            from conxa_compile.conversation.clarify import adds_nothing, answer_from_words, is_safety_question, words_unusable
+
+            text = str(body.get("custom_text") or "")
+            why = words_unusable(question, text)
+            words_answer = None if why else answer_from_words(question, text)[0]
+            if words_answer is None and not why and not question.get("multi") and not is_safety_question(question):
+                try:
+                    self._install_proxy_router(sink=sink, usage_class="ai_credits")
+                    pick = harness.map_free_text_to_choice(question, text.strip())
+                except Exception:  # noqa: BLE001 -- unclear is the safe answer
+                    pick = None
+                choice = next((c for c in question.get("choices") or [] if c.get("id") == pick), None)
+                # Only an option that holds every word of the answer: nothing the person said is dropped.
+                words_answer = {"choice": pick} if choice is not None and adds_nothing(text, choice) else None
+            if words_answer is None:
+                why = why or ("That isn’t one of the options, and nothing is built yet that Studio could change for it. "
+                              "Pick the closest option now. Once the workflow is built, type what you want in the chat "
+                              "and Studio will offer the change for you to apply.")
+                harness.update_card(thread_id, card_id, sink=sink, state="failed", error=why)
+                return {"ok": False, "code": "answer_unclear", "message": why}
+            action, body = "choose", words_answer
         if action not in ("choose", "retry"):
             raise _CommandError("card_action_unsupported", f"A question can’t “{action}”.")
         answer = {"choice": body.get("choice")} if body.get("choice") else {"selected": list(body.get("selected") or [])}

@@ -127,3 +127,16 @@ def test_same_entries_also_fixes_a_check_elsewhere_that_names_a_value():
     last_key = [o for o in ops if o["op"] == "patch"][-1]
     assert last_key["patch"]["validation"]["assertions"][0]["target"] == "E3"
     assert "last_name_3" in ops[-1]["ids"]
+
+
+def test_two_different_boxes_that_share_an_element_hash_are_not_a_repeat():
+    """WF-5: a name box and an email box with no distinguishing attributes got the same element hash, and Studio
+    asked "You entered 2 items the same way, each with a different full name"."""
+    def box(action, css, seq=None):
+        return {"action": {"action": action}, "identity_bundle": {"stable_hash": "same"}, "source_event": seq,
+                "target": {"css": css}}
+    steps = [box("focus", "#userName"), box("type", "#userName", 1), box("focus", "#userEmail"), box("type", "#userEmail", 2)]
+    assert detect_repeated_entries(steps, _typed_of({1: "Ada", 2: "ada@x.test"})) is None
+    # The same box filled twice is still a repeat.
+    same = [box("focus", "#userName"), box("type", "#userName", 1), box("focus", "#userName"), box("type", "#userName", 2)]
+    assert detect_repeated_entries(same, _typed_of({1: "Ada", 2: "Bob"}))["count"] == 2

@@ -371,7 +371,7 @@ export function TestRunCard({ threadId, item }: CardProps) {
             <p className="text-xs text-[var(--text-meta)]">What the run read back</p>
             <ul className="mt-1 space-y-0.5">
               {Object.entries(item.outputs as Record<string, string>).map(([k, v]) => (
-                <li key={k} className="text-[var(--text-secondary)]"><span className="text-[var(--text-primary)]">{k}</span>: {v}</li>
+                <li key={k} className="text-[var(--text-secondary)]"><span className="text-[var(--text-primary)]">{k}</span>: {typeof v === 'object' ? JSON.stringify(v) : String(v)}</li>
               ))}
             </ul>
           </div>

@@ -25,3 +25,7 @@ Several real sites tripped up Build Studio: a Search click was thrown away, typi
 **Downloading and uploading many files now works on more sites — 2026-11-17**
 After downloading a file, Build Studio sometimes saved your next click twice, so the test failed on a click that no longer made sense. That is fixed. Pages where you choose files first and then press Upload can now pass their test: Studio checks that the files were really chosen, then checks the upload when you press the button. A first passing test also no longer gets thrown away, and a check you type must be something that appears only after the step, not words already on the screen.
 — 2026-11-17
+
+**Studio's questions can't be dodged, and "type your own answer" really does what you ask — 2026-11-18**
+A workflow with unanswered questions could still be test-run from the Publish page, and typing nonsense as an answer marked a question as done, even one about a step that can't be undone. Both are closed now: an open question blocks testing, approving and releasing everywhere. The "type your own answer" box is now a real third choice: Studio turns what you write into a change you can see and apply, and the question only closes once the change is made. Saving an unchanged step no longer resets your approval, a chat rename no longer quietly changes how a step finds its button, and tests keep running while Studio is minimized.
+— 2026-11-18

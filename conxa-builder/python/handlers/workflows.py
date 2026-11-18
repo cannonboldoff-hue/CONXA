@@ -748,6 +748,12 @@ class WorkflowsMixin:
         only_workflow_id = None
         if skill_slug:
             only_workflow_id = self._resolve_workflow_by_skill_slug(workspace_id, skill_slug).id
+        if not payload.get("for_test"):
+            # A release build packs approved workflows; "Ask me" can reopen questions on an approved one.
+            from conxa_core.storage.workflow_store import list_workflows
+
+            self._require_no_unanswered_questions(
+                [w for w in list_workflows(workspace_id) if only_workflow_id in (None, w.id)])
         return build_skill_package(
             workspace_id,
             company_name=display_name,
@@ -1129,6 +1135,9 @@ class WorkflowsMixin:
             raise _CommandError("workflow_not_found", f"No workflow {workflow_id}")
         if not workflow.skill_id:
             raise _CommandError("workflow_not_compiled", "Compile this workflow before testing.")
+        # Every caller (Publish page, group page, the conversation, re-record replay, copilot verify) runs
+        # through here, so this is where an unanswered question blocks a test.
+        self._require_no_unanswered_questions([workflow])
         pack = get_skill_pack(workspace_id)
         if pack is None or pack.build is None:
             raise _CommandError("skill_package_not_built", "Build the skill package before testing its workflows.")
@@ -1140,6 +1149,14 @@ class WorkflowsMixin:
             raise _CommandError(
                 "workflow_stale",
                 "This workflow was edited after the last build. Rebuild the skill package before testing.",
+            )
+        from handlers.test_flow import _built_package_has
+
+        # Otherwise the runtime answers "Skill not found: <slug>. Call list_skills." (WF-5 5.1).
+        if not _built_package_has(pack.build.output_path, workflow.slug):
+            raise _CommandError(
+                "workflow_not_built",
+                f"“{workflow.name}” isn’t in the test copy yet. Test it from its conversation; that builds a fresh copy first.",
             )
 
         sink = _event_sink(rid)

@@ -925,6 +925,12 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
   const assertionsInvalid = !hideSelectorTools && canEdit('validation') && hasInvalidAssertions(assertions)
 
   const onSubmit = methods.handleSubmit(async (values) => {
+    // Nothing edited: no write. A save would send each shown default (a null stored field, a bare action kind) as a
+    // change and revoke the approval for nothing (WF-5). The backend refuses such a no-op too.
+    if (!methods.formState.isDirty) {
+      toast.success('Nothing changed')
+      return
+    }
     try {
       await persistStepValues(values, { silentToast: false })
     } catch {

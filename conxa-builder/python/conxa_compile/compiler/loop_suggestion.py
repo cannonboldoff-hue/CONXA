@@ -218,9 +218,16 @@ def _step_action(step: Step) -> str:
     return action if isinstance(action, str) else str((action or {}).get("action") or "")
 
 
-def repeat_signature(steps: list[Step]) -> list[tuple[str, str]]:
-    """What each step does to which element, without its values: two copies of a form give the same sequence."""
-    return [(_step_action(s), k.rsplit("#", 1)[0]) for s, k in zip(steps, step_keys(steps))]
+def _primary_selector(step: Step) -> str:
+    target = step.get("target") if isinstance(step, dict) else getattr(step, "target", None)
+    sel = target.get("css") if isinstance(target, dict) else getattr(target, "css", "")
+    return str(sel or "")
+
+
+def repeat_signature(steps: list[Step]) -> list[tuple[str, str, str]]:
+    """What each step does to which element, without its values: two copies of a form give the same sequence.
+    The selector is part of it because two plain inputs (a name box, an email box) can share an element hash."""
+    return [(_step_action(s), k.rsplit("#", 1)[0], _primary_selector(s)) for s, k in zip(steps, step_keys(steps))]
 
 
 def _column_name(step: Step, taken: set[str]) -> str:
@@ -251,13 +258,13 @@ def detect_repeated_entries(steps: list[Step], literal_of: Any) -> dict[str, Any
         start = 0
         while start + 2 * block_len <= n:
             block = sig[start:start + block_len]
-            if sig[start + block_len:start + 2 * block_len] != block or any(a in _REPEAT_EXCLUDED for a, _ in block):
+            if sig[start + block_len:start + 2 * block_len] != block or any(a in _REPEAT_EXCLUDED for a, *_ in block):
                 start += 1
                 continue
             count = 2
             while start + (count + 1) * block_len <= n and sig[start + count * block_len:start + (count + 1) * block_len] == block:
                 count += 1
-            offsets = [o for o, (a, _) in enumerate(block) if a in _REPEAT_VALUE_ACTIONS]
+            offsets = [o for o, (a, *_) in enumerate(block) if a in _REPEAT_VALUE_ACTIONS]
             values = {o: [literal_of(steps[start + c * block_len + o]) for c in range(count)] for o in offsets}
             varying = [o for o in offsets if all(v is not None for v in values[o]) and len(set(values[o])) > 1]
             score = (count * block_len, -start, -block_len)
