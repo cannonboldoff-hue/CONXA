@@ -155,7 +155,7 @@ function sweepOldRuns(runsBaseDir, maxAgeMs = RUN_RETENTION_MS, excludeRunId = n
   }
 }
 
-const PAGE_SIZE_MESSAGE = "The test browser is not showing the page at its normal size, so a click could land in the wrong place and this step could not be trusted. Run the test again.";
+const PAGE_SIZE_MESSAGE = "The test browser is not showing the page at its normal size, so a click could land in the wrong place and this step could not be trusted. If Build Studio's window is minimized, bring it back first, then run the test again.";
 // A minimized (or hidden) window leaves the page no size at all: say how to bring it back.
 const PAGE_HIDDEN_MESSAGE = "The window showing the test browser is minimized or hidden, so the page could not be shown and this step could not be trusted. Bring the window back and run the test again.";
 

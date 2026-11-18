@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Error messages now say what to do in plain words — 2026-11-18**
+Some messages that reached the test card were written for an AI helper ("Call list_skills first") or showed an internal word. They now say things like "Studio couldn't find this workflow in its built copy. Choose Build again, then test it", or "bring Build Studio's window back, then run the test again". A test now checks that no message uses developer words.
+— 2026-11-18
+
 **A finished workflow can now be built again, and old buttons no longer linger — 2026-11-18**
 Once a workflow was built, there was no way to build it again from its recording, and a "Confirm" button from earlier could stay on screen after it stopped making sense. Now "Build again" is always offered (it says edits are replaced and a new test is needed), and a button that is no longer valid turns into a short note. The question counter also now counts every question still waiting, so it matches the heading.
 — 2026-11-18

@@ -2249,11 +2249,16 @@ async function _handleTool(name, args, extra) {
 
     } catch (runErr) {
       _phase(`steps_failed:${mapErrorToCode(runErr)}`);
-      if (!runErr.proofPause) { // a parked wait is not a failure
+      // A parked wait is not a failure: a step still working, or a run handed to an agent that asked to go on
+      // (a "someone says yes first" step). Logged as a pause, never as an error.
+      const parkedWait = !!(runErr.proofPause || runErr.spanPause);
+      if (runErr.spanPause) {
+        log("info", "execute_paused", { run_id: _runId, skill: primary.entry.slug, reason: "agent_span" });
+      } else if (!parkedWait) {
         log("error", "execute_failed", { run_id: _runId, skill: primary.entry.slug, error: runErr.message });
         appendRecoveryEvent({ event: "terminal_failure", run_id: _runId, slug: primary.entry.slug, error: runErr.message });
       }
-      if (!runErr.proofPause) _runTracker.emit("wf_fail", {
+      if (!parkedWait) _runTracker.emit("wf_fail", {
         dur: Date.now() - _wfStartAt,
         fsi: runErr.failedAt ?? null,
         fc:  runErr.couldntConfirm ? "couldnt_confirm" : mapErrorToCode(runErr),
