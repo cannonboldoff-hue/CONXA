@@ -673,7 +673,7 @@ def test_a_changed_input_is_asked_about_before_autofix_edits_any_step(env, monke
     q = next(x for x in clarify_store.load(wf.id)["questions"] if x["kind"] == "input_check")
     assert q["status"] == "open" and q["input_ids"] == ["po_number"] and "PO-1" in q["body"] and "PO-44821" in q["body"]
     assert len(_cards(wf.id, "clarify_question")) == 1
-    assert lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"] == ["answer_clarify", "edit"]
+    assert lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"] == ["answer_clarify", "edit", "rebuild"]
 
 
 def test_the_recorded_value_is_not_blamed_so_autofix_runs_as_before(env, monkeypatch):

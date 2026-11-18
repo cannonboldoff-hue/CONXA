@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 44 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
+| BUILD — Build Studio | 45 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 11 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **117** | |
+| **Total** | **118** | |
 
 ---
 
-## BUILD — Build Studio (44 done)
+## BUILD — Build Studio (45 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -774,6 +774,10 @@ inferred from `outer_html`, not read directly.
 - **Category:** Builder (recorder)
 - **Resolution:** Found from a "GitHub to Drive Handoff" recording that kept 9 of ~12 steps (sessions `59dea81a`, `b6ac8844`, `67178545`): `bridge.js` chained every click's report behind one promise that also held the Proof-of-Done progress watch (up to 15 s), and Stop never asked the page to release what it held. Now `finalizeStateAfterSettle` reports the step at once (`uid`/`bridge`/`seq`) and sends state change / post condition / the app's words as `{_amend}` after the settle; the progress watch runs concurrently and arrives as a second amendment, starting only when progress is new since the act. `RecordingSession._apply_amend_sync` merges by `extras.uid` (before the pause and login drops). Stop calls `window.__skillFlush()` in every frame (open watches cut, `post_watch.cut_by_stop`) and drains until every `seq` has arrived (`_STOP_BARRIER_MAX_S` 10 s); `cmd_stop_recording` now snapshots events after the stop. `capture_gaps` (lost step numbers, failed saves; clicks on non-controls diagnostics-only) go to `recorder_diag.json`, and the Studio adds a plain sentence to "Got it" when steps were lost. Tests: 5 new bridge tests, 9 new session tests, 3 handler tests; docs in `TRD.md` and `Backend-Schema.md`.
 - **Not done / open:** not yet re-recorded in the running Studio against Drive (the real-run check in the plan). A frame destroyed before Stop can still lose its very last step without a trace, because a hole in step numbers cannot show a missing final one. The plan's "trusted click matched no control counts as a gap" was narrowed to diagnostics only, since clicks on plain text are normal.
+
+### BUILD-86 — A build refusal whose advice could not be followed
+**Resolved:** 2026-11-18
+The refusal said "Compile the workflow again", but a compiled workflow offered no compile action. A compiled workflow now always offers `rebuild` ("Build again", `conversation/actions.py`, `lifecycle.py`), and the message says: Choose “Build again” for it, or record it again, then build.
 
 ### BUILD-87 — A form field with a good id but no linked label was marked "less certain"
 **Resolved:** 2026-11-18

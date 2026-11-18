@@ -22,6 +22,7 @@ export function ConfirmActionCard({ threadId, item }: CardProps) {
   }
 
   if (state === 'dismissed') return <p className="text-sm text-[var(--text-meta)]">Cancelled — {label.toLowerCase()} didn’t run.</p>
+  if (state === 'expired') return <p className="text-sm text-[var(--text-meta)]">{label} is no longer available — things have moved on.</p>
   if (state === 'running') return <p className="text-sm text-[var(--text-secondary)]">{label}…</p>
   if (state === 'done' || state === 'failed') {
     return <p className="text-sm text-[var(--text-secondary)]">{state === 'failed' ? 'Couldn’t: ' : ''}{String(item.receipt || label)}</p>

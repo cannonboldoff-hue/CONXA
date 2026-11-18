@@ -87,6 +87,7 @@ Each is explained in full in `docs/TRD.md`.
 - The understanding check labels meaning only; code does every rewrite (`parameterize_literal`, and `parameterize_click_text` only on a person's explicit act).
 - Code decides which questions to ask (`conversation/unknowns.py`, `scoring.py`). Popups, irreversible steps and unsafe guesses always ask.
 - Every asked question must be answered: no skip, no defer. An unanswered question blocks test, approve, publish and Build Installer.
+- `derive_lifecycle` is the only workflow state, and every read of it closes Confirm cards whose action it no longer allows (`expire_stale_cards`); a compiled workflow can always be built again (`rebuild`) unless something is running.
 - Chat can only run actions in `lifecycle.allowed_actions`; anything with a side effect waits for a Confirm card (`conversation/actions.py`, mirrored in renderer `lib/actions.ts`).
 
 **Runtime**

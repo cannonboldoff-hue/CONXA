@@ -64,7 +64,7 @@ def _assert_no_account_text(saved_skill: dict[str, Any], workflow_name: str) -> 
             if has_personal_email(text):
                 raise ValueError(
                     f"“{workflow_name}” contains someone’s account details (an email address) in how it finds a button. "
-                    "Compile the workflow again, then build."
+                    "Choose “Build again” for it, or record it again, then build."
                 )
 
 

@@ -143,6 +143,13 @@ def derive_lifecycle(
         else:
             stage, substate, glyph, note, actions = "test", "ready", WARN, "Ready to test", ["test", "edit"]
 
+    # A compiled workflow can always be built again from its recording, unless something is running right now.
+    # (An unanswered question does not stop it: the new build replaces those questions.)
+    if compiled and recorded and not any(rt.get(k) for k in (
+        "compiling", "queued", "understanding", "watching", "testing", "investigating", "recording", "signing_in", "replying",
+    )):
+        actions = actions + ["rebuild"]
+
     # A typed message is still being answered: it may come back as a change card, so nothing may offer
     # a test (or an approval of the version it would change) until the reply and its card are in.
     if rt.get("replying"):
@@ -162,8 +169,39 @@ def derive_lifecycle(
         "glyph": glyph,
         "note": note,
         "allowed_actions": actions,
+        "rev": lifecycle_rev(stage, substate, actions),
         "rows": _rows(wf, auth_missing, rt, cl, recorded, compiled, last_test, signed_off, warnings, open_q),
     }
+
+
+def lifecycle_rev(stage: str, substate: str, actions: list[str]) -> str:
+    """A short fingerprint of what the person may do right now. A card that offers an action is only good while its
+    action is still allowed; when this changes, cards are checked against the new list (``expire_stale_cards``)."""
+    import hashlib
+
+    return hashlib.sha1("|".join([stage, substate, *sorted(actions)]).encode()).hexdigest()[:10]
+
+
+def expire_stale_cards(workflow_id: str, lc: dict[str, Any], items: list[dict[str, Any]]) -> int:
+    """Close every open Confirm card whose action the lifecycle no longer allows ("things moved on"). One place for
+    this, read wherever the lifecycle is read, so no handler has to remember to close a card it posted earlier.
+    Returns how many were closed. Never raises."""
+    from conxa_compile.conversation import thread_store as ts
+
+    allowed = set(lc.get("allowed_actions") or [])
+    closed = 0
+    for card in items:
+        if card.get("kind") != "card" or card.get("card_type") != "confirm_action" or card.get("state") != "open":
+            continue
+        if str(card.get("action") or "") in allowed:
+            continue
+        try:
+            ts.revise_card(f"wf:{workflow_id}", str(card.get("card_id")), state="expired",
+                           note="This is no longer available — things have moved on since it was offered.")
+            closed += 1
+        except Exception:  # noqa: BLE001 — a card that cannot be closed must not hide the lifecycle
+            pass
+    return closed
 
 
 def _rows(wf: Any, auth_missing: bool, rt: dict[str, Any], cl: dict[str, Any], recorded: bool,
@@ -238,13 +276,15 @@ def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
     # The thread file is read and folded once: the screen asks for the lifecycle after every new
     # chat item, so reading it per helper made the cost grow with the length of the chat.
     items = _thread_items(workflow.id)
-    return derive_lifecycle(
+    lc = derive_lifecycle(
         workflow,
         auth_missing=auth_missing,
         clarify=clarify,
         runtime=runtime_state.get_flags(workflow.id),
         pending_changes=_pending_changes(items),
     )
+    expire_stale_cards(workflow.id, lc, items)
+    return lc
 
 
 def _thread_items(workflow_id: str) -> list[dict[str, Any]]:

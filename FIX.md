@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A finished workflow can now be built again, and old buttons no longer linger — 2026-11-18**
+Once a workflow was built, there was no way to build it again from its recording, and a "Confirm" button from earlier could stay on screen after it stopped making sense. Now "Build again" is always offered (it says edits are replaced and a new test is needed), and a button that is no longer valid turns into a short note. The question counter also now counts every question still waiting, so it matches the heading.
+— 2026-11-18
+
 **Studio asks "can this be undone?" by understanding the step, not by its button's words — 2026-11-18**
 Before, a button called "Continue" was waved through and one called "Finish" could trigger a needless warning, because Studio only looked at the words. Now the same review that reads your recording also judges what each step really does, and when it is unsure it plays safe and asks you. The results page now also tells apart words the page showed from the names of buttons, so "how we know it worked" offers real results first and unticked options really disappear.
 — 2026-11-18

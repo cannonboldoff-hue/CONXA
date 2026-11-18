@@ -641,7 +641,9 @@ class CompileFlowMixin:
         live = ts.get_card(_thread(workflow_id), q["card_id"]) if q.get("card_id") else None
         if live and live.get("state") in ("open", "failed", "applying"):
             return  # its card is already on screen: asking again would only stack a second copy
-        asked = [x for x in questions if x.get("status") not in ("queued", "assumed", "superseded") and not x.get("carried")]
+        # Every question the person will have to answer, the queued ones too: the same count the header ("N questions
+        # need you") uses, so the two never disagree and the total only grows when a new question really appears.
+        asked = [x for x in questions if x.get("status") not in ("assumed", "superseded") and not x.get("carried")]
         number = asked.index(q) + 1
         card = harness.post_card(
             _thread(workflow_id), "clarify_question", "open", sink=sink, refs={"question_id": q["id"]},

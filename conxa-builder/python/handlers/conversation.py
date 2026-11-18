@@ -300,6 +300,7 @@ class ConversationMixin:
             "workflow": {"id": workflow.id, "name": workflow.name, "task_description": workflow.task_description},
             "skill_id": skill_id,
             "lifecycle": lifecycle_for_workflow(workflow),
+            "lifecycle_now": lambda: lifecycle_for_workflow(get_workflow(ident) or workflow),
             "load_digest": load_digest,
             "load_clarify": lambda: clarify_store.load(workflow.id),
             "gate_proposals": gate,
@@ -461,6 +462,9 @@ class ConversationMixin:
         if action == "compile":
             self._flow_start_compile(workflow_id)
             return {"ok": True, "message": "Compiling the recording."}
+        if action == "rebuild":
+            self._flow_start_compile(workflow_id)
+            return {"ok": True, "message": "Building it again from the recording. You’ll need to test it again."}
         if action == "answer_clarify":
             self._flow_post_next_question(workflow_id, sink, promote_assumed=True)
             return {"ok": True, "message": "Here’s the next question."}

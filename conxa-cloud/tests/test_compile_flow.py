@@ -618,7 +618,7 @@ def test_questions_past_the_cap_are_queued_then_asked_without_being_requested(en
     assert [q["status"] for q in data["questions"]] == ["open"] * 5 + ["queued"] * 3
     assert clarify_store.summary(wf.id)["unanswered"] == 8        # held back is not answered
     first = _cards(wf.id, "clarify_question")[0]
-    assert first["total"] == 5
+    assert first["total"] == 8  # every question still to answer, held-back ones too: the header counts the same
     from conxa_core.storage.workflow_store import get_workflow
 
     for _ in range(5):

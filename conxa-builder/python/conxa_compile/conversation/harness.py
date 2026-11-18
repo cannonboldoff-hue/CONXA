@@ -198,6 +198,7 @@ def run_turn(
     workflow: dict[str, Any] | None = None,
     skill_id: str | None = None,
     lifecycle: dict[str, Any] | None = None,
+    lifecycle_now: Callable[[], dict[str, Any] | None] | None = None,
     group_names: list[str] | None = None,
     card_executor: CardExecutor | None = None,
     gate_proposals: Callable[[list[dict[str, Any]]], list[dict[str, Any]]] | None = None,
@@ -239,7 +240,7 @@ def run_turn(
                 return _run_locked(
                     thread_id=thread_id, kind=kind, message=message, sink=sink, turn_id=turn_id, cancel=cancel,
                     anchor=anchor, card_id=card_id, choice=choice, action=action, workflow=workflow, skill_id=skill_id,
-                    lifecycle=lifecycle, group_names=group_names, card_executor=card_executor,
+                    lifecycle=lifecycle, lifecycle_now=lifecycle_now, group_names=group_names, card_executor=card_executor,
                     gate_proposals=gate_proposals, load_digest=load_digest, load_clarify=load_clarify,
                     last_test_failed=last_test_failed, push=push, new_items=new_items,
                     flow_executor=flow_executor, workflows=workflows, context_sections=context_sections,
@@ -265,7 +266,15 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
                 last_test_failed: bool, push: Callable[[dict[str, Any]], dict[str, Any]],
                 new_items: list[dict[str, Any]], flow_executor: FlowExecutor | None = None,
                 workflows: list[dict[str, Any]] | None = None,
-                context_sections: list[tuple[str, str]] | None = None, hidden: bool = False) -> dict[str, Any]:
+                context_sections: list[tuple[str, str]] | None = None, hidden: bool = False,
+                lifecycle_now: Callable[[], dict[str, Any] | None] | None = None) -> dict[str, Any]:
+    # The thread lock may have made this turn wait behind another (a compile that was starting, a test): the
+    # lifecycle the caller read before the wait is old by now, and chat must answer from what is true now.
+    if lifecycle_now is not None:
+        try:
+            lifecycle = lifecycle_now() or lifecycle
+        except Exception:  # noqa: BLE001 — the caller's copy is still better than failing the turn
+            pass
     if sink is not None:
         sink({"phase": "thread_turn", "thread_id": thread_id, "turn_id": turn_id, "status": "started"})
 
