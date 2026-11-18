@@ -317,8 +317,24 @@ def test_route_stops_when_total_budget_exhausted(monkeypatch):
 
     import time as time_mod
 
+    # A fake clock the slow attempt advances itself: no real waiting, no dependence on the OS timer tick.
+    class _FakeTime:
+        now = 1000.0
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, secs):
+            self.now += secs
+
+        def __getattr__(self, name):
+            return getattr(time_mod, name)
+
+    fake_time = _FakeTime()
+    monkeypatch.setattr("app.llm.router.time", fake_time)
+
     def fake_urlopen(req, timeout=None):
-        time_mod.sleep(0.06)  # first attempt alone exceeds the whole budget
+        fake_time.now += 0.06  # first attempt alone exceeds the whole budget
         raise TimeoutError("timed out")
 
     monkeypatch.setattr("app.llm.router.request.urlopen", fake_urlopen)

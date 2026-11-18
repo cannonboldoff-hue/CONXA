@@ -457,7 +457,7 @@ Every updateable component (host exe, app layer, each skill) is a **versioned di
 │       │                              manifest.json (carries group_id), validation.json, version.json
 │       └── current
 ├── resume/{run_id}.cmd                hand-over resume drops (§11.4)
-└── logs/runtime.log, recovery.log     JSONL, rotated at 10 MB
+└── logs/runtime.log, recovery.log     JSONL, rotated at 10 MB (recovery.log keeps 3 older files). recovery.log is the local-only run record: every line carries run_id/step_key; it holds resolver scores and the full proof verdict. The cloud tracker never reads it.
 
 %APPDATA%/Conxa/                       CONXA_DATA_DIR
 ├── cache/sessions/{co}__{appId}_state.json       AES-256-GCM storageState (§5.3)

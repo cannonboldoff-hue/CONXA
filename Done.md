@@ -9,16 +9,16 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | BUILD — Build Studio | 43 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80 |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 9 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14 |
+| RT — Runtime | 11 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
-| TEST — Testing & Cleanup | 3 | TEST-6, 14, 15 |
+| TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **113** | |
+| **Total** | **116** | |
 
 ---
 
@@ -1307,7 +1307,7 @@ inferred from `outer_html`, not read directly.
 - **Category:** Cloud
 ---
 
-## RT — Runtime (9 done)
+## RT — Runtime (11 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1425,6 +1425,10 @@ Updater.md` §1.3.
 - **Category:** Runtime
 
 ---
+
+### RT-16 / RT-17 — The local run record
+**Resolved:** 2026-11-18
+`recovery.log` is now the local record of a run: `recovery_log.js::enterStepScope` (called per step from `run.js::executeOneStep`) stamps `run_id`, `slug`, `step_index` and `step_key` on every line written while that step runs; `resolution.js` writes a `resolve` line (winner's score and margin over the runner-up, or the tied candidates, per-signal match counts) and `run.js::proveStep` a `proof` line (verdict, rung, every check's witness and answer). Rotation keeps three older files. The cloud tracker is unchanged; `test_recovery_log_local_record.js` fails if a `tracker.emit` call ever carries `checks`, `tied`, `signals` or `candidates`. Leftover: RT-17b in `TODO.md`.
 
 ## PROD — Product (4 done)
 
@@ -1556,7 +1560,7 @@ Updater.md` §1.3.
 
 ---
 
-## TEST — Testing & Cleanup (3 done)
+## TEST — Testing & Cleanup (4 done)
 
 ### TEST-6 — Remove dead `refreshSession()` from `runtime/auth_manager.js`
 **Resolved:** 2026-08-17
@@ -1572,6 +1576,10 @@ Updater.md` §1.3.
 ### TEST-15 — Two long-standing failing tests (BUILD-73 / TEST-13): router backoff and the test-inputs card
 **Resolved:** 2026-11-15
 `test_llm_router_backoff::test_waits_for_soonest_cooldown_then_succeeds`: the router slept once and re-picked once; a Windows sleep can wake one 15.6 ms clock tick early, so every entry still read as cooled and the request gave up. It now keeps waiting out the remainder inside the same wait budget. `test_test_flow::test_prepare_prefills_recorded_values_and_names_what_cant_be_undone` asserted that asking for the inputs card again reuses the open card; since 2026-11-02 (`fd600d9`) it deliberately replaces it so "Test it" visibly does something, so the test now asserts that.
+
+### TEST-FLAKE — Two timing-based tests failed about 1 run in 3
+**Resolved:** 2026-11-18
+`test_route_stops_when_total_budget_exhausted` now runs on a fake clock (no real wait, no OS timer tick); `test_native_input_records_single_debounced_type` uses a 400 ms debounce and waits for the event instead of a fixed 200 ms. Five runs in a row pass.
 
 ## REC — Recorder (1 done)
 

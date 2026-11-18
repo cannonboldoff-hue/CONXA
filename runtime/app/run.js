@@ -25,7 +25,7 @@ const { evalOn, countOn, EVAL_TIMED_OUT } = require("./page_eval");
 const { SIGN_IN_PAGE_RE, SSO_HOP_RE, pathOf } = require("./login_paths");
 const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs");
 
-const { appendRecoveryEvent } = require("./recovery_log");
+const { appendRecoveryEvent, enterStepScope } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
 const { MAX_CALL_DEPTH } = require("./call_workflow");
 const fork = require("./fork");
@@ -563,6 +563,11 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     si: i, rung: j.rung, v: j.verdict,
     w: [...new Set(checks.filter((c) => c.answer === "yes").map((c) => c.witness))],
   });
+  // The full verdict stays on this computer (RT-16): which check answered what, at which rung.
+  appendRecoveryEvent({
+    event: "proof", verdict: j.verdict, rung: j.rung, required, move: move.do,
+    checks: checks.map(({ id, rung, witness, role, answer }) => ({ ...(id ? { id } : {}), rung, witness, ...(role === "veto" ? { role } : {}), answer })),
+  });
 
   if (move.do === "continue") {
     if (move.note) {
@@ -713,6 +718,14 @@ async function executeOneStep(ctx, state, steps, i) {
   if (!state.stepPath) state.stepPath = [];
   state.stepPath.push(i);
   const startedAt = Date.now();
+  // Every local log line written while this step runs carries who it belongs to (recovery_log.js).
+  const stepNow = steps[i] || {};
+  enterStepScope({
+    run_id: (ctx.runCtx && ctx.runCtx.runId) || undefined,
+    slug: ctx.slug,
+    step_index: i,
+    ...(stepNow.source_step_key ? { step_key: stepNow.source_step_key } : {}),
+  });
   try {
     return await runStepFrame(ctx, state, steps, i, frame);
   } catch (e) {

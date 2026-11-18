@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A run now leaves a full record on the computer that ran it — 2026-11-18**
+When a workflow failed on someone's computer, the notes it left behind were too thin to say why. Each run now writes down, for every step, how sure it was about the right button and which checks proved the step worked. These notes stay on that computer and are not sent to Conxa Cloud. Two tests that failed now and then for no real reason were also made steady.
+— 2026-11-18
+
 **A fuller record of each run is now on the to-do list — 2026-11-18**
 When a workflow runs on a customer's computer, the local record of what went wrong is thin, so it is hard to see exactly what happened. We added a task to make that record detailed, kept only on the computer. What is sent to Conxa Cloud stays small and limited. This lets us find the cause of a problem from one file without sending private details away.
 — 2026-11-18

@@ -7,6 +7,7 @@ const { resolve: resolveSignals, scoreCandidate, DEFAULT_UNIQUE_MARGIN, DEFAULT_
 const { gatherCandidates, bundleFingerprint, toLocator } = require("./resolve_adapter");
 const { STALE_RE } = require("./recovery");
 const { interpolate } = require("./interpolate");
+const { appendRecoveryEvent } = require("./recovery_log");
 const {
   envNumber,
   VIRTUAL_SCROLL_ENABLED,
@@ -323,6 +324,16 @@ async function resolveStep(page, step, inputs, scrollState) {
       result = resolveSignals(signals, fp, { queryAll: sel => map[sel] || [] }, {});
     }
   }
+  // What the resolver weighed stays on this computer (RT-17): the winner's score and its margin over the
+  // runner-up, or the tied candidates, never page text beyond a short element name.
+  appendRecoveryEvent({
+    event: "resolve",
+    outcome: result && result.node ? "found" : result && result.ambiguous ? "ambiguous" : "miss",
+    ...(result && result.node ? { score: Number(result.score.toFixed(2)), margin: Number(result.margin.toFixed(2)), signal: result.signalUsed && result.signalUsed.selector } : {}),
+    unique_margin: DEFAULT_UNIQUE_MARGIN,
+    ...(result && result.tied ? { tied: result.tied } : {}),
+    signals: signals.map(s => ({ selector: s.selector, matches: (map[s.selector] || []).length })),
+  });
   if (result && result.node && result.node._loc) {
     return result.node._loc;
   }

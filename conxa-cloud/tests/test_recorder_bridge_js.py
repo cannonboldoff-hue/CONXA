@@ -137,11 +137,12 @@ def _action_events(page: Page, action: str) -> list[dict]:
 
 
 def test_native_input_records_single_debounced_type(page: Page) -> None:
-    _install_bridge(page, '<input id="email" name="email" aria-label="Email" />')
+    # Debounce wider than any cold-start gap between keystrokes; wait for the event, not a fixed time.
+    _install_bridge(page, '<input id="email" name="email" aria-label="Email" />', {"input_debounce_ms": 400})
 
     page.click("#email")
     page.keyboard.type("person@example.com")
-    page.wait_for_timeout(200)
+    page.wait_for_function("() => window.__events.some((e) => e.action.action === 'type')", timeout=5000)
 
     events = _type_events(page)
     assert len(events) == 1

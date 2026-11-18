@@ -1,27 +1,47 @@
 "use strict";
-// Recovery log — the append-only JSONL audit of every cascade event, extracted
-// verbatim from run.js. Rotates at 10 MB, never throws (a logging failure must
-// not break an in-flight recovery).
+// Recovery log — the append-only JSONL record of a run, kept on this computer only (RT-16/17).
+// It is the full local record: every line carries run_id / slug / step when a run is in scope, so a
+// run can be rebuilt from it alone. The cloud tracker (tracker.js) gets a small subset and never
+// reads this file. Rotates at 10 MB over three files, never throws (a logging failure must not
+// break an in-flight recovery).
 const fs   = require("fs");
 const path = require("path");
+const { AsyncLocalStorage } = require("async_hooks");
 
 const CONXA_DIR = process.env.CONXA_DIR || require("./host_bridge").env().conxaDir;
 const RECOVERY_LOG = path.join(CONXA_DIR, "logs", "recovery.log");
 const RECOVERY_LOG_MAX = 10 * 1024 * 1024;
+const RECOVERY_LOG_KEEP = 3; // recovery.log.1 .. .3
+
+// Who a line belongs to. Set once per step by run.js (enterStepScope); every append made while that
+// step runs, however deep in the call chain, picks it up. A run's own fields win over the scope.
+const scope = new AsyncLocalStorage();
+
+function enterStepScope(fields) {
+  const prev = scope.getStore() || {};
+  scope.enterWith({ ...prev, ...fields });
+}
+
+function rotate() {
+  if (!fs.existsSync(RECOVERY_LOG) || fs.statSync(RECOVERY_LOG).size <= RECOVERY_LOG_MAX) return;
+  for (let n = RECOVERY_LOG_KEEP; n >= 2; n--) {
+    const from = `${RECOVERY_LOG}.${n - 1}`;
+    if (fs.existsSync(from)) fs.renameSync(from, `${RECOVERY_LOG}.${n}`);
+  }
+  fs.renameSync(RECOVERY_LOG, `${RECOVERY_LOG}.1`);
+}
 
 function appendRecoveryEvent(event) {
   try {
     fs.mkdirSync(path.dirname(RECOVERY_LOG), { recursive: true });
-    if (fs.existsSync(RECOVERY_LOG) && fs.statSync(RECOVERY_LOG).size > RECOVERY_LOG_MAX) {
-      fs.renameSync(RECOVERY_LOG, `${RECOVERY_LOG}.1`);
-    }
-    fs.appendFileSync(RECOVERY_LOG, `${require("./redact").scrubLine(JSON.stringify({ ts: new Date().toISOString(), ...event }))}\n`);
+    rotate();
+    const line = { ts: new Date().toISOString(), ...(scope.getStore() || {}), ...event };
+    fs.appendFileSync(RECOVERY_LOG, `${require("./redact").scrubLine(JSON.stringify(line))}\n`);
   } catch (_) {}
 }
 
-// BUILD-26 stage (a1) — the copilot's recovery-trail evidence. Events carry no run_id (most
-// cascade call sites only know slug/step_index), so this filters by slug plus a ts floor instead
-// of threading run_id through ~25 call sites for one reader. Caps at 200 matches, newest last.
+// BUILD-26 stage (a1) — the copilot's recovery-trail evidence. Filters by slug plus a ts floor.
+// Caps at 200 matches, newest last.
 function readRecentEvents(slug, sinceTs) {
   try {
     if (!fs.existsSync(RECOVERY_LOG)) return [];
@@ -42,4 +62,4 @@ function readRecentEvents(slug, sinceTs) {
   }
 }
 
-module.exports = { CONXA_DIR, RECOVERY_LOG, RECOVERY_LOG_MAX, appendRecoveryEvent, readRecentEvents };
+module.exports = { CONXA_DIR, RECOVERY_LOG, RECOVERY_LOG_MAX, RECOVERY_LOG_KEEP, appendRecoveryEvent, enterStepScope, readRecentEvents };
