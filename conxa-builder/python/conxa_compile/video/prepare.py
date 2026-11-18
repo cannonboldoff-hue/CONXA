@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,10 @@ RING_BEFORE_MS, RING_AFTER_MS = 100, 500
 
 TYPED_ACTIONS = {"type", "fill"}
 CLICK_ACTIONS = {"click", "dblclick", "right_click", "set_checkbox", "set_radio"}
+
+
+# How long to wait for the recorder to finish writing videos.json (see prepare_video).
+VIDEOS_WAIT_S = 30.0
 
 
 class NoVideoError(RuntimeError):
@@ -344,6 +349,13 @@ def prepare_video(
                                  int(meta["duration_ms"]), blur_all, True)
 
     videos_path = session_dir / "videos.json"
+    # The recorder writes videos.json when it finishes closing the page recordings, which can lag the moment the
+    # person pressed Finish (a long recording is still being written out). Wait for it rather than call the
+    # recording empty; a session that really has none still ends in NoVideoError.
+    waited = 0.0
+    while not videos_path.is_file() and waited < VIDEOS_WAIT_S:
+        time.sleep(0.5)
+        waited += 0.5
     if not videos_path.is_file():
         raise NoVideoError("session has no videos.json")
     videos = json.loads(videos_path.read_text(encoding="utf-8"))

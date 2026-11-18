@@ -2285,6 +2285,8 @@ class RecordingSession:
         # Dedup fast path: same short signature as last action → reuse ref.
         if dom_sig_short and dom_sig_short == getattr(self, "_last_dom_sig_short", ""):
             return {
+                "captured_ms": int(time.time() * 1000),
+                "doc_id": getattr(self, "_last_snapshot_doc_id", ""),
                 "ref": self._last_snapshot_ref,
                 "dom_hash": self._last_snapshot_hash,
                 "dom_path": snapshot_store.relative_blob_path(self.session_id, self._last_snapshot_hash, "html.gz") if self._last_snapshot_hash else None,
@@ -2292,11 +2294,17 @@ class RecordingSession:
             }
 
         # Capture full HTML.
+        captured_ms = int(time.time() * 1000)
         try:
             html = page.content()
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"dom_snapshot_error: {exc!s}")
             return {}
+        try:
+            doc_id = str(page.evaluate("() => window.__SKILL_DOC_ID__ || ''") or "")
+        except Exception:  # noqa: BLE001 — a page that cannot be asked: the copy simply carries no document id
+            doc_id = ""
+        self._last_snapshot_doc_id = doc_id
 
         h, _ = snapshot_store.save_dom_snapshot(self.session_id, html or "")
 
@@ -2324,6 +2332,8 @@ class RecordingSession:
             self._last_dom_sig_short = dom_sig_short  # type: ignore[attr-defined]
 
         return {
+            "captured_ms": captured_ms,
+            "doc_id": doc_id,
             "ref": ref,
             "dom_hash": h,
             "dom_path": snapshot_store.relative_blob_path(self.session_id, h, "html.gz"),
@@ -2424,7 +2434,10 @@ class RecordingSession:
                 "dom_hash": str(snapshot_info.get("dom_hash") or ""),
                 "dom_path": snapshot_info.get("dom_path"),
                 "a11y_path": snapshot_info.get("a11y_path"),
+                "captured_ms": snapshot_info.get("captured_ms"),
+                "doc_id": str(snapshot_info.get("doc_id") or ""),
             },
+            "doc_id": str(payload.get("doc_id") or ""),
         }
         # bridge.js's optional observations. `body` is an explicit allow-list, so anything not
         # named here is silently replaced by RecordedEvent's None default — which is exactly what

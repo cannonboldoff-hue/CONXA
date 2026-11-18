@@ -849,3 +849,28 @@ def test_a_popup_without_a_title_is_named_by_its_buttons():
                                "options": [{"id": "yes", "label": "Yes, Delete", "recorded": True}]}, None, None)
     assert q["title"].startswith("A message box with the buttons “No, Cancel” and “Yes, Delete” can pop up here")
     assert "a popup" not in q["title"]
+
+
+def test_typed_words_are_placed_by_the_clock_when_the_recording_has_one(monkeypatch):
+    """The first copy that shows the words was taken after the LAST click (4500 ms), so that click brought them up,
+    although copy order alone would name the click before it."""
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+
+    acts = ["click", "scroll", "click", "click"]
+    press = [1000, 2000, 3000, 4000]
+    looked = [1500, 4500, 4500, 4500]
+    copies = ["before", "late", "late", "late"]
+    events = [{"action": {"action": a, "timestamp": f"1970-01-01T00:00:{p // 1000:02d}Z"},
+               "page": {"url": "https://shop.test/a"}, "extras": {"sequence": i + 1},
+               "snapshot": {"dom_hash": copies[i], "captured_ms": looked[i]}}
+              for i, (a, p) in enumerate(zip(acts, press))]
+    pages = {"before": "<p>Order</p>", "late": "<p>Saved it</p>"}
+    monkeypatch.setattr(se, "read_session_events", lambda _s: events)
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: pages.get(h))
+    from conxa_compile.conversation.clarify import step_where_words_appear
+
+    steps = [_step(a, f"s{i}", source_event=i + 1) for i, a in enumerate(acts)]
+    doc = _doc(steps)
+    doc["meta"]["source_session_id"] = "s1"
+    assert step_where_words_appear(doc, "saved it") == step_keys(steps)[3]

@@ -1081,6 +1081,36 @@ def _press_time_text(ev: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+def _press_ms(ev: dict[str, Any]) -> int | None:
+    from datetime import datetime
+
+    raw = str((ev.get("action") or {}).get("timestamp") or "")
+    try:
+        return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def _cause_by_clock(events: list[dict[str, Any]], pressed: list[int], first: int, without: int) -> int | None:
+    """The press that brought words up, by time; None when the recording carries no clock for it."""
+    def looked_at(i: int) -> int | None:
+        value = (events[i].get("snapshot") or {}).get("captured_ms")
+        return value if isinstance(value, int) else None
+
+    seen = looked_at(first)
+    if seen is None:
+        return None
+    times = {i: _press_ms(events[i]) for i in pressed}
+    if any(t is None for t in times.values()):
+        return None
+    before = [i for i in pressed if times[i] <= seen]
+    if not before:
+        return None
+    clean = looked_at(without) if without >= 0 else None
+    after_clean = [i for i in before if clean is None or times[i] > clean]
+    return (after_clean or before)[-1]
+
+
 def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     """The step after which ``words`` were on the screen while recording (its step key); "" when the saved pages were
     read and none shows them, None when there is no recording to read or no step brought them up, ``ALREADY_SHOWN`` when they
@@ -1093,7 +1123,8 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     sharing it, the words came with that address: their step is the last thing done before it first showed. Otherwise
     it is the last press (click, Enter) after the last copy without the words, up to the first copy with them; with none
     there, the first press after it that still shares that copy; with none at all, the first other action there.
-    shortcut: placed by copy order, not capture time (the recorder saves none); revisit if a check lands one step off."""
+    Placed by the clock when the recording has one (``_cause_by_clock``), by copy order otherwise (recordings made before
+    the recorder stamped each page copy)."""
     from conxa_compile.compiler.navigation_effects import _INTERACTION_ACTIONS
     from conxa_core.storage.session_events import read_session_events
     from conxa_core.storage.snapshots import read_dom_snapshot
@@ -1143,6 +1174,11 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
         upto = [i for i in pressed if i <= first]
         # Late beats early: a check one step late still sees words that stay on the screen; one step early fails.
         cause = upto[-1] if upto else (pressed or acted or [None])[0]
+        # With the clock (the recorder stamps when it looked at the page, and when each press happened) the cause is
+        # the last press made before the first look that shows the words, and after the last look that did not.
+        timed = _cause_by_clock(events, pressed, first, without)
+        if timed is not None:
+            cause = timed
     if cause is None:
         return None  # on screen before anything was done: no step brought them up
     # On the screen already when the person pressed (the recorder describes the press as the page was then: its section

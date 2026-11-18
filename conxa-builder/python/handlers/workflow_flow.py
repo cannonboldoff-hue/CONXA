@@ -290,7 +290,7 @@ class WorkflowFlowMixin:
         session_id = started["session_id"]
         sess = _recorder_registry.get(session_id)
         workflow_id = workflow.id
-        counter = {"n": 0}
+        counter = {"n": 0, "tab": "", "seen_tabs": set()}
 
         hinter = None
         if not variant_of and not segment_from:
@@ -307,6 +307,16 @@ class WorkflowFlowMixin:
             if not by_person(data):
                 return  # the page's own act: never a step, so never shown or counted as captured
             row = describe_event(data)
+            # The compiled workflow gets a "switch tab" step when an action lands on another tab than the one before
+            # it (build.py::_insert_tab_markers); show that here too, so the list matches what was saved.
+            tab_id = str((data.get("tab") or {}).get("id") or "")
+            if tab_id and counter.get("tab") and tab_id != counter["tab"] and tab_id in counter["seen_tabs"]:
+                _emit_event(None, phase="recording_event", workflow_id=workflow_id, session_id=session_id,
+                            row={"sequence": row.get("sequence"), "kind": "other", "text": "Switched to another tab", "value": None, "can_vary": False},
+                            count=counter["n"])
+            if tab_id:
+                counter["tab"] = tab_id
+                counter["seen_tabs"].add(tab_id)
             counter["n"] += 1
             _emit_event(None, phase="recording_event", workflow_id=workflow_id, session_id=session_id,
                         row=row, count=_action_count(sess.snapshot_events()) if sess is not None else counter["n"])

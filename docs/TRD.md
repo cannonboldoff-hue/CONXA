@@ -866,6 +866,8 @@ While a host update is staged but not yet running, the update gate refuses new r
 
 ### 6.1 Capture
 
+**A clock and a document id on every event (W2, 2026-11-18).** `bridge.js` mints one `DOC_ID` per document it lives in; every event carries it as `doc_id`, and the press time is `action.timestamp`. When `session.py::_capture_dom_snapshot_sync` saves (or reuses) a page copy for an event, the event's `snapshot` records `captured_ms` (wall clock when the recorder looked) and `doc_id` (read back from the page). A copy whose `doc_id` differs from the event's was taken after the page changed under the action. Anything that has to say *which action brought something up* uses these (`clarify.py::_cause_by_clock`), never the order of the copies; recordings made before fall back to copy order.
+
 `session.py::RecordingSession` wraps a Playwright context seeded with the group's merged storageState (§5.3.3). By default that is a view in Build Studio's own browser panel (§4.7a, "embedded"); with no panel it is a launched Chromium window. The steps below hold for both; where the embedded path differs (per-page scripts, screencast video, CDP-session cookies) §4.7a says how.
 
 1. `bridge.js` is injected into every frame via `page.addInitScript`. It captures `click`, `dblclick`, `right_click`, `type`, `fill`, `focus`, `select`, `select_option`, `set_checkbox`, `set_radio`, `date_pick`, `drag_drop`, `keyboard_shortcut`, `upload`, `navigate`, `scroll`.

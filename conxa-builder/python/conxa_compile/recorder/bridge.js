@@ -7,6 +7,12 @@
   if (window.__SKILL_BRIDGE_V1__) return;
   window.__SKILL_BRIDGE_V1__ = true;
 
+  // One id per document this bridge lives in. Every event carries it, and the recorder reads it back when it saves a
+  // page copy: a copy whose id differs from the event's was taken after the page changed under the action (a step
+  // that navigated), so nothing on it says what that step did.
+  const DOC_ID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  window.__SKILL_DOC_ID__ = DOC_ID;
+
   const TRACE = !!(typeof window !== "undefined" && window.__SKILL_TRACE__);
 
   // Lightweight trace: fires only when __SKILL_TRACE__ is set.
@@ -1704,6 +1710,7 @@
       anchors,
       shadow_path: shadowPath,
       section_heading: sectionHeading(el),
+      doc_id: DOC_ID,
       visual_placeholder: {
         bbox,
         viewport,

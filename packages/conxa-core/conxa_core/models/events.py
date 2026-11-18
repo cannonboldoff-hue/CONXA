@@ -335,6 +335,8 @@ class SnapshotRef(BaseModel):
     dom_hash: str = ""  # sha256 of full HTML
     a11y_path: str | None = None  # relative blob path
     dom_path: str | None = None   # relative blob path
+    captured_ms: int | None = None  # wall-clock ms when the recorder looked at the page for this event
+    doc_id: str = ""  # the document the recorder saw then (bridge.js DOC_ID); differs from the event's own after a navigation
 
 
 class SurfaceItem(BaseModel):
@@ -383,6 +385,8 @@ class RecordedEvent(BaseModel):
     extras: dict[str, Any] = Field(default_factory=dict)
     frame: FrameContext = Field(default_factory=FrameContext)
     tab: TabContext = Field(default_factory=TabContext)
+    # The document the action happened in (bridge.js DOC_ID). Empty on recordings made before this existed.
+    doc_id: str = ""
 
     # Who caused this event. "script" = the page's own code fired it (el.click(), a dispatched
     # event, a widget clicking its own button; the browser reports ev.isTrusted === false) — not

@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Studio now knows when each page picture was taken — 2026-11-18**
+When you type "how we know it worked", Studio has to work out which click brought those words up. It used to guess from the order of the saved pictures, and could be one step off. Each picture now notes the time it was taken, so the words are tied to the right click. The live list while recording also shows when you switch to another tab.
+— 2026-11-18
+
 **Studio no longer calls a workable recording "failed" — 2026-11-18**
 After recording, Studio could say a workflow had failed when every step could in fact find its button or box, just by a weaker kind of address. It now says "failed" only when a step has no reliable way to find what it clicks. The part of Studio that replays the workflow also checks a box's name and label, so a page in another language is still found.
 — 2026-11-18
