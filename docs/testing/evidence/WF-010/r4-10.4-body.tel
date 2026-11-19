@@ -1,0 +1,8 @@
+run r_mwnuj50s_jjmik
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuj50s_jjmik&conxa_tab=cd5f8929"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 6390}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 347}
+{"e": "wf_ok", "dur": 7397, "tot": 2, "rec": 0, "oc": "done"}

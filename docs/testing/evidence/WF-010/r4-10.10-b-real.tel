@@ -1,0 +1,13 @@
+run r_mwnvik3s_ukmgj
+{"e": "rec_start", "si": 1, "l": 5, "sc": "llm_intent"}
+{"e": "wf_start"}
+{"e": "park_resumed", "si": 1}
+{"e": "fork_observed", "si": 1, "st": "dialog_delete_all_items"}
+{"e": "fork_decided", "si": 1, "st": "dialog_delete_all_items", "opt": "ok", "mode": "run", "src": "policy"}
+{"e": "settle_retry", "si": 0, "waited": 266, "phase": "action", "ok": true}
+{"e": "rec_skip", "si": 0, "why": "destructive"}
+{"e": "repair_event", "step_id": 0, "tier": "L2", "method": "transient", "signal_used": "", "score": null, "margin": null, "stable_hash_match": false, "stable_hash": "h-ok", "drift_hint": "retry-cascade", "app_version_fingerprint": ""}
+{"e": "completion", "si": 0, "mode": "short", "st": "done", "waited": 530}
+{"e": "step_ms", "si": 0, "ms": 1552}
+{"e": "step_ms", "si": 1, "ms": 2102}
+{"e": "wf_ok", "dur": 2271, "tot": 2, "rec": 1, "oc": "done"}

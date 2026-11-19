@@ -1,0 +1,13 @@
+run r_mwnutv5x_wtdoc
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnutv5x_wtdoc&conxa_tab=82b8a66f"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1040}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 150}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 411}
+{"e": "completion", "si": 3, "mode": "full", "st": "done", "waited": 532}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 1567}
+{"e": "wf_ok", "dur": 3720, "tot": 4, "rec": 0, "oc": "done"}

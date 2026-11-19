@@ -30,7 +30,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ✅ passed 2026-11-18 (P-39) | — |
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ✅ passed 2026-11-18 (P-40) | — |
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ✅ passed 2026-11-19 (P-41) | — |
-| WF-10 | Branches and popups: optional, decision, unrecorded | ⏳ | Yes |
+| WF-10 | Branches and popups: optional, decision, unrecorded | ✅ passed 2026-11-20 (P-42; 10.3 on a stand-in, 10.11 guard half not run) | Yes |
 | WF-11 | Loops, inputs and hostile input data | ⏳ | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ⏳ | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ⏳ | Yes (Studio part) |
@@ -305,7 +305,7 @@ no-ops, which must be listed with a reason). **Failures go to:** `recorder/bridg
 
 Identity clues, meaning pass never moves an address (9.2 wording: except a confirmed popup's action/branch/recovery and `signals.semantic.effect_judgement`), blank-space click gets a plain notice (9.3), checks never rely on a selector that must exist (9.4), one date step for a picked date (9.5), typed emails never reach a selector (9.6). Details: [`workflow-handoffs/WF-009.md`](workflow-handoffs/WF-009.md).
 
-## WF-10 — Branches and popups
+## ✅ WF-10 — Branches and popups — passed 2026-11-20 (P-42; 10.3 on a stand-in, 10.11 guard half not run)
 
 **Rules being attacked:** popups never answered on anyone's behalf; branches never spend tokens;
 nothing pauses by default. **Sites:** S1 `/entry_ad`, `/login`, `/notification_message_rendered`,

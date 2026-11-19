@@ -1,0 +1,15 @@
+run r_mwnsuba2_ynfy4
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnsuba2_ynfy4&conxa_tab=c1053cf0"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1157}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 1006}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 2537}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 409}
+{"e": "completion", "si": 4, "mode": "full", "st": "done", "waited": 534}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 1966}
+{"e": "wf_ok", "dur": 7790, "tot": 5, "rec": 0, "oc": "done"}

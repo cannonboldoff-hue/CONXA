@@ -417,6 +417,32 @@ def test_generic_text_click_without_ui_change_is_not_recorded(page: Page) -> Non
     assert _events(page) == []
 
 
+def test_a_short_text_with_its_own_pointing_hand_is_recorded_as_a_click(page: Page) -> None:
+    _install_bridge(page, """
+        <style>#modal .modal-footer p { cursor: pointer }</style>
+        <div id="modal"><div class="modal-footer"><p>Close</p></div></div>
+        <script>document.querySelector('#modal .modal-footer').addEventListener('click', () => {});</script>""")
+
+    page.click("#modal .modal-footer p")
+    page.wait_for_timeout(180)
+
+    events = _action_events(page, "click")
+    assert len(events) == 1
+    assert events[0]["target"]["tag"] == "p"
+    assert page.evaluate("window.__gaps.length") == 0
+
+
+def test_text_that_only_inherits_a_pointing_hand_is_not_recorded(page: Page) -> None:
+    _install_bridge(page, '<div id="card" style="cursor:pointer"><span id="t">Card title</span>'
+                          ' a long description well over forty characters</div>')
+
+    page.click("#t")
+    page.wait_for_timeout(180)
+
+    assert _events(page) == []
+    assert page.evaluate("window.__gaps.length") == 1
+
+
 def test_iframe_sidebar_form_records_when_bridge_runs_as_init_script(browser: Browser) -> None:
     context = browser.new_context()
     init_script = (

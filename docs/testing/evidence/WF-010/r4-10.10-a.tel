@@ -1,0 +1,10 @@
+run r_mwnvfrul_b8ui4
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnvfrul_b8ui4&conxa_tab=6f709bf5"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 124}
+{"e": "fork_observed", "si": 1, "st": "dialog_delete_all_items"}
+{"e": "fork_decided", "si": 1, "st": "dialog_delete_all_items", "mode": "stop", "src": "policy"}
+{"e": "step_fail", "si": 1, "fc": "fork_decision_needed"}
+{"e": "step_ms", "si": 1, "ms": 1115}
+{"e": "wf_fail", "dur": 1698, "fsi": 1, "fc": "unknown"}

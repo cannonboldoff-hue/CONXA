@@ -1128,3 +1128,9 @@ admits what it can't repeat, and keeps secrets off disk.
 9.1 radio options each get their own address; 9.2 the meaning pass moves no address (0 diffs on a 12- and a 14-step compile; only a confirmed popup's action/branch/recovery and the model's undo label may differ); 9.3 a click on blank space gives a plain notice and is not replayed; 9.4 checks are text, not "this element must exist", and a changed page still passes on its real proof; 9.5 a picked date is one step and lands on the right date for four different dates; 9.6 typed emails never reach a selector or package. Each workflow reached Approved and was proven on the live page. Also fixed on the way: a close click gets a required "box is gone" proof (the runtime counts it only if the box was there before), done-when checks sit on the step that opened the box, "can it be undone" is now really asked of the model. Limitation: demoqa's own Close button on the practice form is broken (S3 site note), so that recording ends at Submit. Details: [`workflow-handoffs/WF-009.md`](workflow-handoffs/WF-009.md).
 
 **What this proves Conxa can do now:** the compiler's meaning pass cannot change how a step finds its element, and a date, a radio choice and a closing box are each proven by something that would fail if the action did nothing.
+
+---
+
+## Passed Workflow P-42 — WF-10: branches and popups (2026-11-20)
+
+Optional branches take the arm that matches the page (zero tokens, no recovery), an unanswered decision popup is never answered by the runtime, and a consequential option runs only after author approval. Caveats: 10.3 on a stand-in, 10.11 guard half not run. Detail: [`workflow-handoffs/WF-010.md`](workflow-handoffs/WF-010.md)

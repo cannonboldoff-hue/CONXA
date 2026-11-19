@@ -1,0 +1,17 @@
+run r_mwnsjrfi_0y3zq
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnsjrfi_0y3zq&conxa_tab=9b484230"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1311}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 117}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 91}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 420}
+{"e": "completion", "si": 4, "mode": "full", "st": "done", "waited": 535}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 1811}
+{"e": "tier_ok", "si": 5, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 5, "ms": 5035}
+{"e": "wf_ok", "dur": 9502, "tot": 6, "rec": 0, "oc": "done"}

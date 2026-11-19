@@ -1,0 +1,25 @@
+run r_mwnuaagu_1sd47
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuaagu_1sd47&conxa_tab=b1614793"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 2180}
+{"e": "completion", "si": 1, "mode": "short", "st": "done", "waited": 530}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 1791}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 232}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 538}
+{"e": "completion", "si": 4, "mode": "short", "st": "done", "waited": 531}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 1786}
+{"e": "tier_ok", "si": 5, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 5, "ms": 190}
+{"e": "tier_ok", "si": 6, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 6, "ms": 613}
+{"e": "completion", "si": 7, "mode": "full", "st": "done", "waited": 542}
+{"e": "tier_ok", "si": 7, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 7, "ms": 1635}
+{"e": "tier_ok", "si": 8, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 8, "ms": 210}
+{"e": "wf_ok", "dur": 10362, "tot": 9, "rec": 0, "oc": "done"}

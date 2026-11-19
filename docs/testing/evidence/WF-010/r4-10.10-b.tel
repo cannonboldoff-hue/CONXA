@@ -1,0 +1,10 @@
+run r_mwnvhd2y_0acs2
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnvhd2y_0acs2&conxa_tab=dd6507d6"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 118}
+{"e": "fork_observed", "si": 1, "st": "dialog_delete_all_items"}
+{"e": "fork_decided", "si": 1, "st": "dialog_delete_all_items", "opt": "ok", "mode": "run", "src": "policy"}
+{"e": "step_ms", "si": 1, "ms": 980}
+{"e": "wf_fail", "dur": 1728, "fsi": null, "fc": "unknown"}
+{"e": "park_created", "si": 1, "kind": "guard"}

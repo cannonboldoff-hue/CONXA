@@ -457,6 +457,15 @@
         if (!holder && getComputedStyle(n).cursor === "pointer") return true;
       } catch (_e) {}
     }
+    // Short plain text with its OWN pointing hand (cursor differs from its parent's, so a card's children that merely
+    // inherit it never count), e.g. an ad's <p>Close</p> wired in script. Text-less hand areas (an underlay) stay dropped.
+    try {
+      if (getComputedStyle(n).cursor === "pointer" && n.parentElement && getComputedStyle(n.parentElement).cursor !== "pointer") {
+        const len = (n.innerText || "").trim().length;
+        if (len >= 1 && len <= 40 && !n.parentElement.closest(
+          "button, a[href], input, select, textarea, [role=button], [role=link], [role=menuitem], [role=tab], [role=option]")) return true;
+      }
+    } catch (_e) {}
     return false;
   }
 

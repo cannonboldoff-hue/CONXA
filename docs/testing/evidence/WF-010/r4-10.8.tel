@@ -1,0 +1,10 @@
+run r_mwnv98bi_h8wfb
+{"e": "rec_start", "si": 1, "l": 5, "sc": "llm_intent"}
+{"e": "wf_start"}
+{"e": "park_resumed", "si": 1}
+{"e": "completion", "si": 1, "mode": "full", "st": "handoff", "waited": 0}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 547}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 36}
+{"e": "wf_ok", "dur": 943, "tot": 3, "rec": 0, "oc": "done"}

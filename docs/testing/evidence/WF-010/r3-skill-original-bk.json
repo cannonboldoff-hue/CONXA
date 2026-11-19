@@ -1,0 +1,1067 @@
+{
+  "meta": {
+    "id": "skill_f02fa97d-b837-410d-9e47-97f136b73230",
+    "version": 4,
+    "title": "WF10 branches r3",
+    "created_at": "2026-11-19T16:26:18.059793+00:00",
+    "source_session_id": "f02fa97d-b837-410d-9e47-97f136b73230",
+    "compiler_policy_version": "1.0.0",
+    "compiler_policy_hash": "698b356bf9d7073e",
+    "required_runtime": ">=1.0.0",
+    "structural_fingerprint": {
+      "landmarks": [
+        {
+          "primary_selector": "text=\"Close\"",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Close",
+          "tag": "p"
+        },
+        {
+          "primary_selector": "role=link[name=\"Click here\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Click here",
+          "tag": "a"
+        }
+      ],
+      "landmark_count": 2
+    },
+    "environment": {
+      "locale": "en-US",
+      "timezone": "Asia/Calcutta",
+      "utc_offset_minutes": 330,
+      "viewport": {
+        "w": 1280,
+        "h": 992
+      },
+      "device_pixel_ratio": 1.0000000149011612,
+      "date_format_sample": "1/31/2026",
+      "platform": "Win32"
+    },
+    "compensation_skill": "",
+    "visited_hosts": [
+      "the-internet.herokuapp.com"
+    ]
+  },
+  "inputs": [],
+  "skills": [
+    {
+      "name": "recorded",
+      "steps": [
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "https://the-internet.herokuapp.com/entry_ad",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://the-internet.herokuapp.com/entry_ad"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "https://the-internet.herokuapp.com/entry_ad",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "https://the-internet.herokuapp.com/entry_ad"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open the entry ad demo page",
+          "phase": "",
+          "source_event": null,
+          "video_context": null,
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "if_present"
+          },
+          "intent": "dismiss_if_present",
+          "url": "https://the-internet.herokuapp.com/entry_ad",
+          "target": {
+            "primary_selector": "",
+            "fallback_selectors": []
+          },
+          "signals": {
+            "dom": {},
+            "selectors": {
+              "css": "",
+              "aria": "",
+              "text_based": "",
+              "xpath": ""
+            },
+            "semantic": {
+              "final_intent": "dismiss_if_present",
+              "llm_intent": "dismiss_if_present"
+            },
+            "context": {
+              "page_url": "https://the-internet.herokuapp.com/entry_ad",
+              "page_title": ""
+            },
+            "anchors": [],
+            "visual": {}
+          },
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "timeout": 5000
+            },
+            "success_conditions": {}
+          },
+          "recovery": {
+            "intent": "dismiss_if_present",
+            "final_intent": "dismiss_if_present",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {},
+          "branch": {
+            "steps": [
+              {
+                "action": {
+                  "action": "click"
+                },
+                "intent": "click_target",
+                "url": "",
+                "target": {
+                  "primary_selector": "",
+                  "fallback_selectors": []
+                },
+                "signals": {
+                  "dom": {},
+                  "selectors": {
+                    "css": "",
+                    "aria": "",
+                    "text_based": "",
+                    "xpath": ""
+                  },
+                  "semantic": {
+                    "final_intent": "click_target",
+                    "llm_intent": "click_target"
+                  },
+                  "context": {
+                    "page_url": "",
+                    "page_title": ""
+                  },
+                  "anchors": [],
+                  "visual": {}
+                },
+                "state": {},
+                "value": null,
+                "input_binding": null,
+                "validation": {
+                  "wait_for": {
+                    "type": "none",
+                    "timeout": 5000
+                  },
+                  "success_conditions": {}
+                },
+                "recovery": {
+                  "intent": "click_target",
+                  "final_intent": "click_target",
+                  "anchors": [],
+                  "strategies": [],
+                  "confidence_threshold": 0.85,
+                  "max_attempts": 0,
+                  "require_diverse_attempts": false
+                },
+                "confidence_protocol": {},
+                "decision_policy": {}
+              }
+            ],
+            "timeout_ms": 3000
+          }
+        },
+        {
+          "action": "click",
+          "intent": "close_popup_ad",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://the-internet.herokuapp.com/entry_ad"
+          },
+          "target": {
+            "primary_selector": "text=\"Close\"",
+            "fallback_selectors": [
+              "/html[1]/body[1]/div[2]/div[1]/div[2]/div[2]/div[3]/p[1]"
+            ],
+            "css": "text=\"Close\"",
+            "role": "p",
+            "type": "p",
+            "selector_confidence": 0.85,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Close\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "xpath",
+                "selector": "/html[1]/body[1]/div[2]/div[1]/div[2]/div[2]/div[3]/p[1]",
+                "durability": 0.01,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "p",
+              "tag": "p",
+              "inner_text": "Close",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Source code",
+                "Entry Ad",
+                "THIS IS A MODAL WINDOW"
+              ],
+              "position_hint": {
+                "x_pct": 0.484,
+                "y_pct": 0.818
+              },
+              "section_heading": "This is a modal window"
+            },
+            "stable_hash": "9b745d1180bec7f2de69094d88bdc4f0425a89e1c1c0ab9923e37c5e945faace",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "p",
+              "id": null,
+              "classes": [],
+              "inner_text": "Close",
+              "role": null,
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": null,
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "content_change",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Close\"",
+              "css": "",
+              "xpath": "/html[1]/body[1]/div[2]/div[1]/div[2]/div[2]/div[3]/p[1]"
+            },
+            "semantic": {
+              "normalized_text": "close",
+              "role": "p",
+              "input_type": null,
+              "final_intent": "",
+              "llm_intent": "",
+              "effect_judgement": {
+                "reversible": true,
+                "kind": "other",
+                "confidence": 0.9,
+                "reason": "Closing the popup only hides it and nothing is saved or sent."
+              }
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": null,
+              "page_url": "https://the-internet.herokuapp.com/entry_ad",
+              "page_title": "The Internet",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "close",
+                "relation": "target"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 620,
+                "y": 654,
+                "w": 41,
+                "h": 18
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://the-internet.herokuapp.com/entry_ad",
+              "page_title": "The Internet",
+              "visible_key_elements": [
+                "text=\"Close\"",
+                "#modal > div.modal:nth-of-type(2) > div.modal-footer:nth-of-type(3) > p",
+                "p"
+              ],
+              "important_text_blocks": [
+                "Close"
+              ],
+              "dom_fingerprint": "3569574ec78627d5c3a2bd757b4d53f663a5a98074708c3fe27ab36ded3d0099"
+            },
+            "after": {
+              "url": "https://the-internet.herokuapp.com/entry_ad",
+              "page_title": "The Internet",
+              "visible_key_elements": [
+                "text=\"Close\"",
+                "#modal > div.modal:nth-of-type(2) > div.modal-footer:nth-of-type(3) > p",
+                "p"
+              ],
+              "important_text_blocks": [
+                "Close"
+              ],
+              "dom_fingerprint": "3569574ec78627d5c3a2bd757b4d53f663a5a98074708c3fe27ab36ded3d0099"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Elemental Selenium",
+                "Sauce Labs"
+              ],
+              "control_text": [
+                "Elemental Selenium",
+                "Sauce Labs"
+              ],
+              "state_diff_strength": 0.1,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Elemental Selenium",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "control"
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "close_popup_ad",
+            "final_intent": "close_popup_ad",
+            "anchors": [
+              {
+                "element": "close",
+                "relation": "target"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click Close to dismiss the popup ad",
+          "phase": "cleanup",
+          "source_event": 1,
+          "video_context": {
+            "visible_target": "Close button on the modal window",
+            "screen_before": "A modal window titled 'THIS IS A MODAL WINDOW' is displayed over the Entry Ad page",
+            "screen_after": "The modal window is gone, showing the Entry Ad page content clearly",
+            "purpose": "Dismiss the popup to access the main page content"
+          },
+          "snapshot_ref": "e2222bf2c32547048315f49bf8a25444",
+          "snapshot_dom_hash": "b535cb6f6f4f5dd7011b8b4df2a247ddf8be709120638b0e8a64c767c1eb9b32",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "https://the-internet.herokuapp.com/notification_message_rendered",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://the-internet.herokuapp.com/notification_message_rendered"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "https://the-internet.herokuapp.com/notification_message_rendered",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "https://the-internet.herokuapp.com/notification_message_rendered"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open the notification message page",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "Click here to load a new message link",
+            "screen_before": "The Notification Message page with a link to load a new message",
+            "screen_after": "A blue notification banner appears at the top saying 'Action successful'",
+            "purpose": "Demonstrate the notification message functionality by loading a success message"
+          },
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "click",
+          "intent": "interact_click_here",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://the-internet.herokuapp.com/notification_message_rendered"
+          },
+          "target": {
+            "primary_selector": "role=link[name=\"Click here\"]",
+            "fallback_selectors": [
+              "text=\"Click here\"",
+              "#content > div.example > p > a",
+              "/html[1]/body[1]/div[2]/div[1]/div[1]/p[1]/a[1]"
+            ],
+            "css": "#content > div.example > p > a",
+            "role": "link",
+            "type": "a",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=link[name=\"Click here\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Click here\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=link[name=\"Click here\"] >> right-of=internal:text=\"Source code\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#content > div.example > p > a",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "link",
+              "tag": "a",
+              "inner_text": "Click here",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Source code",
+                "Notification Message"
+              ],
+              "position_hint": {
+                "x_pct": 0.122,
+                "y_pct": 0.398
+              },
+              "section_heading": "Notification Message"
+            },
+            "stable_hash": "d26983f00e64f672f3aae80edfbc7d17096a429ad098bdccb00f8130a88bcb54",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "a",
+              "id": null,
+              "classes": [],
+              "inner_text": "Click here",
+              "role": "link",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": null,
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "none",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Click here\"",
+              "css": "#content > div.example > p > a",
+              "xpath": "/html[1]/body[1]/div[2]/div[1]/div[1]/p[1]/a[1]"
+            },
+            "semantic": {
+              "normalized_text": "click here",
+              "role": "link",
+              "input_type": null,
+              "final_intent": "interact_click_here",
+              "llm_intent": "interact_click_here",
+              "effect_judgement": {
+                "reversible": true,
+                "kind": "other",
+                "confidence": 0.85,
+                "reason": "Clicking the link just loads a new message on the page and can be repeated."
+              }
+            },
+            "context": {
+              "parent": "p",
+              "siblings": [
+                "br:"
+              ],
+              "index_in_parent": 4,
+              "form_context": null,
+              "page_url": "https://the-internet.herokuapp.com/notification_message_rendered",
+              "page_title": "The Internet",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "click here",
+                "relation": "target"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 156,
+                "y": 318,
+                "w": 70,
+                "h": 21
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://the-internet.herokuapp.com/notification_message_rendered",
+              "page_title": "The Internet",
+              "visible_key_elements": [
+                "text=\"Click here\"",
+                "#content > div.example > p > a",
+                "a",
+                "br:"
+              ],
+              "important_text_blocks": [
+                "Click here"
+              ],
+              "dom_fingerprint": "f49c60c675f1d9a146cee3c64f61c5c446d32b0569c943e056d135a8a2ae5dc3"
+            },
+            "after": {
+              "url": "https://the-internet.herokuapp.com/notification_message_rendered",
+              "page_title": "The Internet",
+              "visible_key_elements": [
+                "text=\"Click here\"",
+                "#content > div.example > p > a",
+                "a",
+                "br:"
+              ],
+              "important_text_blocks": [
+                "Click here"
+              ],
+              "dom_fingerprint": "f49c60c675f1d9a146cee3c64f61c5c446d32b0569c943e056d135a8a2ae5dc3"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "interact_click_here",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "interact_click_here",
+            "final_intent": "interact_click_here",
+            "anchors": [
+              {
+                "element": "click here",
+                "relation": "target"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click the link to load a new message",
+          "phase": "act",
+          "source_event": 3,
+          "video_context": {
+            "visible_target": "Click here to load a new message link",
+            "screen_before": "The Notification Message page with a link to load a new message",
+            "screen_after": "A blue notification banner appears at the top saying 'Action successful'",
+            "purpose": "Demonstrate the notification message functionality by loading a success message"
+          },
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        }
+      ]
+    }
+  ],
+  "policies": {
+    "failure_first": true,
+    "stop_on_low_confidence": true
+  },
+  "llm": {
+    "max_calls_per_step": 1,
+    "timeout_ms": 600000
+  },
+  "intent_graph": {
+    "goal": "Close a popup ad and load a new notification message on a demo page.",
+    "steps": [
+      {
+        "index": 0,
+        "intent": "Open the entry ad demo page",
+        "verification_anchor": "entry_ad",
+        "intent_token": "open_entry_ad_page"
+      },
+      {
+        "index": 2,
+        "intent": "Click Close to dismiss the popup ad",
+        "verification_anchor": "Close",
+        "intent_token": "close_popup_ad"
+      },
+      {
+        "index": 3,
+        "intent": "Open the notification message page",
+        "verification_anchor": "notification_message_rendered",
+        "intent_token": "open_notification_message_page"
+      },
+      {
+        "index": 4,
+        "intent": "Click the link to load a new message",
+        "verification_anchor": "Action successful",
+        "intent_token": "click_load_new_message_link"
+      }
+    ],
+    "decision_points": [
+      {
+        "step_index": 1,
+        "description": "The popup ad may not appear on every visit, so it is only closed when it shows up."
+      }
+    ],
+    "expected_end_state": {
+      "description": "The popup ad is closed and a blue banner saying 'Action successful' appears on the notification message page."
+    }
+  },
+  "compile_report": {
+    "status": "stale",
+    "steps_total": 4,
+    "steps_with_warnings": 0,
+    "min_confidence": 0.85,
+    "steps": [],
+    "llm_router_stats": {
+      "provider": "cloud_proxy"
+    },
+    "second_opinion": [
+      {
+        "step_key": "9b745d1180bec7f2de69094d88bdc4f0425a89e1c1c0ab9923e37c5e945faace#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "cleanup",
+        "why": "Dismissing the popup only clears the way to the page content before the real work starts."
+      },
+      {
+        "step_key": "d26983f00e64f672f3aae80edfbc7d17096a429ad098bdccb00f8130a88bcb54#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "This click is the main action of the workflow that loads the new message."
+      }
+    ],
+    "events_total": 3,
+    "for_each_suggestions": []
+  }
+}

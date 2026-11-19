@@ -1,0 +1,9 @@
+run r_mwnsxw2l_yxgmh
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnsxw2l_yxgmh&conxa_tab=ba537096"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 6125}
+{"e": "settle_retry", "si": 1, "waited": 263, "phase": "action", "ok": true}
+{"e": "step_fail", "si": 1, "fc": "timeout"}
+{"e": "step_ms", "si": 1, "ms": 24466}
+{"e": "wf_fail", "dur": 31745, "fsi": 1, "fc": "timeout"}

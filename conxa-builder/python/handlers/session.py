@@ -47,10 +47,13 @@ def by_person(e: Any) -> bool:
                 and not isinstance((e.get("extras") or {}).get("file_pick"), dict))
 
 
-def _empty_reason(events: list[dict[str, Any]]) -> str | None:
+def _empty_reason(events: list[dict[str, Any]], login_drops: int = 0) -> str | None:
     """Why this recording has nothing to build from, in plain words; None when it has something. Drawing on a canvas
     is recorded only so it can be said: a recording of nothing else would build a workflow that draws nothing."""
     if not events:
+        if login_drops:
+            return ("You only signed in. Signing in is saved separately, so it isn't part of a workflow. "
+                    "Sign in first, then record the steps after it.")
         return "No workflow actions were recorded."
     acts = [e for e in events if by_person(e)]
     kind = lambda e: (e.get("action") or {}).get("action") if isinstance(e.get("action"), dict) else e.get("action")  # noqa: E731
@@ -647,7 +650,7 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import remove_variant
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            if (empty := _empty_reason(events)):
+            if (empty := _empty_reason(events, len(getattr(sess, "_login_drops", None) or []))):
                 remove_variant(workflow_id, session_id)
                 raise _CommandError("empty_recording", empty)
             _refresh_group_app_sessions(workflow_id)
@@ -666,7 +669,7 @@ class SessionMixin:
             from conxa_core.storage.workflow_store import clear_recording, get_workflow, save_workflow
 
             workflow_id = _safe_id(workflow_id, "workflow_id")
-            if (empty := _empty_reason(events)):
+            if (empty := _empty_reason(events, len(getattr(sess, "_login_drops", None) or []))):
                 clear_recording(workflow_id)
                 raise _CommandError("empty_recording", empty)
             _refresh_group_app_sessions(workflow_id)

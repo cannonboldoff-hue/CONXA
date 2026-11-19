@@ -44,7 +44,7 @@ def ignored_click_note(result: dict[str, Any]) -> str:
     if n <= 0:
         return ""
     return (f" You also clicked {plural(n, 'time')} on parts of the page that aren't buttons or boxes, like a heading."
-            " Those do nothing, so the workflow won't repeat them.")
+            " Those weren't buttons or boxes, so the workflow won't repeat them.")
 
 
 def plural(n: int, word: str) -> str:

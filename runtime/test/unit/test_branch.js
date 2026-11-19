@@ -168,6 +168,48 @@ test("wait_for_one_of no-ops when not required and no option appears before time
   await assert.doesNotReject(executeStep(page, step, {}));
 });
 
+// Real browsers answer count() after a macrotask, not instantly. A 0 ms probe must still get an answer.
+function slowPage(present) {
+  const clicks = [];
+  return {
+    locator: (sel) => ({
+      count: () => new Promise((r) => setTimeout(() => r(present[sel] ? 1 : 0), 10)),
+      first: () => ({ click: async () => { clicks.push(sel); } }),
+    }),
+    keyboard: { press: async () => {} },
+    _clicks: clicks,
+  };
+}
+
+test("a 0 ms probe still sees an element on a page that answers asynchronously", async () => {
+  assert.strictEqual(await probePresent(slowPage({ "#a": true }), { selector: "#a" }, {}, 0), true);
+});
+
+test("wait_for_one_of on a slow-answering page takes its arm immediately", async () => {
+  const page = slowPage({ "#ok": true });
+  const step = {
+    type: "wait_for_one_of", timeout_ms: 5000, required: true,
+    options: [{ selector: "#err" }, { selector: "#ok", steps: [{ type: "click", selector: "#next" }] }],
+  };
+  const t = Date.now();
+  await executeStep(page, step, {});
+  assert.deepStrictEqual(page._clicks, ["#next"]);
+  assert.ok(Date.now() - t < 1500, "must not wait out the timeout");
+});
+
+test("wait_for_one_of on a slow page: required with no option fails plainly and fast", async () => {
+  const t = Date.now();
+  await assert.rejects(
+    executeStep(slowPage({}), { type: "wait_for_one_of", timeout_ms: 100, required: true, options: [{ selector: "#x" }] }, {}),
+    /none of the candidate selectors appeared/);
+  assert.ok(Date.now() - t < 1500);
+});
+
+test("wait_for_one_of on a slow page: not required falls through", async () => {
+  await assert.doesNotReject(
+    executeStep(slowPage({}), { type: "wait_for_one_of", timeout_ms: 100, options: [{ selector: "#x" }] }, {}));
+});
+
 // ─── variant branch (flow: true) ───────────────────────────────────────────────
 // "Record another way from here": each option is a whole way the rest of the workflow can go. The
 // chosen body runs as real steps, so a failure inside it fails the run (a cookie-banner branch

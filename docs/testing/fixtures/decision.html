@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Decision fixture</title>
+<style>
+  body{font-family:sans-serif;margin:48px}
+  #ask{position:fixed;inset:0;background:rgba(10,10,10,.88);color:#fff;z-index:9999;
+       display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center}
+  #ask button{padding:10px 22px;font-size:15px}
+  #ask.hidden{display:none}
+  #clicklog{position:fixed;top:8px;right:8px;background:#fffa;border:1px solid #888;
+            padding:8px;font-size:12px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+  <h1>Decision fixture</h1>
+  <p>Modes: none = no box; <code>?ask=1</code> = "Delete all items?" box ~1s after load (or on
+     "Show box"); <code>?hidden=1</code> = a present-but-hidden #maybe element (case 10.12).
+     Every click is logged to <code>/__log?&lt;name&gt;</code>.</p>
+  <button id="real">Do the real action</button>
+  <button id="trigger">Show box</button>
+  <button id="maybe" style="display:none">Maybe (hidden)</button>
+  <div id="ask" class="hidden" role="dialog" aria-modal="true">
+    <span>Delete all items?</span>
+    <button id="ask-ok">OK</button>
+    <button id="ask-cancel">Cancel</button>
+  </div>
+  <div id="clicklog">clicked: (this page load)</div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const logEl = document.getElementById("clicklog");
+    function log(name){
+      logEl.textContent += "\n  " + name;
+      new Image().src = "/__log?" + encodeURIComponent("decision:" + name);
+    }
+    const ask = document.getElementById("ask");
+    function show(){ ask.classList.remove("hidden"); log("box-shown"); }
+    if (q.get("ask") === "1") setTimeout(show, 1000);
+    document.getElementById("trigger").addEventListener("click", () => { log("trigger"); if (q.get("ask") === "1") show(); });
+    document.getElementById("real").addEventListener("click", () => log("real"));
+    document.getElementById("maybe").addEventListener("click", () => log("maybe"));
+    document.getElementById("ask-ok").addEventListener("click", () => { log("OK"); ask.classList.add("hidden"); });
+    document.getElementById("ask-cancel").addEventListener("click", () => { log("Cancel"); ask.classList.add("hidden"); });
+    // ?hidden=1 keeps #maybe in the DOM but not visible (display:none above); default also hidden.
+  </script>
+</body>
+</html>

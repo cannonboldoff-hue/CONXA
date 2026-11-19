@@ -1,0 +1,3 @@
+::ffff:127.0.0.1 - - [19/Nov/2026 22:40:54] "GET /__log?decision%3Abox-shown HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [19/Nov/2026 22:42:20] "GET /__log?decision%3Areal HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [19/Nov/2026 22:45:08] "GET /__log?decision%3Abox-shown HTTP/1.1" 404 -

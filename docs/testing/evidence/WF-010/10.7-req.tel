@@ -1,0 +1,14 @@
+run r_mwnsr0cx_65trx
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnsr0cx_65trx&conxa_tab=d6bd3e2f"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1066}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 406}
+{"e": "completion", "si": 2, "mode": "full", "st": "done", "waited": 531}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 1641}
+{"e": "settle_retry", "si": 3, "waited": 291, "phase": "action", "ok": true}
+{"e": "step_fail", "si": 3, "fc": "timeout"}
+{"e": "step_ms", "si": 3, "ms": 4631}
+{"e": "wf_fail", "dur": 8390, "fsi": 3, "fc": "timeout"}

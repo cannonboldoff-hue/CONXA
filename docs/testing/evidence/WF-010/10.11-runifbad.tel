@@ -1,0 +1,10 @@
+run r_mwnt1pm6_ldcnc
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnt1pm6_ldcnc&conxa_tab=337a690e"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 6177}
+{"e": "verify_result", "si": 1, "ok": true, "n": 1, "advFail": 0, "ct": 1}
+{"e": "completion", "si": 1, "mode": "full", "st": "done", "waited": 535}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 2925}
+{"e": "wf_ok", "dur": 9893, "tot": 2, "rec": 0, "oc": "done"}

@@ -1,0 +1,7 @@
+run r_mwnuzgfb_s14tx
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuzgfb_s14tx&conxa_tab=804109a0"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 5131}
+{"e": "step_ms", "si": 1, "ms": 15408}
+{"e": "wf_ok", "dur": 21047, "tot": 2, "rec": 0, "oc": "done"}

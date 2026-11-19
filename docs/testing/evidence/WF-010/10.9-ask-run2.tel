@@ -1,0 +1,9 @@
+{"e": "park_resumed", "si": 1}
+{"e": "settle_retry", "si": 1, "waited": 262, "phase": "action", "ok": true}
+{"e": "rec_skip", "si": 1, "why": "destructive"}
+{"e": "rec_halt", "si": 1, "why": "destructive"}
+{"e": "app_obs", "si": 1, "host": "127.0.0.1", "rt": "/decision.html", "tt": [], "bt": ["OK", "Cancel"], "cl": "decision", "k": 0, "sc": "decision_benign"}
+{"e": "step_fail", "si": 1, "fc": "timeout"}
+{"e": "step_ms", "si": 1, "ms": 19174}
+{"e": "wf_fail", "dur": 19256, "fsi": 1, "fc": "timeout"}
+{"ts":"2026-11-19T17:16:23.123Z","level":"error","msg":"execute_failed","run_id":"r_mwntaglp_6h4q1","skill":"wf10-decision-r3-94560d1d","error":"Step 2 (click) failed: Another element was covering the target, so the click couldn't land. (locator.click: Timeout 2500ms exceeded.)"}

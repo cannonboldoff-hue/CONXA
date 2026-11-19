@@ -1,0 +1,19 @@
+run r_mwns78km_vcnn6
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwns78km_vcnn6&conxa_tab=b78a0b57"}
+{"e": "proof", "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 3897}
+{"e": "proof", "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 254}
+{"e": "proof", "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 2808}
+{"e": "proof", "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 639}
+{"e": "completion", "si": 4, "mode": "full", "st": "done", "waited": 562}
+{"e": "proof", "si": 4, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 2746}

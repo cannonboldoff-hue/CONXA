@@ -1,0 +1,7 @@
+run r_mwnt06tv_pkol2
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnt06tv_pkol2&conxa_tab=0e073572"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1032}
+{"e": "step_ms", "si": 1, "ms": 2}
+{"e": "wf_ok", "dur": 1836, "tot": 2, "rec": 0, "oc": "done"}

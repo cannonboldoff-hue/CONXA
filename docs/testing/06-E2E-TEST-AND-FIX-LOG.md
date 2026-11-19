@@ -1311,3 +1311,6 @@ fixture server's log and files on disk.
 
 ### WF-9 — compiler honesty (2026-11-19)
 PASSED (P-41) after 5 engineering rounds (cause: 4 live retests exposed regressions of earlier fixes and a stale backend). Commit: see `git log` ("WF-9"). Detail: [`workflow-handoffs/WF-009.md`](workflow-handoffs/WF-009.md). Next: WF-10 (not started).
+
+### WF-10 — branches and popups (2026-11-20)
+PASSED (P-42) after 2 engineering rounds (recorder missed script-wired `<p>` controls; `wait_for_one_of` never took an arm on a real browser). Caveats: 10.3 run on a notification stand-in (sign-in pages are never recorded, by design); 10.11 "guard never skipped" half not run. Commit: see `git log` ("WF-10"). Detail: [`workflow-handoffs/WF-010.md`](workflow-handoffs/WF-010.md)

@@ -2,66 +2,14 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**Closing the thank-you box now counts as finished — 2026-11-19**
-The last step of the practice form closes the thank-you box, but the test ended by saying it could not confirm that step, and it called the box a "calendar pop-up". Studio now notes that the box was open and checks that it is gone afterwards, and it names the step from the box's own title. A test of a form that ends by closing a box can now finish cleanly.
-— 2026-11-19
+**Closing a pop-up with a plain "Close" word is now recorded — 2026-11-20**
+Some pop-ups have a "Close" that is just a word, not a button. Studio ignored clicks on it, so a workflow could not learn to close that pop-up, and told you the click "does nothing". Studio now records it, and the note says plainly that it was not a button.
+— 2026-11-20
 
-**The meaning pass can no longer turn a normal button into an optional one — 2026-11-19**
-When the review said a step was not optional, Studio still turned it into a "skip if it is not there" step, for example a calendar's Previous Month arrow. Now a "not optional" answer leaves the step exactly as you recorded it. This keeps the review from changing how a step finds and clicks things.
-— 2026-11-19
+**Optional "if this, do that" steps now pick the right branch — 2026-11-20**
+A step that waits for one of several things (for example a success or an error message) waited the whole time and never took its branch in a real browser. It now looks once straight away and follows the branch that matches the page.
+— 2026-11-20
 
-**Radio buttons in a group can be told apart — 2026-11-19**
-Every choice in a group such as Gender used to be saved with the same address, so a test could not tell Male from Female and stopped. Each choice now keeps its own address, and recordings made before this fix still replay correctly. Pick-one questions now work on forms like this.
-— 2026-11-19
-
-**Picking a date from a calendar is now one step that lands on the right month — 2026-11-19**
-A date picked from a calendar was saved as three loose steps and replayed on the wrong month and year, with the right day number. Studio now keeps it as one date step, reads the month shown at the top correctly, remembers the month and year drop-downs, and refuses to click a day while the calendar shows a different month.
-— 2026-11-19
-
-**A "send" button that could not be undone was clicked again and again — 2026-11-19**
-When the review left a step out of its answers, Studio treated a button like "Send card" as harmless, and a test that failed its check clicked it seven times. A step the review did not judge now counts as one that cannot be undone, and Studio never clicks such a step a second time because a check failed.
-— 2026-11-19
-
-**Clicks on headings and empty space are now mentioned — 2026-11-19**
-If you clicked on a heading or blank part of the page while recording, nothing was said about it. After recording, Studio now tells you how many such clicks it ignored and that the workflow will not repeat them.
-— 2026-11-19
-
-**Personal details no longer travel inside the built workflow's helper notes — 2026-11-19**
-The short descriptions of what was on screen could quote a name or email you had typed, and they were shipped to customers inside the built workflow. Those descriptions now have quoted text, emails and anything with numbers removed before they are saved.
-— 2026-11-19
-
-**Smaller wording fixes — 2026-11-19**
-A date box labelled "Select Date" is now called "date" instead of "due date". A finish check on something you typed now reads "the date of birth you entered appears" and no longer shows doubled quote marks. The helper that rebuilds a recording offline now tells you which settings to use.
-— 2026-11-19
-
-**Studio now really asks the AI whether each step can be undone — 2026-11-19**
-The question "can this be undone?" was listed in the instructions Studio sends when it builds a workflow, but never explained, so the AI never answered it. It is now explained, and the answer is also written onto each step. A "Send card" button is now marked as something that cannot be undone, and Studio asks you about it.
-— 2026-11-19
-
-**A page's changed text no longer becomes a required button check — 2026-11-19**
-After you clicked Submit, words that appeared on the page, like a name, could be saved as a button that must be on the screen afterwards. Unticking it did nothing, so the test kept failing. Those words are now kept only as words to look for.
-— 2026-11-19
-
-**Calendar steps no longer wait forever on an invisible box — 2026-11-19**
-A calendar step could time out because Studio waited for an invisible wrapper around the calendar to appear. It now waits for the month heading. Studio also keeps the date format and the month and year drop-downs it saw while recording, and if it does not know the format it clicks through the calendar instead of typing the date.
-— 2026-11-19
-
-**A date pick is no longer treated as a step that cannot be undone — 2026-11-19**
-Choosing a date only fills a box, like typing. If the AI gave no answer for one, Studio used to treat it as something that cannot be undone and ask about it. It no longer does.
-— 2026-11-19
-
-**You can add a result check to a step that cannot be undone — 2026-11-19**
-Studio refused to save any change to such a step unless it already had a wait, even a change that added the proof that it worked. Now a change that adds a required result check, such as words that must appear, is accepted.
-— 2026-11-19
-
-**Date, choice and tick-box steps no longer trigger "cannot be undone" questions — 2026-11-19**
-Choosing a date, a radio button, a tick box or a dropdown option only fills in a field, like typing. If the AI left one out of its answers, Studio treated it as something that cannot be undone and asked about it. It now leaves these alone; real clicks are still asked about.
-— 2026-11-19
-
-**"What you typed shows on the screen" is now checked at the right moment — 2026-11-19**
-When you chose to check that something you typed appears on screen at the end, Studio put the check on the very last step, which could be the click that closes the box showing it. The check now goes on the step where the words actually appeared, and is only offered if Studio saw those words on a saved page.
-— 2026-11-19
-
-**The "what you typed shows up" check now goes on the right click — 2026-11-19**
-After a form is sent, a thank-you box shows what you typed and then you close it. Studio put the check on the Close click, where the box is already going away. It now puts the check on the click that opened the box, and no longer offers it for a box that was already open or for something you never typed.
-— 2026-11-19
+**Recording only a sign-in now explains itself — 2026-11-20**
+Studio never records sign-in pages on purpose, so a recording of only a sign-in said "No workflow actions were recorded". It now says that the sign-in was left out on purpose.
+— 2026-11-20

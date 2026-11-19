@@ -100,3 +100,10 @@ def test_missing_or_malformed_sidecar_is_no_drops(tmp_path: Path) -> None:
     assert _read_login_drops_sidecar(tmp_path) == []
     (tmp_path / "login_drops.json").write_text("{not json", encoding="utf-8")
     assert _read_login_drops_sidecar(tmp_path) == []
+
+
+def test_a_recording_of_only_a_sign_in_explains_itself() -> None:
+    from handlers.session import _empty_reason
+
+    assert "only signed in" in (_empty_reason([], login_drops=3) or "")
+    assert _empty_reason([]) == "No workflow actions were recorded."

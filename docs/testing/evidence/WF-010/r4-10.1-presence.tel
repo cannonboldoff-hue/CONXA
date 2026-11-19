@@ -1,0 +1,8 @@
+run r_mwnukcrp_isju6
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnukcrp_isju6&conxa_tab=ebd4113d"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 618}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 844}
+{"e": "wf_ok", "dur": 2078, "tot": 2, "rec": 0, "oc": "done"}

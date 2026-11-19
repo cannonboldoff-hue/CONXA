@@ -160,14 +160,20 @@ const NEGATIVE_STABILIZE_MS = 500;
 
 async function pollPositive(checkFn, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
+  // A 0 ms budget means "look once", not "don't look": racing a real browser's answer against an
+  // already-expired timer always loses, so the first look gets a short grace (still bounded).
+  let attemptDeadline = timeoutMs > 0 ? deadline : deadline + ZERO_BUDGET_LOOK_MS;
   for (;;) {
     let result = false;
-    try { result = await withDeadline(checkFn, deadline, false); } catch (_) { result = false; }
+    try { result = await withDeadline(checkFn, attemptDeadline, false); } catch (_) { result = false; }
     if (result) return true;
     if (Date.now() >= deadline) return false;
+    attemptDeadline = deadline;
     await new Promise(r => setTimeout(r, Math.min(VERIFY_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now()))));
   }
 }
+
+const ZERO_BUDGET_LOOK_MS = 1000;
 
 async function pollNegative(checkAbsentFn, timeoutMs) {
   const deadline = Date.now() + timeoutMs;

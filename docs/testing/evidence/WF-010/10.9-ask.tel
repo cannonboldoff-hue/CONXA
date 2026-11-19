@@ -1,0 +1,8 @@
+run r_mwnt98s6_z6sk2
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 1, "missing": 1, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnt98s6_z6sk2&conxa_tab=14801ed4"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 126}
+{"e": "step_ms", "si": 1, "ms": 21}
+{"e": "wf_fail", "dur": 618, "fsi": null, "fc": "unknown"}
+{"e": "park_created", "si": 1, "kind": "guard"}

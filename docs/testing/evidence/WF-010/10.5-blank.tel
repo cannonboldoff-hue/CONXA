@@ -1,0 +1,13 @@
+run r_mwnssssh_d7qad
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnssssh_d7qad&conxa_tab=5f9909f5"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1074}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 173}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 367}
+{"e": "completion", "si": 3, "mode": "full", "st": "done", "waited": 537}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 1731}
+{"e": "wf_ok", "dur": 4283, "tot": 4, "rec": 0, "oc": "done"}

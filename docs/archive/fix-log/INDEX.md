@@ -116,7 +116,8 @@ This index lists every rotated file plus the live one.
 | [`FIX-2026-11-16.md`](FIX-2026-11-16.md) | 19 | End-to-end test campaign fixes for WF-1 and WF-2: forms with an email box can be tested again, and more |
 | [`FIX-2026-11-17.md`](FIX-2026-11-17.md) | 6 | The test plan now tries to break Build Studio on purpose; Deleting a row and saving a form are now checked properly; Long shopping runs: choosing from a dropdown, removing items and "Continue" |
 | [`FIX-2026-11-18.md`](FIX-2026-11-18.md) | 13 | "Sign in and test again" now really asks you to sign in; Error messages say what to do in plain words; A finished workflow can be built again; Studio asks "can this be undone?" by understanding the step |
-| `FIX.md` (live) | — | today's (2026-11-19) entries, not yet rotated |
+| [`FIX-2026-11-19.md`](FIX-2026-11-19.md) | 16 | Compiler honesty round (WF-9) |
+| `FIX.md` (live) | — | today's (2026-11-20) entries |
 
 **Rotation rule:** at the end of each day (or sooner if `FIX.md` exceeds ~800 lines), split by
 each entry's own trailing `— YYYY-MM-DD` date — not a blind line-number cut, since entries are

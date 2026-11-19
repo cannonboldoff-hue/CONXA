@@ -1,0 +1,32 @@
+run r_mwnuh2a6_87lu4
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuh2a6_87lu4&conxa_tab=ad4f9d30"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 1084}
+{"e": "completion", "si": 1, "mode": "short", "st": "done", "waited": 532}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 1439}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 153}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 465}
+{"e": "completion", "si": 4, "mode": "short", "st": "done", "waited": 528}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 1477}
+{"e": "tier_ok", "si": 5, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 5, "ms": 125}
+{"e": "tier_ok", "si": 6, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 6, "ms": 412}
+{"e": "completion", "si": 7, "mode": "short", "st": "done", "waited": 520}
+{"e": "tier_ok", "si": 7, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 7, "ms": 1359}
+{"e": "tier_ok", "si": 8, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 8, "ms": 125}
+{"e": "tier_ok", "si": 9, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 9, "ms": 395}
+{"e": "completion", "si": 10, "mode": "full", "st": "done", "waited": 537}
+{"e": "tier_ok", "si": 10, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 10, "ms": 1366}
+{"e": "tier_ok", "si": 11, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 11, "ms": 113}
+{"e": "wf_ok", "dur": 8803, "tot": 12, "rec": 0, "oc": "done"}

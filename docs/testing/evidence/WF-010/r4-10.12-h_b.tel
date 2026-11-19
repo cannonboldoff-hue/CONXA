@@ -1,0 +1,9 @@
+run r_mwnuxn04_o04oy
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuxn04_o04oy&conxa_tab=b524b878"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 5137}
+{"e": "settle_retry", "si": 1, "waited": 264, "phase": "action", "ok": true}
+{"e": "step_fail", "si": 1, "fc": "selector_missing"}
+{"e": "step_ms", "si": 1, "ms": 35550}
+{"e": "wf_fail", "dur": 41257, "fsi": 1, "fc": "selector_missing"}

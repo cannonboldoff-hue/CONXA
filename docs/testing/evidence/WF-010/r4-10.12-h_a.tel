@@ -1,0 +1,9 @@
+run r_mwnuvsew_d81jq
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 2, "missing": 2, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnuvsew_d81jq&conxa_tab=50f1b76a"}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 94}
+{"e": "settle_retry", "si": 1, "waited": 259, "phase": "action", "ok": true}
+{"e": "step_fail", "si": 1, "fc": "selector_missing"}
+{"e": "step_ms", "si": 1, "ms": 10821}
+{"e": "wf_fail", "dur": 11455, "fsi": 1, "fc": "selector_missing"}

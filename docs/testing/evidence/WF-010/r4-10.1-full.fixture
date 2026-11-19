@@ -1,0 +1,2 @@
+::ffff:127.0.0.1 - - [19/Nov/2026 23:23:13] "GET /__log?still-open HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [19/Nov/2026 23:23:16] "GET /__log?arm-error-x HTTP/1.1" 404 -
