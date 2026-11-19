@@ -1,7 +1,0 @@
-on rc=0
-off rc=0
-steps on/off: 14 15
-source_event keys sample 9
-only in on: []
-only in off: [(7, 'interact_female', 'click')]
-address diffs among matched steps: 0 of 14

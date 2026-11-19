@@ -1,1 +1,0 @@
-Test finished - please check: 'I couldn't confirm that Close the thank-you box finished.' Submit step carries only selector_present [role=dialog]; the four text_present checks sit on the Close step (effects_and_checks.json). Not approved (strict rule).

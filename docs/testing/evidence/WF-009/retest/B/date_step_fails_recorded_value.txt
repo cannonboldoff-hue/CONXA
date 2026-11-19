@@ -1,6 +1,0 @@
-started
-9.7 {"cal":""}
-10.1 {"dob":"19 Nov 2026","cal":""}
-14.8 {"dob":"2026-10-15","cal":"November 2026"}
-MODAL: 
-. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Date of birth: 2026-10-15 · Gender: Female · Last name: Khan · Mobile 10 digits: 9876543210 · Name: Sana · User email: sana.khan.1994@outlook.com | ✕ | Test failed at �

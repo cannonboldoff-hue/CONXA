@@ -1,6 +1,0 @@
-started
-13.9 date field: 19 Nov 2026
-PAUSE before: Click “gender
-22.1 date field: 07 May 2026
-MODAL: Thanks for submitting the form Label Values Student Name Meera Iyer Student Email meera.iyer.2001@gmail.com Gender Male Mobile 9123456780 Date of Birth 07 May,2026 Subjects Hobbies Picture Address State and City Close
-. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Date of birth: 2026-05-07 · Gender: Male · Last name: Iyer · Mobile 10 digits: 9123456780 · Name: Meera · User email: meera.iyer.2001@gmail.com | ✕ | Test failed at “Click Close to dismiss the confirmation box” | 1 min 12 s | The step ran, but the page didn’t end up where it should have. | ● | Open the student registration form page | ● | Click the First Na

@@ -1,1 +1,0 @@
-page error on demoqa Close click: Lr.findDOMNode is not a function; modal stays open; Escape closes it (headless Chromium via runtime playwright, 2026-11-19)

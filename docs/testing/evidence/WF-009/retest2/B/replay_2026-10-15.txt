@@ -1,6 +1,0 @@
-started
-11.9 date field: 19 Nov 2026
-PAUSE before: Click “gender
-19.9 date field: 15 Oct 2026
-MODAL: Thanks for submitting the form Label Values Student Name Sana Khan Student Email sana.khan.1994@outlook.com Gender Female Mobile 9876543210 Date of Birth 15 October,2026 Subjects Hobbies Picture Address State and City Close
-. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Date of birth: 2026-10-15 · Gender: Female · Last name: Khan · Mobile 10 digits: 9876543210 · Name: Sana · User email: sana.khan.1994@outlook.com | ✕ | Test failed at “Click Close to dismiss the co

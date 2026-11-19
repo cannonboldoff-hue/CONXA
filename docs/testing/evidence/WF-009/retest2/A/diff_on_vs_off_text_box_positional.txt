@@ -1,9 +1,0 @@
-off rc=0
-on rc=0
-steps on/off: 12 13
-source_event keys sample 8
-only in on: []
-only in off: [(9, 'interact_permanent_address', 'focus')]
-ADDR DIFF on#8 identity_bundle
-ADDR DIFF on#8 signals
-address diffs among matched steps: 2 of 12

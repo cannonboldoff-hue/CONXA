@@ -1,1 +1,0 @@
-2026-11-19T13:38:48.975Z https://demoqa.com/automation-practice-form :: Thanks for submitting the form | Label	Values | Student Name	Sana Khan | Student Email	sana.khan.1994@outlook.com | Gender	Male | Mobile	9876543210 | Date of Birth	07 May,2026 | Subjects	 | Hobbies	 | Picture	 | Address	 | State and City	 | Close

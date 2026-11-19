@@ -1,1 +1,0 @@
-Replay Male + 2026-05-07: live confirmation box shows Gender Male, Date of Birth 07 May,2026, name/email right. Checks on Submit, none on Close (effects_and_checks.json). Test ended 'Test finished - please check: I couldn't confirm that Close the calendar pop-up finished' (Close click, mislabelled 'calendar pop-up', has no check). Not approved (strict).

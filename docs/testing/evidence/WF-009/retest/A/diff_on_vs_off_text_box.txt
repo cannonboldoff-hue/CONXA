@@ -1,8 +1,0 @@
-rm: cannot remove '/c/Users/kiran/AppData/Local/Temp/claude/76b5041f46a914b2/ec946fa6-bf4f-4b45-844e-5f22bd91784d/scratchpad/home_Ra_on/data/sessions/sessions': Directory not empty
-off rc=0
-on rc=0
-steps on/off: 13 13
-source_event keys sample 7
-only in on: []
-only in off: []
-address diffs among matched steps: 0 of 13
