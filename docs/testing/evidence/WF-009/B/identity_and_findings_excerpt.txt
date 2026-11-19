@@ -1,0 +1,7 @@
+RADIO OPTION SELECTORS (step 7): ['input[name="gender"]', 'input[name="gender"]', 'input[name="gender"]']
+STEP 11 action/branch (meaning pass output): {'action': 'try_dismiss'} {"candidates": ["role=button[name=\"Previous Month\"]", "[aria-label=\"Choose Date\"]"], "timeout_ms": 3000, "fallback_escape": true}
+SO rename_binding name_2 -> last_name | This box is the last name, but its name collides with the first name field's name.
+SO rename_binding name -> first_name | The plain name is unclear next to the second name box; this one is the first name.
+SO suggest_optional true -> false | Stepping the calendar back is part of reaching the chosen date, not an occasional pop-up.
+SO rename_binding due_date -> date_of_birth | The field on the page is the student's date of birth, not a due date.
+DATE STEP HINTS (C): {"open": "#datePickerMonthYearInput", "grid": "[aria-label=\"Choose Date\"]", "header": "#datePickerMonthYear > div.react-datepicker__tab-loop:nth-of-type(2) > div.react-datepicker-popper:nth-of-type(2) > div > div > div.react-datepicker > div.react-datepicker__month-container", "header_text": "October 2026 January February March April May June July Augu", "prev": "[aria-label=\"Previous Month\"]", "next": "[aria-label=\"Next Month\"]", "cell": "[aria-label=\"Choose Thursday, October 15th, 2026\"]", "cell_attr": "", "display_format": "", "kind": "single", "strategy": "typed_first", "recorded_value": "2026-10-15"}

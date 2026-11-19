@@ -492,6 +492,20 @@ def is_confirm_only_span(step: dict[str, Any]) -> bool:
     return str(step.get("agent_span_on_failure") or "abort").strip().lower() == "abort"
 
 
+_OUTCOME_ASSERTION_TYPES = frozenset({"text_present", "url_changed", "url_pattern", "state_changed"})
+
+
+def _has_required_outcome(step: dict[str, Any]) -> bool:
+    """Whether the step already carries proof of its result: a required text / address / page-change check, or a
+    proof-of-done effect with checks."""
+    validation = step.get("validation") if isinstance(step.get("validation"), dict) else {}
+    for a in validation.get("assertions") or []:
+        if isinstance(a, dict) and a.get("required") and a.get("type") in _OUTCOME_ASSERTION_TYPES:
+            return True
+    effect = validation.get("effect") if isinstance(validation.get("effect"), dict) else {}
+    return bool(effect.get("checks"))
+
+
 def validate_editor_patch(
     step: dict[str, Any],
     patch: dict[str, Any],
@@ -768,7 +782,9 @@ def validate_editor_patch(
     if destructive_compiler_step(view, policy):
         wf = (merged.get("validation") or {}).get("wait_for") or {}
         wf_d = dict(wf) if isinstance(wf, dict) else {}
-        if not destructive_wait_for_is_non_none(wf_d):
+        # A step that cannot be undone needs some proof its result landed: a non-trivial wait, or a required outcome
+        # check. Refusing a patch that ADDS that check (WF-9 F-8) left the person no way to give the step one.
+        if not destructive_wait_for_is_non_none(wf_d) and not _has_required_outcome(merged):
             raise ValueError("destructive_step_requires_non_none_wait_for")
         anchors = (merged.get("signals") or {}).get("anchors") or []
         if not anchors:

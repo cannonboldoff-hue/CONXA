@@ -112,3 +112,23 @@ test("control: a NON-destructive step runs the a11y stage (proves the skip above
   assert.ok(!has(tracker, "rec_skip"), "a non-destructive step must never skip re-identification");
   assert.ok(!has(tracker, "rec_halt"), "a non-destructive step must never report a destructive halt");
 });
+
+// WF-9: a "send" step whose action went out but whose check failed was clicked again 7 times. A step that cannot
+// be undone is never dispatched a second time on the strength of a failed check.
+test("a destructive step that already acted and failed its check is blocked, not clicked again", async () => {
+  const { createActionGuard, guardDecision } = require("../../app/cascade");
+  const page = {
+    url: () => "https://x.test/start",
+    locator: () => ({ first: () => ({ waitFor: async () => { throw new Error("not attached"); } }), count: async () => 0 }),
+    waitForTimeout: async () => {},
+  };
+  const check = { validation: { assertions: [{ type: "selector_present", target: ".sent", required: true, timeout_ms: 20 }] } };
+  const send = { type: "click", destructive: true, ...check };
+  const guard = createActionGuard(send, { acted: true });
+  assert.strictEqual(await guardDecision(page, send, {}, null, guard), "blocked");
+  assert.strictEqual(guard.blocked, "action-may-have-taken-effect");
+
+  // A step that can be undone keeps the old behaviour: a failed check means retry.
+  const plain = { type: "click", ...check };
+  assert.strictEqual(await guardDecision(page, plain, {}, null, createActionGuard(plain, { acted: true })), "go");
+});

@@ -353,7 +353,8 @@ def infer_success_conditions(
 
     val = policy.get("validation") if isinstance(policy, dict) and isinstance(policy.get("validation"), dict) else {}
     min_strength_for_diff_elements = float(val.get("intent_required_elements_min_diff_strength", 0.08))
-    required_from_diff = new_els[:24] if new_els else (text_change[:8] if text_change else [])
+    # Page TEXT is never an element: "Name:Asha Verma" became a required selector. It stays an advisory text token below.
+    required_from_diff = list(new_els[:24])
     if intent_primary and final_intent and strength < min_strength_for_diff_elements:
         required_from_diff = []
 

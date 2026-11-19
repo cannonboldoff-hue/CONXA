@@ -265,6 +265,24 @@ _STUDIO_CHAT_SYSTEMS: dict[str, str] = {
 }
 
 
+_EFFECTS_RULE = (
+    "effects (array of {step_key, reversible, kind, confidence, reason}): ONE entry for "
+    "every input step whose action is click, dblclick, select, set_checkbox, set_radio, "
+    "upload, date_pick or dialog_accept — anything that could change data in the app. "
+    "step_key is copied exactly like above. reversible is true when the person could take "
+    "it back by going back, doing it again or closing something (opening a page or menu, "
+    "moving on with Continue or Next, filling in a field, a search, sorting, closing a "
+    "pop-up), and false when it saves, sends, pays, places an order, deletes, publishes, "
+    "submits or confirms something that changes data outside this page. Judge from what the "
+    "step MEANS in the workflow (its summary, seen, intent, field_label, dialog words and "
+    "what happens next), never from one word on a button: a button named Finish may only "
+    "close a pop-up, and OK on a box asking to delete is a delete. kind is exactly one of "
+    "moves_forward, opens, edits_field, saves, sends, pays, deletes, other. confidence is "
+    "0 to 1. When you cannot tell, answer reversible false with a low confidence — a wrong "
+    "\"true\" lets an irreversible step run without anyone being asked. reason is one plain "
+    "sentence.\n"
+)
+
 def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
     data = payload.get("input")
     prompt = payload.get("prompt")
@@ -490,21 +508,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "exactly one of duplicate_action, no_op_action, orphaned_hover. This step will be "
                     "removed from the shipped skill (archived, not deleted), so only propose it when "
                     "you are sure.\n"
-                    "effects (array of {step_key, reversible, kind, confidence, reason}): ONE entry for "
-                    "every input step whose action is click, dblclick, select, set_checkbox, set_radio, "
-                    "upload, date_pick or dialog_accept — anything that could change data in the app. "
-                    "step_key is copied exactly like above. reversible is true when the person could take "
-                    "it back by going back, doing it again or closing something (opening a page or menu, "
-                    "moving on with Continue or Next, filling in a field, a search, sorting, closing a "
-                    "pop-up), and false when it saves, sends, pays, places an order, deletes, publishes, "
-                    "submits or confirms something that changes data outside this page. Judge from what the "
-                    "step MEANS in the workflow (its summary, seen, intent, field_label, dialog words and "
-                    "what happens next), never from one word on a button: a button named Finish may only "
-                    "close a pop-up, and OK on a box asking to delete is a delete. kind is exactly one of "
-                    "moves_forward, opens, edits_field, saves, sends, pays, deletes, other. confidence is "
-                    "0 to 1. When you cannot tell, answer reversible false with a low confidence — a wrong "
-                    "\"true\" lets an irreversible step run without anyone being asked. reason is one plain "
-                    "sentence.\n"
+                    + _EFFECTS_RULE +
                     "Prefer steps marked low_confidence — the compiler was least sure about those. "
                     "Use sibling_bindings (names other workflows for the same site already use) to "
                     "pick names, not guesses. Return an EMPTY suggestions array when nothing is "
@@ -640,6 +644,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
                     "of duplicate_action, no_op_action, orphaned_hover. This step will be removed "
                     "from the shipped skill (archived, not deleted), so only propose it when you are "
                     "sure.\n"
+                    + _EFFECTS_RULE +
                     "Prefer steps marked low_confidence — the compiler was least sure about those. "
                     "Use sibling_bindings (names other workflows for the same site already use) to "
                     "pick names, not guesses. Return an EMPTY suggestions array when nothing is "

@@ -28,13 +28,16 @@ const {
   parseDateInput,
   formatForDisplay,
   monthDelta,
+  parseHeader,
+  headerMatches,
+  datePickerProbe,
   machineCellSelector,
   dayNumberSelector,
   monthLabel,
   dateFromOffset,
   MAX_NAV_CLICKS,
 } = require("./date_picker");
-const { matchOption, matchOptions, optionsSummary } = require("./choice");
+const { matchOption, matchOptions, optionsSummary, optionSelector } = require("./choice");
 const {
   PRIMARY,
   markMayHaveActed,
@@ -241,15 +244,17 @@ async function _gatedClick(locator, step, timeout) {
 // ever valid for the recording's own day) cell selector -> optional time option for a datetime.
 async function _driveDatePickerGrid(root, parsed, hints, step) {
   if (hints.role !== "range_end" && hints.open) {
-    const alreadyOpen = hints.grid
-      ? await root.locator(hints.grid).first().isVisible().catch(() => false)
+    const probe = datePickerProbe(hints);
+    const alreadyOpen = probe
+      ? await root.locator(probe).first().isVisible().catch(() => false)
       : false;
     if (!alreadyOpen) {
       await _gatedClick(root.locator(hints.open).first(), step, ACTION_TIMEOUT_MS);
     }
   }
-  if (hints.grid) {
-    await root.locator(hints.grid).first().waitFor({ state: "visible", timeout: ACTION_TIMEOUT_MS });
+  const probe = datePickerProbe(hints);
+  if (probe) {
+    await root.locator(probe).first().waitFor({ state: "visible", timeout: ACTION_TIMEOUT_MS });
   }
 
   if (hints.year_select || hints.month_select) {
@@ -286,6 +291,16 @@ async function _driveDatePickerGrid(root, parsed, hints, step) {
       const after = await root.locator(hints.header).first()
         .innerText({ timeout: SECONDARY_ACTION_TIMEOUT_MS }).catch(() => "");
       if (after === headerText) break;
+    }
+  }
+
+  // Never click a day on a calendar that is showing another month: the day number is right, the date is not.
+  if (hints.header) {
+    const shown = await root.locator(hints.header).first()
+      .innerText({ timeout: SECONDARY_ACTION_TIMEOUT_MS }).catch(() => "");
+    if (!headerMatches(shown, parsed.year, parsed.month)) {
+      const now = parseHeader(shown);
+      throw new Error(`The calendar shows ${monthLabel(now.month)} ${now.year}, not ${monthLabel(parsed.month)} ${parsed.year}.`);
     }
   }
 
@@ -585,7 +600,7 @@ const HANDLERS = {
       for (const opt of choice.options) {
         if (!opt.selector) continue;
         const checked = pickedValues.has(opt.value);
-        await runLocatorStep(page, stepWithSelector(step, opt.selector), inputs, locator => {
+        await runLocatorStep(page, stepWithSelector(step, optionSelector(opt, choice)), inputs, locator => {
           return locator.setChecked(checked, { timeout: ACTION_TIMEOUT_MS });
         });
       }
@@ -607,7 +622,7 @@ const HANDLERS = {
       const fallback = choice.group_key
         ? `input[type="radio"][name="${_cssAttrEscape(choice.group_key)}"][value="${_cssAttrEscape(option.value)}"]`
         : "";
-      const selector = option.selector || fallback;
+      const selector = optionSelector(option, choice) || fallback;
       if (!selector) throw new Error(`No selector available for option "${option.label || option.value}"`);
       await runLocatorStep(page, stepWithSelector(step, selector), inputs, locator => {
         return locator.click({ timeout: ACTION_TIMEOUT_MS });
@@ -665,7 +680,9 @@ const HANDLERS = {
     // grid_only (an inline always-visible calendar, no anchored field — see date_picker.py) has
     // nothing to type into at all: the step's own compiled target is the day cell itself, so a
     // typed attempt would only burn the full action timeout on a guaranteed-to-fail fill().
-    if (!(isCustomPicker && hints.strategy === "grid_only")) {
+    // Same when the app's own date format was never learned: typing ISO text into a box that expects another
+    // format lands on the wrong date, so drive the calendar instead.
+    if (!(isCustomPicker && (hints.strategy === "grid_only" || !hints.display_format))) {
       try {
         await runLocatorStep(page, step, inputs, async locator => {
           await locator.fill(displayValue, { timeout: ACTION_TIMEOUT_MS });

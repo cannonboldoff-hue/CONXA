@@ -53,6 +53,12 @@ def test_the_prompt_asks_for_both_extra_answers_and_still_forbids_selectors():
     assert "never write or invent a page selector" in system.lower()
 
 
+def test_the_compile_prompt_defines_effects_not_only_lists_the_key():
+    """WF-9 round 2: the compile call listed `effects` as an allowed key but never said what it was, so no step was ever judged."""
+    system, _ = _review_text()
+    assert "effects (array of" in system and "reversible" in system
+
+
 # ── the review builder ──────────────────────────────────────────────────────────────────────
 
 

@@ -38,6 +38,15 @@ def capture_gap_note(result: dict[str, Any]) -> str:
             " If one is missing, record that part again.")
 
 
+def ignored_click_note(result: dict[str, Any]) -> str:
+    """One plain sentence when the person clicked on parts of the page that are not controls, else an empty string."""
+    n = int(result.get("ignored_clicks") or 0)
+    if n <= 0:
+        return ""
+    return (f" You also clicked {plural(n, 'time')} on parts of the page that aren't buttons or boxes, like a heading."
+            " Those do nothing, so the workflow won't repeat them.")
+
+
 def plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
@@ -456,10 +465,10 @@ class WorkflowFlowMixin:
         harness.update_card(_thread(workflow.id), card["card_id"], state="saved", count=count, duration_seconds=seconds, actions=[], sink=sink)
         if payload.get("auto_compile", True):
             self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}. I’m watching the recording back and lining it up with "
-                           "what the browser saw. I’ll ask you a few things before I build it." + capture_gap_note(result), sink)
+                           "what the browser saw. I’ll ask you a few things before I build it." + capture_gap_note(result) + ignored_click_note(result), sink)
             self._flow_start_understand(workflow.id)
         else:
-            self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}." + capture_gap_note(result), sink)
+            self._flow_say(workflow.id, f"Got it — {plural(count, 'action')}." + capture_gap_note(result) + ignored_click_note(result), sink)
         return {"ok": True, "event_count": count, "session_id": sid}
 
     # ── re-record from a step ───────────────────────────────────────────────────────────────
@@ -566,7 +575,7 @@ class WorkflowFlowMixin:
         count = int(stopped.get("action_count", stopped.get("event_count")) or 0)
         harness.update_card(thread, card["card_id"], state="saved", count=count, duration_seconds=0, actions=[], sink=sink)
         where = "adding them as a second way from that step on" if mode == "branch" else "putting them in place of that step and the ones after it"
-        self._flow_say(workflow.id, f"Got it \u2014 {plural(count, 'action')}. I\u2019m compiling them and {where}." + capture_gap_note(stopped), sink)
+        self._flow_say(workflow.id, f"Got it \u2014 {plural(count, 'action')}. I\u2019m compiling them and {where}." + capture_gap_note(stopped) + ignored_click_note(stopped), sink)
         threading.Thread(target=self._splice_segment_safe, args=(workflow.id, sid, step_key, mode), daemon=True).start()
         return {"ok": True, "event_count": count, "session_id": sid}
 

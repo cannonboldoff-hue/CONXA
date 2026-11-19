@@ -239,6 +239,18 @@ def test_step_checks_list_live_checks_and_required_assertions_per_step():
     assert s["step_checks"] == [["the file arrives on this computer", "“Downloaded” appears"], []]
 
 
+def test_a_check_on_an_input_never_shows_doubled_quotes():
+    """WF-9 F-5: 'Done when ““date of birth”” appears' named an input as if it were screen text."""
+    def done(target):
+        step = {"action": "click", "validation": {"assertions": [{"type": "text_present", "target": target, "required": True}]}}
+        return build_summary({"skills": [{"steps": [step]}]}, recorded_actions=1, added_steps=0, name="x", uncertain=0)["done_when"]
+
+    assert done("{{date_of_birth}}") == ["the date of birth you entered appears"]
+    assert done("Hello {{first_name}}") == ["Hello “first name” appears"]
+    assert done("{{first_name}} saved") == ["“first name” saved appears"]
+    assert done("Saved") == ["“Saved” appears"]
+
+
 def test_compile_done_settles_rows_whose_end_event_never_came():
     p = CompileProgress()
     p.observe({"phase": "pipeline_start"})
@@ -875,3 +887,73 @@ def test_typed_words_are_placed_by_the_clock_when_the_recording_has_one(monkeypa
     doc = _doc(steps)
     doc["meta"]["source_session_id"] = "s1"
     assert step_where_words_appear(doc, "saved it") == step_keys(steps)[3]
+
+
+def test_a_ticked_input_is_checked_on_the_step_that_showed_it_not_the_last(monkeypatch):
+    """WF-9 F-9: every input check went on the last step (Close), which dismisses the box showing the values."""
+    from conxa_compile.conversation import clarify
+
+    doc = _invoice_doc()
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = _q(doc, "done_when")
+    assert q["recorded"].get("po_number")
+    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words: keys[2])
+    ops, _ = plan_answer(q, {"selected": ["input:po_number"]}, doc)
+    check = {"type": "text_present", "target": "{{po_number}}", "required": True}
+    holders = [o["step_key"] for o in ops if check in o["patch"]["validation"]["assertions"]]
+    assert holders == [keys[2]]
+
+
+def test_an_input_whose_words_no_page_showed_or_that_were_already_there_is_not_offered(monkeypatch):
+    from conxa_compile.conversation import clarify
+
+    doc = _invoice_doc()
+    for answer in ("", clarify.ALREADY_SHOWN):
+        monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words, a=answer: a)
+        ids = {c["id"] for c in _q(doc, "done_when")["choices"]}
+        assert not any(i.startswith("input:") for i in ids), (answer, ids)
+    # nothing to read (no recording): today's choice stays, on the last step
+    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words: None)
+    q = _q(doc, "done_when")
+    assert "input:po_number" in {c["id"] for c in q["choices"]}
+    (op,) = plan_answer(q, {"selected": ["input:po_number"]}, doc)[0]
+    assert op["step_key"] == step_keys(doc["skills"][0]["steps"])[5]
+
+
+def _modal_events(with_opener: bool):
+    """WF-9 F-9a: Submit opens a thank-you box; its own saved page was taken before the box drew; Close's copy shows it."""
+    def ev(seq, action, snap, **kw):
+        return {"action": {"action": action}, "page": {"url": "https://form.test/a"}, "extras": {"sequence": seq},
+                "snapshot": {"dom_hash": snap}, **kw}
+
+    return [ev(1, "type", "before"),
+            ev(2, "click", "before", post_condition={"dialog_signal": '[role="dialog"]'} if with_opener else {}),
+            ev(3, "click", "after", dialog_context={"message": "Thanks for submitting the form  Name Sana Khan",
+                                                    "container_signal": '[role="dialog"]'})]
+
+
+def test_words_in_a_box_go_on_the_press_that_opened_it_not_the_one_that_closed_it(monkeypatch):
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+    from conxa_compile.conversation.clarify import ALREADY_SHOWN, step_where_words_appear
+
+    pages = {"before": "<form><input></form>", "after": "<div role=dialog>Thanks for submitting the form Name Sana Khan</div>"}
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: pages.get(h))
+    steps = [_step("type", "name", source_event=1), _step("click", "submit", source_event=2), _step("click", "close", source_event=3)]
+    doc = _doc(steps)
+    doc["meta"]["source_session_id"] = "s1"
+    monkeypatch.setattr(se, "read_session_events", lambda _s: _modal_events(True))
+    assert step_where_words_appear(doc, "Sana Khan") == step_keys(steps)[1]
+    # No press opened that box: the words were there before anything this recording did, so they prove nothing.
+    monkeypatch.setattr(se, "read_session_events", lambda _s: _modal_events(False))
+    assert step_where_words_appear(doc, "Sana Khan") == ALREADY_SHOWN
+
+
+def test_an_input_whose_typed_words_are_unknown_is_not_offered_as_a_check_on_the_screen():
+    from conxa_compile.conversation.clarify import _done_when_choices
+
+    step = _step("click", "submit", validation={"assertions": [{"type": "text_present", "target": "Thanks", "required": False}]})
+    doc = _doc([step], inputs=[{"id": "name", "type": "text"}, {"id": "date_of_birth", "type": "date"}])
+    ids = {c["id"] for c in _done_when_choices(doc, {"name": "Sana", "date_of_birth": None})[0]}
+    assert "input:name" in ids and "input:date_of_birth" not in ids
+    assert "input:date_of_birth" in {c["id"] for c in _done_when_choices(doc)[0]}  # no recording given: as before

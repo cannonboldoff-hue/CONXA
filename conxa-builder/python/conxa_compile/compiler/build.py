@@ -722,6 +722,16 @@ def _build_assertions(
             timeout_ms=wf_timeout,
             required=True,
         ))
+    elif classified_effect == "dialog_closed":
+        # The click closed a box: it must be gone (the runtime only counts this as proof when it was there before).
+        closed_sig = str((ev.get("dialog_context") or {}).get("container_signal") or "")
+        if closed_sig:
+            assertions.append(Assertion(
+                type="selector_absent",
+                target=closed_sig,
+                timeout_ms=wf_timeout,
+                required=True,
+            ))
 
     # Text entry / selection: the enforced post-condition is that the field actually holds the
     # value we typed/selected — this is the action's own direct effect, independent of wait_for.
@@ -2207,7 +2217,9 @@ def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowInten
         # let the step be described from its own action.
         if prose and _prose_contradicts_action(prose, _step_action_name(step)):
             prose = None
-        if prose:
+        if step.signals.get("label_owner") == "code":
+            pass  # named by code from the popup's own title (outcome_fork.py); the model's wording never replaces it
+        elif prose:
             step.semantic_description = prose
         elif step.intent and not step.semantic_description:
             step.semantic_description = step.intent
@@ -2581,7 +2593,15 @@ def _apply_second_opinion(
         noise_findings = [f for f in findings if f.get("kind") == "flag_noise"] if settings.compile_pass("flag_noise") else []
         rewrite_findings = [f for f in findings if f.get("kind") != "flag_noise"]
         applied = apply_second_opinion(steps, rewrite_findings)
-        apply_effect_judgements(steps, (extras_out or {}).get("effects") or [])
+        if apply_effect_judgements(steps, (extras_out or {}).get("effects") or []):
+            # `consequence` was set per step before the model judged anything; read the judgement into it now so
+            # the editor, the questions and the dry run all see what the model decided. Never the address.
+            from conxa_compile.editor.step_view import skill_step_for_destructive_check  # noqa: PLC0415
+
+            policy = get_policy_bundle().data
+            for step in steps:
+                if isinstance(step.signals, dict) and isinstance((step.signals.get("semantic") or {}).get("effect_judgement"), dict):
+                    step.consequence = classify_consequence(skill_step_for_destructive_check(step.model_dump(mode="json")), policy)
         steps, archived = archive_flagged_steps(steps, noise_findings, keep_sequences=keep_sequences)
     except Exception as exc:  # noqa: BLE001 — a second, non-primary LLM pass must never fail compile
         applied, archived = [], []

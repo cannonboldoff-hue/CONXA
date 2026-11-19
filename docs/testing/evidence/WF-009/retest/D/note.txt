@@ -1,0 +1,5 @@
+WF9 retest visitor card (0c8551d0-47cf-4310-8ed3-8f140540b2bc), fixture :8197 (same server as ../../D). Recorded fine, "Which change" answered, then "How can we tell it worked?" could not be answered:
+typed words "Card ready for", "Card ready for Dev Patel", "Card ready" (button and Enter) and a chat sentence were all refused with
+"This step performs an action that can't be undone, so it needs an outcome check that confirms it worked. Add one before saving."
+(chat reply: "I'm not sure whether the wording is the whole sentence or the start of it"). The workflow stays blocked ("1 question need you"), so no test, no "Send card" re-click count, no 9.4 retest on this fixture.
+Round 1 (before fixes) accepted the same typed words. Compiled package: Send card consequence "reversible", destructive false, no assertions.

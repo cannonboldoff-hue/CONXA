@@ -1,0 +1,3 @@
+started
+PAGE #output: Name:Lakshmi Rao | Email:lakshmi.rao.88@gmail.com | Current Address :41 Elm Court | Permananet Address :8 Mill Road
+. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Current address: 41 Elm Court · Full name: Lakshmi Rao · Permanent address: 8 Mill Road · User email: lakshmi.rao.88@gmail.com | ● | Test passed | 12 steps · 0 min 58 s | ▲ | Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data. | What was checked | Approve for packaging | Test with other inputs | C | Conxa · 8:50 AM | It works. Approve it when you’

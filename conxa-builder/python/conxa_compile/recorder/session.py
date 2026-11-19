@@ -2193,6 +2193,11 @@ class RecordingSession:
         """How many steps were lost or failed to save. A click on a non-control is not a loss and is not counted."""
         return sum(int(g.get("count") or 1) for g in self.capture_gaps() if g.get("kind") in ("lost_step", "capture_error"))
 
+    def ignored_click_count(self) -> int:
+        """Clicks on something that is not a control (a heading, empty space). They are not steps and not a loss, but
+        the person did them, so the recording's summary says they were left out."""
+        return sum(int(g.get("count") or 1) for g in self.capture_gaps() if g.get("kind") == "unrecorded_click")
+
     def _bridge_states_sync(self, flush: bool) -> list[dict[str, Any]]:
         """Ask every frame of every open page where its bridge stands. ``flush`` also cuts open watches and sends
         pending typing (window.__skillFlush); without it the call only reads (window.__skillState)."""

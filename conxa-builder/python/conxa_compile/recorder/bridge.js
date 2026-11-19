@@ -1192,10 +1192,20 @@
         // which all live above the cell and were coming back empty.
         let root = cur;
         let up = cur.parentElement;
-        for (let w = 0; w < 6 && up && up.nodeType === 1; w++) {
+        // Poppers wrap the widget in several plain divs (react-datepicker: popper, tab loops), so a fixed
+        // few levels reached a different outer node from the arrow than from a day, and one date pick
+        // became two grids. Walk high enough to settle on the same outermost node from anywhere inside.
+        const fieldCount = (n) => { try { return n.querySelectorAll("input,textarea").length; } catch (_e) { return 0; } };
+        for (let w = 0; w < 15 && up && up.nodeType === 1; w++) {
           // Structure alone never widens a root: the smallest subtree that looks like a month grid is the
           // widget, and any bigger one would swallow the date field the widget belongs to.
-          if (_isCalendarGridNode(up, false)) root = up;
+          if (fieldCount(up) > fieldCount(root)) break;
+          // A wrapper with no size of its own (a popper placed absolutely around the widget) is not something a
+          // person or the runtime can see; as the grid it never becomes visible and the replay times out.
+          if (_isCalendarGridNode(up, false)) {
+            const box = up.getBoundingClientRect();
+            if (box.width > 0 && box.height > 0) root = up;
+          }
           up = up.parentElement;
         }
         // A wrapper holding the nav chrome may sit just outside the matched widget.
@@ -1214,8 +1224,19 @@
   }
 
   function _findCalendarHeader(root) {
-    const preferred = root.querySelector('[role="heading"],[class*="caption"],[class*="header"],[class*="month"],[class*="label"]');
-    if (preferred && _MONTH_YEAR_RE.test(safeText(preferred, 60))) return preferred;
+    // A class like "month" also matches the whole month container (and a header holding month/year
+    // dropdowns, whose text lists every month). Skip anything with a <select> in it; of the rest the
+    // shortest text that reads "Month YYYY" is the heading itself.
+    let preferred = null;
+    let preferredLen = Infinity;
+    try {
+      for (const c of root.querySelectorAll('[role="heading"],[class*="caption"],[class*="header"],[class*="month"],[class*="label"]')) {
+        if (c.querySelector("select")) continue;
+        const t = safeText(c, 60);
+        if (_MONTH_YEAR_RE.test(t) && t.length < preferredLen) { preferred = c; preferredLen = t.length; }
+      }
+    } catch (_e) {}
+    if (preferred) return preferred;
     let all = [];
     try { all = root.querySelectorAll("*"); } catch (_e) {}
     for (let i = 0; i < all.length && i < 200; i++) {
@@ -1365,7 +1386,12 @@
 
   function _selectorForElement(el) {
     if (!el) return "";
-    return buildStableSelector(el) || buildCssPath(el);
+    const stable = buildStableSelector(el);
+    // A name/label shared by a group (radios named "gender") points at all of them, not at this one.
+    try {
+      if (stable && el.getRootNode().querySelectorAll(stable).length === 1) return stable;
+    } catch (_e) {}
+    return buildCssPath(el);
   }
 
   /** The input/combobox this grid belongs to: an explicit aria-owns/aria-controls back-reference,
@@ -1465,6 +1491,13 @@
       // The field element itself, kept (non-enumerable, so never serialized) to read what the
       // pick left in it once the click settles: pickers close their grid on pick, so the field
       // cannot be found again from the grid later. See finalizeStateWithAfter.
+      // Year/month dropdowns driving this grid: without them the runtime can only click arrows.
+      try {
+        for (const sel of gridRoot.querySelectorAll("select")) {
+          const r = _selectRoleFor(sel);
+          if (r && !ctx[r]) ctx[r] = _selectorForElement(sel);
+        }
+      } catch (_e) {}
       if (field) Object.defineProperty(ctx, "__fieldEl", { value: field, enumerable: false });
       return ctx;
     }
@@ -2100,6 +2133,9 @@
     const uid = row.uid;
     _finalizeQueue = _finalizeQueue
       .then(() => _waitForDomSettle(quietMs, maxWaitMs))
+      // A box that is fading out is still in the page when the page first goes quiet: read it again after its
+      // transition, or the close is recorded as "nothing happened" (WF-9 thank-you dialog).
+      .then(() => (probe.dialog_before && _queryOpenDialog() ? _sleep(400) : null))
       .then(() => {
         _applyAfter(payload, pageFingerprint());
         const dc = payload.date_context;

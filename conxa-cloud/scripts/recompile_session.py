@@ -44,7 +44,9 @@ def main() -> int:
     offline = os.environ.get("SKILL_ALLOW_NO_PROVIDERS", "").strip() in ("1", "true", "True")
     if not token and not offline:
         print("CONXA_TOKEN is not set. The compiler needs Build Studio's cloud connection for its LLM calls: "
-              "set CONXA_TOKEN to a signed-in Studio token (and CONXA_CLOUD_API if the cloud is not on 127.0.0.1:8000).")
+              "set CONXA_TOKEN to a signed-in Studio token (and CONXA_CLOUD_API if the cloud is not on 127.0.0.1:8000). "
+              "On a dev machine with the cloud running locally, this pair works: "
+              "CONXA_TOKEN=dev-skip-auth-token SKILL_ALLOW_NO_PROVIDERS=1.")
         return 1
     if token:
         from conxa_core import llm as core_llm

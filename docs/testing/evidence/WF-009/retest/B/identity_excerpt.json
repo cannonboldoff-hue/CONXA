@@ -1,0 +1,40 @@
+{
+ "radio_options": [
+  "#gender-radio-1",
+  "#gender-radio-2",
+  "#gender-radio-3"
+ ],
+ "date_pick_hints": {
+  "open": "#dateOfBirthInput",
+  "grid": "#dateOfBirth > div.react-datepicker__tab-loop:nth-of-type(2)",
+  "header": "div.react-datepicker__tab-loop:nth-of-type(2) > div.react-datepicker-popper:nth-of-type(2) > div > div > div.react-datepicker > div.react-datepicker__month-container > div.react-datepicker__header:nth-of-type(1) > h2.react-datepicker__current-month.react-datepicker__current-month--hasYearDropdown",
+  "header_text": "October 2026",
+  "prev": "[aria-label=\"Previous Month\"]",
+  "next": "[aria-label=\"Next Month\"]",
+  "cell": "[aria-label=\"Choose Thursday, October 15th, 2026\"]",
+  "cell_attr": "",
+  "display_format": "",
+  "kind": "single",
+  "strategy": "typed_first",
+  "recorded_value": "2026-10-15"
+ },
+ "steps": [
+  "navigate",
+  "focus",
+  "type",
+  "focus",
+  "type",
+  "focus",
+  "type",
+  "set_radio",
+  "focus",
+  "type",
+  "date_pick",
+  {
+   "action": "scroll",
+   "delta": 53
+  },
+  "click",
+  "click"
+ ]
+}

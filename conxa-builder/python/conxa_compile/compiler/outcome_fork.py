@@ -415,7 +415,14 @@ def build_outcome_forks(steps: list[SkillStep], session_id: str = "") -> list[Sk
         cursor = end
     out.extend(steps[cursor:])
     for s in out:
-        s.signals.pop("dialog_context", None)
+        ctx = s.signals.pop("dialog_context", None)
+        # Code owns the name of a click on a popup's button: the popup's own title, never a model's guess about
+        # which popup it was ("Close the calendar pop-up" for a thank-you box). build.py keeps it from prose.
+        if isinstance(ctx, dict) and s.action != "outcome_fork" and str(ctx.get("title") or "").strip():
+            chosen = next((_button_name(b) for b in ctx.get("buttons") or [] if isinstance(b, dict) and b.get("chosen")), "")
+            if chosen:
+                s.semantic_description = f'Click "{chosen}" in the "{str(ctx["title"]).strip()}" popup'
+                s.signals["label_owner"] = "code"
     return out
 
 

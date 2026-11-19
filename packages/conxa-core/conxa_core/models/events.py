@@ -200,6 +200,11 @@ class DateContext(BaseModel):
     cell: str = ""
     field: str = ""                       # the input/combobox this grid belongs to, if found
     field_display_value: str | None = None  # field's post-pick display text — reveals site format
+    # What the field held after the click settled (the app's own format), and the calendar's month/year dropdowns when
+    # it has them. Written by the recorder; without these here the model dropped them and the date format was lost.
+    field_display_value_after: str | None = None
+    year_select: str = ""
+    month_select: str = ""
     # role == "nav"
     nav: Literal["prev", "next"] | None = None
     # role == "time"

@@ -113,23 +113,42 @@ function dateFromOffset(offsetDays, now = new Date()) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-/** "September 2026" / "Sep 2026" / "2026 Sep" / "09/2026" / "2026-09" -> {year, month}. */
+/** "September 2026" / "Sep 2026" / "2026 Sep" / "09/2026" / "2026-09" -> {year, month}. When the text holds
+ * several months (a header that also lists its month dropdown: "October 2026 January February ..."), the
+ * first month-and-year pair in reading order is the one shown, not the first month in calendar order. */
 function parseHeader(text) {
   const t = String(text || "").trim().toLowerCase();
   if (!t) return null;
-  for (let i = 0; i < MONTHS.length; i++) {
-    const abbr = MONTHS[i].slice(0, 3);
-    const re = new RegExp(`\\b${abbr}[a-z]*\\b`);
-    if (re.test(t)) {
-      const yearMatch = t.match(/\d{4}/);
-      if (yearMatch) return { year: Number(yearMatch[0]), month: i + 1 };
-    }
-  }
+  const mon = String.raw`(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?`;
+  const monthIndex = (abbr) => MONTHS.findIndex((m) => m.startsWith(abbr)) + 1;
+  const monthFirst = t.match(new RegExp(String.raw`\b${mon},?\s+(\d{4})\b`));
+  const yearFirst = t.match(new RegExp(String.raw`\b(\d{4})\s+${mon}`));
+  const pair = [
+    monthFirst && { at: monthFirst.index, year: Number(monthFirst[2]), month: monthIndex(monthFirst[1]) },
+    yearFirst && { at: yearFirst.index, year: Number(yearFirst[1]), month: monthIndex(yearFirst[2]) },
+  ].filter(Boolean).sort((a, b) => a.at - b.at)[0];
+  if (pair) return { year: pair.year, month: pair.month };
+  const word = t.match(new RegExp(String.raw`\b${mon}`));
+  const yearMatch = t.match(/\d{4}/);
+  if (word && yearMatch) return { year: Number(yearMatch[0]), month: monthIndex(word[1]) };
   let m = t.match(/^(\d{1,2})[/\-](\d{4})$/);
   if (m) return { year: Number(m[2]), month: Number(m[1]) };
   m = t.match(/^(\d{4})[/\-](\d{1,2})$/);
   if (m) return { year: Number(m[1]), month: Number(m[2]) };
   return null;
+}
+
+/** What to wait for before a calendar counts as open: the header text (a node with a size of its own), else the
+ * grid. Older recordings stored a zero-size popper wrapper as the grid, which never becomes visible. */
+function datePickerProbe(hints) {
+  return String((hints && (hints.header || hints.grid)) || "");
+}
+
+/** Does the calendar's header show the target month? True also when the header can't be read: the caller
+ * cannot tell, and only a header that parses to a DIFFERENT month is proof the grid is on the wrong page. */
+function headerMatches(headerText, targetYear, targetMonth) {
+  const shown = parseHeader(headerText);
+  return !shown || (shown.year === targetYear && shown.month === targetMonth);
 }
 
 /** How many next(+)/prev(-) clicks to get from the header's current month to the target month.
@@ -185,6 +204,8 @@ module.exports = {
   parseDateInput,
   formatForDisplay,
   parseHeader,
+  headerMatches,
+  datePickerProbe,
   monthDelta,
   machineCellSelector,
   dayNumberSelector,

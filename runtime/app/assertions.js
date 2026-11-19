@@ -72,7 +72,7 @@ function endsInBoundValue(step, target) {
   });
 }
 
-async function capturePreStepSignature(page, countTexts = []) {
+async function capturePreStepSignature(page, countTexts = [], absentTargets = []) {
   try {
     const popups = popupsOpened(page);
     const url = page.url();
@@ -87,6 +87,14 @@ async function capturePreStepSignature(page, countTexts = []) {
         if (typeof n === "number") counts[t] = n;
       }
     }
+    // Whether each box a "this is gone" check names is on the page before the action: gone only proves the
+    // action when it was there to begin with (same locator count the check itself uses, across every frame).
+    let present;
+    if (absentTargets.length) {
+      present = {};
+      const frames = typeof page.frames === "function" ? page.frames() : [page];
+      for (const t of absentTargets) present[t] = await anyRootHasMatch(frames, t);
+    }
     // A timed-out probe is unknown, not "definitely empty" — every caller already treats a null
     // signature as "no evidence" (signatureChanged/evaluateAssertion's state_changed branch both
     // fail closed to "no movement detected" rather than false-reporting one). Fabricating
@@ -94,7 +102,7 @@ async function capturePreStepSignature(page, countTexts = []) {
     // real page, which is a false positive on the exact guard meant to catch a repeated action.
     if (!sig || sig === EVAL_TIMED_OUT) return null;
     const { textLen, interactiveCount } = sig;
-    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}), ...(popups !== null ? { popups } : {}) };
+    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}), ...(present ? { present } : {}), ...(popups !== null ? { popups } : {}) };
   } catch (_) {
     return null;
   }
@@ -107,6 +115,17 @@ function watchedTexts(step, inputs) {
   for (const a of stepAssertions(step)) {
     if (String(a.type || "").toLowerCase() !== "text_present") continue;
     const t = interpolate(String(a.target), inputs);
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+// The boxes a step's required "gone" checks name, so the baseline can note whether each was there before the action.
+function watchedAbsents(step, inputs) {
+  const out = [];
+  for (const a of stepAssertions(step)) {
+    if (String(a.type || "").toLowerCase() !== "selector_absent" || a.required === false) continue;
+    const t = interpolate(String(a.target || ""), inputs);
     if (t && !out.includes(t)) out.push(t);
   }
   return out;
@@ -235,6 +254,12 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       // Absent must hold in EVERY root, not just one — otherwise a root where it never existed
       // would trivially satisfy "absent" while it's still very much present in another.
       ok = await pollNegative(async () => !(await anyRootHasMatch(roots, target)), timeout);
+      // Witness rule: gone proves the action only if the box was there before it. Not seen before (or no baseline)
+      // is "can't tell", never a new failure.
+      if (ok) {
+        if (baseline && baseline.present && baseline.present[target] === true) fresh = true;
+        else cantTell = true;
+      }
     } else if (type === "text_present") {
       // In an element's text, or in what a visible text box holds (page_scripts.countTextOccurrences): both are "on the
       // screen" to the person who typed these words as proof.
@@ -412,5 +437,6 @@ module.exports = {
   hasRequiredAssertion,
   needsStateChangedBaseline,
   watchedTexts,
+  watchedAbsents,
   withDeadline,
 };

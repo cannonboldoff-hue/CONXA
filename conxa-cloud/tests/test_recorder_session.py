@@ -1534,6 +1534,7 @@ def test_a_click_on_something_that_is_not_a_control_is_diagnostic_only(tmp_path)
 
     assert [g["kind"] for g in sess.capture_gaps()] == ["unrecorded_click"]
     assert sess.capture_gap_count() == 0
+    assert sess.ignored_click_count() == 1  # WF-9 9.3: still told to the person, but not as a lost step
     assert sess._pending_payloads.empty()
 
 
@@ -1605,3 +1606,17 @@ def test_a_definition_the_app_already_has_is_tried_at_its_own_address_first(tmp_
     sess._learn_auth_at_sync = fake
     assert sess._perform_learn_auth_sync("https://app.test/login", existing, "https://app.test/home") == (existing, "")
     assert asked == ["https://app.test/home"]
+
+
+def test_the_summary_tells_the_person_about_clicks_that_were_left_out() -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "conxa-builder" / "python"))
+    from handlers.workflow_flow import ignored_click_note
+
+    assert ignored_click_note({"ignored_clicks": 0}) == ""
+    assert ignored_click_note({}) == ""
+    one, two = ignored_click_note({"ignored_clicks": 1}), ignored_click_note({"ignored_clicks": 2})
+    assert "1 time on parts of the page" in one and "2 times on parts of the page" in two
+    assert "selector" not in one and "won't repeat them" in one

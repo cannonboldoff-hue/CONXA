@@ -1,0 +1,1 @@
+Aligned by hand (off step 7 = archived duplicate gender click): only diffs are signals.semantic.effect_judgement wording/confidence (model text, differs between two live model calls); dom/visual/selector parts identical.

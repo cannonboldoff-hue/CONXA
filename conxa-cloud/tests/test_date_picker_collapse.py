@@ -161,3 +161,51 @@ def test_a_recording_without_the_after_value_is_still_judged_by_shape():
     day_step = _step("click", "day")
     out = collapse_date_picker_runs([day_step], [_day_event()], {})
     assert [s.action for s in out] == ["date_pick"]
+
+
+def test_open_arrow_day_on_one_grid_is_one_date_pick_with_selects_and_the_fields_own_format():
+    """WF-9 9.5: [focus field, Previous Month arrow, day] on one grid folds into ONE date_pick (the open click
+    included). Month/year dropdowns come from the day record when none was touched, and the format is read from
+    what the field held after the pick."""
+    arrow = {
+        "action": {"action": "click"},
+        "target": {"tag": "button"},
+        "selectors": {"css": ".react-datepicker__navigation--previous", "aria": "", "xpath": ""},
+        "date_context": {"role": "nav", "nav": "prev", "grid": ".react-datepicker", "header": ".react-datepicker__current-month",
+                         "header_text": "October 2026"},
+    }
+    day = _day_event(iso_date="2026-09-15")
+    day["date_context"].update({
+        "month_select": ".react-datepicker__month-select",
+        "year_select": ".react-datepicker__year-select",
+        "field_display_value": "10/15/2026",
+        "field_display_value_after": "09/15/2026",
+    })
+    steps = [_step("focus", "open-marker"), _step("click", "arrow"), _step("click", "day")]
+    out = collapse_date_picker_runs(steps, [_open_event(), arrow, day], {})
+    assert len(out) == 1 and out[0].action == "date_pick", [s.action for s in out]
+    assert out[0].semantic_description == "open-marker"
+    hints = out[0].handler_hints.date_picker
+    assert hints["month_select"] == ".react-datepicker__month-select"
+    assert hints["year_select"] == ".react-datepicker__year-select"
+    assert hints["display_format"] == "MM/DD/YYYY"
+
+
+def test_the_recorded_event_keeps_the_calendar_fields_through_the_model():
+    """WF-9 round 2: DateContext lacked these fields, RecordedEvent silently dropped them and the date format was lost."""
+    from conxa_core.models.events import DateContext
+
+    dc = DateContext.model_validate({
+        "role": "day", "iso_date": "2026-09-15", "grid": ".cal", "field": "#dateOfBirthInput",
+        "field_display_value": "", "field_display_value_after": "09/15/2026",
+        "month_select": ".react-datepicker__month-select", "year_select": ".react-datepicker__year-select",
+    }).model_dump(mode="json")
+    assert dc["field_display_value_after"] == "09/15/2026"
+    assert dc["month_select"] and dc["year_select"]
+
+    day = _day_event(iso_date="2026-09-15")
+    day["date_context"] = dc
+    out = collapse_date_picker_runs([_step("focus", "open"), _step("click", "day")], [_open_event(), day], {})
+    hints = out[0].handler_hints.date_picker
+    assert hints["display_format"] == "MM/DD/YYYY"
+    assert hints["month_select"] == ".react-datepicker__month-select" and hints["year_select"] == ".react-datepicker__year-select"

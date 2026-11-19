@@ -1,0 +1,6 @@
+started
+47.7 date field: 19 Nov 2026
+65.5 date field: 07 May 2026
+PAUSE before: Click Submit to send the form
+MODAL: Thanks for submitting the form Label Values Student Name Meera Iyer Student Email meera.iyer.2001@gmail.com Gender Male Mobile 9123456780 Date of Birth 07 May,2026 Subjects Hobbies Picture Address State and City Close
+. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Date of birth: 2026-05-07 · Gender: Male · Last name: Iyer · Mobile 10 digits: 9123456780 · Name: Meera · User email: meera.iyer.2001@gmail.com | ▲ | Test finished — please check | 15 steps · 1 min 29 s | ▲ | Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data. | ▲ | I couldn't confirm that "Close the calendar pop-up" finished. | What was checked | Approve for packaging | Test with other inputs | ▲ | Paused before a step that can’t be undone · Click

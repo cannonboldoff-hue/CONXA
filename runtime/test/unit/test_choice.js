@@ -84,3 +84,35 @@ test("matchOptions: de-duplicates repeated picks", () => {
 test("optionsSummary: joins labels for the bad-input error message", () => {
   assert.strictEqual(optionsSummary(GENDER_OPTIONS), "Male, Female, Other");
 });
+
+test("optionSelector: a selector shared by the group falls back to group name + value", () => {
+  const { optionSelector } = require("../../app/choice");
+  const shared = ["male", "female", "other"].map((v) => ({ value: v, label: v, selector: 'input[name="gender"]' }));
+  const choice = { kind: "radio", group_key: "gender", options: shared };
+  assert.strictEqual(optionSelector(shared[1], choice), 'input[type="radio"][name="gender"][value="female"]');
+  assert.strictEqual(
+    optionSelector(shared[0], { ...choice, kind: "checkbox" }),
+    'input[type="checkbox"][name="gender"][value="male"]',
+  );
+});
+
+test("optionSelector: a quote in the value is escaped", () => {
+  const { optionSelector } = require("../../app/choice");
+  const shared = [{ value: 'a"b', selector: "x" }, { value: "c", selector: "x" }];
+  assert.strictEqual(
+    optionSelector(shared[0], { kind: "radio", group_key: "g", options: shared }),
+    'input[type="radio"][name="g"][value="a\\"b"]',
+  );
+});
+
+test("optionSelector: distinct selectors are used as recorded", () => {
+  const { optionSelector } = require("../../app/choice");
+  const choice = { kind: "radio", group_key: "gender", options: GENDER_OPTIONS };
+  assert.strictEqual(optionSelector(GENDER_OPTIONS[1], choice), "#g2");
+});
+
+test("optionSelector: no group name to fall back on keeps the recorded selector", () => {
+  const { optionSelector } = require("../../app/choice");
+  const shared = [{ value: "a", selector: ".x" }, { value: "b", selector: ".x" }];
+  assert.strictEqual(optionSelector(shared[0], { kind: "radio", options: shared }), ".x");
+});

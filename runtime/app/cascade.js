@@ -87,6 +87,12 @@ async function guardDecision(page, step, inputs, baseline, guard) {
     if (verdict.results.every(r => r.ok)) return "recovered";
     // A post-condition that does NOT hold is the author's own statement that the outcome did
     // not land — retry, exactly as before. This is the case test_recovery_verify.js pins.
+    // ...except a step that cannot be undone: it may already have taken effect, and a second dispatch
+    // would do it twice (WF-9: a "send" clicked 7 times). Stop and let the person look.
+    if (step.destructive === true) {
+      guard.blocked = "action-may-have-taken-effect";
+      return "blocked";
+    }
     return "go";
   }
 

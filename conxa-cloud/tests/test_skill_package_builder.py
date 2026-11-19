@@ -1707,3 +1707,22 @@ def test_a_package_never_ships_the_recording_persons_account_details():
     # A form's own sample placeholder ("name@example.com") is the page's text, not anyone's account.
     sample = {"skills": [{"steps": [{"signals": {"selectors": {"aria": '[role="textbox"][name="name@example.com"]'}}}]}]}
     _assert_no_account_text(sample, "Text box form")
+
+
+def test_recovery_json_carries_no_typed_value_from_the_video_words():
+    """WF-9 F-6: the video model's words can quote what the person typed; they ship to customers."""
+    from conxa_compile.skill_package_builder_saved_skill import _build_saved_skill_recovery
+
+    step = {
+        "action": {"action": "click"}, "intent": "send_card", "target": {"role": "button", "primary_selector": "#send"},
+        "video_context": {
+            "visible_target": "Send button", "purpose": "sends the card",
+            "screen_after": "The Email field now contains 'ravi.kumar1987@gmail.com'",
+            "screen_before": "Card for Ravi Kumar, 14 Park Road",
+        },
+    }
+    out = _build_saved_skill_recovery([step], [1])
+    text = json.dumps(out)
+    assert "ravi.kumar1987" not in text and "gmail" not in text and "14 Park" not in text
+    entry = out["steps"][0] if isinstance(out.get("steps"), list) else next(iter(out.values()))[0]
+    assert entry["video_context"]["visible_target"] == "Send button"

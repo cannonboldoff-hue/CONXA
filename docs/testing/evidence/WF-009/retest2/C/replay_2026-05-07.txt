@@ -1,0 +1,5 @@
+started
+13.7 date field: 11/19/2026
+14.1 date field: 05/07/2026
+MODAL: 
+. Fill in the inputs the way a real request would — I’ve put your recorded values in to start. | ● | Test inputs | · Select date: 2026-05-07 | ● | Test passed | 2 steps · 0 min 14 s | What was checked | Approve for packaging | Test with other inputs | C | Conxa · 5:16 AM | It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own. | Test passed — not yet approved | Approve | Test it | WF9 round2 date picker | WF9 round2 date picker | Probe group | Lifecycle | ● | Sign in | ● | Record | ● | Compile | ● | Clarify | ● | Review | ● | Test | Passed | ○ | Approve | Not approved | Detail

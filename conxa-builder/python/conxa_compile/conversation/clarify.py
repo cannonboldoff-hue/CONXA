@@ -442,10 +442,12 @@ def _unproven_end(doc: dict[str, Any]) -> str | None:
     return None
 
 
-def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[str]]:
     """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
     wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
-    ``target`` first -- the field the runtime checks and a "changes each run" answer rewrites."""
+    ``target`` first -- the field the runtime checks and a "changes each run" answer rewrites. ``recorded`` is what each
+    input was when recorded: an input is offered only if its words were on a saved page at some step (an input whose
+    words no page ever showed, or that were already there before, cannot prove anything)."""
     steps = _steps(doc)
     keys = step_keys(steps)
     checks: list[dict[str, Any]] = []
@@ -485,6 +487,12 @@ def _done_when_choices(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[
             if iid and iid != "file_path" and "{{" + iid + "}}" not in referenced and not any(
                     c["assertion"].get("type") == "text_present" and "{{" + iid + "}}" in str(c["assertion"].get("target") or "")
                     for c in checks):
+                words = str((recorded or {}).get(iid) or "")
+                if recorded is not None and not words:
+                    continue  # words nobody saw typed cannot be proven on the screen; no recording given keeps the old offer
+                where = step_where_words_appear(doc, words) if words else None
+                if where == "" or where == ALREADY_SHOWN:
+                    continue
                 choices.append({"id": f"input:{iid}", "label": f"You see the {_humanize(iid).lower()} on the screen",
                                 "detail": "Makes sure what was typed in appears on the screen at the end.", "selected": False})
     return effect_choices + choices, sorted({c["step_key"] for c in checks} | set(effect_keys))
@@ -580,7 +588,7 @@ def refresh_question(question: dict[str, Any], doc: dict[str, Any]) -> dict[str,
     after the compile (a value that became an input). Other kinds are returned as they were."""
     if question.get("kind") != "done_when":
         return question
-    choices, keys = _done_when_choices(doc)
+    choices, keys = _done_when_choices(doc, question.get("recorded") if isinstance(question.get("recorded"), dict) else None)
     return {**question, "choices": choices, "step_keys": keys} if choices else question
 
 
@@ -1004,7 +1012,9 @@ def generate_questions(
             ))
 
     # 5 ─ how do we know it worked? Only checks the compiler already wrote, never new selectors.
-    done_choices, done_keys = _done_when_choices(doc)
+    recorded_values = {str(st["input_binding"]): v for st in steps
+                       if st.get("input_binding") and (v := typed(st)) is not None}
+    done_choices, done_keys = _done_when_choices(doc, recorded_values)
     unproven_end = None if done_choices else _unproven_end(doc)
     if done_choices:
         out.append(_question(
@@ -1014,8 +1024,7 @@ def generate_questions(
             done_choices, multi=True, step_keys_=done_keys, needs_proof=bool(irreversible_without_proof(doc)),
             # What each input was when recorded: if a later answer fixes it ("nothing changes"), a ticked
             # "you see it on the screen" checks those words, not an input that no longer exists.
-            recorded={str(st["input_binding"]): v for st in steps
-                      if st.get("input_binding") and (v := typed(st)) is not None},
+            recorded=recorded_values,
         ))
     elif unproven_end:
         # Nothing to tick, and nothing proves the last step: its result is only on the screen (a tab's panel, a
@@ -1084,6 +1093,8 @@ def _press_time_text(ev: dict[str, Any]) -> str:
     parts = [str(extras.get("section_heading") or ""), str(ev.get("surrounding_text") or ""), str(target.get("inner_text") or "")]
     parts += [str(a.get("element") or "") for a in ev.get("anchors") or [] if isinstance(a, dict)]
     parts += [str(x).split(":", 1)[-1] for x in ctx.get("siblings") or []]
+    dlg = ev.get("dialog_context") if isinstance(ev.get("dialog_context"), dict) else {}
+    parts += [str(dlg.get("title") or ""), str(dlg.get("message") or "")]
     return " | ".join(parts)
 
 
@@ -1187,6 +1198,16 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
             cause = timed
     if cause is None:
         return None  # on screen before anything was done: no step brought them up
+    # A press made inside a box that already showed the words did not bring them up; the press that opened that box
+    # did (a thank-you box shown by Submit, then closed). Saved copies are taken a moment after each press, so the
+    # first copy showing the words is the closing press's, not the opener's.
+    dlg = events[cause].get("dialog_context") if isinstance(events[cause].get("dialog_context"), dict) else {}
+    if needle in _words_in(str(dlg.get("message") or "")):
+        opener = next((i for i in range(cause - 1, -1, -1)
+                       if (events[i].get("post_condition") or {}).get("dialog_signal") == dlg.get("container_signal")), None)
+        if opener is None:
+            return ALREADY_SHOWN
+        cause = opener
     # On the screen already when the person pressed (the recorder describes the press as the page was then: its section
     # heading, the text around it): seeing them afterwards says nothing about whether it worked. WF-5: a page heading
     # ("Five downloads") was accepted as the proof. Saved copies cannot tell: one copy may be taken after the press.
@@ -1576,7 +1597,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         selected = set(answer.get("selected") or [])
         custom = str(answer.get("custom_text") or "").strip()[:120]
         by_step: dict[str, dict[int, bool]] = {}
-        extra: list[dict[str, Any]] = []  # new text checks, added to the last step
+        # New text checks for ticked inputs: (step key the words appeared after, or None to put it at the end, check).
+        pending: list[tuple[str | None, dict[str, Any]]] = []
         for cid in sorted(selected):
             if cid.startswith("effect:"):
                 # Agreeing to the completion checks the compiler built from the recording (Proof of Done).
@@ -1589,7 +1611,11 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 # by the built workflow while the person is told it has none (WF-3 A: {{search_term_2}}).
                 target = "{{" + iid + "}}" if iid in declared else str((question.get("recorded") or {}).get(iid) or "")
                 if target:
-                    extra.append({"type": "text_present", "target": target, "required": True})
+                    # The words belong on the step that brought them up (a modal's values are gone by the last
+                    # click that closes it); the end only when there is no recording to read.
+                    where = step_where_words_appear(doc, str((question.get("recorded") or {}).get(iid) or ""))                         if (question.get("recorded") or {}).get(iid) else None
+                    if where not in ("", ALREADY_SHOWN):
+                        pending.append((where, {"type": "text_present", "target": target, "required": True}))
                 continue
             key, _, idx = cid.rpartition("#")  # step keys may contain "#" themselves
             by_step.setdefault(key, {})[int(idx)] = True
@@ -1612,8 +1638,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             _action_name(keyed[k]) == "outcome_fork" for k in order[order.index(custom_key) + 1:])
         if after_fork:
             custom_key = None
-        if extra and end_key:
-            by_step.setdefault(end_key, {})
+        extra_by_step: dict[str, list[dict[str, Any]]] = {}
+        for where, check in pending:
+            key = where or end_key
+            if key:
+                extra_by_step.setdefault(key, []).append(check)
+                by_step.setdefault(key, {})
         if already:
             custom_key = None
         if custom and custom_key:
@@ -1640,8 +1670,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                     assertions[j]["required"] = True
             retired = {j for j in offered.get(key, set()) if j < len(assertions) and not assertions[j].get("required")}
             assertions = [a for j, a in enumerate(assertions) if j not in retired]
-            if key == end_key:
-                assertions += extra
+            assertions += extra_by_step.get(key, [])
             if custom and key == custom_key:
                 assertions.append({"type": "text_present", "target": custom, "required": True})
             ops.append({"op": "patch", "step_key": key, "patch": {"validation": {"assertions": assertions}}})
@@ -1697,7 +1726,13 @@ def _assertion_words(step: dict[str, Any]) -> list[str]:
     for a in (step.get("validation") or {}).get("assertions") or []:
         if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
             if a.get("type") == "text_present":
-                out.append(f"“{_readable(str(a.get('target') or a.get('text') or a.get('value') or ''))[:60]}” appears")
+                raw = str(a.get("target") or a.get("text") or a.get("value") or "").strip()
+                only_input = re.fullmatch(r"\{\{\s*([A-Za-z_]\w*)\s*\}\}", raw)
+                shown = _readable(raw)[:60]
+                if only_input:  # an input's name is not words on the screen: say what it stands for
+                    out.append(f"the {only_input.group(1).replace('_', ' ').lower()} you entered appears")
+                else:  # _readable already quotes an input name inside the words: never quote twice
+                    out.append(f"{shown} appears" if "“" in shown else f"“{shown}” appears")
             elif a.get("type") == "url_changed":
                 out.append("the page address changes")
             elif a.get("type") == "state_changed":

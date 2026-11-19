@@ -29,7 +29,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-6 | False success: a pass that didn't really happen | ✅ passed 2026-11-18 (P-38) | — |
 | WF-7 | Wrong row, right button ⭐ (stop-ship class) | ✅ passed 2026-11-18 (P-39) | — |
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ✅ passed 2026-11-18 (P-40) | — |
-| WF-9 | Compiler honesty: identity, meaning never touches addresses | ⏳ | Yes |
+| WF-9 | Compiler honesty: identity, meaning never touches addresses | ✅ passed 2026-11-19 (P-41) | — |
 | WF-10 | Branches and popups: optional, decision, unrecorded | ⏳ | Yes |
 | WF-11 | Loops, inputs and hostile input data | ⏳ | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ⏳ | Yes |
@@ -301,25 +301,9 @@ no-ops, which must be listed with a reason). **Failures go to:** `recorder/bridg
 
 ---
 
-## WF-9 — Compiler honesty
+## ✅ WF-9 — Compiler honesty — passed 2026-11-19 (P-41)
 
-**Rules being attacked:** no AI writes selectors on the main path; the meaning pass never touches
-addresses; nothing is dropped silently. **Site:** S3 (`/text-box`, `/automation-practice-form`,
-`/dynamic-properties`). Compile determinism already passed (P-28) — not repeated.
-
-| # | Check | Must happen | If wrong |
-|---|---|---|---|
-| 9.1 | Open a step's identity in the details view | More than one clue (role, label, nearby text, test id). Every clue traceable to the real page; nothing invented | S1 |
-| 9.2 | Recompile the same session with the meaning pass off (investigator provides the switch) and diff address fields | Identical `ADDRESS_KEYS` fields with and without it. The pass may change only meaning: inputs, placeholders, phases, optional checks, archiving | S0 |
-| 9.3 | Add a click on blank space mid-recording | Archived with a plain reason and still visible; not run at replay; not silently gone | S1 |
-| 9.4 | A suggested check after Submit | Text/URL/page kind only, never "this selector must exist"; optional. Break the page after Submit → the run still passes on its real proof | S1 |
-| 9.5 | Date of Birth on the practice form (open, change month, pick day) | One date step, not 3–5 clicks. Replay with a date in a different year → lands on the new date | S1 |
-| 9.6 | Type a personal-looking email as a value | Never ends up inside how a button is found (BUILD-86 class); build refusals give advice a person can follow | S2 |
-
-**Failures go to:** `IdentityBundle` / `selector_grammar.py` (9.1); `second_opinion.py` (9.2–9.4,
-9.2 is S0); date-picker items (9.5).
-
----
+Identity clues, meaning pass never moves an address (9.2 wording: except a confirmed popup's action/branch/recovery and `signals.semantic.effect_judgement`), blank-space click gets a plain notice (9.3), checks never rely on a selector that must exist (9.4), one date step for a picked date (9.5), typed emails never reach a selector (9.6). Details: [`workflow-handoffs/WF-009.md`](workflow-handoffs/WF-009.md).
 
 ## WF-10 — Branches and popups
 

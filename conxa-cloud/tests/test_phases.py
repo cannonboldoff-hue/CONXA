@@ -1598,3 +1598,57 @@ def test_an_anchor_the_recorder_flagged_ephemeral_never_reaches_the_compiled_ste
         {}, None,
     )
     assert [a["element"] for a in out] == ["heading"]
+
+
+def test_validation_planner_text_is_never_an_element():
+    """WF-9 round 2: changed page text ("Name:Asha Verma") became a required selector on the Submit step."""
+    from conxa_compile.compiler.validation_planner import infer_success_conditions
+
+    out = infer_success_conditions(
+        {"type": "element_appear"}, {"text_change": ["Name:Asha Verma"], "new_elements": []}, "https://x.test/form", {},
+    )
+    assert out["required_elements"] == []
+    assert "Name:Asha Verma" in out["expected_text_tokens"]
+
+
+def _dialog_click(effect: str, *, signal: str = "", context_signal: str = "") -> tuple:
+    from conxa_core.models.skill_spec import ValidationBlock
+    from tests.test_element_fingerprint import _make_ev
+
+    ev = _make_ev(inner_text="Close")
+    ev["action"]["action"] = "click"
+    ev["post_condition"] = {"classified_effect": effect, **({"dialog_signal": signal} if signal else {})}
+    if context_signal:
+        ev["dialog_context"] = {"container_signal": context_signal, "title": "Thanks", "buttons": []}
+    return ev, ValidationBlock(wait_for={"type": "none"}, success_conditions={})
+
+
+def test_dialog_closed_click_gets_required_selector_absent():
+    from conxa_compile.compiler.build import _build_assertions
+
+    ev, validation = _dialog_click("dialog_closed", context_signal='[role="dialog"]')
+    got = [a for a in _build_assertions(ev, validation, {}, {}) if a.type == "selector_absent"]
+    assert len(got) == 1 and got[0].target == '[role="dialog"]' and got[0].required is True
+
+
+def test_dialog_opened_click_gets_no_absent_check():
+    from conxa_compile.compiler.build import _build_assertions
+
+    ev, validation = _dialog_click("dialog_opened", signal='[role="dialog"]', context_signal='[role="dialog"]')
+    assertions = _build_assertions(ev, validation, {}, {})
+    assert not any(a.type == "selector_absent" for a in assertions)
+    assert any(a.type == "selector_present" for a in assertions)
+
+
+def test_a_click_on_a_popup_button_is_named_from_the_popups_title_by_code():
+    from conxa_compile.compiler.outcome_fork import build_outcome_forks
+    from conxa_core.models.skill_spec import SkillStep
+
+    step = SkillStep(
+        action="click",
+        semantic_description="Close the calendar pop-up",
+        signals={"dialog_context": {"title": "Thanks for submitting the form", "buttons": [{"name": "Close", "chosen": True}]}},
+    )
+    out = build_outcome_forks([step], "s1")
+    assert out[0].semantic_description == 'Click "Close" in the "Thanks for submitting the form" popup'
+    assert out[0].signals["label_owner"] == "code"

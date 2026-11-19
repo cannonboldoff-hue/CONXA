@@ -95,7 +95,7 @@ def build_try_dismiss_from_hint(primary_selector: str, container_signal: str) ->
     }
 
 
-_GENERIC_INPUT_NAMES = frozenset({"text", "number", "value", "input", "field", "item", "record_name", "page_address"})
+_GENERIC_INPUT_NAMES = frozenset({"text", "number", "value", "input", "field", "item", "record_name", "page_address", "date", "date_time"})
 
 
 def _is_made_up_input_name(name: str) -> bool:
@@ -141,8 +141,8 @@ def _apply_one(step: SkillStep, kind: str, current: str, proposed: str) -> bool:
 
     if kind == "suggest_optional":
         hint = step.optional_hint if isinstance(step.optional_hint, dict) else None
-        if not hint:
-            return False
+        if not hint or proposed.strip().lower() != "true":
+            return False  # a "false" verdict means leave the step as recorded
         built = build_try_dismiss_from_hint(
             str((step.target or {}).get("primary_selector") or ""),
             str(hint.get("container_signal") or ""),

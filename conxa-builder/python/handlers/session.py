@@ -73,6 +73,15 @@ def _capture_gap_count(sess: Any) -> int:
         return 0
 
 
+def _ignored_click_count(sess: Any) -> int:
+    """Clicks the recording left out because they were on something that is not a control. Tolerates a missing counter."""
+    counter = getattr(sess, "ignored_click_count", None)
+    try:
+        return int(counter()) if callable(counter) else 0
+    except Exception:  # noqa: BLE001 — a diagnostic must never fail a save
+        return 0
+
+
 def _refresh_group_app_sessions(workflow_id: str) -> None:
     """After a workflow recording ends, split its merged group session back into
     per-app updates so each app's saved session picks up whatever the site did to
@@ -629,6 +638,7 @@ class SessionMixin:
         # during stop(). A snapshot taken first would miss them in the count, the empty-recording check and the hosts.
         events = sess.snapshot_events()
         gaps = _capture_gap_count(sess)
+        ignored = _ignored_click_count(sess)
         with self._rec_lock:
             if self._active_recording == session_id:
                 self._active_recording = None
@@ -648,6 +658,7 @@ class SessionMixin:
                 "workflow_id": workflow_id,
                 "status": "variant_recorded",
                 "capture_gaps": gaps,
+                "ignored_clicks": ignored,
                 "variant_of": getattr(sess, "variant_of", ""),
                 "workflow_kind": "workflow",
             }
@@ -676,7 +687,8 @@ class SessionMixin:
                 "workflow_id": workflow_id,
                 "status": "recorded",
                 "capture_gaps": gaps,
+                "ignored_clicks": ignored,
                 "workflow_kind": "workflow",
             }
-        return {"session_id": session_id, "event_count": len(events), "action_count": _action_count(events), "capture_gaps": gaps}
+        return {"session_id": session_id, "event_count": len(events), "action_count": _action_count(events), "capture_gaps": gaps, "ignored_clicks": ignored}
 

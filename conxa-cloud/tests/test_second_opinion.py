@@ -203,6 +203,88 @@ class SecondOpinionCompileTests(unittest.TestCase):
         for field in ("target", "identity_bundle", "compiled_selectors", "validation", "frame", "tab"):
             self.assertEqual(applied_step[field], baseline_step[field], field)
 
+    def test_pass_never_moves_an_address(self) -> None:
+        """WF-9 9.2: with the pass on, every address field equals the rules-only compile. The one allowed
+        difference is a recorder-flagged step the model confirmed optional ("true"): action, branch, recovery."""
+        from conxa_compile.compiler.build import compile_skill_package
+        from conxa_compile.editor.capability_manifest import ADDRESS_KEYS
+        from conxa_compile.pipeline.run import run_pipeline
+
+        ev = _minimal_click_event()
+        ev["optionality"] = "stochastic"
+        ev["branch_hint"] = {"container_signal": ".cookie-banner"}
+        evs = run_pipeline([ev])
+        data_dir, patchers = _compile_fixture("sess", evs)
+
+        def build(canned, effects=None):
+            def review(inputs, **kw):
+                if effects is not None:
+                    kw["extras_out"]["effects"] = effects
+                return WorkflowIntentGraph(), canned(None)
+
+            with ExitStack() as stack:
+                for p in patchers:
+                    stack.enter_context(p)
+                stack.enter_context(patch.object(settings, "llm_semantic_suggestions_enabled", canned is not None))
+                if canned is not None:
+                    stack.enter_context(patch("conxa_compile.llm.workflow_review.build_workflow_review", side_effect=review))
+                return compile_skill_package(evs, skill_id="skill_test", source_session_id="sess", title="t", version=1)
+
+        try:
+            baseline = build(None)
+            click_key = step_keys(baseline.skills[0].steps)[-1]
+            self.assertTrue(baseline.skills[0].steps[-1].optional_hint, "fixture must carry the recorder hint")
+
+            def findings(optional):
+                return lambda _stack: [
+                    {"step_key": click_key, "kind": "rename_binding", "current": "", "proposed": "named_input"},
+                    {"step_key": click_key, "kind": "label_phase", "current": "", "proposed": "act"},
+                    {"step_key": click_key, "kind": "suggest_assertion", "current": "",
+                     "proposed": json.dumps({"type": "text_present", "target": "Submit"})},
+                    {"step_key": click_key, "kind": "suggest_optional", "current": "", "proposed": optional},
+                ]
+
+            declined = build(findings("false"))
+            confirmed = build(findings("true"))
+
+            def judged(reversible):
+                return [{"step_key": click_key, "reversible": reversible, "kind": "other", "confidence": 0.9, "reason": "x"}]
+
+            said_yes, said_no = build(findings("false"), judged(True)), build(findings("false"), judged(False))
+        finally:
+            shutil.rmtree(data_dir, ignore_errors=True)
+
+        def dumps(pkg, keep_judgement=False):
+            out = [s.model_dump() for s in pkg.skills[0].steps]
+            if not keep_judgement:
+                # The model's meaning-only "can it be undone" label may be worded differently by two live calls.
+                for d in out:
+                    (d.get("signals") or {}).get("semantic", {}).pop("effect_judgement", None)
+            return out
+
+        for base, got in zip(dumps(baseline), dumps(declined)):
+            for k in ADDRESS_KEYS:
+                self.assertEqual(base.get(k), got.get(k), k)
+        self.assertEqual(declined.skills[0].steps[-1].phase, "act")  # the pass did run
+        self.assertTrue(declined.skills[0].steps[-1].optional_hint, "a false verdict leaves the hint alone")
+
+        # Two different model answers about reversibility differ only in `signals.semantic.effect_judgement`.
+        self.assertNotEqual(dumps(said_yes, True)[-1]["signals"], dumps(said_no, True)[-1]["signals"])
+        # (`consequence` follows the judgement by design; it is not an address.)
+        def no_consequence(pkg):
+            return [{k: v for k, v in d.items() if k != "consequence"} for d in dumps(pkg)]
+
+        self.assertEqual(no_consequence(said_yes), no_consequence(said_no))
+        self.assertEqual(no_consequence(said_yes), no_consequence(declined))
+
+        confirmed_steps = dumps(confirmed)
+        self.assertEqual(confirmed_steps[-1]["action"]["action"], "try_dismiss")
+        for base, got in zip(dumps(baseline), confirmed_steps):
+            for k in ADDRESS_KEYS - {"action", "branch", "recovery"}:
+                self.assertEqual(base.get(k), got.get(k), k)
+        for k in ("tab", "frame", "signals", "target", "identity_bundle", "compiled_selectors"):
+            self.assertEqual(dumps(baseline)[-1].get(k), confirmed_steps[-1].get(k), k)
+
     @patch.object(settings, "compile_keep_every_action", False)
 
     def test_flag_noise_finding_removes_step_and_archives_it(self) -> None:
@@ -333,6 +415,19 @@ class ApplySecondOpinionTests(unittest.TestCase):
         self.assertIsNone(step.optional_hint)
         # try_dismiss bodies never enter the recovery cascade.
         self.assertEqual(step.recovery.max_attempts, 0)
+
+    def test_suggest_optional_false_applies_nothing(self) -> None:
+        step = _type_step(
+            target={"primary_selector": "#prev"},
+            optional_hint={"container_signal": ".cal"},
+        )
+        before = (dict(step.action), dict(step.branch), step.recovery.model_dump())
+        keys = step_keys([step])
+        self.assertEqual(
+            apply_second_opinion([step], [{"step_key": keys[0], "kind": "suggest_optional", "current": "", "proposed": "false"}]), []
+        )
+        self.assertEqual((dict(step.action), dict(step.branch), step.recovery.model_dump()), before)
+        self.assertEqual(step.optional_hint, {"container_signal": ".cal"})
 
     def test_suggest_optional_without_a_recorder_hint_applies_nothing(self) -> None:
         step = _type_step(target={"primary_selector": "#x"})
@@ -622,6 +717,9 @@ class ValidateFindingsTests(unittest.TestCase):
 
     def test_suggest_optional_with_recorder_hint_survives(self) -> None:
         self.assertEqual(len(self._validate([{"step_key": "k2", "kind": "suggest_optional", "proposed": "true"}])), 1)
+
+    def test_suggest_optional_false_dropped(self) -> None:
+        self.assertEqual(self._validate([{"step_key": "k2", "kind": "suggest_optional", "proposed": "false"}]), [])
 
     def test_invalid_phase_dropped(self) -> None:
         self.assertEqual(self._validate([{"step_key": "k1", "kind": "label_phase", "proposed": "shopping"}]), [])

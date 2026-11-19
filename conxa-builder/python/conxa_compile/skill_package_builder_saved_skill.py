@@ -16,9 +16,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from conxa_compile.compiler.action_policy import RECOVERY_ACTION_TYPES
+from conxa_compile.compiler.action_semantics import judged_irreversible
 from conxa_compile.editor.action_registry import is_marker_action, is_supported_action, normalize_action_kind
 from conxa_compile.editor.assets import resolve_skill_asset
 from conxa_compile.llm.anchor_vision_llm import _apply_bbox_highlight
+from conxa_compile.app_graph.scrub import scrub_text as _scrub_words
 from conxa_core.sanitize import dumps_safe, scrub_text
 
 
@@ -315,6 +317,11 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
         out["label"] = label[:120]
     bundle = step.get("identity_bundle")
     if isinstance(bundle, dict) and bundle.get("destructive"):
+        out["destructive"] = True
+    # A model's "cannot be undone" (or "could not tell") is recorded as meaning only, never written into the
+    # address above; the runtime reads it here so a failed check on such a step is never answered by clicking again.
+    signals = step.get("signals") if isinstance(step.get("signals"), dict) else {}
+    if judged_irreversible({"semantic": signals.get("semantic")}) is True:
         out["destructive"] = True
 
     eb = step.get("entity_binding")
@@ -1362,7 +1369,9 @@ def _build_saved_skill_recovery(
         # the reference screenshot. Absent when the recording was never watched or missed this step.
         video_context = step.get("video_context")
         if isinstance(video_context, dict) and any(str(v or "").strip() for v in video_context.values()):
-            entry["video_context"] = {k: str(video_context.get(k) or "") for k in ("visible_target", "screen_before", "screen_after", "purpose")}
+            # What a person typed can sit in these words ("the Email field now contains 'a@b.com'"), and this file
+            # ships to customers: same scrub the proof picker applies before showing them to a model.
+            entry["video_context"] = {k: _scrub_words(video_context.get(k), 200) for k in ("visible_target", "screen_before", "screen_after", "purpose")}
         # BUILD-25 stage e: the compiler's second-opinion pass's label_phase
         # finding. Read by runtime/app/failure_response.js's Tier B recovery
         # prompt as a workflow-position prior. Absent on any step the pass

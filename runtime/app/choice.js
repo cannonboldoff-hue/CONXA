@@ -106,4 +106,17 @@ function optionsSummary(options) {
     .join(", ");
 }
 
-module.exports = { matchOption, matchOptions, optionsSummary };
+/** The selector to act on for one option. Older recordings gave every radio/checkbox in a group the same
+ * shared selector (`input[name="gender"]`), which matches all of them; when another option carries the
+ * same selector, point at this one by group name + value instead. */
+function optionSelector(option, choice) {
+  const sel = String((option && option.selector) || "");
+  const opts = Array.isArray(choice && choice.options) ? choice.options : [];
+  const shared = sel && opts.some((o) => o && o !== option && o.selector === sel);
+  const kind = choice && choice.kind;
+  if (!shared || !choice.group_key || option.value == null || (kind !== "radio" && kind !== "checkbox")) return sel;
+  const esc = (v) => String(v).replace(/[\\"]/g, "\\$&");
+  return `input[type="${kind}"][name="${esc(choice.group_key)}"][value="${esc(option.value)}"]`;
+}
+
+module.exports = { matchOption, matchOptions, optionsSummary, optionSelector };

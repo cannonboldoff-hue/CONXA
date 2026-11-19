@@ -779,6 +779,8 @@ in the run report so the owner sees them without reading the log.
 
 **Residual.** A name without an email is not detected; only the length cap guards that. Typed values are not scanned.
 
+**Update 2026-11-19 (WF-9 F-6).** `skill_package_builder_saved_skill.py` copied the video model's step words (`video_context`: `screen_after` and the others) into `recovery.json` raw, so a line like "The Email field now contains 'ravi.kumar1987@gmail.com'" shipped. Each field now goes through `app_graph/scrub.py::scrub_text` (200 characters), as the proof picker does. **Residual:** the scrub drops quoted spans, emails, file-like words and any word with a digit, so a name or address written as plain words with no digit or quote ("Ravi Kumar", "Park Road") still passes.
+
 ## SG-26 — Step Facts Are Sent To A Decision Model Through The Conxa Cloud
 
 **Severity:** Low (mitigated)

@@ -488,3 +488,14 @@ test("value_equals still fails when the rich-text box holds other text", { timeo
   const r = await verifyStep(page, step, {});
   assert.strictEqual(r.pass, false);
 });
+
+test("selector_absent is fresh only when present in baseline", async () => {
+  const step = { type: "click", validation: { assertions: [{ type: "selector_absent", target: '[role="dialog"]', required: true }] } };
+  const base = { url: "https://x.test", textLen: 1, interactiveCount: 1 };
+  const seen = await verifyStep(mockPage("https://x.test", { '[role="dialog"]': 0 }), step, {}, { ...base, present: { '[role="dialog"]': true } });
+  assert.deepStrictEqual([seen.pass, seen.results[0].answer, seen.results[0].fresh], [true, "yes", true]);
+  const neverThere = await verifyStep(mockPage("https://x.test", { '[role="dialog"]': 0 }), step, {}, { ...base, present: { '[role="dialog"]': false } });
+  assert.deepStrictEqual([neverThere.pass, neverThere.results[0].answer, neverThere.results[0].fresh], [true, "cant_tell", undefined]);
+  const noBaseline = await verifyStep(mockPage("https://x.test", { '[role="dialog"]': 0 }), step, {}, null);
+  assert.strictEqual(noBaseline.results[0].answer, "cant_tell");
+});

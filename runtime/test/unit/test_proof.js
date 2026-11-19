@@ -207,3 +207,9 @@ test("judge: added checks that cannot look never turn 'couldn't confirm' into 's
     assert.strictEqual(r.verdict, "couldnt_confirm", answer);
   }
 });
+
+test("assertionRung: a required 'gone' check on a box that was there before is completed; otherwise accepted", () => {
+  assert.strictEqual(proof.assertionRung({ type: "selector_absent", required: true, fresh: true }), "completed");
+  assert.strictEqual(proof.assertionRung({ type: "selector_absent", required: true }), "accepted");
+  assert.strictEqual(proof.assertionRung({ type: "selector_absent", required: false, fresh: true }), "accepted");
+});

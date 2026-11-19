@@ -1,0 +1,6 @@
+<!doctype html><html><head><title>Dialog check</title><style>body{font:16px sans-serif;padding:40px}.m{position:fixed;top:100px;left:100px;width:400px;background:#fff;border:2px solid #333;padding:20px;transition:opacity .3s}.m.fade{opacity:0}</style></head><body>
+<h1>Order form</h1><input id="nm" placeholder="Name"><button id="go" type="button">Send</button><p id="out"></p>
+<script>
+document.getElementById("go").onclick=()=>{const n=document.getElementById("nm").value;const d=document.createElement("div");d.className="m";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.innerHTML='<h2>Thanks for sending</h2><p>Name '+n+'</p><button id="closeBox" type="button">Close</button>';document.body.appendChild(d);
+d.querySelector("#closeBox").onclick=()=>{};};
+</script></body></html>

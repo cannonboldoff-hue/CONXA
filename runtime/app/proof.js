@@ -136,7 +136,8 @@ function requiredRungFor(step, { full = false, hasRequiredAssertion = false } = 
  * that the app took the action.
  */
 function assertionRung(result) {
-  return result && result.type === "text_present" && result.required && result.fresh ? "completed" : "accepted";
+  // A box that was on the page before the action and is gone after it (`selector_absent`, fresh) finds the result too.
+  return result && (result.type === "text_present" || result.type === "selector_absent") && result.required && result.fresh ? "completed" : "accepted";
 }
 
 /** One run's outcome from what its steps showed. */

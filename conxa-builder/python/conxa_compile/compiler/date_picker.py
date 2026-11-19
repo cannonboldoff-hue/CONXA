@@ -225,7 +225,9 @@ def _collapse_one(
     prev_selector = str(first_dc.get("prev") or "")
     next_selector = str(first_dc.get("next") or "")
     field_selector = str(first_dc.get("field") or "")
-    display_value = first_dc.get("field_display_value")
+    # What the field held AFTER the pick is in the app's own format; before it, the field may be empty or
+    # hold an older value in a different shape.
+    display_value = first_dc.get("field_display_value_after") or first_dc.get("field_display_value")
     display_format = _infer_display_format(display_value, first_dc.get("iso_date"))
     # Derived from whether an anchored field exists at all (hints["open"], below), not from
     # whether a preceding step happened to fold into open_step: those answer different
@@ -239,6 +241,9 @@ def _collapse_one(
     # click loop, so there's nothing to reconcile between the two strategies within one step.
     year_select_selector = str(_date_context(events[year_select_idx]).get("select") or "") if year_select_idx is not None else ""
     month_select_selector = str(_date_context(events[month_select_idx]).get("select") or "") if month_select_idx is not None else ""
+    # No dropdown was touched in this run, but the day click recorded which dropdowns the calendar has.
+    year_select_selector = year_select_selector or str(first_dc.get("year_select") or "")
+    month_select_selector = month_select_selector or str(first_dc.get("month_select") or "")
 
     def hints_for(cell_selector: str, cell_attr: str, kind: str) -> dict[str, Any]:
         h: dict[str, Any] = {
@@ -299,7 +304,7 @@ def _collapse_one(
         hints["time_option"] = str(_date_context(events[time_idx]).get("time") or "")
     step = _make_date_pick_step(
         open_step or steps[day_idxs[0]], open_event, iso, policy,
-        fallback_name="due_datetime" if kind == "datetime" else "due_date",
+        fallback_name="date_time" if kind == "datetime" else "date",
         hints=hints,
     )
     return [step]

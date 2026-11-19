@@ -1,0 +1,129 @@
+{
+ "wait_for": {
+  "type": "element_appear",
+  "target": "text=\"Submit\"",
+  "timeout": 8000
+ },
+ "success_conditions": {
+  "url_not_contains": "",
+  "required_elements": [],
+  "forbidden_elements": [],
+  "expected_text_tokens": [
+   "Name:Asha Verma",
+   "Email:ravi.kumar1987@gmail.com",
+   "Current Address :12 Park Street",
+   "Permananet Address :34 Lake Road"
+  ],
+  "control_text": [],
+  "page_url_hint": "https://demoqa.com/text-box",
+  "state_diff_strength": 0.2,
+  "state_diff_as_hint": true,
+  "final_intent": "activate_control_submit",
+  "intent_validation_primary": true
+ },
+ "assertions": [
+  {
+   "type": "state_changed",
+   "target": "",
+   "expected": "",
+   "timeout_ms": 8000,
+   "required": true,
+   "source": ""
+  },
+  {
+   "type": "text_present",
+   "target": "{{current_address}}",
+   "required": true
+  },
+  {
+   "type": "text_present",
+   "target": "{{full_name}}",
+   "required": true
+  },
+  {
+   "type": "text_present",
+   "target": "{{permanent_address}}",
+   "required": true
+  },
+  {
+   "type": "text_present",
+   "target": "{{user_email}}",
+   "required": true
+  }
+ ],
+ "effect": {
+  "kind": "send",
+  "required_rung": "result_exists",
+  "target_rung": "result_exists",
+  "identity": {},
+  "checks": [
+   {
+    "id": "c1",
+    "rung": "completed",
+    "witness": "transport",
+    "role": "support",
+    "probe": {
+     "type": "request_chain",
+     "method": "mutating",
+     "status": "2xx"
+    },
+    "plain": "the app accepted the request",
+    "confirmed": true,
+    "calibrated": null,
+    "calibration_basis": []
+   },
+   {
+    "id": "c3",
+    "rung": "result_exists",
+    "witness": "renderer",
+    "role": "support",
+    "probe": {
+     "type": "row_with_identity",
+     "key": "{{permanent_address}}",
+     "keys": [
+      "{{permanent_address}}",
+      "{{current_address}}",
+      "{{user_email}}",
+      "{{full_name}}"
+     ],
+     "delta": 1
+    },
+    "plain": "what you entered now shows up on the page",
+    "confirmed": true,
+    "calibrated": true,
+    "calibration_basis": [
+     "c3"
+    ]
+   },
+   {
+    "id": "c2",
+    "rung": "completed",
+    "witness": "renderer",
+    "role": "veto",
+    "probe": {
+     "type": "failure_signal",
+     "scope": "new_since_baseline"
+    },
+    "plain": "the app shows no error or refusal",
+    "confirmed": false,
+    "calibrated": null,
+    "calibration_basis": []
+   }
+  ],
+  "quorum": {
+   "witnesses": 1,
+   "identity_required": false
+  },
+  "time": {
+   "progress_extends": true,
+   "stall_after_s": 20,
+   "max_s": 120,
+   "long_wait": "fail"
+  },
+  "on": {
+   "unverified": "fail",
+   "partial": "stop_and_report"
+  },
+  "words": {}
+ }
+}

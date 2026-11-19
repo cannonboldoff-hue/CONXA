@@ -55,7 +55,7 @@ _NAMESPACE = "workflow_review"
 _CACHE_VERSION = 2
 # Bump when the review prompt in openapi_client.infer_workflow_review changes, so a fresh
 # recording after the change is not served an answer the old prompt produced.
-_PROMPT_VERSION = 8  # 8: also judges whether each step can be undone (effects); 7: 7: each step states its 0-based index; 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
+_PROMPT_VERSION = 9  # 9: the compile prompt now defines `effects` (it only listed the key); 8: also judges whether each step can be undone (effects); 7: 7: each step states its 0-based index; 6: reads the video's words, the understanding and each input's label, may be asked twice; 5: text only, no step screenshots; 4: also answers the description check and loop wording (BUILD-55)
 
 
 _RETRY_NOTE = "Your last reply could not be read. Return ONLY the JSON object described, nothing before or after it."

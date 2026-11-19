@@ -869,6 +869,31 @@ def test_radio_group_records_choice_context_with_every_option(page: Page) -> Non
     assert [o["value"] for o in choice["options"]] == ["male", "female", "other"]
     picked = next(o for o in choice["options"] if o["value"] == "female")
     assert picked["checked"] is True
+    # WF-9 9.1: every option points at itself, never at the whole group.
+    selectors = [o["selector"] for o in choice["options"]]
+    assert len(set(selectors)) == 3, selectors
+    for sel, o in zip(selectors, choice["options"]):
+        assert page.locator(sel).count() == 1 and page.locator(sel).get_attribute("value") == o["value"], sel
+
+
+def test_radio_options_without_ids_still_get_distinct_selectors(page: Page) -> None:
+    _install_bridge(
+        page,
+        """
+        <fieldset>
+          <legend>Plan</legend>
+          <label><input type="radio" name="plan" value="free"> Free</label>
+          <label><input type="radio" name="plan" value="pro"> Pro</label>
+        </fieldset>
+        """,
+    )
+    page.click("text=Pro")
+    page.wait_for_timeout(80)
+    choice = _action_events(page, "set_radio")[0]["choice_context"]
+    selectors = [o["selector"] for o in choice["options"]]
+    assert len(set(selectors)) == 2, selectors
+    for sel, o in zip(selectors, choice["options"]):
+        assert page.locator(sel).count() == 1 and page.locator(sel).get_attribute("value") == o["value"], sel
 
 
 def test_radio_click_does_not_also_record_a_separate_click_or_focus_event(page: Page) -> None:
@@ -1220,6 +1245,96 @@ def test_calendar_root_is_the_widget_not_the_day_cell(page: Page) -> None:
         f"grid is a date-specific selector ({dc['grid']!r}) — it can only ever match the "
         "recorded day, so a different target date could never be picked"
     )
+
+
+def test_popper_calendar_arrow_and_day_share_one_grid_and_read_a_clean_header(page: Page) -> None:
+    # WF-9 9.5: react-datepicker wraps its widget in plain popper / tab-loop divs. A fixed widening depth
+    # reached a different outer node from the arrow than from a day, so one date pick compiled as two
+    # grids (3 steps). The header also came back as the whole month container (every dropdown option),
+    # and the day record named no month/year dropdowns.
+    _install_bridge(
+        page,
+        """
+        <div>
+          <div class="react-datepicker-wrapper"><div class="react-datepicker__input-container">
+            <input id="dob" type="text" value="10/15/2026">
+          </div></div>
+          <div class="react-datepicker__tab-loop">
+            <div class="react-datepicker__tab-loop__start" tabindex="0"></div>
+            <div class="react-datepicker-popper"><div><div><div>
+              <div class="react-datepicker">
+                <button type="button" class="react-datepicker__navigation react-datepicker__navigation--previous"
+                        aria-label="Previous Month" id="prev">Previous Month</button>
+                <div class="react-datepicker__month-container">
+                  <div class="react-datepicker__header">
+                    <div class="react-datepicker__current-month">October 2026</div>
+                    <div class="react-datepicker__header__dropdown">
+                      <div class="react-datepicker__month-dropdown-container"><select class="react-datepicker__month-select">
+                        <option>January</option><option selected>October</option><option>December</option></select></div>
+                      <div class="react-datepicker__year-dropdown-container"><select class="react-datepicker__year-select">
+                        <option>2024</option><option selected>2026</option></select></div>
+                    </div>
+                  </div>
+                  <div class="react-datepicker__month"><div class="react-datepicker__week">
+                    <div class="react-datepicker__day" id="d15" role="gridcell" tabindex="-1"
+                         aria-label="Choose Thursday, October 15th, 2026">15</div>
+                  </div></div>
+                </div>
+              </div>
+            </div></div></div></div>
+          </div>
+        </div>
+        """,
+    )
+    page.click("#prev")
+    page.wait_for_timeout(150)
+    page.click("#d15")
+    page.wait_for_timeout(150)
+
+    events = [e for e in _action_events(page, "click") if e.get("date_context")]
+    assert len(events) == 2, events
+    arrow, day = events[0]["date_context"], events[1]["date_context"]
+    assert (arrow["role"], day["role"]) == ("nav", "day")
+    assert arrow["grid"] == day["grid"], (arrow["grid"], day["grid"])
+    assert day["header_text"] == "October 2026"
+    assert page.locator(day["header"]).inner_text() == "October 2026"
+    assert page.locator(day["month_select"]).count() == 1 and page.locator(day["year_select"]).count() == 1
+
+
+def test_a_zero_size_popper_wrapper_is_never_the_grid(page: Page) -> None:
+    # WF-9 round 2: the popper is placed absolutely, so the tab-loop wrapper around it has no size. Recorded as the
+    # grid it can never become visible, and the replay waited on it until it timed out.
+    _install_bridge(
+        page,
+        """
+        <div id="shell">
+          <input id="dob" type="text" value="10/15/2026">
+          <div class="react-datepicker__tab-loop" style="height:0;position:relative">
+            <div class="react-datepicker-popper" style="position:absolute;top:0;left:0"><div><div><div>
+              <div class="react-datepicker">
+                <button type="button" class="react-datepicker__navigation--previous" aria-label="Previous Month" id="prev">Previous Month</button>
+                <div class="react-datepicker__month-container">
+                  <div class="react-datepicker__header"><div class="react-datepicker__current-month">October 2026</div></div>
+                  <div class="react-datepicker__month"><div class="react-datepicker__week">
+                    <div class="react-datepicker__day" id="d15" role="gridcell" tabindex="-1"
+                         aria-label="Choose Thursday, October 15th, 2026">15</div>
+                  </div></div>
+                </div>
+              </div>
+            </div></div></div></div>
+          </div>
+        </div>
+        """,
+    )
+    page.click("#prev")
+    page.wait_for_timeout(150)
+    page.click("#d15")
+    page.wait_for_timeout(150)
+    events = [e for e in _action_events(page, "click") if e.get("date_context")]
+    arrow, day = events[0]["date_context"], events[1]["date_context"]
+    assert arrow["grid"] == day["grid"]
+    assert not day["grid"].endswith("tab-loop"), day["grid"]
+    assert page.locator(day["grid"]).first.is_visible()
 
 
 def _jqueryui_style_html(month_attr: str = "10", year_attr: str = "2026", header: str = "November 2026") -> str:
@@ -1997,3 +2112,26 @@ def test_words_that_appear_after_a_click_are_recorded_as_the_result_not_the_cont
     assert "Saved!" in change["result_diff"]["added"]
     assert not any("Undo" in line for line in change["result_diff"]["added"])
     assert any("Undo" in line for line in change["dom_diff"]["added"])
+
+
+def test_a_click_that_closes_a_fading_dialog_is_recorded_as_closing_it(page: Page) -> None:
+    # The box is removed 300ms after the click (a fade-out). The page is quiet before that, so reading it right
+    # then called the close "nothing happened" and left the step with no way to prove it worked (WF-9).
+    _install_bridge(
+        page,
+        """
+        <div id="box" role="dialog" aria-label="Thanks"><button id="close">Close</button></div>
+        <script>
+          document.getElementById('close').addEventListener('click', () => {
+            setTimeout(() => document.getElementById('box').remove(), 300);
+          });
+        </script>
+        """,
+    )
+
+    page.click("#close")
+    page.wait_for_timeout(1800)
+
+    clicks = _action_events(page, "click")
+    assert len(clicks) == 1
+    assert clicks[0]["post_condition"]["classified_effect"] == "dialog_closed"

@@ -358,6 +358,11 @@ There is no dev/stable manifest system for Build Studio. It ships differently:
    dashboard and the Studio's own self-updater read from — is driven entirely by these env
    vars. Nothing promotes automatically the way conxa-app/conxa-runtime do.
 
+**Order matters when the compile prompt changes.** The prompt Studio sends at compile time (the "can this be
+undone?" definition, `_EFFECTS_RULE`) lives in the shared core that the **cloud** also runs. Deploy the cloud first,
+then release the Studio that depends on it: against an old cloud the model is never asked the question, so every
+click counts as "cannot be undone" and is asked about.
+
 ### Conxa Execute — no promotion step, this one is manual
 
 Same shape as Build Studio, its own tag prefix and env vars:

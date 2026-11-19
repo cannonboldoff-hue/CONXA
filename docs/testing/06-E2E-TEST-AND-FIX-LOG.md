@@ -3,7 +3,7 @@
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
 > a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **Paused after WF-8 (owner's request).** **Next:** WF-9 (compiler honesty). Remaining: WF-9…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> **WF-9 passed 2026-11-19.** **Next:** WF-10 (branches and popups). Remaining: WF-10…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1308,3 +1308,6 @@ fixture server's log and files on disk.
   CAPTCHA (needs a person) and browser autofill (can't be triggered by the test driver).
 
 **Final status of WF-8: PASSED** (P-40). Campaign paused here at the owner's request.
+
+### WF-9 — compiler honesty (2026-11-19)
+PASSED (P-41) after 5 engineering rounds (cause: 4 live retests exposed regressions of earlier fixes and a stale backend). Commit: see `git log` ("WF-9"). Detail: [`workflow-handoffs/WF-009.md`](workflow-handoffs/WF-009.md). Next: WF-10 (not started).

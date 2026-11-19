@@ -73,6 +73,7 @@ const {
   hasRequiredAssertion,
   needsStateChangedBaseline,
   watchedTexts,
+  watchedAbsents,
   pollNegative,
 } = require("./assertions");
 const {
@@ -1130,7 +1131,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // Pre-action baseline for the state_changed assertion (only captured when the step actually
   // carries one — cheap, but no reason to pay it on every step).
   const watched = watchedTexts(step, state.inputs);
-  const stateBaseline = needsStateChangedBaseline(step) || watched.length ? await capturePreStepSignature(page, watched) : null;
+  const watchedGone = watchedAbsents(step, state.inputs);
+  const stateBaseline = needsStateChangedBaseline(step) || watched.length || watchedGone.length ? await capturePreStepSignature(page, watched, watchedGone) : null;
   // Completion gate: what the page shows before the action, so only NEW progress/errors count after.
   // The evidence notebook opens here too: from now until the verdict it writes down what every tab this run
   // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.

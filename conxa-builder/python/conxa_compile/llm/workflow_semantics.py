@@ -188,6 +188,9 @@ def _validate_findings(
             if step_key not in optional_hint_keys:
                 _log(report, "override", "unobserved_optional", step_key)
                 continue
+            if proposed.lower() != "true":
+                _log(report, "override", "optional_declined", step_key)
+                continue  # the model said "not optional": nothing to convert
         elif kind == "label_phase":
             if proposed not in _VALID_PHASES:
                 _log(report, "shape", "bad_phase", step_key)
@@ -276,6 +279,8 @@ _EFFECT_KINDS = frozenset({"moves_forward", "opens", "edits_field", "saves", "se
 _JUDGED_ACTIONS = frozenset({"click", "dblclick", "double_click", "select", "select_option", "set_checkbox", "set_radio",
                              "upload", "date_pick", "dialog_accept", "outcome_fork"})
 
+_FILL_ONLY_ACTIONS = frozenset({"date_pick", "set_radio", "set_checkbox", "select", "select_option"})
+
 
 def _validate_effects(
     raw_effects: Any,
@@ -283,9 +288,11 @@ def _validate_effects(
     steps_context: list[dict[str, Any]],
     report: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """One judgement per step key at most, only for a step that can change data, with a usable answer."""
+    """One judgement per step key at most, only for a step that can change data. A step the model left out (or
+    answered unusably) gets an explicit "not judged" entry: without one the older word lists would call it
+    reversible, and WF-9 re-clicked a send button 7 times on that."""
     if not isinstance(raw_effects, list):
-        return []
+        raw_effects = []
     actions = {str(s.get("key") or ""): str(s.get("action") or "").lower() for s in steps_context}
     out: dict[str, dict[str, Any]] = {}
     for item in raw_effects:
@@ -314,4 +321,9 @@ def _validate_effects(
             "confidence": round(confidence, 2),
             "reason": str(item.get("reason") or "")[:200],
         }
+    for key, action in actions.items():
+        # A date pick, radio, checkbox or select only fills a field, like typing: an unanswered one is not "cannot be
+        # undone" (an answer is still kept). Clicks stay covered.
+        if action in _JUDGED_ACTIONS and action not in _FILL_ONLY_ACTIONS and key not in out:
+            out[key] = {"step_key": key, "reversible": None, "kind": "other", "confidence": 0.0, "reason": "not judged"}
     return list(out.values())

@@ -10,6 +10,8 @@ const {
   parseDateInput,
   formatForDisplay,
   parseHeader,
+  headerMatches,
+  datePickerProbe,
   monthDelta,
   machineCellSelector,
   dayNumberSelector,
@@ -244,4 +246,22 @@ test("date_pick: date_offset_days ignores the recorded value and works the date 
   };
   await HANDLERS.date_pick(page, step, {}).catch((e) => console.log("ERR", e.message));
   assert.ok(filled.length && filled[0] === dateFromOffset(7), `filled ${JSON.stringify(filled)}`);
+});
+
+test("parseHeader: a header that also lists its month dropdown reads the month shown first, not January", () => {
+  const text = "October 2026 January February March April May June July August September October November December 2024 2025 2026";
+  assert.deepStrictEqual(parseHeader(text), { year: 2026, month: 10 });
+});
+
+test("headerMatches: the shown month must be the target; an unreadable header is not proof", () => {
+  assert.strictEqual(headerMatches("October 2026", 2026, 10), true);
+  assert.strictEqual(headerMatches("December 2026", 2026, 5), false);
+  assert.strictEqual(headerMatches("October 2024", 2026, 10), false);
+  assert.strictEqual(headerMatches("", 2026, 10), true);
+});
+
+test("datePickerProbe: wait for the header (it has a size), else the grid", () => {
+  assert.strictEqual(datePickerProbe({ header: ".h", grid: ".wrapper" }), ".h");
+  assert.strictEqual(datePickerProbe({ grid: ".g" }), ".g");
+  assert.strictEqual(datePickerProbe({}), "");
 });
