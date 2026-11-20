@@ -1,0 +1,15 @@
+{"thinkAt":337,"changes":3,"firstSamples":[[337,125],[6420,280],[6738,328]],"totalMs":9441}
+----TAIL----
+Why did my last test fail? What went wrong?
+
+12:24 PM
+
+C
+
+Conxa · 12:24 PM
+
+No test has been run yet, so nothing failed. The record shows testing has never happened for this workflow.
+
+It's ready to test, and it isn't approved. When you test it, the test will ask you for the note text.
+
+WF12 note r1 · “Open localhost” selected

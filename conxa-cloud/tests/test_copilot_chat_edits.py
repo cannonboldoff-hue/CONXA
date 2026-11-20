@@ -52,7 +52,7 @@ def test_editable_fields_follow_the_gate_and_never_include_an_address():
     assert not click & {"target", "identity_bundle", "compiled_selectors", "check_selector", "recovery"}
     assert "run_if" not in editable_fields("agent_span")  # an input must never switch off a span
     assert "agent_span_budget" in editable_fields("agent_span")
-    assert "url" in editable_fields("navigate")
+    assert "url" not in editable_fields("navigate")  # a page address: chat never re-points a step (WF-12)
     assert "value" not in editable_fields("drag_drop")  # holds CSS
 
 

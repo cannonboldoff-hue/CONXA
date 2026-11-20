@@ -150,11 +150,18 @@ ASSERTION_TYPES = (
 
 # Keys that name WHERE on the page a step acts, or its structure. Chat never writes these: an element
 # address comes from a person (Human Edit) or is copied by code from an existing
-# step, and a branch / loop body is edited through its own ops, never as a raw array.
+# step, and a branch / loop body is edited through its own ops, never as a raw array. `url` is a navigate
+# step's page address: chat may only turn part of it into an input (`parameterize`, code-written), never
+# point the step at another page (WF-12 12.5).
 ADDRESS_KEYS = frozenset({
     "target", "identity_bundle", "compiled_selectors", "check_selector", "signals", "frame", "action",
-    "recovery", "branch", "for_each",
+    "recovery", "branch", "for_each", "url",
 })
+# What a person reads when a chat change is refused because it would change where a step acts.
+ADDRESS_REFUSAL = (
+    "Chat can't change where a step acts, such as its page address or the element it clicks. "
+    "Open the step in Human Edit to change that."
+)
 # Fields the patch gate accepts through a dotted path (or outside the per-kind key lists) that change
 # meaning, not an address. Offered only to the kinds that own the parent object.
 _DEFAULT_DOTTED = ("consequence", "entity_binding.confirmed", "handler_hints.hover_chain")
@@ -180,6 +187,25 @@ def editable_fields(kind: str) -> frozenset[str]:
     if kind in VALUE_IS_ADDRESS_KINDS:
         out.discard("value")
     return frozenset(out)
+
+
+def chat_may_write(kind: str, patch: Any) -> bool:
+    """True when every field a chat patch writes is one ``editable_fields(kind)`` lists. The one check every
+    chat edit passes, when its card is made and again when it is applied. An allow-list, so an address under
+    any spelling or nesting (``url``, ``URL``, ``action.url``, ``signals.context.page_url``, ``target``) fails."""
+    allowed = editable_fields(kind)
+
+    def ok(prefix: str, sub: dict[str, Any]) -> bool:
+        for key, val in sub.items():
+            path = f"{prefix}{key}"
+            if path in allowed:
+                continue
+            deeper = isinstance(val, dict) and val and any(f.startswith(path + ".") for f in allowed)
+            if not (deeper and ok(path + ".", val)):
+                return False
+        return True
+
+    return isinstance(patch, dict) and bool(patch) and ok("", patch)
 
 
 def _kind_row(kind: str) -> dict[str, Any]:

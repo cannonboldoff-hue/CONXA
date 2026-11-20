@@ -41,7 +41,7 @@ def recording_chat(workflow_id: str, limit: int = 600) -> str:
     from conxa_compile.conversation import thread_store as ts
 
     try:
-        said = [str(it.get("text") or "").strip() for it in ts.read_raw(_thread(workflow_id)) if it.get("kind") == "user_message"]
+        said = [str(it.get("text") or "").strip() for it in ts.fold(ts.read_raw(_thread(workflow_id))) if it.get("kind") == "user_message"]
     except Exception:  # noqa: BLE001 -- context only: a missing thread must never stop the understanding
         return ""
     return " | ".join(s for s in said if s)[-limit:]

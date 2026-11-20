@@ -1,0 +1,24 @@
+{"thinkAt":318,"changes":10,"firstSamples":[[318,143],[2237,148],[3182,148],[4131,148],[5072,148],[6318,148],[7261,148],[8213,148],[9152,453],[9463,589]],"totalMs":12031}
+----TAIL----
+use a new input named note
+
+1:23 PM
+
+C
+
+Conxa · 1:23 PM
+
+The change I have ready does that: the typing step will take its text from a new input called note, so whoever uses the workflow is asked for it first. It takes effect when you press Apply.
+
+One thing still open: the check on that same step expects the old fixed phrase. Tell me if you want that loosened too and I'll prepare it.
+
+▲
+Change the text or value it uses
+
+Not applied yet
+
+Make the text in step 3 come from a run input: “{{note}}”
+Show exact change
+Apply
+Dismiss
+WF12 note rt2 · “Type the note text into the box” selected

@@ -1,0 +1,17 @@
+{"thinkAt":332,"changes":6,"firstSamples":[[332,174],[2134,179],[3074,179],[4339,179],[4647,218],[4955,353]],"totalMs":7476}
+----TAIL----
+How many steps does this workflow have?
+
+Edit
+3:42 PM
+
+C
+
+Conxa · 3:42 PM
+
+Three steps: open the page, click Buy Now to start the purchase, and click Confirm Order to finish the order.
+
+The workflow is not tested and not approved — the latest test failed at the Buy Now step.
+
+Jump to latest
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

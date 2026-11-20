@@ -170,6 +170,7 @@ class ConversationMixin:
                 choice=str(payload.get("choice") or "") or None,
                 action=str(payload.get("action") or "") or None,
                 hidden=bool(payload.get("hidden")),
+                replaces=str(payload.get("replaces") or "") or None,
                 card_executor=execute,
                 flow_executor=run_action,
                 **ctx,
@@ -187,6 +188,20 @@ class ConversationMixin:
         finally:
             if replying:
                 runtime_state.set_flags(ident, replying=False)
+
+    def cmd_thread_new_conversation(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
+        """"New conversation": a divider the model reads nothing above. Nothing is removed, and cards
+        above it stay open. Waits for a reply that is still being written, so that reply stays above it.
+        ``item`` is None when nothing was said since the last divider."""
+        from conxa_compile.conversation import harness
+        from conxa_compile.conversation import thread_store as ts
+
+        thread_id = _thread_id(payload)
+        with harness._thread_lock(thread_id):
+            item = ts.start_new_conversation(thread_id)
+        if item is not None:
+            harness.emit_item(_event_sink(rid), thread_id, item)
+        return {"item": item}
 
     def cmd_card_action(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         """A button on a card (Apply, Undo, Create, …) — no model involved."""

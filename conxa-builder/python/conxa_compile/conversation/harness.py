@@ -178,6 +178,10 @@ def thread_turns(items: list[dict[str, Any]], *, after_id: str | None = None) ->
     return out
 
 
+EDIT_REFUSED = ("Only your last message can be changed, and only while nothing but my reply came after it. "
+                "Send a new message instead.")
+
+
 def _timeout() -> int:
     return int(getattr(settings, "llm_vision_timeout_ms", 120_000))
 
@@ -209,12 +213,17 @@ def run_turn(
     workflows: list[dict[str, Any]] | None = None,
     context_sections: list[tuple[str, str]] | None = None,
     hidden: bool = False,
+    replaces: str | None = None,
 ) -> dict[str, Any]:
     """Run one turn. Returns ``{"turn_id", "status": "done"|"cancelled", "reply", "items"}``.
 
     Raises the proxy's entitlement/quota/cloud errors unchanged — the command handler maps them
     to the error cards in ``States``. A turn that raises appends nothing but the person's own
     message (already shown), so Try again is always safe.
+
+    ``replaces`` is "Edit and resend": the id of the person's last message. It and Conxa's replies
+    to it leave the thread (``thread_store.editable_message`` says when that is allowed) and
+    ``message`` is answered in their place.
     """
     kind, _ident = ts.parse_thread_id(thread_id)
     turn_id = turn_id or f"turn_{uuid.uuid4().hex[:10]}"
@@ -244,7 +253,7 @@ def run_turn(
                     gate_proposals=gate_proposals, load_digest=load_digest, load_clarify=load_clarify,
                     last_test_failed=last_test_failed, push=push, new_items=new_items,
                     flow_executor=flow_executor, workflows=workflows, context_sections=context_sections,
-                    hidden=hidden,
+                    hidden=hidden, replaces=replaces,
                 )
             finally:
                 # Said here, with the turn's own id, so a turn the backend starts by itself (no renderer
@@ -267,7 +276,8 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
                 new_items: list[dict[str, Any]], flow_executor: FlowExecutor | None = None,
                 workflows: list[dict[str, Any]] | None = None,
                 context_sections: list[tuple[str, str]] | None = None, hidden: bool = False,
-                lifecycle_now: Callable[[], dict[str, Any] | None] | None = None) -> dict[str, Any]:
+                lifecycle_now: Callable[[], dict[str, Any] | None] | None = None,
+                replaces: str | None = None) -> dict[str, Any]:
     # The thread lock may have made this turn wait behind another (a compile that was starting, a test): the
     # lifecycle the caller read before the wait is old by now, and chat must answer from what is true now.
     if lifecycle_now is not None:
@@ -281,6 +291,13 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     message = (message or "").strip()
     raw = ts.read_raw(thread_id)
     items = ts.fold(raw)
+
+    if replaces:
+        ids = ts.editable_message(raw)
+        if card_id or not message or not ids or ids[0] != replaces:
+            raise ValueError(EDIT_REFUSED)
+        push(emit_item(sink, thread_id, ts.append(thread_id, "retract", ids=ids)))
+        items = ts.fold(ts.read_raw(thread_id))
 
     # 1 ─ deterministic routing: an answer to an open card never needs the conversational model.
     if card_id and (choice or action):
@@ -338,8 +355,10 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     # 2 ─ context under a budget.
     digest = load_digest() if load_digest else None
     clarify = load_clarify() if load_clarify else None
-    summary_item = ts.latest_summary(items)
-    turns = thread_turns(items[:-1], after_id=(summary_item or {}).get("covers_through"))
+    # After a "New conversation" divider the model reads only what came after it; open cards above it still count.
+    recent = items[ts.conversation_start(items):]
+    summary_item = ts.latest_summary(recent)
+    turns = thread_turns(recent[:-1], after_id=(summary_item or {}).get("covers_through"))
     budget = DEFAULT_WORKFLOW_BUDGET if kind == "wf" else DEFAULT_CHAT_BUDGET
     extra: list[tuple[str, str]] = []
     if kind == "chat" and group_names is not None:
@@ -377,7 +396,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
             return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
         offered = "\n".join(f"- {proposal_summary(p)}" for p in proposals)
         if editor_hints:
-            offered += ("\n" if offered else "") + "- (a link to Human Edit, where the person points a step at a new element)"
+            offered += ("\n" if offered else "") + "- (a button under your reply that opens the step in Human Edit; it is a button, not a card)"
         offered = offered or "(none could be prepared)"
         extra.append(("Changes you are offering — each takes effect only when the person presses Apply", offered))
         pack = make_pack()
@@ -453,7 +472,7 @@ def post_editor_hint_card(thread_id: str, sink: Any, hint: dict[str, Any], diges
     # A reason that names element addresses (role=…, #id, an xpath) goes behind "Technical details" (WF-5).
     technical = bool(re.search(r"role=|\[name=|internal:|xpath|//|#[A-Za-z][\w-]*|\bselector\b", reason, re.I))
     return post_card(thread_id, "action_link", "open", sink=sink, action="edit", target="edit",
-                     title=f"Open Human Edit to point {where} at a new element" + (f" — {reason}" if reason and not technical else ""),
+                     title=f"Open {where} in Human Edit" + (f" — {reason}" if reason and not technical else ""),
                      detail=reason if technical else "", step_index=step_index, actions=["open"])
 
 
@@ -490,7 +509,8 @@ def _perform_routed(routed: dict[str, Any], *, thread_id: str, sink: Sink | None
     slots = routed.get("slots") or {}
 
     def say(text: str) -> dict[str, Any]:
-        item = push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=text)))
+        # `routed`: Conxa acted on the message, so it can't be edited and resent (thread_store.editable_message).
+        item = push(emit_item(sink, thread_id, ts.append(thread_id, "assistant_message", text=text, routed=spec.id)))
         return {"turn_id": turn_id, "status": "done", "reply": item["text"], "items": new_items, "routed": spec.id}
 
     if spec.kind == "nav":
@@ -529,7 +549,9 @@ def _proposal_title(p: dict[str, Any]) -> str:
         return "Make it a run input" if p.get("op") == "parameterize" else "Change the steps"
     if p.get("field") in ("validation", "validation.assertions"):
         return "Change how a step is checked"
-    return f"Change “{p.get('field') or 'a step'}”"
+    from conxa_compile.editor.copilot_proposals import field_words
+
+    return f"Change {field_words(p.get('field'))}"
 
 
 # ── the extra model calls ───────────────────────────────────────────────────────────────────

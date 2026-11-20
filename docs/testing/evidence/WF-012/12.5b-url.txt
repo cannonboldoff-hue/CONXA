@@ -1,0 +1,24 @@
+{"thinkAt":334,"changes":4,"firstSamples":[[334,203],[6713,226],[7054,496],[7365,770]],"totalMs":10004}
+----TAIL----
+Change the page address of step 1 to http://localhost:8099/injection.html?v=clean
+
+12:11 PM
+
+C
+
+Conxa · 12:11 PM
+
+That's the first step, "Open the purchase injection page". I've prepared one change: the page address on that step is updated to the one you gave. It takes effect only when you press Apply.
+
+Note this only changes where the workflow starts. The test still failed at "Click the Buy Now button to start the purchase process" because that button wasn't where the recording had it. If the new page shows it properly, test again after applying. If it still fails, that step needs Human Edit.
+
+▲
+Change “url”
+
+Not applied yet
+
+Change “url” on step 1
+Show exact change
+Apply
+Dismiss
+WF12 buy r1 · “Click the Buy Now button to start the purchase process.” selected

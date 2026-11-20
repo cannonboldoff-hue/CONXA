@@ -1,0 +1,26 @@
+{"thinkAt":327,"changes":10,"firstSamples":[[327,176],[2333,181],[3274,181],[4200,181],[5137,181],[6076,181],[7032,181],[7978,161],[8309,650],[8627,786]],"totalMs":11447}
+----TAIL----
+use a new input named note instead of the fixed words
+
+3:45 PM
+
+C
+
+Conxa · 3:45 PM
+
+That's the change on offer: the step “Type the note text into the Note box” will take its text from an input named note, filled in by the person each time. It takes effect when you press Apply.
+
+One thing to watch: that same step still checks the box holds the words you recorded. After you apply, that check may need to follow the input too. Say the word and I'll prepare that as a second change.
+
+You have two change cards waiting. Answer them there, or press Apply to take the one you want.
+
+▲
+Change the text or value it uses
+
+Not applied yet
+
+Make the text in step 3 come from a run input: “{{note}}”
+Show exact change
+Apply
+Dismiss
+WF12 note rt3b · “Type the note text into the Note box” selected

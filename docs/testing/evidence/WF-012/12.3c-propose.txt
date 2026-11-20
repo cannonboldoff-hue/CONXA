@@ -1,0 +1,22 @@
+{"thinkAt":333,"changes":2,"firstSamples":[[333,196],[12038,465]],"totalMs":14850}
+----TAIL----
+Change the text typed in this step so it uses a new input named note, instead of the fixed words.
+
+12:20 PM
+
+C
+
+Conxa · 12:20 PM
+
+I can change the value on the step "Type the note text into the box". This change will replace the fixed text with the input named note. These changes take effect when you press Apply.
+
+▲
+Change “value”
+
+Not applied yet
+
+Change “value” on step 3
+Show exact change
+Apply
+Dismiss
+WF12 note r1 · “Type the note text into the box” selected

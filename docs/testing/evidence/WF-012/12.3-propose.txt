@@ -1,0 +1,17 @@
+{"thinkAt":325,"changes":3,"firstSamples":[[325,211],[7050,464],[7362,633]],"totalMs":10030}
+----TAIL----
+The note text should be something the person gives me each time, not always 'quarterly report'. Please fix that.
+
+12:19 PM
+
+C
+
+Conxa · 12:19 PM
+
+I couldn't prepare that change — nothing is ready for you to apply. The step “Type the note text into the box” still holds the fixed text from your recording.
+
+To make the note text something the person supplies each time, use Human Edit on that step and set it to ask for the text instead of using a fixed value.
+
+The workflow hasn't been tested yet and isn't approved. Once the step is changed, testing is the next thing to do.
+
+WF12 note r1 · “Type the note text into the box” selected

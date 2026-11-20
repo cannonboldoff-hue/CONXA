@@ -7,6 +7,7 @@ import {
   applyDelta,
   clockTime,
   earlierLabel,
+  editableMessageId,
   openCards,
   prependPage,
   upsertItem,
@@ -75,4 +76,24 @@ test("clock time tolerates a bad date", () => {
   assert.equal(clockTime("not a date"), "");
   assert.equal(clockTime(undefined), "");
   assert.match(clockTime("2026-10-18T15:06:00Z", "en-US"), /\d/);
+});
+
+// WF-12 12.7: "Edit and resend" and "New conversation".
+test("a retract drops the replaced messages and is never stored itself", () => {
+  const items = upsertMany([], [msg("1", "keep"), msg("2", "old"), msg("3", "old reply", "assistant_message")]);
+  const after = upsertItem(items, { id: "r", ts: "2026-10-18T10:01:00Z", kind: "retract", ids: ["2", "3"] });
+  assert.deepEqual(after.map((i) => i.id), ["1"]);
+  assert.equal(upsertItem(after, { id: "r", ts: "x", kind: "retract", ids: ["2", "3"] }), after);
+});
+
+test("only the last message is editable, and only while just replies followed it", () => {
+  const base = [msg("1", "first"), msg("2", "re", "assistant_message"), msg("3", "last"), msg("4", "re", "assistant_message")];
+  assert.equal(editableMessageId(base), "3");
+  assert.equal(editableMessageId([...base, card("c1", 1, "open")]), null);
+  assert.equal(editableMessageId([...base, { id: "d", ts: "z", kind: "new_conversation" }]), null);
+  assert.equal(editableMessageId([...base.slice(0, 3), { ...msg("4", "ok", "assistant_message"), routed: "test" }]), null);
+  // A card above that changed after the message was sent (an answer, an Undo) also blocks it.
+  assert.equal(editableMessageId([card("c0", 2, "answered", { updated_ts: "2026-10-18T10:05:00Z" }), ...base]), null);
+  assert.equal(editableMessageId([{ ...msg("9", "x"), hidden: true }]), null);
+  assert.equal(editableMessageId([]), null);
 });

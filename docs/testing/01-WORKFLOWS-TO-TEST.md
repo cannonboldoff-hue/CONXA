@@ -32,7 +32,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ✅ passed 2026-11-19 (P-41) | — |
 | WF-10 | Branches and popups: optional, decision, unrecorded | ✅ passed 2026-11-20 (P-42; 10.3 on a stand-in, 10.11 guard half not run) | Yes |
 | WF-11 | Loops, inputs and hostile input data | ✅ passed 2026-11-20 (P-43) | Yes |
-| WF-12 | Copilot: "why did this fail?" chat | ⏳ | Yes |
+| WF-12 | Copilot: "why did this fail?" chat | ✅ passed 2026-11-20 (P-44; 12.7 built after owner decision, 3 sub-checks not reached) | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ⏳ | Yes (Studio part) |
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | 🔄 14.1–14.2, 14.4–14.7 passed (P-34…P-36); 14.3, 14.8 open | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
@@ -367,7 +367,7 @@ exactly as recorded.
 
 ---
 
-## WF-12 — Copilot: "why did this fail?"
+## ✅ WF-12 — Copilot: "why did this fail?" — passed 2026-11-20 (P-44)
 
 **Site:** `recovery-fixture.html?v=gone` (unrecoverable by design) + `injection.html`.
 **Where:** Human Edit → the chat launcher in the editor's corner.

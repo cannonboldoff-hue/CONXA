@@ -1,0 +1,17 @@
+{"thinkAt":335,"changes":3,"firstSamples":[[335,169],[6706,488],[7014,585]],"totalMs":9822}
+----TAIL----
+Replace the fixed text typed in this step with a new input named note.
+
+12:22 PM
+
+C
+
+Conxa · 12:22 PM
+
+I couldn't prepare that change — nothing is ready for you to apply. The step “Type the note text into the box” still holds the fixed words from your recording.
+
+To swap them for an input named note, use Human Edit on that step and switch it from a fixed value to asking for the text.
+
+The workflow hasn't been tested yet and isn't approved. It's ready to test, and testing is the next thing to do once that step is changed.
+
+WF12 note r1 · “Type the note text into the box” selected

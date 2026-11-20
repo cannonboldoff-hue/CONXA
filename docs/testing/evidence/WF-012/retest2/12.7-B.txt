@@ -1,0 +1,17 @@
+{"thinkAt":341,"changes":7,"firstSamples":[[341,162],[2221,167],[3162,167],[4094,167],[5049,167],[5682,235],[5992,364]],"totalMs":8554}
+----TAIL----
+What does the last step do?
+
+Edit
+3:42 PM
+
+C
+
+Conxa · 3:43 PM
+
+The last step clicks Confirm Order to finish the order. That's the one that can't be undone, and it goes ahead without asking first.
+
+The workflow is not tested and not approved — the latest test failed at the Buy Now step.
+
+Jump to latest
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

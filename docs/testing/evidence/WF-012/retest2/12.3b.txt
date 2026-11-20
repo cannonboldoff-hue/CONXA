@@ -1,0 +1,24 @@
+{"thinkAt":323,"changes":11,"firstSamples":[[323,161],[2101,166],[3036,166],[4298,166],[5234,166],[6168,166],[7100,166],[8030,166],[8667,182],[8980,491],[9285,683]],"totalMs":11940}
+----TAIL----
+turn it into an input called note_text
+
+3:44 PM
+
+C
+
+Conxa · 3:45 PM
+
+That's exactly what's on offer. The step “Type the note text into the Note box” will take its text from an input the person fills in, named the way you asked. It takes effect when you press Apply.
+
+One thing to watch: that same step still checks the box holds the words you recorded. After you apply, that check may need to follow the input too. Say the word and I'll prepare that as a second change.
+
+▲
+Change the text or value it uses
+
+Not applied yet
+
+Make the text in step 3 come from a run input: “{{note_text}}”
+Show exact change
+Apply
+Dismiss
+WF12 note rt3b · “Type the note text into the Note box” selected

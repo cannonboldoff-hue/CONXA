@@ -963,4 +963,6 @@ def _change_title(proposal: dict[str, Any]) -> str:
         return "Add a step to dismiss a pop-up"
     if proposal.get("command") == "structural_op":
         return "Change the steps"
-    return f"Change “{proposal.get('field') or 'a step'}”"
+    from conxa_compile.editor.copilot_proposals import field_words
+
+    return f"Change {field_words(proposal.get('field'))}"

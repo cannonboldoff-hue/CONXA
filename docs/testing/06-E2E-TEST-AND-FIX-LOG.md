@@ -3,7 +3,7 @@
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
 > a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **WF-9 passed 2026-11-19.** **WF-10 passed 2026-11-20. WF-11 passed 2026-11-20.** **Next:** WF-12 (copilot chat). Remaining: WF-12, WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> **WF-9 passed 2026-11-19.** **WF-10, WF-11, WF-12 passed 2026-11-20.** **Next:** WF-13 (agent-driven steps). Remaining: WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1317,3 +1317,6 @@ PASSED (P-42) after 2 engineering rounds (recorder missed script-wired `<p>` con
 
 ### WF-11 — loops, inputs and hostile input data (2026-11-20)
 PASSED (P-43) after 1 engineering round. Failures found: local test builds lacked the loop capability so no loop could run (S1); a "Save" step that clears its own boxes ended "couldn't confirm" (S1); loop checks stayed frozen to row 1 (S2); a pasted newline was silently dropped (S2). Retest: loop with 5 rows, twin, 50 rows, 0 rows and all hostile inputs pass, proven on the fixture log. Unfixed UX nits (S3) are listed in the handoff. Commit: see `git log` ("WF-11"). Detail: [`workflow-handoffs/WF-011.md`](workflow-handoffs/WF-011.md)
+
+### WF-12 — copilot "why did this fail?" (2026-11-20)
+PASSED (P-44) after 2 engineering rounds plus a 12.7 build. Failure found: asking chat to change a step's page address produced an Apply card that rewrote the address (S0) — the address was never on the protected list, and the after-apply guard re-synced the copies. Fixed at the one shared gate (card creation and apply). A flaky "turn typed text into an input" proposal was fixed; 12.7 (edit-and-resend, new conversation) did not exist, owner chose to build the minimal version. Retest 2: all cases pass; 3 sub-checks of 12.7 not reached (listed in P-44). Open: BUILD-114 (2)/(3), S3 UX notes in the handoff. Commit: see `git log` ("WF-12"). Detail: [`workflow-handoffs/WF-012.md`](workflow-handoffs/WF-012.md)

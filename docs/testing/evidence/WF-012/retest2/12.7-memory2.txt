@@ -1,0 +1,24 @@
+{"thinkAt":338,"changes":9,"firstSamples":[[338,143],[2045,148],[3308,148],[4238,148],[5208,148],[6155,148],[7105,148],[7796,500],[8127,621]],"totalMs":10842}
+----TAIL----
+What did I say earlier?
+
+Edit
+3:53 PM
+
+C
+
+Conxa · 3:53 PM
+
+You told me four things about this workflow:
+
+It's for placing an order — click Buy Now, then Confirm Order.
+
+Clicking Confirm Order to finish the order can't be undone, and it should go ahead without asking anyone first.
+
+You can tell it worked because the app confirms it received each of those two clicks.
+
+The Confirm Order step is the one that can't be undone.
+
+One thing worth knowing while you're on the Buy Now step: the latest test failed there, because the button wasn't found on the page.
+
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

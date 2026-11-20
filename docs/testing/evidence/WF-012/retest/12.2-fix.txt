@@ -1,0 +1,22 @@
+{"thinkAt":327,"changes":21,"firstSamples":[[327,157],[2197,162],[3141,162],[4073,162],[5327,162],[6276,162],[7211,162],[8153,162],[9088,162],[10021,163],[11275,163],[12212,163],[13159,163],[14102,163],[15040,163]],"totalMs":21010}
+----TAIL----
+Please fix this so the test passes
+
+1:09 PM
+
+C
+
+Conxa · 1:10 PM
+
+I can't make that change myself here. No automatic fix could be prepared for this step, so nothing is waiting for you to press Apply.
+
+The test failed because the Buy Now button isn't on the page as a clickable button anymore. The page looks redesigned since you recorded it. Since clicking Buy Now can't be undone, the test stopped instead of guessing — nothing was clicked.
+
+To fix it, use Human Edit on the step "Click Buy Now to start buying the item" and point it at the Buy Now button as it appears now. That's the only change on offer.
+
+Testing again isn't available right now — the workflow is marked as failed, and only looking into it or editing it are open. Once you've made the edit, you can test again.
+
+Open Human Edit to point step 2 at a new element
+Technical details
+Open
+WF12 buy rt1 · “Click Buy Now to start buying the item” selected

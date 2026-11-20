@@ -63,7 +63,12 @@ export const threadTurn = (body: {
   card_id?: string
   choice?: string
   action?: string
+  /** "Edit and resend": the id of the person's last message, replaced with `message`. */
+  replaces?: string
 }) => cmd<TurnResult>('thread_turn', body)
+
+export const threadNewConversation = (threadId: string) =>
+  cmd<{ item: ThreadItem | null }>('thread_new_conversation', { thread_id: threadId })
 
 export const threadCancel = (turnId: string) => cmd<{ cancelled: boolean }>('thread_cancel', { turn_id: turnId })
 

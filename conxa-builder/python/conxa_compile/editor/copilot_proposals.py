@@ -26,7 +26,7 @@ from conxa_compile.compiler.action_semantics import action_name
 from conxa_compile.compiler.second_opinion import build_try_dismiss_from_hint
 from conxa_compile.compiler.step_key import step_keys
 from conxa_compile.editor.action_registry import SELECTOR_ACTIONS, action_spec, is_supported_action
-from conxa_compile.editor.capability_manifest import editable_fields
+from conxa_compile.editor.capability_manifest import ADDRESS_KEYS, chat_may_write, editable_fields
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.overlay_identity import bundle_from_descriptor
 from conxa_compile.editor.patch_gate import validate_editor_patch
@@ -119,9 +119,9 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
             in_branch_body = bool(nested_path) and nested_path[0] == "branch"
         kind = action_name(target_step).lower()
         value = raw.get("patch")
-        if field not in editable_fields(kind) or _value_holds_address(kind, target_step, field, value):
-            continue
         patch = _patch_for(field, value)
+        if not chat_may_write(kind, patch) or _value_holds_address(kind, target_step, field, value):
+            continue
         previous_step = steps[step_index - 1] if step_index > 0 and not path else None
         try:
             validate_editor_patch(
@@ -187,7 +187,7 @@ def gate_all(
         taken = {"patch": 0, "overlay": 0, "structural": 0}
         for p in accepted:
             taken["overlay" if p.get("command") == "insert_overlay_branch" else
-                  "structural" if p.get("command") == "structural_op" else "patch"] += 1
+                  "structural" if p.get("command") == "structural_op" or p.get("from_op") else "patch"] += 1
         for kind, n in wanted.items():
             for _ in range(max(0, n - taken.get(kind, 0))):
                 _log(report, "safety", "gate_refused", kind)
@@ -403,7 +403,32 @@ def _patch_summary(p: dict[str, Any]) -> str:
         return f"Change what the agent does in {where} to: {_clip(value)}"
     if field in ("validation", "validation.assertions"):
         return _checks_summary(p, where)
-    return f"Change “{field}” on {where}"
+    if field == "value" and "{{" in str(value or ""):
+        return f"Make the text in {where} come from a run input: “{_clip(value)}”"
+    return f"Change {field_words(field)} on {where}"
+
+
+# What a card calls a field; the field's own name stays behind "Show exact change" (WF-12).
+_FIELD_WORDS = {
+    "value": "the text or value it uses",
+    "intent": "the step's name",
+    "semantic_description": "the step's description",
+    "input_binding": "which input it fills in",
+    "on_missing": "what happens when it isn't there",
+    "consequence": "whether it can be undone",
+    "entity_binding.confirmed": "the row it acts on",
+    "handler_hints.hover_chain": "what it hovers over first",
+    "branch.timeout_ms": "how long it waits",
+    "wait_until_timeout_ms": "how long it waits",
+    "for_each.max_iterations": "how many rows it goes through",
+    "for_each.on_row_error": "what happens when a row fails",
+}
+
+
+def field_words(field: Any) -> str:
+    """A field's name in everyday words: "semantic_description" is "the step's description"."""
+    field = str(field or "")
+    return _FIELD_WORDS.get(field) or "the " + field.split(".")[-1].replace("_", " ").strip() if field else "a step"
 
 
 def _said(text: Any) -> str:
@@ -553,6 +578,8 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
                 continue  # a non-selector kind carries no target — a source here is a model error
             raw_fields = raw.get("fields")
             fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
+            if _names_an_address(action_kind, fields):
+                continue
             allowed_fields = {f: v for f, v in fields.items() if f in editable_fields(action_kind)}
             # An agent step with no goal would ship nothing (the packager drops it): refuse it here.
             if action_kind == "agent_span" and not str(allowed_fields.get("value") or "").strip():
@@ -638,6 +665,9 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
                     kinds.append(kind)
                     changed += n
             if not kinds:
+                # Typed text is neither rewrite's job: it becomes the same `value` edit Human Edit makes, so
+                # "make the typed note an input" gets a card on every wording, not only on some (WF-12 12.3).
+                out.extend({**p, "from_op": op} for p in gate_proposals(doc, _typed_value_edits(doc, literal, name, why, evidence_refs)))
                 continue
             out.append({**base, "literal": literal, "name": name, "kinds": kinds, "changed": changed,
                         "preview": {"before": literal, "after": "{{%s}}" % name}})
@@ -655,6 +685,32 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             out.append({**base, "name": name, "preview": {"before": current or None, "after": name}})
 
     return out
+
+
+def _names_an_address(kind: str, fields: dict[str, Any]) -> bool:
+    """A new step whose fields ask for an address (a page to open, an element) gets no card at all: dropping
+    only that field would offer a step that goes somewhere other than what was asked."""
+    for f, v in fields.items():
+        name = str(f).strip().lower()
+        if chat_may_write(kind, _patch_for(str(f), v)):
+            continue
+        if name.split(".")[0] in ADDRESS_KEYS or any(w in name for w in ("url", "selector", "address")):
+            return True
+    return False
+
+
+def _typed_value_edits(doc: dict[str, Any], literal: str, name: str, why: str, refs: list[str]) -> list[dict[str, Any]]:
+    """Raw `value` field edits for every type / fill step whose typed text holds ``literal``: the literal
+    becomes ``{{name}}`` and the rest of the text stays as typed."""
+    token = "{{%s}}" % name
+    keys = step_keys(_steps_of(doc))
+    return [
+        {"step_key": key, "field": "value", "patch": str(step.get("value")).replace(literal, token), "why": why,
+         "evidence_refs": refs}
+        for key, step in zip(keys, _steps_of(doc))
+        if isinstance(step, dict) and action_name(step).lower() in ("type", "fill")
+        and isinstance(step.get("value"), str) and literal in step["value"]
+    ]
 
 
 _STEP_SCOPED_OPS = frozenset({
@@ -710,6 +766,8 @@ def _gate_step_scoped_op(
             elif identity_from:
                 return None
             raw_fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
+            if _names_an_address(action_kind, raw_fields):
+                return None
             fields = {f: v for f, v in raw_fields.items() if f in editable_fields(action_kind)}
             insert_branch_step(copy.deepcopy(doc), index, action_kind, after_nested, container)
             _merge_nested(patch, _fields_patch(fields))

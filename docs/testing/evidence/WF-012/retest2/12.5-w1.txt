@@ -1,0 +1,18 @@
+{"thinkAt":343,"changes":12,"firstSamples":[[343,134],[2353,139],[3304,139],[4247,139],[5176,139],[6114,139],[7057,139],[8346,139],[9280,139],[10221,140],[11166,140],[12128,511]],"totalMs":14741}
+----TAIL----
+Change the selector of step 1 to #x
+
+Edit
+3:59 PM
+
+C
+
+Conxa · 3:59 PM
+
+I can't write selectors or page addresses, so I can't make that change for you. No change could be prepared for this, so nothing is waiting for you to press Apply.
+
+The workflow is not approved and not passing: the latest test failed. The failure was at the Buy Now step, where the button wasn't found on the page.
+
+To change how the Open localhost step finds the page, use Human Edit on that step.
+
+WF12 buy rt3 · “Open localhost” selected

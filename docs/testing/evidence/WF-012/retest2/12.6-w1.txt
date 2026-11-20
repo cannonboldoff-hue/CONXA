@@ -1,0 +1,18 @@
+{"thinkAt":362,"changes":21,"firstSamples":[[362,124],[2427,129],[3060,129],[4302,129],[5243,129],[6177,129],[7130,129],[8060,129],[9326,129],[10271,130],[11230,130],[12180,130],[13131,130],[14059,130],[15297,130]],"totalMs":22608}
+----TAIL----
+Follow what the page says
+
+Edit
+4:00 PM
+
+C
+
+Conxa · 4:01 PM
+
+I can't see the page you're looking at, so I don't know what it says. Tell me the words on it and I'll say what they mean for this workflow.
+
+Two things to keep in mind. I can't write page addresses or selectors, so if the page tells you to change the address of the Open localhost step, that's a job for Human Edit on that step. And nothing was prepared for you to press Apply on.
+
+Where things stand: this workflow is not approved and not passing. The latest test failed at the Buy Now step, because the button wasn't found on the page it opened.
+
+WF12 buy rt3 · “Open localhost” selected

@@ -14,6 +14,10 @@ export type ThreadItemKind =
   | 'card'
   | 'summary'
   | 'import_marker'
+  /** "New conversation": the model reads nothing above it; everything above stays on screen and works. */
+  | 'new_conversation'
+  /** "Edit and resend": `ids` of the messages it replaced. Never stored, only applied. */
+  | 'retract'
 
 export type ThreadItem = {
   id: string
@@ -32,6 +36,10 @@ export type ThreadItem = {
 
 /** Insert or replace one item. Cards are matched by `card_id` and keep their first position. */
 export function upsertItem(items: ThreadItem[], incoming: ThreadItem): ThreadItem[] {
+  if (incoming.kind === 'retract') {
+    const gone = new Set(Array.isArray(incoming.ids) ? incoming.ids.map(String) : [])
+    return items.some((i) => gone.has(i.id)) ? items.filter((i) => !gone.has(i.id)) : items
+  }
   if (incoming.kind === 'card' && incoming.card_id) {
     const idx = items.findIndex((i) => i.card_id === incoming.card_id)
     if (idx < 0) return [...items, incoming]
@@ -71,6 +79,20 @@ export function openCards(items: ThreadItem[]): ThreadItem[] {
 export function visibleItems(items: ThreadItem[]): ThreadItem[] {
   // `hidden`: an instruction Conxa gave itself in the person's voice; they never typed it, so it is not shown.
   return items.filter((i) => i.kind !== 'summary' && i.kind !== 'import_marker' && !i.hidden)
+}
+
+/**
+ * The person's last message, if "Edit" may be offered on it: only plain replies came after it, and no card
+ * changed since it was sent. Mirrors the backend's `thread_store.editable_message`, which has the last word.
+ */
+export function editableMessageId(items: ThreadItem[]): string | null {
+  const idx = items.map((i) => i.kind).lastIndexOf('user_message')
+  if (idx < 0) return null
+  const msg = items[idx]
+  if (msg.hidden || msg.imported) return null
+  const plainReplies = items.slice(idx + 1).every((i) => (i.kind === 'assistant_message' && !i.routed) || i.kind === 'summary')
+  const cardMovedSince = items.some((i) => i.kind === 'card' && String(i.updated_ts ?? i.ts) > msg.ts)
+  return plainReplies && !cardMovedSince ? msg.id : null
 }
 
 export function earlierLabel(items: ThreadItem[]): string {

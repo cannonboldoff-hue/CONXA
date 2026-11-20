@@ -1,0 +1,24 @@
+{"thinkAt":324,"changes":3,"firstSamples":[[324,191],[5660,384],[5970,572]],"totalMs":8771}
+----TAIL----
+Change the description of the Save note click to say: Save the note so it shows on the page.
+
+12:22 PM
+
+C
+
+Conxa · 12:22 PM
+
+I can change the wording shown for the step "Click on 'Save note' (activate control save note)". It will read: Save the note so it shows on the page. This takes effect when you press Apply.
+
+The workflow hasn't been tested yet and isn't approved. It's ready to test.
+
+▲
+Change “semantic_description”
+
+Not applied yet
+
+Change “semantic_description” on step 4
+Show exact change
+Apply
+Dismiss
+WF12 note r1 · “Type the note text into the box” selected

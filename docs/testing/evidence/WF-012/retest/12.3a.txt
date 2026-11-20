@@ -1,0 +1,26 @@
+{"thinkAt":326,"changes":9,"firstSamples":[[326,182],[2060,187],[3290,187],[4232,187],[5179,187],[6127,187],[7057,187],[8021,588],[8344,725]],"totalMs":10942}
+----TAIL----
+That typed text should be something the person gives me each time
+
+1:21 PM
+
+C
+
+Conxa · 1:21 PM
+
+Right — the note text should be something the person supplies each time, not a fixed phrase.
+
+The change I have ready does that: the typing step will take its text from a note input, so whoever uses the workflow is asked for the note first. It takes effect when you press Apply.
+
+One thing to know: the check on that same step still expects the old fixed text. If you want that check loosened too, tell me and I'll prepare it.
+
+▲
+Change the text or value it uses
+
+Not applied yet
+
+Make the text in step 3 come from a run input: “{{note}}”
+Show exact change
+Apply
+Dismiss
+WF12 note rt2 · “Type the note text into the box” selected

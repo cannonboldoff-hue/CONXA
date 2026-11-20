@@ -1,0 +1,19 @@
+{"thinkAt":338,"changes":24,"firstSamples":[[338,146],[2042,151],[3295,151],[4226,151],[5182,151],[6120,151],[7056,151],[8307,151],[9258,151],[10214,152],[11175,152],[12107,152],[13040,152],[14300,152],[15240,152]],"totalMs":24427}
+----TAIL----
+Why did this step fail?
+
+1:09 PM
+
+C
+
+Conxa · 1:09 PM
+
+The test opened the shop page, but the Buy Now button wasn't there.
+
+The page looks different from when you recorded it. The test checks for two landmarks it expects on that page, and both were missing. It found the words "Buy Now" once, but not as a clickable button.
+
+Because clicking Buy Now can't be undone, the test stopped rather than guessing at something else. Nothing was clicked, so no purchase was started.
+
+What you can do now: look into it, or edit the step. I couldn't prepare a change for you, so if you want the step adjusted, use Human Edit on the step "Click Buy Now to start buying the item".
+
+WF12 buy rt1 · “Click Buy Now to start buying the item” selected

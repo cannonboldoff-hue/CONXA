@@ -1,0 +1,17 @@
+{"thinkAt":347,"changes":12,"firstSamples":[[347,145],[2088,150],[3332,150],[4292,150],[5230,150],[6161,150],[7084,150],[8333,150],[9272,150],[10241,151],[10871,373],[11196,492]],"totalMs":13740}
+----TAIL----
+test it
+
+Edit
+3:47 PM
+
+C
+
+Conxa · 3:47 PM
+
+Testing isn't open right now. The workflow is at the test stage and marked ready to test, but the only action available to you is editing. No test has been recorded yet, so it is not tested and not approved.
+
+No card is waiting on you. If you want something changed first — for example the check on “Type the note text into the Note box” — tell me and I'll prepare it.
+
+Jump to latest
+WF12 note rt3b · “Type the note text into the Note box” selected

@@ -8,7 +8,7 @@ export default defineConfig({
   root: path.join(__dirname),
   base: "./",
   plugins: [react(), tailwindcss()],
-  server: { port: 5174, strictPort: true },
+  server: { port: Number(process.env.CONXA_RENDERER_PORT) || 5174, strictPort: true },
   build: {
     outDir: path.join(__dirname, "dist"),
     emptyOutDir: true,

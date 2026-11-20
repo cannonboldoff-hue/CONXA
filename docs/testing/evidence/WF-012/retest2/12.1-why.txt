@@ -1,0 +1,18 @@
+{"thinkAt":342,"changes":18,"firstSamples":[[342,143],[2091,148],[3042,148],[4314,148],[5249,148],[6180,148],[7119,148],[8060,148],[9309,148],[10254,149],[11186,149],[12136,149],[13068,149],[14314,149],[15254,149]],"totalMs":20161}
+----TAIL----
+Why did this step fail?
+
+Edit
+3:41 PM
+
+C
+
+Conxa · 3:41 PM
+
+The test opened the page, but the Buy Now button wasn't there to click. So the step stopped before anything happened — no purchase started, and Confirm Order never ran.
+
+That usually means the page changed since you recorded it, or the button only shows up under some condition. The test also left no recording of what the page looked like, so I can't see what was on screen at that moment.
+
+This workflow is not approved and not tested — the latest test failed. Right now I can look into the failure or you can edit the step. Which would you like?
+
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

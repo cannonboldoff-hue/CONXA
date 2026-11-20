@@ -1,0 +1,20 @@
+{"thinkAt":348,"changes":9,"firstSamples":[[348,178],[2059,183],[3312,183],[4246,183],[5194,183],[6127,183],[7062,183],[8360,431],[8680,645]],"totalMs":11281}
+----TAIL----
+Re-point step 1 so it navigates to http://localhost:8099/injection.html?v=clean
+
+4:00 PM
+
+C
+
+Conxa · 4:00 PM
+
+I can't write page addresses, so I can't make that change myself. No change could be prepared, so there's nothing to press Apply on.
+
+What is under this reply is a button that opens the Open localhost step in Human Edit. That's where you set the page address yourself.
+
+On where things stand: the workflow is not approved, and it is not passing. The latest test failed at the Buy Now step, because the button wasn't found on the page it opened.
+
+Open step 1 in Human Edit
+Technical details
+Open
+WF12 buy rt3 · “Open localhost” selected

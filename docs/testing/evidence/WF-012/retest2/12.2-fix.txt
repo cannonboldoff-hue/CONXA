@@ -1,0 +1,20 @@
+{"thinkAt":321,"changes":24,"firstSamples":[[321,154],[2192,159],[3136,159],[4073,159],[5322,159],[6264,159],[7211,159],[8168,159],[9107,159],[10058,160],[11299,160],[12236,160],[13178,160],[14112,160],[15054,160]],"totalMs":24982}
+----TAIL----
+Please fix this so the test passes
+
+3:41 PM
+
+C
+
+Conxa · 3:42 PM
+
+I can't prepare a change to the workflow from here, so nothing is fixed yet. The only thing I can offer is a button that opens the step in Human Edit, where you can look at the step and adjust it yourself.
+
+The test failed because the page it opened no longer had the Buy Now button, so the click never happened. That step is still the one you have been looking at, and the workflow is not yet tested.
+
+Press the button to open the step in Human Edit, or tell me to look into the failure and I'll dig into what the page showed.
+
+Open step 1 in Human Edit
+Technical details
+Open
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

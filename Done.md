@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 45 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87 |
+| BUILD — Build Studio | 46 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87, 114 (1) |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 11 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **131** | |
+| **Total** | **132** | |
 
 ---
 
-## BUILD — Build Studio (45 done)
+## BUILD — Build Studio (46 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -782,6 +782,10 @@ The refusal said "Compile the workflow again", but a compiled workflow offered n
 ### BUILD-87 — A form field with a good id but no linked label was marked "less certain"
 **Resolved:** 2026-11-18
 Confidence is now the best signal that matched exactly one element on the recorded page, and one kind of signal is a penalty only when that signal is weak (`selector_score.py::confidence_from_signal_rows`). A readable, unique `#id` (demoqa's Permanent Address) scores 0.45 with no warning; `compile_report.status` is "failed" only when a step has no unique, lasting signal.
+
+### BUILD-114 (1) — Workflow chat: edit your last message and start a new conversation (WF-12 12.7)
+**Resolved:** 2026-11-20
+Human Edit's Conversation got a "New conversation" button that adds a divider the chat model reads nothing above (everything stays visible and every open question or change card above keeps working), and an "Edit" link on the person's last message that replaces it and its reply with one new reply, offered only while nothing but a reply followed it (`thread_store.conversation_start` / `editable_message`, a `retract` line, `thread_turn{replaces}`, `thread_new_conversation`). Parts (2) and (3) stay open in `TODO.md`.
 
 ## EXEC — Execution & Recovery (29 done)
 

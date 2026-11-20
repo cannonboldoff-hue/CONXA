@@ -10,8 +10,10 @@ Same fail-silent contract as ``editor/copilot_sessions.py``: a disk hiccup must 
 person from continuing a conversation, so writes swallow ``OSError`` and reads degrade to empty.
 
 Item kinds: ``user_message``, ``assistant_message``, ``event`` (the system's one-line voice),
-``card`` (stateful — see below), ``summary`` (a rolling summary of older turns) and
-``import_marker``.
+``card`` (stateful — see below), ``summary`` (a rolling summary of older turns),
+``import_marker``, ``new_conversation`` (a divider: the model reads nothing above it, the person
+still sees and can act on all of it) and ``retract`` (``ids`` of messages an "Edit and resend"
+replaced; :func:`fold` leaves them out, the file keeps them).
 
 Cards are never edited in place. A card is *revised* by appending a new line with the same
 ``card_id`` and a higher ``revision``; :func:`fold` shows the latest revision at the position
@@ -109,6 +111,12 @@ def append(thread_id: str, kind: str, **fields: Any) -> dict[str, Any]:
 # ── cards ───────────────────────────────────────────────────────────────────────────────────
 
 
+def _live(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Raw lines without ``retract`` markers and the messages they replaced."""
+    gone = {i for it in raw if it.get("kind") == "retract" for i in it.get("ids") or []}
+    return [it for it in raw if it.get("kind") != "retract" and it.get("id") not in gone]
+
+
 def fold(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Collapse card revisions: each card appears once, where it first appeared, as its latest
     revision. ``created_ts`` is when it first appeared, ``ts`` stays that moment so the thread
@@ -117,7 +125,7 @@ def fold(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     first_ts: dict[str, str] = {}
     order: list[Any] = []
-    for item in raw:
+    for item in _live(raw):
         cid = item.get("card_id") if item.get("kind") == "card" else None
         if not cid:
             order.append(item)
@@ -275,9 +283,48 @@ def latest_summary(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
+# ── "New conversation" and "Edit and resend" (WF-12 12.7) ──────────────────────────────────────
+
+
+def conversation_start(items: list[dict[str, Any]]) -> int:
+    """Index just after the last ``new_conversation`` divider (0 when there is none). The model's
+    turns and summary come only from here on; cards above it stay open and answerable."""
+    for i in range(len(items) - 1, -1, -1):
+        if items[i].get("kind") == "new_conversation":
+            return i + 1
+    return 0
+
+
+def start_new_conversation(thread_id: str) -> dict[str, Any] | None:
+    """Append a divider, or None when nothing was said since the last one (no empty dividers)."""
+    items = fold(read_raw(thread_id))
+    if not any(i.get("kind") in ("user_message", "assistant_message") for i in items[conversation_start(items):]):
+        return None
+    return append(thread_id, "new_conversation")
+
+
+def editable_message(raw: list[dict[str, Any]]) -> list[str] | None:
+    """Ids to replace when the person edits and resends: their last message, then Conxa's replies
+    to it. None unless only plain replies (or a summary) came after it — a card, a card revision, a
+    question, a test result, a divider or a command Conxa acted on would be left without the
+    message that led to it. Reads raw lines, so a card answered after the message counts too."""
+    lines = _live(raw)
+    for i in range(len(lines) - 1, -1, -1):
+        msg = lines[i]
+        if msg.get("kind") != "user_message":
+            continue
+        if msg.get("hidden") or msg.get("imported"):
+            return None
+        after = lines[i + 1:]
+        if any(it.get("kind") not in ("assistant_message", "summary") or it.get("routed") for it in after):
+            return None
+        return [str(msg.get("id"))] + [str(it.get("id")) for it in after if it.get("kind") == "assistant_message"]
+    return None
+
+
 # Cards that stay "open" only to keep their shortcut buttons: they report, they never wait on anyone (WF-5: chat said
-# "three summary cards are waiting on you").
-INFO_CARDS = frozenset({"workflow_summary"})
+# "three summary cards are waiting on you"; WF-12: an unclicked "Open Human Edit" link made chat say "that card is open").
+INFO_CARDS = frozenset({"workflow_summary", "action_link"})
 
 
 def open_cards(items: list[dict[str, Any]], card_type: str | None = None) -> list[dict[str, Any]]:

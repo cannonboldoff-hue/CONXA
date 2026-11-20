@@ -19,7 +19,9 @@
 #>
 param(
   [Parameter(Position=0)][string]$Arg1,
-  [Parameter(Position=1)][string]$Arg2
+  [Parameter(Position=1)][string]$Arg2,
+  # Extra Studio beside a running one (studio target only): own data dirs, user-data dir, vite port 5174+N.
+  [int]$Instance = 0
 )
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -82,6 +84,18 @@ if ($Env -eq "dev") {
   if (-not $env:CONXA_UPDATE_CHANNEL) { $env:CONXA_UPDATE_CHANNEL = "stable" }
 }
 
+if ($Instance -gt 0) {
+  if ($Target -ne "studio") { throw "-Instance only applies to the studio target" }
+  $sfx = "-i$Instance"
+  foreach ($v in "CONXA_DIR", "CONXA_DATA_DIR", "CONXA_STUDIO_HOME") {
+    $cur = [Environment]::GetEnvironmentVariable($v, "Process")
+    [Environment]::SetEnvironmentVariable($v, "$cur$sfx", "Process")
+  }
+  $env:CONXA_APP_DIR = "$env:CONXA_DIR\conxa-app"
+  $env:CONXA_USER_DATA_DIR = "$env:CONXA_DATA_DIR\electron-userdata"
+  $env:CONXA_RENDERER_PORT = [string](5174 + $Instance)
+}
+
 Write-Host "-- conxa [$($env:CONXA_ENV)] -> $Target --------------------------------"
 Write-Host "  CONXA_DIR            = $($env:CONXA_DIR)"
 Write-Host "  CONXA_DATA_DIR       = $($env:CONXA_DATA_DIR)"
@@ -107,6 +121,10 @@ switch ($Target) {
     Set-Location "$Root\conxa-cloud\frontend"
     if ($Env -eq "dev") { npm run dev } else { npm run start }
   }
-  "studio"   { Set-Location "$Root\conxa-builder\electron"; npm run dev }
+  "studio"   {
+    Set-Location "$Root\conxa-builder\electron"
+    # `npm run dev` runs cleanup-dev.js, which kills every Studio under this checkout — skip it for extra instances.
+    if ($Instance -gt 0) { npx concurrently "npm:dev:renderer" "npm:dev:electron" } else { npm run dev }
+  }
   "runtime"  { Set-Location "$Root\runtime"; node server.js }
 }

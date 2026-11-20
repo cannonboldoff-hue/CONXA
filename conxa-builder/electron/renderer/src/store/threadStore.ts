@@ -3,6 +3,7 @@ import {
   cardAction,
   threadCancel,
   threadLoad,
+  threadNewConversation,
   threadTurn,
   type CardActionResult,
   type Lifecycle,
@@ -45,7 +46,8 @@ type Store = {
   threads: Record<string, ThreadState>
   load: (threadId: string) => Promise<void>
   loadOlder: (threadId: string) => Promise<void>
-  send: (threadId: string, message: string, anchor?: string) => Promise<void>
+  send: (threadId: string, message: string, anchor?: string, replaces?: string) => Promise<void>
+  newConversation: (threadId: string) => Promise<void>
   answer: (threadId: string, cardId: string, body: { choice?: string; action?: string; message?: string }) => Promise<void>
   act: (threadId: string, cardId: string, action: string, payload?: Record<string, unknown>) => Promise<CardActionResult | null>
   cancel: (threadId: string) => Promise<void>
@@ -104,17 +106,26 @@ export const useThreadStore = create<Store>((set, get) => ({
     }
   },
 
-  send: async (threadId, message, anchor) => {
+  send: async (threadId, message, anchor, replaces) => {
     const text = message.trim()
     if (!text) return
     const turnId = `turn_${Math.random().toString(36).slice(2, 12)}`
     patch(set, threadId, { turnId, error: null, streaming: null })
     try {
-      const res = await threadTurn({ thread_id: threadId, message: text, turn_id: turnId, anchor })
+      const res = await threadTurn({ thread_id: threadId, message: text, turn_id: turnId, anchor, replaces })
       patch(set, threadId, (t) => ({ items: upsertMany(t.items, res.items), streaming: null, turnId: null, queued: false }))
     } catch (e) {
       // The backend already put the person's words and an error card in the thread.
       patch(set, threadId, { streaming: null, turnId: null, queued: false, error: messageOf(e) })
+    }
+  },
+
+  newConversation: async (threadId) => {
+    try {
+      const { item } = await threadNewConversation(threadId)
+      if (item) patch(set, threadId, (t) => ({ items: upsertItem(t.items, item), error: null }))
+    } catch (e) {
+      patch(set, threadId, { error: messageOf(e) })
     }
   },
 

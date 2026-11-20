@@ -1,0 +1,16 @@
+{"thinkAt":347,"changes":3,"firstSamples":[[347,153],[4815,340],[5122,334]],"totalMs":7751}
+----TAIL----
+How many steps does this workflow have?
+
+12:23 PM
+
+C
+
+Conxa · 12:23 PM
+
+It has 4 steps: open the page, click into the note box, type the note text into the box, and click Save note to store it.
+
+It hasn't been tested yet and isn't approved. It's ready to test.
+
+Jump to latest
+WF12 note r1 · “Type the note text into the box” selected

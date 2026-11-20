@@ -1,0 +1,26 @@
+{"thinkAt":329,"changes":8,"firstSamples":[[329,188],[2077,193],[3030,193],[4291,193],[5237,193],[6171,193],[6792,495],[7102,741]],"totalMs":9766}
+----TAIL----
+That typed text should be something the person gives me each time
+
+3:44 PM
+
+C
+
+Conxa · 3:44 PM
+
+Yes — that can come from the person each time.
+
+The change I'm offering: the step “Type the note text into the Note box” will take its text from a note input the person fills in, instead of the fixed words you recorded. It takes effect when you press Apply.
+
+One thing to know: that step also checks the box holds the recorded words. After you apply, that check may need to follow the input too — tell me if you want me to prepare that.
+
+▲
+Change the text or value it uses
+
+Not applied yet
+
+Make the text in step 3 come from a run input: “{{note}}”
+Show exact change
+Apply
+Dismiss
+WF12 note rt3b · “Type the note text into the Note box” selected

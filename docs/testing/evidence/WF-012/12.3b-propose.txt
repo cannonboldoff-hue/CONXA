@@ -1,0 +1,17 @@
+{"thinkAt":324,"changes":3,"firstSamples":[[324,210],[7132,371],[7455,627]],"totalMs":9982}
+----TAIL----
+Turn the typed text 'quarterly report' into an input called note_text, so I can type a different note each run.
+
+12:20 PM
+
+C
+
+Conxa · 12:20 PM
+
+I couldn't prepare that change — nothing is ready for you to apply. The step “Type the note text into the box” still holds the fixed text from your recording.
+
+To make the note text something the person supplies each time, use Human Edit on that step and switch it from a fixed value to asking for the text.
+
+The workflow hasn't been tested yet and isn't approved. Once that step is changed, testing is the next thing to do.
+
+WF12 note r1 · “Type the note text into the box” selected

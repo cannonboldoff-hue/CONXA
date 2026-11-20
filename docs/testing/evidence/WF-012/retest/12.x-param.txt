@@ -1,0 +1,22 @@
+{"thinkAt":319,"changes":18,"firstSamples":[[319,214],[2023,219],[3285,219],[4217,219],[5159,219],[6097,219],[7035,219],[8313,219],[9260,219],[10210,220],[11135,220],[12063,220],[13319,220],[14255,220],[15225,220]],"totalMs":20048}
+----TAIL----
+Make the address this workflow opens a run input called site, so the person can type it each time
+
+1:24 PM
+
+C
+
+Conxa · 1:24 PM
+
+The change I have ready does that: the first step, which opens the note page, will take its address from a new input called site. Whoever uses the workflow is asked for it first, and the address you recorded stays as the default, so it still works if they leave it as is. It touches one place and takes effect when you press Apply.
+
+▲
+Make it a run input
+
+Not applied yet
+
+Make “http://localhost:8099/note.html” a run input called site (1 place); the recorded value stays its default
+Show exact change
+Apply
+Dismiss
+WF12 note rt2 · “Type the note text into the box” selected

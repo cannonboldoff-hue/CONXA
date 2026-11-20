@@ -1,0 +1,61 @@
+ails
+▲
+Paused before a step that can’t be undone · Click
+3:38 PM
+
+Why did this step fail?
+
+3:41 PM
+
+C
+
+Conxa · 3:41 PM
+
+The test opened the page, but the Buy Now button wasn't there to click. So the step stopped before anything happened — no purchase started, and Confirm Order never ran.
+
+That usually means the page changed since you recorded it, or the button only shows up under some condition. The test also left no recording of what the page looked like, so I can't see what was on screen at that moment.
+
+This workflow is not approved and not tested — the latest test failed. Right now I can look into the failure or you can edit the step. Which would you like?
+
+Please fix this so the test passes
+
+3:41 PM
+
+C
+
+Conxa · 3:42 PM
+
+I can't prepare a change to the workflow from here, so nothing is fixed yet. The only thing I can offer is a button that opens the step in Human Edit, where you can look at the step and adjust it yourself.
+
+The test failed because the page it opened no longer had the Buy Now button, so the click never happened. That step is still the one you have been looking at, and the workflow is not yet tested.
+
+Press the button to open the step in Human Edit, or tell me to look into the failure and I'll dig into what the page showed.
+
+Open step 1 in Human Edit
+Technical details
+Open
+
+How many steps does this workflow have?
+
+3:42 PM
+
+C
+
+Conxa · 3:42 PM
+
+Three steps: open the page, click Buy Now to start the purchase, and click Confirm Order to finish the order.
+
+The workflow is not tested and not approved — the latest test failed at the Buy Now step.
+
+What does step 2 do?
+
+Edit
+3:43 PM
+
+C
+
+Conxa · 3:43 PM
+
+Step 2, named "Click Buy Now to start the purchase," clicks on "Buy Now" to begin the purchase.
+
+WF12 buy rt3 · “Click Buy Now to start the purchase” selected

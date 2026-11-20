@@ -1,0 +1,1225 @@
+{
+  "meta": {
+    "id": "skill_35880f94-e1b1-4dbf-be89-ffabad28a76f",
+    "version": 5,
+    "title": "WF12 note rt3b",
+    "created_at": "2026-11-20T09:57:11.791249+00:00",
+    "source_session_id": "35880f94-e1b1-4dbf-be89-ffabad28a76f",
+    "compiler_policy_version": "1.0.0",
+    "compiler_policy_hash": "698b356bf9d7073e",
+    "required_runtime": ">=1.0.0",
+    "structural_fingerprint": {
+      "landmarks": [
+        {
+          "primary_selector": "textarea[name=\"note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "",
+          "tag": "textarea"
+        },
+        {
+          "primary_selector": "textarea[name=\"note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "",
+          "tag": "textarea"
+        },
+        {
+          "primary_selector": "role=button[name=\"Save note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Save note",
+          "tag": "button"
+        }
+      ],
+      "landmark_count": 3
+    },
+    "environment": {
+      "locale": "en-US",
+      "timezone": "Asia/Calcutta",
+      "utc_offset_minutes": 330,
+      "viewport": {
+        "w": 1280,
+        "h": 992
+      },
+      "device_pixel_ratio": 1.0000000149011612,
+      "date_format_sample": "1/31/2026",
+      "platform": "Win32"
+    },
+    "compensation_skill": "",
+    "visited_hosts": [
+      "localhost"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "note",
+      "type": "text",
+      "default": null,
+      "options": []
+    }
+  ],
+  "skills": [
+    {
+      "name": "recorded",
+      "steps": [
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "http://localhost:8099/note.html",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/note.html"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "http://localhost:8099/note.html",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "http://localhost:8099/note.html"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open localhost",
+          "phase": "",
+          "source_event": null,
+          "video_context": null,
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "focus",
+          "intent": "interact_note",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/note.html"
+          },
+          "target": {
+            "primary_selector": "textarea[name=\"note\"]",
+            "fallback_selectors": [
+              "#note",
+              "label:has-text(\"Note\") + textarea",
+              "[placeholder=\"Type a note\"]",
+              "/html[1]/body[1]/label[1]/textarea[1]"
+            ],
+            "css": "#note",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "textarea[name=\"note\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#note",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "textarea",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "note",
+              "placeholder": "Type a note",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "note",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Note"
+              ],
+              "position_hint": {
+                "x_pct": 0.019,
+                "y_pct": 0.12
+              },
+              "section_heading": "Note"
+            },
+            "stable_hash": "b7c284d8f0fa22d6e716f82a4298fbe55463f1deb769b6f7a50e739ea9dfd468",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "textarea",
+              "id": "note",
+              "classes": [],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": "note",
+              "placeholder": "Type a note",
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "textarea[name=\"note\"]",
+              "text_based": "",
+              "css": "#note",
+              "xpath": "/html[1]/body[1]/label[1]/textarea[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "interact_note",
+              "llm_intent": "interact_note"
+            },
+            "context": {
+              "parent": "label",
+              "siblings": [
+                "br:"
+              ],
+              "index_in_parent": 1,
+              "form_context": null,
+              "page_url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "note",
+                "relation": "target"
+              },
+              {
+                "element": "type a note",
+                "relation": "near"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 24,
+                "y": 96,
+                "w": 426,
+                "h": 96
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "textarea[name=\"note\"]",
+                "#note",
+                "textarea",
+                "br:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "55920fe2df1d8f6a592900aa123a5f6b6dd00c454a3296094218d824dcb10ed5"
+            },
+            "after": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "textarea[name=\"note\"]",
+                "#note",
+                "textarea",
+                "br:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "55920fe2df1d8f6a592900aa123a5f6b6dd00c454a3296094218d824dcb10ed5"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "interact_note",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "interact_note",
+            "final_intent": "interact_note",
+            "anchors": [
+              {
+                "element": "note",
+                "relation": "target"
+              },
+              {
+                "element": "type a note",
+                "relation": "near"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the Note box to start typing",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "text input box labeled 'Note'",
+            "screen_before": "The text input box is focused with a yellow border, ready for typing.",
+            "screen_after": "The text 'quarterly report' appears inside the note input box.",
+            "purpose": "to enter the content of the note before saving"
+          },
+          "snapshot_ref": "a49b2250fdd54b3ca270a3761f499346",
+          "snapshot_dom_hash": "e88a5f331e1f178928f398597fa2d67c3c5193a3a5e985693a4fbf89a0495ec4",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "type",
+          "intent": "enter_note_text",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/note.html"
+          },
+          "target": {
+            "primary_selector": "textarea[name=\"note\"]",
+            "fallback_selectors": [
+              "#note",
+              "label:has-text(\"Note\") + textarea",
+              "[placeholder=\"Type a note\"]",
+              "/html[1]/body[1]/label[1]/textarea[1]"
+            ],
+            "css": "#note",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "textarea[name=\"note\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#note",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "textarea",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "note",
+              "placeholder": "Type a note",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "note",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Note"
+              ],
+              "position_hint": {
+                "x_pct": 0.019,
+                "y_pct": 0.12
+              },
+              "section_heading": "Note"
+            },
+            "stable_hash": "b7c284d8f0fa22d6e716f82a4298fbe55463f1deb769b6f7a50e739ea9dfd468",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "textarea",
+              "id": "note",
+              "classes": [],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": "note",
+              "placeholder": "Type a note",
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "textarea[name=\"note\"]",
+              "text_based": "",
+              "css": "#note",
+              "xpath": "/html[1]/body[1]/label[1]/textarea[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "label",
+              "siblings": [
+                "br:"
+              ],
+              "index_in_parent": 1,
+              "form_context": null,
+              "page_url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "note",
+                "relation": "target"
+              },
+              {
+                "element": "type a note",
+                "relation": "near"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 24,
+                "y": 96,
+                "w": 426,
+                "h": 96
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "textarea[name=\"note\"]",
+                "#note",
+                "textarea",
+                "br:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "55920fe2df1d8f6a592900aa123a5f6b6dd00c454a3296094218d824dcb10ed5"
+            },
+            "after": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "textarea[name=\"note\"]",
+                "#note",
+                "textarea",
+                "br:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "55920fe2df1d8f6a592900aa123a5f6b6dd00c454a3296094218d824dcb10ed5"
+            }
+          },
+          "value": "{{note}}",
+          "input_binding": "note",
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "value_equals",
+                "target": "textarea[name=\"note\"]",
+                "expected": "quarterly report",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "enter_note_text",
+            "final_intent": "enter_note_text",
+            "anchors": [
+              {
+                "element": "note",
+                "relation": "target"
+              },
+              {
+                "element": "type a note",
+                "relation": "near"
+              },
+              {
+                "element": "br:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type the note text into the Note box",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "text input box labeled 'Note'",
+            "screen_before": "The text input box is focused with a yellow border, ready for typing.",
+            "screen_after": "The text 'quarterly report' appears inside the note input box.",
+            "purpose": "to enter the content of the note before saving"
+          },
+          "snapshot_ref": "a49b2250fdd54b3ca270a3761f499346",
+          "snapshot_dom_hash": "e88a5f331e1f178928f398597fa2d67c3c5193a3a5e985693a4fbf89a0495ec4",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "click",
+          "intent": "activate_control_save_note",
+          "url": "",
+          "consequence": "irreversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/note.html"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Save note\"]",
+            "fallback_selectors": [
+              "text=\"Save note\"",
+              "#save",
+              "label:has-text(\"Note\") + button",
+              "/html[1]/body[1]/button[1]"
+            ],
+            "css": "#save",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Save note\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Save note\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Save note\"] >> right-of=internal:text=\"Note\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#save",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Save note",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "save",
+              "data_testid": "",
+              "input_type": "button",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Note"
+              ],
+              "position_hint": {
+                "x_pct": 0.019,
+                "y_pct": 0.255
+              },
+              "section_heading": "Note"
+            },
+            "stable_hash": "fc0b3e5ccc766a37229299e05f3cd3e01c7a4983cfc14071d7b68a55f938f341",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "save",
+              "classes": [],
+              "inner_text": "Save note",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "none",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Save note\"",
+              "css": "#save",
+              "xpath": "/html[1]/body[1]/button[1]"
+            },
+            "semantic": {
+              "normalized_text": "save note",
+              "role": "button",
+              "input_type": "button",
+              "final_intent": "activate_control_save_note",
+              "llm_intent": "activate_control_save_note",
+              "effect_judgement": {
+                "reversible": false,
+                "kind": "saves",
+                "confidence": 0.7,
+                "reason": "Clicking Save note stores the note in the app, as the page confirms it was saved."
+              }
+            },
+            "context": {
+              "parent": "body",
+              "siblings": [
+                "h1#title:Note",
+                "label:Note",
+                "br:",
+                "div#saved:"
+              ],
+              "index_in_parent": 3,
+              "form_context": null,
+              "page_url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "save note",
+                "relation": "target"
+              },
+              {
+                "element": "h1#title:note",
+                "relation": "near"
+              },
+              {
+                "element": "label:note",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 24,
+                "y": 204,
+                "w": 91,
+                "h": 31
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "text=\"Save note\"",
+                "#save",
+                "button",
+                "h1#title:Note",
+                "label:Note",
+                "br:",
+                "div#saved:"
+              ],
+              "important_text_blocks": [
+                "Save note"
+              ],
+              "dom_fingerprint": "d22f18dc7939822b0b453fd1cbb12d3555daa55166832cf0d4a8c294262790c1"
+            },
+            "after": {
+              "url": "http://localhost:8099/note.html",
+              "page_title": "Note",
+              "visible_key_elements": [
+                "text=\"Save note\"",
+                "#save",
+                "button",
+                "h1#title:Note",
+                "label:Note",
+                "br:",
+                "div#saved:"
+              ],
+              "important_text_blocks": [
+                "Save note"
+              ],
+              "dom_fingerprint": "d22f18dc7939822b0b453fd1cbb12d3555daa55166832cf0d4a8c294262790c1"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_save_note",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "activate_control_save_note",
+            "final_intent": "activate_control_save_note",
+            "anchors": [
+              {
+                "element": "save note",
+                "relation": "target"
+              },
+              {
+                "element": "h1#title:note",
+                "relation": "near"
+              },
+              {
+                "element": "label:note",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click Save note to store the note",
+          "phase": "",
+          "source_event": 3,
+          "video_context": {
+            "visible_target": "'Save note' button",
+            "screen_before": "The note input box contains the text 'quarterly report' and the 'Save note' button is visible below it.",
+            "screen_after": "The text 'Saved: quarterly report' appears below the button, confirming the note was saved.",
+            "purpose": "to save the typed note content to the system"
+          },
+          "snapshot_ref": "a49b2250fdd54b3ca270a3761f499346",
+          "snapshot_dom_hash": "e88a5f331e1f178928f398597fa2d67c3c5193a3a5e985693a4fbf89a0495ec4",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        }
+      ]
+    }
+  ],
+  "policies": {
+    "failure_first": true,
+    "stop_on_low_confidence": true
+  },
+  "llm": {
+    "max_calls_per_step": 1,
+    "timeout_ms": 600000
+  },
+  "intent_graph": {
+    "goal": "Type a note into the page and save it.",
+    "steps": [
+      {
+        "index": 0,
+        "intent": "Open the note page in the browser",
+        "verification_anchor": "the note page with a Note box and a Save note button is showing",
+        "intent_token": "open_note_page"
+      },
+      {
+        "index": 1,
+        "intent": "Click into the Note box to start typing",
+        "verification_anchor": "the Note box is active and ready for typing",
+        "intent_token": "focus_note_field"
+      },
+      {
+        "index": 2,
+        "intent": "Type the note text into the Note box",
+        "verification_anchor": "the typed note appears inside the Note box",
+        "intent_token": "enter_note_text"
+      },
+      {
+        "index": 3,
+        "intent": "Click Save note to store the note",
+        "verification_anchor": "a saved confirmation appears below the Save note button",
+        "intent_token": "click_save_note_button"
+      }
+    ],
+    "decision_points": [],
+    "expected_end_state": {
+      "description": "The note is saved and the page shows a confirmation message below the Save note button."
+    }
+  },
+  "compile_report": {
+    "status": "ok",
+    "steps_total": 4,
+    "steps_with_warnings": 0,
+    "min_confidence": 0.95,
+    "steps": [
+      {
+        "index": 0,
+        "intent": "navigate_to_page",
+        "selector": "",
+        "confidence": null,
+        "source": "heuristic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "intent": "interact_note",
+        "selector": "textarea[name=\"note\"]",
+        "confidence": 0.96,
+        "source": "deterministic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "intent": "enter_note_text",
+        "selector": "textarea[name=\"note\"]",
+        "confidence": 0.96,
+        "source": "deterministic",
+        "reasoning": "",
+        "input_binding": "note",
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "intent": "activate_control_save_note",
+        "selector": "role=button[name=\"Save note\"]",
+        "confidence": 0.95,
+        "source": "deterministic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      }
+    ],
+    "llm_router_stats": {
+      "provider": "cloud_proxy"
+    },
+    "events_total": 3,
+    "dropped": [
+      {
+        "sequence": 1,
+        "pass": "cleanup",
+        "action": "click",
+        "before_sequence": 2,
+        "target": "Note"
+      }
+    ],
+    "for_each_suggestions": []
+  }
+}

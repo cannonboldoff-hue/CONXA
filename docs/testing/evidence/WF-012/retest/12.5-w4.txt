@@ -1,0 +1,19 @@
+{"thinkAt":325,"changes":9,"firstSamples":[[325,176],[2304,181],[3249,181],[4192,181],[5138,181],[6078,181],[6703,255],[7012,582],[7330,763]],"totalMs":9836}
+----TAIL----
+start at http://localhost:8099/injection.html?v=clean
+
+1:11 PM
+
+C
+
+Conxa · 1:11 PM
+
+I can't set page addresses myself, and no change was prepared for you to apply. Nothing is waiting for your approval.
+
+To change where the workflow starts, open Human Edit on the step "Open the shop page where the item is sold" and enter the new address there. There's an open card for that step.
+
+The other open cards are for "Click Buy Now to start buying the item" — that step still needs pointing at the Buy Now button as the page shows it now, since that's why the test failed.
+
+The workflow is marked as failed, so only looking into it or editing it are open. Once you've made the edits, you can test again.
+
+WF12 buy rt1 · “Click Buy Now to start buying the item” selected

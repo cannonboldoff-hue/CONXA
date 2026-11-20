@@ -1,0 +1,23 @@
+{"thinkAt":331,"changes":7,"firstSamples":[[331,969],[2102,974],[3031,974],[4266,974],[5202,974],[6139,1068],[6449,1246]],"totalMs":9038}
+----TAIL----
+test it yet — the workflow is still in the question stage, and there's no test run recorded. The card open on your screen, "How can we tell it worked?", needs your answer first. Once you pick the check you want, the workflow can be tested and I can tell you the result.
+
+C
+
+Conxa · 3:57 PM
+
+Still need your answer: How can we tell it worked?
+
+▲
+Near the end of your recording, I spotted these things. Tick each one that should be true when everything works. If something you ticked turns out not to be true, we count it as failed. You can also type your own below.
+Question 2 of 2
+How can we tell it worked?
+After the step “Click Buy Now to start the purchase”, the app confirms it received it
+If this is not true afterwards, the run says it couldn’t confirm it worked instead of saying it’s done.
+After the step “Click Confirm Order to finish the purchase”, the app confirms it received it
+If this is not true afterwards, the run says it couldn’t confirm it worked instead of saying it’s done.
+You see the words “Buy Now done” on the screen
+You see the words “Confirm Order” on the screen
+You see the words “Confirm Order done” on the screen
+Tick what applies, then press the arrow.
+WF12 buy rt3c · “Click Buy Now to start the purchase” selected

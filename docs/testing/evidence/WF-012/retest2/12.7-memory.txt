@@ -1,0 +1,20 @@
+{"thinkAt":356,"changes":11,"firstSamples":[[356,146],[2467,151],[3090,151],[4040,151],[5304,151],[6262,151],[7219,151],[7850,134],[8330,417],[8647,565],[8972,624]],"totalMs":11769}
+----TAIL----
+What did I say earlier?
+
+Edit
+3:51 PM
+
+C
+
+Conxa · 3:52 PM
+
+Earlier you asked for the note text to come from an input called note, instead of the fixed words “quarterly report”. That request came up three times, and each proposal was turned down.
+
+You also undid an earlier change that had made this step take its text from an input.
+
+Separately, you recorded that nothing changes each time, and that the save step goes ahead without asking.
+
+Right now one proposed change is waiting for you on its card, and I couldn't prepare anything new from this message.
+
+WF12 note rt3b · “Type the note text into the Note box” selected

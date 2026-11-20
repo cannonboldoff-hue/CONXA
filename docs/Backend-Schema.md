@@ -2928,12 +2928,13 @@ Studio stdio RPC (`handlers/conversation.py`), not cloud HTTP. Thread ids are `w
 |---|---|---|
 | `chat_list` / `chat_create{title?}` / `chat_rename{chat_id,title}` / `chat_delete{chat_id}` | | `{chats}` / `{chat}` / `{chat}` / `{deleted}` |
 | `thread_load{thread_id, before?, limit?}` | `before` = index into the folded list | `{items, start, total, has_more, cursor, thread_id}` + `chat` or `{workflow, lifecycle}` |
-| `thread_turn{thread_id, message?, turn_id?, anchor?, card_id?, choice?, action?}` | a message, or an answer to a card | `{turn_id, status: done or cancelled, reply, items[, result]}` |
+| `thread_turn{thread_id, message?, turn_id?, anchor?, card_id?, choice?, action?, replaces?}` | a message, or an answer to a card; `replaces` = id of the person's last message (Edit and resend; `invalid_input` unless only plain replies followed it) | `{turn_id, status: done or cancelled, reply, items[, result]}` |
 | `thread_cancel{turn_id}` | | `{cancelled}` |
+| `thread_new_conversation{thread_id}` | appends a `new_conversation` divider; waits for a running turn | `{item}` (`null` when nothing was said since the last divider) |
 | `card_action{thread_id, card_id, action, payload?}` | `pending_change`: apply / undo / dismiss; `draft_workflow`: create / create_and_record / edit_details / dismiss; `error`: retry | `{ok, ...}`; draft: `{workflow_id, start_recording}` or `{needs, open_form}` |
 | `get_lifecycle{workflow_id}` / `list_lifecycles` / `count_publishable` | | `{lifecycle}` / `{lifecycles}` / `{count}` |
 
-Events (id = request id): `thread_item{thread_id, item}` (an appended item, or a card's new revision), `thread_delta{thread_id, turn_id, text}`, `thread_turn{thread_id, turn_id, status: started or queued}`.
+Events (id = request id): `thread_item{thread_id, item}` (an appended item, or a card's new revision; an item of kind `retract` carries `ids` the screen drops), `thread_delta{thread_id, turn_id, text}`, `thread_turn{thread_id, turn_id, status: started or queued}`.
 
 `lifecycle = {stage, substate, glyph (ok, warn, fail, run or none), note, allowed_actions, rows[{label,kind,note}]}`. Item shape: `{id, ts, kind, ...}`; cards add `card_id, revision, card_type, state, refs, ...`. Card types so far: `pending_change` (`proposal`, `preview`, `why`, `undo_steps`, `applied_version`), `draft_workflow` (`draft{name,group,starting_page}`), `error` (`code`, `body`).
 

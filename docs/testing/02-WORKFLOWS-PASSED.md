@@ -1140,3 +1140,9 @@ Optional branches take the arm that matches the page (zero tokens, no recovery),
 ## Passed Workflow P-43 — WF-11: loops, inputs and hostile input data (2026-11-20)
 
 A table loop built from three hand-made adds runs for 5 rows (record N = row N, proven on the fixture's own log) and is approved; the twin with the offer declined runs exactly as recorded. 50 rows all land right (2 min 18 s); 0 rows is refused plainly, identical rows are not merged and commas/quotes are not split. Empty, spaces-only, 10,000 characters, unicode, script/SQL text and `007`/`1e5`/`-0` are typed exactly or refused plainly; pasted newlines switch the box to multi-line with a note; chat refuses to build a loop and points to Human Edit. Fixed on the way: local builds lacked the loop engine capability; a step whose boxes clear after Save could not be proven; loop checks stayed frozen to row 1. Detail: [`workflow-handoffs/WF-011.md`](workflow-handoffs/WF-011.md)
+
+---
+
+## Passed Workflow P-44 — WF-12: copilot "why did this fail?" (2026-11-20)
+
+Chat names the real missing button from the real failed run, never invents a diagnosis on an untested workflow, ignores instructions found in page text, and proposes only meaning changes (a frozen value becomes an input; Apply equals the shown diff, Undo restores, Dismiss changes nothing). Chat can no longer change a step's page address: no card, plain refusal, file byte-identical across 4 wordings. Fixed on the way (S0): a "change the page address" request produced an Apply card. Built after the owner's decision: "New conversation" divider and "Edit and resend" on the last message only (nothing orphaned). Not reached in the live run: Edit hidden after a routed-command reply, a typed answer to the pinned multi-tick question, Approve/Publish blocked by an open question (only Test checked). Detail: [`workflow-handoffs/WF-012.md`](workflow-handoffs/WF-012.md)

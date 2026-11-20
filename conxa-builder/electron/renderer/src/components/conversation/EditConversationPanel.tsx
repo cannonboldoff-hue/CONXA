@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, X } from 'lucide-react'
+import { MessageSquare, MessageSquarePlus, X } from 'lucide-react'
 import { Conversation } from '@/components/conversation/Conversation'
 import { PanelDivider } from '@/components/shell/PanelDivider'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,11 @@ export function EditConversationPanel({
     .filter((i) => i.card_type === 'pending_change' && (i.state === 'applied' || i.state === 'undone'))
     .map((i) => `${i.card_id}:${i.state}`)
     .join('|')
+  const busy = useThreadStore((s) => s.threads[threadId]?.turnId != null)
+  const newConversation = useThreadStore((s) => s.newConversation)
+  // Shown once something was said since the last divider (the backend refuses an empty one too).
+  const lastDivider = (items ?? []).map((i) => i.kind).lastIndexOf('new_conversation')
+  const saidSince = (items ?? []).slice(lastDivider + 1).some((i) => (i.kind === 'user_message' && !i.hidden) || i.kind === 'assistant_message')
   const seen = useRef<string | null>(null)
   useEffect(() => {
     if (items === undefined) return
@@ -85,6 +90,19 @@ export function EditConversationPanel({
       <aside aria-label="Conversation" className="flex min-h-0 shrink-0 flex-col bg-[var(--bg-base)]" style={{ width }}>
         <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border-subtle)] px-3">
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-primary)]">Conversation</span>
+          {saidSince && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-[var(--text-meta)]"
+              disabled={busy}
+              title="Start fresh: Conxa stops using the messages above in its replies. Nothing is deleted, and questions and changes above still work."
+              onClick={() => void newConversation(threadId)}
+            >
+              <MessageSquarePlus className="size-3.5" /> New conversation
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="icon-sm" className="text-[var(--text-meta)]" aria-label="Hide conversation" title="Hide conversation" onClick={() => save({ width, open: false })}>
             <X className="size-4" />
           </Button>

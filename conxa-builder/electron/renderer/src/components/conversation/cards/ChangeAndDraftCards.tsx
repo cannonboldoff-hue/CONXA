@@ -46,6 +46,9 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
   const state = String(item.state)
   const preview = (item.preview ?? null) as { before?: unknown; after?: unknown } | null
   const summaries = (Array.isArray(item.summaries) ? item.summaries : []).map(String)
+  const proposals = Array.isArray(item.proposals) ? (item.proposals as { field?: unknown }[]) : []
+  // The field's own name, for the person who opens the exact change; the title uses plain words.
+  const field = proposals.length === 1 && typeof proposals[0]?.field === 'string' ? proposals[0].field : ''
   const glyph: StatusKind =
     state === 'applied' ? 'ok' : state === 'applying' ? 'run' : state === 'failed' ? 'fail' : state === 'open' ? 'warn' : 'none'
   const run = async (action: string) => {
@@ -82,8 +85,19 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
         <details className="mt-2">
           <summary className="cursor-pointer text-xs text-[var(--text-meta)]">Show exact change</summary>
           <div className="mt-1 max-h-60 space-y-1 overflow-auto rounded-[8px] bg-[var(--bg-raised)] p-2.5 font-mono text-xs">
-            {preview.before !== undefined && <pre className="whitespace-pre-wrap break-all text-[var(--text-meta)] line-through">{asPretty(preview.before)}</pre>}
-            {preview.after !== undefined && <pre className="whitespace-pre-wrap break-all text-[var(--text-primary)]">{asPretty(preview.after)}</pre>}
+            {field && <p className="text-[var(--text-meta)]">Field: {field}</p>}
+            {preview.before !== undefined && (
+              <>
+                <p className="text-[var(--text-meta)]">Before</p>
+                <pre className="whitespace-pre-wrap break-all text-[var(--text-meta)] line-through">{asPretty(preview.before)}</pre>
+              </>
+            )}
+            {preview.after !== undefined && (
+              <>
+                <p className="text-[var(--text-meta)]">After</p>
+                <pre className="whitespace-pre-wrap break-all text-[var(--text-primary)]">{asPretty(preview.after)}</pre>
+              </>
+            )}
           </div>
         </details>
       )}

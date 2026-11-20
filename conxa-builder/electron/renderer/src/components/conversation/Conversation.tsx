@@ -1,17 +1,19 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ShieldCheck, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { AssistantMessage, EventRow, ThreadSkeleton, UserMessage } from '@/components/conversation/parts'
+import { AssistantMessage, ConversationDivider, EventRow, ThreadSkeleton, UserMessage } from '@/components/conversation/parts'
 import { cardComponent } from '@/components/conversation/cards'
 import { selectThread, useThreadStore } from '@/store/threadStore'
-import { visibleItems, type ThreadItem } from '@/lib/thread'
+import { editableMessageId, visibleItems, type ThreadItem } from '@/lib/thread'
 import { useConnectionStore } from '@/store/connectionStore'
 import { cn } from '@/lib/utils'
 
-function ItemView({ threadId, item }: { threadId: string; item: ThreadItem }) {
+function ItemView({ threadId, item, onEdit }: { threadId: string; item: ThreadItem; onEdit?: (text: string) => void }) {
   switch (item.kind) {
     case 'user_message':
-      return <UserMessage text={String(item.text ?? '')} ts={item.ts} />
+      return <UserMessage text={String(item.text ?? '')} ts={item.ts} onEdit={onEdit} />
+    case 'new_conversation':
+      return <ConversationDivider ts={item.ts} />
     case 'assistant_message':
       return <AssistantMessage text={String(item.text ?? '')} ts={item.ts} />
     case 'event':
@@ -189,6 +191,9 @@ export function Conversation({
     [items],
   )
 
+  // "Edit" only on the person's last message, only while nothing but a reply followed it, never mid-reply.
+  const editableId = useMemo(() => (t.turnId ? null : editableMessageId(t.items)), [t.items, t.turnId])
+
   const toBottom = useCallback(() => {
     const el = scroller.current
     if (el) el.scrollTop = el.scrollHeight
@@ -261,7 +266,12 @@ export function Conversation({
                 {String(item.title ?? 'A question')} — waiting for your answer below
               </p>
             ) : (
-              <ItemView key={item.card_id ?? item.id} threadId={threadId} item={item} />
+              <ItemView
+                key={item.card_id ?? item.id}
+                threadId={threadId}
+                item={item}
+                onEdit={item.id === editableId && !composerProps.disabledReason ? (text) => send(threadId, text, anchor, item.id) : undefined}
+              />
             ),
           )}
           {tail}

@@ -31,12 +31,14 @@ from handlers.test_flow import last_test_inputs
 def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any] | None:
     """Chat never touches a step's address keys (CLAUDE.md). The edit commands re-derive shadows inside them (a
     renamed input re-filled an empty `recovery.intent`, WF-5 5.8), so after a chat change set every step that existed
-    before gets its address keys back byte for byte. Two shadows of a field chat may edit follow that field: the
-    navigate `action.url` / `signals.context.page_url` (from `url`) and `signals.semantic` intents (from `intent`).
+    before gets its address keys back byte for byte. A page address (`url`) keeps a change only when code turned
+    part of it into an input (`_templated_from`); its shadows `action.url` / `signals.context.page_url` then follow
+    it, as `signals.semantic` intents follow `intent`.
     Branch and loop bodies are edited through their own ops, so they are left as the ops wrote them.
     Returns the corrected document, or None when nothing had to change."""
     import copy
 
+    from conxa_compile.compiler.action_semantics import action_name
     from conxa_compile.compiler.step_key import step_keys
     from conxa_compile.editor.capability_manifest import ADDRESS_KEYS
 
@@ -44,14 +46,20 @@ def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[st
     old_steps = ((before.get("skills") or [{}])[0] or {}).get("steps") or []
     doc = copy.deepcopy(after)
     new_steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
-    old_by_key = dict(zip(step_keys(old_steps), old_steps))
+    old_keys, new_keys = step_keys(old_steps), step_keys(new_steps)
+    old_by_key = dict(zip(old_keys, old_steps))
     changed = False
-    for key, step in zip(step_keys(new_steps), new_steps):
+    for i, (key, step) in enumerate(zip(new_keys, new_steps)):
         old = old_by_key.get(key)
+        # A step with no element is keyed by its page address, so a changed address hides it from the lookup:
+        # one whose key vanished is the step that was there before, at the same place with the same action.
+        if old is None and i < len(old_steps) and old_keys[i] not in new_keys and isinstance(step, dict) \
+                and isinstance(old_steps[i], dict) and action_name(old_steps[i]) == action_name(step):
+            old = old_steps[i]
         if not isinstance(old, dict) or not isinstance(step, dict):
             continue
         for k in guarded_keys:
-            if step.get(k) == old.get(k):
+            if step.get(k) == old.get(k) or (k == "url" and _templated_from(old.get(k), step.get(k))):
                 continue
             changed = True
             if k in old:
@@ -70,6 +78,37 @@ def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[st
                 if isinstance(sem, dict) and f in sem:
                     sem[f] = step.get("intent")
     return doc if changed else None
+
+
+def _templated_from(old: Any, new: Any) -> bool:
+    """True when ``new`` is ``old`` with parts turned into {{inputs}} ("this changes each run", written by code),
+    never an address that points somewhere else."""
+    import re
+
+    if not isinstance(old, str) or not isinstance(new, str) or "{{" not in new:
+        return False
+    parts = re.split(r"\{\{[^{}]+\}\}", new)
+    return len(parts) > 1 and re.fullmatch("(.+?)".join(map(re.escape, parts)), old, re.S) is not None
+
+
+def _refuse_address_edit(doc: dict[str, Any], step_index: int, patch: Any, path: Any = None, kind: str | None = None) -> None:
+    """Apply-time half of the one chat gate (``chat_may_write``): a card made before a rule changed, or any
+    payload, is checked again against the step it lands on. ``kind`` names a step about to be inserted."""
+    from conxa_compile.compiler.action_semantics import action_name
+    from conxa_compile.editor.capability_manifest import ADDRESS_REFUSAL, chat_may_write
+    from conxa_compile.editor.step_path import StepPathError, get_nested_step, parse_nested_step_path
+
+    if kind is None:
+        step = (((doc.get("skills") or [{}])[0] or {}).get("steps") or [])[step_index]
+        if path:
+            try:
+                nested = parse_nested_step_path(str(path))
+                step = get_nested_step(step, nested) if nested else step
+            except StepPathError as exc:
+                raise _CommandError("invalid_input", "That step inside the body no longer exists.") from exc
+        kind = action_name(step).lower()
+    if not chat_may_write(kind, patch):
+        raise _CommandError("chat_cannot_repoint", ADDRESS_REFUSAL)
 
 
 class CopilotMixin:
@@ -180,6 +219,7 @@ class CopilotMixin:
             step_index = resolve_step_index(doc, step_key)
         except ProposalError as exc:
             raise _CommandError(exc.code, exc.message) from exc
+        _refuse_address_edit(doc, step_index, patch, payload.get("path"))
 
         # Delegates to the exact command a manual edit uses — its own patch_gate re-run, its own
         # undo entry, its own edits.jsonl lines. dispatch()'s edit-log hook attributes the write
@@ -325,7 +365,7 @@ class CopilotMixin:
         return result
 
     def _apply_one_structural_op(self, skill_id: str, op: dict[str, Any], rid: str) -> dict[str, Any]:
-        from conxa_compile.editor.copilot_proposals import _STEP_SCOPED_OPS, identity_patch_from_source, resolve_step_index
+        from conxa_compile.editor.copilot_proposals import _STEP_SCOPED_OPS, _fields_patch, identity_patch_from_source, resolve_step_index
         from conxa_core.storage.json_store import read_skill
 
         kind = str(op.get("op") or "").strip()
@@ -340,13 +380,15 @@ class CopilotMixin:
             block0 = skills[0] if skills and isinstance(skills[0], dict) else {}
             pre_len = len(block0.get("steps") or [])
             action_kind = str(op.get("action_kind") or "").strip()
+            fields = op.get("fields") if isinstance(op.get("fields"), dict) else {}
+            if fields:
+                _refuse_address_edit(doc, 0, _fields_patch(fields), kind=action_kind.lower())
             result = self.cmd_insert_step(
                 {"skill_id": skill_id, "action_kind": action_kind, "insert_after": insert_after}, rid
             )
             new_index = (insert_after + 1) if insert_after is not None else pre_len
 
             identity_from_step_key = op.get("identity_from_step_key")
-            fields = op.get("fields") if isinstance(op.get("fields"), dict) else {}
             patch: dict[str, Any] = {}
             if identity_from_step_key:
                 source_index = resolve_step_index(doc, identity_from_step_key)
@@ -435,6 +477,9 @@ class CopilotMixin:
 
         if kind == "body_insert_step":
             action_kind = str(op.get("action_kind") or "").strip()
+            fields = op.get("fields") if isinstance(op.get("fields"), dict) else {}
+            if fields:
+                _refuse_address_edit(doc, step_index, _fields_patch(fields), kind=action_kind.lower())
             nested_before = len(((steps[step_index].get(container) or {}).get("steps")) or [])
             after_nested = op.get("after_nested_index")
             result = self.cmd_insert_branch_step({**base, "action_kind": action_kind, "insert_after": after_nested, "container": container}, rid)
@@ -443,7 +488,6 @@ class CopilotMixin:
             if op.get("identity_from_step_key"):
                 source = steps[resolve_step_index(doc, str(op["identity_from_step_key"]).strip())]
                 patch.update(identity_patch_from_source(action_kind, source))
-            fields = op.get("fields") if isinstance(op.get("fields"), dict) else {}
             _merge_nested(patch, _fields_patch(fields))
             if patch:
                 result = self.cmd_patch_step({**base, "path": f"{container}.steps[{new_nested}]", "patch": patch}, rid)

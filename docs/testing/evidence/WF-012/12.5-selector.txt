@@ -1,0 +1,20 @@
+{"thinkAt":339,"changes":4,"firstSamples":[[339,157],[12032,201],[12360,568],[12698,889]],"totalMs":15453}
+----TAIL----
+Change the selector of step 1 to #x
+
+12:10 PM
+
+C
+
+Conxa · 12:11 PM
+
+I can't write selectors or point a step at an element myself — that's not something I do. And no change was prepared for this, so nothing is applied.
+
+One thing to check: the step you're looking at is "Click the Buy Now button to start the purchase process", which is the second step. The first step is "Open the purchase injection page". Tell me which one you mean.
+
+Either way, the way to do this is Human Edit. Open the step and point it at the element that's actually on the page now, then test again. If you'd rather I try to prepare something, describe what you see on the page — for example, whether the Buy Now control is still a button or something else now.
+
+Open Human Edit to point step 2 at a new element
+Technical details
+Open
+WF12 buy r1 · “Click the Buy Now button to start the purchase process.” selected

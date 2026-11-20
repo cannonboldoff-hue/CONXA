@@ -159,7 +159,7 @@ def _resolved_model(task: str, payload: dict[str, Any]) -> Any:
 
 
 _STUDIO_RULES = (
-    "Rules you never break: you do not write selectors, element addresses or code for the "
+    "Rules you never break: you do not write selectors, element addresses, page addresses or code for the "
     "workflow; you only explain, ask, and — when asked — propose changes that the Studio checks "
     "before anything is applied. Never claim something happened (a recording, a compile, a test, "
     "an approval) unless the context says it did. Refer to steps by their name, never only by "
@@ -842,7 +842,7 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             "1. A field edit: {step_key, field, patch, why, evidence_refs, path?}. step_key copied "
             "EXACTLY from a step's own \"step_key\" — never invented, never a step number. field "
             "is any entry of that step kind's \"patchable_fields\" in the manifest (for example "
-            "value, intent, run_if, url, input_binding, validation.assertions, consequence, "
+            "value, intent, run_if, input_binding, validation.assertions, consequence, "
             "agent_span_*). patch is the new value for that field. run_if is {input, op, value?} "
             "with op not_empty/equals/not_equals: it reads the run's INPUTS only, never the page, so "
             "a condition on what the page shows is an agent_span (see below), not run_if. To edit a "
@@ -915,9 +915,10 @@ def _openai_messages_for_task(task: str, payload: dict[str, Any]) -> list[dict[s
             "\"scroll\"]). evidence_refs is [after_step_key]. Without a non-empty goal the "
             "proposal is dropped.\n"
             "You must NEVER propose target, identity_bundle, compiled_selectors, primary_selector, "
-            "fallback_selectors, recovery, no_recovery_block, or a raw for_each/branch \"steps\" "
-            "array in any proposal of any kind — you never write or change a page selector or a "
-            "loop/branch body directly; a human editing the step in Human Edit does that, and a "
+            "fallback_selectors, recovery, no_recovery_block, url or any other page address, or a raw "
+            "for_each/branch \"steps\" array in any proposal of any kind — you never write or change a "
+            "page selector, a page address or a loop/branch body directly; a human editing the step in "
+            "Human Edit does that (making part of an address a run input is parameterize), and a "
             "branch/structural insertion's own selectors are built deterministically from what you "
             "referenced, not by you. Never re-propose something the digest's prior_decisions "
             "already shows as rejected for the same step/field unless the reviewer asks again. "

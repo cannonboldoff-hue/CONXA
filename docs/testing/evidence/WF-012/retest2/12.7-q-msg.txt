@@ -1,0 +1,34 @@
+{"thinkAt":325,"changes":6,"firstSamples":[[325,982],[2196,987],[3141,987],[4076,987],[5023,1011],[5355,1363]],"totalMs":7862}
+----TAIL----
+What does step 2 do?
+
+Edit
+3:56 PM
+
+C
+
+Conxa · 3:56 PM
+
+Step 2 is “Click Buy Now to start the purchase.” It presses the Buy Now button on the page, which opens the order confirmation. It can be undone, so nothing is final at that point.
+
+The workflow is still waiting on your answer to the open question, “How can we tell it worked?” Once you answer that card, it will be ready to test.
+
+C
+
+Conxa · 3:56 PM
+
+Still need your answer: How can we tell it worked?
+
+▲
+Near the end of your recording, I spotted these things. Tick each one that should be true when everything works. If something you ticked turns out not to be true, we count it as failed. You can also type your own below.
+Question 2 of 2
+How can we tell it worked?
+After the step “Click Buy Now to start the purchase”, the app confirms it received it
+If this is not true afterwards, the run says it couldn’t confirm it worked instead of saying it’s done.
+After the step “Click Confirm Order to finish the purchase”, the app confirms it received it
+If this is not true afterwards, the run says it couldn’t confirm it worked instead of saying it’s done.
+You see the words “Buy Now done” on the screen
+You see the words “Confirm Order” on the screen
+You see the words “Confirm Order done” on the screen
+Tick what applies, then press the arrow.
+WF12 buy rt3c · “Click Buy Now to start the purchase” selected

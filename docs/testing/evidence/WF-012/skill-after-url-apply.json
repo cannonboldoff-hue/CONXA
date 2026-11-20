@@ -1,0 +1,1119 @@
+{
+  "meta": {
+    "id": "skill_b67f335f-5000-48fd-8105-5093c332d974",
+    "version": 5,
+    "title": "WF12 buy r1",
+    "created_at": "2026-11-20T06:30:56.629882+00:00",
+    "source_session_id": "b67f335f-5000-48fd-8105-5093c332d974",
+    "compiler_policy_version": "1.0.0",
+    "compiler_policy_hash": "698b356bf9d7073e",
+    "required_runtime": ">=1.0.0",
+    "structural_fingerprint": {
+      "landmarks": [
+        {
+          "primary_selector": "role=button[name=\"Buy Now\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Buy Now",
+          "tag": "button"
+        },
+        {
+          "primary_selector": "role=button[name=\"Confirm Order\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Confirm Order",
+          "tag": "button"
+        }
+      ],
+      "landmark_count": 2
+    },
+    "environment": {
+      "locale": "en-US",
+      "timezone": "Asia/Calcutta",
+      "utc_offset_minutes": 330,
+      "viewport": {
+        "w": 1280,
+        "h": 992
+      },
+      "device_pixel_ratio": 1.0000000149011612,
+      "date_format_sample": "1/31/2026",
+      "platform": "Win32"
+    },
+    "compensation_skill": "",
+    "visited_hosts": [
+      "localhost"
+    ]
+  },
+  "inputs": [],
+  "skills": [
+    {
+      "name": "recorded",
+      "steps": [
+        {
+          "action": {
+            "action": "navigate",
+            "url": "http://localhost:8099/injection.html?v=clean"
+          },
+          "intent": "navigate_to_page",
+          "url": "http://localhost:8099/injection.html?v=clean",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/injection.html?v=clean"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "context": {
+              "page_url": "http://localhost:8099/injection.html?v=clean"
+            },
+            "anchors": []
+          },
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "http://localhost:8099/injection.html?v=gone",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "http://localhost:8099/injection.html?v=gone"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open the purchase injection page.",
+          "phase": "navigate",
+          "source_event": null,
+          "video_context": null,
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "click",
+          "intent": "activate_control_buy_now",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/injection.html?v=clean"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Buy Now\"]",
+            "fallback_selectors": [
+              "text=\"Buy Now\"",
+              "#buy",
+              "/html[1]/body[1]/div[1]/button[1]"
+            ],
+            "css": "#buy",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Buy Now\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Buy Now\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Buy Now\"] >> right-of=internal:text=\"Checkout\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#buy",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Buy Now",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "buy",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Checkout"
+              ],
+              "position_hint": {
+                "x_pct": 0.037,
+                "y_pct": 0.131
+              },
+              "section_heading": "Checkout"
+            },
+            "stable_hash": "8d4cc4a8ed37c7be70a676f45ab8a3a7c5a2c9c9ea35e9f583776bd09d5f9800",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": true
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "buy",
+              "classes": [],
+              "inner_text": "Buy Now",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": null,
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "content_change",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Buy Now\"",
+              "css": "#buy",
+              "xpath": "/html[1]/body[1]/div[1]/button[1]"
+            },
+            "semantic": {
+              "normalized_text": "buy now",
+              "role": "button",
+              "input_type": null,
+              "final_intent": "activate_control_buy_now",
+              "llm_intent": "activate_control_buy_now",
+              "effect_judgement": {
+                "reversible": true,
+                "kind": "moves_forward",
+                "confidence": 1.0,
+                "reason": "The action initiates the purchase process and changes the button state."
+              }
+            },
+            "context": {
+              "parent": "div#controls",
+              "siblings": [
+                "button#confirm:Confirm Order"
+              ],
+              "index_in_parent": 0,
+              "form_context": null,
+              "page_url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "buy now",
+                "relation": "target"
+              },
+              {
+                "element": "div#controls",
+                "relation": "inside"
+              },
+              {
+                "element": "button#confirm:confirm order",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 48,
+                "y": 105,
+                "w": 115,
+                "h": 46
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "visible_key_elements": [
+                "text=\"Buy Now\"",
+                "#buy",
+                "button",
+                "button#confirm:Confirm Order"
+              ],
+              "important_text_blocks": [
+                "Buy Now"
+              ],
+              "dom_fingerprint": "1e77077e2afdee7b48caea3ce8775400f227166be9e9bb7de09011daa99ef8a2"
+            },
+            "after": {
+              "url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "visible_key_elements": [
+                "text=\"Buy Now\"",
+                "#buy",
+                "button",
+                "button#confirm:Confirm Order"
+              ],
+              "important_text_blocks": [
+                "Buy Now"
+              ],
+              "dom_fingerprint": "1e77077e2afdee7b48caea3ce8775400f227166be9e9bb7de09011daa99ef8a2"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "element_appear",
+              "target": "text=\"Buy Now\"",
+              "timeout": 8000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Buy Now done"
+              ],
+              "control_text": [
+                "Buy Now done"
+              ],
+              "page_url_hint": "http://localhost:8099/injection.html?v=clean",
+              "state_diff_strength": 0.05,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_buy_now",
+              "intent_validation_primary": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Buy Now done",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "control"
+              },
+              {
+                "type": "state_changed",
+                "target": "",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": {
+              "kind": "send",
+              "required_rung": "completed",
+              "target_rung": "result_exists",
+              "identity": {},
+              "checks": [
+                {
+                  "id": "c1",
+                  "rung": "completed",
+                  "witness": "transport",
+                  "role": "support",
+                  "probe": {
+                    "type": "request_chain",
+                    "method": "mutating",
+                    "status": "2xx"
+                  },
+                  "plain": "the app accepted the request",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                },
+                {
+                  "id": "c2",
+                  "rung": "completed",
+                  "witness": "renderer",
+                  "role": "veto",
+                  "probe": {
+                    "type": "failure_signal",
+                    "scope": "new_since_baseline"
+                  },
+                  "plain": "the app shows no error or refusal",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                }
+              ],
+              "quorum": {
+                "witnesses": 1,
+                "identity_required": false
+              },
+              "time": {
+                "progress_extends": true,
+                "stall_after_s": 20,
+                "max_s": 120,
+                "long_wait": "fail"
+              },
+              "on": {
+                "unverified": "fail",
+                "partial": "stop_and_report"
+              },
+              "words": {}
+            }
+          },
+          "recovery": {
+            "intent": "activate_control_buy_now",
+            "final_intent": "activate_control_buy_now",
+            "anchors": [
+              {
+                "element": "buy now",
+                "relation": "target"
+              },
+              {
+                "element": "div#controls",
+                "relation": "inside"
+              },
+              {
+                "element": "button#confirm:confirm order",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match",
+              "overlay_anchor",
+              "role_match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_evidence": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click the Buy Now button to start the purchase process.",
+          "phase": "act",
+          "source_event": 1,
+          "video_context": {
+            "visible_target": "Buy Now button",
+            "screen_before": "Checkout page with Buy Now and Confirm Order buttons visible",
+            "screen_after": "Buy Now button text changes to 'Buy Now done'",
+            "purpose": "to initiate the purchase process"
+          },
+          "snapshot_ref": "edcfdc1566ea419e82230852f0ffbb79",
+          "snapshot_dom_hash": "a4b59d01b185939eef5382e82be85969f02932e69f96ccb16e2c2abea2aacdc8",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "click",
+          "intent": "activate_control_confirm_order",
+          "url": "",
+          "consequence": "irreversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/injection.html?v=clean"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Confirm Order\"]",
+            "fallback_selectors": [
+              "text=\"Confirm Order\"",
+              "#confirm",
+              "/html[1]/body[1]/div[1]/button[2]"
+            ],
+            "css": "#confirm",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Confirm Order\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Confirm Order\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Confirm Order\"] >> right-of=internal:text=\"Checkout\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#confirm",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Confirm Order",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "confirm",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Checkout"
+              ],
+              "position_hint": {
+                "x_pct": 0.168,
+                "y_pct": 0.131
+              },
+              "section_heading": "Checkout"
+            },
+            "stable_hash": "52c52a03c815dff74a6bef8c77626f4774daa51357d801fcc705d8a0c1f24e3c",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": true
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "confirm",
+              "classes": [],
+              "inner_text": "Confirm Order",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": null,
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "content_change",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Confirm Order\"",
+              "css": "#confirm",
+              "xpath": "/html[1]/body[1]/div[1]/button[2]"
+            },
+            "semantic": {
+              "normalized_text": "confirm order",
+              "role": "button",
+              "input_type": null,
+              "final_intent": "activate_control_confirm_order",
+              "llm_intent": "activate_control_confirm_order",
+              "effect_judgement": {
+                "reversible": false,
+                "kind": "saves",
+                "confidence": 1.0,
+                "reason": "This step finalizes and confirms the purchase order."
+              }
+            },
+            "context": {
+              "parent": "div#controls",
+              "siblings": [
+                "button#buy:Buy Now done"
+              ],
+              "index_in_parent": 1,
+              "form_context": null,
+              "page_url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "confirm order",
+                "relation": "target"
+              },
+              {
+                "element": "div#controls",
+                "relation": "inside"
+              },
+              {
+                "element": "button#buy:buy now done",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 215,
+                "y": 105,
+                "w": 153,
+                "h": 46
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "visible_key_elements": [
+                "text=\"Confirm Order\"",
+                "#confirm",
+                "button",
+                "button#buy:Buy Now done"
+              ],
+              "important_text_blocks": [
+                "Confirm Order"
+              ],
+              "dom_fingerprint": "030670216a0e27d2a2c4930f171ea93fbec383a70e20332ca15195b6bbcf8f25"
+            },
+            "after": {
+              "url": "http://localhost:8099/injection.html?v=clean",
+              "page_title": "Injection fixture",
+              "visible_key_elements": [
+                "text=\"Confirm Order\"",
+                "#confirm",
+                "button",
+                "button#buy:Buy Now done"
+              ],
+              "important_text_blocks": [
+                "Confirm Order"
+              ],
+              "dom_fingerprint": "030670216a0e27d2a2c4930f171ea93fbec383a70e20332ca15195b6bbcf8f25"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "element_appear",
+              "target": "text=\"Confirm Order\"",
+              "timeout": 8000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Confirm Order done"
+              ],
+              "control_text": [
+                "Confirm Order done"
+              ],
+              "page_url_hint": "http://localhost:8099/injection.html?v=clean",
+              "state_diff_strength": 0.05,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_confirm_order",
+              "intent_validation_primary": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Confirm Order done",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "control"
+              },
+              {
+                "type": "state_changed",
+                "target": "",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": {
+              "kind": "send",
+              "required_rung": "completed",
+              "target_rung": "result_exists",
+              "identity": {},
+              "checks": [
+                {
+                  "id": "c1",
+                  "rung": "completed",
+                  "witness": "transport",
+                  "role": "support",
+                  "probe": {
+                    "type": "request_chain",
+                    "method": "mutating",
+                    "status": "2xx"
+                  },
+                  "plain": "the app accepted the request",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                },
+                {
+                  "id": "c2",
+                  "rung": "completed",
+                  "witness": "renderer",
+                  "role": "veto",
+                  "probe": {
+                    "type": "failure_signal",
+                    "scope": "new_since_baseline"
+                  },
+                  "plain": "the app shows no error or refusal",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                }
+              ],
+              "quorum": {
+                "witnesses": 1,
+                "identity_required": false
+              },
+              "time": {
+                "progress_extends": true,
+                "stall_after_s": 20,
+                "max_s": 120,
+                "long_wait": "fail"
+              },
+              "on": {
+                "unverified": "fail",
+                "partial": "stop_and_report"
+              },
+              "words": {}
+            }
+          },
+          "recovery": {
+            "intent": "activate_control_confirm_order",
+            "final_intent": "activate_control_confirm_order",
+            "anchors": [
+              {
+                "element": "confirm order",
+                "relation": "target"
+              },
+              {
+                "element": "div#controls",
+                "relation": "inside"
+              },
+              {
+                "element": "button#buy:buy now done",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match",
+              "overlay_anchor",
+              "role_match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_evidence": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click the Confirm Order button to finalize the purchase.",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "Confirm Order button",
+            "screen_before": "Checkout page with Buy Now done and Confirm Order buttons",
+            "screen_after": "Confirm Order button text changes to 'Confirm Order done'",
+            "purpose": "to finalize and confirm the purchase order"
+          },
+          "snapshot_ref": "925d2030824f4b4f81a5b16126d94108",
+          "snapshot_dom_hash": "f60976c2b6a3a37422a21a27cf94fdb57293d00e43bb4fe6d60d09aec65d66a4",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        }
+      ]
+    }
+  ],
+  "policies": {
+    "failure_first": true,
+    "stop_on_low_confidence": true
+  },
+  "llm": {
+    "max_calls_per_step": 1,
+    "timeout_ms": 600000
+  },
+  "intent_graph": {
+    "goal": "Complete a purchase on the checkout page by buying and then confirming the order.",
+    "steps": [
+      {
+        "index": 0,
+        "intent": "Open the purchase injection page.",
+        "verification_anchor": "URL change",
+        "intent_token": "navigate_to_purchase_page"
+      },
+      {
+        "index": 1,
+        "intent": "Click the Buy Now button to start the purchase process.",
+        "verification_anchor": "The button text changes to Buy Now done",
+        "intent_token": "click_buy_now_button"
+      },
+      {
+        "index": 2,
+        "intent": "Click the Confirm Order button to finalize the purchase.",
+        "verification_anchor": "The button text changes to Confirm Order done",
+        "intent_token": "click_confirm_order_button"
+      }
+    ],
+    "decision_points": [],
+    "expected_end_state": {
+      "description": "The purchase is completed and confirmed on the checkout page."
+    }
+  },
+  "compile_report": {
+    "status": "ok",
+    "steps_total": 3,
+    "steps_with_warnings": 0,
+    "min_confidence": 0.95,
+    "steps": [
+      {
+        "index": 0,
+        "intent": "navigate_to_page",
+        "selector": "",
+        "confidence": null,
+        "source": "heuristic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "intent": "activate_control_buy_now",
+        "selector": "role=button[name=\"Buy Now\"]",
+        "confidence": 0.95,
+        "source": "deterministic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "intent": "activate_control_confirm_order",
+        "selector": "role=button[name=\"Confirm Order\"]",
+        "confidence": 0.95,
+        "source": "deterministic",
+        "reasoning": "",
+        "input_binding": null,
+        "warnings": []
+      }
+    ],
+    "llm_router_stats": {
+      "provider": "cloud_proxy"
+    },
+    "second_opinion": [
+      {
+        "step_key": "a8fb7fbc00ab6969#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "navigate",
+        "why": "This step initiates the workflow by moving to the required page."
+      },
+      {
+        "step_key": "8d4cc4a8ed37c7be70a676f45ab8a3a7c5a2c9c9ea35e9f583776bd09d5f9800#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "This step performs the first action of the purchase process."
+      }
+    ],
+    "understanding": {
+      "goal_summary": "The user wants to complete a purchase by clicking 'Buy Now' and then 'Confirm Order' on a checkout page.",
+      "coverage": {
+        "ok": true,
+        "note": ""
+      },
+      "values": [
+        {
+          "ref": "http://localhost:8099/injection.html?v=clean",
+          "verdict": "fixed",
+          "name": "purchase_page_url",
+          "literal": "http://localhost:8099/injection.html?v=clean"
+        },
+        {
+          "ref": "Buy Now",
+          "verdict": "fixed",
+          "name": "buy_now_button",
+          "literal": "Buy Now"
+        },
+        {
+          "ref": "Confirm Order",
+          "verdict": "fixed",
+          "name": "confirm_order_button",
+          "literal": "Confirm Order"
+        }
+      ],
+      "for_task": "Complete a purchase on the checkout page by buying and then confirming the order."
+    },
+    "model_ledger": {
+      "second_opinion": {
+        "dropped": 1,
+        "changed": 1,
+        "added": 0,
+        "report": {
+          "reference": {
+            "ungrounded_assertion": {
+              "count": 1,
+              "example": "8d4cc4a8ed37c7be70a676f45ab8a3a7c5a2c9c9ea35e9f583776bd09d5f"
+            }
+          },
+          "safety": {
+            "over_cap": {
+              "count": 1,
+              "example": ""
+            }
+          }
+        }
+      }
+    },
+    "events_total": 2,
+    "for_each_suggestions": []
+  }
+}
