@@ -22,8 +22,7 @@ export function DeleteStepDialog({ deleteIndex, onOpenChange, onConfirm }: Delet
         <AlertDialogHeader>
           <AlertDialogTitle>Remove step {deleteIndex !== null ? deleteIndex + 1 : ''}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the step from the skill package. You can recompile from session if the recording data is still
-            available.
+            This removes the step from the workflow. You can undo it right after, or record that part again.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

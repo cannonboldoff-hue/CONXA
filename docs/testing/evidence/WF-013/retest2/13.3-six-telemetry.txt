@@ -1,0 +1,63 @@
+16:00:47 t8ekx {"e": "wf_start", "ts": 1795190447759}
+16:00:48 t8ekx {"e": "drift_detected", "ts": 1795190448025, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp61imj_t8ekx&conxa_tab=d05da036"}
+16:00:48 t8ekx {"e": "proof", "ts": 1795190448100, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+16:00:48 t8ekx {"e": "tier_ok", "ts": 1795190448102, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+16:00:48 t8ekx {"e": "step_ms", "ts": 1795190448102, "si": 0, "ms": 56}
+16:00:48 t8ekx {"e": "proof", "ts": 1795190448322, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+16:00:48 t8ekx {"e": "tier_ok", "ts": 1795190448322, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+16:00:48 t8ekx {"e": "step_ms", "ts": 1795190448322, "si": 1, "ms": 220}
+16:00:48 t8ekx {"e": "verify_result", "ts": 1795190448458, "si": 2, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:00:48 t8ekx {"e": "proof", "ts": 1795190448458, "si": 2, "rung": "accepted", "v": "proven", "w": ["target"]}
+16:00:48 t8ekx {"e": "tier_ok", "ts": 1795190448459, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+16:00:48 4ebzz {"e": "rec_start", "ts": 1795190448876, "si": 3, "l": 5, "sc": "llm_intent"}
+16:00:48 4ebzz {"e": "wf_start", "ts": 1795190448876}
+16:00:48 4ebzz {"e": "park_resumed", "ts": 1795190448888, "si": 3}
+16:00:49 4ebzz {"e": "verify_result", "ts": 1795190449080, "si": 3, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:00:52 4ebzz {"e": "completion", "ts": 1795190452182, "si": 3, "mode": "full", "st": "no_sign", "waited": 3100}
+16:00:52 4ebzz {"e": "proof", "ts": 1795190452182, "si": 3, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+16:00:52 4ebzz {"e": "tier_ok", "ts": 1795190452183, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+16:00:52 4ebzz {"e": "step_ms", "ts": 1795190452183, "si": 3, "ms": 3289}
+16:00:52 4ebzz {"e": "span_start", "ts": 1795190452187, "si": 4}
+16:00:52 4ebzz {"e": "step_ms", "ts": 1795190452187, "si": 4, "ms": 4}
+16:00:52 4ebzz {"e": "park_created", "ts": 1795190452191, "si": 4, "kind": "span"}
+16:01:01 ztdzd {"e": "rec_start", "ts": 1795190461053, "si": 4, "l": 5, "sc": "llm_intent"}
+16:01:01 ztdzd {"e": "wf_start", "ts": 1795190461053}
+16:01:01 ztdzd {"e": "span_done", "ts": 1795190461059, "si": 4, "n": 0}
+16:01:01 ztdzd {"e": "park_resumed", "ts": 1795190461069, "si": 4}
+16:01:01 ztdzd {"e": "step_ms", "ts": 1795190461080, "si": 4, "ms": 4}
+16:01:01 ztdzd {"e": "span_start", "ts": 1795190461083, "si": 5}
+16:01:01 ztdzd {"e": "step_ms", "ts": 1795190461083, "si": 5, "ms": 3}
+16:01:01 ztdzd {"e": "park_created", "ts": 1795190461088, "si": 5, "kind": "span"}
+16:01:04 gucon {"e": "rec_start", "ts": 1795190464699, "si": 5, "l": 5, "sc": "llm_intent"}
+16:01:04 gucon {"e": "wf_start", "ts": 1795190464699}
+16:01:04 gucon {"e": "span_done", "ts": 1795190464700, "si": 5, "n": 0}
+16:01:04 gucon {"e": "park_resumed", "ts": 1795190464711, "si": 5}
+16:01:04 gucon {"e": "step_ms", "ts": 1795190464725, "si": 5, "ms": 6}
+16:01:04 gucon {"e": "span_start", "ts": 1795190464728, "si": 6}
+16:01:04 gucon {"e": "step_ms", "ts": 1795190464728, "si": 6, "ms": 3}
+16:01:04 gucon {"e": "park_created", "ts": 1795190464735, "si": 6, "kind": "span"}
+16:01:08 6wqvj {"e": "rec_start", "ts": 1795190468928, "si": 6, "l": 5, "sc": "llm_intent"}
+16:01:08 6wqvj {"e": "wf_start", "ts": 1795190468928}
+16:01:08 6wqvj {"e": "span_done", "ts": 1795190468929, "si": 6, "n": 0}
+16:01:08 6wqvj {"e": "park_resumed", "ts": 1795190468938, "si": 6}
+16:01:08 6wqvj {"e": "step_ms", "ts": 1795190468949, "si": 6, "ms": 4}
+16:01:08 6wqvj {"e": "span_start", "ts": 1795190468953, "si": 7}
+16:01:08 6wqvj {"e": "step_ms", "ts": 1795190468953, "si": 7, "ms": 4}
+16:01:08 6wqvj {"e": "park_created", "ts": 1795190468958, "si": 7, "kind": "span"}
+16:01:14 jp07j {"e": "rec_start", "ts": 1795190474401, "si": 7, "l": 5, "sc": "llm_intent"}
+16:01:14 jp07j {"e": "wf_start", "ts": 1795190474401}
+16:01:14 jp07j {"e": "span_done", "ts": 1795190474403, "si": 7, "n": 0}
+16:01:14 jp07j {"e": "park_resumed", "ts": 1795190474417, "si": 7}
+16:01:14 jp07j {"e": "step_ms", "ts": 1795190474436, "si": 7, "ms": 8}
+16:01:14 jp07j {"e": "span_start", "ts": 1795190474439, "si": 8}
+16:01:14 jp07j {"e": "step_ms", "ts": 1795190474439, "si": 8, "ms": 3}
+16:01:14 jp07j {"e": "park_created", "ts": 1795190474444, "si": 8, "kind": "span"}
+16:01:18 ac0dy {"e": "rec_start", "ts": 1795190478977, "si": 8, "l": 5, "sc": "llm_intent"}
+16:01:18 ac0dy {"e": "wf_start", "ts": 1795190478977}
+16:01:18 ac0dy {"e": "span_done", "ts": 1795190478978, "si": 8, "n": 0}
+16:01:18 ac0dy {"e": "park_resumed", "ts": 1795190478986, "si": 8}
+16:01:18 ac0dy {"e": "step_ms", "ts": 1795190478999, "si": 8, "ms": 4}
+16:01:19 ac0dy {"e": "step_fail", "ts": 1795190479000, "si": 9, "fc": "agent_span_limit"}
+16:01:19 ac0dy {"e": "step_ms", "ts": 1795190479001, "si": 9, "ms": 2}
+16:01:19 ac0dy {"e": "wf_fail", "ts": 1795190479005, "dur": 28, "fsi": 9, "fc": "unknown"}
+{'wf_start': 7, 'drift_detected': 1, 'proof': 4, 'tier_ok': 4, 'step_ms': 14, 'verify_result': 2, 'rec_start': 6, 'park_resumed': 6, 'completion': 1, 'span_start': 5, 'park_created': 5, 'span_done': 5, 'step_fail': 1, 'wf_fail': 1}

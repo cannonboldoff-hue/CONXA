@@ -1,0 +1,100 @@
+before 17:46:24 kv={"input_tokens": 2402505, "output_tokens": 178744, "requests": 549, "org_id": "wrk_local", "period": "2026-11"} credits_used=2126851 proxyPosts=202
+started 2026-11-20T12:16:27.448Z
+12s Paused before “Click Save note to keep the note.”
+usage@pause 17:46:41 kv={"input_tokens": 2402505, "output_tokens": 178744, "requests": 549, "org_id": "wrk_local", "period": "2026-11"} credits_used=2126851 proxyPosts=202
+53s Test failed at “A person confirms before the next step”
+after 17:47:22 kv={"input_tokens": 2421078, "output_tokens": 178921, "requests": 560, "org_id": "wrk_local", "period": "2026-11"} credits_used=2145601 proxyPosts=213
+Test inputs
+·
+✕
+Test failed at “A person confirms before the next step”
+
+0 min 52 s
+
+Something went wrong at this step.
+
+●
+Open the customer record page.
+●
+Click into the note field.
+●
+Type the note into the note field.
+●
+Click Save note to keep the note.
+●
+Click Save note to keep the note.
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+✕
+A person confirms before the next step
+Technical details
+▲
+Paused before a step that can’t be undone · Click
+5:46 PM
+Latest test failed
+Find the cause
+Test it
+WF13 delete gate
+WF13 delete gate
+
+Probe group
+
+Lifecycle
+●
+Sign in
+●
+Record
+●
+Compile
+●
+Clarify
+●
+Review
+✕
+Test
+Failed
+○
+Approve
+Not approved
+Details
+
+Starting page
+
+localhost:8099
+
+Apps it uses
+
+—
+
+Steps
+
+—
+
+Status
+
+✕
+Latest test failed
+
+Human Edit

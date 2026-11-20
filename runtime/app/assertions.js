@@ -411,13 +411,22 @@ async function verifyStep(page, step, inputs, baseline = null, dialogQueue = nul
   // Every assertion is evaluated — not just up to the first required failure — so a failed step
   // carries a full audit of what held and what didn't (advisory included). This is the dataset the
   // fleet dashboard needs to see an assertion decaying before it becomes a hard failure.
-  const results = [];
-  let failing = null;
-  for (const a of assertions) {
-    const result = await evaluateAssertion(roots, page, a, inputs, baseline, capMs, step);
-    results.push(result);
-    if (!result.ok && result.required && !failing) failing = result;
+  // "The page changed" (state_changed) is checked last: when a required check on this step already saw a change that
+  // would not be there had the action done nothing (`fresh`: new words, a box that was there and is gone), the page
+  // did change, even when the change is under the text tolerance ("Name:person" after Submit, WF-13 F6).
+  const isStateChanged = (a) => String((a && a.type) || "").toLowerCase() === "state_changed";
+  const results = new Array(assertions.length);
+  const order = assertions.map((_, k) => k).sort((x, y) => isStateChanged(assertions[x]) - isStateChanged(assertions[y]));
+  for (const k of order) {
+    const a = assertions[k];
+    if (isStateChanged(a) && results.some((r) => r && r.required && r.fresh && r.answer === "yes")) {
+      results[k] = { type: "state_changed", target: "", required: a.required !== false, ok: true, recognized: true,
+        answer: "yes", proven_by: "fresh_check", elapsed_ms: 0 };
+      continue;
+    }
+    results[k] = await evaluateAssertion(roots, page, a, inputs, baseline, capMs, step);
   }
+  const failing = results.find((r) => !r.ok && r.required) || null;
 
   if (failing) {
     return { pass: false, channel: failing.type, answer: "no", evidence: failing.target, results };

@@ -33,7 +33,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-10 | Branches and popups: optional, decision, unrecorded | ✅ passed 2026-11-20 (P-42; 10.3 on a stand-in, 10.11 guard half not run) | Yes |
 | WF-11 | Loops, inputs and hostile input data | ✅ passed 2026-11-20 (P-43) | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ✅ passed 2026-11-20 (P-44; 12.7 built after owner decision, 3 sub-checks not reached) | Yes |
-| WF-13 | Agent-driven steps: AI Review + agent span | ⏳ | Yes (Studio part) |
+| WF-13 | Agent-driven steps: AI Review + agent span | ✅ passed 2026-11-20 (P-45; 13.6 unit-test only) | Yes (Studio part) |
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | 🔄 14.1–14.2, 14.4–14.7 passed (P-34…P-36); 14.3, 14.8 open | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ⏳ | Needs an MCP client (ask first) |
@@ -387,7 +387,7 @@ exactly as recorded.
 
 ---
 
-## WF-13 — Agent-driven steps: AI Review + agent span
+## ✅ WF-13 — Agent-driven steps: AI Review + agent span — passed 2026-11-20 (P-45)
 
 **Sites:** S11 + S3 `/text-box`. Only these steps may spend tokens, and only on purpose.
 
@@ -398,14 +398,15 @@ event, other", enum output `article_category`, on failure use default `other`. P
 
 | # | Break it | Must happen | If wrong |
 |---|---|---|---|
-| 13.1 | Insert a delete/remove step right after the AI Review | Save refused (`destructive_step_cannot_directly_follow_ai_review`) | S0 |
-| 13.2 | Blank prompt | Dropped with a plain notice, not silently | S2 |
-| 13.3 | Workflow with 6 AI Review steps, Studio test | Stops at the 5-pause cap with a plain message | S1 |
+| 13.1 | Insert a delete/remove step right after the agent span (AI Review folded in) | Save refused (`destructive_step_cannot_directly_follow_agent_span`) | S0 |
+| 13.2 | Blank goal on the agent span (AI Review folded in) | Dropped with a plain notice, not silently | S2 |
+| 13.3 | Workflow with 6 agent spans (AI Review folded in), Studio test | The 6th span in a run stops the run, with a plain message | S1 |
 | 13.4 | Every other step in the run | Zero LLM calls | S1 |
 | 13.5 | Insert an **agent span** around a click that looks irreversible | The click waits for a person's confirmation; the agent picks numbered actions, never selectors | S0 |
 | 13.6 | Put the agent span inside a loop; also mark the run as a dry run | Span fails closed | S0 |
 | 13.7 | Check the package | Says `uses_agent: true` | S1 |
 
+AI Review was renamed: it is now an agent span with no allowed actions and an answer schema (TRD 11.7); 13.x rows say agent span.
 The real-agent pause/resume part (bad answers, re-ask limit, park timeout) is in WF-16.
 **Failures go to:** EXEC-13; 13.1/13.5/13.6 → PROD-3.
 

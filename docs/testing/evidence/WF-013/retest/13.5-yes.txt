@@ -1,0 +1,9 @@
+saved-click allowed
+CONFIRM CARD: The agent wants to do something that can't be undone: Delete record. Allow it?
+page #out while waiting: Saved
+page #out while waiting: Saved
+page #out while waiting: Saved
+page #out while waiting: Saved
+fixture deleted-hits before decision: 1
+page #out after decision: Record deleted
+Test inputs | · Note: hello | ▲ | A person needs to confirm |  | The agent wants to do something that can't be undone: Delete record. Allow it? |  | ● | Open the customer record page | ● | Click into the Note box | ● | Type the note into the Note box | ● | Click Save note to keep the note | ● | Agent span — agent span goal | Yes, go ahead | End the test here | ▲ | Paused before a step that can’t be undone · Click | 7:40 PM | WF13 delete rt | WF13 records

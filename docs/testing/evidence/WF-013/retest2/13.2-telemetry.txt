@@ -1,0 +1,27 @@
+16:43:59 k5kfq {"e": "wf_start", "ts": 1795193039937}
+16:44:00 k5kfq {"e": "drift_detected", "ts": 1795193040882, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp7l2r6_k5kfq&conxa_tab=9df7c2c5"}
+16:44:01 k5kfq {"e": "proof", "ts": 1795193041201, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+16:44:01 k5kfq {"e": "tier_ok", "ts": 1795193041215, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+16:44:01 k5kfq {"e": "step_ms", "ts": 1795193041215, "si": 0, "ms": 302}
+16:44:02 k5kfq {"e": "proof", "ts": 1795193042168, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+16:44:02 k5kfq {"e": "tier_ok", "ts": 1795193042169, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+16:44:02 k5kfq {"e": "step_ms", "ts": 1795193042169, "si": 1, "ms": 954}
+16:44:02 k5kfq {"e": "verify_result", "ts": 1795193042647, "si": 2, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:44:02 k5kfq {"e": "proof", "ts": 1795193042648, "si": 2, "rung": "accepted", "v": "proven", "w": ["target"]}
+16:44:02 k5kfq {"e": "tier_ok", "ts": 1795193042649, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+16:44:02 k5kfq {"e": "step_ms", "ts": 1795193042649, "si": 2, "ms": 480}
+16:44:02 k5kfq {"e": "step_ms", "ts": 1795193042656, "si": 3, "ms": 2}
+16:44:02 k5kfq {"e": "wf_fail", "ts": 1795193042678, "dur": 2741, "fsi": null, "fc": "unknown"}
+16:44:02 k5kfq {"e": "park_created", "ts": 1795193042703, "si": 3, "kind": "guard"}
+16:44:03 r57no {"e": "rec_start", "ts": 1795193043808, "si": 3, "l": 5, "sc": "llm_intent"}
+16:44:03 r57no {"e": "wf_start", "ts": 1795193043808}
+16:44:03 r57no {"e": "park_resumed", "ts": 1795193043851, "si": 3}
+16:44:11 r57no {"e": "verify_result", "ts": 1795193051076, "si": 3, "ok": false, "n": 2, "advFail": 0, "ct": 1}
+16:44:11 r57no {"e": "verify_fail", "ts": 1795193051076, "si": 3, "ch": "state_changed"}
+16:44:11 r57no {"e": "settle_retry", "ts": 1795193051351, "si": 3, "waited": 265, "phase": "verify", "ok": true}
+16:44:15 r57no {"e": "rec_skip", "ts": 1795193055885, "si": 3, "why": "destructive"}
+16:44:20 r57no {"e": "rec_halt", "ts": 1795193060658, "si": 3, "why": "destructive"}
+16:44:20 r57no {"e": "step_fail", "ts": 1795193060658, "si": 3, "fc": "unknown"}
+16:44:20 r57no {"e": "step_ms", "ts": 1795193060658, "si": 3, "ms": 16761}
+16:44:20 r57no {"e": "wf_fail", "ts": 1795193060659, "dur": 16851, "fsi": 3, "fc": "unknown"}
+{'wf_start': 2, 'drift_detected': 1, 'proof': 3, 'tier_ok': 3, 'step_ms': 5, 'verify_result': 2, 'wf_fail': 2, 'park_created': 1, 'rec_start': 1, 'park_resumed': 1, 'verify_fail': 1, 'settle_retry': 1, 'rec_skip': 1, 'rec_halt': 1, 'step_fail': 1}

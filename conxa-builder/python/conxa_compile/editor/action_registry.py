@@ -233,7 +233,7 @@ ACTION_LABELS = {
     "wait_until": "Wait until",
     "screenshot": "Screenshot",
     "handover": "Hand over to person",
-    "agent_span": "Agent span",
+    "agent_span": "AI agent does a part",
     "clipboard_write": "Copy to clipboard",
     "clipboard_read": "Read clipboard",
     "call_workflow": "Call another workflow",
@@ -408,8 +408,9 @@ def default_action_value(kind: str) -> Any:
     if normalized == "clipboard_read":
         return "clipboard_text"
     if normalized == "agent_span":
-        # Engine v2 C4: the goal the agent works toward; {{input}} names are filled from the run's inputs.
-        return "Describe what the agent should get done"
+        # Engine v2 C4: the goal the agent works toward; {{input}} names are filled from the run's inputs. Blank on
+        # purpose: the person writes it (Save refuses a blank goal), and an unwritten one is dropped at build with a warning.
+        return ""
     if normalized == "handover":
         # EXEC-21: not a page-interaction value — the message shown to the person (see
         # VALUE_LABELS above).

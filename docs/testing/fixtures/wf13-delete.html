@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WF13 records</title></head><body>
+<h1>Customer record: Marie Curie</h1>
+<p>Marie Curie was a physicist and chemist.</p>
+<label>Note <input id="note" type="text"></label>
+<button id="save" onclick="document.getElementById('out').textContent='Saved'">Save note</button>
+<button id="del" onclick="document.getElementById('out').textContent='Record deleted';fetch('/__log?wf13:deleted')">Delete record</button>
+<p id="out"></p></body></html>

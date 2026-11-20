@@ -214,6 +214,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     // ordinary selector failure, so server.js parked it and handed it to an armed Tier B round.
     if (cause.forkDecisionNeeded) err.forkDecisionNeeded = true;
     if (cause.badInput) err.badInput = true;
+    if (cause.agentSpanRefused) err.agentSpanRefused = cause.agentSpanRefused;
     if (cause.fault) {
       err.fault = true;
       err.faultKind = cause.faultKind;
@@ -966,6 +967,15 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       state.prevStepType = step.type;
       state.prevPage = page;
       return;
+    }
+    // At most MAX_AGENT_SPANS_PER_RUN agent parts per run (WF-13, owner decision 2026-11-20). Spans run only at the
+    // top level, once each, so the count is this span's place among the plan's free spans; a confirm-only question
+    // is a person's yes, not agent work, and never counts. The one over the limit ends the run before it starts.
+    if (steps.slice(0, i + 1).filter((s) => s && s.type === "agent_span" && !isConfirmOnlySpan(s)).length > MAX_AGENT_SPANS_PER_RUN
+        && !isConfirmOnlySpan(step)) {
+      refuse("agent_span_limit",
+        `This workflow uses the AI agent more than ${MAX_AGENT_SPANS_PER_RUN} times in one run. Conxa stopped here so it doesn't run away. ` +
+        "Remove or merge some of the parts the AI agent does on its own.");
     }
     const brief = (s) => String((s && (s.intent || s.description || s.type)) || "").slice(0, 80);
     const span = await agentSpan.begin(page, step, state.inputs, {
@@ -2316,6 +2326,17 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     hostOwned: hostOwned === true, hostRunId: hostRunId ?? runId, // page_geometry.js: who to ask to repair the page size
   };
 
+  // A step that can't be undone never runs straight after a free agent span (TRD 11.7): the editor and the build
+  // refuse that order; a package saved before them is refused here, before any step runs.
+  const unsafe = spanBeforeIrreversible(steps);
+  if (unsafe >= 0) {
+    t.emit("step_fail", { si: unsafe + 1, fc: "agent_span_before_irreversible" });
+    throw stepFailure(steps[unsafe + 1], unsafe + 1, Object.assign(new Error(
+      "This step can't be undone and comes straight after a part the AI agent does on its own, so the run was stopped before anything ran. " +
+      "Put a normal step between them in the Build Studio and publish again."
+    ), { agentSpanRefused: "agent_span_before_irreversible" }), null, state.warnings);
+  }
+
   let endedAt = null;
   const ran = new Set(); // source_step_key of every step that executed and passed (feeds resolveLaterProofs)
   try {
@@ -2347,6 +2368,32 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     proof: { steps: state.proof.steps, notes: state.proof.notes },
     ...(endedAt !== null ? { endedAt } : {}),
   };
+}
+
+// The most free agent spans one run may start (TRD 11.7); Studio mirrors it (patch_gate.MAX_AGENT_SPANS_PER_RUN).
+const MAX_AGENT_SPANS_PER_RUN = 5;
+
+// The only span allowed right before an irreversible step: a question with no actions whose one valid answer is yes
+// and whose no ends the run, so it can gate WHETHER the step runs, never what it acts on (patch_gate.is_confirm_only_span).
+function isConfirmOnlySpan(span) {
+  const answer = span.answer || {};
+  const schema = answer.schema || {};
+  const props = schema.properties || {};
+  const c = props.confirmed;
+  return !(Array.isArray(span.allowed) && span.allowed.length) && Object.keys(props).length === 1 && !!c
+    && c.type === "boolean" && Array.isArray(c.enum) && c.enum.length === 1 && c.enum[0] === true
+    && Object.keys(c).every((k) => ["type", "enum", "description"].includes(k))
+    && Array.isArray(schema.required) && schema.required.length === 1 && schema.required[0] === "confirmed"
+    && (answer.on_failure || "abort") === "abort";
+}
+
+// Index of a free agent span sitting directly before a step marked destructive, or -1.
+function spanBeforeIrreversible(steps) {
+  for (let i = 0; i + 1 < steps.length; i++) {
+    const span = steps[i], next = steps[i + 1];
+    if (span && span.type === "agent_span" && !isConfirmOnlySpan(span) && next && next.destructive === true) return i;
+  }
+  return -1;
 }
 
 // ── run_if and outputs ───────────────────────────────────────────────────────────────────────
@@ -2454,6 +2501,8 @@ async function isAuthFailure(page, steps, step = null) {
 }
 
 module.exports = {
+  spanBeforeIrreversible,
+  MAX_AGENT_SPANS_PER_RUN,
   NOOP_STEP_TYPES,
   NAVIGATION_STEP_TYPES,
   resolveLaterProofs,

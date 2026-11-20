@@ -1,0 +1,14 @@
+
+C
+
+Conxa · 5:38 PM
+
+About emptying the goal of the step “Agent span — agent span goal”.
+
+I couldn't prepare that change, so nothing is waiting for you to press Apply. To clear the goal text, use Human Edit on that step.
+
+Worth knowing: a blank goal leaves that step with no instruction, so the agent would have nothing to aim at there.
+
+Where things stand: the latest test failed, so this workflow is not tested and not approved. The test stopped at this step — the agent gave up because it couldn't confirm the delete with the person. Your saved answer says the delete goes ahead without asking, so that mismatch is worth a look. You can investigate or edit now.
+
+WF13 delete gate · “Agent span — agent span goal” selected

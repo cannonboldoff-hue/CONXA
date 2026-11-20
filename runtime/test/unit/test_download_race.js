@@ -84,6 +84,9 @@ for (const [error, message] of [
   ["cancelled: download of u did not complete", /was cancelled/],
   ["interrupted: download of u did not complete", /was interrupted/],
   ["empty: the downloaded file is 0 bytes", /empty or incomplete/],
+  ["empty: download of u is 0 bytes", /empty or incomplete/],
+  // A host that gave up on a stuck transfer (browser_panel.js::saveDownload) — a plain timeout, in seconds (WF-14).
+  ["timeout: download of u did not finish in 500ms", /did not finish downloading within 1 seconds/],
 ]) {
   test(`download_observed reports a failed download: ${error.split(":")[0]}`, async () => {
     const inputs = {};

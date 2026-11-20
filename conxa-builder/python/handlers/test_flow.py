@@ -142,6 +142,27 @@ def rows_from_text(text: Any, columns: list[str], label: str) -> list[dict[str, 
     return out
 
 
+def _agent_span_notice(steps: list[Any]) -> str:
+    """What the person must know before a test about the parts the AI agent does (WF-13): an unfinished one is left
+    out (the build only logged it), and a run stops before the free one over the limit. Empty when nothing to say."""
+    from conxa_compile.editor.patch_gate import MAX_AGENT_SPANS_PER_RUN
+    from conxa_compile.skill_package_builder_saved_skill import agent_span_counts
+
+    dropped, kept = agent_span_counts(steps)
+    parts = []
+    if dropped == 1:
+        parts.append("One part the AI agent does on its own has no goal yet, so it is left out of this test. "
+                     "Open it in Human Edit and say what the agent should get done to include it.")
+    elif dropped:
+        parts.append(f"{dropped} parts the AI agent does on its own have no goal yet, so they are left out of this test. "
+                     "Open them in Human Edit and say what the agent should get done to include them.")
+    if kept > MAX_AGENT_SPANS_PER_RUN:
+        parts.append(f"This workflow uses the AI agent {kept} times, and a run stops before the "
+                     f"{MAX_AGENT_SPANS_PER_RUN + 1}th time so it can’t run away. "
+                     "Remove or merge some of those parts so the whole workflow can run.")
+    return " ".join(parts)
+
+
 def _is_deliberate_stop(kind: str | None) -> bool:
     return bool(kind) and (kind in _DELIBERATE_KINDS or str(kind).startswith("fault:"))
 
@@ -175,6 +196,7 @@ class TestFlowMixin:
 
     def cmd_flow_test_prepare(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.conversation import clarify, clarify_store, harness, thread_store as ts
+        from conxa_compile.editor.workflow_mutations import run_produced_names
         from conxa_core.storage.json_store import read_skill
         from conxa_core.storage.workflow_store import get_workflow
 
@@ -199,9 +221,11 @@ class TestFlowMixin:
                 recorded = {**recorded, **(q.get("recorded") or {})}
         last = workflow.last_test_inputs or {}
         suspects = {str(s) for s in payload.get("suspect_inputs") or []}
+        # A value the run fills in itself (an agent's answer, a value read off the page) is never asked for (WF-13).
+        produced = run_produced_names(steps)
         inputs = []
         for row in doc.get("inputs") or []:
-            if not isinstance(row, dict) or not row.get("id"):
+            if not isinstance(row, dict) or not row.get("id") or str(row["id"]).lower() in produced:
                 continue
             rid_ = str(row["id"])
             value = last.get(rid_, recorded.get(rid_, row.get("default") or ""))
@@ -227,6 +251,9 @@ class TestFlowMixin:
         harness.emit_item(sink, _thread(workflow_id), ts.append(
             _thread(workflow_id), "assistant_message",
             text="Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start."))
+        notice = _agent_span_notice(steps)
+        if notice:
+            harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=notice))
         card = harness.post_card(
             _thread(workflow_id), "test_inputs", "open", sink=sink, inputs=inputs, irreversible=irreversible[-3:],
             irreversible_count=len(irreversible), guard=True, show_browser=True, use_ai=False,
@@ -383,6 +410,11 @@ class TestFlowMixin:
             for r in rows:
                 if r["status"] == "running":
                     r["status"] = "done"
+            if rows and rows[-1]["index"] == int(entry["step"]):
+                # A resume (each agent round, a released guard) starts the same step again: one row, not two (WF-13).
+                rows[-1]["status"] = "running"
+                push(step_total=entry.get("step_total"))
+                return
             parts = str(entry.get("phase", "")).split("_")  # step_<i>_<type>_start
             kind = parts[2] if len(parts) >= 4 else "step"
             key = entry.get("source_step_key") or ""
@@ -530,9 +562,10 @@ class TestFlowMixin:
         if status == "stopped_at_guard":
             ran = [r["name"] for r in rows if r["status"] == "done"]
             push(state="ended_before_irreversible", cause=pause.get("kind") or "guard", stopped_before=name_at(result.get("stopped_at"), result.get("stopped_intent")),
-                 declined=bool(result.get("declined")), steps_ran=len(rows), actions=["test_again"])
+                 declined=bool(result.get("declined")), after_confirmed=bool(result.get("after_confirmed")),
+                 steps_ran=len(rows), actions=["test_again"])
             harness.log_event(thread, "Test ended before a step that can’t be undone", glyph="none", sink=sink,
-                              subject="Nothing was sent")
+                              subject="Nothing more was sent" if result.get("after_confirmed") else "Nothing was sent")
             record_outcome("ended_before_irreversible", name_at(result.get("stopped_at"), result.get("stopped_intent")),
                            step_index=result.get("stopped_at"), reason=pause.get("kind") or "guard")
             return "ended"

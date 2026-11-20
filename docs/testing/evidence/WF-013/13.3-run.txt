@@ -1,0 +1,102 @@
+before 17:44:55 kv={"input_tokens": 2389072, "output_tokens": 178710, "requests": 541, "org_id": "wrk_local", "period": "2026-11"} credits_used=2113384 proxyPosts=194
+started 2026-11-20T12:14:58.387Z
+24s Paused before “Click Save note to keep the note.”
+usage@pause 17:45:24 kv={"input_tokens": 2389072, "output_tokens": 178710, "requests": 541, "org_id": "wrk_local", "period": "2026-11"} credits_used=2113384 proxyPosts=194
+55s Test failed at “Agent span — agent span goal”
+after 17:45:54 kv={"input_tokens": 2402505, "output_tokens": 178744, "requests": 549, "org_id": "wrk_local", "period": "2026-11"} credits_used=2126851 proxyPosts=202
+Test inputs
+·
+C
+
+Conxa · 5:21 PM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+✕
+Test failed at “Agent span — agent span goal”
+
+0 min 53 s
+
+Something went wrong at this step.
+
+●
+Open the customer record page.
+●
+Click into the note field.
+●
+Type the note into the note field.
+●
+Click Save note to keep the note.
+●
+Click Save note to keep the note.
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+●
+Agent span — agent span goal
+✕
+Agent span — agent span goal
+Technical details
+▲
+Paused before a step that can’t be undone · Click
+5:45 PM
+Latest test failed
+Find the cause
+Test it
+WF13 delete gate
+WF13 delete gate
+
+Probe group
+
+Lifecycle
+●
+Sign in
+●
+Record
+●
+Compile
+●
+Clarify
+●
+Review
+✕
+Test
+Failed
+○
+Approve
+Not approved
+Details
+
+Starting page
+
+localhost:8099
+
+Apps it uses
+
+—
+
+Steps
+
+—
+
+Status
+
+✕
+Latest test failed
+
+Human Edit

@@ -87,7 +87,7 @@ def test_new_manual_step_scaffolds_a_loadable_span():
     assert step["action"]["action"] == "agent_span"
     assert step["intent"] == "agent_span_goal"
     # The goal is blank on purpose: the packager drops a span with no goal, with a warning.
-    assert step["value"] == default_action_value("agent_span") != ""
+    assert step["value"] == default_action_value("agent_span") == ""   # WF-13: no placeholder shipped as the goal
     assert "agent_span_answer_schema" not in step
 
 

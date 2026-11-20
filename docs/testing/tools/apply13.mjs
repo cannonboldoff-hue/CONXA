@@ -1,0 +1,12 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:62498`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+console.log("header:", await s.evaluate(() => document.querySelector("header,h1,[class*=title]")?.innerText?.slice(0, 40)));
+const btn = s.getByRole("button", { name: "Apply", exact: true }).last();
+console.log("count", await s.getByRole("button", { name: "Apply", exact: true }).count());
+await btn.click(); await new Promise((z) => setTimeout(z, 3500));
+if (process.argv[2]) await s.screenshot({ path: process.argv[2] });
+console.log((await s.evaluate(() => document.body.innerText)).split(String.fromCharCode(10)).filter((l) => /come straight|Something went wrong|couldn.t|Applied|Nothing/.test(l)).slice(-4));
+await b.close();

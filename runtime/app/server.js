@@ -2232,8 +2232,9 @@ async function _handleTool(name, args, extra) {
       // wants to act on it). Absent entirely when no step extracted anything, so a run without outputs
       // returns exactly what it always did.
       const outputNames = Object.keys(_outputs);
+      // An agent span's answer is an object: written out, not "[object Object]" (WF-13).
       const outputNote = outputNames.length
-        ? `\n\nOutputs:\n${outputNames.map(k => `  ${k}: ${_outputs[k]}`).join("\n")}`
+        ? `\n\nOutputs:\n${outputNames.map(k => `  ${k}: ${_outputs[k] !== null && typeof _outputs[k] === "object" ? JSON.stringify(_outputs[k]) : _outputs[k]}`).join("\n")}`
         : "";
       const skippedNote = _skippedByInput.length
         ? `\n\nSkipped because an input was empty or different:\n${_skippedByInput.map(x => `  - ${x.intent || `step ${x.index + 1}`} (${x.input})`).join("\n")}`
@@ -2622,7 +2623,7 @@ async function _handleTool(name, args, extra) {
       const parkable = _failedPage && _effAgentEnabled && resolved.length === 1
         && typeof runErr.failedAt === "number" && !runErr.session_expired && !runErr.cancelled
         && !runErr.destructiveHalt && !runErr.entityNotFound
-        && !runErr.forkDecisionNeeded && !runErr.badInput && !runErr.fault;
+        && !runErr.forkDecisionNeeded && !runErr.badInput && !runErr.fault && !runErr.agentSpanRefused;
       if (parkable) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();

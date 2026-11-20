@@ -1,0 +1,63 @@
+16:29:52 bhfsx {"e": "wf_start", "ts": 1795192192836}
+16:29:53 bhfsx {"e": "drift_detected", "ts": 1795192193800, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp72x4t_bhfsx&conxa_tab=5d078734"}
+16:29:55 bhfsx {"e": "proof", "ts": 1795192195502, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+16:29:55 bhfsx {"e": "tier_ok", "ts": 1795192195511, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+16:29:55 bhfsx {"e": "step_ms", "ts": 1795192195511, "si": 0, "ms": 1671}
+16:29:57 bhfsx {"e": "proof", "ts": 1795192197020, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+16:29:57 bhfsx {"e": "tier_ok", "ts": 1795192197026, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+16:29:57 bhfsx {"e": "step_ms", "ts": 1795192197026, "si": 1, "ms": 1515}
+16:29:57 bhfsx {"e": "proof", "ts": 1795192197683, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+16:29:57 bhfsx {"e": "tier_ok", "ts": 1795192197685, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+16:29:57 bhfsx {"e": "step_ms", "ts": 1795192197685, "si": 2, "ms": 659}
+16:29:58 bhfsx {"e": "proof", "ts": 1795192198347, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+16:29:58 bhfsx {"e": "tier_ok", "ts": 1795192198352, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+16:29:58 bhfsx {"e": "step_ms", "ts": 1795192198352, "si": 3, "ms": 667}
+16:29:59 bhfsx {"e": "verify_result", "ts": 1795192199148, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:29:59 bhfsx {"e": "proof", "ts": 1795192199157, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+16:29:59 bhfsx {"e": "tier_ok", "ts": 1795192199162, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+16:29:59 bhfsx {"e": "step_ms", "ts": 1795192199162, "si": 4, "ms": 810}
+16:30:00 bhfsx {"e": "verify_result", "ts": 1795192200383, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+16:30:02 bhfsx {"e": "completion", "ts": 1795192202126, "si": 5, "mode": "short", "st": "done", "waited": 1729}
+16:30:02 bhfsx {"e": "proof", "ts": 1795192202127, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+16:30:02 bhfsx {"e": "tier_ok", "ts": 1795192202129, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:02 bhfsx {"e": "step_ms", "ts": 1795192202129, "si": 5, "ms": 2967}
+16:30:02 bhfsx {"e": "span_start", "ts": 1795192202174, "si": 6}
+16:30:02 bhfsx {"e": "step_ms", "ts": 1795192202174, "si": 6, "ms": 45}
+16:30:02 bhfsx {"e": "park_created", "ts": 1795192202209, "si": 6, "kind": "span"}
+16:30:06 t1oax {"e": "rec_start", "ts": 1795192206070, "si": 6, "l": 5, "sc": "llm_intent"}
+16:30:06 t1oax {"e": "wf_start", "ts": 1795192206070}
+16:30:06 t1oax {"e": "span_done", "ts": 1795192206072, "si": 6, "n": 0}
+16:30:06 t1oax {"e": "park_resumed", "ts": 1795192206079, "si": 6}
+16:30:06 t1oax {"e": "step_ms", "ts": 1795192206090, "si": 6, "ms": 4}
+16:30:06 t1oax {"e": "proof", "ts": 1795192206414, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+16:30:06 t1oax {"e": "tier_ok", "ts": 1795192206415, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:06 t1oax {"e": "step_ms", "ts": 1795192206415, "si": 7, "ms": 325}
+16:30:06 t1oax {"e": "proof", "ts": 1795192206658, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+16:30:06 t1oax {"e": "tier_ok", "ts": 1795192206659, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:06 t1oax {"e": "step_ms", "ts": 1795192206659, "si": 8, "ms": 244}
+16:30:09 t1oax {"e": "proof", "ts": 1795192209027, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+16:30:09 t1oax {"e": "tier_ok", "ts": 1795192209028, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:09 t1oax {"e": "step_ms", "ts": 1795192209028, "si": 9, "ms": 2369}
+16:30:09 t1oax {"e": "proof", "ts": 1795192209350, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+16:30:09 t1oax {"e": "tier_ok", "ts": 1795192209351, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:09 t1oax {"e": "step_ms", "ts": 1795192209351, "si": 10, "ms": 323}
+16:30:09 t1oax {"e": "verify_result", "ts": 1795192209674, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:30:09 t1oax {"e": "proof", "ts": 1795192209674, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+16:30:09 t1oax {"e": "tier_ok", "ts": 1795192209675, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:09 t1oax {"e": "step_ms", "ts": 1795192209675, "si": 11, "ms": 324}
+16:30:09 t1oax {"e": "proof", "ts": 1795192209687, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+16:30:09 t1oax {"e": "tier_ok", "ts": 1795192209688, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:09 t1oax {"e": "step_ms", "ts": 1795192209688, "si": 12, "ms": 12}
+16:30:09 t1oax {"e": "step_ms", "ts": 1795192209689, "si": 13, "ms": 1}
+16:30:09 t1oax {"e": "wf_fail", "ts": 1795192209693, "dur": 3623, "fsi": null, "fc": "unknown"}
+16:30:09 t1oax {"e": "park_created", "ts": 1795192209706, "si": 13, "kind": "guard"}
+16:30:12 ud98p {"e": "rec_start", "ts": 1795192212941, "si": 13, "l": 5, "sc": "llm_intent"}
+16:30:12 ud98p {"e": "wf_start", "ts": 1795192212941}
+16:30:12 ud98p {"e": "park_resumed", "ts": 1795192212950, "si": 13}
+16:30:15 ud98p {"e": "verify_result", "ts": 1795192215096, "si": 13, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+16:30:18 ud98p {"e": "completion", "ts": 1795192218532, "si": 13, "mode": "full", "st": "no_sign", "waited": 3436}
+16:30:22 ud98p {"e": "proof", "ts": 1795192222646, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+16:30:22 ud98p {"e": "tier_ok", "ts": 1795192222647, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+16:30:22 ud98p {"e": "step_ms", "ts": 1795192222647, "si": 13, "ms": 9691}
+16:30:22 ud98p {"e": "wf_ok", "ts": 1795192222697, "dur": 9756, "tot": 14, "rec": 0, "oc": "done"}
+{'wf_start': 3, 'drift_detected': 1, 'proof': 13, 'tier_ok': 13, 'step_ms': 16, 'verify_result': 4, 'completion': 2, 'span_start': 1, 'park_created': 2, 'rec_start': 2, 'span_done': 1, 'park_resumed': 2, 'wf_fail': 1, 'wf_ok': 1}

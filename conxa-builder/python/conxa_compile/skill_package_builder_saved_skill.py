@@ -996,6 +996,22 @@ _AGENT_SPAN_KINDS = {
 }
 
 
+def agent_span_counts(steps: Any) -> tuple[int, int]:
+    """(unfinished agent spans the build drops, free spans it keeps) among a saved document's top-level steps, decided
+    the way the build decides them. A confirm-only question is a person's yes, so it is neither (WF-13)."""
+    from conxa_compile.editor.patch_gate import is_confirm_only_span
+
+    dropped = kept = 0
+    for s in steps if isinstance(steps, list) else []:
+        if not isinstance(s, dict) or normalize_action_kind(_step_action_name(s) or "") != "agent_span":
+            continue
+        if _saved_step_to_execution_step(s) is None:
+            dropped += 1
+        elif not is_confirm_only_span(s):
+            kept += 1
+    return dropped, kept
+
+
 def _produced_names(steps: Any) -> set[str]:
     """Names a run binds into its own inputs: extract / clipboard_read ``output_name``, and an
     an agent span answer's ``output_name`` plus ``<output_name>_<field>`` for each plain field of its schema
@@ -1040,15 +1056,15 @@ def _merge_saved_inputs_with_execution_placeholders(
         for_each_loop_variable_names,
     )
 
-    inputs = _normalize_saved_skill_inputs(declared_inputs)
+    # Values the run itself produces (an extract, an agent-span answer and its fields, a clipboard read)
+    # are filled in by the runtime, never something the caller supplies — not even when an older edit declared one.
+    produced = _produced_names(execution_steps)
+    inputs = [i for i in _normalize_saved_skill_inputs(declared_inputs) if str(i.get("name") or "") not in produced]
     seen = {str(item.get("name") or "") for item in inputs}
     overrides = descriptions or {}
     # A for_each loop's own {{<as>_id}}/{{<as>_index}} are populated by run.js at replay time,
     # never something a user/agent supplies — same reason downloaded_file* is excluded below.
     loop_vars = for_each_loop_variable_names(execution_steps)
-    # Values the run itself produces (an extract, an agent-span answer and its fields, a clipboard read)
-    # are filled in by the runtime, never something the caller supplies.
-    produced = _produced_names(execution_steps)
     # The primary record->compile path (compiler/build.py) already declares file_path with a
     # generic humanized label ("File Path") before this function ever sees it, so the "not yet
     # seen" branch below never fires for it. Overwrite it here too, since the upload-derived
@@ -1484,6 +1500,15 @@ def _build_workflow_from_saved_skill(
         step_ids.append(len(execution_steps))
     if not execution_steps:
         raise ValueError(f"Saved skill {meta.get('id') or workflow_slug!r} has no executable steps.")
+    # The editor refuses this order; a document saved before that (or a drop above that closed a gap) is caught here.
+    from conxa_compile.editor.patch_gate import span_before_irreversible
+    from conxa_compile.editor.patch_wording import SPAN_BEFORE_IRREVERSIBLE
+    from conxa_compile.policy.bundle import get_policy_bundle
+
+    unsafe = span_before_irreversible(source_steps, get_policy_bundle().data)
+    if unsafe is not None:
+        number = next(k for k, s in enumerate(export_steps, start=1) if s is source_steps[unsafe + 1])
+        raise ValueError(f"Step {number}: {SPAN_BEFORE_IRREVERSIBLE}")
 
     inputs = _merge_saved_inputs_with_execution_placeholders(
         list(saved_skill.get("inputs") or []),

@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from conxa_compile.compiler.action_policy import no_recovery_block
+from conxa_compile.compiler.action_semantics import action_name
 from conxa_compile.compiler.entity_binding import template_identifier
 from conxa_compile.compiler.second_opinion import build_try_dismiss_from_hint
 from conxa_compile.compiler.patch import revalidate_step
@@ -75,6 +76,13 @@ def validate_skill_document(document: dict[str, Any]) -> dict[str, Any]:
     return {"steps": per_step, "suggestions": [m.model_dump() for m in collect_suggestions([dict(s) for s in steps_raw], policy)]}
 
 
+def _refuse_span_before_irreversible(steps: list[Any]) -> None:
+    """The shared order rule (patch_gate.check_step_order) for every structural change below."""
+    from conxa_compile.editor.patch_gate import check_step_order  # noqa: PLC0415 -- patch_gate imports this module's neighbours
+
+    check_step_order(steps, get_policy_bundle().data)
+
+
 def reorder_steps(document: dict[str, Any], new_order: list[int]) -> dict[str, Any]:
     doc = dict(document)
     skills = list(doc.get("skills") or [])
@@ -86,6 +94,7 @@ def reorder_steps(document: dict[str, Any], new_order: list[int]) -> dict[str, A
     if sorted(new_order) != list(range(n)):
         raise ValueError("invalid_reorder_permutation")
     new_steps = [dict(steps[i]) for i in new_order]
+    _refuse_span_before_irreversible(new_steps)
     block["steps"] = new_steps
     skills[0] = block
     doc["skills"] = skills
@@ -108,6 +117,7 @@ def delete_step_at(document: dict[str, Any], step_index: int) -> dict[str, Any]:
         raise ValueError("step_index_out_of_range")
     original_len = len(steps)
     del steps[step_index]
+    _refuse_span_before_irreversible(steps)
     block["steps"] = steps
     skills[0] = block
     doc["skills"] = skills
@@ -767,11 +777,6 @@ def insert_step_after(
         insert_at = insert_after + 1
         anchor_index = insert_after
     original_len = len(steps)
-    if action_kind.strip().lower() == "agent_span" and insert_at < len(steps) and not confirm_only:
-        from conxa_compile.editor.patch_gate import _is_destructive  # noqa: PLC0415 -- patch_gate imports this module's neighbours
-
-        if _is_destructive(steps[insert_at], get_policy_bundle().data):
-            raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
     new_step = _new_manual_step(action_kind, _last_known_page_url(steps, anchor_index))
     if confirm_only:
         from conxa_compile.editor.patch_gate import CONFIRM_ONLY_SPAN_SCHEMA  # noqa: PLC0415
@@ -784,6 +789,7 @@ def insert_step_after(
         new_step["agent_span_on_failure"] = "abort"
         new_step["agent_span_budget"] = {"actions": 1, "seconds": 600}
     steps.insert(insert_at, new_step)
+    _refuse_span_before_irreversible(steps)
     block["steps"] = steps
     skills[0] = block
     doc["skills"] = skills
@@ -1128,6 +1134,27 @@ def _choice_specs(steps: list[Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
+def run_produced_names(steps: list[Any]) -> set[str]:
+    """Names the run fills in itself, so nobody is ever asked for them (lower-case): an agent span's answer and
+    ``<name>_<field>`` for each field of its schema, an extract's or a clipboard read's name. Mirrors the
+    packager's ``_produced_names`` on the saved-document shape (top-level steps; a span never runs in a body)."""
+    out: set[str] = set()
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        act = action_name(step).lower()
+        if act == "agent_span" and isinstance(step.get("agent_span_answer_schema"), dict):
+            name = str(step.get("agent_span_output_name") or "").strip()
+            if name:
+                props = step["agent_span_answer_schema"].get("properties")
+                out |= {name.lower()} | {f"{name}_{f}".lower() for f in (props if isinstance(props, dict) else {})}
+        elif act in ("extract", "clipboard_read"):
+            name = str(step.get("value") or "").strip()
+            if name:
+                out.add(name.lower())
+    return out
+
+
 def reconcile_inputs_with_step_values(document: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     """Auto-declare any {{var}} referenced in a step but missing from the inputs list.
 
@@ -1158,11 +1185,12 @@ def reconcile_inputs_with_step_values(document: dict[str, Any]) -> tuple[dict[st
     # real "supply a value" input the moment either RPC ran. Excluding both families right here
     # is the fix that covers every caller, not just the compile handler's.
     loop_vars = for_each_loop_variable_names(steps)
+    produced = run_produced_names(steps)
     inputs = list(document.get("inputs") or [])
     declared = {str(i.get("id") or "").strip().lower() for i in inputs if isinstance(i, dict)}
     added = False
     for sid in sorted(spotted):
-        if sid in loop_vars or _RUNTIME_ONLY_PLACEHOLDER_RE.match(sid):
+        if sid in loop_vars or _RUNTIME_ONLY_PLACEHOLDER_RE.match(sid) or sid.lower() in produced:
             continue
         if sid.lower() not in declared:
             spec = choice_specs.get(sid)
@@ -1297,6 +1325,7 @@ def replace_step_range(
         raise ValueError("new_steps_must_be_steps")
     delta = len(new_steps) - (last - start + 1)
     block["steps"] = steps[:start] + [copy.deepcopy(s) for s in new_steps] + steps[last + 1:]
+    _refuse_span_before_irreversible(block["steps"])
     # Steps inside the replaced range are gone ("gone is honest, misattributed is not"); the ones after
     # it shift by however much the range grew or shrank.
     old_to_new: dict[int, int | None] = {}

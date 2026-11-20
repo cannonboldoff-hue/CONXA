@@ -36,6 +36,10 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
      "The window showing the test browser is minimized or hidden, so the step could not be trusted. Bring Build Studio’s window back, then run the test again."),
     (re.compile(r"not showing the page at its normal size", re.I),
      "The test browser isn’t showing the page at its normal size, so the step could not be trusted. If Build Studio’s window is minimized, bring it back, then run the test again."),
+    (re.compile(r"comes straight after a part the AI agent does on its own", re.I),
+     "A step that can’t be undone comes straight after a part the AI agent does on its own, so the test stopped before anything ran. Put a normal step between them."),
+    (re.compile(r"uses the AI agent more than \d+ times in one run", re.I),
+     "This workflow uses the AI agent more than 5 times in one run, so the test stopped before the next one instead of running on. Remove or merge some of the parts the AI agent does on its own."),
     (re.compile(r"Execution cancelled", re.I), "The test was stopped before it finished."),
     (re.compile(r"Runtime tool call timed out", re.I), "The test stopped responding and was cancelled."),
 ]
@@ -55,6 +59,27 @@ _BY_KIND = {
 }
 # The kinds whose cause is already known exactly: the kind decides the sentence, not a word in the message.
 _KIND_FIRST = frozenset({"decision_needed", "couldnt_confirm", "left_open_unclassified", "bad_input", "tab_not_found"})
+
+# A download step that got no usable file. The runtime marks it bad input only to skip recovery, so the reason
+# comes from its words, not the kind ("One of the values given..." named the wrong cause, WF-14). First match wins.
+_DOWNLOAD = re.compile(r"Expected a file download at this step", re.I)
+_DOWNLOAD_REASONS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"empty or incomplete", re.I), "The file downloaded empty or cut short, so the test stopped instead of using it."),
+    (re.compile(r"did not finish downloading within", re.I), "The file took too long to download, so the test stopped waiting for it."),
+    (re.compile(r"was cancelled|was interrupted", re.I), "The download stopped before the file was saved."),
+    (re.compile(r"none arrived within", re.I), "No file started downloading at this step."),
+]
+_DOWNLOAD_OTHER = "The file couldn’t be downloaded."
+
+# A part the AI agent did on its own ended without finishing (runtime server.js: "Agent span at step N ended (<code>): ...").
+# The reason is known exactly, so it is said, not hidden behind the generic line (WF-13).
+_SPAN_ENDED = re.compile(r"Agent span at step \d+ ended \((\w+)\):\s*(.*)", re.I | re.S)
+_SPAN_REASONS = {
+    "exhausted": "The AI agent used up the actions or time it was given for this part before finishing it.",
+    "refused_too_often": "The AI agent kept trying things this part doesn’t allow, so it was stopped.",
+    "answer_invalid": "The AI agent never gave an answer in the form this part asks for.",
+    "page_closed": "The page closed while the AI agent was working on this part.",
+}
 
 _SMALL_WINDOW = re.compile(r"recorded at \d+\s*[x×]\s*\d+; this browser is \d+\s*[x×]\s*\d+", re.I)
 _GENERIC = "Something went wrong at this step."
@@ -77,7 +102,15 @@ def _which_ones(candidates: list[str] | None) -> str:
 def summarize(message: str, failure_kind: str | None = None, candidates: list[str] | None = None) -> str:
     """One plain sentence. Never returns the raw text; unmatched errors get a generic line."""
     text = message or ""
-    if failure_kind in _KIND_FIRST:
+    span = _SPAN_ENDED.search(text)
+    if span:
+        first = (span.group(2).strip().splitlines() or [""])[0]
+        why = re.sub(r"^The agent gave up:?\s*", "", first).strip().rstrip(".")[:200]
+        gave_up = "The AI agent gave up on this part" + (f": {why}." if why else ".")
+        sentence = gave_up if span.group(1).lower() == "gave_up" else _SPAN_REASONS.get(span.group(1).lower(), "The AI agent couldn’t finish this part.")
+    elif _DOWNLOAD.search(text):
+        sentence = next((s for p, s in _DOWNLOAD_REASONS if p.search(text)), _DOWNLOAD_OTHER)
+    elif failure_kind in _KIND_FIRST:
         sentence = _BY_KIND[failure_kind]
     elif (failure_kind or "").startswith("fault:"):
         # The app's own refusal. The runtime wrote a plain sentence for it ("This step didn't finish: ..."): keep it.

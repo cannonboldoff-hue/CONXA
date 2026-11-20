@@ -1,0 +1,10 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:62498`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+console.log("wf:", await s.evaluate(() => document.querySelector("header")?.innerText?.slice(0,40) ?? document.title));
+await s.getByRole("button", { name: "Approve", exact: true }).last().click(); await new Promise((z) => setTimeout(z, 4000));
+await s.screenshot({ path: path.join(here, "../evidence/WF-013/retest2/happy-approve.png") });
+console.log((await s.evaluate(() => document.body.innerText)).split(String.fromCharCode(10)).filter((l) => /Approved|approved/.test(l)).slice(-4));
+await b.close();

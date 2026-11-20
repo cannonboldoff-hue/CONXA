@@ -3,7 +3,7 @@
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
 > a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **WF-9 passed 2026-11-19.** **WF-10, WF-11, WF-12 passed 2026-11-20.** **Next:** WF-13 (agent-driven steps). Remaining: WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> **WF-9 passed 2026-11-19.** **WF-10…WF-13 passed 2026-11-20.** **Next:** WF-14 (files: 14.3, 14.8). Remaining: WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1320,3 +1320,6 @@ PASSED (P-43) after 1 engineering round. Failures found: local test builds lacke
 
 ### WF-12 — copilot "why did this fail?" (2026-11-20)
 PASSED (P-44) after 2 engineering rounds plus a 12.7 build. Failure found: asking chat to change a step's page address produced an Apply card that rewrote the address (S0) — the address was never on the protected list, and the after-apply guard re-synced the copies. Fixed at the one shared gate (card creation and apply). A flaky "turn typed text into an input" proposal was fixed; 12.7 (edit-and-resend, new conversation) did not exist, owner chose to build the minimal version. Retest 2: all cases pass; 3 sub-checks of 12.7 not reached (listed in P-44). Open: BUILD-114 (2)/(3), S3 UX notes in the handoff. Commit: see `git log` ("WF-12"). Detail: [`workflow-handoffs/WF-012.md`](workflow-handoffs/WF-012.md)
+
+### WF-13 — agent-driven steps (2026-11-20)
+PASSED (P-45) after 2 engineering rounds. Failures found: a step that can't be undone could be dragged right after an AI agent part (S0); the 5-span cap did not exist (owner chose to add it); Human Edit could not save a span answer; the span's answer was asked as a run input; a Submit step failed "page didn't change" although the text proved it. All fixed in shared places and retested; 13.6 stays unit-test only. Commit: see `git log` ("WF-13"). Detail: [`workflow-handoffs/WF-013.md`](workflow-handoffs/WF-013.md)

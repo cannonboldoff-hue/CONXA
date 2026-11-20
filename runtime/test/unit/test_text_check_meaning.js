@@ -33,6 +33,36 @@ test("a typed check is found inside a longer line, and new text proves the work 
   }
 });
 
+// WF-13 F6: a short result ("Name:person", under the 20-character text tolerance, no new element, same address) is
+// still a change when a required check saw new words; words that were already there prove nothing, so the
+// page-change check still decides.
+test("new words under a required check also satisfy 'the page changed'; old words do not", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const both = (words) => ({ type: "click", validation: { assertions: [
+    { type: "text_present", target: words, required: true, timeout_ms: 800 },
+    { type: "state_changed", required: true, timeout_ms: 500 },
+  ] } });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<form><input id="n" value="person"><button type="button">Submit</button></form><p id="output"></p><p>Name:old</p>`);
+    let baseline = await capturePreStepSignature(page, ["Name:person"]);
+    await page.evaluate(() => { document.getElementById("output").textContent = "Name:person"; });
+    let v = await verifyStep(page, both("Name:person"), {}, baseline);
+    assert.strictEqual(v.pass, true);
+    assert.deepStrictEqual(v.results.map((r) => [r.type, r.answer]), [["text_present", "yes"], ["state_changed", "yes"]]);
+    assert.strictEqual(v.results[1].proven_by, "fresh_check");
+
+    // Same page again: "Name:person" is already there, Submit did nothing visible -> the page-change check fails.
+    baseline = await capturePreStepSignature(page, ["Name:person"]);
+    v = await verifyStep(page, both("Name:person"), {}, baseline);
+    assert.strictEqual(v.pass, false);
+    assert.strictEqual(v.channel, "state_changed");
+    assert.notStrictEqual(v.results[0].fresh, true);
+  } finally {
+    await browser.close();
+  }
+});
+
 test("words already on the page, or only hidden in it, never prove the step", async () => {
   const browser = await chromium.launch({ headless: true });
   try {

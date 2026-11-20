@@ -14,14 +14,19 @@ import re
 
 _FALLBACK = "That change doesn't fit this step's rules, so it wasn't saved. Open the step in Human Edit to adjust it."
 _BRANCH_RETRY = "Something went wrong saving this branch's options. Please try again."
+# One refusal, whichever way a free agent part and a step that can't be undone end up side by side.
+SPAN_BEFORE_IRREVERSIBLE = (
+    "A step that can't be undone can't come straight after a part the AI agent does on its own. "
+    "Put a normal step between them."
+)
 
 _WORDING: dict[str, str] = {
     # Safety rules
     "irreversible_step_requires_confirmed_entity_binding": "This step can't be undone, so Conxa needs you to confirm which row it should act on first.",
     "irreversible_step_requires_completion_check": "This step can't be undone, so it needs a check that proves it worked. Add one before saving.",
-    "destructive_step_cannot_directly_follow_agent_span": "A step that can't be undone can't come straight after an agent-driven part. Add a normal step between them.",
+    "destructive_step_cannot_directly_follow_agent_span": SPAN_BEFORE_IRREVERSIBLE,
     "destructive_step_cannot_be_gated_by_span_answer": "A step that can't be undone can't depend on what an agent-driven part answered. Use a confirmed condition instead.",
-    "agent_span_cannot_directly_precede_a_destructive_step": "An agent-driven part can't come right before a step that can't be undone. Add a normal step between them.",
+    "agent_span_cannot_directly_precede_a_destructive_step": SPAN_BEFORE_IRREVERSIBLE,
     "confirmation_guards_a_destructive_step": "This confirmation protects a step that can't be undone, so it can't be changed or removed here.",
     "effect_is_not_a_valid_checklist": "That outcome isn't a valid check for this step. Pick one of the suggested checks instead.",
     "destructive_step_requires_non_none_wait_for": "This step performs an action that can't be undone, so it needs an outcome check that confirms it worked. Add one before saving.",

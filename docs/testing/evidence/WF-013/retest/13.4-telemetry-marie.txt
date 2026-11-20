@@ -1,0 +1,468 @@
+13:34:15 76dif {"e": "wf_start", "ts": 1795181655621}
+13:34:16 76dif {"e": "drift_detected", "ts": 1795181656018, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp0t2ki_76dif&conxa_tab=d478c385"}
+13:34:16 76dif {"e": "proof", "ts": 1795181656868, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:16 76dif {"e": "tier_ok", "ts": 1795181656869, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:16 76dif {"e": "step_ms", "ts": 1795181656869, "si": 0, "ms": 834}
+13:34:17 76dif {"e": "proof", "ts": 1795181657144, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:17 76dif {"e": "tier_ok", "ts": 1795181657145, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:17 76dif {"e": "step_ms", "ts": 1795181657145, "si": 1, "ms": 276}
+13:34:20 76dif {"e": "settle_retry", "ts": 1795181660261, "si": 2, "waited": 264, "phase": "verify", "ok": true}
+13:34:23 76dif {"e": "repair_event", "ts": 1795181663135, "step_id": 2, "tier": "L2", "method": "transient", "signal_used": "", "score": null, "margin": null, "stable_hash_match": false, "stable_hash": "3ee719aef7df45093b238ed9c9359934e095f8da8f
+13:34:23 76dif {"e": "proof", "ts": 1795181663136, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:23 76dif {"e": "step_ms", "ts": 1795181663137, "si": 2, "ms": 5992}
+13:34:23 76dif {"e": "proof", "ts": 1795181663346, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:23 76dif {"e": "tier_ok", "ts": 1795181663347, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:23 76dif {"e": "step_ms", "ts": 1795181663347, "si": 3, "ms": 210}
+13:34:23 76dif {"e": "verify_result", "ts": 1795181663541, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:34:23 76dif {"e": "proof", "ts": 1795181663541, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:34:23 76dif {"e": "tier_ok", "ts": 1795181663542, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:23 76dif {"e": "step_ms", "ts": 1795181663542, "si": 4, "ms": 195}
+13:34:24 76dif {"e": "verify_result", "ts": 1795181664204, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:34:25 76dif {"e": "completion", "ts": 1795181665046, "si": 5, "mode": "short", "st": "done", "waited": 840}
+13:34:25 76dif {"e": "proof", "ts": 1795181665047, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:34:25 76dif {"e": "tier_ok", "ts": 1795181665048, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:25 76dif {"e": "step_ms", "ts": 1795181665048, "si": 5, "ms": 1505}
+13:34:25 76dif {"e": "proof", "ts": 1795181665302, "si": 6, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:25 76dif {"e": "tier_ok", "ts": 1795181665303, "si": 6, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:25 76dif {"e": "step_ms", "ts": 1795181665303, "si": 6, "ms": 255}
+13:34:27 76dif {"e": "proof", "ts": 1795181667035, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:27 76dif {"e": "tier_ok", "ts": 1795181667036, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:27 76dif {"e": "step_ms", "ts": 1795181667036, "si": 7, "ms": 1733}
+13:34:28 76dif {"e": "proof", "ts": 1795181668425, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:28 76dif {"e": "tier_ok", "ts": 1795181668426, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:28 76dif {"e": "step_ms", "ts": 1795181668426, "si": 8, "ms": 1390}
+13:34:28 76dif {"e": "proof", "ts": 1795181668818, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:28 76dif {"e": "tier_ok", "ts": 1795181668819, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:28 76dif {"e": "step_ms", "ts": 1795181668819, "si": 9, "ms": 393}
+13:34:28 76dif {"e": "verify_result", "ts": 1795181668985, "si": 10, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:34:28 76dif {"e": "proof", "ts": 1795181668986, "si": 10, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:34:28 76dif {"e": "tier_ok", "ts": 1795181668986, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:28 76dif {"e": "step_ms", "ts": 1795181668986, "si": 10, "ms": 167}
+13:34:28 76dif {"e": "proof", "ts": 1795181668999, "si": 11, "rung": "performed", "v": "proven", "w": ["target"]}
+13:34:28 76dif {"e": "tier_ok", "ts": 1795181668999, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:34:29 76dif {"e": "step_ms", "ts": 1795181669000, "si": 11, "ms": 13}
+13:34:29 76dif {"e": "step_ms", "ts": 1795181669001, "si": 12, "ms": 1}
+13:34:29 76dif {"e": "wf_fail", "ts": 1795181669004, "dur": 13383, "fsi": null, "fc": "unknown"}
+13:34:29 76dif {"e": "park_created", "ts": 1795181669011, "si": 12, "kind": "guard"}
+13:41:26 txeoh {"e": "wf_start", "ts": 1795182086108}
+13:41:26 txeoh {"e": "drift_detected", "ts": 1795182086356, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp12aqg_txeoh&conxa_tab=37268d32"}
+13:41:27 txeoh {"e": "proof", "ts": 1795182087007, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:27 txeoh {"e": "tier_ok", "ts": 1795182087009, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:27 txeoh {"e": "step_ms", "ts": 1795182087009, "si": 0, "ms": 635}
+13:41:27 txeoh {"e": "proof", "ts": 1795182087384, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:27 txeoh {"e": "tier_ok", "ts": 1795182087385, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:27 txeoh {"e": "step_ms", "ts": 1795182087385, "si": 1, "ms": 376}
+13:41:29 txeoh {"e": "proof", "ts": 1795182089139, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:29 txeoh {"e": "tier_ok", "ts": 1795182089140, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:29 txeoh {"e": "step_ms", "ts": 1795182089140, "si": 2, "ms": 1755}
+13:41:29 txeoh {"e": "proof", "ts": 1795182089333, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:29 txeoh {"e": "tier_ok", "ts": 1795182089334, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:29 txeoh {"e": "step_ms", "ts": 1795182089334, "si": 3, "ms": 194}
+13:41:29 txeoh {"e": "verify_result", "ts": 1795182089532, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:41:29 txeoh {"e": "proof", "ts": 1795182089532, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:41:29 txeoh {"e": "tier_ok", "ts": 1795182089533, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:29 txeoh {"e": "step_ms", "ts": 1795182089533, "si": 4, "ms": 199}
+13:41:30 txeoh {"e": "verify_result", "ts": 1795182090433, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:41:31 txeoh {"e": "completion", "ts": 1795182091102, "si": 5, "mode": "short", "st": "done", "waited": 666}
+13:41:31 txeoh {"e": "proof", "ts": 1795182091103, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:41:31 txeoh {"e": "tier_ok", "ts": 1795182091104, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:31 txeoh {"e": "step_ms", "ts": 1795182091104, "si": 5, "ms": 1570}
+13:41:31 txeoh {"e": "span_start", "ts": 1795182091119, "si": 6}
+13:41:31 txeoh {"e": "step_ms", "ts": 1795182091120, "si": 6, "ms": 16}
+13:41:31 txeoh {"e": "park_created", "ts": 1795182091135, "si": 6, "kind": "span"}
+13:41:34 jzcmd {"e": "rec_start", "ts": 1795182094324, "si": 6, "l": 5, "sc": "llm_intent"}
+13:41:34 jzcmd {"e": "wf_start", "ts": 1795182094324}
+13:41:34 jzcmd {"e": "span_done", "ts": 1795182094326, "si": 6, "n": 0}
+13:41:34 jzcmd {"e": "park_resumed", "ts": 1795182094334, "si": 6}
+13:41:34 jzcmd {"e": "step_ms", "ts": 1795182094350, "si": 6, "ms": 8}
+13:41:34 jzcmd {"e": "proof", "ts": 1795182094621, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:34 jzcmd {"e": "tier_ok", "ts": 1795182094622, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:34 jzcmd {"e": "step_ms", "ts": 1795182094622, "si": 7, "ms": 272}
+13:41:34 jzcmd {"e": "proof", "ts": 1795182094824, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:34 jzcmd {"e": "tier_ok", "ts": 1795182094824, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:34 jzcmd {"e": "step_ms", "ts": 1795182094824, "si": 8, "ms": 202}
+13:41:36 jzcmd {"e": "proof", "ts": 1795182096509, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:36 jzcmd {"e": "tier_ok", "ts": 1795182096510, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:36 jzcmd {"e": "step_ms", "ts": 1795182096510, "si": 9, "ms": 1686}
+13:41:36 jzcmd {"e": "proof", "ts": 1795182096954, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:36 jzcmd {"e": "tier_ok", "ts": 1795182096955, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:36 jzcmd {"e": "step_ms", "ts": 1795182096955, "si": 10, "ms": 445}
+13:41:37 jzcmd {"e": "verify_result", "ts": 1795182097124, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:41:37 jzcmd {"e": "proof", "ts": 1795182097124, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:41:37 jzcmd {"e": "tier_ok", "ts": 1795182097125, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:37 jzcmd {"e": "step_ms", "ts": 1795182097125, "si": 11, "ms": 170}
+13:41:37 jzcmd {"e": "proof", "ts": 1795182097141, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:41:37 jzcmd {"e": "tier_ok", "ts": 1795182097142, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+13:41:37 jzcmd {"e": "step_ms", "ts": 1795182097142, "si": 12, "ms": 16}
+13:41:37 jzcmd {"e": "step_ms", "ts": 1795182097143, "si": 13, "ms": 1}
+13:41:37 jzcmd {"e": "wf_fail", "ts": 1795182097147, "dur": 2823, "fsi": null, "fc": "unknown"}
+13:41:37 jzcmd {"e": "park_created", "ts": 1795182097153, "si": 13, "kind": "guard"}
+13:41:38 p0y3b {"e": "rec_start", "ts": 1795182098632, "si": 13, "l": 5, "sc": "llm_intent"}
+13:41:38 p0y3b {"e": "wf_start", "ts": 1795182098632}
+13:41:38 p0y3b {"e": "park_resumed", "ts": 1795182098644, "si": 13}
+13:41:48 p0y3b {"e": "verify_result", "ts": 1795182108277, "si": 13, "ok": false, "n": 2, "advFail": 0, "ct": 0}
+13:41:48 p0y3b {"e": "verify_fail", "ts": 1795182108277, "si": 13, "ch": "state_changed"}
+13:41:48 p0y3b {"e": "settle_retry", "ts": 1795182108551, "si": 13, "waited": 260, "phase": "verify", "ok": true}
+13:41:51 p0y3b {"e": "rec_skip", "ts": 1795182111588, "si": 13, "why": "destructive"}
+13:41:54 p0y3b {"e": "rec_halt", "ts": 1795182114866, "si": 13, "why": "destructive"}
+13:41:54 p0y3b {"e": "step_fail", "ts": 1795182114866, "si": 13, "fc": "unknown"}
+13:41:54 p0y3b {"e": "step_ms", "ts": 1795182114869, "si": 13, "ms": 16219}
+13:41:54 p0y3b {"e": "wf_fail", "ts": 1795182114873, "dur": 16241, "fsi": 13, "fc": "unknown"}
+13:43:23 gicru {"e": "wf_start", "ts": 1795182203205}
+13:43:23 gicru {"e": "drift_detected", "ts": 1795182203416, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp14t37_gicru&conxa_tab=5a8abb96"}
+13:43:23 gicru {"e": "proof", "ts": 1795182203884, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:23 gicru {"e": "tier_ok", "ts": 1795182203885, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:23 gicru {"e": "step_ms", "ts": 1795182203885, "si": 0, "ms": 446}
+13:43:25 gicru {"e": "proof", "ts": 1795182205781, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:25 gicru {"e": "tier_ok", "ts": 1795182205782, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:25 gicru {"e": "step_ms", "ts": 1795182205782, "si": 1, "ms": 1897}
+13:43:27 gicru {"e": "proof", "ts": 1795182207461, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:27 gicru {"e": "tier_ok", "ts": 1795182207463, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:27 gicru {"e": "step_ms", "ts": 1795182207463, "si": 2, "ms": 1681}
+13:43:27 gicru {"e": "proof", "ts": 1795182207652, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:27 gicru {"e": "tier_ok", "ts": 1795182207653, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:27 gicru {"e": "step_ms", "ts": 1795182207653, "si": 3, "ms": 190}
+13:43:27 gicru {"e": "verify_result", "ts": 1795182207824, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:43:27 gicru {"e": "proof", "ts": 1795182207824, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:43:27 gicru {"e": "tier_ok", "ts": 1795182207825, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:27 gicru {"e": "step_ms", "ts": 1795182207825, "si": 4, "ms": 172}
+13:43:28 gicru {"e": "verify_result", "ts": 1795182208472, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:43:29 gicru {"e": "completion", "ts": 1795182209127, "si": 5, "mode": "short", "st": "done", "waited": 655}
+13:43:29 gicru {"e": "proof", "ts": 1795182209128, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:43:29 gicru {"e": "tier_ok", "ts": 1795182209129, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:29 gicru {"e": "step_ms", "ts": 1795182209129, "si": 5, "ms": 1303}
+13:43:29 gicru {"e": "span_start", "ts": 1795182209145, "si": 6}
+13:43:29 gicru {"e": "step_ms", "ts": 1795182209145, "si": 6, "ms": 16}
+13:43:29 gicru {"e": "park_created", "ts": 1795182209155, "si": 6, "kind": "span"}
+13:43:32 zumjl {"e": "rec_start", "ts": 1795182212981, "si": 6, "l": 5, "sc": "llm_intent"}
+13:43:32 zumjl {"e": "wf_start", "ts": 1795182212981}
+13:43:32 zumjl {"e": "span_done", "ts": 1795182212983, "si": 6, "n": 0}
+13:43:32 zumjl {"e": "park_resumed", "ts": 1795182212995, "si": 6}
+13:43:33 zumjl {"e": "step_ms", "ts": 1795182213008, "si": 6, "ms": 4}
+13:43:33 zumjl {"e": "proof", "ts": 1795182213294, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:33 zumjl {"e": "tier_ok", "ts": 1795182213295, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:33 zumjl {"e": "step_ms", "ts": 1795182213295, "si": 7, "ms": 287}
+13:43:33 zumjl {"e": "proof", "ts": 1795182213542, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:33 zumjl {"e": "tier_ok", "ts": 1795182213543, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:33 zumjl {"e": "step_ms", "ts": 1795182213543, "si": 8, "ms": 248}
+13:43:34 zumjl {"e": "proof", "ts": 1795182214981, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:34 zumjl {"e": "tier_ok", "ts": 1795182214982, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:34 zumjl {"e": "step_ms", "ts": 1795182214982, "si": 9, "ms": 1439}
+13:43:35 zumjl {"e": "proof", "ts": 1795182215350, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:43:35 zumjl {"e": "tier_ok", "ts": 1795182215351, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:43:35 zumjl {"e": "step_ms", "ts": 1795182215351, "si": 10, "ms": 369}
+13:43:40 zumjl {"e": "verify_result", "ts": 1795182220501, "si": 11, "ok": false, "n": 1, "advFail": 0, "ct": 0}
+13:43:40 zumjl {"e": "verify_fail", "ts": 1795182220501, "si": 11, "ch": "value_equals"}
+13:43:40 zumjl {"e": "settle_retry", "ts": 1795182220764, "si": 11, "waited": 257, "phase": "verify", "ok": true}
+13:43:54 zumjl {"e": "step_fail", "ts": 1795182234214, "si": 11, "fc": "unknown"}
+13:43:54 zumjl {"e": "step_ms", "ts": 1795182234214, "si": 11, "ms": 18863}
+13:43:54 zumjl {"e": "wf_fail", "ts": 1795182234218, "dur": 21237, "fsi": 11, "fc": "unknown"}
+13:44:43 2mqs0 {"e": "wf_start", "ts": 1795182283646}
+13:44:43 2mqs0 {"e": "drift_detected", "ts": 1795182283869, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp16j5n_2mqs0&conxa_tab=8d0ca7d6"}
+13:44:44 2mqs0 {"e": "proof", "ts": 1795182284055, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:44 2mqs0 {"e": "tier_ok", "ts": 1795182284056, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:44 2mqs0 {"e": "step_ms", "ts": 1795182284056, "si": 0, "ms": 168}
+13:44:44 2mqs0 {"e": "proof", "ts": 1795182284545, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:44 2mqs0 {"e": "tier_ok", "ts": 1795182284546, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:44 2mqs0 {"e": "step_ms", "ts": 1795182284546, "si": 1, "ms": 490}
+13:44:44 2mqs0 {"e": "proof", "ts": 1795182284738, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:44 2mqs0 {"e": "tier_ok", "ts": 1795182284739, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:44 2mqs0 {"e": "step_ms", "ts": 1795182284739, "si": 2, "ms": 193}
+13:44:44 2mqs0 {"e": "proof", "ts": 1795182284936, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:44 2mqs0 {"e": "tier_ok", "ts": 1795182284937, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:44 2mqs0 {"e": "step_ms", "ts": 1795182284937, "si": 3, "ms": 197}
+13:44:45 2mqs0 {"e": "verify_result", "ts": 1795182285105, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:44:45 2mqs0 {"e": "proof", "ts": 1795182285105, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:44:45 2mqs0 {"e": "tier_ok", "ts": 1795182285106, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:45 2mqs0 {"e": "step_ms", "ts": 1795182285106, "si": 4, "ms": 169}
+13:44:46 2mqs0 {"e": "verify_result", "ts": 1795182286009, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:44:46 2mqs0 {"e": "completion", "ts": 1795182286631, "si": 5, "mode": "short", "st": "done", "waited": 621}
+13:44:46 2mqs0 {"e": "proof", "ts": 1795182286631, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:44:46 2mqs0 {"e": "tier_ok", "ts": 1795182286631, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:46 2mqs0 {"e": "step_ms", "ts": 1795182286631, "si": 5, "ms": 1525}
+13:44:46 2mqs0 {"e": "span_start", "ts": 1795182286643, "si": 6}
+13:44:46 2mqs0 {"e": "step_ms", "ts": 1795182286643, "si": 6, "ms": 12}
+13:44:46 2mqs0 {"e": "park_created", "ts": 1795182286652, "si": 6, "kind": "span"}
+13:44:50 52egk {"e": "rec_start", "ts": 1795182290659, "si": 6, "l": 5, "sc": "llm_intent"}
+13:44:50 52egk {"e": "wf_start", "ts": 1795182290659}
+13:44:51 52egk {"e": "span_action", "ts": 1795182291085, "si": 6, "ok": 1}
+13:44:54 g0g6o {"e": "rec_start", "ts": 1795182294479, "si": 6, "l": 5, "sc": "llm_intent"}
+13:44:54 g0g6o {"e": "wf_start", "ts": 1795182294479}
+13:44:54 g0g6o {"e": "span_done", "ts": 1795182294482, "si": 6, "n": 1}
+13:44:54 g0g6o {"e": "park_resumed", "ts": 1795182294495, "si": 6}
+13:44:54 g0g6o {"e": "step_ms", "ts": 1795182294507, "si": 6, "ms": 4}
+13:44:54 g0g6o {"e": "proof", "ts": 1795182294771, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:54 g0g6o {"e": "tier_ok", "ts": 1795182294771, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:54 g0g6o {"e": "step_ms", "ts": 1795182294771, "si": 7, "ms": 264}
+13:44:54 g0g6o {"e": "proof", "ts": 1795182294978, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:54 g0g6o {"e": "tier_ok", "ts": 1795182294979, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:54 g0g6o {"e": "step_ms", "ts": 1795182294979, "si": 8, "ms": 208}
+13:44:56 g0g6o {"e": "proof", "ts": 1795182296302, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:56 g0g6o {"e": "tier_ok", "ts": 1795182296304, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:56 g0g6o {"e": "step_ms", "ts": 1795182296304, "si": 9, "ms": 1325}
+13:44:56 g0g6o {"e": "proof", "ts": 1795182296724, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:56 g0g6o {"e": "tier_ok", "ts": 1795182296725, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:56 g0g6o {"e": "step_ms", "ts": 1795182296725, "si": 10, "ms": 421}
+13:44:56 g0g6o {"e": "verify_result", "ts": 1795182296887, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:44:56 g0g6o {"e": "proof", "ts": 1795182296887, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:44:56 g0g6o {"e": "tier_ok", "ts": 1795182296888, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:56 g0g6o {"e": "step_ms", "ts": 1795182296888, "si": 11, "ms": 163}
+13:44:56 g0g6o {"e": "proof", "ts": 1795182296901, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:44:56 g0g6o {"e": "tier_ok", "ts": 1795182296901, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+13:44:56 g0g6o {"e": "step_ms", "ts": 1795182296901, "si": 12, "ms": 13}
+13:44:59 1ra96 {"e": "rec_start", "ts": 1795182299412, "si": 13, "l": 5, "sc": "llm_intent"}
+13:44:59 1ra96 {"e": "wf_start", "ts": 1795182299412}
+13:44:59 1ra96 {"e": "park_resumed", "ts": 1795182299435, "si": 13}
+13:45:08 1ra96 {"e": "verify_result", "ts": 1795182308066, "si": 13, "ok": true, "n": 2, "advFail": 1, "ct": 0}
+13:45:11 1ra96 {"e": "completion", "ts": 1795182311239, "si": 13, "mode": "full", "st": "no_sign", "waited": 3172}
+13:45:15 1ra96 {"e": "proof", "ts": 1795182315341, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:45:15 1ra96 {"e": "tier_ok", "ts": 1795182315342, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+13:45:15 1ra96 {"e": "step_ms", "ts": 1795182315342, "si": 13, "ms": 15901}
+13:45:15 1ra96 {"e": "wf_ok", "ts": 1795182315403, "dur": 15991, "tot": 14, "rec": 0, "oc": "done"}
+13:47:18 zdo9v {"e": "wf_start", "ts": 1795182438448}
+13:47:18 zdo9v {"e": "drift_detected", "ts": 1795182438659, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp19ulq_zdo9v&conxa_tab=73c098bf"}
+13:47:19 zdo9v {"e": "proof", "ts": 1795182439279, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:19 zdo9v {"e": "tier_ok", "ts": 1795182439280, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:19 zdo9v {"e": "step_ms", "ts": 1795182439280, "si": 0, "ms": 603}
+13:47:19 zdo9v {"e": "proof", "ts": 1795182439725, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:19 zdo9v {"e": "tier_ok", "ts": 1795182439726, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:19 zdo9v {"e": "step_ms", "ts": 1795182439726, "si": 1, "ms": 446}
+13:47:19 zdo9v {"e": "proof", "ts": 1795182439924, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:19 zdo9v {"e": "tier_ok", "ts": 1795182439925, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:19 zdo9v {"e": "step_ms", "ts": 1795182439925, "si": 2, "ms": 199}
+13:47:20 zdo9v {"e": "proof", "ts": 1795182440111, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:20 zdo9v {"e": "tier_ok", "ts": 1795182440112, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:20 zdo9v {"e": "step_ms", "ts": 1795182440112, "si": 3, "ms": 186}
+13:47:20 zdo9v {"e": "verify_result", "ts": 1795182440273, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:47:20 zdo9v {"e": "proof", "ts": 1795182440273, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:47:20 zdo9v {"e": "tier_ok", "ts": 1795182440274, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:20 zdo9v {"e": "step_ms", "ts": 1795182440274, "si": 4, "ms": 162}
+13:47:20 zdo9v {"e": "verify_result", "ts": 1795182440917, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:47:21 zdo9v {"e": "completion", "ts": 1795182441588, "si": 5, "mode": "short", "st": "done", "waited": 671}
+13:47:21 zdo9v {"e": "proof", "ts": 1795182441588, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:47:21 zdo9v {"e": "tier_ok", "ts": 1795182441589, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:21 zdo9v {"e": "step_ms", "ts": 1795182441589, "si": 5, "ms": 1315}
+13:47:21 zdo9v {"e": "span_start", "ts": 1795182441602, "si": 6}
+13:47:21 zdo9v {"e": "step_ms", "ts": 1795182441602, "si": 6, "ms": 12}
+13:47:21 zdo9v {"e": "park_created", "ts": 1795182441612, "si": 6, "kind": "span"}
+13:47:25 b61f0 {"e": "rec_start", "ts": 1795182445003, "si": 6, "l": 5, "sc": "llm_intent"}
+13:47:25 b61f0 {"e": "wf_start", "ts": 1795182445003}
+13:47:25 b61f0 {"e": "span_action", "ts": 1795182445422, "si": 6, "ok": 1}
+13:47:30 dgpdo {"e": "rec_start", "ts": 1795182450041, "si": 6, "l": 5, "sc": "llm_intent"}
+13:47:30 dgpdo {"e": "wf_start", "ts": 1795182450041}
+13:47:30 dgpdo {"e": "span_done", "ts": 1795182450042, "si": 6, "n": 1}
+13:47:30 dgpdo {"e": "park_resumed", "ts": 1795182450051, "si": 6}
+13:47:30 dgpdo {"e": "step_ms", "ts": 1795182450063, "si": 6, "ms": 4}
+13:47:30 dgpdo {"e": "proof", "ts": 1795182450344, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:30 dgpdo {"e": "tier_ok", "ts": 1795182450344, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:30 dgpdo {"e": "step_ms", "ts": 1795182450344, "si": 7, "ms": 281}
+13:47:32 dgpdo {"e": "proof", "ts": 1795182452048, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:32 dgpdo {"e": "tier_ok", "ts": 1795182452049, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:32 dgpdo {"e": "step_ms", "ts": 1795182452049, "si": 8, "ms": 1705}
+13:47:33 dgpdo {"e": "proof", "ts": 1795182453551, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:33 dgpdo {"e": "tier_ok", "ts": 1795182453552, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:33 dgpdo {"e": "step_ms", "ts": 1795182453552, "si": 9, "ms": 1503}
+13:47:33 dgpdo {"e": "proof", "ts": 1795182453975, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:33 dgpdo {"e": "tier_ok", "ts": 1795182453976, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:33 dgpdo {"e": "step_ms", "ts": 1795182453976, "si": 10, "ms": 424}
+13:47:34 dgpdo {"e": "verify_result", "ts": 1795182454169, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:47:34 dgpdo {"e": "proof", "ts": 1795182454170, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:47:34 dgpdo {"e": "tier_ok", "ts": 1795182454170, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:34 dgpdo {"e": "step_ms", "ts": 1795182454170, "si": 11, "ms": 194}
+13:47:34 dgpdo {"e": "proof", "ts": 1795182454181, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:47:34 dgpdo {"e": "tier_ok", "ts": 1795182454181, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:34 dgpdo {"e": "step_ms", "ts": 1795182454181, "si": 12, "ms": 11}
+13:47:34 dgpdo {"e": "step_ms", "ts": 1795182454182, "si": 13, "ms": 0}
+13:47:34 dgpdo {"e": "wf_fail", "ts": 1795182454185, "dur": 4144, "fsi": null, "fc": "unknown"}
+13:47:34 dgpdo {"e": "park_created", "ts": 1795182454190, "si": 13, "kind": "guard"}
+13:47:35 disl8 {"e": "rec_start", "ts": 1795182455935, "si": 13, "l": 5, "sc": "llm_intent"}
+13:47:35 disl8 {"e": "wf_start", "ts": 1795182455935}
+13:47:35 disl8 {"e": "park_resumed", "ts": 1795182455943, "si": 13}
+13:47:47 disl8 {"e": "verify_result", "ts": 1795182467051, "si": 13, "ok": true, "n": 2, "advFail": 1, "ct": 0}
+13:47:50 disl8 {"e": "completion", "ts": 1795182470206, "si": 13, "mode": "full", "st": "no_sign", "waited": 3155}
+13:47:54 disl8 {"e": "proof", "ts": 1795182474302, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:47:54 disl8 {"e": "tier_ok", "ts": 1795182474303, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+13:47:54 disl8 {"e": "step_ms", "ts": 1795182474303, "si": 13, "ms": 18353}
+13:47:54 disl8 {"e": "wf_ok", "ts": 1795182474336, "dur": 18401, "tot": 14, "rec": 0, "oc": "done"}
+13:48:15 pvyjd {"e": "wf_start", "ts": 1795182495416}
+13:48:15 pvyjd {"e": "drift_detected", "ts": 1795182495625, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp1b2k6_pvyjd&conxa_tab=681a84de"}
+13:48:15 pvyjd {"e": "proof", "ts": 1795182495875, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:15 pvyjd {"e": "tier_ok", "ts": 1795182495876, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:15 pvyjd {"e": "step_ms", "ts": 1795182495876, "si": 0, "ms": 235}
+13:48:16 pvyjd {"e": "proof", "ts": 1795182496358, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:16 pvyjd {"e": "tier_ok", "ts": 1795182496359, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:16 pvyjd {"e": "step_ms", "ts": 1795182496359, "si": 1, "ms": 483}
+13:48:16 pvyjd {"e": "proof", "ts": 1795182496545, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:16 pvyjd {"e": "tier_ok", "ts": 1795182496546, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:16 pvyjd {"e": "step_ms", "ts": 1795182496546, "si": 2, "ms": 187}
+13:48:16 pvyjd {"e": "proof", "ts": 1795182496742, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:16 pvyjd {"e": "tier_ok", "ts": 1795182496743, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:16 pvyjd {"e": "step_ms", "ts": 1795182496743, "si": 3, "ms": 196}
+13:48:16 pvyjd {"e": "verify_result", "ts": 1795182496910, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:48:16 pvyjd {"e": "proof", "ts": 1795182496910, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:48:16 pvyjd {"e": "tier_ok", "ts": 1795182496910, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:16 pvyjd {"e": "step_ms", "ts": 1795182496910, "si": 4, "ms": 167}
+13:48:17 pvyjd {"e": "verify_result", "ts": 1795182497559, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:48:18 pvyjd {"e": "completion", "ts": 1795182498249, "si": 5, "mode": "short", "st": "done", "waited": 689}
+13:48:18 pvyjd {"e": "proof", "ts": 1795182498249, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:48:18 pvyjd {"e": "tier_ok", "ts": 1795182498250, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:18 pvyjd {"e": "step_ms", "ts": 1795182498250, "si": 5, "ms": 1340}
+13:48:18 pvyjd {"e": "span_start", "ts": 1795182498260, "si": 6}
+13:48:18 pvyjd {"e": "step_ms", "ts": 1795182498261, "si": 6, "ms": 11}
+13:48:18 pvyjd {"e": "park_created", "ts": 1795182498274, "si": 6, "kind": "span"}
+13:48:21 j3wbe {"e": "rec_start", "ts": 1795182501733, "si": 6, "l": 5, "sc": "llm_intent"}
+13:48:21 j3wbe {"e": "wf_start", "ts": 1795182501733}
+13:48:21 j3wbe {"e": "span_done", "ts": 1795182501735, "si": 6, "n": 0}
+13:48:21 j3wbe {"e": "park_resumed", "ts": 1795182501743, "si": 6}
+13:48:21 j3wbe {"e": "step_ms", "ts": 1795182501759, "si": 6, "ms": 5}
+13:48:22 j3wbe {"e": "proof", "ts": 1795182502039, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:22 j3wbe {"e": "tier_ok", "ts": 1795182502040, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:22 j3wbe {"e": "step_ms", "ts": 1795182502040, "si": 7, "ms": 281}
+13:48:22 j3wbe {"e": "proof", "ts": 1795182502260, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:22 j3wbe {"e": "tier_ok", "ts": 1795182502261, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:22 j3wbe {"e": "step_ms", "ts": 1795182502261, "si": 8, "ms": 221}
+13:48:22 j3wbe {"e": "proof", "ts": 1795182502941, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:22 j3wbe {"e": "tier_ok", "ts": 1795182502943, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:22 j3wbe {"e": "step_ms", "ts": 1795182502943, "si": 9, "ms": 682}
+13:48:23 j3wbe {"e": "proof", "ts": 1795182503349, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:23 j3wbe {"e": "tier_ok", "ts": 1795182503350, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:23 j3wbe {"e": "step_ms", "ts": 1795182503350, "si": 10, "ms": 407}
+13:48:23 j3wbe {"e": "verify_result", "ts": 1795182503513, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:48:23 j3wbe {"e": "proof", "ts": 1795182503514, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:48:23 j3wbe {"e": "tier_ok", "ts": 1795182503514, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:23 j3wbe {"e": "step_ms", "ts": 1795182503514, "si": 11, "ms": 164}
+13:48:23 j3wbe {"e": "proof", "ts": 1795182503521, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:48:24 ngoim {"e": "rec_start", "ts": 1795182504941, "si": 13, "l": 5, "sc": "llm_intent"}
+13:48:24 ngoim {"e": "wf_start", "ts": 1795182504941}
+13:48:24 ngoim {"e": "park_resumed", "ts": 1795182504951, "si": 13}
+13:48:35 ngoim {"e": "verify_result", "ts": 1795182515560, "si": 13, "ok": true, "n": 2, "advFail": 1, "ct": 0}
+13:48:38 ngoim {"e": "completion", "ts": 1795182518714, "si": 13, "mode": "full", "st": "no_sign", "waited": 3154}
+13:48:42 ngoim {"e": "proof", "ts": 1795182522823, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:48:42 ngoim {"e": "tier_ok", "ts": 1795182522823, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+13:48:42 ngoim {"e": "step_ms", "ts": 1795182522823, "si": 13, "ms": 17867}
+13:48:42 ngoim {"e": "wf_ok", "ts": 1795182522861, "dur": 17920, "tot": 14, "rec": 0, "oc": "done"}
+13:49:03 cq5yl {"e": "wf_start", "ts": 1795182543149}
+13:49:03 cq5yl {"e": "drift_detected", "ts": 1795182543371, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp1c3e3_cq5yl&conxa_tab=bb71ff70"}
+13:49:03 cq5yl {"e": "proof", "ts": 1795182543666, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:03 cq5yl {"e": "tier_ok", "ts": 1795182543667, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:03 cq5yl {"e": "step_ms", "ts": 1795182543667, "si": 0, "ms": 281}
+13:49:04 cq5yl {"e": "proof", "ts": 1795182544164, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:04 cq5yl {"e": "tier_ok", "ts": 1795182544165, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:04 cq5yl {"e": "step_ms", "ts": 1795182544165, "si": 1, "ms": 498}
+13:49:04 cq5yl {"e": "proof", "ts": 1795182544341, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:04 cq5yl {"e": "tier_ok", "ts": 1795182544342, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:04 cq5yl {"e": "step_ms", "ts": 1795182544342, "si": 2, "ms": 177}
+13:49:04 cq5yl {"e": "proof", "ts": 1795182544544, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:04 cq5yl {"e": "tier_ok", "ts": 1795182544545, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:04 cq5yl {"e": "step_ms", "ts": 1795182544545, "si": 3, "ms": 202}
+13:49:04 cq5yl {"e": "verify_result", "ts": 1795182544709, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:49:04 cq5yl {"e": "proof", "ts": 1795182544709, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:49:04 cq5yl {"e": "tier_ok", "ts": 1795182544710, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:04 cq5yl {"e": "step_ms", "ts": 1795182544710, "si": 4, "ms": 165}
+13:49:05 cq5yl {"e": "verify_result", "ts": 1795182545613, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:49:06 cq5yl {"e": "completion", "ts": 1795182546221, "si": 5, "mode": "short", "st": "done", "waited": 608}
+13:49:06 cq5yl {"e": "proof", "ts": 1795182546221, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:49:06 cq5yl {"e": "tier_ok", "ts": 1795182546223, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:06 cq5yl {"e": "step_ms", "ts": 1795182546223, "si": 5, "ms": 1513}
+13:49:06 cq5yl {"e": "span_start", "ts": 1795182546241, "si": 6}
+13:49:06 cq5yl {"e": "step_ms", "ts": 1795182546241, "si": 6, "ms": 18}
+13:49:06 cq5yl {"e": "park_created", "ts": 1795182546255, "si": 6, "kind": "span"}
+13:49:09 6e47b {"e": "rec_start", "ts": 1795182549618, "si": 6, "l": 5, "sc": "llm_intent"}
+13:49:09 6e47b {"e": "wf_start", "ts": 1795182549618}
+13:49:10 6e47b {"e": "span_action", "ts": 1795182550028, "si": 6, "ok": 1}
+13:49:14 7cvzu {"e": "rec_start", "ts": 1795182554073, "si": 6, "l": 5, "sc": "llm_intent"}
+13:49:14 7cvzu {"e": "wf_start", "ts": 1795182554073}
+13:49:14 7cvzu {"e": "span_done", "ts": 1795182554075, "si": 6, "n": 1}
+13:49:14 7cvzu {"e": "park_resumed", "ts": 1795182554089, "si": 6}
+13:49:14 7cvzu {"e": "step_ms", "ts": 1795182554107, "si": 6, "ms": 5}
+13:49:14 7cvzu {"e": "proof", "ts": 1795182554373, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:14 7cvzu {"e": "tier_ok", "ts": 1795182554374, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:14 7cvzu {"e": "step_ms", "ts": 1795182554374, "si": 7, "ms": 267}
+13:49:16 7cvzu {"e": "proof", "ts": 1795182556083, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:16 7cvzu {"e": "tier_ok", "ts": 1795182556084, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:16 7cvzu {"e": "step_ms", "ts": 1795182556084, "si": 8, "ms": 1710}
+13:49:16 7cvzu {"e": "proof", "ts": 1795182556681, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:16 7cvzu {"e": "tier_ok", "ts": 1795182556681, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:16 7cvzu {"e": "step_ms", "ts": 1795182556681, "si": 9, "ms": 596}
+13:49:17 7cvzu {"e": "proof", "ts": 1795182557108, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:17 7cvzu {"e": "tier_ok", "ts": 1795182557109, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:17 7cvzu {"e": "step_ms", "ts": 1795182557109, "si": 10, "ms": 428}
+13:49:17 7cvzu {"e": "verify_result", "ts": 1795182557279, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:49:17 7cvzu {"e": "proof", "ts": 1795182557280, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:49:17 7cvzu {"e": "tier_ok", "ts": 1795182557281, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:17 7cvzu {"e": "step_ms", "ts": 1795182557281, "si": 11, "ms": 172}
+13:49:17 7cvzu {"e": "proof", "ts": 1795182557295, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:49:17 7cvzu {"e": "tier_ok", "ts": 1795182557295, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:17 7cvzu {"e": "step_ms", "ts": 1795182557295, "si": 12, "ms": 14}
+13:49:17 7cvzu {"e": "step_ms", "ts": 1795182557296, "si": 13, "ms": 1}
+13:49:17 7cvzu {"e": "wf_fail", "ts": 1795182557299, "dur": 3226, "fsi": null, "fc": "unknown"}
+13:49:17 7cvzu {"e": "park_created", "ts": 1795182557305, "si": 13, "kind": "guard"}
+13:49:19 gpdbq {"e": "rec_start", "ts": 1795182559590, "si": 13, "l": 5, "sc": "llm_intent"}
+13:49:19 gpdbq {"e": "wf_start", "ts": 1795182559590}
+13:49:19 gpdbq {"e": "park_resumed", "ts": 1795182559612, "si": 13}
+13:49:29 gpdbq {"e": "verify_result", "ts": 1795182569954, "si": 13, "ok": true, "n": 2, "advFail": 1, "ct": 0}
+13:49:33 gpdbq {"e": "completion", "ts": 1795182573131, "si": 13, "mode": "full", "st": "no_sign", "waited": 3176}
+13:49:37 gpdbq {"e": "proof", "ts": 1795182577227, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:49:37 gpdbq {"e": "tier_ok", "ts": 1795182577228, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+13:49:37 gpdbq {"e": "step_ms", "ts": 1795182577228, "si": 13, "ms": 17611}
+13:49:37 gpdbq {"e": "wf_ok", "ts": 1795182577266, "dur": 17676, "tot": 14, "rec": 0, "oc": "done"}
+13:50:25 4yqlj {"e": "wf_start", "ts": 1795182625290}
+13:50:25 4yqlj {"e": "drift_detected", "ts": 1795182625499, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp1durr_4yqlj&conxa_tab=bbe45bc1"}
+13:50:25 4yqlj {"e": "proof", "ts": 1795182625818, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:25 4yqlj {"e": "tier_ok", "ts": 1795182625818, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:25 4yqlj {"e": "step_ms", "ts": 1795182625818, "si": 0, "ms": 305}
+13:50:26 4yqlj {"e": "proof", "ts": 1795182626331, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:26 4yqlj {"e": "tier_ok", "ts": 1795182626332, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:26 4yqlj {"e": "step_ms", "ts": 1795182626332, "si": 1, "ms": 513}
+13:50:28 4yqlj {"e": "proof", "ts": 1795182628037, "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:28 4yqlj {"e": "tier_ok", "ts": 1795182628038, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:28 4yqlj {"e": "step_ms", "ts": 1795182628038, "si": 2, "ms": 1706}
+13:50:28 4yqlj {"e": "proof", "ts": 1795182628231, "si": 3, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:28 4yqlj {"e": "tier_ok", "ts": 1795182628231, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:28 4yqlj {"e": "step_ms", "ts": 1795182628231, "si": 3, "ms": 193}
+13:50:28 4yqlj {"e": "verify_result", "ts": 1795182628401, "si": 4, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:50:28 4yqlj {"e": "proof", "ts": 1795182628401, "si": 4, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:50:28 4yqlj {"e": "tier_ok", "ts": 1795182628401, "si": 4, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:28 4yqlj {"e": "step_ms", "ts": 1795182628401, "si": 4, "ms": 170}
+13:50:29 4yqlj {"e": "verify_result", "ts": 1795182629296, "si": 5, "ok": true, "n": 2, "advFail": 0, "ct": 0}
+13:50:29 4yqlj {"e": "completion", "ts": 1795182629887, "si": 5, "mode": "short", "st": "done", "waited": 591}
+13:50:29 4yqlj {"e": "proof", "ts": 1795182629888, "si": 5, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:50:29 4yqlj {"e": "tier_ok", "ts": 1795182629889, "si": 5, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:29 4yqlj {"e": "step_ms", "ts": 1795182629889, "si": 5, "ms": 1487}
+13:50:29 4yqlj {"e": "span_start", "ts": 1795182629901, "si": 6}
+13:50:29 4yqlj {"e": "step_ms", "ts": 1795182629901, "si": 6, "ms": 12}
+13:50:29 4yqlj {"e": "park_created", "ts": 1795182629914, "si": 6, "kind": "span"}
+13:50:36 kxe57 {"e": "rec_start", "ts": 1795182636342, "si": 6, "l": 5, "sc": "llm_intent"}
+13:50:36 kxe57 {"e": "wf_start", "ts": 1795182636342}
+13:50:36 kxe57 {"e": "span_done", "ts": 1795182636343, "si": 6, "n": 0}
+13:50:36 kxe57 {"e": "park_resumed", "ts": 1795182636354, "si": 6}
+13:50:36 kxe57 {"e": "step_ms", "ts": 1795182636370, "si": 6, "ms": 5}
+13:50:36 kxe57 {"e": "proof", "ts": 1795182636655, "si": 7, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:36 kxe57 {"e": "tier_ok", "ts": 1795182636655, "si": 7, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:36 kxe57 {"e": "step_ms", "ts": 1795182636655, "si": 7, "ms": 285}
+13:50:36 kxe57 {"e": "proof", "ts": 1795182636885, "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:36 kxe57 {"e": "tier_ok", "ts": 1795182636886, "si": 8, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:36 kxe57 {"e": "step_ms", "ts": 1795182636886, "si": 8, "ms": 231}
+13:50:38 kxe57 {"e": "proof", "ts": 1795182638300, "si": 9, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:38 kxe57 {"e": "tier_ok", "ts": 1795182638302, "si": 9, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:38 kxe57 {"e": "step_ms", "ts": 1795182638302, "si": 9, "ms": 1416}
+13:50:38 kxe57 {"e": "proof", "ts": 1795182638692, "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:38 kxe57 {"e": "tier_ok", "ts": 1795182638693, "si": 10, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:38 kxe57 {"e": "step_ms", "ts": 1795182638693, "si": 10, "ms": 391}
+13:50:38 kxe57 {"e": "verify_result", "ts": 1795182638936, "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+13:50:38 kxe57 {"e": "proof", "ts": 1795182638936, "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+13:50:38 kxe57 {"e": "tier_ok", "ts": 1795182638937, "si": 11, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:38 kxe57 {"e": "step_ms", "ts": 1795182638937, "si": 11, "ms": 244}
+13:50:38 kxe57 {"e": "proof", "ts": 1795182638946, "si": 12, "rung": "performed", "v": "proven", "w": ["target"]}
+13:50:38 kxe57 {"e": "tier_ok", "ts": 1795182638948, "si": 12, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:38 kxe57 {"e": "step_ms", "ts": 1795182638948, "si": 12, "ms": 11}
+13:50:40 5cux7 {"e": "rec_start", "ts": 1795182640324, "si": 13, "l": 5, "sc": "llm_intent"}
+13:50:40 5cux7 {"e": "wf_start", "ts": 1795182640324}
+13:50:40 5cux7 {"e": "park_resumed", "ts": 1795182640333, "si": 13}
+13:50:50 5cux7 {"e": "verify_result", "ts": 1795182650685, "si": 13, "ok": true, "n": 2, "advFail": 1, "ct": 0}
+13:50:53 5cux7 {"e": "completion", "ts": 1795182653816, "si": 13, "mode": "full", "st": "no_sign", "waited": 3131}
+13:50:57 5cux7 {"e": "proof", "ts": 1795182657923, "si": 13, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+13:50:57 5cux7 {"e": "tier_ok", "ts": 1795182657924, "si": 13, "tier": "tier1_compiled", "virtualScroll": false}
+13:50:57 5cux7 {"e": "step_ms", "ts": 1795182657924, "si": 13, "ms": 17585}
+13:50:57 5cux7 {"e": "wf_ok", "ts": 1795182657965, "dur": 17641, "tot": 14, "rec": 0, "oc": "done"}
+{'wf_start': 24, 'drift_detected': 8, 'proof': 99, 'tier_ok': 97, 'step_ms': 118, 'settle_retry': 3, 'repair_event': 1, 'verify_result': 30, 'completion': 13, 'wf_fail': 6, 'park_created': 11, 'span_start': 7, 'rec_start': 16, 'span_done': 7, 'park_resumed': 13, 'verify_fail': 2, 'rec_skip': 1, 'rec_halt': 1, 'step_fail': 2, 'span_action': 3, 'wf_ok': 5}

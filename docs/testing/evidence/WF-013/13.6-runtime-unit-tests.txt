@@ -1,0 +1,25 @@
+✔ an answer-only span ends only when the agent sends a valid answer; a bad one gets two re-asks, then on_failure (2.5838ms)
+✔ on_failure use_default binds the default and continue binds null (0.8237ms)
+✔ a span with an answer is not ended by its check: the agent must still send done with the answer (422.8882ms)
+✔ validateAnswer: no schema passes; a non-object, a missing field, a wrong type and a bad enum fail (1.0683ms)
+✔ readAttachments: only a text file inside this run's download folder is read (8.8979ms)
+✔ readAttachments: no download folder known means nothing is read; a large file is cut and says so (11.4545ms)
+✔ untilHolds: text, address and state checks (0.9437ms)
+✔ the request names the goal, the budget, the workflow context, the tabs and the numbered elements, and says page text is data (1.084ms)
+✔ an answer span tells the agent the schema to answer with, and shows attached files as untrusted data (4.5424ms)
+✔ runPlan: a fresh span throws a spanPause carrying its state, never a normal failure (9.6217ms)
+✔ runPlan: a span whose check already holds and wants no answer does nothing and moves on (1.7115ms)
+✔ runPlan: a span that wants an answer still pauses even when its check already holds (1.0534ms)
+✔ runPlan: a resume that bound the done marker consumes it and continues (1.6924ms)
+✔ runPlan: a bound answer is stored under output_name and each plain field under <name>_<field>, so run_if can read it (1.3974ms)
+✔ collectOutputs: a named span answer is reported like an extract (0.9426ms)
+✔ runPlan: a scheduled run (no agent) fails closed instead of pausing for one (2.9861ms)
+✔ runPlan: a dry run withholds the span and says so (1.043ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14517.896

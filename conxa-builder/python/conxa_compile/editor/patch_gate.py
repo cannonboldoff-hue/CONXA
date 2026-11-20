@@ -71,6 +71,8 @@ AGENT_SPAN_KINDS = (
 AGENT_SPAN_UNTIL_TYPES = ("text_present", "text_absent", "url_changed", "url_pattern", "state_changed")
 AGENT_SPAN_MAX_ACTIONS = 100
 AGENT_SPAN_MAX_SECONDS = 1800
+# The most free agent spans one run may start; the runtime stops before the next (run.js MAX_AGENT_SPANS_PER_RUN).
+MAX_AGENT_SPANS_PER_RUN = 5
 BRANCH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "target", "frame", "branch", "validation", "recovery"}) | _RUN_IF
 FOR_EACH_ALLOWED_KEYS = frozenset({"intent", "semantic_description", "action", "frame", "for_each"}) | _RUN_IF
 # An outcome fork's states/options/policy change only through the set_fork_policy mutation (the
@@ -490,6 +492,26 @@ def is_confirm_only_span(step: dict[str, Any]) -> bool:
     if set(schema.get("required") or []) != {"confirmed"}:
         return False
     return str(step.get("agent_span_on_failure") or "abort").strip().lower() == "abort"
+
+
+def span_before_irreversible(steps: list[dict[str, Any]], policy: dict[str, Any]) -> int | None:
+    """Index of the first free agent span sitting directly before a step that can't be undone, or None.
+
+    The one rule every way two steps can end up side by side goes through (insert, move, delete, splice,
+    chat, build): a model's last action or free answer must never be what an irreversible step builds on.
+    Only a confirm-only span may sit there. TRD §11.7."""
+    for i in range(len(steps) - 1):
+        span = steps[i] if isinstance(steps[i], dict) else {}
+        if action_name(span).lower() == "agent_span" and not is_confirm_only_span(span) \
+                and isinstance(steps[i + 1], dict) and _is_destructive(steps[i + 1], policy):
+            return i
+    return None
+
+
+def check_step_order(steps: list[dict[str, Any]], policy: dict[str, Any]) -> None:
+    """Raise the shared refusal when a structural change leaves a free span right before an irreversible step."""
+    if span_before_irreversible(steps, policy) is not None:
+        raise ValueError("agent_span_cannot_directly_precede_a_destructive_step")
 
 
 _OUTCOME_ASSERTION_TYPES = frozenset({"text_present", "url_changed", "url_pattern", "state_changed"})

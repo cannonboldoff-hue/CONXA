@@ -1,0 +1,67 @@
+{
+  "slug": "wf13-marie-curie-rt-283e911a",
+  "name": "Wf13-Marie-Curie-Rt-283E911A",
+  "description": "WF13 marie curie rt",
+  "version": "0.1.0",
+  "required_runtime": ">=1.0.3",
+  "company": "wrk_local",
+  "target_url": "https://en.wikipedia.org/wiki/Main_Page",
+  "group_id": "08501f47-6308-42f7-9a8b-c8aa3ed75fc0",
+  "inputs_required": [
+    "full_name",
+    "search_wikipedia"
+  ],
+  "structural_fingerprint": {
+    "landmarks": [
+      {
+        "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+        "data_testid": "",
+        "aria_label": "Search Wikipedia",
+        "inner_text": "",
+        "tag": "input"
+      },
+      {
+        "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+        "data_testid": "",
+        "aria_label": "Search Wikipedia",
+        "inner_text": "",
+        "tag": "input"
+      },
+      {
+        "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+        "data_testid": "",
+        "aria_label": "Search Wikipedia",
+        "inner_text": "",
+        "tag": "input"
+      }
+    ],
+    "landmark_count": 3
+  },
+  "environment": {
+    "locale": "en-US",
+    "timezone": "Asia/Calcutta",
+    "utc_offset_minutes": 330,
+    "viewport": {
+      "w": 1280,
+      "h": 992
+    },
+    "device_pixel_ratio": 1.0000000149011612,
+    "date_format_sample": "1/31/2026",
+    "platform": "Win32"
+  },
+  "compensation_skill": "",
+  "checksum": {
+    "execution.json": "1f0f762e091a6e972276a3aa9b377f53da82413839f436c5a5098e29de4d348b",
+    "recovery.json": "9b90d7a42b1755305fae6ae8b4ef071999c784851d5ce4677626e1944ec2ea0e",
+    "inputs.json": "b4bb9dd3a46177e82b72ef583151b1b137689172ef1690ed1306a7114a3544b8"
+  },
+  "required_capabilities": [
+    "agent_span",
+    "agent_span_v2"
+  ],
+  "uses_agent": true,
+  "unclaimed_hosts": [
+    "demoqa.com",
+    "en.wikipedia.org"
+  ]
+}

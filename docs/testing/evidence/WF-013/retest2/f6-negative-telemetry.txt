@@ -1,0 +1,27 @@
+16:41:15 dci8a {"e": "wf_start", "ts": 1795192875089}
+16:41:16 dci8a {"e": "drift_detected", "ts": 1795192876589, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp7hjk8_dci8a&conxa_tab=158f2b62"}
+16:41:17 dci8a {"e": "proof", "ts": 1795192877016, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+16:41:17 dci8a {"e": "tier_ok", "ts": 1795192877029, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+16:41:17 dci8a {"e": "step_ms", "ts": 1795192877029, "si": 0, "ms": 394}
+16:41:17 dci8a {"e": "proof", "ts": 1795192877911, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+16:41:17 dci8a {"e": "tier_ok", "ts": 1795192877912, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+16:41:17 dci8a {"e": "step_ms", "ts": 1795192877912, "si": 1, "ms": 882}
+16:41:18 dci8a {"e": "verify_result", "ts": 1795192878297, "si": 2, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+16:41:18 dci8a {"e": "proof", "ts": 1795192878297, "si": 2, "rung": "accepted", "v": "proven", "w": ["target"]}
+16:41:18 dci8a {"e": "tier_ok", "ts": 1795192878299, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+16:41:18 dci8a {"e": "step_ms", "ts": 1795192878299, "si": 2, "ms": 387}
+16:41:18 dci8a {"e": "step_ms", "ts": 1795192878304, "si": 3, "ms": 5}
+16:41:18 dci8a {"e": "wf_fail", "ts": 1795192878323, "dur": 3233, "fsi": null, "fc": "unknown"}
+16:41:18 dci8a {"e": "park_created", "ts": 1795192878348, "si": 3, "kind": "guard"}
+16:41:20 4dptx {"e": "rec_start", "ts": 1795192880736, "si": 3, "l": 5, "sc": "llm_intent"}
+16:41:20 4dptx {"e": "wf_start", "ts": 1795192880736}
+16:41:20 4dptx {"e": "park_resumed", "ts": 1795192880816, "si": 3}
+16:41:28 4dptx {"e": "verify_result", "ts": 1795192888174, "si": 3, "ok": false, "n": 2, "advFail": 0, "ct": 1}
+16:41:28 4dptx {"e": "verify_fail", "ts": 1795192888174, "si": 3, "ch": "state_changed"}
+16:41:28 4dptx {"e": "settle_retry", "ts": 1795192888465, "si": 3, "waited": 279, "phase": "verify", "ok": true}
+16:41:33 4dptx {"e": "rec_skip", "ts": 1795192893023, "si": 3, "why": "destructive"}
+16:41:37 4dptx {"e": "rec_halt", "ts": 1795192897821, "si": 3, "why": "destructive"}
+16:41:37 4dptx {"e": "step_fail", "ts": 1795192897822, "si": 3, "fc": "unknown"}
+16:41:37 4dptx {"e": "step_ms", "ts": 1795192897824, "si": 3, "ms": 16965}
+16:41:37 4dptx {"e": "wf_fail", "ts": 1795192897841, "dur": 17105, "fsi": 3, "fc": "unknown"}
+{'wf_start': 2, 'drift_detected': 1, 'proof': 3, 'tier_ok': 3, 'step_ms': 5, 'verify_result': 2, 'wf_fail': 2, 'park_created': 1, 'rec_start': 1, 'park_resumed': 1, 'verify_fail': 1, 'settle_retry': 1, 'rec_skip': 1, 'rec_halt': 1, 'step_fail': 1}

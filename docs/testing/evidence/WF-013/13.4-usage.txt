@@ -1,0 +1,13 @@
+Run 6 (full test run, 11 steps + span)
+before 17:49:21 kv={"input_tokens": 2421078, "output_tokens": 178921, "requests": 560, "org_id": "wrk_local", "period": "2026-11"} credits_used=2145601 proxyPosts=213
+after 17:50:35 kv={"input_tokens": 2429103, "output_tokens": 178940, "requests": 561, "org_id": "wrk_local", "period": "2026-11"} credits_used=2153645 proxyPosts=214
+
+Run 7
+before 17:50:52 kv={"input_tokens": 2429103, "output_tokens": 178940, "requests": 561, "org_id": "wrk_local", "period": "2026-11"} credits_used=2153645 proxyPosts=214
+after 17:51:34 kv={"input_tokens": 2437128, "output_tokens": 178959, "requests": 562, "org_id": "wrk_local", "period": "2026-11"} credits_used=2161689 proxyPosts=215
+
+Idle noise from another process (no WF13 run active, UTC):
+11:32:43.733 2091007 168843 493
+11:32:53.303 2105307 169101 494
+
+Per-run span answer in kv-changes.log: 8025 in / 19 out each (run 2 11:29:40, run 4 11:31:21, run 6 12:20:00, run 7 12:21:13)

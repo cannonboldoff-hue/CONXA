@@ -1,0 +1,4029 @@
+{
+  "meta": {
+    "id": "skill_50750363-3e9a-4839-9198-9bd438119f20",
+    "version": 10,
+    "title": "WF13 marie curie rt",
+    "created_at": "2026-11-20T13:25:41.791914+00:00",
+    "source_session_id": "50750363-3e9a-4839-9198-9bd438119f20",
+    "compiler_policy_version": "1.0.0",
+    "compiler_policy_hash": "698b356bf9d7073e",
+    "required_runtime": ">=1.0.0",
+    "structural_fingerprint": {
+      "landmarks": [
+        {
+          "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+          "data_testid": "",
+          "aria_label": "Search Wikipedia",
+          "inner_text": "",
+          "tag": "input"
+        },
+        {
+          "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+          "data_testid": "",
+          "aria_label": "Search Wikipedia",
+          "inner_text": "",
+          "tag": "input"
+        },
+        {
+          "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+          "data_testid": "",
+          "aria_label": "Search Wikipedia",
+          "inner_text": "",
+          "tag": "input"
+        }
+      ],
+      "landmark_count": 3
+    },
+    "environment": {
+      "locale": "en-US",
+      "timezone": "Asia/Calcutta",
+      "utc_offset_minutes": 330,
+      "viewport": {
+        "w": 1280,
+        "h": 992
+      },
+      "device_pixel_ratio": 1.0000000149011612,
+      "date_format_sample": "1/31/2026",
+      "platform": "Win32"
+    },
+    "compensation_skill": "",
+    "visited_hosts": [
+      "demoqa.com",
+      "en.wikipedia.org"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "full_name",
+      "type": "text",
+      "default": null,
+      "options": []
+    },
+    {
+      "id": "search_wikipedia",
+      "type": "text",
+      "default": null,
+      "options": []
+    }
+  ],
+  "skills": [
+    {
+      "name": "recorded",
+      "steps": [
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "https://en.wikipedia.org/wiki/Main_Page",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "https://en.wikipedia.org/wiki/Main_Page",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open en.wikipedia.org",
+          "phase": "navigate",
+          "source_event": null,
+          "video_context": null,
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "focus",
+          "intent": "focus_search_wikipedia",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "#searchInput",
+              "[aria-label=\"Search Wikipedia\"]",
+              "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "#searchInput",
+            "role": "searchbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#searchInput",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "searchbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "searchInput",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.208,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "3ee719aef7df45093b238ed9c9359934e095f8da8f94f45786f93e3e53a98b43",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "searchInput",
+              "classes": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "inner_text": "",
+              "role": "searchbox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "#searchInput",
+              "xpath": "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "searchbox",
+              "input_type": "search",
+              "final_intent": "focus_search_wikipedia",
+              "llm_intent": "focus_search_wikipedia"
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 266,
+                "y": 17,
+                "w": 405,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "0ad9ad00f00566628d4011b6246ded07d122d5a12a7f2f09028caf71ac04aa39"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "0ad9ad00f00566628d4011b6246ded07d122d5a12a7f2f09028caf71ac04aa39"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "focus_search_wikipedia",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "focus_search_wikipedia",
+            "final_intent": "focus_search_wikipedia",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the Wikipedia search box",
+          "phase": "",
+          "source_event": 1,
+          "video_context": null,
+          "snapshot_ref": "b479f4483678475da7df559f167d7811",
+          "snapshot_dom_hash": "70ee0f2c27d14a97c2de5df22de690b2f0b8e46de8e2d8f5db158c5e1c02f943",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "type",
+          "intent": "enter_search_topic",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "#searchInput",
+              "[aria-label=\"Search Wikipedia\"]",
+              "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "#searchInput",
+            "role": "searchbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#searchInput",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "searchbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "searchInput",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.208,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "3ee719aef7df45093b238ed9c9359934e095f8da8f94f45786f93e3e53a98b43",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "searchInput",
+              "classes": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "inner_text": "",
+              "role": "searchbox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "#searchInput",
+              "xpath": "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "searchbox",
+              "input_type": "search",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 266,
+                "y": 17,
+                "w": 405,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "0ad9ad00f00566628d4011b6246ded07d122d5a12a7f2f09028caf71ac04aa39"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "0ad9ad00f00566628d4011b6246ded07d122d5a12a7f2f09028caf71ac04aa39"
+            }
+          },
+          "value": "",
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "",
+            "final_intent": "",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type the topic into the search box",
+          "phase": "",
+          "source_event": 1,
+          "video_context": null,
+          "snapshot_ref": "b479f4483678475da7df559f167d7811",
+          "snapshot_dom_hash": "70ee0f2c27d14a97c2de5df22de690b2f0b8e46de8e2d8f5db158c5e1c02f943",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "focus",
+          "intent": "focus_search_wikipedia",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "role": "combobox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "form#searchform input[name=\"search\"]",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "combobox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.188,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "a02adcedb4136478f342ce6d3188c42ef0a56c5185ce9e7813bcd3fd0d219ef7",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": null,
+              "classes": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "inner_text": "",
+              "role": "combobox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {
+                "role": "combobox"
+              }
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "",
+              "xpath": "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "combobox",
+              "input_type": "search",
+              "final_intent": "focus_search_wikipedia",
+              "llm_intent": "focus_search_wikipedia"
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 240,
+                "y": 17,
+                "w": 431,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "619c49dcf78c0bc36f541d6fd15ac4680f95cf00a10f3b23820ea85191e9e9c4"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "619c49dcf78c0bc36f541d6fd15ac4680f95cf00a10f3b23820ea85191e9e9c4"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "focus_search_wikipedia",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "focus_search_wikipedia",
+            "final_intent": "focus_search_wikipedia",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the search box again",
+          "phase": "",
+          "source_event": 3,
+          "video_context": {
+            "visible_target": "Wikipedia search bar",
+            "screen_before": "Wikipedia homepage with empty search bar",
+            "screen_after": "Wikipedia search suggestions dropdown showing Marie Curie options",
+            "purpose": "find information about Marie Curie on Wikipedia"
+          },
+          "snapshot_ref": "cb74843799394ea7a77bf8d03e73d9da",
+          "snapshot_dom_hash": "96e76078d23971c1bdd89716fdef6729659cc09231712f62ae7f38e7180e7835",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "type",
+          "intent": "enter_search_topic",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "role": "combobox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "form#searchform input[name=\"search\"]",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "combobox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.188,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "a02adcedb4136478f342ce6d3188c42ef0a56c5185ce9e7813bcd3fd0d219ef7",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": null,
+              "classes": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "inner_text": "",
+              "role": "combobox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {
+                "role": "combobox"
+              }
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "",
+              "xpath": "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "combobox",
+              "input_type": "search",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 240,
+                "y": 17,
+                "w": 431,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "619c49dcf78c0bc36f541d6fd15ac4680f95cf00a10f3b23820ea85191e9e9c4"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "619c49dcf78c0bc36f541d6fd15ac4680f95cf00a10f3b23820ea85191e9e9c4"
+            }
+          },
+          "value": "{{search_wikipedia}}",
+          "input_binding": "search_wikipedia",
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "value_equals",
+                "target": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "expected": "{{search_wikipedia}}",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "",
+            "final_intent": "",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type the topic to look up in the search box",
+          "phase": "act",
+          "source_event": 3,
+          "video_context": {
+            "visible_target": "Wikipedia search bar",
+            "screen_before": "Wikipedia homepage with empty search bar",
+            "screen_after": "Wikipedia search suggestions dropdown showing Marie Curie options",
+            "purpose": "find information about Marie Curie on Wikipedia"
+          },
+          "snapshot_ref": "cb74843799394ea7a77bf8d03e73d9da",
+          "snapshot_dom_hash": "96e76078d23971c1bdd89716fdef6729659cc09231712f62ae7f38e7180e7835",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "keyboard_shortcut",
+          "intent": "press_enter_to_search",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Main_Page"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "role": "combobox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=combobox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "form#searchform input[name=\"search\"]",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "combobox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.188,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "a02adcedb4136478f342ce6d3188c42ef0a56c5185ce9e7813bcd3fd0d219ef7",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": null,
+              "classes": [
+                "cdx-text-input__input",
+                "cdx-text-input__input--has-value"
+              ],
+              "inner_text": "",
+              "role": "combobox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {
+                "role": "combobox"
+              }
+            },
+            "post_condition_effect": "navigation",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "",
+              "xpath": "//div[2]/div[1]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "combobox",
+              "input_type": "search",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 240,
+                "y": 17,
+                "w": 431,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "619c49dcf78c0bc36f541d6fd15ac4680f95cf00a10f3b23820ea85191e9e9c4"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Wikipedia, the free encyclopedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchform > div.cdx-search-input.cdx-search-input--has-end-button > div.cdx-search-input__input-wrapper > div.cdx-text-input.cdx-text-input--has-start-icon:nth-of-type(1) > input.cdx-text-input__input",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "c4455278df17e8c9a57f33ac34706832ebb326c6d9c82cb1aec07b300328cd71"
+            }
+          },
+          "value": "Enter",
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "",
+              "timeout": 8000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "page_url_hint": "https://en.wikipedia.org/wiki/Main_Page",
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "url_changed",
+                "target": "https://en.wikipedia.org/wiki/Main_Page",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": true,
+                "source": ""
+              },
+              {
+                "type": "url_pattern",
+                "target": "^https://en\\.wikipedia\\.org/wiki/Marie_Curie",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": false,
+                "source": ""
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "",
+            "final_intent": "",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Press Enter to open the topic's article",
+          "phase": "act",
+          "source_event": 4,
+          "video_context": {
+            "visible_target": "Marie Curie search result link",
+            "screen_before": "Wikipedia homepage with search suggestions dropdown",
+            "screen_after": "Marie Curie Wikipedia article page",
+            "purpose": "navigate to the detailed article about Marie Curie"
+          },
+          "snapshot_ref": "cb74843799394ea7a77bf8d03e73d9da",
+          "snapshot_dom_hash": "96e76078d23971c1bdd89716fdef6729659cc09231712f62ae7f38e7180e7835",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "agent_span",
+            "value": "Read the article. Classify the subject of the article as exactly one of: person, place, organization, event, other."
+          },
+          "intent": "agent_span_goal",
+          "url": "https://en.wikipedia.org/wiki/Main_Page",
+          "target": {
+            "primary_selector": "",
+            "fallback_selectors": []
+          },
+          "signals": {
+            "dom": {},
+            "selectors": {
+              "css": "",
+              "aria": "",
+              "text_based": "",
+              "xpath": ""
+            },
+            "semantic": {
+              "final_intent": "agent_span_goal",
+              "llm_intent": "agent_span_goal"
+            },
+            "context": {
+              "page_url": "https://en.wikipedia.org/wiki/Main_Page",
+              "page_title": ""
+            },
+            "anchors": [],
+            "visual": {}
+          },
+          "state": {},
+          "value": "Read the article. Classify the subject of the article as exactly one of: person, place, organization, event, other.",
+          "input_binding": null,
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "timeout": 5000
+            },
+            "success_conditions": {}
+          },
+          "recovery": {
+            "intent": "agent_span_goal",
+            "final_intent": "agent_span_goal",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {},
+          "agent_span_allowed": [],
+          "agent_span_budget": {
+            "actions": 25,
+            "seconds": 600
+          },
+          "agent_span_on_budget": "fail",
+          "semantic_description": "Step 7: Agent span — agent span goal",
+          "agent_span_until": null,
+          "agent_span_answer_schema": {
+            "type": "object",
+            "required": [
+              "choice"
+            ],
+            "properties": {
+              "choice": {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "place",
+                  "organization",
+                  "event",
+                  "other"
+                ]
+              }
+            }
+          },
+          "agent_span_output_name": "article_category",
+          "agent_span_on_failure": "use_default",
+          "agent_span_attach": [],
+          "agent_span_default_value": "other"
+        },
+        {
+          "action": "focus",
+          "intent": "focus_search_wikipedia",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Marie_Curie"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "#searchInput",
+              "[aria-label=\"Search Wikipedia\"]",
+              "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "#searchInput",
+            "role": "searchbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#searchInput",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "searchbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "searchInput",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.208,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "3ee719aef7df45093b238ed9c9359934e095f8da8f94f45786f93e3e53a98b43",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "searchInput",
+              "classes": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "inner_text": "",
+              "role": "searchbox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "#searchInput",
+              "xpath": "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "searchbox",
+              "input_type": "search",
+              "final_intent": "focus_search_wikipedia",
+              "llm_intent": "focus_search_wikipedia"
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 266,
+                "y": 17,
+                "w": 405,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "3acdaa1ae1746c82783f6664e197c8ecb0935d0a00a6e904eeefca038d4a9d1a"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "3acdaa1ae1746c82783f6664e197c8ecb0935d0a00a6e904eeefca038d4a9d1a"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "focus_search_wikipedia",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "focus_search_wikipedia",
+            "final_intent": "focus_search_wikipedia",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the search box once more",
+          "phase": "",
+          "source_event": 5,
+          "video_context": {
+            "visible_target": "Marie Curie search result link",
+            "screen_before": "Wikipedia homepage with search suggestions dropdown",
+            "screen_after": "Marie Curie Wikipedia article page",
+            "purpose": "navigate to the detailed article about Marie Curie"
+          },
+          "snapshot_ref": "c2a472f9f0864082aa839362dc539c55",
+          "snapshot_dom_hash": "376228cc4e57d1e0b8215d9c919c05ee804233a77fc535c6dcaba4a814fa8206",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "type",
+          "intent": "enter_search_topic",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://en.wikipedia.org/wiki/Marie_Curie"
+          },
+          "target": {
+            "primary_selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+            "fallback_selectors": [
+              "#searchInput",
+              "[aria-label=\"Search Wikipedia\"]",
+              "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            ],
+            "css": "#searchInput",
+            "role": "searchbox",
+            "type": "input",
+            "selector_confidence": 0.96,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "attr",
+                "selector": "input[title=\"Search Wikipedia [alt-f]\"]",
+                "durability": 0.96,
+                "orthogonality_class": "named-attr",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "role",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=searchbox[name=\"Search Wikipedia\"] >> right-of=internal:text=\"Site\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#searchInput",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "searchbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": "",
+              "alt": "",
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": "",
+              "element_id": "searchInput",
+              "data_testid": "",
+              "input_type": "search",
+              "css_class_tokens": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "anchor_phrases": [
+                "Site",
+                "Personal tools",
+                "Appearance"
+              ],
+              "position_hint": {
+                "x_pct": 0.208,
+                "y_pct": 0.021
+              },
+              "section_heading": ""
+            },
+            "stable_hash": "3ee719aef7df45093b238ed9c9359934e095f8da8f94f45786f93e3e53a98b43",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "searchInput",
+              "classes": [
+                "cdx-text-input__input",
+                "mw-searchInput"
+              ],
+              "inner_text": "",
+              "role": "searchbox",
+              "aria_label": "Search Wikipedia",
+              "name": "search",
+              "placeholder": "Search Wikipedia",
+              "label_text": null,
+              "alt": null,
+              "title": "Search Wikipedia [alt-f]",
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[aria-label=\"Search Wikipedia\"]",
+              "text_based": "",
+              "css": "#searchInput",
+              "xpath": "//div[2]/header[1]/div[2]/div[1]/div[1]/div[1]/form[1]/div[1]/div[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "searchbox",
+              "input_type": "search",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [
+                "span:"
+              ],
+              "index_in_parent": 0,
+              "form_context": "form#searchform",
+              "page_url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 266,
+                "y": 17,
+                "w": 405,
+                "h": 32
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "3acdaa1ae1746c82783f6664e197c8ecb0935d0a00a6e904eeefca038d4a9d1a"
+            },
+            "after": {
+              "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+              "page_title": "Marie Curie - Wikipedia",
+              "visible_key_elements": [
+                "[aria-label=\"Search Wikipedia\"]",
+                "#searchInput",
+                "input",
+                "span:"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "3acdaa1ae1746c82783f6664e197c8ecb0935d0a00a6e904eeefca038d4a9d1a"
+            }
+          },
+          "value": "",
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "",
+            "final_intent": "",
+            "anchors": [
+              {
+                "element": "search wikipedia",
+                "relation": "target"
+              },
+              {
+                "element": "span:",
+                "relation": "near"
+              },
+              {
+                "element": "form#searchform",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type in the search box again",
+          "phase": "",
+          "source_event": 5,
+          "video_context": {
+            "visible_target": "Marie Curie search result link",
+            "screen_before": "Wikipedia homepage with search suggestions dropdown",
+            "screen_after": "Marie Curie Wikipedia article page",
+            "purpose": "navigate to the detailed article about Marie Curie"
+          },
+          "snapshot_ref": "c2a472f9f0864082aa839362dc539c55",
+          "snapshot_dom_hash": "376228cc4e57d1e0b8215d9c919c05ee804233a77fc535c6dcaba4a814fa8206",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "https://demoqa.com/text-box",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://demoqa.com/text-box"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "https://demoqa.com/text-box",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "https://demoqa.com/text-box"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open the demo text box form page",
+          "phase": "navigate",
+          "source_event": 6,
+          "video_context": {
+            "visible_target": "Marie Curie search result link",
+            "screen_before": "Wikipedia homepage with search suggestions dropdown",
+            "screen_after": "Marie Curie Wikipedia article page",
+            "purpose": "navigate to the detailed article about Marie Curie"
+          },
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "focus",
+          "intent": "focus_full_name",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://demoqa.com/text-box"
+          },
+          "target": {
+            "primary_selector": "role=textbox[name=\"Full Name\"]",
+            "fallback_selectors": [
+              "#userName",
+              "label:has-text(\"Full Name\") + input",
+              "[placeholder=\"Full Name\"]",
+              "input[type=\"text\"]",
+              "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[1]/div[2]/input[1]"
+            ],
+            "css": "#userName",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=textbox[name=\"Full Name\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=textbox[name=\"Full Name\"] >> right-of=internal:text=\"Text Box\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#userName",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "Full Name",
+              "label_text": "Full Name",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "userName",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [
+                "form-control",
+                "mr-sm-2"
+              ],
+              "anchor_phrases": [
+                "Text Box"
+              ],
+              "position_hint": {
+                "x_pct": 0.322,
+                "y_pct": 0.279
+              },
+              "section_heading": "Text Box"
+            },
+            "stable_hash": "48e185110d96d1ce2c81c6719fbcb03f0e6969ad9e38a6350efe26453fa55a5d",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "userName",
+              "classes": [
+                "form-control",
+                "mr-sm-2"
+              ],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": null,
+              "placeholder": "Full Name",
+              "label_text": "Full Name",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[role=\"textbox\"][name=\"Full Name\"]",
+              "text_based": "",
+              "css": "#userName",
+              "xpath": "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[1]/div[2]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "focus_full_name",
+              "llm_intent": "focus_full_name"
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": "form#userForm",
+              "page_url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "full name",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 412,
+                "y": 223,
+                "w": 518,
+                "h": 38
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "[role=\"textbox\"][name=\"Full Name\"]",
+                "#userName",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "5cd43d970ba7f0f736d8ede51e5eca106e9d855cfbc3340ab36bc33dd6737681"
+            },
+            "after": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "[role=\"textbox\"][name=\"Full Name\"]",
+                "#userName",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "5cd43d970ba7f0f736d8ede51e5eca106e9d855cfbc3340ab36bc33dd6737681"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "focus_full_name",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "focus_full_name",
+            "final_intent": "focus_full_name",
+            "anchors": [
+              {
+                "element": "full name",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_fingerprint": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the Full Name box",
+          "phase": "",
+          "source_event": 9,
+          "video_context": {
+            "visible_target": "Full Name input field",
+            "screen_before": "ToolsQA Text Box form with empty Full Name field",
+            "screen_after": "ToolsQA Text Box form with 'person' typed in Full Name field",
+            "purpose": "fill in the required name information in the form"
+          },
+          "snapshot_ref": "791a10496e2b4988a2acd5def0d7e288",
+          "snapshot_dom_hash": "b0b51d080ae3d6762ee960898a30a727944ab05c5c29a1d3bdc2795346003387",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "type",
+            "value": "{{article_category_choice}}"
+          },
+          "intent": "enter_full_name_value",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://demoqa.com/text-box"
+          },
+          "target": {
+            "primary_selector": "role=textbox[name=\"Full Name\"]",
+            "fallback_selectors": [
+              "role=textbox Name\"] >> right-of=text=\"Text Box\"",
+              "#userName",
+              "label:has-text(\"Full Name\") + input",
+              "[placeholder=\"Full Name\"]",
+              "input[type=\"text\"]",
+              "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[1]/div[2]/input[1]"
+            ],
+            "css": "#userName",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=textbox[name=\"Full Name\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=textbox[name=\"Full Name\"] >> right-of=internal:text=\"Text Box\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#userName",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "Full Name",
+              "label_text": "Full Name",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "userName",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [
+                "form-control",
+                "mr-sm-2"
+              ],
+              "anchor_phrases": [
+                "Text Box"
+              ],
+              "position_hint": {
+                "x_pct": 0.322,
+                "y_pct": 0.279
+              },
+              "section_heading": "Text Box"
+            },
+            "stable_hash": "48e185110d96d1ce2c81c6719fbcb03f0e6969ad9e38a6350efe26453fa55a5d",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "userName",
+              "classes": [
+                "form-control",
+                "mr-sm-2"
+              ],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": null,
+              "placeholder": "Full Name",
+              "label_text": "Full Name",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "[role=\"textbox\"][name=\"Full Name\"]",
+              "text_based": "",
+              "css": "#userName",
+              "xpath": "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[1]/div[2]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": "form#userForm",
+              "page_url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "full name",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 412,
+                "y": 223,
+                "w": 518,
+                "h": 38
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "[role=\"textbox\"][name=\"Full Name\"]",
+                "#userName",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "5cd43d970ba7f0f736d8ede51e5eca106e9d855cfbc3340ab36bc33dd6737681"
+            },
+            "after": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "[role=\"textbox\"][name=\"Full Name\"]",
+                "#userName",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "5cd43d970ba7f0f736d8ede51e5eca106e9d855cfbc3340ab36bc33dd6737681"
+            }
+          },
+          "value": "{{article_category_choice}}",
+          "input_binding": "article_category_choice",
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "value_equals",
+                "target": "role=textbox[name=\"Full Name\"]",
+                "expected": "{{article_category_choice}}",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "enter_full_name_value",
+            "final_intent": "enter_full_name_value",
+            "anchors": [
+              {
+                "element": "full name",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_fingerprint": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type the name into the Full Name box",
+          "phase": "act",
+          "source_event": 9,
+          "video_context": {
+            "visible_target": "Full Name input field",
+            "screen_before": "ToolsQA Text Box form with empty Full Name field",
+            "screen_after": "ToolsQA Text Box form with 'person' typed in Full Name field",
+            "purpose": "fill in the required name information in the form"
+          },
+          "snapshot_ref": "791a10496e2b4988a2acd5def0d7e288",
+          "snapshot_dom_hash": "b0b51d080ae3d6762ee960898a30a727944ab05c5c29a1d3bdc2795346003387",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "scroll",
+            "delta": 120
+          },
+          "intent": "scroll_viewport",
+          "url": "",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://demoqa.com/text-box"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "visual": {
+              "scroll_position": "0,120"
+            }
+          },
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {},
+            "success_conditions": {},
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "scroll_viewport",
+            "final_intent": "scroll_viewport",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "scroll_viewport",
+          "phase": "",
+          "source_event": 10,
+          "video_context": {
+            "visible_target": "Full Name input field",
+            "screen_before": "ToolsQA Text Box form with empty Full Name field",
+            "screen_after": "ToolsQA Text Box form with 'person' typed in Full Name field",
+            "purpose": "fill in the required name information in the form"
+          },
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "click"
+          },
+          "intent": "activate_control_submit",
+          "url": "",
+          "consequence": "irreversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "https://demoqa.com/text-box"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Submit\"]",
+            "fallback_selectors": [
+              "text=\"Submit\"",
+              "role=button[name=\"Submit\"] >> right-of=text=\"Text Box\"",
+              "#submit",
+              "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[5]/div[1]/button[1]"
+            ],
+            "css": "#submit",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Submit\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Submit\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Submit\"] >> right-of=internal:text=\"Text Box\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#submit",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Submit",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "submit",
+              "data_testid": "",
+              "input_type": "button",
+              "css_class_tokens": [
+                "btn",
+                "btn-primary"
+              ],
+              "anchor_phrases": [
+                "Text Box"
+              ],
+              "position_hint": {
+                "x_pct": 0.652,
+                "y_pct": 0.596
+              },
+              "section_heading": "Text Box"
+            },
+            "stable_hash": "33bbdd4f0d76d1015a900caccfbc49e8b098ab1923db2081acad96c034b7e97f",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": true
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "submit",
+              "classes": [
+                "btn",
+                "btn-primary"
+              ],
+              "inner_text": "Submit",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": null,
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": true,
+              "attributes": {}
+            },
+            "post_condition_effect": "none",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Submit\"",
+              "css": "#submit",
+              "xpath": "//div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/form[1]/div[5]/div[1]/button[1]"
+            },
+            "semantic": {
+              "normalized_text": "submit",
+              "role": "button",
+              "input_type": "button",
+              "final_intent": "activate_control_submit",
+              "llm_intent": "activate_control_submit",
+              "effect_judgement": {
+                "reversible": false,
+                "kind": "saves",
+                "confidence": 0.45,
+                "reason": "Clicking Submit sends the entered details off the form, and the page only echoes them back afterwards."
+              }
+            },
+            "context": {
+              "parent": "div",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": "form#userForm",
+              "page_url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "submit",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 834,
+                "y": 477,
+                "w": 76,
+                "h": 38
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,120"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "text=\"Submit\"",
+                "#submit",
+                "button"
+              ],
+              "important_text_blocks": [
+                "Submit"
+              ],
+              "dom_fingerprint": "bc8c6bac5e84dc89c08c573685a8b10ab3211606533920be1013f2362fae90a7"
+            },
+            "after": {
+              "url": "https://demoqa.com/text-box",
+              "page_title": "demosite",
+              "visible_key_elements": [
+                "text=\"Submit\"",
+                "#submit",
+                "button"
+              ],
+              "important_text_blocks": [
+                "Submit"
+              ],
+              "dom_fingerprint": "bc8c6bac5e84dc89c08c573685a8b10ab3211606533920be1013f2362fae90a7"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "element_appear",
+              "target": "text=\"Submit\"",
+              "timeout": 8000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Name:person"
+              ],
+              "control_text": [],
+              "page_url_hint": "https://demoqa.com/text-box",
+              "state_diff_strength": 0.05,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_submit",
+              "intent_validation_primary": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Name:person",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "result"
+              },
+              {
+                "type": "state_changed",
+                "target": "",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": {
+              "kind": "send",
+              "required_rung": "completed",
+              "target_rung": "result_exists",
+              "identity": {},
+              "checks": [
+                {
+                  "id": "c1",
+                  "rung": "completed",
+                  "witness": "transport",
+                  "role": "support",
+                  "probe": {
+                    "type": "request_chain",
+                    "method": "mutating",
+                    "status": "2xx"
+                  },
+                  "plain": "the app accepted the request",
+                  "confirmed": true,
+                  "calibrated": null,
+                  "calibration_basis": []
+                },
+                {
+                  "id": "c3",
+                  "rung": "result_exists",
+                  "witness": "renderer",
+                  "role": "support",
+                  "probe": {
+                    "type": "row_with_identity",
+                    "key": "{{full_name}}",
+                    "keys": [
+                      "{{full_name}}"
+                    ],
+                    "delta": 1
+                  },
+                  "plain": "what you entered now shows up on the page",
+                  "confirmed": true,
+                  "calibrated": null,
+                  "calibration_basis": []
+                },
+                {
+                  "id": "c2",
+                  "rung": "completed",
+                  "witness": "renderer",
+                  "role": "veto",
+                  "probe": {
+                    "type": "failure_signal",
+                    "scope": "new_since_baseline"
+                  },
+                  "plain": "the app shows no error or refusal",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                }
+              ],
+              "quorum": {
+                "witnesses": 1,
+                "identity_required": false
+              },
+              "time": {
+                "progress_extends": true,
+                "stall_after_s": 20,
+                "max_s": 120,
+                "long_wait": "fail"
+              },
+              "on": {
+                "unverified": "fail",
+                "partial": "stop_and_report"
+              },
+              "words": {}
+            }
+          },
+          "recovery": {
+            "intent": "activate_control_submit",
+            "final_intent": "activate_control_submit",
+            "anchors": [
+              {
+                "element": "submit",
+                "relation": "target"
+              },
+              {
+                "element": "form#userform",
+                "relation": "near"
+              },
+              {
+                "element": "nav",
+                "relation": "above"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match",
+              "overlay_anchor",
+              "role_match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_evidence": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click Submit to send the form",
+          "phase": "act",
+          "source_event": 11,
+          "video_context": {
+            "visible_target": "Submit button",
+            "screen_before": "ToolsQA Text Box form with 'person' in Full Name field",
+            "screen_after": "ToolsQA Text Box form showing 'Name: person' below the form",
+            "purpose": "process the entered data and display the result"
+          },
+          "snapshot_ref": "791a10496e2b4988a2acd5def0d7e288",
+          "snapshot_dom_hash": "b0b51d080ae3d6762ee960898a30a727944ab05c5c29a1d3bdc2795346003387",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        }
+      ]
+    }
+  ],
+  "policies": {
+    "failure_first": true,
+    "stop_on_low_confidence": true
+  },
+  "llm": {
+    "max_calls_per_step": 1,
+    "timeout_ms": 600000
+  },
+  "intent_graph": {
+    "goal": "Search Wikipedia for a topic, then fill in a demo form with a name and submit it.",
+    "steps": [
+      {
+        "index": 0,
+        "intent": "Open the Wikipedia home page",
+        "verification_anchor": "the Wikipedia main page is showing",
+        "intent_token": "open_wikipedia_home_page"
+      },
+      {
+        "index": 1,
+        "intent": "Click into the Wikipedia search box",
+        "verification_anchor": "the search box is ready for typing",
+        "intent_token": "focus_search_box"
+      },
+      {
+        "index": 2,
+        "intent": "Type the topic into the search box",
+        "verification_anchor": "the search box holds the typed topic",
+        "intent_token": "enter_search_topic"
+      },
+      {
+        "index": 3,
+        "intent": "Click into the search box again",
+        "verification_anchor": "the search box is ready for typing",
+        "intent_token": "focus_search_box"
+      },
+      {
+        "index": 4,
+        "intent": "Type the topic to look up in the search box",
+        "verification_anchor": "suggestions for the topic appear under the search box",
+        "intent_token": "enter_search_topic"
+      },
+      {
+        "index": 5,
+        "intent": "Press Enter to open the topic's article",
+        "verification_anchor": "the topic's article page opens",
+        "intent_token": "press_enter_to_search"
+      },
+      {
+        "index": 7,
+        "intent": "Click into the search box once more",
+        "verification_anchor": "the search box is ready for typing",
+        "intent_token": "focus_search_box"
+      },
+      {
+        "index": 8,
+        "intent": "Type in the search box again",
+        "verification_anchor": "the search box holds typed text",
+        "intent_token": "enter_search_topic"
+      },
+      {
+        "index": 9,
+        "intent": "Open the demo text box form page",
+        "verification_anchor": "the demo form page is showing",
+        "intent_token": "open_demo_form_page"
+      },
+      {
+        "index": 10,
+        "intent": "Click into the Full Name box",
+        "verification_anchor": "the Full Name box is ready for typing",
+        "intent_token": "focus_full_name_field"
+      },
+      {
+        "index": 11,
+        "intent": "Type the name into the Full Name box",
+        "verification_anchor": "the Full Name box shows the typed name",
+        "intent_token": "enter_full_name_value"
+      },
+      {
+        "index": 12,
+        "intent": "Scroll down to the Submit button",
+        "verification_anchor": "the Submit button is in view",
+        "intent_token": "scroll_down_page"
+      },
+      {
+        "index": 13,
+        "intent": "Click Submit to send the form",
+        "verification_anchor": "the submitted name appears below the form",
+        "intent_token": "click_submit_button"
+      }
+    ],
+    "decision_points": [
+      {
+        "step_index": 4,
+        "description": "Which topic to look up on Wikipedia."
+      },
+      {
+        "step_index": 10,
+        "description": "Which name to type into the Full Name box."
+      },
+      {
+        "step_index": 12,
+        "description": "Whether to go ahead and submit the filled-in form."
+      }
+    ],
+    "expected_end_state": {
+      "description": "The demo form page shows the submitted name in a result line below the form."
+    }
+  },
+  "compile_report": {
+    "status": "stale",
+    "steps_total": 13,
+    "steps_with_warnings": 0,
+    "min_confidence": 0.95,
+    "steps": [],
+    "llm_router_stats": {
+      "provider": "cloud_proxy"
+    },
+    "second_opinion": [
+      {
+        "step_key": "5708315176bcc1c4#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "navigate",
+        "why": "This step opens the Wikipedia home page before any searching happens."
+      },
+      {
+        "step_key": "a02adcedb4136478f342ce6d3188c42ef0a56c5185ce9e7813bcd3fd0d219ef7#2",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "Typing the topic is the main action of the search part."
+      },
+      {
+        "step_key": "a02adcedb4136478f342ce6d3188c42ef0a56c5185ce9e7813bcd3fd0d219ef7#3",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "Pressing Enter carries out the search and opens the article."
+      },
+      {
+        "step_key": "a9d63781f4805e8d#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "navigate",
+        "why": "This step moves to the demo form page before filling it in."
+      },
+      {
+        "step_key": "48e185110d96d1ce2c81c6719fbcb03f0e6969ad9e38a6350efe26453fa55a5d#2",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "Typing the name is the main filling-in action on the form."
+      },
+      {
+        "step_key": "33bbdd4f0d76d1015a900caccfbc49e8b098ab1923db2081acad96c034b7e97f#1",
+        "kind": "label_phase",
+        "current": "",
+        "proposed": "act",
+        "why": "Clicking Submit sends the form and produces the result line."
+      }
+    ],
+    "events_total": 11,
+    "dropped": [
+      {
+        "sequence": 2,
+        "pass": "cleanup",
+        "action": "click",
+        "after_sequence": 1,
+        "before_sequence": 3,
+        "target": "Search Wikipedia"
+      },
+      {
+        "sequence": 7,
+        "pass": "cleanup",
+        "action": "type",
+        "after_sequence": 6,
+        "before_sequence": 9,
+        "target": "Full Name"
+      },
+      {
+        "sequence": 8,
+        "pass": "cleanup",
+        "action": "click",
+        "after_sequence": 6,
+        "before_sequence": 9,
+        "target": "Full Name"
+      }
+    ],
+    "for_each_suggestions": []
+  }
+}

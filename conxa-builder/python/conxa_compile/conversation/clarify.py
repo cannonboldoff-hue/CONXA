@@ -65,7 +65,6 @@ _LABELLED_VERBS = {
 _PLAIN_ACTIONS = {
     "scroll": "Scroll the page", "upload_intent": "Choose the file to upload", "upload": "Upload a file",
     "tab_switch": "Switch to another tab", "tab_open": "A new tab opens", "handover": "A person takes over",
-    "agent_span": "A person confirms before the next step",
     "dialog_accept": "Answer the pop-up message with OK", "dialog_dismiss": "Answer the pop-up message with Cancel",
 }
 
@@ -76,6 +75,11 @@ def _action_title(step: dict[str, Any]) -> str:
     act = _action_name(step)
     if act in _PLAIN_ACTIONS:
         return _PLAIN_ACTIONS[act]
+    if act == "agent_span":
+        from conxa_compile.editor.patch_gate import is_confirm_only_span
+
+        # Only the confirm-only question asks a person; any other span is the agent working (WF-13).
+        return "A person confirms before the next step" if is_confirm_only_span(step) else "The AI agent does a part on its own"
     if act in ("navigate", "goto"):
         url = re.sub(r"^\w+://(www\.)?", "", str(step.get("url") or "")).split("?")[0].rstrip("/")
         return f"Go to {url[:60]}" if url else ""

@@ -38,6 +38,8 @@ function endpoint() {
   return v && v.trim() ? v.trim() : null;
 }
 
+const _isLoopback = (url) => /^\w+:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(url);
+
 function controlUrl() {
   const v = process.env.CONXA_HOST_CONTROL_URL;
   return v && v.trim() ? v.trim() : null;
@@ -49,10 +51,18 @@ function controlUrl() {
 async function _controlPost(op, body, timeoutMs = 5000) {
   const url = controlUrl();
   if (!url) throw new Error("host_browser: CONXA_HOST_CONTROL_URL not set");
-  const { body: raw } = await httpClient.postForBuffer(url, {
+  const { body: raw, statusCode } = await httpClient.postForBuffer(url, {
     json: { op, ...body },
     timeoutMs,
+    requireOkStatus: false,
   });
+  if (statusCode !== 200) {
+    // The host answers a failed op with {error} naming why ("empty: ...", "timeout: ..."); a bare
+    // "HTTP 500" hid that reason from every caller (WF-14: an empty or stuck download).
+    let reason = null;
+    try { reason = JSON.parse(raw.toString("utf8")).error; } catch (_) { /* not JSON */ }
+    throw new Error(reason || `HTTP ${statusCode}`);
+  }
   return JSON.parse(raw.toString("utf8"));
 }
 
@@ -60,7 +70,14 @@ async function _controlPost(op, body, timeoutMs = 5000) {
 // own Electron partition, whose download manager never writes where download.saveAs() looks
 // (confirmed on real Electron — ENOENT). Execute hands the finished file over instead (EXEC-46).
 async function saveDownload({ runId, download, dest, timeoutMs }) {
-  await _controlPost("save_download", { runId, url: download.url(), dest, timeoutMs }, timeoutMs + 5000);
+  try {
+    await _controlPost("save_download", { runId, url: download.url(), dest, timeoutMs }, timeoutMs + 5000);
+  } catch (e) {
+    // A host with no transfer limit of its own (Execute's panel) never answers a stuck download: the channel's
+    // deadline is then the download's, and it is a timeout, not a failure of another kind.
+    if (e && e.message === "post timeout") throw new Error(`timeout: the download did not finish in ${timeoutMs}ms`);
+    throw e;
+  }
 }
 
 // Cookies of the storage a PAGE actually uses, in Playwright's cookie shape. Execute gives each
@@ -141,7 +158,9 @@ async function acquire({ runId, storageState, label, focus, loginKey, viewport }
   if (!cdp) throw new Error("host_browser: CONXA_HOST_BROWSER_CDP not set");
   // `viewport` fixes the page size no matter how big the host's panel is (the panel letterboxes it).
   const { markerUrl, tabId } = await _controlPost("new_view", { runId, label, focus, loginKey, viewport });
-  const browser = await chromium.connectOverCDP(cdp);
+  // isLocal: the host shares this machine's disk, so an upload hands the browser file paths. Without it Playwright
+  // reads every file into memory and sends it through CDP: 40 MB outran the action budget and 50 MB+ was refused (WF-14).
+  const browser = await chromium.connectOverCDP(cdp, { isLocal: _isLoopback(cdp) });
   const context = browser.contexts()[0];
   if (!context) {
     await browser.close().catch(() => {});
@@ -210,4 +229,4 @@ function release({ runId, tabId }) {
   // idle cleanup (or app restart) reclaims it; never worth failing a run over.
 }
 
-module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, setInputOpen, capture, pageCookies, setPageCookies, saveDownload };
+module.exports = { endpoint, controlUrl, acquire, newTab, openTab, release, ensureGeometry, setInputOpen, capture, pageCookies, setPageCookies, saveDownload, _isLoopback };

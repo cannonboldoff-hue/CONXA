@@ -206,6 +206,10 @@ def describe_step(step: dict[str, Any], step_index: int) -> str:
         return f"Step {n}: {verb}".strip()
     if act in _STATIC_ACTION_LABELS:
         return f"Step {n}: {_STATIC_ACTION_LABELS[act]}"
+    if act == "agent_span":
+        from conxa_compile.conversation.clarify import _action_title  # noqa: PLC0415 -- one plain title for a span (WF-13)
+
+        return f"Step {n}: {_action_title(step)}"
     if act in {"dialog_accept", "dialog_dismiss"}:
         verb = "Accepted" if act == "dialog_accept" else "Dismissed"
         dialog_payload: dict[str, Any] | None = None

@@ -1,0 +1,14 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:62498`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
+const n = process.argv[2];
+const f = (n) => [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() === n && e.getBoundingClientRect().x > 250 && e.getBoundingClientRect().x < 330);
+await s.evaluate((n) => { [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() === n && e.getBoundingClientRect().x > 250 && e.getBoundingClientRect().x < 330).scrollIntoView({ block: "center" }); }, n);
+await sleep(400);
+const y = await s.evaluate((n) => [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() === n && e.getBoundingClientRect().x > 250 && e.getBoundingClientRect().x < 330).getBoundingClientRect().y + 6, n);
+await s.mouse.move(380, y); await s.mouse.click(420, y); await sleep(900);
+console.log((await s.evaluate(() => document.querySelector("h2,h1")?.innerText)), "|", await s.evaluate(() => document.body.innerText.match(/Step \d+ · [^\n]*/)?.[0]));
+await b.close();

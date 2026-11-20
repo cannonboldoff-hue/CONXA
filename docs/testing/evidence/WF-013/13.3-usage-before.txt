@@ -1,0 +1,1 @@
+17:42:57 kv={"input_tokens": 2389072, "output_tokens": 178710, "requests": 541, "org_id": "wrk_local", "period": "2026-11"} credits_used=2113384 proxyPosts=194

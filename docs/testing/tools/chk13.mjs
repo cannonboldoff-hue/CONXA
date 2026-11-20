@@ -1,0 +1,13 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:62498`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
+await s.locator("input[value=Saved]").first().fill("Name:person");
+await s.getByRole("button", { name: /^Page changed \(no-op guard\)/ }).click(); await sleep(700);
+const bl = s.getByRole("button", { name: /^Blocks step/ }); console.log("blocks", await bl.count());
+await bl.nth(1).click(); await sleep(500);
+await s.getByRole("button", { name: /^Save step/ }).click(); await sleep(2500);
+console.log((await s.evaluate(() => document.body.innerText)).match(/Step saved|Nothing changed|Save failed/g));
+await b.close();

@@ -546,7 +546,7 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
         }
         if (!goal) fail('value', 'Say what the agent should get done')
         let answerSchema: Record<string, unknown> | null = null
-        const answerText = values.agent_span_answer_preset === 'none' ? '' : values.agent_span_answer_json.trim()
+        const answerText = values.agent_span_answer_preset === 'none' ? '' : (values.agent_span_answer_json ?? '').trim()
         if (answerText) {
           try {
             const parsed = JSON.parse(answerText) as unknown
@@ -933,8 +933,9 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
     }
     try {
       await persistStepValues(values, { silentToast: false })
-    } catch {
-      /* persistStepValues surfaces toast/error state */
+    } catch (e) {
+      // persistStepValues surfaces its own refusals; anything else (a bug) must not leave Save doing nothing.
+      if (e instanceof TypeError) toast.error('This step could not be saved. Please try again.')
     }
   })
 

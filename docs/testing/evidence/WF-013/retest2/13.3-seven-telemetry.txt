@@ -1,0 +1,64 @@
+15:54:51 9f6nq {"e": "wf_start", "ts": 1795190091991}
+15:54:53 9f6nq {"e": "drift_detected", "ts": 1795190093405, "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwp5tw3z_9f6nq&conxa_tab=ee7ce553"}
+15:54:54 9f6nq {"e": "proof", "ts": 1795190094552, "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+15:54:54 9f6nq {"e": "tier_ok", "ts": 1795190094560, "si": 0, "tier": "tier1_compiled", "virtualScroll": false}
+15:54:54 9f6nq {"e": "step_ms", "ts": 1795190094561, "si": 0, "ms": 1107}
+15:54:55 9f6nq {"e": "proof", "ts": 1795190095260, "si": 1, "rung": "performed", "v": "proven", "w": ["target"]}
+15:54:55 9f6nq {"e": "tier_ok", "ts": 1795190095261, "si": 1, "tier": "tier1_compiled", "virtualScroll": false}
+15:54:55 9f6nq {"e": "step_ms", "ts": 1795190095261, "si": 1, "ms": 700}
+15:54:55 9f6nq {"e": "verify_result", "ts": 1795190095621, "si": 2, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+15:54:55 9f6nq {"e": "proof", "ts": 1795190095621, "si": 2, "rung": "accepted", "v": "proven", "w": ["target"]}
+15:54:55 9f6nq {"e": "tier_ok", "ts": 1795190095623, "si": 2, "tier": "tier1_compiled", "virtualScroll": false}
+15:54:55 9f6nq {"e": "step_ms", "ts": 1795190095623, "si": 2, "ms": 362}
+15:54:56 xle62 {"e": "rec_start", "ts": 1795190096999, "si": 3, "l": 5, "sc": "llm_intent"}
+15:54:56 xle62 {"e": "wf_start", "ts": 1795190096999}
+15:54:57 xle62 {"e": "park_resumed", "ts": 1795190097044, "si": 3}
+15:54:57 xle62 {"e": "verify_result", "ts": 1795190097641, "si": 3, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+15:55:00 xle62 {"e": "completion", "ts": 1795190100864, "si": 3, "mode": "full", "st": "no_sign", "waited": 3221}
+15:55:00 xle62 {"e": "proof", "ts": 1795190100865, "si": 3, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+15:55:00 xle62 {"e": "tier_ok", "ts": 1795190100867, "si": 3, "tier": "tier1_compiled", "virtualScroll": false}
+15:55:00 xle62 {"e": "step_ms", "ts": 1795190100867, "si": 3, "ms": 3773}
+15:55:00 xle62 {"e": "span_start", "ts": 1795190100882, "si": 4}
+15:55:00 xle62 {"e": "step_ms", "ts": 1795190100882, "si": 4, "ms": 15}
+15:55:00 xle62 {"e": "park_created", "ts": 1795190100915, "si": 4, "kind": "span"}
+15:55:06 ir7b7 {"e": "rec_start", "ts": 1795190106228, "si": 4, "l": 5, "sc": "llm_intent"}
+15:55:06 ir7b7 {"e": "wf_start", "ts": 1795190106228}
+15:55:06 ir7b7 {"e": "span_done", "ts": 1795190106233, "si": 4, "n": 0}
+15:55:06 ir7b7 {"e": "park_resumed", "ts": 1795190106246, "si": 4}
+15:55:06 ir7b7 {"e": "step_ms", "ts": 1795190106280, "si": 4, "ms": 12}
+15:55:06 ir7b7 {"e": "span_start", "ts": 1795190106292, "si": 5}
+15:55:06 ir7b7 {"e": "step_ms", "ts": 1795190106292, "si": 5, "ms": 12}
+15:55:06 ir7b7 {"e": "park_created", "ts": 1795190106314, "si": 5, "kind": "span"}
+15:55:11 i8anw {"e": "rec_start", "ts": 1795190111317, "si": 5, "l": 5, "sc": "llm_intent"}
+15:55:11 i8anw {"e": "wf_start", "ts": 1795190111317}
+15:55:11 i8anw {"e": "span_done", "ts": 1795190111320, "si": 5, "n": 0}
+15:55:11 i8anw {"e": "park_resumed", "ts": 1795190111338, "si": 5}
+15:55:11 i8anw {"e": "step_ms", "ts": 1795190111375, "si": 5, "ms": 13}
+15:55:11 i8anw {"e": "span_start", "ts": 1795190111383, "si": 6}
+15:55:11 i8anw {"e": "step_ms", "ts": 1795190111383, "si": 6, "ms": 8}
+15:55:11 i8anw {"e": "park_created", "ts": 1795190111414, "si": 6, "kind": "span"}
+15:55:15 336h4 {"e": "rec_start", "ts": 1795190115612, "si": 6, "l": 5, "sc": "llm_intent"}
+15:55:15 336h4 {"e": "wf_start", "ts": 1795190115612}
+15:55:15 336h4 {"e": "span_done", "ts": 1795190115613, "si": 6, "n": 0}
+15:55:15 336h4 {"e": "park_resumed", "ts": 1795190115625, "si": 6}
+15:55:15 336h4 {"e": "step_ms", "ts": 1795190115662, "si": 6, "ms": 19}
+15:55:15 336h4 {"e": "span_start", "ts": 1795190115672, "si": 7}
+15:55:15 336h4 {"e": "step_ms", "ts": 1795190115672, "si": 7, "ms": 10}
+15:55:15 336h4 {"e": "park_created", "ts": 1795190115690, "si": 7, "kind": "span"}
+15:55:19 vzxhw {"e": "rec_start", "ts": 1795190119634, "si": 7, "l": 5, "sc": "llm_intent"}
+15:55:19 vzxhw {"e": "wf_start", "ts": 1795190119634}
+15:55:19 vzxhw {"e": "span_done", "ts": 1795190119637, "si": 7, "n": 0}
+15:55:19 vzxhw {"e": "park_resumed", "ts": 1795190119647, "si": 7}
+15:55:19 vzxhw {"e": "step_ms", "ts": 1795190119692, "si": 7, "ms": 20}
+15:55:19 vzxhw {"e": "span_start", "ts": 1795190119727, "si": 8}
+15:55:19 vzxhw {"e": "step_ms", "ts": 1795190119727, "si": 8, "ms": 35}
+15:55:19 vzxhw {"e": "park_created", "ts": 1795190119773, "si": 8, "kind": "span"}
+15:55:24 d10rw {"e": "rec_start", "ts": 1795190124148, "si": 8, "l": 5, "sc": "llm_intent"}
+15:55:24 d10rw {"e": "wf_start", "ts": 1795190124156}
+15:55:24 d10rw {"e": "span_done", "ts": 1795190124158, "si": 8, "n": 0}
+15:55:24 d10rw {"e": "park_resumed", "ts": 1795190124187, "si": 8}
+15:55:24 d10rw {"e": "step_ms", "ts": 1795190124280, "si": 8, "ms": 29}
+15:55:24 d10rw {"e": "step_fail", "ts": 1795190124290, "si": 9, "fc": "agent_span_limit"}
+15:55:24 d10rw {"e": "step_ms", "ts": 1795190124299, "si": 9, "ms": 19}
+15:55:24 d10rw {"e": "wf_fail", "ts": 1795190124319, "dur": 171, "fsi": 9, "fc": "unknown"}
+{'wf_start': 7, 'drift_detected': 1, 'proof': 4, 'tier_ok': 4, 'step_ms': 15, 'verify_result': 2, 'rec_start': 6, 'park_resumed': 6, 'completion': 1, 'span_start': 5, 'park_created': 5, 'span_done': 5, 'step_fail': 1, 'wf_fail': 1}

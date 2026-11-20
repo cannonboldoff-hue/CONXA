@@ -189,7 +189,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
               {dryRun
                 ? 'No AI credits are used. The test stops if it reaches a step that needs AI, or an unexpected popup. This does not hold back steps that can’t be undone: those are checked separately before each one runs.'
                 : aiSteps > 0
-                  ? `Turned off automatically — this workflow has ${plural(aiSteps, 'AI step')}, which need the AI helper. Uses AI credits.`
+                  ? `The AI helper has to stay on: this workflow has ${plural(aiSteps, 'part')} the AI agent does on its own. Uses AI credits.`
                   : 'The AI helper is on. It can answer an unexpected popup, and uses AI credits only if one appears.'}
             </span>
           </span>
@@ -432,7 +432,7 @@ export function TestRunCard({ threadId, item }: CardProps) {
         meta="Not a full pass"
         footer={<Button variant="outline" size="sm" onClick={() => run(() => flowTestPrepare(wf))}>Run again</Button>}
       >
-        You ended the test before the steps that can’t be undone{item.declined ? ' (you didn’t confirm)' : ''}. Nothing was sent. A workflow isn’t tested until it runs to the end.
+        You ended the test before the steps that can’t be undone{item.declined ? ' (you didn’t confirm)' : ''}. {item.after_confirmed ? 'Only what you allowed was done; nothing more was sent.' : 'Nothing was sent.'} A workflow isn’t tested until it runs to the end.
       </CardShell>
     )
   }

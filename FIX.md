@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Big files now upload, and a failed download says why — 2026-11-20**
+In a Studio test, a file bigger than a few megabytes was never put into the page's file box, and the test then blamed the Upload button. Big files now attach at once, whatever their size. When a download comes back empty or never finishes, the test now says exactly that ("the file downloaded empty", "the file took too long to download") instead of a confusing error number.
+— 2026-11-20
+
 **You can now fix your last chat message and start a fresh conversation — 2026-11-20**
 In the editor's chat you could not correct a message you just sent, and the chat kept remembering everything said before. Your last message now has an Edit link: change the words and you get one new reply in place of the old one. A new "New conversation" button draws a line in the chat; the assistant forgets what came above it, but nothing is deleted and any question or change above still works. The chat also no longer talks about an "open card" when there is only a link to the editor.
 — 2026-11-20
@@ -36,4 +40,28 @@ Asked to change the page a step opens, the chat in the step editor offered a cha
 
 **Chat change cards speak plainly, and asking to make typed text an input works on any wording — 2026-11-20**
 Change cards used internal names such as "url" or "semantic_description"; they now say "the step's description" and similar, and the exact change shows its field name with labelled Before and After. Asking to turn typed text into something the person gives each run used to work on some wordings and fail on others; it now offers the same change every time. While a reply is being prepared, the chat now says it is working and counts the seconds, so it no longer looks frozen.
+— 2026-11-20
+
+**A step that can't be undone can no longer come right after the AI agent's own work — 2026-11-20**
+In the step editor, dragging a part the AI agent does on its own so it sat right before a "Delete" step was saved without a word, and adding one there showed only "Something went wrong". Now every way of putting the two side by side (moving, adding, removing the step between them, the chat, building, and running an older copy) stops with one plain sentence: put a normal step between them. Only a step where a person says yes may sit there. This keeps the agent's guess from ever deciding what gets deleted, sent or paid.
+— 2026-11-20
+
+**Setting up the AI agent's answer works in the step editor, and its answer is no longer asked of you — 2026-11-20**
+Choosing an answer type such as "One choice from a list" and saving did nothing, and the answer box stayed empty. The answer box now fills in and saves, and a badly written answer gets a plain message. When a later step used the agent's answer, the test card also asked you to type that answer yourself and the result showed "[object Object]"; it no longer asks, and the result shows the actual answer.
+— 2026-11-20
+
+**Clearer test screens for workflows with AI agent parts — 2026-11-20**
+When the AI agent gave up, the test said only "Something went wrong at this step"; it now says the agent gave up and why, or that it ran out of time or actions. Each agent part is listed once, so the count no longer reads "Step 12 of 10". A new agent part starts with an empty goal instead of sample text, is no longer titled as if a person confirms it, and is called "AI agent does a part" in the Add step menu. The note under "Keep the AI helper off" now says plainly that the helper has to stay on, and removing a step no longer talks about a "skill package".
+— 2026-11-20
+
+**A workflow can use the AI agent at most five times in one run — 2026-11-20**
+A workflow with many parts the AI agent does on its own used to run every one of them, so a long chain could keep spending AI credits with no end in sight. Now a run stops before the sixth such part and says in plain words that the workflow uses the AI agent more than five times, and to remove or merge some of those parts. A step where a person only says yes does not count. Before a test starts, the chat also warns when a workflow is over the limit.
+— 2026-11-20
+
+**A short result after pressing Submit now counts as the page changing — 2026-11-20**
+On a simple form, pressing Submit showed the expected result ("Name: person"), yet the test failed saying the page did not change, because the new text was only a few letters long. When a check the person asked for already sees new words appear, that now also counts as the page changing. Words that were already on the page still prove nothing, so a click that did nothing is still caught.
+— 2026-11-20
+
+**The test tells you when an AI agent part is left out, and other wording fixes — 2026-11-20**
+An AI agent part with no goal was quietly left out of the test, with the reason only in a hidden log. The chat now says so before the test and how to include it. After saving, such a part is described as "The AI agent does a part on its own" instead of internal words. And when you let the agent do something that can't be undone and then end the test, it no longer claims "Nothing was sent".
 — 2026-11-20

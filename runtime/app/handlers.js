@@ -1029,6 +1029,7 @@ HANDLERS["download_observed"] = async (_page, _step, inputs, ctx) => {
     );
   };
   if (!queue) noDownload("no download tracking was set up for this run");
+  const waitSecs = `${Math.round(DOWNLOAD_WAIT_TIMEOUT_MS / 1000)} seconds`;
   // server.js's `page.on("download", ...)` listener only pushes onto this queue once Playwright's
   // download event actually fires — which can trail the triggering click by real wall-clock time
   // (server round-trip, header negotiation). Checking the queue once and bailing when it's still
@@ -1040,7 +1041,7 @@ HANDLERS["download_observed"] = async (_page, _step, inputs, ctx) => {
     await pollPositive(() => queue.length > 0, DOWNLOAD_WAIT_TIMEOUT_MS);
   }
   if (!queue.length) {
-    noDownload(`none arrived within ${DOWNLOAD_WAIT_TIMEOUT_MS}ms — the click before this step may not have triggered one`);
+    noDownload(`none arrived within ${waitSecs} — the click before this step may not have triggered one`);
   }
   const pending = queue.shift();
   const entry = await Promise.race([
@@ -1056,11 +1057,12 @@ HANDLERS["download_observed"] = async (_page, _step, inputs, ctx) => {
       kind && kind[1] === "cancelled" ? "the download was cancelled"
         : kind && kind[1] === "interrupted" ? "the download was interrupted before it finished"
           : kind && kind[1] === "empty" ? "the downloaded file was empty or incomplete"
-            : `the download failed (${entry.error})`,
+            : kind && kind[1] === "timeout" ? `it did not finish downloading within ${waitSecs}`
+              : `the download failed (${entry.error})`,
     );
   }
   if (!entry || !entry.path) {
-    noDownload(`it did not finish downloading within ${DOWNLOAD_WAIT_TIMEOUT_MS}ms`);
+    noDownload(`it did not finish downloading within ${waitSecs}`);
   }
   // Bind the saved path into `inputs` so a later `upload` step in this same run can reference
   // it — `downloaded_file` always holds the latest download, `downloaded_file_N` (1-indexed,

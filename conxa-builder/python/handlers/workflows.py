@@ -389,6 +389,8 @@ def _drive_runtime_pauses(
     pauses_seen = 0
     span_rounds = 0
     last_action: dict[str, Any] | None = None
+    # The person already let the agent do something that can't be undone: an ending later must not say "nothing was sent".
+    after_confirmed: dict[str, Any] = {}
     while True:
         guard = _extract_guard_pause(result)
         if guard is not None:
@@ -398,7 +400,7 @@ def _drive_runtime_pauses(
                     cancel_run(guard["run_id"])
                 except Exception:  # noqa: BLE001
                     pass
-                return result, guard
+                return result, {**guard, **after_confirmed}
             mark(f"Running the steps that can't be undone, from {guard['step_intent'] or 'here'}…")
             run_args = {**run_args, "resume_from": guard["step_index"], "_guard_release": True}
             result = call(run_args)
@@ -411,7 +413,8 @@ def _drive_runtime_pauses(
             span_rounds += 1
             if span_rounds > _MAX_AGENT_SPAN_ROUNDS:
                 raise RuntimeError(f"An agent span used {span_rounds} rounds in one test run — stopping instead of looping.")
-            declined = {"step_index": span["step_index"], "step_intent": span["goal"], "remaining": 0, "run_id": "", "declined": True}
+            declined = {"step_index": span["step_index"], "step_intent": span["goal"], "remaining": 0, "run_id": "", "declined": True,
+                        **after_confirmed}
             extra: dict[str, Any] = {}
             if span["needs_confirm"] and last_action is not None and review_hook is not None:
                 # The runtime refused an irreversible-looking action until a person says yes. Only a person can.
@@ -419,6 +422,7 @@ def _drive_runtime_pauses(
                 if not review_hook({"step_index": span["step_index"], "prompt": f"The agent wants to do something that can't be undone: {span['needs_confirm']}. Allow it?"}):
                     return result, declined
                 action = {**last_action, "user_confirmed": True}
+                after_confirmed = {"after_confirmed": True}
             elif span["needs_confirm"]:
                 return result, declined
             elif _is_confirm_only_span_request(span) and review_hook is not None:
@@ -1390,6 +1394,7 @@ class WorkflowsMixin:
                 "company": company, "skill": workflow.slug, "run_id": _test_run_id,
                 "stopped_at": stopped_at_guard["step_index"], "stopped_intent": stopped_at_guard.get("step_intent"),
                 "declined": bool(stopped_at_guard.get("declined")),
+                "after_confirmed": bool(stopped_at_guard.get("after_confirmed")),
             }
 
         stopped_step = _extract_stopped_at(result)

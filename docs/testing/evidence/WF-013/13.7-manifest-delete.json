@@ -1,0 +1,63 @@
+{
+  "slug": "wf13-delete-gate-18b9740f",
+  "name": "Wf13-Delete-Gate-18B9740F",
+  "description": "WF13 delete gate",
+  "version": "0.1.0",
+  "required_runtime": ">=1.0.3",
+  "company": "wrk_local",
+  "target_url": "http://localhost:8099/wf13-delete.html",
+  "group_id": "08501f47-6308-42f7-9a8b-c8aa3ed75fc0",
+  "inputs_required": [],
+  "structural_fingerprint": {
+    "landmarks": [
+      {
+        "primary_selector": "role=textbox[name=\"Note\"]",
+        "data_testid": "",
+        "aria_label": "",
+        "inner_text": "",
+        "tag": "input"
+      },
+      {
+        "primary_selector": "role=textbox[name=\"Note\"]",
+        "data_testid": "",
+        "aria_label": "",
+        "inner_text": "",
+        "tag": "input"
+      },
+      {
+        "primary_selector": "role=button[name=\"Save note\"]",
+        "data_testid": "",
+        "aria_label": "",
+        "inner_text": "Save note",
+        "tag": "button"
+      }
+    ],
+    "landmark_count": 3
+  },
+  "environment": {
+    "locale": "en-US",
+    "timezone": "Asia/Calcutta",
+    "utc_offset_minutes": 330,
+    "viewport": {
+      "w": 1280,
+      "h": 992
+    },
+    "device_pixel_ratio": 1.0000000149011612,
+    "date_format_sample": "1/31/2026",
+    "platform": "Win32"
+  },
+  "compensation_skill": "",
+  "checksum": {
+    "execution.json": "345b57e9136748e2da82352275e8fed98690dd47a069f92f4860f77fa2e25523",
+    "recovery.json": "93462cbc44f1254b1f5dcb944bfbe21e5b65c85d56a38fe5c31d8f30d6e6f1e3",
+    "inputs.json": "29a0775701f835f07add30462d0aa4c855d1e695a4125d46bf7454f40e058f46"
+  },
+  "required_capabilities": [
+    "agent_span",
+    "agent_span_v2"
+  ],
+  "uses_agent": true,
+  "unclaimed_hosts": [
+    "localhost"
+  ]
+}

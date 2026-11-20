@@ -1,0 +1,33 @@
+before 17:49:21 kv={"input_tokens": 2421078, "output_tokens": 178921, "requests": 560, "org_id": "wrk_local", "period": "2026-11"} credits_used=2145601 proxyPosts=213
+started 2026-11-20T12:19:24.785Z
+43s Paused before “Click Submit to send the form”
+usage@pause 17:50:09 kv={"input_tokens": 2429103, "output_tokens": 178940, "requests": 561, "org_id": "wrk_local", "period": "2026-11"} credits_used=2153645 proxyPosts=214
+70s Test passed
+after 17:50:35 kv={"input_tokens": 2429103, "output_tokens": 178940, "requests": 561, "org_id": "wrk_local", "period": "2026-11"} credits_used=2153645 proxyPosts=214
+Test inputs
+· Article category choice: zzplaceholder
+●
+Test passed
+
+12 steps · 1 min 07 s
+
+▲
+Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.
+
+What was checked
+
+What the run read back
+
+article_category: [object Object]
+Approve for packaging
+Test with other inputs
+▲
+Paused before a step that can’t be undone · Click
+5:50 PM
+C
+
+Conxa · 5:50 PM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+WF13 marie curie · “Click Submit to send the form” selected

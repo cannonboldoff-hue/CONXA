@@ -514,3 +514,72 @@ test("runPlan: a dry run withholds the span and says so", async () => {
   const result = await runPlan(runnerPage(), [{ ...STEP }], { invoice: "INV-7" }, 0, "span-dry", { dryRun: true });
   assert.deepStrictEqual(result.dryRunSkipped.map((s) => s.index), [0]);
 });
+
+// ── WF-13: a free span never sits right before a step that can't be undone; a span never runs in a loop ──
+
+const CONFIRM_ONLY = {
+  type: "agent_span", goal: "A person confirms", allowed: [],
+  answer: { schema: { type: "object", required: ["confirmed"], properties: { confirmed: { type: "boolean", enum: [true] } } }, on_failure: "abort" },
+};
+const DELETE = { type: "click", intent: "delete_record", destructive: true };
+
+test("runPlan: a free span right before a step that can't be undone is refused before anything runs", async () => {
+  const page = runnerPage();
+  const events = [];
+  await assert.rejects(
+    () => runPlan(page, [{ type: "navigate", url: "https://app.test/x" }, { ...STEP }, DELETE], { invoice: "INV-7" }, 0, "span-order",
+      { tracker: { emit: (e, d) => events.push([e, d]) } }),
+    (err) => !err.spanPause && err.failedAt === 2 && /comes straight after a part the AI agent does on its own/.test(err.message)
+      && !/unexpected/i.test(err.message),
+  );
+  assert.deepStrictEqual(page.log, [], "nothing ran, not even the first step");
+  assert.deepStrictEqual(events, [["step_fail", { si: 2, fc: "agent_span_before_irreversible" }]]);
+});
+
+test("spanBeforeIrreversible: only a confirm-only question may sit right before it, and a step between clears it", () => {
+  const { spanBeforeIrreversible } = require("../../app/run");
+  assert.strictEqual(spanBeforeIrreversible([{ ...STEP }, DELETE]), 0);
+  assert.strictEqual(spanBeforeIrreversible([CONFIRM_ONLY, DELETE]), -1);
+  assert.strictEqual(spanBeforeIrreversible([{ ...STEP }, { type: "wait" }, DELETE]), -1);
+  assert.strictEqual(spanBeforeIrreversible([DELETE, { ...STEP }]), -1);
+  assert.strictEqual(spanBeforeIrreversible([{ ...CONFIRM_ONLY, allowed: ["click"] }, DELETE]), 0, "a confirm that may also click is free");
+  assert.strictEqual(spanBeforeIrreversible([{ ...CONFIRM_ONLY, answer: { ...CONFIRM_ONLY.answer, on_failure: "continue" } }, DELETE]), 0,
+    "a no that carries on does not gate");
+});
+
+test("runPlan: the 6th agent span in a run is refused before it starts; the 5th still runs; confirm-only questions don't count (13.3)", async () => {
+  const { MAX_AGENT_SPANS_PER_RUN } = require("../../app/run");
+  assert.strictEqual(MAX_AGENT_SPANS_PER_RUN, 5);
+  const six = Array.from({ length: 6 }, () => ({ ...STEP }));
+  const done = (n) => Object.fromEntries(Array.from({ length: n }, (_, k) => [`__agent_span_done_${k}`, true]));
+  // Resumed past the first four: the 5th pauses as usual.
+  await assert.rejects(() => runPlan(runnerPage(), six, { invoice: "INV-7", ...done(4) }, 0, "span-cap"),
+    (err) => err.spanPause === true && err.stepIndex === 4);
+  // Resumed past five: the 6th never starts, the run ends with one plain sentence and a typed code.
+  const events = [];
+  await assert.rejects(
+    () => runPlan(runnerPage(), six, { invoice: "INV-7", ...done(5) }, 0, "span-cap", { tracker: { emit: (e, d) => events.push([e, d]) } }),
+    (err) => err.spanPause !== true && err.failedAt === 5 && err.agentSpanRefused === "agent_span_limit"
+      && /uses the AI agent more than 5 times in one run/.test(err.message) && !/unexpected/i.test(err.message),
+  );
+  assert.ok(events.some(([e, d]) => e === "step_fail" && d.fc === "agent_span_limit" && d.si === 5));
+  assert.ok(!events.some(([e]) => e === "span_start"), "the 6th span never started");
+  // A resume straight onto the 6th (resume_from 5) is refused the same way.
+  await assert.rejects(() => runPlan(runnerPage(), six, { invoice: "INV-7" }, 5, "span-cap"),
+    (err) => err.agentSpanRefused === "agent_span_limit");
+  // Two confirm-only questions among them: five free spans, the last free one still pauses.
+  const mixed = [{ ...STEP }, CONFIRM_ONLY, { ...STEP }, { ...STEP }, CONFIRM_ONLY, { ...STEP }, { ...STEP }];
+  await assert.rejects(() => runPlan(runnerPage(), mixed, { invoice: "INV-7" }, 6, "span-cap-mixed"),
+    (err) => err.spanPause === true && err.stepIndex === 6);
+  // A confirm-only question after five free spans is still asked.
+  await assert.rejects(() => runPlan(runnerPage(), [...six.slice(0, 5), CONFIRM_ONLY], {}, 5, "span-cap-confirm"),
+    (err) => err.spanPause === true && err.stepIndex === 5);
+});
+
+test("runPlan: a span inside a loop fails closed instead of pausing (13.6)", async () => {
+  const loop = { type: "for_each", items: "files", as: "f", max_iterations: 2, steps: [{ ...STEP }] };
+  await assert.rejects(
+    () => runPlan(runnerPage(), [loop], { files: "a,b", invoice: "INV-7" }, 0, "span-loop"),
+    (err) => err.spanPause !== true && /cannot run inside a repeated or conditional step/.test(err.message),
+  );
+});

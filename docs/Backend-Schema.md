@@ -1002,6 +1002,14 @@ Saved step (editor): `value` = the goal; `agent_span_allowed: ["click","fill","s
 allowed, budget_left, page_url, candidates (each with in_dialog), context {skill, description, steps_done,
 steps_after, inputs}, tabs [{tab, url, title, active}], history, answer_schema, decision_dialog?,
 needs_user_confirmation? (the button label)}`. Contract: `models/action_contract.json` (see TRD §7.7).
+A free span directly before a step with `destructive: true` is refused at every structural edit
+(`agent_span_cannot_directly_precede_a_destructive_step`), at build, and by the runtime before any step runs
+(telemetry `step_fail` `fc: "agent_span_before_irreversible"`); only a confirm-only question may sit there (WF-13).
+A span's answer names are never declared as `inputs`. The run's text reports an object output as JSON.
+A run starts at most 5 free spans (`MAX_AGENT_SPANS_PER_RUN`; confirm-only questions do not count); the next one ends
+the run before it starts (telemetry `step_fail` `fc: "agent_span_limit"`, plain message, never parked for recovery).
+A Studio test stopped by a person after allowing an irreversible span action returns `after_confirmed: true` on the
+`stopped_at_guard` result and the `ended_before_irreversible` card.
 
 ### 3.4l App map models (`conxa_core/models/app_graph.py`)
 

@@ -9,7 +9,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | BUILD — Build Studio | 46 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87, 114 (1) |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 11 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17 |
+| RT — Runtime | 12 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17, 18 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
@@ -18,7 +18,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **132** | |
+| **Total** | **133** | |
 
 ---
 
@@ -1319,7 +1319,7 @@ Human Edit's Conversation got a "New conversation" button that adds a divider th
 - **Category:** Cloud
 ---
 
-## RT — Runtime (11 done)
+## RT — Runtime (12 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1441,6 +1441,10 @@ Updater.md` §1.3.
 ### RT-16 / RT-17 — The local run record
 **Resolved:** 2026-11-18
 `recovery.log` is now the local record of a run: `recovery_log.js::enterStepScope` (called per step from `run.js::executeOneStep`) stamps `run_id`, `slug`, `step_index` and `step_key` on every line written while that step runs; `resolution.js` writes a `resolve` line (winner's score and margin over the runner-up, or the tied candidates, per-signal match counts) and `run.js::proveStep` a `proof` line (verdict, rung, every check's witness and answer). Rotation keeps three older files. The cloud tracker is unchanged; `test_recovery_log_local_record.js` fails if a `tracker.emit` call ever carries `checks`, `tied`, `signals` or `candidates`. Leftover: RT-17b in `TODO.md`.
+
+### RT-18 — Large uploads and failed downloads in a host panel (WF-14 14.8)
+**Resolved:** 2026-11-20
+`host_browser.js` connected to the host with `connectOverCDP` and no `isLocal`, so Playwright read every upload into memory and sent it through CDP: 40 MB outran the 2.5 s action budget, 50 MB or more was refused. It now passes `isLocal` for a loopback endpoint (200 MB attaches in ~20 ms on real Electron). `_controlPost` relays the host's `{error}` instead of "HTTP 500", so an empty or stuck download reaches its own message; `handlers.js` reports a timeout in seconds and Studio's headline (`failure_summary.py`) names the download reason instead of "One of the values given...". Leftover: RT-19 in `TODO.md`.
 
 ## PROD — Product (4 done)
 

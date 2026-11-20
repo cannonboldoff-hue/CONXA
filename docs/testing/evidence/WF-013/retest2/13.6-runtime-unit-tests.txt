@@ -1,0 +1,9 @@
+✔ runPlan: a span inside a loop fails closed instead of pausing (13.6) (4.1034ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 41
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16022.0487

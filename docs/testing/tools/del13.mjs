@@ -1,0 +1,12 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:62498`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+const li = s.locator("li[draggable=true]").nth(Number(process.argv[2]) - 1);
+await li.hover(); const btn = li.locator("button").last(); console.log(await btn.getAttribute("aria-label"));
+await btn.click();
+await new Promise(z=>setTimeout(z,1000));
+console.log(await s.evaluate(() => document.body.innerText.match(/[^\n]*(Delete step|delete this|Remove step|Are you sure)[^\n]*/gi)));
+await s.screenshot({path:"../evidence/WF-013/del-confirm.png"});
+await b.close();

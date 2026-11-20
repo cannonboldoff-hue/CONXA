@@ -1,0 +1,1702 @@
+{
+  "meta": {
+    "id": "skill_b204d02a-39ed-453a-8184-5d431ca4a466",
+    "version": 8,
+    "title": "WF13 delete gate",
+    "created_at": "2026-11-20T11:42:30.782898+00:00",
+    "source_session_id": "b204d02a-39ed-453a-8184-5d431ca4a466",
+    "compiler_policy_version": "1.0.0",
+    "compiler_policy_hash": "698b356bf9d7073e",
+    "required_runtime": ">=1.0.0",
+    "structural_fingerprint": {
+      "landmarks": [
+        {
+          "primary_selector": "role=textbox[name=\"Note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "",
+          "tag": "input"
+        },
+        {
+          "primary_selector": "role=textbox[name=\"Note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "",
+          "tag": "input"
+        },
+        {
+          "primary_selector": "role=button[name=\"Save note\"]",
+          "data_testid": "",
+          "aria_label": "",
+          "inner_text": "Save note",
+          "tag": "button"
+        }
+      ],
+      "landmark_count": 3
+    },
+    "environment": {
+      "locale": "en-US",
+      "timezone": "Asia/Calcutta",
+      "utc_offset_minutes": 330,
+      "viewport": {
+        "w": 1280,
+        "h": 992
+      },
+      "device_pixel_ratio": 1.0000000149011612,
+      "date_format_sample": "1/31/2026",
+      "platform": "Win32"
+    },
+    "compensation_skill": "",
+    "visited_hosts": [
+      "localhost"
+    ]
+  },
+  "inputs": [],
+  "skills": [
+    {
+      "name": "recorded",
+      "steps": [
+        {
+          "action": "navigate",
+          "intent": "navigate_to_page",
+          "url": "http://localhost:8099/wf13-delete.html",
+          "consequence": "",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/wf13-delete.html"
+          },
+          "target": {},
+          "identity_bundle": {
+            "signals": [],
+            "fingerprint": {
+              "role": "",
+              "tag": "",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [],
+              "position_hint": {},
+              "section_heading": ""
+            },
+            "stable_hash": "",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {},
+          "state": {},
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "url_change",
+              "target": "http://localhost:8099/wf13-delete.html",
+              "timeout": 60000
+            },
+            "success_conditions": {
+              "url": "http://localhost:8099/wf13-delete.html"
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "navigate_to_page",
+            "final_intent": "navigate_to_page",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Open the customer record page.",
+          "phase": "",
+          "source_event": null,
+          "video_context": null,
+          "snapshot_ref": "",
+          "snapshot_dom_hash": "",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "focus",
+          "intent": "focus_note",
+          "url": "",
+          "consequence": "read_only",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/wf13-delete.html"
+          },
+          "target": {
+            "primary_selector": "role=textbox[name=\"Note\"]",
+            "fallback_selectors": [
+              "#note",
+              "label:has-text(\"Note\") + input",
+              "input[type=\"text\"]",
+              "/html[1]/body[1]/label[1]/input[1]"
+            ],
+            "css": "#note",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=textbox[name=\"Note\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=textbox[name=\"Note\"] >> right-of=internal:text=\"Customer record: Marie Curie\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#note",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "note",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Customer record: Marie Curie"
+              ],
+              "position_hint": {
+                "x_pct": 0.034,
+                "y_pct": 0.144
+              },
+              "section_heading": "Customer record: Marie Curie"
+            },
+            "stable_hash": "48e185110d96d1ce2c81c6719fbcb03f0e6969ad9e38a6350efe26453fa55a5d",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "note",
+              "classes": [],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "",
+              "text_based": "",
+              "css": "#note",
+              "xpath": "/html[1]/body[1]/label[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "focus_note",
+              "llm_intent": "focus_note"
+            },
+            "context": {
+              "parent": "label",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": null,
+              "page_url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "label",
+                "relation": "near"
+              },
+              {
+                "element": "label",
+                "relation": "inside"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 43,
+                "y": 115,
+                "w": 170,
+                "h": 21
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "#note",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "880104fe99b75da3d0656840ad3eab06c4e9bb247fd8357ad33757d11138ff75"
+            },
+            "after": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "#note",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "880104fe99b75da3d0656840ad3eab06c4e9bb247fd8357ad33757d11138ff75"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true,
+              "final_intent": "focus_note",
+              "intent_validation_primary": true
+            },
+            "assertions": [],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "focus_note",
+            "final_intent": "focus_note",
+            "anchors": [
+              {
+                "element": "label",
+                "relation": "near"
+              },
+              {
+                "element": "label",
+                "relation": "inside"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_fingerprint": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click into the note field.",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "Note text input field",
+            "screen_before": "Note field active and empty",
+            "screen_after": "Note field contains the text 'hello'",
+            "purpose": "to add a note to the customer record"
+          },
+          "snapshot_ref": "82b9ca0c124b4ce8a474fce78a070d5f",
+          "snapshot_dom_hash": "b86838270e201239c97ddff5f7d3e670dcb1219146869207b8df980de1d40229",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "type",
+          "intent": "type_note_value",
+          "url": "",
+          "consequence": "reversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/wf13-delete.html"
+          },
+          "target": {
+            "primary_selector": "role=textbox[name=\"Note\"]",
+            "fallback_selectors": [
+              "#note",
+              "label:has-text(\"Note\") + input",
+              "input[type=\"text\"]",
+              "/html[1]/body[1]/label[1]/input[1]"
+            ],
+            "css": "#note",
+            "role": "textbox",
+            "type": "input",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=textbox[name=\"Note\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=textbox[name=\"Note\"] >> right-of=internal:text=\"Customer record: Marie Curie\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#note",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "textbox",
+              "tag": "input",
+              "inner_text": "",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "note",
+              "data_testid": "",
+              "input_type": "text",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Customer record: Marie Curie"
+              ],
+              "position_hint": {
+                "x_pct": 0.034,
+                "y_pct": 0.144
+              },
+              "section_heading": "Customer record: Marie Curie"
+            },
+            "stable_hash": "48e185110d96d1ce2c81c6719fbcb03f0e6969ad9e38a6350efe26453fa55a5d",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "input",
+              "id": "note",
+              "classes": [],
+              "inner_text": "",
+              "role": "textbox",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "value_set",
+            "selectors": {
+              "aria": "",
+              "text_based": "",
+              "css": "#note",
+              "xpath": "/html[1]/body[1]/label[1]/input[1]"
+            },
+            "semantic": {
+              "normalized_text": "",
+              "role": "textbox",
+              "input_type": "text",
+              "final_intent": "",
+              "llm_intent": ""
+            },
+            "context": {
+              "parent": "label",
+              "siblings": [],
+              "index_in_parent": 0,
+              "form_context": null,
+              "page_url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "label",
+                "relation": "near"
+              },
+              {
+                "element": "label",
+                "relation": "inside"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 43,
+                "y": 115,
+                "w": 170,
+                "h": 21
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "#note",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "880104fe99b75da3d0656840ad3eab06c4e9bb247fd8357ad33757d11138ff75"
+            },
+            "after": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "#note",
+                "input"
+              ],
+              "important_text_blocks": [],
+              "dom_fingerprint": "880104fe99b75da3d0656840ad3eab06c4e9bb247fd8357ad33757d11138ff75"
+            }
+          },
+          "value": "hello",
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [],
+              "control_text": [],
+              "state_diff_strength": 0.0,
+              "state_diff_as_hint": true
+            },
+            "assertions": [
+              {
+                "type": "value_equals",
+                "target": "role=textbox[name=\"Note\"]",
+                "expected": "hello",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "type_note_value",
+            "final_intent": "type_note_value",
+            "anchors": [
+              {
+                "element": "label",
+                "relation": "near"
+              },
+              {
+                "element": "label",
+                "relation": "inside"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_fingerprint": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Type the note into the note field.",
+          "phase": "",
+          "source_event": 2,
+          "video_context": {
+            "visible_target": "Note text input field",
+            "screen_before": "Note field active and empty",
+            "screen_after": "Note field contains the text 'hello'",
+            "purpose": "to add a note to the customer record"
+          },
+          "snapshot_ref": "82b9ca0c124b4ce8a474fce78a070d5f",
+          "snapshot_dom_hash": "b86838270e201239c97ddff5f7d3e670dcb1219146869207b8df980de1d40229",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": "click",
+          "intent": "activate_control_save_note",
+          "url": "",
+          "consequence": "irreversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/wf13-delete.html"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Save note\"]",
+            "fallback_selectors": [
+              "text=\"Save note\"",
+              "#save",
+              "label:has-text(\"Note\") + button",
+              "/html[1]/body[1]/button[1]"
+            ],
+            "css": "#save",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Save note\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Save note\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Save note\"] >> right-of=internal:text=\"Customer record: Marie Curie\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#save",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Save note",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "save",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Customer record: Marie Curie"
+              ],
+              "position_hint": {
+                "x_pct": 0.17,
+                "y_pct": 0.144
+              },
+              "section_heading": "Customer record: Marie Curie"
+            },
+            "stable_hash": "fc0b3e5ccc766a37229299e05f3cd3e01c7a4983cfc14071d7b68a55f938f341",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": false
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "save",
+              "classes": [],
+              "inner_text": "Save note",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "none",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Save note\"",
+              "css": "#save",
+              "xpath": "/html[1]/body[1]/button[1]"
+            },
+            "semantic": {
+              "normalized_text": "save note",
+              "role": "button",
+              "input_type": null,
+              "final_intent": "activate_control_save_note",
+              "llm_intent": "activate_control_save_note",
+              "effect_judgement": {
+                "reversible": false,
+                "kind": "saves",
+                "confidence": 0.7,
+                "reason": "Clicking Save note stores the note on the customer record, which is a change to saved data."
+              }
+            },
+            "context": {
+              "parent": "body",
+              "siblings": [
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#del:Delete record"
+              ],
+              "index_in_parent": 3,
+              "form_context": null,
+              "page_url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "save note",
+                "relation": "target"
+              },
+              {
+                "element": "p:marie curie was a physicist and chemist.",
+                "relation": "near"
+              },
+              {
+                "element": "h1:customer record: marie curie",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 217,
+                "y": 115,
+                "w": 75,
+                "h": 21
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "text=\"Save note\"",
+                "#save",
+                "button",
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#del:Delete record"
+              ],
+              "important_text_blocks": [
+                "Save note"
+              ],
+              "dom_fingerprint": "9ec1c4dd3125e3ee0a5d5a6d67da7b1a3af358a632ba010f5eded7127df92e9e"
+            },
+            "after": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "text=\"Save note\"",
+                "#save",
+                "button",
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#del:Delete record"
+              ],
+              "important_text_blocks": [
+                "Save note"
+              ],
+              "dom_fingerprint": "9ec1c4dd3125e3ee0a5d5a6d67da7b1a3af358a632ba010f5eded7127df92e9e"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "target": "",
+              "timeout": 5000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Saved"
+              ],
+              "control_text": [],
+              "state_diff_strength": 0.05,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_save_note",
+              "intent_validation_primary": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Saved",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "result"
+              }
+            ],
+            "effect": null
+          },
+          "recovery": {
+            "intent": "activate_control_save_note",
+            "final_intent": "activate_control_save_note",
+            "anchors": [
+              {
+                "element": "save note",
+                "relation": "target"
+              },
+              {
+                "element": "p:marie curie was a physicist and chemist.",
+                "relation": "near"
+              },
+              {
+                "element": "h1:customer record: marie curie",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e"
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click Save note to keep the note.",
+          "phase": "",
+          "source_event": 3,
+          "video_context": {
+            "visible_target": "Save note button",
+            "screen_before": "Note field contains 'hello', Save note button visible",
+            "screen_after": "Message 'Saved' appears below the note field",
+            "purpose": "to persist the note in the customer record"
+          },
+          "snapshot_ref": "82b9ca0c124b4ce8a474fce78a070d5f",
+          "snapshot_dom_hash": "b86838270e201239c97ddff5f7d3e670dcb1219146869207b8df980de1d40229",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        },
+        {
+          "action": {
+            "action": "agent_span",
+            "value": "Describe what the agent should get done"
+          },
+          "intent": "agent_span_goal",
+          "url": "http://localhost:8099/wf13-delete.html",
+          "target": {
+            "primary_selector": "",
+            "fallback_selectors": []
+          },
+          "signals": {
+            "dom": {},
+            "selectors": {
+              "css": "",
+              "aria": "",
+              "text_based": "",
+              "xpath": ""
+            },
+            "semantic": {
+              "final_intent": "agent_span_goal",
+              "llm_intent": "agent_span_goal"
+            },
+            "context": {
+              "page_url": "http://localhost:8099/wf13-delete.html",
+              "page_title": ""
+            },
+            "anchors": [],
+            "visual": {}
+          },
+          "state": {},
+          "value": "Describe what the agent should get done",
+          "input_binding": null,
+          "validation": {
+            "wait_for": {
+              "type": "none",
+              "timeout": 5000
+            },
+            "success_conditions": {}
+          },
+          "recovery": {
+            "intent": "agent_span_goal",
+            "final_intent": "agent_span_goal",
+            "anchors": [],
+            "strategies": [],
+            "confidence_threshold": 0.85,
+            "max_attempts": 0,
+            "require_diverse_attempts": false
+          },
+          "confidence_protocol": {},
+          "decision_policy": {},
+          "agent_span_allowed": [
+            "click",
+            "fill",
+            "select",
+            "scroll",
+            "send_keys",
+            "navigate",
+            "go_back",
+            "open_tab",
+            "switch_tab",
+            "close_tab"
+          ],
+          "agent_span_budget": {
+            "actions": 25,
+            "seconds": 600
+          },
+          "agent_span_on_budget": "fail"
+        },
+        {
+          "action": "click",
+          "intent": "activate_control_delete_record",
+          "url": "",
+          "consequence": "irreversible",
+          "frame": {},
+          "tab": {
+            "id": "tab_0",
+            "index": 0,
+            "opened_by": "initial",
+            "opener_tab": null,
+            "url": "http://localhost:8099/wf13-delete.html"
+          },
+          "target": {
+            "primary_selector": "role=button[name=\"Delete record\"]",
+            "fallback_selectors": [
+              "text=\"Delete record\"",
+              "#del",
+              "label:has-text(\"Note\") + button",
+              "/html[1]/body[1]/button[2]"
+            ],
+            "css": "#del",
+            "role": "button",
+            "type": "button",
+            "selector_confidence": 0.95,
+            "selector_source": "deterministic"
+          },
+          "identity_bundle": {
+            "signals": [
+              {
+                "engine": "role",
+                "selector": "internal:role=button[name=\"Delete record\"]",
+                "durability": 0.95,
+                "orthogonality_class": "semantic-aria",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "text_based",
+                "selector": "internal:text=\"Delete record\"",
+                "durability": 0.85,
+                "orthogonality_class": "visible-text",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "relational",
+                "selector": "internal:role=button[name=\"Delete record\"] >> right-of=internal:text=\"Customer record: Marie Curie\"",
+                "durability": 0.75,
+                "orthogonality_class": "spatial-anchor",
+                "unique_at_compile": true,
+                "source": "compiler"
+              },
+              {
+                "engine": "css-id",
+                "selector": "#del",
+                "durability": 0.45,
+                "orthogonality_class": "structural",
+                "unique_at_compile": true,
+                "source": "compiler"
+              }
+            ],
+            "fingerprint": {
+              "role": "button",
+              "tag": "button",
+              "inner_text": "Delete record",
+              "aria_label": "",
+              "name": "",
+              "placeholder": "",
+              "label_text": "Note",
+              "alt": "",
+              "title": "",
+              "value_label": "",
+              "element_id": "del",
+              "data_testid": "",
+              "input_type": "",
+              "css_class_tokens": [],
+              "anchor_phrases": [
+                "Customer record: Marie Curie"
+              ],
+              "position_hint": {
+                "x_pct": 0.231,
+                "y_pct": 0.144
+              },
+              "section_heading": "Customer record: Marie Curie"
+            },
+            "stable_hash": "ed1fb908e98b93eefa2501649c9a5ffdde609180712542b5200b7baebca3d685",
+            "frame_chain": [],
+            "shadow_path": [],
+            "compat_fingerprint": "",
+            "guid_like_attrs": [],
+            "destructive": true
+          },
+          "handler_hints": {
+            "hover_chain": [],
+            "virtualized_container": "",
+            "allow_forced_action": false,
+            "repeat_count": 1,
+            "control_kind": "",
+            "date_picker": {},
+            "choice": {}
+          },
+          "signals": {
+            "dom": {
+              "tag": "button",
+              "id": "del",
+              "classes": [],
+              "inner_text": "Delete record",
+              "role": "button",
+              "aria_label": null,
+              "name": null,
+              "placeholder": null,
+              "label_text": "Note",
+              "alt": null,
+              "title": null,
+              "value_label": null,
+              "label_nearby": false,
+              "attributes": {}
+            },
+            "post_condition_effect": "none",
+            "selectors": {
+              "aria": "",
+              "text_based": "text=\"Delete record\"",
+              "css": "#del",
+              "xpath": "/html[1]/body[1]/button[2]"
+            },
+            "semantic": {
+              "normalized_text": "delete record",
+              "role": "button",
+              "input_type": null,
+              "final_intent": "activate_control_delete_record",
+              "llm_intent": "activate_control_delete_record",
+              "effect_judgement": {
+                "reversible": false,
+                "kind": "deletes",
+                "confidence": 0.95,
+                "reason": "Clicking Delete record removes the customer record and the page confirms it was deleted."
+              }
+            },
+            "context": {
+              "parent": "body",
+              "siblings": [
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#save:Save note"
+              ],
+              "index_in_parent": 4,
+              "form_context": null,
+              "page_url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "timing": {
+                "wait_for": "load",
+                "timeout": 5000
+              }
+            },
+            "anchors": [
+              {
+                "element": "delete record",
+                "relation": "target"
+              },
+              {
+                "element": "h1:customer record: marie curie",
+                "relation": "near"
+              },
+              {
+                "element": "p:marie curie was a physicist and chemist.",
+                "relation": "near"
+              }
+            ],
+            "visual": {
+              "bbox": {
+                "x": 296,
+                "y": 115,
+                "w": 95,
+                "h": 21
+              },
+              "viewport": "1280x992",
+              "scroll_position": "0,0"
+            }
+          },
+          "state": {
+            "before": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "text=\"Delete record\"",
+                "#del",
+                "button",
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#save:Save note"
+              ],
+              "important_text_blocks": [
+                "Delete record"
+              ],
+              "dom_fingerprint": "1c7763403119e1d28b353acdf3b96fa76155e2c4931f964a489e1c333798c66e"
+            },
+            "after": {
+              "url": "http://localhost:8099/wf13-delete.html",
+              "page_title": "WF13 records",
+              "visible_key_elements": [
+                "text=\"Delete record\"",
+                "#del",
+                "button",
+                "h1:Customer record: Marie Curie",
+                "p:Marie Curie was a physicist and chemist.",
+                "label:Note",
+                "button#save:Save note"
+              ],
+              "important_text_blocks": [
+                "Delete record"
+              ],
+              "dom_fingerprint": "1c7763403119e1d28b353acdf3b96fa76155e2c4931f964a489e1c333798c66e"
+            }
+          },
+          "value": null,
+          "input_binding": null,
+          "produces": [],
+          "consumes": [],
+          "extract": {},
+          "run_if": {},
+          "validation": {
+            "wait_for": {
+              "type": "element_appear",
+              "target": "text=\"Delete record\"",
+              "timeout": 8000
+            },
+            "success_conditions": {
+              "url_not_contains": "",
+              "required_elements": [],
+              "forbidden_elements": [],
+              "expected_text_tokens": [
+                "Record deleted",
+                "delete",
+                "remove",
+                "permanently",
+                "confirm",
+                "cannot be undone"
+              ],
+              "control_text": [],
+              "page_url_hint": "http://localhost:8099/wf13-delete.html",
+              "state_diff_strength": 0.05,
+              "state_diff_as_hint": true,
+              "final_intent": "activate_control_delete_record",
+              "intent_validation_primary": true
+            },
+            "assertions": [
+              {
+                "type": "text_present",
+                "target": "Record deleted",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "result"
+              },
+              {
+                "type": "text_present",
+                "target": "delete",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "result"
+              },
+              {
+                "type": "text_present",
+                "target": "remove",
+                "expected": "",
+                "timeout_ms": 5000,
+                "required": true,
+                "source": "result"
+              },
+              {
+                "type": "state_changed",
+                "target": "",
+                "expected": "",
+                "timeout_ms": 8000,
+                "required": true,
+                "source": ""
+              }
+            ],
+            "effect": {
+              "kind": "delete",
+              "required_rung": "completed",
+              "target_rung": "result_exists",
+              "identity": {},
+              "checks": [
+                {
+                  "id": "c1",
+                  "rung": "completed",
+                  "witness": "transport",
+                  "role": "support",
+                  "probe": {
+                    "type": "request_chain",
+                    "method": "mutating",
+                    "status": "2xx"
+                  },
+                  "plain": "the app accepted the request",
+                  "confirmed": true,
+                  "calibrated": null,
+                  "calibration_basis": []
+                },
+                {
+                  "id": "c2",
+                  "rung": "completed",
+                  "witness": "renderer",
+                  "role": "veto",
+                  "probe": {
+                    "type": "failure_signal",
+                    "scope": "new_since_baseline"
+                  },
+                  "plain": "the app shows no error or refusal",
+                  "confirmed": false,
+                  "calibrated": null,
+                  "calibration_basis": []
+                }
+              ],
+              "quorum": {
+                "witnesses": 1,
+                "identity_required": false
+              },
+              "time": {
+                "progress_extends": true,
+                "stall_after_s": 20,
+                "max_s": 120,
+                "long_wait": "fail"
+              },
+              "on": {
+                "unverified": "fail",
+                "partial": "stop_and_report"
+              },
+              "words": {}
+            }
+          },
+          "recovery": {
+            "intent": "activate_control_delete_record",
+            "final_intent": "activate_control_delete_record",
+            "anchors": [
+              {
+                "element": "delete record",
+                "relation": "target"
+              },
+              {
+                "element": "h1:customer record: marie curie",
+                "relation": "near"
+              },
+              {
+                "element": "p:marie curie was a physicist and chemist.",
+                "relation": "near"
+              }
+            ],
+            "strategies": [
+              "semantic match",
+              "position match",
+              "visual match",
+              "overlay_anchor",
+              "role_match"
+            ],
+            "confidence_threshold": 0.85,
+            "max_attempts": 2,
+            "require_diverse_attempts": true
+          },
+          "confidence_protocol": {
+            "layer_thresholds": {
+              "dom_execute": 0.9,
+              "semantic_execute": 0.85,
+              "visual_execute": 0.8
+            },
+            "recovery_global_weights": {
+              "dom": 0.3,
+              "semantic": 0.35,
+              "visual": 0.15,
+              "context": 0.2
+            },
+            "layer_scorers": {
+              "dom": {
+                "id": 0.35,
+                "tag": 0.15,
+                "class": 0.25,
+                "xpath": 0.25
+              },
+              "semantic": {
+                "text": 0.35,
+                "role": 0.25,
+                "intent": 0.2,
+                "context": 0.2,
+                "parent_mix": 0.5,
+                "form_mix": 0.5
+              },
+              "visual": {
+                "viewport_mismatch_penalty": 0.85,
+                "iou_weight": 0.65,
+                "pos_weight": 0.35
+              },
+              "context": {
+                "url": 0.6,
+                "title": 0.4
+              }
+            },
+            "uncertainty_policy": {
+              "candidate_ambiguity_margin": 0.03,
+              "min_anchors_warn": 1,
+              "failure_first": true,
+              "assist_min_confidence": 0.75,
+              "recovery_candidate_budget": 5
+            },
+            "policy_version": "1.0.0",
+            "policy_hash": "698b356bf9d7073e",
+            "compile_warnings": {
+              "weak_evidence": true
+            }
+          },
+          "decision_policy": {
+            "ask_if_ambiguous": true,
+            "stop_if_low_confidence": true,
+            "max_retries": 2
+          },
+          "compiled_selectors": [],
+          "semantic_description": "Click Delete record to remove the record.",
+          "phase": "",
+          "source_event": 4,
+          "video_context": {
+            "visible_target": "Delete record button",
+            "screen_before": "Saved message visible, Delete record button available",
+            "screen_after": "Message 'Record deleted' appears on screen",
+            "purpose": "to remove Marie Curie's record from the system"
+          },
+          "snapshot_ref": "82b9ca0c124b4ce8a474fce78a070d5f",
+          "snapshot_dom_hash": "b86838270e201239c97ddff5f7d3e670dcb1219146869207b8df980de1d40229",
+          "branch": {},
+          "optional_hint": null,
+          "entity_binding": null,
+          "for_each": {},
+          "outcome_fork": {}
+        }
+      ]
+    }
+  ],
+  "policies": {
+    "failure_first": true,
+    "stop_on_low_confidence": true
+  },
+  "llm": {
+    "max_calls_per_step": 1,
+    "timeout_ms": 600000
+  },
+  "intent_graph": {
+    "goal": "Add a note to a customer record, then delete that record.",
+    "steps": [
+      {
+        "index": 0,
+        "intent": "Open the customer record page.",
+        "verification_anchor": "The customer record page is open with the note field showing.",
+        "intent_token": "open_customer_record_page"
+      },
+      {
+        "index": 1,
+        "intent": "Click into the note field.",
+        "verification_anchor": "The note field is ready for typing.",
+        "intent_token": "focus_note_field"
+      },
+      {
+        "index": 2,
+        "intent": "Type the note into the note field.",
+        "verification_anchor": "The note field shows the typed note.",
+        "intent_token": "type_note_value"
+      },
+      {
+        "index": 3,
+        "intent": "Click Save note to keep the note.",
+        "verification_anchor": "The page says Saved under the note field.",
+        "intent_token": "click_save_note_button"
+      },
+      {
+        "index": 5,
+        "intent": "Click Delete record to remove the record.",
+        "verification_anchor": "The page says Record deleted.",
+        "intent_token": "click_delete_record_button"
+      }
+    ],
+    "decision_points": [],
+    "expected_end_state": {
+      "description": "The customer record is deleted and the page says Record deleted."
+    }
+  },
+  "compile_report": {
+    "status": "stale",
+    "steps_total": 5,
+    "steps_with_warnings": 0,
+    "min_confidence": 0.95,
+    "steps": [],
+    "llm_router_stats": {
+      "provider": "cloud_proxy"
+    },
+    "events_total": 4,
+    "dropped": [
+      {
+        "sequence": 1,
+        "pass": "cleanup",
+        "action": "click",
+        "before_sequence": 2,
+        "target": "Note"
+      }
+    ],
+    "commit_ordering_warnings": [
+      {
+        "step_index": 3,
+        "intent": "activate_control_save_note",
+        "followed_by_index": 4,
+        "followed_by_intent": "activate_control_delete_record",
+        "message": "Step 4 (activate_control_save_note) is an irreversible action but is not the workflow's last committing step — step 5 (activate_control_delete_record) still runs after it. If it fails partway, this workflow won't stop on a harmless draft."
+      }
+    ],
+    "for_each_suggestions": []
+  }
+}

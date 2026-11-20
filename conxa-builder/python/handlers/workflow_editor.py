@@ -38,6 +38,14 @@ def _patch_is_noop(step: dict[str, Any], patch: dict[str, Any]) -> bool:
     return same({**step, "action": act}, patch)
 
 
+def _structural_refusal(exc: ValueError, fallback: str) -> _CommandError:
+    """A refused structural change, in plain words: the shared span-before-irreversible rule always reads the same."""
+    from conxa_compile.editor.patch_wording import SPAN_BEFORE_IRREVERSIBLE
+
+    code = str(exc)
+    return _CommandError(code, SPAN_BEFORE_IRREVERSIBLE if code == "agent_span_cannot_directly_precede_a_destructive_step" else fallback)
+
+
 class WorkflowEditorMixin:
     def _apply_step_patch(
         self,
@@ -347,7 +355,7 @@ class WorkflowEditorMixin:
         try:
             doc = flatten_fork_to_recorded_option(doc, step_index, str(payload.get("state_id") or ""))
         except ValueError as exc:
-            raise _CommandError(str(exc), f"Could not make the popup a normal step: {exc}") from exc
+            raise _structural_refusal(exc, f"Could not make the popup a normal step: {exc}") from exc
         write_skill(skill_id, doc)
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))
@@ -395,8 +403,12 @@ class WorkflowEditorMixin:
         doc = read_skill(skill_id)
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
-        self._push_undo(skill_id, copy.deepcopy(doc))
-        doc = reorder_steps(doc, new_order)
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = reorder_steps(doc, new_order)
+        except ValueError as exc:
+            raise _structural_refusal(exc, "Those steps couldn't be moved. Please try again.") from exc
+        self._push_undo(skill_id, snapshot)
         write_skill(skill_id, doc)
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))
@@ -413,8 +425,12 @@ class WorkflowEditorMixin:
         doc = read_skill(skill_id)
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
-        self._push_undo(skill_id, copy.deepcopy(doc))
-        doc = insert_step_after(doc, action_kind, insert_after, confirm_only=bool(payload.get("confirm_only")))
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = insert_step_after(doc, action_kind, insert_after, confirm_only=bool(payload.get("confirm_only")))
+        except ValueError as exc:
+            raise _structural_refusal(exc, "That step couldn't be added. Please try again.") from exc
+        self._push_undo(skill_id, snapshot)
         write_skill(skill_id, doc)
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))
@@ -430,8 +446,12 @@ class WorkflowEditorMixin:
         doc = read_skill(skill_id)
         if doc is None:
             raise _CommandError("skill_not_found", f"No skill {skill_id}")
-        self._push_undo(skill_id, copy.deepcopy(doc))
-        doc = delete_step_at(doc, step_index)
+        snapshot = copy.deepcopy(doc)
+        try:
+            doc = delete_step_at(doc, step_index)
+        except ValueError as exc:
+            raise _structural_refusal(exc, "That step couldn't be removed. Please try again.") from exc
+        self._push_undo(skill_id, snapshot)
         write_skill(skill_id, doc)
         result = _skill_response(skill_id, doc)
         result.update(self._history_flags(skill_id))
@@ -485,7 +505,7 @@ class WorkflowEditorMixin:
         try:
             doc = replace_step_range(doc, start, new_steps)
         except ValueError as exc:
-            raise _CommandError(str(exc), f"Couldn\u2019t replace those steps: {exc}") from exc
+            raise _structural_refusal(exc, f"Couldn\u2019t replace those steps: {exc}") from exc
         self._push_undo(skill_id, snapshot)
         write_skill(skill_id, doc)
         steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []

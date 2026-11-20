@@ -1,0 +1,15 @@
+✔ runPlan: a scheduled run (no agent) fails closed instead of pausing for one (1.9034ms)
+✔ runPlan: a dry run withholds the span and says so (1.0138ms)
+✔ runPlan: a span inside a loop fails closed instead of pausing (13.6) (3.0088ms)
+✔ runPlan: a dry run withholds the span and says so (1.2262ms)
+✔ runPlan: a free span right before a step that can't be undone is refused before anything runs (1.5056ms)
+✔ spanBeforeIrreversible: only a confirm-only question may sit right before it, and a step between clears it (0.6985ms)
+✔ runPlan: a span inside a loop fails closed instead of pausing (13.6) (6.4737ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14467.3816
