@@ -93,3 +93,26 @@ def test_the_recorder_logs_only_data_changing_requests_and_no_address():
         sess._on_request(SimpleNamespace(method=m, url="https://app.test/secret?q=1"))
     assert [r["method"] for r in sess._mutating_requests] == ["POST", "PUT", "DELETE"]
     assert all(set(r) == {"t", "method"} for r in sess._mutating_requests)
+
+
+def test_the_app_accepted_the_request_check_needs_a_request_the_recording_saw():
+    # A "save" the recorder watched send nothing never gets the transport check; one that sent a request does; a
+    # recording with no request log keeps today's behaviour (nothing can be said).
+    def plain(extras):
+        ev = _ev(3, "click", 9000)
+        ev["extras"] = {"sequence": 3, **extras}
+        return [c.plain for c in build_effect(ev, kind="save").checks]
+
+    assert "the app accepted the request" not in plain({"sent_mutating_request": False})
+    assert "the app accepted the request" in plain({"sent_mutating_request": True})
+    assert "the app accepted the request" in plain({})
+
+
+def test_marking_events_sets_the_flag_only_with_a_log(tmp_path):
+    events = _events()
+    (tmp_path / "requests.json").write_text(json.dumps(_log_at(9300)), encoding="utf-8")
+    _mark_choose_file_presses(events, tmp_path)
+    assert [e["extras"].get("sent_mutating_request") for e in events] == [False, False, True]
+    bare = _events()
+    _mark_choose_file_presses(bare, tmp_path / "nowhere")
+    assert all("sent_mutating_request" not in e["extras"] for e in bare)

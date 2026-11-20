@@ -126,7 +126,9 @@ def test_compile_updated_only_bumps_metadata(backend, monkeypatch, tmp_path):
     assert result == {"skill_id": skill_id, "ok": True}
     assert updated["meta"]["title"] == "Renamed title"
     assert updated["meta"]["version"] == 4
-    assert updated["skills"][0]["steps"] == [saved_step]
+    # The only addition is the id every saved step now carries (BUILD-104 (1)); nothing else may change.
+    assert [{k: v for k, v in s.items() if k != "step_id"} for s in updated["skills"][0]["steps"]] == [saved_step]
+    assert all(s.get("step_id") for s in updated["skills"][0]["steps"])
     assert updated["inputs"] == [{"name": "service_name"}]
 
 

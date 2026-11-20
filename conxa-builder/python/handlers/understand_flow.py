@@ -306,8 +306,15 @@ class UnderstandFlowMixin:
             und = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return set()
-        return {e for c in und.get("candidates") or [] if isinstance(c, dict) and c.get("kind") in ("typed", "control")
-                and c.get("verdict") == "fixed" for e in c.get("event_ids") or [] if e is not None}
+        fixed = {e for c in und.get("candidates") or [] if isinstance(c, dict) and c.get("kind") in ("typed", "control")
+                 and c.get("verdict") == "fixed" for e in c.get("event_ids") or [] if e is not None}
+        # What the person answered before the build counts too: "always this one" there settles the same recorded events
+        # here, so the build never asks the same thing again (a typed value, a picked date).
+        from conxa_compile.conversation import decisions
+
+        fixed |= {e for d in decisions.load(path.parent) if d.get("kind") == "value" and d.get("choice") == "fixed"
+                  for e in (d.get("item_events") or []) + (d.get("event_ids") or []) if e is not None}
+        return fixed
 
     @staticmethod
     def _flow_asked_before_events(workflow: Any) -> set[Any]:

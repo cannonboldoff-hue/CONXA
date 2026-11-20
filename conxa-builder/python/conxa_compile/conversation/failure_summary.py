@@ -56,9 +56,11 @@ _BY_KIND = {
     "couldnt_confirm": "The step ran, but nothing on the page confirmed it finished, so the test stopped instead of reporting success. Check it before running it again.",
     "bad_input": "One of the values given for this test isn’t one this step can use.",
     "tab_not_found": "The browser tab this step needs wasn’t open.",
+    # The test never started: Studio could not get the workflow ready to test. Not a result about the workflow.
+    "package_build": "Studio couldn’t get this workflow ready to test, so nothing was run. Choose “Build again”, then test it.",
 }
 # The kinds whose cause is already known exactly: the kind decides the sentence, not a word in the message.
-_KIND_FIRST = frozenset({"decision_needed", "couldnt_confirm", "left_open_unclassified", "bad_input", "tab_not_found"})
+_KIND_FIRST = frozenset({"decision_needed", "couldnt_confirm", "left_open_unclassified", "bad_input", "tab_not_found", "package_build"})
 
 # A download step that got no usable file. The runtime marks it bad input only to skip recovery, so the reason
 # comes from its words, not the kind ("One of the values given..." named the wrong cause, WF-14). First match wins.

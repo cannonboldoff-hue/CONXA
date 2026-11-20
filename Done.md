@@ -6,23 +6,23 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 46 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87, 114 (1) |
+| BUILD — Build Studio | 54 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1) |
 | EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
 | CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 12 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17, 18 |
+| RT — Runtime | 13 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17, 17b (step line), 18 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 19 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22 |
+| AUTH — Authentication | 20 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 24 (2, 3) |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **133** | |
+| **Total** | **141** | |
 
 ---
 
-## BUILD — Build Studio (46 done)
+## BUILD — Build Studio (54 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -783,6 +783,38 @@ The refusal said "Compile the workflow again", but a compiled workflow offered n
 **Resolved:** 2026-11-18
 Confidence is now the best signal that matched exactly one element on the recorded page, and one kind of signal is a penalty only when that signal is weak (`selector_score.py::confidence_from_signal_rows`). A readable, unique `#id` (demoqa's Permanent Address) scores 0.45 with no warning; `compile_report.status` is "failed" only when a step has no unique, lasting signal.
 
+### BUILD-88 (2, 3) — The test card ignored "No, just do it"; chat said "the last compile failed"
+**Resolved:** 2026-11-21
+The test card now lists the steps the person answered "No, just do it" to and says the test won't stop there; the test's own pause skips them (`test_flow.py::_flow_go_ahead_keys`, runtime `guard.skip` by `source_step_key`), and the answer is kept on "Build again" while it is the same question about the same step (`compile_flow.py::_CARRIED_SAFETY`). Chat's "the last compile failed" came from `compile_status: failed`, which only ever meant "a step is hard to find": the chat digest now carries `some_steps_hard_to_find` instead, and a failure to build the test copy is its own "The test didn't start" card.
+
+### BUILD-89 — What a test says when it cannot be trusted, and what it reads back
+**Resolved:** 2026-11-21
+A run stopped because the test browser was not at its normal size (a minimized window) is now "couldn't run", not a test result: the last real result stays, no input check or auto-fix runs, and the card says nothing is wrong with the workflow (`workflows.py::_extract_couldnt_run`, runtime `_meta["conxa/couldnt_run"]`); Studio restores a minimized window when a test starts (`browser_panel.js::prepareTestRun`) and holds a running test at size (`setMinimized`). Earlier (2026-11-18): the size-guard message says to bring Build Studio's window back; a "someone says yes first" pause is logged as `execute_paused` at info; `confirmed_to_continue` is hidden from the read-back list; that step has its own plain name. Not tried live on a real minimized window.
+
+### BUILD-91 (1 status, 2, 3, 4) — Compile status, unticked checks, suggestion text and check wording
+**Resolved:** 2026-11-21
+`compile_report.status` is "failed" only when a step has no unique, lasting way to find its element (`selector_score.py::has_usable_unique_signal`); an unticked "How can we tell it worked?" check is removed from the step (`clarify.py::plan_answer`); offered words come first from what the page said after the action and a control's label is never pre-ticked; every check wording is made by one function (`prose_binding.say_text`), so quotes are never doubled, and "What was checked" on the test card shows each step's plain name.
+
+### BUILD-93 (1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 18) — Dialog-leg and later loose ends
+**Resolved:** 2026-11-21
+(1) "Done, please check" is stored as "ran, not yet confirmed" like "Submitted": Approve needs each unproven step ticked and "I checked — it worked" (`cmd_flow_approve`, lifecycle substate `passed_unproven`). (2) The test card's prefill is read from the recording itself (`source_event.recorded_input_values`), including a prompt's answer. (3) A confirm box's "OK" is judged by a model, not by its word (BUILD-111). (5) A model step name that borrows a neighbour's words is dropped. (6) "The app accepted the request" is offered only after a step the recorder saw send a data-changing request (`effects.request_evidence`, `extras.sent_mutating_request`). (7) The web-address tick box shows its address (2026-11-16). (8) A model's reason that names an internal field is dropped for code wording (`plain_words.plain_ok`). (10) "Tick what applies" shows only when there is something to tick. (11) The size-guard card says the window may be minimized. (12)/(14) "Always this one" answered before the build is read after it, so the values card and the relative-date card do not ask again (`typed_fixed_events` includes `decisions.json`). (13) One missing landmark is never "the app may have been redesigned" (runtime `drift.js` needs two) and a landmark needs a test id, label or words of its own. (15)/(18) A list pick and a search box are named by their own words and placeholder. (16) A number that tells siblings apart stays in the role name (`identity_bundle.py`). Also fixed 2026-11-18: the questions header and the card now count the same; a switch to an earlier tab shows in the live list.
+
+### BUILD-94 (guard message, running while minimized) — A minimized window no longer costs a test its result
+**Resolved:** 2026-11-21
+The size-guard message says the window is minimized and how to bring it back (2026-11-17); a test started while minimized restores Studio first, and a run in progress is held at 1280 wide (`browser_panel.js`). What minimizes the window is still open (BUILD-94 in `TODO.md`).
+
+### BUILD-95 (1, 2, 5, 6, 7) — Loop leg: forward buttons, question total, internal wording, inputs
+**Resolved:** 2026-11-21
+(1)/(5) A button whose own words only move forward is not an irreversible step (2026-11-17; for new compiles a model judges it, BUILD-111). (2) The question total counts every question still to answer, the same as the header. (6) "missing required input(s)…", "Skill not found…" and "navigation_error…" read in plain words (`failure_summary.py`). (7) The test card asks for exactly the inputs steps use, declared or not, by one rule shared with the package builder (`workflow_mutations.inputs_a_run_needs`).
+
+### BUILD-99 (1, 3) — Row tie decision; "Build again" kept answers
+**Resolved:** 2026-11-21
+(1) Owner decision 2026-11-21: an unconfirmed row tie keeps failing ("refusing to act on a different row"), now with plain wording. (3) "Build again" keeps the approve-before-it and right-row answers while the question and step are the same, and the typed/date answers settled before the build are read after it. Also fixed 2026-11-17 (`entity_binding.py`): a row binding needs a data row, a step that cannot do harm and whose own words name its row gets none, and a recorded value names a row input only as a whole value.
+
+### BUILD-100 (1) — A successful build can be built again
+**Resolved:** 2026-11-21
+A compiled workflow can always be built again (action `rebuild`, "Build again", a Confirm card that warns edits are replaced and a new test is needed; also reachable in chat as "build again" / "compile again") (2026-11-18).
+
 ### BUILD-114 (1) — Workflow chat: edit your last message and start a new conversation (WF-12 12.7)
 **Resolved:** 2026-11-20
 Human Edit's Conversation got a "New conversation" button that adds a divider the chat model reads nothing above (everything stays visible and every open question or change card above keeps working), and an "Edit" link on the person's last message that replaces it and its reply with one new reply, offered only while nothing but a reply followed it (`thread_store.conversation_start` / `editable_message`, a `retract` line, `thread_turn{replaces}`, `thread_new_conversation`). Parts (2) and (3) stay open in `TODO.md`.
@@ -1319,7 +1351,7 @@ Human Edit's Conversation got a "New conversation" button that adds a divider th
 - **Category:** Cloud
 ---
 
-## RT — Runtime (12 done)
+## RT — Runtime (13 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1441,6 +1473,10 @@ Updater.md` §1.3.
 ### RT-16 / RT-17 — The local run record
 **Resolved:** 2026-11-18
 `recovery.log` is now the local record of a run: `recovery_log.js::enterStepScope` (called per step from `run.js::executeOneStep`) stamps `run_id`, `slug`, `step_index` and `step_key` on every line written while that step runs; `resolution.js` writes a `resolve` line (winner's score and margin over the runner-up, or the tied candidates, per-signal match counts) and `run.js::proveStep` a `proof` line (verdict, rung, every check's witness and answer). Rotation keeps three older files. The cloud tracker is unchanged; `test_recovery_log_local_record.js` fails if a `tracker.emit` call ever carries `checks`, `tied`, `signals` or `candidates`. Leftover: RT-17b in `TODO.md`.
+
+### RT-17b (step line) — One run-record line per step
+**Resolved:** 2026-11-21
+`recovery.log` gets a `step_decision` line for every step: how it ended, how long it took, the tab address without query or fragment, the nesting path (`run.js::executeOneStep`).
 
 ### RT-18 — Large uploads and failed downloads in a host panel (WF-14 14.8)
 **Resolved:** 2026-11-20
@@ -1630,7 +1666,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (19 done)
+## AUTH — Authentication (20 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -1766,6 +1802,10 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Category:** Authentication (Build Studio)
 - **Description:** The probe kept only the first 25 unique buttons/links, so footer links ("Docs", "Contact GitHub Support") fell out of the signed-in observation and were learned as signed-out markers; one "no" overrides every other signal, so a thin signed-in page could read "expired".
 - **Complexity:** S
+
+### AUTH-24 (2, 3) — Stale sign-in warning; "Sign in and test again" used a dead session
+**Resolved:** 2026-11-21
+(2) The "No success URL is set" warning is worked out each time it is read (`groups.py::_live_detect_warning`), so it goes the moment an address exists. (3) A sign-in expiry reported by the runtime is written onto the group's apps (`test_flow.py::_tf_mark_session_expired`), so "Sign in and test again" opens the sign-in window (2026-11-18).
 
 ## DEAD — Tech debt (1 done)
 

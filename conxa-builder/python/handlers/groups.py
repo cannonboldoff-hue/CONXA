@@ -103,6 +103,37 @@ def _detect_warning(success_url: str, reached: bool, has_definition: bool) -> st
     return ""
 
 
+def _learned_success_url(landed_url: Any, app: Any) -> str:
+    """The page the person ended up on once signed in, when the app has no address for it yet. It is the sign-in
+    window's own last page, and only used when it is a real page of the same site that is not the sign-in page itself,
+    so a wizard that never asks for it still ends with one. Empty when there is nothing safe to use."""
+    from urllib.parse import urlsplit
+
+    from conxa_compile.recorder.frame_utils import looks_like_login_page
+
+    if app is None or app.success_url or not isinstance(landed_url, str):
+        return ""
+    url = landed_url.strip()
+    try:
+        got, login = urlsplit(url), urlsplit(app.login_url or "")
+    except ValueError:
+        return ""
+    if got.scheme not in ("http", "https") or not got.netloc or got.netloc != login.netloc:
+        return ""
+    if (got.path or "/") == (login.path or "/") or looks_like_login_page(url):
+        return ""
+    return url
+
+
+def _live_detect_warning(app) -> str:
+    """The warning as it is NOW. "No success URL is set" is a fact about the app's current settings, so it is worked out
+    every time it is read: it goes away the moment an address is set, and a learned definition makes it moot. What was
+    seen at sign-in time (the login never reached the address) is the only part that is stored."""
+    if app.auth_definition is not None:
+        return ""
+    return app.detect_warning or _detect_warning("", False, False) if not app.success_url else app.detect_warning
+
+
 def group_auth_status(group) -> dict[str, Any]:
     """Per-app readiness for a group, plus the id of the first app still
     needing attention (used by both the setup wizard and the run gate).
@@ -139,7 +170,7 @@ def group_auth_status(group) -> dict[str, Any]:
             "verified": verified,
             "last_error": app.last_error,
             "check_note": app.check_note,
-            "detect_warning": app.detect_warning,
+            "detect_warning": _live_detect_warning(app),
             # Boolean only — never the definition itself (which is diagnostics-adjacent, not a
             # secret, but has no reason to round-trip through the group-status polling response).
             "has_auth_definition": app.auth_definition is not None,
@@ -522,6 +553,7 @@ class GroupsMixin:
             decided = True
 
         reached_success_url = bool(sess.reached_wait_url)  # read before stop() tears the session down
+        landed_url = str(getattr(sess, "current_url", "") or "")
         self._loop.run(sess.stop())
         with self._rec_lock:
             if self._active_recording == session_id:
@@ -552,9 +584,14 @@ class GroupsMixin:
         app = next((a for a in group.apps if a.id == app_id), None)
         has_definition = definition is not None if decided else app_before is not None and app_before.auth_definition is not None
         warning = _detect_warning(app.success_url if app else "", reached_success_url, has_definition)
+        if not (app and app.success_url):
+            warning = ""   # "no address set" is worked out when read (_live_detect_warning), never stored to go stale
         group = update_app(group_id, app_id, detect_warning=warning) or group
         if decided:
             group = set_group_app_auth_definition(group_id, app_id, definition) or group
+            learned = _learned_success_url(landed_url, app)
+            if learned:
+                group = update_app(group_id, app_id, success_url=learned) or group
 
         status = group_auth_status(group)
         for wf in list_workflows(group.workspace_id):

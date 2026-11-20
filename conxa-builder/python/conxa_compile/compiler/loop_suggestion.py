@@ -28,6 +28,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from conxa_compile.compiler.step_key import step_keys
+from conxa_core.models.step_identity import legacy_base
 from conxa_compile.compiler.upload_binding import parse_download_suggested_filename
 
 Step = Any  # SkillStep model instance, as build.py holds it before model_dump()
@@ -227,7 +228,7 @@ def _primary_selector(step: Step) -> str:
 def repeat_signature(steps: list[Step]) -> list[tuple[str, str, str]]:
     """What each step does to which element, without its values: two copies of a form give the same sequence.
     The selector is part of it because two plain inputs (a name box, an email box) can share an element hash."""
-    return [(_step_action(s), k.rsplit("#", 1)[0], _primary_selector(s)) for s, k in zip(steps, step_keys(steps))]
+    return [(_step_action(s), legacy_base(s), _primary_selector(s)) for s in steps]
 
 
 def _column_name(step: Step, taken: set[str]) -> str:

@@ -63,6 +63,7 @@ const CORE_TOOL_DEFS = [
         _stop_before_step: { type: "integer", minimum: 0, description: "Internal, Build Studio only — do not set. Park on the live page just before this 0-based step instead of running it." },
         _pause_before_irreversible: { type: "boolean", description: "Internal, Build Studio tests only — do not set. Pause (parked on the live page) before the first step that can't be undone instead of running it." },
         _guard_release: { type: "boolean", description: "Internal, Build Studio tests only — do not set. With resume_from set to the paused step, run it and every later step that can't be undone." },
+        _guard_skip: { type: "array", items: { type: "string" }, description: "Internal, Build Studio tests only — do not set. source_step_key of steps the person said to run without asking; the test guard does not pause before them." },
       },
       required: ["skill"],
     },

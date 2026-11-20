@@ -1213,6 +1213,7 @@ async function _handleTool(name, args, extra) {
     // per-run entry): customer and agent callers never set these, so for them both stay false.
     const _guardPause = args._pause_before_irreversible === true;
     const _guardRelease = args._guard_release === true;
+    const _guardSkip = Array.isArray(args._guard_skip) ? args._guard_skip.filter((k) => typeof k === "string") : [];
     // Build Studio only: park BEFORE this step of the primary skill (segment re-recording). Never set by a
     // customer or an agent, so for them it stays undefined and nothing changes.
     const _stopBefore = Number.isInteger(args._stop_before_step) && args._stop_before_step >= 0 ? args._stop_before_step : undefined;
@@ -2094,7 +2095,7 @@ async function _handleTool(name, args, extra) {
             dryRun,
             isResume: isResuming,
             context: _context, // EXEC-21: handover needs the browser context to arm its banner
-            guard: _guardPause ? { pause: true, released: _guardRelease } : undefined, // RT-9
+            guard: _guardPause ? { pause: true, released: _guardRelease, skip: _guardSkip } : undefined, // RT-9
             stopBefore: si === 0 ? _stopBefore : undefined,
             resumeLoop: isResuming && _park ? _park.loopCursor : undefined, // a guard pause inside a loop body
             callees, // call_workflow: the workflows this skill calls, already loaded and checked
@@ -2585,6 +2586,11 @@ async function _handleTool(name, args, extra) {
           outcome: "couldnt_confirm",
           steps: [..._proofSteps, ...((runErr.proof && runErr.proof.steps) || [])].slice(0, 200),
         };
+      }
+      if (failResp && runErr.fault && runErr.faultKind === "page_size") {
+        // The test browser was not showing the page at its normal size (a minimized window): the run could not be
+        // trusted, which says nothing about the workflow. Studio reads this and leaves the last test result alone.
+        failResp._meta = { ...(failResp._meta || {}), "conxa/couldnt_run": { kind: "page_size", run_id: _runId, step_index: runErr.failedAt } };
       }
       if (failResp && Array.isArray(failResp.content)) {
         // EXEC-36/BUILD-28(a) — same warnings a passing run would have surfaced, so a run that

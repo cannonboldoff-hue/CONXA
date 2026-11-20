@@ -32,6 +32,7 @@ from conxa_compile.compiler.step_key import step_keys
 from conxa_compile.compiler.identity_bundle import _OPTION_CONTENT_TAGS
 from conxa_core.config import settings
 from conxa_core.models.prose_binding import readable as _readable
+from conxa_core.models.prose_binding import say_text
 
 MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
@@ -621,8 +622,8 @@ def generate_questions(
 
     ``kinds`` keeps only those question kinds (the flow builds the ones an earlier answer must be
     replayed onto first, then the rest from the document replay left). ``typed_fixed_events`` are
-    recorded event ids (sequence numbers) of typed text already judged "stays as recorded": their
-    ``values`` choice is left unticked. ``limits`` (out-param) counts, per kind, the places found
+    recorded event ids (sequence numbers) already settled as "stays as recorded" (typed text, or a picked date the person
+    called "always this one"): their ``values`` choice is left unticked and a date is not asked about again as a relative one. ``limits`` (out-param) counts, per kind, the places found
     after that kind's cap was reached, so a cut is said out loud instead of silently under-asking.
     ``skip_events`` are recorded event ids already asked about before the build (a dropdown / radio / date
     the understanding put to the person): their ``values`` choice is not offered a second time.
@@ -894,6 +895,11 @@ def generate_questions(
                 continue
             days = (picked - today).days
             if _action_name(s) != "date_pick" or picker.get("date_offset_days") is not None or not -31 <= days <= 366:
+                continue
+            # "Always this one" was already answered for this recorded date (asked before the build): a date that is
+            # always this one is not "N days from today", so it is not asked a second time (WF-2 E).
+            date_seq = ((look(s) or {}).get("extras") or {}).get("sequence")
+            if date_seq is not None and str(date_seq) in fixed_events:
                 continue
             rel_seen += 1
             if rel_seen > 2:
@@ -1730,13 +1736,7 @@ def _assertion_words(step: dict[str, Any]) -> list[str]:
     for a in (step.get("validation") or {}).get("assertions") or []:
         if isinstance(a, dict) and a.get("required") and a.get("type") in _ASSERTION_TYPES:
             if a.get("type") == "text_present":
-                raw = str(a.get("target") or a.get("text") or a.get("value") or "").strip()
-                only_input = re.fullmatch(r"\{\{\s*([A-Za-z_]\w*)\s*\}\}", raw)
-                shown = _readable(raw)[:60]
-                if only_input:  # an input's name is not words on the screen: say what it stands for
-                    out.append(f"the {only_input.group(1).replace('_', ' ').lower()} you entered appears")
-                else:  # _readable already quotes an input name inside the words: never quote twice
-                    out.append(f"{shown} appears" if "“" in shown else f"“{shown}” appears")
+                out.append(f"{say_text(a.get('target') or a.get('text') or a.get('value'))} appears")
             elif a.get("type") == "url_changed":
                 out.append("the page address changes")
             elif a.get("type") == "state_changed":

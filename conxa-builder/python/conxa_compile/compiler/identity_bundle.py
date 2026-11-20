@@ -164,7 +164,16 @@ def generate_deterministic_signals(
     role = str(semantic.get("role") or target.get("role") or "").strip()
     ax_name = _accessible_name(target)
     if role and ax_name and role.lower() not in _EXCLUDED_ROLES:
-        candidates.append(("role", to_playwright_grammar("role", role, strip_volatile_count(ax_name))))
+        role_name = strip_volatile_count(ax_name)
+        if role_name != ax_name and dom_html:
+            # The trailing number is a live count only when it does not tell this element from its neighbours. When the
+            # shorter name picks several elements on the recorded page and the full name picks one, the number IS the
+            # identity (one of forty "Pick item N" buttons), so it stays.
+            short_sel, full_sel = to_playwright_grammar("role", role, role_name), to_playwright_grammar("role", role, ax_name)
+            if (not uniqueness_gate(short_sel, dom_html, a11y_tree, absent_ok=False)
+                    and uniqueness_gate(full_sel, dom_html, a11y_tree, absent_ok=False)):
+                role_name = ax_name
+        candidates.append(("role", to_playwright_grammar("role", role, role_name)))
 
     # 3. text-based (visible-text)
     # Skipped for option-content elements: a <select>'s inner text is its concatenated <option>

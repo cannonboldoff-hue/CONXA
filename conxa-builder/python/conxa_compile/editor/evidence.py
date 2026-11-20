@@ -31,6 +31,7 @@ from conxa_core.storage.json_store import read_skill
 from conxa_core.storage.workflow_store import list_workflows
 
 from conxa_compile.compiler.step_key import step_keys
+from conxa_core.models.step_identity import legacy_base
 from conxa_compile.conxa_runtime import resolve_test_sandbox_dir
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.edit_log import read_edits
@@ -116,7 +117,7 @@ def _read_observed_overlays(evidence_dir: Path) -> list[dict[str, Any]]:
 
 
 def _resolve_failed_step_key(
-    keys: list[str], failed_at: Any, failed_stable_hash: str | None
+    keys: list[str], failed_at: Any, failed_stable_hash: str | None, bases: list[str] | None = None
 ) -> tuple[str | None, bool]:
     """BUILD-31: `failed_at` is a raw index frozen at the moment a run failed; `keys` is the
     CURRENT document's step_keys. An insert/delete before that index shifts every later
@@ -135,7 +136,10 @@ def _resolve_failed_step_key(
     if not isinstance(failed_at, int) or not (0 <= failed_at < len(keys)):
         return None, False
     key = keys[failed_at]
-    if failed_stable_hash and key.rsplit("#", 1)[0] != failed_stable_hash:
+    # A key is the step's own id now (BUILD-104 (1)), no longer `<hash>#<n>`: compare the step's element hash,
+    # which the caller passes as `bases` (a bare key list keeps the old reading, for the self-check below).
+    base = bases[failed_at] if bases is not None else key.rsplit("#", 1)[0]
+    if failed_stable_hash and base != failed_stable_hash:
         return None, True
     return key, False
 
@@ -329,7 +333,7 @@ def build_evidence_bundle(
     runtime_evidence = _read_runtime_evidence(run_id)
     failed_at = runtime_evidence.get("failed_at")
     failed_step_key, step_key_mismatched = _resolve_failed_step_key(
-        keys, failed_at, runtime_evidence.get("failed_stable_hash")
+        keys, failed_at, runtime_evidence.get("failed_stable_hash"), [legacy_base(s) for s in steps]
     )
 
     # BUILD-26 stage h: runtime_evidence degrades to {} both when nothing failed AND when a
@@ -406,7 +410,9 @@ def build_evidence_bundle(
         "skill_id": skill_id,
         "run_id": run_id,
         "failed_step_key": failed_step_key,
-        "compile_status": compile_report.get("status"),
+        # What the compile's selector check found, in its own words: "failed" there never meant the compile failed
+        # (the workflow was built and saved), only that a step has no unique, lasting way to find its element.
+        "some_steps_hard_to_find": compile_report.get("status") == "failed",
         "second_opinion": compile_report.get("second_opinion"),
         # EXEC-44: two provenances, concatenated. compile_report["archived_steps"] is rebuilt
         # from scratch every compile (this compile's own flag_noise findings only — see

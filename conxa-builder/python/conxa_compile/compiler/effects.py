@@ -196,8 +196,10 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
     if kind == "download":
         add(rung="completed", witness="filesystem", probe={"type": "download_file"},
             plain="the file arrived on this computer")
-    if kind in {"upload", "delete", "send", "save", "long_job"}:
-        # Layer 1 of the design, true on any website: the app was sent a data-changing request and answered it.
+    if kind in {"upload", "delete", "send", "save", "long_job"} and (ev.get("extras") or {}).get("sent_mutating_request") is not False:
+        # Layer 1 of the design, true on any website: the app was sent a data-changing request and answered it. Only
+        # offered for a step the recorder saw one after (a page that sends nothing never gets this check); a recording
+        # with no request log leaves the flag unset and keeps it.
         add(rung="completed", witness="transport", probe={"type": "request_chain", "method": "mutating", "status": "2xx"},
             plain="the app accepted the request")
     mine = _own_data_words(ev)
@@ -267,17 +269,13 @@ def _app_reacted(ev: dict[str, Any]) -> bool:
             or bool(ev.get("post_watch")) or bool(ev.get("surface_context")))
 
 
-def choose_file_presses(events: list[dict[str, Any]], requests: dict[str, Any] | None) -> dict[int, int]:
-    """``{upload sequence: press sequence}`` for each file pick that sent nothing, whose files a later press on the same
-    page sent (a "choose files, then press Upload" page). Such a pick is built as ``choose_files`` (proven by the file box
-    holding the files) and the press carries the upload's checklist and is gated like an upload.
-
-    Needs the recorder's request log (``requests.json``): without it nobody can say the pick sent nothing, so a recording
-    made before 2026-11-17 keeps the upload as the step that does the work. A pick that sent a request, or after which
-    the app reacted, is the upload itself. Only presses on the same tab and address before the next pick count, and only
-    the first of them that sent a data-changing request."""
+def request_evidence(events: list[dict[str, Any]], requests: dict[str, Any] | None):
+    """``None`` without the recorder's request log (a recording made before it, or none kept): nothing can be said.
+    Otherwise ``f(i)``: did a data-changing request go out in the 10 s after event ``i`` (until the next event)?
+    ``None`` for an event with no time. One reading of the log for both the file-pick pairing and the "app accepted the
+    request" check, so a check about a request is only ever made for a step after which one was seen."""
     if not isinstance(requests, dict) or not isinstance(requests.get("mutating"), list):
-        return {}
+        return None
     sent = sorted(float(r["t"]) for r in requests["mutating"] if isinstance(r, dict) and isinstance(r.get("t"), (int, float)))
 
     def window(i: int) -> tuple[float, float] | None:
@@ -290,6 +288,22 @@ def choose_file_presses(events: list[dict[str, Any]], requests: dict[str, Any] |
     def sent_in(i: int) -> bool | None:
         w = window(i)
         return None if w is None else any(w[0] <= t < w[1] for t in sent)
+
+    return sent_in
+
+
+def choose_file_presses(events: list[dict[str, Any]], requests: dict[str, Any] | None) -> dict[int, int]:
+    """``{upload sequence: press sequence}`` for each file pick that sent nothing, whose files a later press on the same
+    page sent (a "choose files, then press Upload" page). Such a pick is built as ``choose_files`` (proven by the file box
+    holding the files) and the press carries the upload's checklist and is gated like an upload.
+
+    Needs the recorder's request log (``requests.json``): without it nobody can say the pick sent nothing, so a recording
+    made before 2026-11-17 keeps the upload as the step that does the work. A pick that sent a request, or after which
+    the app reacted, is the upload itself. Only presses on the same tab and address before the next pick count, and only
+    the first of them that sent a data-changing request."""
+    sent_in = request_evidence(events, requests)
+    if sent_in is None:
+        return {}
 
     def where(ev: dict[str, Any]) -> tuple[str, str]:
         tab = ev.get("tab") if isinstance(ev.get("tab"), dict) else {}

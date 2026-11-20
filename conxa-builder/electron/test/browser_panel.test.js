@@ -664,3 +664,26 @@ test("a middle-click or Ctrl+click opens a background tab and never throws out o
   assert.strictEqual(broken.destroyed, true);
   assert.strictEqual(last.tabs.length, 2);
 });
+
+test("starting a test brings a minimized Studio window back first, so the run never starts at no size", async () => {
+  const modPath = require.resolve("../browser_panel");
+  delete require.cache[modPath];
+  Module._load = function (request, ...rest) {
+    if (request === "electron") return { session: { fromPartition: () => ({ clearStorageData: async () => {}, on: () => {} }) }, WebContentsView: FakeView };
+    return realLoad.call(this, request, ...rest);
+  };
+  const panel = require("../browser_panel");
+  Module._load = realLoad;
+  const listeners = {};
+  const calls = [];
+  let minimized = true;
+  const w = { ...win, isDestroyed: () => false, isMinimized: () => minimized,
+    restore: () => { calls.push("restore"); minimized = false; (listeners.restore || []).forEach((f) => f()); },
+    once: (ev, f) => { (listeners[ev] = listeners[ev] || []).push(f); } };
+  panel.init(w, {});
+  await panel.prepareTestRun();
+  assert.deepStrictEqual(calls, ["restore"]);
+  calls.length = 0;
+  await panel.prepareTestRun();                          // already restored: nothing to do
+  assert.deepStrictEqual(calls, []);
+});

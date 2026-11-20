@@ -98,7 +98,10 @@ export function interimProgress(wf: ProgressInput): ProgressRow[] {
   const compiling = wf.stage === 'queued' || wf.stage === 'compiling'
   const recorded = Boolean(wf.session_id)
   const compiled = Boolean(wf.skill_id)
-  const compileFailed = wf.recording_status === 'error' || wf.compile_status === 'failed'
+  // compile_status "failed" means a step is hard to find on the page; the workflow was still built, so it is a review
+  // flag and never "the compile didn't finish".
+  const compileFailed = wf.recording_status === 'error'
+  const hardToFind = compiled && wf.compile_status === 'failed'
   return [
     wf.status === 'needs_auth' && !recorded
       ? { label: 'Sign in', kind: 'warn', note: 'Sign-in needed' }
@@ -111,8 +114,8 @@ export function interimProgress(wf: ProgressInput): ProgressRow[] {
         : { label: 'Compile', kind: compiled ? 'ok' : 'none', note: compiled ? '' : recorded ? 'Ready to compile' : '' },
     {
       label: 'Review',
-      kind: !compiled ? 'none' : wf.stage === 'needs_review' ? 'warn' : 'ok',
-      note: wf.stage === 'needs_review' ? 'Needs your review' : '',
+      kind: !compiled ? 'none' : wf.stage === 'needs_review' || hardToFind ? 'warn' : 'ok',
+      note: wf.stage === 'needs_review' ? 'Needs your review' : hardToFind ? 'Some steps are hard to find' : '',
     },
     {
       label: 'Test',

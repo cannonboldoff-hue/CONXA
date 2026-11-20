@@ -25,6 +25,9 @@ from handlers.test_flow import last_test_inputs
 _WATCH_INTERVAL_S = 1.0
 _SIGN_IN_WATCH_INTERVAL_S = 1.5
 _sign_in_finish_lock = threading.Lock()
+# "I'm signed in" pressed while the signed-in page is still loading reads as "not confirmed" (BUILD-98 (4)): look
+# again after each pause before saying so. The check itself is unchanged; it is only given the page's time to load.
+_SIGN_IN_RECHECK_SECONDS = (2.0, 3.0)
 
 def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
@@ -170,10 +173,18 @@ class WorkflowFlowMixin:
             if card.get("state") != "waiting":
                 return {"next": "sign_in", "already": True}
             refs = card.get("refs") or {}
-            result = self.cmd_finish_group_app_auth(
-                {"session_id": refs.get("session_id"), "group_id": refs.get("group_id"), "app_id": refs.get("app_id"),
-                 "force": force}, rid or "",
-            )
+            finish_args = {"session_id": refs.get("session_id"), "group_id": refs.get("group_id"), "app_id": refs.get("app_id"),
+                           "force": force}
+            result = self.cmd_finish_group_app_auth(finish_args, rid or "")
+            if result.get("confirmed") is False and not (auto or force):
+                for pause in _SIGN_IN_RECHECK_SECONDS:
+                    time.sleep(pause)
+                    try:
+                        result = self.cmd_finish_group_app_auth(finish_args, rid or "")
+                    except _CommandError:
+                        break  # the window was closed meanwhile: keep the answer we have
+                    if result.get("confirmed") is not False:
+                        break
             if result.get("confirmed") is False:
                 # An automatic check that came too early stays quiet — the person is still signing in.
                 if not auto:
@@ -510,6 +521,8 @@ class WorkflowFlowMixin:
         flags = runtime_state.get_flags(workflow.id)
         if flags.get("recording") or flags.get("testing"):
             raise _CommandError("busy", "Finish the recording or test that is in progress first.")
+        # The replay is a test run: an open question, a running build or a missing test copy stops it the same way (BUILD-104 (2)).
+        self._require_allowed(workflow.id, "test")
         inputs = {str(i.get("id")): i.get("default") for i in doc.get("inputs") or [] if isinstance(i, dict) and i.get("id")}
         missing = [str(i.get("id")) for i in doc.get("inputs") or []
                    if isinstance(i, dict) and i.get("id") and not i.get("optional") and str(i.get("default") or "").strip() == ""]

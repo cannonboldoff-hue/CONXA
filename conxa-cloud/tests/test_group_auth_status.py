@@ -154,3 +154,29 @@ def test_ready_app_without_a_recent_probe_is_not_counted_verified() -> None:
     status = group_auth_status(group)
     assert status["apps_authenticated"] == 2
     assert status["apps_verified"] == 1
+
+
+def test_the_no_success_url_warning_is_worked_out_when_read_and_goes_when_an_address_is_set() -> None:
+    from handlers.groups import _learned_success_url
+
+    stale = GroupApp(id="a", name="A", login_url="https://x.test/login", captured_at=1.0, detect_warning="No success URL is set, so ...")
+    assert "No success URL" in group_auth_status(_group(stale))["apps"][0]["detect_warning"]
+    fixed = GroupApp(id="a", name="A", login_url="https://x.test/login", captured_at=1.0, success_url="https://x.test/app",
+                     detect_warning="")
+    assert group_auth_status(_group(fixed))["apps"][0]["detect_warning"] == ""
+    # nothing stored at all, no address, no learned definition: still said (derived, not remembered)
+    bare = GroupApp(id="a", name="A", login_url="https://x.test/login", captured_at=1.0)
+    assert "No success URL" in group_auth_status(_group(bare))["apps"][0]["detect_warning"]
+    assert _learned_success_url("https://x.test/app", bare) == "https://x.test/app"
+
+
+def test_a_learned_success_url_is_never_the_sign_in_page_or_another_site() -> None:
+    from handlers.groups import _learned_success_url
+
+    app = GroupApp(id="a", name="A", login_url="https://x.test/login", captured_at=1.0)
+    assert _learned_success_url("https://x.test/login", app) == ""
+    assert _learned_success_url("https://x.test/users/sign_in", app) == ""
+    assert _learned_success_url("https://evil.test/app", app) == ""
+    assert _learned_success_url("javascript:alert(1)", app) == ""
+    set_already = GroupApp(id="a", name="A", login_url="https://x.test/login", success_url="https://x.test/home")
+    assert _learned_success_url("https://x.test/app", set_already) == ""

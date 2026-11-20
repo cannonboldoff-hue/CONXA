@@ -196,7 +196,8 @@ class TestFlowMixin:
 
     def cmd_flow_test_prepare(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:
         from conxa_compile.conversation import clarify, clarify_store, harness, thread_store as ts
-        from conxa_compile.editor.workflow_mutations import run_produced_names
+        from conxa_compile.editor.source_event import recorded_input_values
+        from conxa_compile.editor.workflow_mutations import inputs_a_run_needs, run_produced_names
         from conxa_core.storage.json_store import read_skill
         from conxa_core.storage.workflow_store import get_workflow
 
@@ -223,12 +224,13 @@ class TestFlowMixin:
         suspects = {str(s) for s in payload.get("suspect_inputs") or []}
         # A value the run fills in itself (an agent's answer, a value read off the page) is never asked for (WF-13).
         produced = run_produced_names(steps)
+        from_recording = recorded_input_values(doc)
         inputs = []
-        for row in doc.get("inputs") or []:
-            if not isinstance(row, dict) or not row.get("id") or str(row["id"]).lower() in produced:
+        for row in inputs_a_run_needs(doc):
+            if str(row["id"]).lower() in produced:
                 continue
             rid_ = str(row["id"])
-            value = last.get(rid_, recorded.get(rid_, row.get("default") or ""))
+            value = last.get(rid_, recorded.get(rid_, row.get("default") or from_recording.get(rid_, "")))
             columns = [str(c) for c in row.get("columns") or []] if row.get("type") == "rows" else []
             if columns:
                 value = rows_to_text(value, columns)
@@ -248,6 +250,8 @@ class TestFlowMixin:
             # A step can also be destructive without a consequence label (older compiles).
             irreversible = [clarify.step_name(s) for s in steps if isinstance(s, dict)
                             and isinstance(s.get("identity_bundle"), dict) and s["identity_bundle"].get("destructive")]
+        go_keys = self._flow_go_ahead_keys(workflow_id)
+        go_ahead = [clarify.step_name(s) for k, s in zip(clarify.step_keys(steps), steps) if k in go_keys]
         harness.emit_item(sink, _thread(workflow_id), ts.append(
             _thread(workflow_id), "assistant_message",
             text="Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start."))
@@ -257,6 +261,7 @@ class TestFlowMixin:
         card = harness.post_card(
             _thread(workflow_id), "test_inputs", "open", sink=sink, inputs=inputs, irreversible=irreversible[-3:],
             irreversible_count=len(irreversible), guard=True, show_browser=True, use_ai=False,
+            go_ahead=go_ahead,
             agent_step_count=sum(1 for s in steps if isinstance(s, dict) and clarify._action_name(s) == "agent_span"
                                  and not _is_confirm_only_span(s)),
             version=int((doc.get("meta") or {}).get("version") or 1), step_count=len(steps),
@@ -487,10 +492,14 @@ class TestFlowMixin:
             return "__stop__"
 
         try:
-            self._tf_ensure_built(workflow, rid)
+            try:
+                self._tf_ensure_built(workflow, rid)
+            except Exception as exc:  # noqa: BLE001 -- the test never started: this is not a test result
+                return self._tf_failed(workflow_id, card_id, rows, str(exc), sink, started, inputs, outcome="package_build", names=names)
             result = self.cmd_test_workflow(
                 {"workflow_id": workflow_id, "inputs": inputs, "headless": not show_browser, "guard": guard, "use_ai": use_ai,
                  "_phase_hook": phase_hook, "_guard_hook": guard_hook, "_review_hook": review_hook,
+                 "guard_skip": sorted(self._flow_go_ahead_keys(workflow_id)),
                  "_fork_hook": fork_hook}, rid)
         except _CommandError as exc:
             return self._tf_failed(workflow_id, card_id, rows, exc.message or exc.code, sink, started, inputs,
@@ -512,13 +521,20 @@ class TestFlowMixin:
                 self._tf_calibrate(workflow.skill_id, result.get("proof_steps") or [])
             notes = [str(n) for n in (result.get("notes") or [])][:10]
             # An approval step's yes is the run's own bookkeeping, not something the workflow read from the app.
-            outputs = {k: v for k, v in (result.get("outputs") or {}).items() if k != "confirmed_to_continue"}
+            # Said in the card's own words: the person never sees a step's token or an output's internal name.
+            outputs = {k.replace("_", " "): v for k, v in (result.get("outputs") or {}).items() if k != "confirmed_to_continue"}
+            proof_steps = [{**s, "intent": (names.get(str(s.get("source_step_key") or "")) or (_humanize(str(s.get("intent") or "")),))[0]}
+                           for s in result.get("proof_steps") or []]
+            from handlers.workflows import unproven_steps
+
             push(state="passed", seconds=elapsed, steps_ran=len(rows), irreversible_ran=ran_destructive,
                  outputs=outputs, actions=["approve", "test_again"],
-                 outcome=outcome, notes=notes, proof_steps=result.get("proof_steps") or [])
-            if outcome == "done_please_check" and notes:
-                text = ("It ran to the end, but I couldn’t confirm everything: " + " ".join(notes)
-                        + " Take a look before you approve it. Approving doesn’t publish anything on its own.")
+                 outcome=outcome, notes=notes, proof_steps=proof_steps,
+                 unproven_steps=unproven_steps(proof_steps) if outcome in ("submitted", "done_please_check") else [])
+            if outcome == "done_please_check":
+                text = ("It ran to the end, but I couldn’t confirm everything" + (": " + " ".join(notes) if notes else ".")
+                        + " Look at the result in the app. If it’s right, press “I checked — it worked” on the test card; "
+                        "otherwise test it again. Approving doesn’t publish anything on its own.")
             elif outcome == "submitted":
                 text = ("It ran and the app took the work, but I couldn’t confirm that it finished. Look at the result in the "
                         "app. If it’s there, press “I checked — it worked” on the test card; otherwise test it again. "
@@ -543,6 +559,15 @@ class TestFlowMixin:
             harness.log_event(thread, "Test paused — sign-in expired", glyph="warn", sink=sink,
                               subject="Nothing failed in the workflow")
             return "needs_sign_in"
+        if status == "couldnt_run":
+            # Not a test result: the last real result stays, and neither the input check nor auto-fix runs.
+            from conxa_compile.conversation.failure_summary import summarize
+
+            push(state="failed", outcome="couldnt_run", seconds=elapsed,
+                 summary=summarize(str(result.get("message") or "")), error=str(result.get("message") or "")[:4000],
+                 failed_step="", nothing_sent=False, actions=[])
+            harness.log_event(thread, "Test couldn’t run", glyph="warn", sink=sink, subject="Nothing failed in the workflow")
+            return "blocked"
         if status == "previewed":
             push(state="previewed", seconds=elapsed, actions=["test_again"])
             harness.log_event(thread, "Preview finished", glyph="warn", sink=sink,
@@ -574,6 +599,28 @@ class TestFlowMixin:
         harness.log_event(thread, "Test stopped by you", glyph="none", sink=sink)
         record_outcome("stopped", rows[-1]["name"] if rows else "")
         return "stopped"
+
+    @staticmethod
+    def _flow_go_ahead_keys(workflow_id: str) -> set[str]:
+        """Step keys of steps that can't be undone where the person answered "No, just do it" to "should someone approve
+        first". The test's own pause before such steps honours that answer. Only a step still marked irreversible counts:
+        an answer about a step that has since become something else settles nothing."""
+        try:
+            from conxa_compile.conversation import clarify, clarify_store
+            from conxa_core.storage.json_store import read_skill
+            from conxa_core.storage.workflow_store import get_workflow
+
+            wf = get_workflow(workflow_id)
+            doc = read_skill(wf.skill_id) if wf and wf.skill_id else None
+            if not doc:
+                return set()
+            live = {k for k, s in zip(clarify.step_keys(clarify._steps(doc)), clarify._steps(doc))
+                    if isinstance(s, dict) and s.get("consequence") == "irreversible"}
+            return {k for q in (clarify_store.load(workflow_id) or {}).get("questions") or []
+                    if q.get("kind") == "confirm" and q.get("status") == "answered" and (q.get("answer") or {}).get("choice") == "no"
+                    for k in q.get("step_keys") or [] if k in live}
+        except Exception:  # noqa: BLE001 -- without it the test simply pauses, which is the safe side
+            return set()
 
     def _tf_run_facts(self, workflow_id: str) -> dict[str, Any]:
         """What the runtime recorded about the latest failure, as data: its kind, whether the failing step's action may
@@ -754,13 +801,19 @@ class TestFlowMixin:
         # "Couldn't confirm" / "Partly done" already read in plain words and say something an ordinary
         # failure summary would flatten: the work may have happened. Keep their own sentences.
         own = outcome in ("couldnt_confirm", "partly_done")
-        summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message, facts["kind"], facts.get("candidates"))
+        not_a_result = outcome == "package_build"   # the test never started: no step ran, so the run's evidence is not this failure's
+        if not_a_result:
+            summary = summarize(message, "package_build")
+        else:
+            summary = message.split(".", 1)[1].strip()[:400] if own and "." in message else summarize(message, facts["kind"], facts.get("candidates"))
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:4000],
-            summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=nothing_sent and not own,
+            summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=(nothing_sent and not own) or not_a_result,
             seconds=int(time.time() - started), outcome=outcome or "failed",
-            failure_image=self._tf_failure_image(workflow_id), actions=[],
+            failure_image=None if not_a_result else self._tf_failure_image(workflow_id), actions=[],
         )
+        if not_a_result:
+            return "blocked"
         if failing is not None and failing.get("step_key"):
             from conxa_compile.conversation import clarify_events
 
@@ -809,10 +862,14 @@ class TestFlowMixin:
         card = self._flow_card(workflow.id, card_id)
         if card.get("state") != "passed":
             raise _CommandError("not_passed", "Only a passing test can be approved.")
-        if (card.get("outcome") == "submitted" and payload.get("checked") is True and workflow.last_test_status == "never"
-                and (workflow.last_test_outcome or {}).get("outcome") == "submitted"):
-            # The app took the work but nothing could confirm it finished. The person looked and says it did:
-            # their word is the proof, and only this button gives it (never a chat message).
+        stored = (workflow.last_test_outcome or {}).get("outcome")
+        unconfirmed = card.get("outcome") in ("submitted", "done_please_check") and stored == card.get("outcome")
+        if unconfirmed and payload.get("checked") is not True:
+            raise _CommandError("check_required", "Look at the result in the app first, then press “I checked — it worked”.")
+        if unconfirmed and workflow.last_test_status == "never":
+            # The run ended without proving every step (the app took the work, or a step's result could not be confirmed).
+            # The person looked and says it is right: their word is the proof, and only this button gives it (never a
+            # chat message).
             from conxa_core.storage.workflow_store import set_workflow_test_result
 
             set_workflow_test_result(workflow.id, status="passed", inputs=workflow.last_test_inputs or {}, run_id=workflow.last_test_run_id)
@@ -982,8 +1039,12 @@ class TestFlowMixin:
                        if c.get("kind") == "card" and c.get("card_type") == "test_run"), None)
         if newest is None or newest.get("state") != "failed" or runtime_state.get_flags(workflow_id).get("testing"):
             return False
+        from conxa_compile.conversation.lifecycle import lifecycle_for_workflow
+
+        if lifecycle_for_workflow(workflow).get("substate") == "change_pending":
+            return False  # the person may press Test themselves, but an automatic re-test waits for the other change
         try:
-            self._require_allowed(workflow_id, "test")  # an open question or another unapplied change holds it back
+            self._require_allowed(workflow_id, "test")  # an open question holds it back
         except _CommandError:
             return False
         harness.log_event(_thread(workflow_id), "Testing again with your change", glyph="none", sink=sink)

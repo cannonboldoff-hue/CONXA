@@ -252,7 +252,8 @@ def _normalize_step_anchor_blocks(step: dict[str, Any]) -> dict[str, Any]:
     signals = dict(out.get("signals") or {})
     recovery = dict(out.get("recovery") or {})
     signals["anchors"] = normalize_anchor_list(signals.get("anchors") or [])
-    recovery["anchors"] = normalize_anchor_list(recovery.get("anchors") or [])
+    if "anchors" in recovery:  # an absent list stays absent (BUILD-104 (8)); only a present one is cleaned
+        recovery["anchors"] = normalize_anchor_list(recovery["anchors"] or [])
     out["signals"] = signals
     out["recovery"] = recovery
     return out
@@ -294,6 +295,11 @@ def _sync_destructive_from_consequence(step: dict[str, Any], patch: dict[str, An
     return out
 
 
+# The step fields `_sync_recovery_deterministic` reads: the effective intent (its own words and the semantic
+# signals), the action kind, and validation.wait_for.
+_RECOVERY_INPUTS = frozenset({"intent", "action", "signals", "validation", "recovery"})
+
+
 def sync_derived_step_fields(
     step: dict[str, Any], patch: dict[str, Any], *, sync_recovery: bool = True
 ) -> dict[str, Any]:
@@ -314,7 +320,9 @@ def sync_derived_step_fields(
     _apply_top_level_step_fields(out, patch, sanitize_intent=False)
     out = _normalize_step_anchor_blocks(out)
     out = _sync_destructive_from_consequence(out, patch)
-    if sync_recovery:
+    # The recovery block follows only what it is derived from. An edit that touches none of those (a renamed
+    # input, a changed value or address) leaves it as it was: an empty block stays empty (BUILD-104 (8)).
+    if sync_recovery and _RECOVERY_INPUTS & set(patch):
         out = _sync_recovery_deterministic(out)
     return out
 

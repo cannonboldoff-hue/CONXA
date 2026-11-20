@@ -246,7 +246,7 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
         <>
           <Button variant="ghost" size="icon-sm" disabled={busy || !prevId} onClick={goPrev} aria-label="Previous question"><ChevronLeft /></Button>
           {multi && <Button variant="ghost" size="icon-sm" disabled={busy} onClick={next} aria-label="Confirm and go to the next question"><ChevronRight /></Button>}
-          {multi && <span className="text-xs text-[var(--text-meta)]">Tick what applies, then press the arrow.</span>}
+          {multi && <span className="text-xs text-[var(--text-meta)]">{choices.length > 0 ? 'Tick what applies, then press the arrow.' : 'Type what you’ll see, then press the arrow.'}</span>}
           {canCheck && <Button variant="outline" size="sm" disabled={busy} onClick={() => send('checked')}>I’ve checked it — it’s right</Button>}
           {state === 'failed' && typeof item.error === 'string' && <span className="basis-full text-xs text-status-error">✕ {item.error}</span>}
           {typeof item.note === 'string' && item.note && <span className="basis-full text-xs text-[var(--text-meta)]">{item.note}</span>}

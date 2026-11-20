@@ -15,14 +15,14 @@ from typing import Any
 
 from conxa_core.config import settings
 
+from conxa_compile.conversation.plain_words import plain_ok
 from conxa_compile.llm.client import call_llm
 from conxa_compile.llm.llm_cache import cache_key, read_cached, write_cached
 
 _NAMESPACE = "compile_recap"
-_CACHE_VERSION = 3
+_CACHE_VERSION = 4
 _MIN_CHARS, _MAX_CHARS = 40, 900
 _ATTEMPTS = 3
-_SNAKE_ID = re.compile(r"\b[a-z]+_[a-z_]+\b")
 # The reason given for drawing the recording could not keep (handlers/compile_flow.py puts it in ``left_out``).
 DRAWING_LEFT_OUT = "drawing, or clicking in a drawing area, can't be recorded yet"
 HUMAN_CHECK_LEFT_OUT = "a robot check can't be done automatically; only a person may do it"
@@ -32,6 +32,7 @@ _WALLS = (DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT)
 _GETS_PAST = re.compile(r"\b(?:gets?|getting|goes|going) (?:past|through|around)\b|\b(?:solves?|passes|beats?) the robot", re.IGNORECASE)
 # Claims a message must not make when something was left out: the facts say otherwise (WF-8 8.12).
 _NOTHING_LEFT_OUT = re.compile(r"\bnothing (?:was |is |has been )?(?:left out|missed|dropped)", re.IGNORECASE)
+_MENTIONS_TABS = re.compile(r"\b(?:new|another|second|other|first) (?:tab|window)\b", re.IGNORECASE)
 _DOES_ALL_YOU_DID = re.compile(r"\b(?:same thing|everything|exactly what|all) you did\b", re.IGNORECASE)
 
 
@@ -39,8 +40,8 @@ def _problem(message: str, facts: dict[str, Any]) -> str:
     """Why this answer cannot be used ('' when it can). Told back to the model on the next attempt."""
     if not (_MIN_CHARS <= len(message) <= _MAX_CHARS):
         return f"it must be between {_MIN_CHARS} and {_MAX_CHARS} characters"
-    if "`" in message or "{{" in message or _SNAKE_ID.search(message):
-        return "it must not contain backticks, braces or names with underscores"
+    if not plain_ok(message):
+        return "it must not contain backticks, braces, names with underscores or field paths"
     if facts.get("step_count") and str(facts["step_count"]) not in message:
         return f"it must say the number of steps ({facts['step_count']})"
     left_out = facts.get("left_out") or []
@@ -50,6 +51,9 @@ def _problem(message: str, facts: dict[str, Any]) -> str:
         return "part of it was left out, so never say it does what they did"
     if any(d.get("reason") == HUMAN_CHECK_LEFT_OUT for d in left_out) and _GETS_PAST.search(message):
         return "the robot check was left out, so never say it gets past it"
+    tabs = facts.get("tabs")
+    if isinstance(tabs, dict) and not (tabs.get("opened") or tabs.get("switched")) and _MENTIONS_TABS.search(message):
+        return "the workflow never opens or switches tabs (see tabs): do not mention tabs or windows"
     missing = [str(n) for n in facts.get("unsure_steps") or [] if str(n) not in message]
     return f"it must include exactly: {', '.join(missing)}" if missing else ""
 
@@ -74,5 +78,7 @@ def write_recap(facts: dict[str, Any], *, error_detail: list[str] | None = None)
         if not problem:
             write_cached(_NAMESPACE, key, {"message": message}, _CACHE_VERSION)
             return message
+        if error_detail is not None:
+            error_detail.append(f"answer rejected: {problem}")   # so "couldn't write the summary" has a recorded cause
         payload["previous_answer_rejected_because"] = problem
     return None

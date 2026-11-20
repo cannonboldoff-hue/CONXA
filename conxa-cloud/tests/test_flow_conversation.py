@@ -102,6 +102,7 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(b, "cmd_cancel_recording", cancel_rec)
     monkeypatch.setattr(b, "cmd_cancel_group_app_auth", lambda p, r: calls.append(("cancel_auth", p)) or {"ok": True})
     monkeypatch.setattr("handlers.workflow_flow._WATCH_INTERVAL_S", 0.01)
+    monkeypatch.setattr("handlers.workflow_flow._SIGN_IN_RECHECK_SECONDS", (0.0, 0.0))
     monkeypatch.setattr(b, "_flow_start_compile", lambda wid: calls.append(("compile", wid)))
     monkeypatch.setattr(b, "_flow_start_understand", lambda wid: calls.append(("understand", wid)))
     return b, reg, group, wf, calls, env_state, out
@@ -177,6 +178,25 @@ def test_an_unconfirmed_sign_in_keeps_the_window_open_and_says_why(env):
     after = _cards(wf.id, "sign_in")[0]
     assert after["state"] == "waiting" and after["note"] == "Couldn’t confirm sign-in yet." and after["can_force"] is True
     assert not _cards(wf.id, "recording")  # nothing recorded until it is confirmed
+
+
+def test_a_button_pressed_before_the_signed_in_page_loads_looks_again_before_giving_up(env):
+    """BUILD-98 (4): the first look can be too early; a second look, a moment later, confirms."""
+    b, reg, group, wf, calls, st, _out = env
+    b.cmd_flow_begin({"workflow_id": wf.id}, "r")
+    card = _cards(wf.id, "sign_in")[0]
+    looks = []
+    real_finish = b.cmd_finish_group_app_auth
+
+    def late(payload, rid):
+        looks.append(1)
+        st["confirmed"] = len(looks) >= 2
+        return real_finish(payload, rid)
+
+    b.cmd_finish_group_app_auth = late
+    _mark_signed_in(group)
+    res = b.cmd_flow_sign_in_done({"workflow_id": wf.id, "card_id": card["card_id"]}, "r")
+    assert len(looks) == 2 and res["next"] == "record"
 
 
 def test_confirming_sign_in_saves_it_then_goes_straight_on_to_recording(env):

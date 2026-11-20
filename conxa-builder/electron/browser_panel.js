@@ -671,6 +671,13 @@ function _viewport(v) {
 // still on screen and wipe whatever its cookies left in the shared partition (or a previous app
 // session left on disk), so the new run starts signed out with a warm cache.
 async function prepareTestRun() {
+  // A minimized window leaves every page no size, so a run started now could not be trusted. Starting a test is the
+  // person's own act, so Studio comes back for it (a window that is minimized later is held at size by setMinimized).
+  if (_win && !_win.isDestroyed?.() && _win.isMinimized?.()) {
+    _win.restore();
+    await new Promise((resolve) => { _win.once("restore", resolve); setTimeout(resolve, 1500); });
+    await setMinimized(false);
+  }
   await _dropFinishedRuns(null);
   if (_sharedInUse()) return;
   try { await session.fromPartition(SHARED_PARTITION).clearStorageData(); } catch (err) {

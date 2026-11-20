@@ -501,6 +501,7 @@ When Execute is the MCP client, a headed run renders inside Execute's window (ch
 - **Two run ids:** `server.js` carries `_runId` (per call; names hand-over resume files) and `_hostRunId` (the id Execute registered the view under). They diverge only across park/resume, where `_hostRunId` is restored from `_park.runId`. `run.js::runPlan` takes both as separate opts.
 
 ### 4.7a Build Studio Browser Panel — tests (BUILD-42, 2026-10-18), recording and sign-in (BUILD-46, 2026-10-20)
+> **2026-11-21:** `prepareTestRun` restores a minimized Studio window before a test view is made (a test started at no size could not be trusted); `setMinimized` still holds an already-running test at its size. A run the runtime stops for page size returns `_meta["conxa/couldnt_run"]`, which Studio treats as no test result (Backend-Schema, test outcome classes).
 
 Build Studio reuses the §4.7 seam. A headed test run, a recording and a sign-in all draw their browser inside the Studio window instead of opening a separate Chromium window. Each panel run has a `kind` (`test` | `record` | `signin`); the renderer styles the pane by it.
 

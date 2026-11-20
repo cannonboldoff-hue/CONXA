@@ -318,6 +318,10 @@ class SkillStep(BaseModel):
     is [mixed] today (holds executor probe detail) and is EXEC-1's next target for a clean
     contract-terms definition (a condition + nested steps, no browser assumptions).
     `entity_binding` is [mixed] — see EntityBinding."""
+    # [contract] The step's own identity, written once and never recomputed (models/step_identity.py). Every
+    # stored reference to a step (edit log, question, test result, suggestion) is this id, so the element's
+    # hash can change without moving any of them. Empty only before the first save.
+    step_id: str = ""
     action: str | dict[str, Any]                                              # [contract]
     intent: str = ""                                                          # [contract]
     url: str = ""                                                             # [contract]

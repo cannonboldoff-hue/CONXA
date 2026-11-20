@@ -10,6 +10,7 @@ from typing import Any
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_delete, db_list, db_list_mapped
 from conxa_core.models.prose_binding import bind_prose
+from conxa_core.models.step_identity import ensure_step_ids
 from conxa_core.sanitize import scrub_surrogates
 from conxa_core.storage.skill_hooks import notify_skill_deleted, notify_skill_written
 
@@ -24,6 +25,7 @@ def write_skill(skill_id: str, document: dict[str, Any], *, keep_test: bool = Fa
     """``keep_test``: the change was learned from the test run that just passed (Proof-of-Done calibration), so that
     test still stands for the new document. Every other update makes the workflow need testing again."""
     document = bind_prose(scrub_surrogates(document))
+    ensure_step_ids(document)  # a step's id is written once, here at the latest (models/step_identity.py)
     is_update = read_skill(skill_id) is not None
     db_set("skills", skill_id, document)  # the durable copy — Postgres, or db.py's own KV fallback
     path = skills_dir() / f"{skill_id}.json"

@@ -226,7 +226,7 @@ def env(monkeypatch, tmp_path):
     wf = create_workflow("Create invoice", "https://billing.example.test/new", group_id=g.id)
     skill_id = "skill_t1"
     steps = [
-        {"action": {"action": "navigate"}, "intent": "open_new_invoice", "validation": {"assertions": []}},
+        {"action": {"action": "navigate"}, "intent": "open_new_invoice", "url": "https://billing.example.test/new?on={{date}}", "validation": {"assertions": []}},
         {"action": {"action": "type"}, "intent": "enter_po_number", "value": "{{po_number}}", "input_binding": "po_number", "validation": {"assertions": []}},
         {"action": {"action": "click"}, "intent": "send_invoice", "consequence": "irreversible", "validation": {"assertions": []}},
     ]
@@ -456,8 +456,10 @@ def test_a_failure_explains_the_cause_and_proposes_one_fix_but_applies_nothing(e
     assert change["state"] == "open" and change["actions"] == ["apply", "dismiss"] and "auto" not in change
     assert _cards(wf.id, "autofix")[0]["state"] == "done"
     assert runtime_state.get_flags(wf.id) == {}
-    # while the proposal waits, no test may be started
-    assert "test" not in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+    # while the proposal waits, the person may still press Test (BUILD-101 (3)), but nothing may be approved or published
+    waiting = lifecycle_for_workflow(get_workflow(wf.id))
+    assert waiting["substate"] == "change_pending"
+    assert "approve" not in waiting["allowed_actions"] and "publish" not in waiting["allowed_actions"]
 
 
 def test_with_no_confident_fix_it_says_so_and_asks_how_the_person_would_fix_it(env, monkeypatch):
@@ -908,6 +910,7 @@ def test_a_secret_test_input_is_hidden_on_the_card_and_never_saved(env, monkeypa
     b, wf, _out = env
     doc = read_skill("skill_t1")
     doc["inputs"].append({"id": "user_password", "type": "text"})
+    doc["skills"][0]["steps"][1]["value"] = "{{po_number}} {{user_password}}"   # a step uses it, so a run needs it
     write_skill("skill_t1", doc)
     card_id = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"]
     spec = {i["id"]: i for i in _cards(wf.id, "test_inputs")[0]["inputs"]}["user_password"]
@@ -920,3 +923,18 @@ def test_a_secret_test_input_is_hidden_on_the_card_and_never_saved(env, monkeypa
     thread = str(ts.load(f"wf:{wf.id}", limit=200)["items"])
     assert "ZzDummyPw" not in thread                                         # the thread keeps only a mask
     assert test_flow.last_test_inputs(get_workflow(wf.id))["user_password"] == "ZzDummyPw!8812"   # this session only
+
+
+def test_no_just_do_it_lets_the_test_run_past_that_step_and_the_card_says_so(env):
+    from conxa_compile.conversation import clarify
+    from conxa_core.storage.json_store import read_skill
+
+    b, wf, _out = env
+    keys = clarify.step_keys(clarify._steps(read_skill("skill_t1")))
+    clarify_store.save(wf.id, {"questions": [
+        {"id": f"confirm:{keys[2]}", "kind": "confirm", "status": "answered", "step_keys": [keys[2]], "answer": {"choice": "no"}},
+        {"id": f"confirm:{keys[1]}", "kind": "confirm", "status": "answered", "step_keys": [keys[1]], "answer": {"choice": "yes"}},
+    ]})
+    assert b._flow_go_ahead_keys(wf.id) == {keys[2]}      # only the "No" on a step that is still irreversible
+    b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")
+    assert _cards(wf.id, "test_inputs")[0]["go_ahead"] == ["Send invoice"]

@@ -87,3 +87,20 @@ def test_what_an_element_is_doing_right_now_is_not_its_identity():
     got = filter_identity_attrs({"data-transitioning": "transitioning", "data-status": "active", "data-discover": "true",
                                  "data-tab-item": "pull-requests", "role": "link"})
     assert got == {"data-tab-item": "pull-requests", "role": "link"}
+
+
+def test_a_trailing_number_stays_in_the_role_name_when_it_is_what_tells_siblings_apart():
+    from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
+
+    html = "<html><body>" + "".join(f"<button>Pick item {n}</button>" for n in (26, 27, 28)) + "</body></html>"
+    ev = {"target": {"tag": "button", "role": "button", "text": "Pick item 27", "aria_label": "Pick item 27"},
+          "semantic": {"role": "button"}, "selectors": {}}
+    tree = {"aria_snapshot": chr(10).join(f'- button "Pick item {n}"' for n in (26, 27, 28))}
+    roles = [s.selector for s in generate_deterministic_signals(ev, html, tree) if s.selector.startswith("internal:role=")]
+    assert roles and all("Pick item 27" in r for r in roles), roles
+    # a live count that is the same element whatever it says is still stripped
+    only = "<html><body><a role='link'>Inbox (274)</a></body></html>"
+    ev2 = {"target": {"tag": "a", "role": "link", "text": "Inbox (274)", "aria_label": "Inbox (274)"}, "semantic": {"role": "link"}, "selectors": {}}
+    tree2 = {"aria_snapshot": '- link "Inbox (274)"'}
+    roles2 = [s.selector for s in generate_deterministic_signals(ev2, only, tree2) if s.selector.startswith("internal:role=")]
+    assert roles2 and all("274" not in r for r in roles2), roles2

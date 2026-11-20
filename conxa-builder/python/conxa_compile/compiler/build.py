@@ -64,7 +64,7 @@ from conxa_compile.compiler.second_opinion import (
     archive_flagged_steps,
     rename_binding_in_step,
 )
-from conxa_compile.compiler.step_key import step_key_index_map, step_keys
+from conxa_compile.compiler.step_key import assign_compile_ids, step_key_index_map, step_keys
 from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
 from conxa_compile.compiler.selector_score import has_usable_unique_signal
 from conxa_compile.compiler.selector_grammar import display_to_signal, signal_to_display
@@ -897,7 +897,9 @@ def _build_structural_fingerprint(steps: list[SkillStep]) -> dict[str, Any]:
         left_start_page = bool(start_key and step_key and step_key != start_key)
         fp = step.identity_bundle.fingerprint
         primary = step.target.get("primary_selector", "")
-        if primary or fp.data_testid or fp.aria_label or fp.inner_text:
+        # A landmark must be named by something a person or the site gave the element (a test id, a label, its words).
+        # A bare recorded selector path is the same fragile guess the step itself starts from, so it proves nothing.
+        if fp.data_testid or fp.aria_label or fp.inner_text:
             # No model wording in here: the same recording must fingerprint the same on every compile.
             landmarks.append({
                 "primary_selector": primary,
@@ -1854,6 +1856,14 @@ def _mark_choose_file_presses(events: list[dict[str, Any]], session_root: Path) 
         log = json.loads((session_root / "requests.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return
+    from conxa_compile.compiler.effects import request_evidence
+
+    sent_in = request_evidence(events, log)
+    if sent_in is not None:
+        for i, ev in enumerate(events):
+            seen = sent_in(i)
+            if seen is not None:
+                ev["extras"] = {**(ev.get("extras") or {}), "sent_mutating_request": seen}
     pairs = choose_file_presses(events, log)
     for ev in events:
         seq = (ev.get("extras") or {}).get("sequence")
@@ -1967,6 +1977,8 @@ def compile_skill_package(
     # (every older recording) pass through untouched.
     if settings.compile_outcome_forks:
         steps = build_outcome_forks(steps, sid)
+    # Each step gets its own id now, before the first step key is read (BUILD-104 (1)).
+    assign_compile_ids(steps)
 
     _compile_log(
         "compile_phase",

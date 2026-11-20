@@ -87,6 +87,25 @@ def bind_prose(doc: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_WRAPPING_QUOTES = " \"'“”‘’"
+_ONLY_INPUT = re.compile(r"\{\{\s*([A-Za-z_]\w*)\s*\}\}")
+_QUOTED_TOKEN = re.compile(r"[“\"‘']\s*(\{\{[^}]*\}\})\s*[”\"’']")
+
+
+def say_text(raw: Any, limit: int = 60) -> str:
+    """Text a check looks for, as a person reads it: quoted exactly once, never doubled, and a bare ``{{input}}`` says
+    what it stands for ("the search words you entered") because the run's own value is not known here. The one place
+    check wording is made, so every card and proposal says it the same way."""
+    # readable() adds its own quotes round an input name, so quotes already round a token go first
+    text = _QUOTED_TOKEN.sub(lambda m: m.group(1), str(raw or ""))
+    text = text.strip().strip(_WRAPPING_QUOTES).strip()
+    only = _ONLY_INPUT.fullmatch(text)
+    if only:
+        return f"the {only.group(1).replace('_', ' ').lower()} you entered"
+    shown = readable(text)[:limit]
+    return shown if "“" in shown else f"“{shown}”"   # readable already quotes an input name inside the words
+
+
 def readable(text: str) -> str:
     """``{{github_file_name}}`` -> ``“github file name”`` for a person; a leading "the" is dropped so
     "the {{x}} file" does not read "the the x file". Every surface that shows prose uses this."""

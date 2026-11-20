@@ -169,3 +169,20 @@ test("guard inside a for_each body: a resume whose row is gone fails closed", as
     (err) => /no longer on the page/.test(err.message),
   );
 });
+
+test("guard: a step the person said to go ahead on (guard.skip) is attempted, not paused before; one not listed still pauses", async () => {
+  const mine = { ...DESTRUCTIVE, source_step_key: "k-mine" };
+  let skipped = null;
+  try {
+    // The mock page cannot finish a real click (no screenshot), so the run ends in some error: it just must not be the pause.
+    await runPlan(mockPage(), [mine], {}, 0, "guard-skip", { guard: { pause: true, skip: ["k-mine"] } });
+  } catch (err) {
+    skipped = err;
+  }
+  assert.ok(!(skipped && skipped.guardPause), "a listed step is never paused before");
+
+  await assert.rejects(
+    () => runPlan(mockPage(), [{ ...DESTRUCTIVE, source_step_key: "k-other" }], {}, 0, "guard-skip-other", { guard: { pause: true, skip: ["k-mine"] } }),
+    (err) => err.guardPause === true,
+  );
+});

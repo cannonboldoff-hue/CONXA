@@ -17,6 +17,7 @@ const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
 
 const PRESENCE_THRESHOLD = 0.5;      // per-landmark agreement below this = "missing"
 const DRIFT_RATIO_THRESHOLD = 0.5;   // fraction of missing landmarks that trips drift
+const MIN_MISSING = 2;               // one landmark missing is a changed page, not a redesigned app: never drift alone
 const PER_LANDMARK_CAP = 20;         // max live candidates inspected per landmark
 
 // Map a structural landmark to the fingerprint shape scoreCandidate() expects.
@@ -54,7 +55,7 @@ function assessDrift(landmarks, scores, opts = {}) {
     }
   });
   const driftRatio = missing / total;
-  return { drift: driftRatio >= driftRatioThreshold, total, missing, driftRatio, missingIntents };
+  return { drift: missing >= MIN_MISSING && driftRatio >= driftRatioThreshold, total, missing, driftRatio, missingIntents };
 }
 
 // Escape a value for use inside a Playwright/CSS attribute selector's double quotes.

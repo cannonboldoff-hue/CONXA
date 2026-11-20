@@ -45,10 +45,15 @@ test("assessDrift: majority missing → drift", () => {
   assert.deepStrictEqual(r.missingIntents, ["b", "c"]);
 });
 
-test("assessDrift: exactly at ratio threshold trips drift", () => {
-  const landmarks = [{ intent: "a" }, { intent: "b" }];
-  const r = assessDrift(landmarks, [0.9, 0.1]); // 1/2 == 0.5 threshold
+test("assessDrift: exactly at ratio threshold trips drift once at least two landmarks are missing", () => {
+  const landmarks = [{ intent: "a" }, { intent: "b" }, { intent: "c" }, { intent: "d" }];
+  const r = assessDrift(landmarks, [0.9, 0.8, 0.1, 0.1]); // 2/4 == 0.5 threshold
   assert.strictEqual(r.drift, true);
+});
+
+test("assessDrift: a single missing landmark is never drift, however few landmarks there are", () => {
+  assert.strictEqual(assessDrift([{ intent: "a" }, { intent: "b" }], [0.9, 0.1]).drift, false);
+  assert.strictEqual(assessDrift([{ intent: "a" }], [0.0]).drift, false);
 });
 
 test("assessDrift: empty landmarks → no drift", () => {

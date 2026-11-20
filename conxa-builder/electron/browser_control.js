@@ -67,6 +67,8 @@ function start() {
 
 async function dispatch({ op, runId, tabId, label, focus, kind, viewport, url, dest, timeoutMs, open, type, quality }) {
   if (!runId) throw new Error("missing runId");
+  // Timestamped beside main.js's "window minimized" line, so a minimize can be matched to the op that came just before it (BUILD-94).
+  if (op !== "capture" && op !== "ensure_geometry") console.error("[ctl]", new Date().toISOString(), op, runId);
   switch (op) {
     case "new_view":
       if (!kind || kind === "test") await panel.prepareTestRun();

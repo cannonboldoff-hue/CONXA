@@ -21,6 +21,9 @@ from __future__ import annotations
 import copy
 import uuid
 from typing import Any
+from urllib.parse import urlsplit
+
+from conxa_core.login_paths import SIGN_IN_PAGE_RE
 
 from conxa_compile.compiler.action_semantics import action_name
 from conxa_compile.compiler.second_opinion import build_try_dismiss_from_hint
@@ -122,6 +125,8 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
         patch = _patch_for(field, value)
         if not chat_may_write(kind, patch) or _value_holds_address(kind, target_step, field, value):
             continue
+        if refuses_sign_in(kind, target_step, patch):
+            continue
         previous_step = steps[step_index - 1] if step_index > 0 and not path else None
         try:
             validate_editor_patch(
@@ -139,11 +144,38 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
             "path": path,
             "step_label": _step_label(doc, step_key),
             "is_agent_goal": kind == "agent_span",
-            "why": str(raw.get("why") or "").strip(),
+            "why": _plain_why(raw.get("why")),
             "evidence_refs": _evidence_refs(raw),
             "preview": {"before": _current_value(target_step, field), "after": value},
         })
     return out
+
+
+_TYPING_KINDS = frozenset({"type", "fill"})
+
+
+def _is_password_step(step: dict[str, Any]) -> bool:
+    fingerprint = (step.get("identity_bundle") or {}).get("fingerprint") or {}
+    semantic = (step.get("signals") or {}).get("semantic") or {}
+    return "password" in (str(fingerprint.get("input_type") or "").lower(), str(semantic.get("input_type") or "").lower())
+
+
+def _is_sign_in_address(url: Any) -> bool:
+    return bool(SIGN_IN_PAGE_RE.search(urlsplit(str(url or "")).path or "/"))
+
+
+def refuses_sign_in(kind: str, step: dict[str, Any], patch: dict[str, Any]) -> bool:
+    """Signing in is never part of a workflow and a credential never enters one (CLAUDE.md): a change that types
+    into a password box, or sends the run to a sign-in page, is refused here for every kind of proposal. `patch` is
+    the nested change (`{"value": ...}`, `{"url": ...}`); for an insert it is the new step's fields, and `step` the
+    step whose element it would copy. Sign-in is the group's job (conxa_core.login_paths is the one word list)."""
+    if kind in _TYPING_KINDS and _is_password_step(step) and ("value" in patch or "input_binding" in patch):
+        return True
+    if kind == "navigate":
+        action = patch.get("action")
+        return any(_is_sign_in_address(v) for v in (patch.get("url"), patch.get("value"),
+                                                    action.get("url") if isinstance(action, dict) else None))
+    return False
 
 
 def _value_holds_address(kind: str, step: dict[str, Any], field: str, value: Any) -> bool:
@@ -294,7 +326,7 @@ def gate_overlay_proposals(
             "after_step_key": after_step_key,
             "patch": merged_patch,
             "nested_step": nested_step,
-            "why": str(raw.get("why") or "").strip(),
+            "why": _plain_why(raw.get("why")),
             "evidence_refs": _evidence_refs(raw),
             "preview": {
                 "before": None,
@@ -383,6 +415,15 @@ _PARAMETERIZERS = (("click", parameterize_click_text), ("value", parameterize_li
 _RUN_IF_WORDS = {"not_empty": "is filled in", "equals": "is", "not_equals": "is not"}
 
 
+def _plain_why(text: Any) -> str:
+    """A model's reason for a change, only when it reads plainly: one that names an internal field is dropped, and the
+    card then says the change from code wording (``_patch_summary``)."""
+    from conxa_compile.conversation.plain_words import plain_ok
+
+    t = str(text or "").strip()
+    return t if plain_ok(t) else ""
+
+
 def _clip(text: Any, limit: int = 160) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
@@ -432,11 +473,10 @@ def field_words(field: Any) -> str:
 
 
 def _said(text: Any) -> str:
-    """A check's words as a person reads them: "{{user_email}}" is "the user email you typed"."""
-    t = str(text or "").strip()
-    if t.startswith("{{") and t.endswith("}}"):
-        return f"the {t[2:-2].strip().replace('_', ' ')} you typed"
-    return f"“{_clip(t)}”"
+    """A check's words as a person reads them: "{{user_email}}" is "the user email you entered"."""
+    from conxa_core.models.prose_binding import say_text
+
+    return say_text(_clip(text), limit=160)
 
 
 def _check_words(a: dict[str, Any]) -> str:
@@ -557,7 +597,7 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
         evidence_refs = _evidence_refs(raw)
         if not evidence_refs:
             continue
-        why = str(raw.get("why") or "").strip()
+        why = _plain_why(raw.get("why"))
         base = {"id": str(uuid.uuid4()), "command": "structural_op", "op": op, "why": why, "evidence_refs": evidence_refs}
 
         if op == "insert_step":
@@ -579,6 +619,9 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             raw_fields = raw.get("fields")
             fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
             if _names_an_address(action_kind, fields):
+                continue
+            source_step = _resolve_step(doc, identity_from_step_key)[1] if identity_from_step_key else {}
+            if refuses_sign_in(action_kind, source_step, fields):
                 continue
             allowed_fields = {f: v for f, v in fields.items() if f in editable_fields(action_kind)}
             # An agent step with no goal would ship nothing (the packager drops it): refuse it here.

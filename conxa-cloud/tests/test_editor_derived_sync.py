@@ -59,6 +59,18 @@ def test_value_edit_syncs_input_binding() -> None:
     assert literal["input_binding"] is None
 
 
+def test_value_edit_leaves_an_empty_recovery_block_empty() -> None:
+    """BUILD-104 (8): renaming an input is not an edit of what recovery is derived from."""
+    step = {
+        "action": {"action": "fill"}, "intent": "fill_x", "value": "{{old_name}}",
+        "signals": {}, "recovery": {}, "validation": {"wait_for": {"type": "none", "timeout": 5000}},
+    }
+    out = sync_derived_step_fields(step, {"value": "{{new_name}}"})
+    assert out["input_binding"] == "new_name"
+    assert out["recovery"] == {}
+    assert sync_derived_step_fields(step, {"intent": "fill_y"})["recovery"]["intent"] == "fill_y"
+
+
 # --- Branch-body leaf steps never get a real recovery block synced (Key Invariant) ---------
 
 def test_branch_body_leaf_skips_recovery_sync() -> None:

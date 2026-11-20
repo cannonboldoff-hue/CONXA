@@ -1209,6 +1209,19 @@ def reconcile_inputs_with_step_values(document: dict[str, Any]) -> tuple[dict[st
     return doc, True
 
 
+def inputs_a_run_needs(document: dict[str, Any]) -> list[dict[str, Any]]:
+    """The inputs a run of this workflow needs: every declared input some step still mentions, plus every ``{{name}}`` a
+    step uses that was never declared. The test card asks for exactly these; the package builder applies the same two
+    rules (``_merge_saved_inputs_with_execution_placeholders`` + ``_drop_unreferenced_inputs``) to what it ships, so a
+    test never asks for a value the package does not need, and never lacks one it does (BUILD-95 (7))."""
+    import json
+
+    doc, _ = reconcile_inputs_with_step_values(document)
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    blob = json.dumps(steps, ensure_ascii=False, default=str)
+    return [r for r in doc.get("inputs") or [] if isinstance(r, dict) and r.get("id") and str(r["id"]) in blob]
+
+
 def _remap_intent_graph_indices(
     document: dict[str, Any], old_to_new: dict[int, int | None]
 ) -> dict[str, Any]:

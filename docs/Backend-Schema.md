@@ -518,6 +518,13 @@ class SkillMeta(BaseModel):
 
 ```python
 class SkillStep(BaseModel):
+    step_id: str               # The step's own identity, written once, never recomputed (BUILD-104 (1),
+                                # conxa_core/models/step_identity.py). A fresh compile gives `rec<seq>` (the
+                                # recorder's event number); a saved skill from before the field has each
+                                # step's old derived key (`<stable_hash>#<n>`) frozen into it on its first
+                                # write (`write_skill`), so every stored key keeps resolving. Steps inside
+                                # a branch / loop / fork option get `<parent id>/<path>[i]`. `step_key()`
+                                # returns it; only a step with no id still yields the old derived key.
     action: str | dict         # Action type + params
     intent: str                # "Click the Submit button"
     url: str                   # Expected URL for this step
@@ -957,6 +964,9 @@ outcome_fork: dict   # {timeout_ms, unknown_policy: "continue"|"stop", clean, st
 - `policy.author_approved` is written **only** by `set_fork_policy`; the compiler always writes `false`. A consequential option under `auto` without it stops the run (never run, never asked about by default).
 - `SkillStep.produces` / `consumes` (both `list[str]`, default empty) are explicit value flow: a `download_observed` step lists the run slots it writes (`downloaded_file_<n>`, plus `downloaded_file` when it is the only download) and an upload bound to one lists the `{{slot}}` names it reads. Filled by `compiler/upload_binding.py::apply_bindings_to_compiled_steps`; no runtime code reads them.
 - `Workflow.last_test_outcome` (`dict | None`: `{outcome, title, step_index, step_key, reason, at}`) records a test that ended without a pass or failure (`ended_at_popup`, `ended_before_irreversible`, `stopped`, `previewed`). `last_test_status` is untouched; a pass, a failure or any edit clears it; the lifecycle shows substate `partial` while it is set.
+- **Test outcome classes (2026-11-21).** A test ends as a *proven pass* (`last_test_status: passed`), an *unproven pass* or a *couldn't run*. A run that ended `done_please_check` or `submitted` is stored as `last_test_status: never` with `last_test_outcome: {outcome, unproven_steps[], notes[]}` (lifecycle substate `passed_unproven`); `cmd_flow_approve` accepts it only with `checked: true` on the card the outcome came from. A run the runtime flags `_meta["conxa/couldnt_run"]` (today: the test browser was not at its normal size) is not stored at all: `last_test_*` is untouched and the test card shows `outcome: couldnt_run`. A failure to build the test copy before the run shows `outcome: package_build`. The chat digest carries `some_steps_hard_to_find` (from `compile_report.status == "failed"`) and never `compile_status`.
+- **Inputs a run needs.** The test card lists `workflow_mutations.inputs_a_run_needs(doc)`: every declared input some step still mentions plus every `{{name}}` a step uses that was never declared (the package builder applies the same two rules). A card's prefill is `last_test_inputs`, the clarify `recorded` value, the input's `default`, then `source_event.recorded_input_values` (read from the recording; never stored). Recorded `requests.json` sets `extras.sent_mutating_request` on each event at compile; the "app accepted the request" check exists only where it is not `false`.
+- **Run record.** `recovery.log` gets one `step_decision` line per step (`{step_index, type, duration_ms, tab, path, outcome, reason}`; `tab` has no query or fragment).
 - `policy.reviewed` marks a state the author has answered (so Clarify never asks again). It is also the only thing that lets the runtime pause: `ask_human` / `by_input` without it stop instead, and `execution.json` carries it through (`_saved_fork_step`). Nothing pauses by default; `unknown_policy` `continue` (an older `ask_human` reads the same) leaves an unrecognised surface alone.
 - `by_input` declares a `select` input named `policy.input` (options = option labels + `ask`, default `ask`) and sets the fork step's `input_binding`/`value` to it.
 - `message_tokens` are value-free words (quoted text and digits stripped); the popup's message never ships. `signature.title` is value-free the same way (`outcome_fork.py::value_free_title`: quoted text in straight or typographic quotes, and digits, removed), and the runtime strips both sides when matching, so packs compiled before this still match.

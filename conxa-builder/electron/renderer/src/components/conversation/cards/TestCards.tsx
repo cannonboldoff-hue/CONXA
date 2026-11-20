@@ -77,6 +77,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   const state = String(item.state)
   const irreversible = (Array.isArray(item.irreversible) ? item.irreversible : []) as string[]
   const count = Number(item.irreversible_count ?? irreversible.length)
+  const goAhead = (Array.isArray(item.go_ahead) ? item.go_ahead : []) as string[]
   const missing = specs.filter((s) => s.required && !(values[s.id] ?? '').trim())
 
   if (state !== 'open') {
@@ -204,6 +205,11 @@ export function TestInputsCard({ threadId, item }: CardProps) {
                 {irreversible.length ? <> — {irreversible.map((n) => `“${n}”`).join(', ')} —</> : null} can’t be undone.
               </span>
             </p>
+            {goAhead.length > 0 && (
+              <p className="mt-2 text-xs text-[var(--text-meta)]">
+                You said to go ahead without asking on {goAhead.map((n) => `“${n}”`).join(', ')}, so the test won’t stop there.
+              </p>
+            )}
             <label className="mt-2 flex cursor-pointer items-start gap-2.5 text-sm">
               <input type="checkbox" className="mt-1 accent-white" checked={guard} onChange={(e) => setGuard(e.target.checked)} />
               <span>
@@ -238,6 +244,7 @@ const ROW_GLYPH: Record<Row['status'], StatusKind> = { running: 'run', done: 'ok
 export function TestRunCard({ threadId, item }: CardProps) {
   const wf = workflowIdOf(threadId)
   const { busy, run } = useAction(threadId)
+  const [ticked, setTicked] = useState<string[]>([])
   const state = String(item.state)
   const rows = (Array.isArray(item.rows) ? item.rows : []) as Row[]
   const attempt = Number(item.attempt ?? 1)
@@ -337,16 +344,24 @@ export function TestRunCard({ threadId, item }: CardProps) {
     // card says that instead of "failed", and never claims nothing was saved.
     const outcome = String(item.outcome ?? '')
     const unsure = outcome === 'couldnt_confirm' || outcome === 'partly_done'
+    // Not a result about the workflow: the test never ran, or its browser could not be trusted. Never "failed".
+    const notAResult = outcome === 'couldnt_run' || outcome === 'package_build'
     const unsureTitle = outcome === 'partly_done' ? 'Only part of it was done' : 'Couldn’t confirm it worked'
     return (
       <CardShell
-        glyph={unsure ? 'warn' : 'fail'}
-        title={unsure
-          ? `${unsureTitle}${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`
-          : `${auto ? `Attempt ${attempt}` : 'Test'} failed${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`}
+        glyph={unsure || notAResult ? 'warn' : 'fail'}
+        title={notAResult
+          ? (outcome === 'couldnt_run' ? 'The test couldn’t run' : 'The test didn’t start')
+          : unsure
+            ? `${unsureTitle}${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`
+            : `${auto ? `Attempt ${attempt}` : 'Test'} failed${item.failed_step ? ` at “${String(item.failed_step)}”` : ''}`}
         meta={clock || undefined}
+        footer={notAResult
+          ? <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowTestPrepare(wf))}>Run the test again</Button>
+          : undefined}
       >
         <p className="leading-[1.6] text-[var(--text-primary)]">{String(item.summary || 'Something went wrong at this step.')}</p>
+        {notAResult && <p className="mt-2 text-xs text-[var(--text-secondary)]">Nothing is wrong with the workflow, and its last test result hasn’t changed.</p>}
         {typeof item.failure_image === 'string' && item.failure_image && (
           <img
             src={item.failure_image}
@@ -369,6 +384,9 @@ export function TestRunCard({ threadId, item }: CardProps) {
     const notes = (Array.isArray(item.notes) ? item.notes : []) as string[]
     const proofSteps = (Array.isArray(item.proof_steps) ? item.proof_steps : []) as ProofStep[]
     const careful = outcome === 'done_please_check' || outcome === 'submitted'
+    // Steps the run could not prove: the person looks at each in the app and ticks it before approving.
+    const unproven = (Array.isArray(item.unproven_steps) ? item.unproven_steps : []) as string[]
+    const allTicked = unproven.every((u) => ticked.includes(u))
     return (
       <CardShell
         glyph={careful && !approved ? 'warn' : 'ok'}
@@ -376,11 +394,11 @@ export function TestRunCard({ threadId, item }: CardProps) {
         meta={approved ? `by you${item.approved_version ? ` · version ${String(item.approved_version)}` : ''}` : `${plural(Number(item.steps_ran ?? rows.length), 'step')}${clock ? ` · ${clock}` : ''}`}
         footer={
           <>
-            {!approved && outcome !== 'submitted' && (
+            {!approved && !careful && (
               <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowApprove(wf, cardId))}>Approve for packaging</Button>
             )}
-            {!approved && outcome === 'submitted' && (
-              <Button variant="brand" size="sm" disabled={busy} onClick={() => run(() => flowApprove(wf, cardId, true))}>I checked — it worked</Button>
+            {!approved && careful && (
+              <Button variant="brand" size="sm" disabled={busy || !allTicked} onClick={() => run(() => flowApprove(wf, cardId, true))}>I checked — it worked</Button>
             )}
             <Button variant="outline" size="sm" disabled={busy} onClick={() => run(() => flowTestPrepare(wf))}>Test with other inputs</Button>
           </>
@@ -391,6 +409,26 @@ export function TestRunCard({ threadId, item }: CardProps) {
         )}
         {outcome === 'submitted' && (
           <p className="text-[var(--text-secondary)]">The app took the work, but nothing on screen showed that it finished. Look at the result in the app. If it’s there, press “I checked — it worked”; if not, test it again.</p>
+        )}
+        {!approved && outcome === 'done_please_check' && unproven.length > 0 && (
+          <div className="mt-2">
+            <p className="text-[var(--text-secondary)]">Look at the app and tick each one that really happened:</p>
+            <ul className="mt-1 space-y-1">
+              {unproven.map((u) => (
+                <li key={u}>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={ticked.includes(u)}
+                      onChange={(e) => setTicked(e.target.checked ? [...ticked, u] : ticked.filter((x) => x !== u))}
+                    />
+                    <span>{u}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {notes.length > 0 && (
           <ul className="mt-1 space-y-1">

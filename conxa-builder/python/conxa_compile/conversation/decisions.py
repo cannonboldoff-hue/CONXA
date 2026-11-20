@@ -46,6 +46,8 @@ def decision_from_answer(question: dict[str, Any], answer: dict[str, Any] | None
         # leaves the recording as it is. A dropdown / radio / date is already an input, so for it only
         # "always this one" changes anything.
         choice = answer.get("choice")
+        # Every recorded event the answer is about, whichever way it went, so a later step can tell "this was settled".
+        decision["item_events"] = sorted({e for i in question.get("items") or [] for e in i.get("event_ids") or [] if e is not None}, key=str)
         decision["values"] = [
             {"ref": i["ref"], "name": i["name"], "literal": i["literal"], "kind": i.get("kind", ""),
              "event_ids": i.get("event_ids") or []}

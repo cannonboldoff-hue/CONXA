@@ -122,7 +122,9 @@ def derive_lifecycle(
             # Every question that was asked is answered before any test, approval or publish.
             actions = ["answer_clarify", "edit"]
         elif pending_changes > 0:
-            stage, substate, glyph, note, actions = "edit", "change_pending", WARN, "A proposed change is waiting — apply or dismiss it", ["edit"]
+            # The version as it stands can still be tested (BUILD-101 (3)); what must wait is approving or publishing
+            # a version the waiting change would alter.
+            stage, substate, glyph, note, actions = "edit", "change_pending", WARN, "A proposed change is waiting — apply or dismiss it", ["test", "edit"]
         elif last_test == "passed":
             if signed_off:
                 stage, substate, glyph, note, actions = "approve", "approved", OK, "Approved", ["test", "edit", "publish"]
@@ -131,6 +133,10 @@ def derive_lifecycle(
         elif last_test == "failed":
             stage, glyph = "test", FAIL
             substate, note, actions = "failed", "Latest test failed", ["investigate", "edit", "test"]
+        elif isinstance(_g(wf, "last_test_outcome"), dict) and _g(wf, "last_test_outcome").get("outcome") in ("submitted", "done_please_check"):
+            # It ran to the end but not every step's result was proven. Only the person can say it is right, on the test
+            # card's "I checked" button, so no Approve is offered here and it is not a pass.
+            stage, substate, glyph, note, actions = "test", "passed_unproven", WARN, "Test ran — your check is needed before approving", ["test", "edit"]
         elif isinstance(_g(wf, "last_test_outcome"), dict) and _g(wf, "last_test_outcome").get("outcome"):
             # A test that ended partway is not "never tested", and not a pass either.
             where = str(_g(wf, "last_test_outcome").get("title") or "").strip()

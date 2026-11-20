@@ -728,15 +728,24 @@ async function executeOneStep(ctx, state, steps, i) {
     step_index: i,
     ...(stepNow.source_step_key ? { step_key: stepNow.source_step_key } : {}),
   });
+  let decision = { outcome: "ok" };
   try {
     return await runStepFrame(ctx, state, steps, i, frame);
   } catch (e) {
+    decision = { outcome: e && e.guardPause ? "paused" : "failed", reason: e && (e.faultKind || (e.guardPause ? "guard" : e.failureKind)) || undefined };
     if (e && typeof e === "object" && !e.failedPage && frame.page && !(typeof frame.page.isClosed === "function" && frame.page.isClosed())) {
       e.failedPage = frame.page;
     }
     throw e;
   } finally {
     state.stepPath.pop();
+    // The run's own account of the step in one line (RT-17b): how it ended, how long it took, and which tab it ran on
+    // (address without query or fragment, so no value from the page is written down).
+    try {
+      let tab;
+      try { tab = frame.page ? String(frame.page.url()).split(/[?#]/)[0] : undefined; } catch (_) { tab = undefined; }
+      appendRecoveryEvent({ event: "step_decision", step_index: i, type: stepNow.type, duration_ms: Date.now() - startedAt, tab, path: state.stepPath.length ? state.stepPath.slice() : undefined, ...decision });
+    } catch (_) {}
     // How long the whole step took (resolve, act, completion gate, proof). With the "completion" event's own
     // `waited`, it shows where a slow step spent its time (EXEC-61). Nested steps report their own.
     try { ctx.tracker.emit("step_ms", { si: i, ms: Date.now() - startedAt }); } catch (_) {}
@@ -810,7 +819,9 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // not a failure and not recovery: it never touches recovery_stage.js or retry_budget.js, and with
   // no `guard` on ctx (every customer run, every MCP caller) this block is inert. A dry run already
   // withholds destructive steps, so the guard has nothing to do there.
-  if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && step.destructive === true) {
+  // A step the person already answered "just go ahead" for (`guard.skip`, by source_step_key) is not paused before.
+  if (ctx.guard && ctx.guard.pause && !ctx.guard.released && !ctx.dryRun && step.destructive === true
+      && !(Array.isArray(ctx.guard.skip) && step.source_step_key && ctx.guard.skip.includes(step.source_step_key))) {
     if (state.loopDepth === 1 && !state.forkDepth && state.loopCursor) {
       // Inside a for_each body the pause carries the loop's row cursor, so the resume continues AT
       // this row and step instead of restarting the loop. `stepIndex` is the loop's own index: that is

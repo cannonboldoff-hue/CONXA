@@ -863,7 +863,7 @@ def test_the_pencil_after_the_build_restores_the_workflow_and_asks_the_question_
     assert first["state"] == "open"
 
 
-def test_a_rebuild_does_not_ask_again_what_was_already_settled_unless_it_is_a_safety_question(env):
+def test_a_rebuild_does_not_ask_again_what_was_already_settled_including_approve_before_an_irreversible_step(env):
     from conxa_compile.conversation import clarify_store
 
     b, wf, _out = env
@@ -879,7 +879,8 @@ def test_a_rebuild_does_not_ask_again_what_was_already_settled_unless_it_is_a_sa
     b.cmd_flow_compile({"workflow_id": wf.id}, "rid2")           # a rebuild, as after the pencil on an earlier question
     by_kind = {q["kind"]: q for q in clarify_store.load(wf.id)["questions"]}
     assert by_kind["values"]["status"] == "answered" and by_kind["values"]["carried"] is True
-    assert by_kind["confirm"]["status"] == "open"                # a safety question is asked every time
+    # "Approve before it happens" is about one exact step: the same question about the same step keeps its answer.
+    assert by_kind["confirm"]["status"] == "answered" and by_kind["confirm"]["carried"] is True
 
 
 # ── Phase 2: scoring on ──
@@ -1195,7 +1196,7 @@ def test_a_check_change_reads_in_plain_words():
          "preview": {"before": [{"type": "state_changed"}],
                      "after": [{"type": "state_changed"}, {"type": "text_present", "target": "{{user_email}}"}]}}
     text = proposal_summary(p)
-    assert text == "After “Submit”, also check that the page shows the user email you typed"
+    assert text == "After “Submit”, also check that the page shows the user email you entered"
     assert "validation" not in text
 
 

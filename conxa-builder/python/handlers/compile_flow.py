@@ -32,6 +32,8 @@ _APPLY_STALE_S = 60.0
 # once the workflow exists (the compile's own review call), so it is asked here, not before.
 _ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
 # Kinds an earlier answer is replayed onto: built from the document as compiled, before replay changes it.
+# Safety questions whose answer is kept across "Build again" while the question is the same one about the same step.
+_CARRIED_SAFETY = frozenset({"confirm", "confirm_row"})
 _REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
 # Kinds built afterwards from the document replay left, so their bindings and step keys are current.
 _REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage", "unsupported", "human_check"})
@@ -437,6 +439,7 @@ class CompileFlowMixin:
 
         open_qs = [q for q in questions if q.get("status") == "open"]
         coverage = understood.get("coverage") or {}
+        recap_why: list[str] = []
         recap = write_recap({
             "step_count": len(steps),
             "goal": "" if cant else str(understood.get("goal_summary") or workflow.task_description or "")[:200],
@@ -444,14 +447,22 @@ class CompileFlowMixin:
             "checked_against_description": understood.get("source") == "model",
             "input_names": [str(i["id"]).replace("_", " ") for i in doc_now.get("inputs") or [] if isinstance(i, dict) and i.get("id")],
             "left_out": left_out,
+            # What the workflow does with tabs, counted from its own steps: the recap may not talk about a tab it never opens.
+            "tabs": {"opened": sum(1 for s in steps if clarify._action_name(s) == "tab_open"),
+                     "switched": sum(1 for s in steps if clarify._action_name(s) == "tab_switch")},
             "unsure_steps": [f"“{n}”" for n in uncertain_names],
             "similar_not_asked": sum(limits.values()) if limits else 0,
             "assumed": [str(a.get("title")) for a in assumptions if isinstance(a, dict) and a.get("title")][:3],
             "coverage_gap": str(coverage.get("note") or "") if coverage.get("ok") is False else "",
             "question_count": len(open_qs),
             "question_titles": [str(q.get("title")) for q in open_qs][:4],
-        })
+        }, error_detail=recap_why)
         runtime_state.set_flags(workflow_id, understanding=False)
+        if not recap:
+            # Said nowhere to the person (the banner below is enough); kept so the cause is never lost again.
+            from conxa_compile.conversation import clarify_events
+
+            clarify_events.log(workflow_id, "recap_failed", reasons=" | ".join(recap_why)[:600])
         if cant:
             harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=cant))
         if recap:
@@ -480,7 +491,10 @@ class CompileFlowMixin:
         for q in questions:
             unknown = q.get("unknown") or {}
             prev = ledger.get(unknown.get("slot"))
-            if (not prev or q.get("status") != "open" or unknown.get("safety_floor") or prev.get("phase") != "post_compile"
+            # A safety question is asked again after a rebuild, except the two whose answer is about one exact step
+            # (approve before it / is this the right row): the same question about the same step keeps its answer.
+            if (not prev or q.get("status") != "open" or (unknown.get("safety_floor") and q.get("kind") not in _CARRIED_SAFETY)
+                    or prev.get("phase") != "post_compile"
                     or prev.get("status") != "answered" or not prev.get("answer") or prev.get("sig") != clarify.situation_sig(q)):
                 continue
             try:

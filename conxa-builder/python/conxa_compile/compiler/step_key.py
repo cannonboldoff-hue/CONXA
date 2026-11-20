@@ -17,45 +17,18 @@ editor's world) or a SkillStep model instance (the compiler's world, before
 
 from __future__ import annotations
 
-import hashlib
-from collections import Counter
 from typing import Any
 
-
-def _field(step: Any, *path: str) -> Any:
-    """Read a (possibly nested) field off a dict-shaped step or a pydantic
-    SkillStep, without forcing the caller to serialize first."""
-    cur = step
-    for name in path:
-        if cur is None:
-            return None
-        cur = cur.get(name) if isinstance(cur, dict) else getattr(cur, name, None)
-    return cur
-
-
-def _fallback_hash(step: Any) -> str:
-    action_name = _field(step, "action")
-    if isinstance(action_name, dict):
-        action_name = action_name.get("action")
-    raw = f"{action_name or ''}|{_field(step, 'url') or ''}"
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def step_key(step: Any, seen: Counter[str]) -> str:
-    """Return this step's stable key, disambiguated against every key already
-    seen in this workflow (pass the same Counter across a full step list)."""
-    base = str(_field(step, "identity_bundle", "stable_hash") or "").strip()
-    if not base:
-        base = _fallback_hash(step)
-    seen[base] += 1
-    return f"{base}#{seen[base]}"
-
-
-def step_keys(steps: list[Any]) -> list[str]:
-    """Compute step_key() for a full step list in order, sharing one occurrence
-    counter — the shape every caller actually wants."""
-    seen: Counter[str] = Counter()
-    return [step_key(s, seen) for s in steps]
+# BUILD-104 (1): a step now carries its own `step_id` (conxa_core/models/step_identity.py). The derived
+# `<element hash>#<n>` key below is only what a step with no id yields, so keys stored before ids existed
+# keep resolving. Re-exported here so every existing import keeps working.
+from conxa_core.models.step_identity import (  # noqa: F401
+    assign_compile_ids,
+    ensure_step_ids,
+    step_id_of,
+    step_key,
+    step_keys,
+)
 
 
 def step_key_index_map(steps: list[Any]) -> dict[str, int]:

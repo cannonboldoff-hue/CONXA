@@ -146,6 +146,7 @@ _GUARD_META_KEY = "conxa/guard"
 _FORK_META_KEY = "conxa/fork"
 _FORK_STOP = "__stop__"
 _SESSION_EXPIRED_META_KEY = "conxa/session_expired"
+_COULDNT_RUN_META_KEY = "conxa/couldnt_run"
 _STOPPED_AT_META_KEY = "conxa/stopped_at"
 _HANDED_OFF_META_KEY = "conxa/handed_off"
 
@@ -219,6 +220,21 @@ def _extract_session_expired(result: dict[str, Any]) -> dict[str, Any] | None:
         step = info.get("step_index")
         return {"step_index": step if isinstance(step, int) else None, "run_id": str(info.get("run_id") or "")}
     return None
+
+
+def _extract_couldnt_run(result: dict[str, Any]) -> dict[str, Any] | None:
+    """The runtime's word that the run could not be trusted for a reason that is not the workflow's (the test browser
+    was not showing the page at its normal size). Such a run is not a test result at all. An older engine sends plain
+    text and so reads as an ordinary failure, which its own message already explains."""
+    meta = result.get("_meta") if isinstance(result.get("_meta"), dict) else {}
+    info = meta.get(_COULDNT_RUN_META_KEY)
+    return {"kind": str(info.get("kind") or ""), "step_index": info.get("step_index")} if isinstance(info, dict) else None
+
+
+def unproven_steps(proof_steps: list[dict[str, Any]]) -> list[str]:
+    """Plain names of the steps whose result the run did not prove, for the tick list a person confirms before Approve."""
+    return [str(s.get("intent") or "").strip() or f"Step {int(s.get('index') or 0) + 1}"
+            for s in proof_steps if str(s.get("verdict") or "") not in ("proven", "")][:20]
 
 
 def _app_layer_supports(conxa_dir: Path, capability: str) -> bool:
@@ -1327,6 +1343,9 @@ class WorkflowsMixin:
             if guard_requested:
                 if _app_layer_supports(conxa_dir, "test_guard"):
                     run_args["_pause_before_irreversible"] = True
+                    skip = [str(k) for k in payload.get("guard_skip") or [] if k]
+                    if skip:
+                        run_args["_guard_skip"] = skip   # steps the person said to go ahead on (an older engine ignores it and pauses: safe)
                 else:
                     # An engine that predates the guard would ignore the argument and run the
                     # irreversible steps for real. Preview instead: every step is resolved, the ones
@@ -1431,6 +1450,13 @@ class WorkflowsMixin:
             sink({"kind": "workflow_test", "message": message})
             return {"status": "needs_sign_in", "message": message, "company": company, "skill": workflow.slug,
                     "run_id": _test_run_id, "failed_at": expired["step_index"]}
+        couldnt_run = _extract_couldnt_run(result)
+        if couldnt_run is not None:
+            # Not a test result: the test browser could not be trusted, which says nothing about the workflow. The last
+            # real result stays, and nothing downstream (auto-fix) tries to "repair" a window.
+            sink({"kind": "workflow_test", "message": message})
+            return {"status": "couldnt_run", "message": message, "company": company, "skill": workflow.slug,
+                    "run_id": _test_run_id, "cause": couldnt_run["kind"], "failed_at": couldnt_run["step_index"]}
         if previewed and message.startswith("Dry run complete"):
             # A preview proves every target is still findable, but it never ran the irreversible
             # steps, so it must not count as a passing test.
@@ -1455,17 +1481,20 @@ class WorkflowsMixin:
             raise _CommandError("workflow_test_failed", failure, run_id=_test_run_id,
                                 outcome=outcome if outcome in ("couldnt_confirm", "partly_done") else None)
 
-        # "Submitted": the app took the work but nothing could show it finished. That is not a pass: the workflow
-        # stays "not tested yet" (Approve stays closed) until the person says they checked the result.
+        # "Submitted" (the app took the work but nothing could show it finished) and "Done, please check" (some step's
+        # result was not proven) are not passes: the workflow stays "not tested yet" (Approve stays closed) until the
+        # person says they looked at the result. What was left unproven is kept with the outcome, so it survives the card.
+        unconfirmed = outcome in ("submitted", "done_please_check")
         set_workflow_test_result(
-            workflow_id, status="never" if outcome == "submitted" else "passed",
+            workflow_id, status="never" if unconfirmed else "passed",
             inputs=_redact_sensitive_test_inputs(workflow.skill_id, inputs),
             run_id=_test_run_id,
         )
-        if outcome == "submitted":
+        if unconfirmed:
             from conxa_core.storage.workflow_store import set_workflow_test_outcome  # noqa: PLC0415
 
-            set_workflow_test_outcome(workflow_id, {"outcome": "submitted"})
+            set_workflow_test_outcome(workflow_id, {"outcome": outcome, "unproven_steps": unproven_steps(proof_steps),
+                                                    "notes": notes_from_message(message)[:10]})
         sink({"kind": "workflow_test", "message": message})
         return {
             "status": "passed", "message": message, "company": company,
@@ -1476,6 +1505,7 @@ class WorkflowsMixin:
             "outcome": outcome,
             "notes": notes_from_message(message),
             "proof_steps": proof_steps,
+            "unproven_steps": unproven_steps(proof_steps) if unconfirmed else [],
         }
 
     def cmd_cancel_test_workflow(self, payload: dict[str, Any], _rid: str) -> dict[str, Any]:

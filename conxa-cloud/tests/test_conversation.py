@@ -181,11 +181,20 @@ def test_lifecycle_is_derived_from_existing_data(wf, kw, stage, substate, glyph)
     dict(clarify={"open": 1}),  # a small question is still a question: answer it first
     dict(clarify={"open": 2}),
     dict(runtime={"replying": True}),  # a typed message may still come back as a change card
-    dict(pending_changes=1),
 ])
 def test_nothing_offers_a_test_while_something_is_still_to_settle(kw):
     wf = {**_BASE, "session_id": "s", "recording_status": "compiled", "skill_id": "k"}
     assert "test" not in derive_lifecycle(wf, **kw)["allowed_actions"]
+
+
+def test_a_waiting_change_still_lets_the_current_version_be_tested_but_never_approved_or_published():
+    """BUILD-101 (3): the card is on screen, so the Test button is too; approving a version the change would alter is not."""
+    for last_test, signed_off in (("passed", False), ("passed", True), ("failed", False), ("never", False)):
+        wf = {**_BASE, "session_id": "s", "recording_status": "compiled", "skill_id": "k",
+              "last_test_status": last_test, "signed_off": signed_off}
+        actions = derive_lifecycle(wf, pending_changes=1)["allowed_actions"]
+        assert "test" in actions and "edit" in actions
+        assert "approve" not in actions and "publish" not in actions
 
 
 def test_edits_clear_approval_so_the_lifecycle_falls_back_to_testing():

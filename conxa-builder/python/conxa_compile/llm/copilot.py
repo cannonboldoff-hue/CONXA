@@ -112,7 +112,7 @@ def _base_user_text(digest: dict[str, Any], transcript: list[dict[str, Any]], me
             f"No runtime evidence is available for this turn: {absent_reason}. "
             "Treat last_test.error (if present) as the authoritative account of what failed — "
             f"last_test: {json.dumps(last_test, ensure_ascii=False, default=str)}. "
-            "Do not infer a different failing step or cause from compile_status, step kinds, or "
+            "Do not infer a different failing step or cause from some_steps_hard_to_find, step kinds, or "
             "anything else in the digest; say plainly that the failing page could not be "
             "inspected for this turn.\n\n"
         )
