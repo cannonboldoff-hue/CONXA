@@ -3,7 +3,7 @@
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
 > a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **WF-9 passed 2026-11-19.** **WF-10…WF-13 passed 2026-11-20.** **Next:** WF-14 (files: 14.3, 14.8). Remaining: WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> **WF-9 passed 2026-11-19.** **WF-10…WF-13 passed 2026-11-20.** **WF-14 passed 2026-11-21.** **Next:** WF-15. Remaining: WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1323,3 +1323,6 @@ PASSED (P-44) after 2 engineering rounds plus a 12.7 build. Failure found: askin
 
 ### WF-13 — agent-driven steps (2026-11-20)
 PASSED (P-45) after 2 engineering rounds. Failures found: a step that can't be undone could be dragged right after an AI agent part (S0); the 5-span cap did not exist (owner chose to add it); Human Edit could not save a span answer; the span's answer was asked as a run input; a Submit step failed "page didn't change" although the text proved it. All fixed in shared places and retested; 13.6 stays unit-test only. Commit: see `git log` ("WF-13"). Detail: [`workflow-handoffs/WF-013.md`](workflow-handoffs/WF-013.md)
+
+### WF-14 — files at scale, open cases 14.2 pilot, 14.3, 14.8 (2026-11-21)
+PASSED (P-46) after 1 engineering round. Run on Studio instance 2 (second Studio beside the WF-13 session) against a local stand-in file host; public hosts stay blocked. Failures found (all S2, case 14.8): uploads of 40 MB and more left the file box empty and the run blamed the Upload click; a 0-byte download and a download that never finishes both said "HTTP 500". Root cause: the host browser was attached without telling Playwright it is on this machine, so every upload was read into memory and pushed through the debugging link. Fix: attach as local for a loopback address (200 MB now attaches in ~20 ms), pass the host's real reason through, plain timeout wording (RT-18). Retest (fresh session): 20/100/200 MB uploads exact; empty download "The file downloaded empty or cut short…"; stuck download ends after 2 min 05 s with "The file took too long to download…"; folder of 3 and 20 each file once in name order; folder given to a single-file input refused in 9 s with no recovery and no LLM; 0-byte upload, `é` names and a 200 MB download pass. Open: a 100 MB upload to a host that answers ~10 s late fails closed (never a false pass) — RT-19 (4). Details: `workflow-handoffs/WF-014.md`. Commit: see `git log` ("WF-14").

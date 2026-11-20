@@ -3,7 +3,7 @@ Pages: /multi.html (input multiple), /single.html (single input), /dl.html (down
 Endpoints: POST /upload (logs name,size,sha256 per file to the log, JSON lines), GET /received, POST /reset,
 GET /dl/ok?name=x&size=n, /dl/empty, /dl/big (200 MB), /dl/accent (name with spaces and e-acute), /dl/stuck (never finishes).
 """
-import hashlib, json, os, sys, time, urllib.parse
+import hashlib, json, os, re, sys, time, urllib.parse
 from email.parser import BytesParser
 from email.policy import default
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -65,6 +65,8 @@ class H(BaseHTTPRequestHandler):
             self._send(200, UPLOAD_PAGE % {"t": "Single upload", "m": "", "p": "single"})
         elif p == "/dl.html":
             self._send(200, DL_PAGE)
+        elif p == "/dl2.html":  # one real button (keyboard Space records as a click); behaviour set by POST /mode
+            self._send(200, "<!doctype html><meta charset=utf-8><title>Export</title><h1>Export</h1><button type=button id=export onclick=\"location.href='/dl/export'\">Export report</button>")
         elif p == "/received":
             self._send(200, open(LOG, encoding="utf-8").read() if os.path.exists(LOG) else "", "text/plain; charset=utf-8")
         elif p == "/dl/export":  # one link, behaviour switched by POST /mode so one recording can be replayed against every edge case
@@ -126,15 +128,16 @@ class H(BaseHTTPRequestHandler):
             return self._send(404, "not found", "text/plain")
         n = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(n)
-        msg = BytesParser(policy=default).parsebytes(
-            b"Content-Type: " + self.headers["Content-Type"].encode() + b"\r\n\r\n" + body)
+        # fast multipart split (the email parser took ~10 s per 100 MB, longer than the runtime waits for the page's reply)
+        bnd = b"--" + self.headers["Content-Type"].split("boundary=")[1].strip().strip('"').encode()
         files = []
-        for part in msg.iter_parts():
-            fn = part.get_filename()
-            if fn is None:
+        for part in body.split(bnd)[1:-1]:
+            head, _, data = part.partition(b"\r\n\r\n")
+            m = re.search(rb'filename="([^"]*)"', head)
+            if not m:
                 continue
-            data = part.get_payload(decode=True) or b""
-            files.append({"name": fn, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+            data = data[:-2] if data.endswith(b"\r\n") else data
+            files.append({"name": m.group(1).decode("utf-8"), "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
         page = urllib.parse.parse_qs(u.query).get("page", ["?"])[0]
         for f in files:
             log({"ev": "file", "page": page, **f})

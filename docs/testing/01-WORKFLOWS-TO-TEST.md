@@ -34,7 +34,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-11 | Loops, inputs and hostile input data | ✅ passed 2026-11-20 (P-43) | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ✅ passed 2026-11-20 (P-44; 12.7 built after owner decision, 3 sub-checks not reached) | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ✅ passed 2026-11-20 (P-45; 13.6 unit-test only) | Yes (Studio part) |
-| WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | 🔄 14.1–14.2, 14.4–14.7 passed (P-34…P-36); 14.3, 14.8 open | Local fixture; public hosts blocked |
+| WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | ✅ passed 2026-11-21 (P-34…P-36, P-46); 14.8 big uploads, empty and stuck downloads fixed (RT-18); slow-host wait open (RT-19) | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ⏳ | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ⏳ | Partly |

@@ -1152,3 +1152,10 @@ Chat names the real missing button from the real failed run, never invents a dia
 ## Passed Workflow P-45 — WF-13: agent-driven steps (2026-11-20)
 
 "AI Review" is now the agent span ("AI agent does a part"). A free span can never sit directly before a step that can't be undone (insert, drag, remove-between and chat move are all refused with one plain sentence, file byte-identical; the build and the runtime refuse such a saved pack too). A click that can't be undone waits for the person's Yes, and deletes only after Yes. A run stops before the 6th free span with a plain message (confirm-only spans don't count). Only span steps spend tokens (+8,001 in per span; zero on a span-free run). A blank-goal span is left out with a notice; a Submit step passes when a required text check already saw the new words and still fails when the click did nothing. Fixed on the way: a reorder gap (S0), Human Edit could not save a span answer, the span's answer was asked as a run input. Unit-test only: 13.6 dry-run/loop fail-closed (the UI cannot reach them). Detail: [`workflow-handoffs/WF-013.md`](workflow-handoffs/WF-013.md)
+
+---
+
+## Passed Workflow P-46 — WF-14: files at scale, rest of the table (2026-11-21)
+A folder of 3 and of 20 files uploads every file once in name order; a folder given to a single-file input is refused plainly with no recovery and zero tokens; 0-byte files, names with spaces and `é`, and 20/100/200 MB uploads arrive byte-exact; a 200 MB download is kept whole; an empty download and a download that never finishes stop with a plain reason and save nothing. On a local stand-in file host (public hosts blocked). Caveat: a host that answers a 100 MB upload very slowly makes the test fail closed (RT-19). Detail: [`workflow-handoffs/WF-014.md`](workflow-handoffs/WF-014.md).
+
+**What this proves Conxa can do now:** big files and whole folders go through a test run correctly, and bad files fail with a reason a person can read.
