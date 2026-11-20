@@ -118,7 +118,7 @@ This index lists every rotated file plus the live one.
 | [`FIX-2026-11-18.md`](FIX-2026-11-18.md) | 13 | "Sign in and test again" now really asks you to sign in; Error messages say what to do in plain words; A finished workflow can be built again; Studio asks "can this be undone?" by understanding the step |
 | [`FIX-2026-11-19.md`](FIX-2026-11-19.md) | 16 | Compiler honesty round (WF-9) |
 | [`FIX-2026-11-20.md`](FIX-2026-11-20.md) | 16 | Loops, copilot, agent steps (WF-10…WF-13), big uploads (WF-14) |
-| `FIX.md` (live) | — | today's (2026-11-20) entries |
+| `FIX.md` (live) | — | today's (2026-11-21) entries |
 
 **Rotation rule:** at the end of each day (or sooner if `FIX.md` exceeds ~800 lines), split by
 each entry's own trailing `— YYYY-MM-DD` date — not a blind line-number cut, since entries are
