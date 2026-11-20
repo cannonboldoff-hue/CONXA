@@ -717,8 +717,10 @@ class CompileFlowMixin:
             text = f"Updated — here’s the workflow as it stands, saved as version {summary['version']}."
         elif questions:
             text = "That’s everything."
-            if added:
+            if added > 0:
                 text += f" Your answers added {added} step{'s' if added != 1 else ''}."
+            elif added < 0:  # a list of entries folds its copies into one repeated set of steps
+                text += f" Your answers made it {-added} step{'s' if added != -1 else ''} shorter."
             text += f" Here’s the workflow as it stands, saved as version {summary['version']}."
             if summary["queued"]:
                 text += (f" I was sure about {summary['queued']} small thing{'s' if summary['queued'] != 1 else ''}, so I didn’t ask"

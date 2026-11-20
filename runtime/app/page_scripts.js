@@ -901,11 +901,13 @@ function rowsHoldingWholeValue(rows, wanted) {
 // How often `needle` ends a line of the page's visible text (or a visible box's value), with at most closing
 // punctuation after it: "Saved Carol" in "Saved Carol." but not in "Saved Carol Ann". For a check whose words end in
 // the record the run acts on, where a longer look-alike record must not count.
+// `{text, pageOnly: true}`: the page's text alone, never what a box holds (see countPageText).
 function countTextEnding(needle) {
-  var n = String(needle || "").replace(/\s+/g, " ").trim().toLowerCase();
+  var pageOnly = !!(needle && typeof needle === "object" && needle.pageOnly);
+  var n = String((pageOnly ? needle.text : needle) || "").replace(/\s+/g, " ").trim().toLowerCase();
   if (!n) return 0;
   var parts = String((document.body && document.body.innerText) || "").split(/[\n\t]+/);
-  var fields = typeof document.querySelectorAll === "function" ? document.querySelectorAll("input, textarea") : [];
+  var fields = !pageOnly && typeof document.querySelectorAll === "function" ? document.querySelectorAll("input, textarea") : [];
   for (var i = 0; i < fields.length; i++) {
     if (fields[i].offsetParent !== null && typeof fields[i].value === "string") parts.push(fields[i].value);
   }

@@ -1,0 +1,48 @@
+ stands, saved as version 2.
+
+WF11 HP retest
+
+version 2
+
+Add people's details to a table of records using the form.
+
+Inputs you’ll provide:
+entries
+1
+Open the page with the record form
+2
+Repeat for each entry
+
+2 steps (28 compiled, 26 fewer after your answers)
+
+Test it
+C
+
+Conxa · 11:15 AM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+●
+Test inputs
+· Entries: Alice | Adams | alice@example.com | 31 | 5000 | Sales Bob | Brown | bob@examp… (252 characters)
+●
+Test passed
+
+3 steps · 1 min 40 s
+
+What was checked
+Approve for packaging
+Test with other inputs
+▲
+Paused before a step that can’t be undone · Click
+11:17 AM
+C
+
+Conxa · 11:17 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+Test passed — not yet approved
+Approve
+Test it
+WF11 HP retest

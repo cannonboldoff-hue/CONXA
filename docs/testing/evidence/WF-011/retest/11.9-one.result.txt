@@ -1,0 +1,25 @@
+
+●
+Test inputs
+· Entries: Zed | Zane | zed@example.com | 50 | 1000 | Solo
+●
+Test passed
+
+3 steps · 0 min 18 s
+
+What was checked
+Approve for packaging
+Test with other inputs
+▲
+Paused before a step that can’t be undone · Click
+11:48 AM
+C
+
+Conxa · 11:48 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+Approved
+Test it
+Publish
+WF11 HP retest

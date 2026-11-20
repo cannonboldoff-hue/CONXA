@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Note</title>
+<style>body{font:15px sans-serif;margin:24px}textarea{width:420px;height:90px}button{padding:6px 14px;margin-top:8px}</style></head>
+<body>
+<h1 id="title">Note</h1>
+<label>Note <br><textarea id="note" name="note" placeholder="Type a note"></textarea></label><br>
+<button type="button" id="save">Save note</button>
+<div id="saved"></div>
+<script>
+// Test fixture. Save shows the note back and reports exact length, a hash and escaped head/tail to /__log?note=...
+async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('')}
+document.getElementById('save').addEventListener('click', async () => {
+  const v=document.getElementById('note').value;
+  document.getElementById('saved').textContent='Saved: '+v;
+  const rec={len:v.length,cp:[...v].length,sha:await sha(v),head:v.slice(0,80),tail:v.slice(-30),ctrl:(v.match(/[\n\t]/g)||[]).length,scripts_ran:window.__pwn||0};
+  fetch('/__log?note='+encodeURIComponent(JSON.stringify(rec))).catch(()=>{});
+});
+</script>
+</body></html>

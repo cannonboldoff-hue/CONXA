@@ -1,0 +1,20 @@
+n the inputs the way a real request would — I’ve put your recorded values in to start.
+
+Test inputs
+
+from this workflow’s 1 input · version 2
+
+EntriesTable · required
+
+One row per line, with first name | last name | user email | age | salary | department separated by |. The workflow repeats once per row.
+
+✕ Required — the workflow types this in.
+
+Keep the AI helper off
+No AI credits are used. The test stops if it reaches a step that needs AI, or an unexpected popup. This does not hold back steps that can’t be undone: those are checked separately before each one runs.
+Run test
+Builds a fresh test copy first (a few seconds). Tests don’t publish anything.
+Approved
+Test it
+Publish
+WF11 HP retest

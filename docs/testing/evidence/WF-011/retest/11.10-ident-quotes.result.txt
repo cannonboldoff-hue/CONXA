@@ -1,0 +1,25 @@
+
+●
+Test inputs
+· Entries: Twin | Same | twin@example.com | 40 | 2000 | Dup Twin | Same | twin@example.c… (170 characters)
+●
+Test passed
+
+3 steps · 0 min 23 s
+
+What was checked
+Approve for packaging
+Test with other inputs
+▲
+Paused before a step that can’t be undone · Click
+11:52 AM
+C
+
+Conxa · 11:52 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+Approved
+Test it
+Publish
+WF11 HP retest

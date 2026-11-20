@@ -17,6 +17,7 @@ every fix needs its own approval. Approving the workflow stays a separate human 
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import uuid
@@ -112,7 +113,16 @@ _DELIBERATE_KINDS = frozenset({"decision_needed", "left_open_unclassified", "cou
 
 
 def rows_to_text(value: Any, columns: list[str]) -> str:
-    """A table value as the lines the test card shows: one row per line, columns separated by " | "."""
+    """A table value as the lines the test card shows: one row per line, columns separated by " | ".
+    Text that is already lines is kept; a saved default (the rows as JSON text) is shown as lines too (WF-11)."""
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return value
+        if not isinstance(parsed, list):
+            return value
+        value = parsed
     if not isinstance(value, list):
         return ""
     return "\n".join(" | ".join(str(r.get(c, "")) for c in columns) for r in value if isinstance(r, dict))
@@ -127,7 +137,7 @@ def rows_from_text(text: Any, columns: list[str], label: str) -> list[dict[str, 
             continue
         cells = [c.strip() for c in line.split("|")]
         if len(cells) != len(columns) or any(not c for c in cells):
-            raise _CommandError("inputs_invalid", f"{label}, line {n}: give {len(columns)} values separated by | ({', '.join(columns)}).")
+            raise _CommandError("inputs_invalid", f"{label}, line {n}: give {len(columns)} values separated by | ({', '.join(c.replace('_', ' ') for c in columns)}).")
         out.append(dict(zip(columns, cells)))
     return out
 
@@ -197,7 +207,7 @@ class TestFlowMixin:
             value = last.get(rid_, recorded.get(rid_, row.get("default") or ""))
             columns = [str(c) for c in row.get("columns") or []] if row.get("type") == "rows" else []
             if columns:
-                value = value if isinstance(value, str) else rows_to_text(value, columns)
+                value = rows_to_text(value, columns)
             secret = is_secret_input(rid_) and (row.get("type") or "text") == "text"
             if secret:
                 value = ""   # never pre-filled: the card is saved in the thread

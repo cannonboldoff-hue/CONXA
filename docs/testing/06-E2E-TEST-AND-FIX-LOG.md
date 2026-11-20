@@ -3,7 +3,7 @@
 > **Progress (2026-11-17):** 21 workflows (WF-1…WF-21), renumbered in run order on 2026-11-17 —
 > see the old → new map at the bottom of `01-WORKFLOWS-TO-TEST.md`. Passed: WF-1, WF-2 (Segment I is
 > a confirmed limitation), WF-3, WF-4 (A–D; E blocked), WF-5, WF-6, WF-7, WF-8. WF-14 (files) mostly passed (14.3, 14.8 open).
-> **WF-9 passed 2026-11-19.** **Next:** WF-10 (branches and popups). Remaining: WF-10…WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
+> **WF-9 passed 2026-11-19.** **WF-10 passed 2026-11-20. WF-11 passed 2026-11-20.** **Next:** WF-12 (copilot chat). Remaining: WF-12, WF-13, WF-14 (14.3, 14.8), WF-15…WF-21. Latest commit: see `git log`.
 
 This is the running diary of a test-and-fix campaign over every workflow in
 [`01-WORKFLOWS-TO-TEST.md`](01-WORKFLOWS-TO-TEST.md). It is written in plain words, newest entry at
@@ -1314,3 +1314,6 @@ PASSED (P-41) after 5 engineering rounds (cause: 4 live retests exposed regressi
 
 ### WF-10 — branches and popups (2026-11-20)
 PASSED (P-42) after 2 engineering rounds (recorder missed script-wired `<p>` controls; `wait_for_one_of` never took an arm on a real browser). Caveats: 10.3 run on a notification stand-in (sign-in pages are never recorded, by design); 10.11 "guard never skipped" half not run. Commit: see `git log` ("WF-10"). Detail: [`workflow-handoffs/WF-010.md`](workflow-handoffs/WF-010.md)
+
+### WF-11 — loops, inputs and hostile input data (2026-11-20)
+PASSED (P-43) after 1 engineering round. Failures found: local test builds lacked the loop capability so no loop could run (S1); a "Save" step that clears its own boxes ended "couldn't confirm" (S1); loop checks stayed frozen to row 1 (S2); a pasted newline was silently dropped (S2). Retest: loop with 5 rows, twin, 50 rows, 0 rows and all hostile inputs pass, proven on the fixture log. Unfixed UX nits (S3) are listed in the handoff. Commit: see `git log` ("WF-11"). Detail: [`workflow-handoffs/WF-011.md`](workflow-handoffs/WF-011.md)

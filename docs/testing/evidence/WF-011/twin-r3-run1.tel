@@ -1,0 +1,145 @@
+run r_mwnxet0z_2b3as
+{"e": "wf_start"}
+{"e": "drift_detected", "total": 3, "missing": 3, "drift_ratio": 1, "missing_intents": [], "url": "about:blank?conxa_run=r_mwnxet0z_2b3as&conxa_tab=b4823ea7"}
+{"e": "proof", "si": 0, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 0, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 0, "ms": 249}
+{"e": "completion", "si": 1, "mode": "short", "st": "done", "waited": 532}
+{"e": "proof", "si": 1, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+{"e": "tier_ok", "si": 1, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 1, "ms": 2062}
+{"e": "proof", "si": 2, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 2, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 2, "ms": 2302}
+{"e": "verify_result", "si": 3, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 3, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 3, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 3, "ms": 1323}
+{"e": "proof", "si": 4, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 4, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 4, "ms": 694}
+{"e": "verify_result", "si": 5, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 5, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 5, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 5, "ms": 1213}
+{"e": "proof", "si": 6, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 6, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 6, "ms": 1251}
+{"e": "verify_result", "si": 7, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 7, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 7, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 7, "ms": 1286}
+{"e": "proof", "si": 8, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 8, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 8, "ms": 1285}
+{"e": "verify_result", "si": 9, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 9, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 9, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 9, "ms": 1277}
+{"e": "proof", "si": 10, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 10, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 10, "ms": 1262}
+{"e": "verify_result", "si": 11, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 11, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 11, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 11, "ms": 1308}
+{"e": "verify_result", "si": 12, "ok": true, "n": 3, "advFail": 0, "ct": 3}
+{"e": "completion", "si": 12, "mode": "short", "st": "done", "waited": 531}
+{"e": "proof", "si": 12, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+{"e": "tier_ok", "si": 12, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 12, "ms": 6401}
+{"e": "proof", "si": 13, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 13, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 13, "ms": 1325}
+{"e": "verify_result", "si": 14, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 14, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 14, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 14, "ms": 1252}
+{"e": "proof", "si": 15, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 15, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 15, "ms": 1250}
+{"e": "verify_result", "si": 16, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 16, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 16, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 16, "ms": 1286}
+{"e": "proof", "si": 17, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 17, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 17, "ms": 1235}
+{"e": "verify_result", "si": 18, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 18, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 18, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 18, "ms": 1262}
+{"e": "proof", "si": 19, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 19, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 19, "ms": 1285}
+{"e": "verify_result", "si": 20, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 20, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 20, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 20, "ms": 1270}
+{"e": "proof", "si": 21, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 21, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 21, "ms": 1271}
+{"e": "verify_result", "si": 22, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 22, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 22, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 22, "ms": 1276}
+{"e": "proof", "si": 23, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 23, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 23, "ms": 1258}
+{"e": "verify_result", "si": 24, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 24, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 24, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 24, "ms": 1275}
+{"e": "verify_result", "si": 25, "ok": true, "n": 3, "advFail": 0, "ct": 3}
+{"e": "completion", "si": 25, "mode": "short", "st": "done", "waited": 533}
+{"e": "proof", "si": 25, "rung": "completed", "v": "proven", "w": ["target", "renderer"]}
+{"e": "tier_ok", "si": 25, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 25, "ms": 6403}
+{"e": "proof", "si": 26, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 26, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 26, "ms": 1280}
+{"e": "verify_result", "si": 27, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 27, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 27, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 27, "ms": 2286}
+{"e": "proof", "si": 28, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 28, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 28, "ms": 1278}
+{"e": "verify_result", "si": 29, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 29, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 29, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 29, "ms": 1307}
+{"e": "proof", "si": 30, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 30, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 30, "ms": 681}
+{"e": "verify_result", "si": 31, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 31, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 31, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 31, "ms": 1233}
+{"e": "proof", "si": 32, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 32, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 32, "ms": 1280}
+{"e": "verify_result", "si": 33, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 33, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 33, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 33, "ms": 1265}
+{"e": "proof", "si": 34, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 34, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 34, "ms": 1252}
+{"e": "verify_result", "si": 35, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 35, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 35, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 35, "ms": 1288}
+{"e": "proof", "si": 36, "rung": "performed", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 36, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 36, "ms": 1258}
+{"e": "verify_result", "si": 37, "ok": true, "n": 1, "advFail": 0, "ct": 0}
+{"e": "proof", "si": 37, "rung": "accepted", "v": "proven", "w": ["target"]}
+{"e": "tier_ok", "si": 37, "tier": "tier1_compiled"}
+{"e": "step_ms", "si": 37, "ms": 1271}
+{"e": "verify_result", "si": 38, "ok": true, "n": 3, "advFail": 0, "ct": 3}
+{"e": "completion", "si": 38, "mode": "full", "st": "no_sign", "waited": 3169}
+{"e": "proof", "si": 38, "rung": "performed", "v": "couldnt_confirm", "w": ["target"]}
+{"e": "step_fail", "si": 38, "fc": "couldnt_confirm"}
+{"e": "step_ms", "si": 38, "ms": 9020}
+{"e": "wf_fail", "dur": 68883, "fsi": 38, "fc": "couldnt_confirm", "oc": "couldnt_confirm"}

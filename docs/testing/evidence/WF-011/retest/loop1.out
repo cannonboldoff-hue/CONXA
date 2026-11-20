@@ -1,0 +1,8 @@
+== 5
+/__log?note={"len":46,"cp":46,"sha":"f4bce078560e","head":"<script>alert(1)</script>'; DROP TABLE users--","tail":"</script>'; DROP TABLE users--","ctrl":0,"scripts_ran":0}
+== 7a
+/__log?note={"len":3,"cp":3,"sha":"629f4cf9337b","head":"007","tail":"007","ctrl":0,"scripts_ran":0}
+== 7b
+/__log?note={"len":3,"cp":3,"sha":"84af3bdb4539","head":"1e5","tail":"1e5","ctrl":0,"scripts_ran":0}
+== 7c
+/__log?note={"len":2,"cp":2,"sha":"ed79f26d03f4","head":"-0","tail":"-0","ctrl":0,"scripts_ran":0}

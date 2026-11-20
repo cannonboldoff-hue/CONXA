@@ -1,0 +1,5 @@
+Alice | Adams | alice@example.com | 31 | 5000 | Sales
+Bob | Brown | bob@example.com | 42 | 6000 | Support
+Cara | Clark | cara@example.com | 28 | 7000 | Legal
+Dan | Diaz | dan@example.com | 35 | 8000 | Ops
+Eve | Evans | eve@example.com | 29 | 9000 | HR

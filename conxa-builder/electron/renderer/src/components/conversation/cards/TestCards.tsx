@@ -23,6 +23,13 @@ import { cn } from '@/lib/utils'
 const workflowIdOf = (threadId: string) => threadId.replace(/^wf:/, '')
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+// A table column's id in everyday words ("first_name" → "first name").
+const columnWords = (c: string) => c.replace(/_/g, ' ')
+// One line for the summary of what a test ran with: a long value or a whole table is cut, never pasted in full.
+const shortValue = (v: string) => {
+  const one = v.replace(/\s+/g, ' ').trim()
+  return one.length > 80 ? `${one.slice(0, 77)}… (${v.length.toLocaleString()} characters)` : one
+}
 
 /** Run a command; say so if it fails, and refresh what the shell shows either way. */
 function useAction(threadId: string) {
@@ -59,6 +66,14 @@ export function TestInputsCard({ threadId, item }: CardProps) {
   // Dry Run ON = AI helper off. A workflow with AI steps can't be dry-run, so it starts (and stays) off.
   const [dryRun, setDryRun] = useState(!(item.use_ai === true || aiSteps > 0))
   const [tried, setTried] = useState(false)
+  // A one-line box drops line breaks without a word, so text with more than one line gets a box that keeps them.
+  const [multiline, setMultiline] = useState<Record<string, boolean>>(() => Object.fromEntries(specs.map((s) => [s.id, String(s.value ?? '').includes('\n')])))
+  const toLines = (id: string, box: HTMLInputElement, text: string) => {
+    const cur = values[id] ?? ''
+    const next = cur.slice(0, box.selectionStart ?? cur.length) + text.replace(/\r\n?/g, '\n') + cur.slice(box.selectionEnd ?? cur.length)
+    setValues((v) => ({ ...v, [id]: next }))
+    setMultiline((m) => ({ ...m, [id]: true }))
+  }
   const state = String(item.state)
   const irreversible = (Array.isArray(item.irreversible) ? item.irreversible : []) as string[]
   const count = Number(item.irreversible_count ?? irreversible.length)
@@ -69,7 +84,7 @@ export function TestInputsCard({ threadId, item }: CardProps) {
       <div className="flex items-center gap-2.5 text-sm">
         <StatusGlyph kind={state === 'submitted' ? 'ok' : 'none'} />
         <span className="text-[var(--text-primary)]">Test inputs</span>
-        <span className="text-[var(--text-meta)]">· {specs.map((s) => `${s.label}: ${s.secret && values[s.id] ? '••••••' : values[s.id] || '—'}`).join(' · ')}</span>
+        <span className="text-[var(--text-meta)]">· {specs.map((s) => `${s.label}: ${s.secret && values[s.id] ? '••••••' : shortValue(values[s.id] ?? '') || '—'}`).join(' · ')}</span>
       </div>
     )
   }
@@ -107,12 +122,25 @@ export function TestInputsCard({ threadId, item }: CardProps) {
                     id={`ti-${s.id}`}
                     rows={4}
                     value={values[s.id] ?? ''}
-                    placeholder={s.columns.join(' | ')}
+                    placeholder={s.columns.map(columnWords).join(' | ')}
                     onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
                     aria-invalid={bad}
                     className="mt-1 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-raised)] px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand/55"
                   />
-                  <p className="mt-1 text-xs text-[var(--text-meta)]">One row per line, with {s.columns.join(' | ')} separated by |. The workflow repeats once per row.</p>
+                  <p className="mt-1 text-xs text-[var(--text-meta)]">One row per line, with {s.columns.map(columnWords).join(' | ')} separated by |. The workflow repeats once per row.</p>
+                </>
+              ) : multiline[s.id] && !s.secret ? (
+                <>
+                  <textarea
+                    id={`ti-${s.id}`}
+                    rows={4}
+                    autoFocus
+                    value={values[s.id] ?? ''}
+                    onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                    aria-invalid={bad}
+                    className="mt-1 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-raised)] px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand/55"
+                  />
+                  <p className="mt-1 text-xs text-[var(--text-meta)]">This has more than one line. The line breaks are kept and typed as they are.</p>
                 </>
               ) : s.options.length > 0 ? (
                 <select
@@ -131,6 +159,18 @@ export function TestInputsCard({ threadId, item }: CardProps) {
                   autoComplete={s.secret ? 'off' : undefined}
                   value={values[s.id] ?? ''}
                   onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData('text')
+                    if (s.secret || !/[\r\n]/.test(text)) return
+                    e.preventDefault()
+                    toLines(s.id, e.currentTarget, text)
+                  }}
+                  onKeyDown={(e) => {
+                    // Shift+Enter starts a new line, as in the chat box.
+                    if (s.secret || e.key !== 'Enter' || !e.shiftKey || e.nativeEvent.isComposing) return
+                    e.preventDefault()
+                    toLines(s.id, e.currentTarget, '\n')
+                  }}
                   aria-invalid={bad}
                   className="mt-1 font-mono text-sm"
                 />

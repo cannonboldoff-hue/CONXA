@@ -1,0 +1,3 @@
+/__log?add={"n":1,"cells":["Twin","Same","40","twin@example.com","2000","Dup"],"sha":"7c959a2d72dd"}
+/__log?add={"n":2,"cells":["Twin","Same","40","twin@example.com","2000","Dup"],"sha":"7c959a2d72dd"}
+/__log?add={"n":3,"cells":["O'Brien, \"Bob\"","Smith, Jr.","33","ob@example.com","3,500","R&D, \"Core\""],"sha":"3a204e753c69"}

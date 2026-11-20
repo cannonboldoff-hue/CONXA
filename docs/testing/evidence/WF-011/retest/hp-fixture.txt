@@ -1,0 +1,5 @@
+/__log?add={"n":1,"cells":["Alice","Adams","31","alice@example.com","5000","Sales"],"sha":"942171808064"}
+/__log?add={"n":2,"cells":["Bob","Brown","42","bob@example.com","6000","Support"],"sha":"df522aa97fd8"}
+/__log?add={"n":3,"cells":["Cara","Clark","28","cara@example.com","7000","Legal"],"sha":"4786f54827c3"}
+/__log?add={"n":4,"cells":["Dan","Diaz","35","dan@example.com","8000","Ops"],"sha":"f20a0187858c"}
+/__log?add={"n":5,"cells":["Eve","Evans","29","eve@example.com","9000","HR"],"sha":"c56281db17ee"}

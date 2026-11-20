@@ -311,7 +311,7 @@ Compile/Re-compile opens a log panel under the workflow's row on the Group Page 
 
 **Purpose:** Run a compiled workflow against the local runtime for validation.
 **Where:** There is no dedicated Test Skill page (`TestSkillPage.tsx`, `WorkflowTestList`, and `workflowTestSummary()` were removed 2026-09-27, together with the `/test` route and sidebar entry). Testing happens from a workflow's own row on its group page: the row's **Test** toggle (§2.4/§2.5's group-page workflow row) mounts `WorkflowTestRow` inline — same input dialog, group-auth gate (`RunGateDialog`), live log, and pass/fail badge the old page offered, just scoped to one workflow instead of listing the whole workspace.
-**Inputs:** Test inputs for that one workflow, entered inline.
+**Inputs:** Test inputs for that one workflow, entered inline. In the chat's Test inputs card a one-line box that gets text with line breaks (pasted, or Shift+Enter) turns into a multi-line box that keeps them, with the note "This has more than one line. The line breaks are kept and typed as they are." A table input is shown as lines (`Alice | Adams | …`) with its column names in plain words; the card's summary line cuts a long value to about 80 characters.
 **Outputs:** Pass/fail result, runtime output text.
 **User goal:** Confirm the workflow works end-to-end before shipping to customers — reached immediately after approving it in Human Edit, with no intermediate stop.
 

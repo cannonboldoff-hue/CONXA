@@ -1134,3 +1134,9 @@ admits what it can't repeat, and keeps secrets off disk.
 ## Passed Workflow P-42 — WF-10: branches and popups (2026-11-20)
 
 Optional branches take the arm that matches the page (zero tokens, no recovery), an unanswered decision popup is never answered by the runtime, and a consequential option runs only after author approval. Caveats: 10.3 on a stand-in, 10.11 guard half not run. Detail: [`workflow-handoffs/WF-010.md`](workflow-handoffs/WF-010.md)
+
+---
+
+## Passed Workflow P-43 — WF-11: loops, inputs and hostile input data (2026-11-20)
+
+A table loop built from three hand-made adds runs for 5 rows (record N = row N, proven on the fixture's own log) and is approved; the twin with the offer declined runs exactly as recorded. 50 rows all land right (2 min 18 s); 0 rows is refused plainly, identical rows are not merged and commas/quotes are not split. Empty, spaces-only, 10,000 characters, unicode, script/SQL text and `007`/`1e5`/`-0` are typed exactly or refused plainly; pasted newlines switch the box to multi-line with a note; chat refuses to build a loop and points to Human Edit. Fixed on the way: local builds lacked the loop engine capability; a step whose boxes clear after Save could not be proven; loop checks stayed frozen to row 1. Detail: [`workflow-handoffs/WF-011.md`](workflow-handoffs/WF-011.md)

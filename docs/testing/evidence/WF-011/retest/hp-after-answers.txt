@@ -1,0 +1,89 @@
+ AM
+
+Do the task in the browser on the right. Each step you take appears here as you go. 
+
+●
+Recording saved
+
+40 actions · 4 min 00 s
+
+C
+
+Conxa · 11:09 AM
+
+Got it — 40 actions. I’m watching the recording back and lining it up with what the browser saw. I’ll ask you a few things before I build it. You also clicked 2 times on parts of the page that aren't buttons or boxes, like a heading. Those weren't buttons or boxes, so the workflow won't repeat them.
+
+●
+Watched the recording
+C
+
+Conxa · 11:10 AM
+
+I watched your recording. You filled in the form for three people and added each one to the table. Each time, the person's details, such as their name and email, can change.
+
+I’ll assume:
+• You fill in first name, last name, email, age, salary and department for each person.
+• You always click the button that adds the record once the form is filled.
+
+12 more values to check were left out (“First Name”, “Last Name”, “Email”, “Age”, “Salary”). Check the end of the workflow carefully.
+
+That’s everything I need. I’m building it now.
+
+C
+
+Conxa · 11:10 AM
+
+Thanks — building it now.
+
+●
+Compiled
+●
+Cleaned up the recording
+40 recorded actions
+●
+Learned how to find each element
+40 of 40
+●
+Working out what each step is for and which values change
+●
+Saving the workflow
+▲
+Couldn’t write the summary of what was built · The workflow is saved; its questions and summary are below
+11:12 AM
+●
+
+You entered 3 items the same way, each with a different first name, last name, user email, age, salary, department. Each time this runs, should it enter a list it is given?
+
+Enters each row of a list it is given (starts with your 3)
+
+●
+
+Each row of the list ends with “Click Add record to save the person”, which can’t be undone. Should someone approve before it starts?
+
+Goes ahead without asking
+
+C
+
+Conxa · 11:12 AM
+
+That’s everything. Your answers made it 26 steps shorter. Here’s the workflow as it stands, saved as version 2.
+
+WF11 HP retest
+
+version 2
+
+Add people's details to a table of records using the form.
+
+Inputs you’ll provide:
+entries
+1
+Open the page with the record form
+2
+Repeat for each entry
+
+2 steps (28 compiled, 26 fewer after your answers)
+
+Test it
+Ready to test
+Test it
+WF11 HP retest

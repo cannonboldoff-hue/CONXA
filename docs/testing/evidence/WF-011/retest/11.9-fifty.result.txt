@@ -1,0 +1,25 @@
+
+●
+Test inputs
+· Entries: First1 | Last1 | user1@example.com | 21 | 1001 | Dept1 First2 | Last2 | user2… (2,872 characters)
+●
+Test passed
+
+3 steps · 2 min 18 s
+
+What was checked
+Approve for packaging
+Test with other inputs
+▲
+Paused before a step that can’t be undone · Click
+11:49 AM
+C
+
+Conxa · 11:51 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+Approved
+Test it
+Publish
+WF11 HP retest

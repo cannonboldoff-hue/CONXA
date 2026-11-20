@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Records</title>
+<style>body{font:15px sans-serif;margin:24px}label{display:block;margin:6px 0}input{width:260px;padding:4px}button{padding:6px 14px;margin-top:8px}table{border-collapse:collapse;margin-top:18px}td,th{border:1px solid #888;padding:4px 10px}</style></head>
+<body>
+<h1 id="title">Records</h1>
+<form id="f" onsubmit="return false">
+  <label>First Name <input id="firstName" name="firstName" placeholder="First Name"></label>
+  <label>Last Name <input id="lastName" name="lastName" placeholder="Last Name"></label>
+  <label>Email <input id="userEmail" name="userEmail" placeholder="name@example.com"></label>
+  <label>Age <input id="age" name="age" placeholder="Age"></label>
+  <label>Salary <input id="salary" name="salary" placeholder="Salary"></label>
+  <label>Department <input id="department" name="department" placeholder="Department"></label>
+  <button type="button" id="add">Add record</button>
+  <span id="status"></span>
+</form>
+<table id="grid"><thead><tr><th>First Name</th><th>Last Name</th><th>Age</th><th>Email</th><th>Salary</th><th>Department</th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+// Test fixture. Each add appends a row and reports the row AS RENDERED (cells read back from the table) to the
+// fixture server log: GET /__log?add=<json>. Server log = independent proof of what was typed where.
+const ids=['firstName','lastName','age','userEmail','salary','department'];
+async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('')}
+document.getElementById('add').addEventListener('click', async () => {
+  const tr=document.createElement('tr');
+  for(const id of ids){const td=document.createElement('td');td.textContent=document.getElementById(id).value;tr.appendChild(td)}
+  document.getElementById('rows').appendChild(tr);
+  const cells=[...tr.children].map(td=>td.textContent);
+  const rec={n:document.getElementById('rows').children.length,cells:cells.map(c=>c.length>200?{len:c.length,head:c.slice(0,30),tail:c.slice(-30)}:c),sha:await sha(cells.join('\u0001'))};
+  fetch('/__log?add='+encodeURIComponent(JSON.stringify(rec))).catch(()=>{});
+  ids.forEach(id=>document.getElementById(id).value='');
+  document.getElementById('status').textContent='Added '+rec.n;
+});
+</script>
+</body></html>

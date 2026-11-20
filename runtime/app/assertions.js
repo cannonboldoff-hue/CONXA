@@ -50,11 +50,13 @@ function popupsOpened(page) {
 // panel in a demo frame, WF-2 Segment D): counting the top document alone read 0 before and 0 after, so the text
 // could never be "new" and the step never proven. Before and after are counted the same way.
 // `ending`: count only where the text ends a line (pageScripts.countTextEnding), see endsInBoundValue.
-async function countTextAcross(page, text, ending = false) {
+// `pageOnly`: the page's text alone, never what a box holds (pageScripts.countPageText).
+async function countTextAcross(page, text, ending = false, pageOnly = false) {
   const frames = typeof page.frames === "function" ? page.frames() : [page];
   let total = null;
   for (const f of frames) {
-    const n = await (ending ? evalOn(f, pageScripts.countTextEnding, text) : evalOn(f, pageScripts.countTextOccurrences, text))
+    const n = await (ending ? evalOn(f, pageScripts.countTextEnding, pageOnly ? { text, pageOnly } : text)
+      : pageOnly ? evalOn(f, pageScripts.countPageText, text) : evalOn(f, pageScripts.countTextOccurrences, text))
       .catch(() => null);
     if (typeof n === "number") total = (total || 0) + n;
   }
@@ -79,12 +81,18 @@ async function capturePreStepSignature(page, countTexts = [], absentTargets = []
     const sig = await evalOn(page, pageScripts.preStepSignature, STATE_CHANGED_SELECTOR);
     // How many times each text the step will look for is already on the page, so a later "it is there" can be told
     // apart from "it was already there" (contrast: a check only proves something if it could have said no).
+    // `pageCounts`: the same, without what boxes hold. A form that saves a row moves the typed words from its boxes into
+    // the page, so the count with boxes stays the same while the page's own text gains them (WF-11 twin).
     let counts;
+    let pageCounts;
     if (countTexts.length) {
       counts = {};
+      pageCounts = {};
       for (const t of countTexts) {
         const n = await countTextAcross(page, t);
         if (typeof n === "number") counts[t] = n;
+        const p = await countTextAcross(page, t, false, true);
+        if (typeof p === "number") pageCounts[t] = p;
       }
     }
     // Whether each box a "this is gone" check names is on the page before the action: gone only proves the
@@ -102,7 +110,7 @@ async function capturePreStepSignature(page, countTexts = [], absentTargets = []
     // real page, which is a false positive on the exact guard meant to catch a repeated action.
     if (!sig || sig === EVAL_TIMED_OUT) return null;
     const { textLen, interactiveCount } = sig;
-    return { url, textLen, interactiveCount, ...(counts ? { counts } : {}), ...(present ? { present } : {}), ...(popups !== null ? { popups } : {}) };
+    return { url, textLen, interactiveCount, ...(counts ? { counts, pageCounts } : {}), ...(present ? { present } : {}), ...(popups !== null ? { popups } : {}) };
   } catch (_) {
     return null;
   }
@@ -284,9 +292,15 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
       const before = ok && baseline && baseline.counts ? baseline.counts[target] : undefined;
       if (ok && typeof before !== "number") cantTell = true;
       if (typeof before === "number" && ok) {
+        // More on the page itself also counts: a saved form row takes the words out of the boxes it was typed in
+        // (same total), and that row would not be there had the click done nothing.
+        const pageBefore = baseline.pageCounts ? baseline.pageCounts[target] : undefined;
         const grew = async () => {
           const n = await count(target);
-          return typeof n === "number" && n > before;
+          if (typeof n === "number" && n > before) return true;
+          if (typeof pageBefore !== "number") return false;
+          const p = await countTextAcross(page, target, strict, true);
+          return typeof p === "number" && p > pageBefore;
         };
         // Absent before: the check above already waited for the words, so one count says whether it saw them.
         const more = before === 0 ? await grew().catch(() => false) : await pollPositive(grew, Math.min(timeout, 1500));

@@ -76,6 +76,34 @@ def test_wrap_makes_one_table_loop_with_the_recorded_rows():
     assert packaged["type"] == "for_each_rows" and packaged["columns"] == ["last_name"]
 
 
+def test_wrap_makes_a_later_steps_checks_follow_the_row():
+    """WF-11: the Add click kept row 1's words ("Alice") as its checks, so rows 2..N were never proven."""
+    doc, typed = _doc()
+    doc["skills"][0]["steps"][4]["validation"] = {"assertions": [
+        {"type": "text_present", "target": "Saved E1", "required": True},
+        {"type": "text_present", "target": "E1", "required": False},
+        {"type": "text_present", "target": "Conxa", "required": False}]}
+    found = detect_repeated_entries(doc["skills"][0]["steps"], _typed_of(typed))
+    submit = wrap_repeated_entries(doc, found)["skills"][0]["steps"][1]["for_each"]["steps"][3]
+    assert [a["target"] for a in submit["validation"]["assertions"]] == ["Saved {{row.last_name}}", "{{row.last_name}}", "Conxa"]
+
+
+def test_wrap_templates_a_check_naming_two_values_and_a_value_inside_another():
+    """WF-11 saved skill: optional "alice@example.com" must become the email, not "{{row.first_name}}@example.com";
+    a check naming two values gets both."""
+    doc, typed = _doc()
+    for r, (first, mail) in enumerate([("Alice", "alice@example.com"), ("Bob", "bob@example.com"), ("Cara", "cara@example.com")]):
+        typed[100 * (r + 1) + 1], typed[100 * (r + 1) + 2] = first, mail
+    doc["skills"][0]["steps"][4]["validation"] = {"assertions": [
+        {"type": "text_present", "target": "Added Alice alice@example.com", "required": True},
+        {"type": "text_present", "target": "Alice", "required": False},
+        {"type": "text_present", "target": "alice@example.com", "required": False}]}
+    found = detect_repeated_entries(doc["skills"][0]["steps"], _typed_of(typed))
+    submit = wrap_repeated_entries(doc, found)["skills"][0]["steps"][1]["for_each"]["steps"][3]
+    assert [a["target"] for a in submit["validation"]["assertions"]] == [
+        "Added {{row.first_name}} {{row.last_name}}", "{{row.last_name}}"]
+
+
 def test_wrap_refuses_when_the_steps_changed_since_the_question():
     doc, typed = _doc()
     found = detect_repeated_entries(doc["skills"][0]["steps"], _typed_of(typed))

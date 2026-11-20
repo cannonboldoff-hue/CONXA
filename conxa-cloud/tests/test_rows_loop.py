@@ -87,6 +87,9 @@ def test_the_test_card_turns_lines_into_rows_and_back():
     rows = rows_from_text("a@x.com | Hello there\n\n b@x.com|Hi", cols, "Mails")
     assert rows == [{"to": "a@x.com", "subject": "Hello there"}, {"to": "b@x.com", "subject": "Hi"}]
     assert rows_to_text(rows, cols) == "a@x.com | Hello there\nb@x.com | Hi"
+    # WF-11: the saved default is JSON text; the card shows it as the lines its help text asks for.
+    assert rows_to_text('[{"to": "a@x.com", "subject": "Hello there"}]', cols) == "a@x.com | Hello there"
+    assert rows_to_text("a@x.com | Hi", cols) == "a@x.com | Hi"
     for bad in ("a@x.com", "a@x.com | x | y", "a@x.com | "):
         with pytest.raises(_CommandError, match="line 1"):
             rows_from_text(bad, cols, "Mails")

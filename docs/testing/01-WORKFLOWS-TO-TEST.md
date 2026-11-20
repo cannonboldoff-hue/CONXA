@@ -31,7 +31,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-8 | Recorder under attack + hard walls (canvas, CAPTCHA) | ✅ passed 2026-11-18 (P-40) | — |
 | WF-9 | Compiler honesty: identity, meaning never touches addresses | ✅ passed 2026-11-19 (P-41) | — |
 | WF-10 | Branches and popups: optional, decision, unrecorded | ✅ passed 2026-11-20 (P-42; 10.3 on a stand-in, 10.11 guard half not run) | Yes |
-| WF-11 | Loops, inputs and hostile input data | ⏳ | Yes |
+| WF-11 | Loops, inputs and hostile input data | ✅ passed 2026-11-20 (P-43) | Yes |
 | WF-12 | Copilot: "why did this fail?" chat | ⏳ | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ⏳ | Yes (Studio part) |
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | 🔄 14.1–14.2, 14.4–14.7 passed (P-34…P-36); 14.3, 14.8 open | Local fixture; public hosts blocked |
@@ -338,7 +338,7 @@ PROD-3. The old-runtime "silent skip" check needs an installed runtime → WF-16
 
 ---
 
-## WF-11 — Loops, inputs and hostile input data
+## ✅ WF-11 — Loops, inputs and hostile input data — passed 2026-11-20 (P-43)
 
 **Sites:** S3 `/webtables` (add-record form), fixture `rows.html`. Replaces the old Sheets → Gmail
 leg, which sent real email from the owner's account.

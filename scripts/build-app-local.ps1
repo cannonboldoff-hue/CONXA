@@ -108,7 +108,8 @@ $versionJson = @{
   app_version = $appVersion
   min_host    = "0.0.0"
   built_at    = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-  capabilities = @("test_guard", "outputs", "run_if", "stop_before", "date_offset", "ask_missing", "templated_click", "loop_guard", "variant_branch", "wait_until", "clipboard", "call_workflow", "answer_popups", "fork_then", "agent_span", "agent_span_v2")  # see build-runtime-app.yml
+  # One source of truth: runtime/app/version.json (a copied list here once dropped loop_rows). Same in build-runtime-app.yml.
+  capabilities = @((Get-Content (Join-Path $RuntimeDir "app\version.json") -Raw | ConvertFrom-Json).capabilities)
   files       = $hashes
 } | ConvertTo-Json -Depth 5
 # No-BOM write: Windows PowerShell 5.1's `Out-File -Encoding utf8` prepends a BOM, which makes

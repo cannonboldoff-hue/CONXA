@@ -1338,13 +1338,16 @@ def _template_assertion_targets(steps: list[Any], literal: str, token: str) -> N
             if not isinstance(a, dict) or a.get("type") not in ("url_pattern", "text_present"):
                 continue
             target = a.get("target")
-            if not isinstance(target, str) or "{{" in target:
+            if not isinstance(target, str):
                 continue
             # a url_pattern is a RegExp, so the recorded literal may appear escaped
             forms = {literal, re.escape(literal)} if a["type"] == "url_pattern" else {literal}
-            for form in sorted(forms, key=len, reverse=True):
-                target = re.sub(re.escape(form), lambda _m: token, target, flags=re.IGNORECASE)
-            a["target"] = target
+            # Only outside a {{token}} already there: a check naming two values ("Saved Alice Adams") gets both (WF-11).
+            pieces = re.split(r"(\{\{.*?\}\})", target)
+            for i in range(0, len(pieces), 2):
+                for form in sorted(forms, key=len, reverse=True):
+                    pieces[i] = re.sub(re.escape(form), lambda _m: token, pieces[i], flags=re.IGNORECASE)
+            a["target"] = "".join(pieces)
 
 
 def _scrub_recorded_echoes(doc: dict[str, Any], literal: str, token: str) -> None:
@@ -1729,6 +1732,13 @@ def wrap_repeated_entries(document: dict[str, Any], suggestion: dict[str, Any], 
         _scan_placeholder_ids(s, old_ids)
     for c in columns:
         rewrite(body[int(c["offset"])], f"{{{{row.{c['name']}}}}}")
+    # A later step's checks name the first copy's typed words too (the Add click: "Alice" is on the page). Left as
+    # recorded they would look for row 1 on every row, so they follow the row (or, optional, are dropped) (WF-11).
+    # Longest first: "alice@example.com" is the email, not "Alice" plus "@example.com".
+    for c in sorted(columns, key=lambda c: -len(str(rows[0].get(c["name"]) or "").strip())):
+        literal = str(rows[0].get(c["name"]) or "").strip()
+        if literal:
+            _template_assertion_targets(body, literal, f"{{{{row.{c['name']}}}}}")
     for f in suggestion.get("fixed") or []:
         if isinstance(f, dict):
             rewrite(body[int(f["offset"])], str(f.get("value") or ""))

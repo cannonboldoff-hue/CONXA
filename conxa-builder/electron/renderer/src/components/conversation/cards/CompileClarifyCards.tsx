@@ -400,7 +400,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
         )}
       </ol>
       <p className="mt-3 text-xs text-[var(--text-meta)]">
-        {s.steps} steps{s.added_steps ? ` (${compiled} compiled + ${s.added_steps} added)` : ''}{checkCount ? ` · ${checkCount} check${checkCount === 1 ? '' : 's'}` : ''}{s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
+        {s.steps} steps{s.added_steps > 0 ? ` (${compiled} compiled + ${s.added_steps} added)` : s.added_steps < 0 ? ` (${compiled} compiled, ${-s.added_steps} fewer after your answers)` : ''}{checkCount ? ` · ${checkCount} check${checkCount === 1 ? '' : 's'}` : ''}{s.done_when.length ? ` · Done when ${s.done_when.join(' and ')}` : ''}
         {s.queued ? ` · ${s.queued} thing${s.queued === 1 ? '' : 's'} I was sure about (say “ask me” to check)` : ''}
       </p>
       {s.assumptions && s.assumptions.length > 0 && (

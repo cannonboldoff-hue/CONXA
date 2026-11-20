@@ -1,0 +1,35 @@
+AM
+
+About the note on where the people's details come from.
+
+That's already how it's built. You told me it always enters the same 3 people, and the workflow already uses the same three people every time. So no change is needed.
+
+No changes could be prepared, so nothing is waiting for you to press Apply. The workflow is ready to test, and it has not been tested yet.
+
+C
+
+Conxa · 11:33 AM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+●
+Test inputs
+·
+●
+Test passed
+
+40 steps · 0 min 21 s
+
+▲
+Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.
+
+What was checked
+Approve for packaging
+Test with other inputs
+C
+
+Conxa · 11:34 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+WF11 twin retest
