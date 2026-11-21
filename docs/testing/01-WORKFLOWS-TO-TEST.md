@@ -35,7 +35,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-12 | Copilot: "why did this fail?" chat | ✅ passed 2026-11-20 (P-44; 12.7 built after owner decision, 3 sub-checks not reached) | Yes |
 | WF-13 | Agent-driven steps: AI Review + agent span | ✅ passed 2026-11-20 (P-45; 13.6 unit-test only) | Yes (Studio part) |
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | ✅ passed 2026-11-21 (P-34…P-36, P-46); 14.8 big uploads, empty and stuck downloads fixed (RT-18); slow-host wait open (RT-19) | Local fixture; public hosts blocked |
-| WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
+| WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ✅ passed 2026-11-21 (P-47; 15.12 and 15.9 divider drag not verified) | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ✅ passed 2026-11-21 (P-48; stdio client not Claude Code; 16.9 older-layer half and sync 401 not reproducible here) | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ⏳ | Partly |
 | WF-18 | Hand-over step (a person solves a CAPTCHA) | ⏳ | Needs a person |
@@ -434,7 +434,7 @@ Already passed: interleaved one-at-a-time download→upload identity at n=5 (P-1
 
 ---
 
-## WF-15 — Endurance, slow sites, chaos, and a person interfering
+## ✅ WF-15 — Endurance, slow sites, chaos, and a person interfering — passed 2026-11-21 (P-47)
 
 **Known-good skills:** the approved WF-3 skills (P-27 saucedemo, P-29 ParaBank) and WF-4 Leg B.
 Watch Studio, runtime and Chromium memory throughout.
@@ -459,7 +459,9 @@ Watch Studio, runtime and Chromium memory throughout.
 
 ---
 
-## WF-16 — Through a real agent (MCP)
+## ✅ WF-16 — Through a real agent (MCP) — passed 2026-11-21 (P-48)
+
+**Result:** 16.1–16.8, 16.10, 16.12 pass; 16.11 tracking half passes. Not verified: Claude Code as the client (stdio client used), publish → install → sync path, 16.9 older-layer half, real sync 401 (open as RT-20). Detail: `workflow-handoffs/WF-016.md`.
 
 **Needs an MCP client** (Claude Desktop, or Claude Code registered through the runtime's
 `register-mcp`). That edits an agent host's config — **ask the owner first.** Publish a WF-4/WF-10/
