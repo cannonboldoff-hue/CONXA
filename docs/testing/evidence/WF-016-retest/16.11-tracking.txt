@@ -1,0 +1,20 @@
+05:07:31 RUN A good token, fresh sentence=false stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: Done. URL: https://en.wikipedia.org/wiki/Automation |  | Warning: |   This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page. | (run_id: r_mwpy43ck_z9753)
+05:08:20 RUN A2 good token sentence=false stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: Done. URL: https://en.wikipedia.org/wiki/Automation |  | Warning: |   This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page. | (run_id: r_mwpy5efe_c0bpr)
+05:08:20 LIST A good total=10 notice=none
+05:09:02 RUN B1 bogus token (first run, flush may land after) sentence=true stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: ndmarks are missing on the live page. | (run_id: r_mwpy6b3r_umcgt) | Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it.
+05:09:52 RUN B2 bogus token sentence=true stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: ndmarks are missing on the live page. | (run_id: r_mwpy7czi_qcs4p) | Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it.
+05:09:52 LIST B bogus total=10 notice="Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it."
+05:10:34 RUN B3 bogus sentence=true stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: ndmarks are missing on the live page. | (run_id: r_mwpy89ps_wjz2t) | Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it.
+05:10:34 LIST B3 bogus total=10 notice="Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it."
+05:11:17 RUN C1 good token restored sentence=false stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: Done. URL: https://en.wikipedia.org/wiki/Automation |  | Warning: |   This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page. | (run_id: r_mwpy96k1_f7j2z)
+05:12:14 RUN C2 good token sentence=false stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: Done. URL: https://en.wikipedia.org/wiki/Automation |  | Warning: |   This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page. | (run_id: r_mwpya8rs_b0r53)
+05:12:21 LIST C good again total=10 notice=none
+05:13:07 RUN C3 good sentence=false stack=false first line: Done. URL: https://en.wikipedia.org/wiki/Automation
+   TAIL: Done. URL: https://en.wikipedia.org/wiki/Automation |  | Warning: |   This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page. | (run_id: r_mwpybgpt_y0x6v)

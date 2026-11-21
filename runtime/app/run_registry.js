@@ -10,7 +10,9 @@
  * place.
  */
 
-const MAX_CONCURRENT_RUNS = Number(process.env.CONXA_MAX_CONCURRENT_RUNS) || 5;
+const { outcomeFromText } = require("./proof");
+
+const MAX_CONCURRENT_RUNS =Number(process.env.CONXA_MAX_CONCURRENT_RUNS) || 5;
 
 const _runs = new Map(); // runId -> exec
 
@@ -124,6 +126,32 @@ function recordResult(runId, { skill, status, summary }) {
   });
   if (_recent.length > RECENT_MAX) _recent = _recent.slice(-RECENT_MAX);
 }
+
+const _textOf = (res) => ((res && res.content) || []).filter((c) => c && c.type === "text").map((c) => c.text).join("\n");
+// A run that stopped to wait for an answer (span, popup, hand-over, a step still working, a test
+// guard) ended its call without failing.
+const PAUSE_META = ["conxa/agent_span", "conxa/fork", "conxa/handover", "conxa/proof_wait", "conxa/guard", "conxa/stopped_at", "conxa/handed_off"];
+// Success is the "Done." prefix (Build Studio's Run Test reads it the same way) — err() is just text().
+function resultStatus(res) {
+  const t = _textOf(res);
+  const oc = outcomeFromText(t);
+  if (oc === "done" || oc === "done_please_check" || oc === "submitted") return "completed";
+  if (res && res._meta && PAUSE_META.some((k) => res._meta[k])) return "paused";
+  return /^Execution cancelled/.test(t) ? "cancelled" : "failed";
+}
+
+// How an execute_skill/execute_sequence call ended (server.js _handleTool, every run path). Recorded
+// only for a run the caller can name: its answer gave this run_id, or it continues one in the
+// background (`continuation`). A refusal before the run started never shows an id. A hand-off to a
+// sign-in wait is recorded later, by whatever finishes that wait. Returns whether it recorded.
+function recordCallResult(runId, skill, res, { continuation = false } = {}) {
+  const text = _textOf(res);
+  if (!continuation && !text.includes(runId)) return false;
+  if (res && res._meta && res._meta["conxa/awaiting_auth"]) return false;
+  recordResult(runId, { skill, status: resultStatus(res), summary: text });
+  return true;
+}
+
 function listRecent() {
   return _recent.map((r) => ({ ...r }));
 }
@@ -147,4 +175,5 @@ function _resetAuth() {
 module.exports = {
   MAX_CONCURRENT_RUNS, begin, end, get, list, count, requestCancel,
   beginAwaitingAuth, endAwaitingAuth, isAuthCancelled, listAwaitingAuth, findAwaiting, recordResult, listRecent, status, _resetAuth,
+  resultStatus, recordCallResult,
 };

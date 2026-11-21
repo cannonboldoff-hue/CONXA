@@ -1,7 +1,8 @@
 "use strict";
 /** Follows a run the runtime detached (waiting for sign-in) until it ends. */
 
-const TERMINAL = new Set(["completed", "failed", "cancelled", "unknown"]);
+// "paused": the run stopped to wait for an answer; its call is over, so following it ends too.
+const TERMINAL = new Set(["completed", "failed", "cancelled", "paused", "unknown"]);
 // A chat-visible marker instead of a new message field: the transcript goes to the model proxy as-is.
 const FOLLOW_UP_PREFIX = "[Conxa run update]";
 

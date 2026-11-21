@@ -1,0 +1,39 @@
+5.5s list_skills {"skills":[{"skill":"wf4-d-i18n-wiki-r5-06fd6288","workspace_id":"wrk_local","name":"Wf4-D-I18N-Wiki-R5-06Fd6288","description":"WF4 D i18n wiki r5","inputs_required":["search_wikipedia"],"sync_status":"unknown","version":"0.1.0","app":"en.wikipedia.org"},{"skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","name":"Mutator-Fixture-72C45380","description":"Mutator fixture","inputs_required":["email","name","shapeshifter"],"sync_status":"unknown","version":"0.1.0","app":"127.0.0.1"},{"sk
+5.5s get_runtime_status {
+  "runtime_version": "0.0.0-local.20261018234324",
+  "staged_runtime_version": null,
+  "chromium_revision": "chromium-1217",
+  "platform": "win32",
+  "install_id": "0abda178-1be1-4b2f-8dd0-9828b8e8e499",
+  "conxa_dir": "C:/Users/kiran/AppData/Local/Temp/claude/76b5041f46a914b2/c5f9cb1c-16f5-4931-ab78-557c1ed04073/scratchpad/inst/conxa",
+  "max_recovery_tier": 4,
+  "agent_recovery_enabled": true,
+  "skill_packs": [
+    {
+      "workspace_id": "wrk_local",
+      "skill_pack_version": "0.1.0",
+      "required_runtime": ">=1.0.3",
+      "skills": [
+        "wf4-d-i18n-wiki-r5-06fd6288",
+        "mutator-fixture-72c45380",
+        "wf13-marie-curie-rt-283e911a",
+        "wf10-decision-r3-94560d1d",
+        "wf10-branches-r3-16be31f3",
+        "wf11-note-r1-eafa1f0a",
+        "dismiss-df-2d7cebf8",
+        "wf1-a-wikipedia-control-r4-71600c18",
+        "wf16-decision-safe",
+        "wf16-decision-loop"
+      ]
+    }
+  ]
+}
+11.2s RESULT 11 execute with invalid token after 5.7s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwwfih_p5915)
+STDERR_TAIL {"ts":"2026-11-21T04:32:45.774Z","level":"warn","msg":"tracking_http_failed","event_count":5,"run_id":"r_mwpwwfih_p5915"}
+{"ts":"2026-11-21T04:32:45.775Z","level":"info","msg":"test_phase","run_id":"r_mwpwwfih_p5915","phase":"tracking_flushed","ms":5702}
+

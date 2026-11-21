@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**An AI assistant can ask how a finished workflow went, and a refused access key is said plainly — 2026-11-21**
+When an AI assistant ran a workflow and then asked "how did that run go?", Conxa answered "I don't know that run", even though the run had just finished. Now every run is remembered with how it ended: done, failed, cancelled, or paused to wait for an answer. When the key in an installation is no longer accepted, Conxa used to say nothing while updates and run reports quietly stopped; it now adds one plain sentence saying the installed workflows still work and to ask for a new installer. An unusual answer from the cloud with no list of workflows in it can no longer hide the workflows already installed.
+— 2026-11-21
+
 **A sign-in that runs out mid-test is reported as a sign-in, and the chat stays in order — 2026-11-21**
 When a website signed you out in the middle of a test and showed its sign-in form at an ordinary address, the test said a button "wasn't found". It now recognises the sign-in form and pauses with "A sign-in expired during the test", unless the workflow itself fills in a password. Leaving a workflow during a test and coming back no longer puts old test results under the newest messages. A test whose browser tab was closed now says so in plain words instead of "Something went wrong".
 — 2026-11-21

@@ -1,0 +1,72 @@
+1.4s get_skill_inputs {"inputs":[{"name":"note","type":"string","description":"Enter note"}]}
+1.4s ===== empty
+1.4s RESULT 10 empty after 0.0s isError=true outcome=undefined 
+   Skill wf11-note-r1-eafa1f0a is missing required input(s): note. Call get_skill_inputs first.
+2.7s FIXTURE empty (no save reached the page)
+2.7s ===== spaces
+2.7s RESULT 10 spaces after 0.0s isError=true outcome=undefined 
+   Skill wf11-note-r1-eafa1f0a is missing required input(s): note. Call get_skill_inputs first.
+3.9s FIXTURE spaces (no save reached the page)
+3.9s ===== 10k
+9.8s RESULT 10 10k after 5.9s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwqd8q_fzlgv)
+11.0s FIXTURE 10k {"len":10000,"cp":10000,"sha":"e4ee97ec2527","head":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","tail":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","ctrl":0,"scripts_ran":0}
+11.0s ===== unicode
+14.8s RESULT 10 unicode after 3.8s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwqipf_1i1x7)
+16.0s FIXTURE unicode {"len":11,"cp":10,"sha":"086c9135c000","head":"日本語 🎉 café","tail":"日本語 🎉 café","ctrl":0,"scripts_ran":0}
+16.0s ===== injection
+19.8s RESULT 10 injection after 3.8s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwqmkh_9k42n)
+21.0s FIXTURE injection {"len":46,"cp":46,"sha":"f4bce078560e","head":"<script>alert(1)</script>'; DROP TABLE users--","tail":"</script>'; DROP TABLE users--","ctrl":0,"scripts_ran":0}
+21.0s ===== newline-tab
+24.8s RESULT 10 newline-tab after 3.8s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwqqgh_b7vjr)
+26.0s FIXTURE newline-tab {"len":15,"cp":15,"sha":"b748a940ec93","head":"line1\nline2\tend","tail":"line1\nline2\tend","ctrl":2,"scripts_ran":0}
+26.0s ===== 007
+29.9s RESULT 10 007 after 3.8s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwquce_ttc7h)
+31.1s FIXTURE 007 {"len":3,"cp":3,"sha":"629f4cf9337b","head":"007","tail":"007","ctrl":0,"scripts_ran":0}
+31.1s ===== 1e5
+35.0s RESULT 10 1e5 after 3.9s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwqy8t_0sfm3)
+36.2s FIXTURE 1e5 {"len":3,"cp":3,"sha":"84af3bdb4539","head":"1e5","tail":"1e5","ctrl":0,"scripts_ran":0}
+36.2s ===== -0
+40.0s RESULT 10 -0 after 3.8s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8097/note.html
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpwr25p_t17em)
+41.2s FIXTURE -0 {"len":2,"cp":2,"sha":"ed79f26d03f4","head":"-0","tail":"-0","ctrl":0,"scripts_ran":0}
+41.2s ===== missing
+41.2s RESULT 10 missing after 0.0s isError=true outcome=undefined 
+   Skill wf11-note-r1-eafa1f0a is missing required input(s): note. Call get_skill_inputs first.
+42.4s FIXTURE missing (no save reached the page)
+STDERR_TAIL {"ts":"2026-11-21T04:28:33.271Z","level":"info","msg":"test_phase","run_id":"r_mwpwr25p_t17em","phase":"tracking_flushed","ms":3786}
+{"ts":"2026-11-21T04:28:34.483Z","level":"info","msg":"tool_call","tool":"execute_skill"}
+

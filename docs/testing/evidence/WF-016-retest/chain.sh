@@ -1,0 +1,2 @@
+for c in 3 4 5 6 8 8e 9 10 12 7; do cp ../root/data/logs/runtime.log /c/Users/kiran/Desktop/Conxa/docs/testing/evidence/WF-016-retest/_prev.log 2>/dev/null; node wf16_cases.mjs $c > /c/Users/kiran/Desktop/Conxa/docs/testing/evidence/WF-016-retest/16.$c-run.txt 2>&1; echo "case $c done" >> /c/Users/kiran/Desktop/Conxa/docs/testing/evidence/WF-016-retest/chain.status; done
+echo ALL >> /c/Users/kiran/Desktop/Conxa/docs/testing/evidence/WF-016-retest/chain.status

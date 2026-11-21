@@ -46,6 +46,8 @@
     { "name": "errors.js",            "profile": "default",
       "_note": "server.js/run.js require this — the one place raw internal/Playwright error text is shaped into a plain summary." },
     { "name": "tracker.js",           "profile": "default" },
+    { "name": "access_refused.js",    "profile": "default",
+      "_note": "tracker.js, sync.js and server.js require this — which workspaces the cloud refused this machine's keys for (401/403)." },
     { "name": "canonical_json.js",   "profile": "default",
       "_note": "Stable JSON stringify (sorted keys) used by tracker evidence-chain hashing and dual-shipped manifest_manager signing." },
     { "name": "policy_gate.js",      "profile": "default",

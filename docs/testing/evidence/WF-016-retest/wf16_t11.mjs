@@ -1,0 +1,22 @@
+import { Mcp, sleep } from "./wf16_mcp.mjs";
+import fs from "node:fs";
+const PK = process.env.WF16_ROOT + "/conxa/skill-packs/wrk_local/pack.json";
+const pack = () => JSON.parse(fs.readFileSync(PK, "utf8"));
+const set = (tok, url) => { const p = pack(); if (tok) p.tracking.tracking_token = tok; if (url) p.tracking.tracking_url = url; fs.writeFileSync(PK, JSON.stringify(p, null, 2)); };
+const OKURL = "http://127.0.0.1:8000/api/tracking/wf16_ws/events", BADURL = "http://127.0.0.1:8000/api/tracking/wrk_local/events"; // wrk_local has a stored key in the dev cloud, wf16_ws has none (accepts)
+const GOOD = "tok-good-1";
+set(GOOD, OKURL);
+const SENT = /could not confirm this computer's access/;
+const m = new Mcp(); await m.init(); const say=(...a)=>console.log(new Date().toISOString().slice(11,19),...a);
+const run = async (label) => { const r = await m.call("execute_skill", { skill: "wf4-d-i18n-wiki-r5-06fd6288", inputs: { search_wikipedia: "Automation" }, watch: false });
+  const t = m.text(r); say("RUN", label, "sentence=" + SENT.test(t), "stack=" + /\bat .*\.js:\d+|Error:.*\n\s+at /.test(t), "first line:", t.split("\n")[0].slice(0, 80)); console.log("   TAIL:", t.slice(-330).replace(/\n/g, " | ")); return t; };
+const list = async (label) => { const t = m.text(await m.call("list_skills")); const o = JSON.parse(t); say("LIST", label, "total=" + o.total, "notice=" + (o.notice ? JSON.stringify(o.notice) : "none")); };
+const sleepF = async () => sleep(7000);
+await run("A good token, fresh"); await sleepF(); await run("A2 good token"); await list("A good");
+set("bogus-token-not-real", BADURL);
+await run("B1 bogus token (first run, flush may land after)"); await sleepF(); await run("B2 bogus token"); await list("B bogus");
+const t = await run("B3 bogus"); await list("B3 bogus");
+set(GOOD, OKURL);
+await run("C1 good token restored"); await sleepF(); await run("C2 good token"); await sleepF(); await list("C good again");
+const r2 = await run("C3 good"); 
+await m.close();

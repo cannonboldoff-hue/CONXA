@@ -1,0 +1,7 @@
+04:56:28 RUN Done. URL: https://en.wikipedia.org/wiki/Automation
+
+Warning:
+  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+(run_id: r_mwpxpxf7_ahmrb)
+04:56:28 STATUS one {"state":"completed","run_id":"r_mwpxpxf7_ahmrb","skill":"wf4-d-i18n-wiki-r5-06fd6288","status":"completed","summary":"Done. URL: https://en.wikipedia.org/wiki/Automation\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.\n(run_id: r_mwpxpxf7_ahmrb)","ended_at":"2026-11-21T04:56:28.848Z"}
+04:56:28 STATUS all {"active_runs":[],"awaiting_auth":[],"recent":[{"run_id":"r_mwpxpxf7_ahmrb","skill":"wf4-d-i18n-wiki-r5-06fd6288","status":"completed","summary":"Done. URL: https://en.wikipedia.org/wiki/Automation\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.\n(run_id: r_mwpxpxf7_ahmrb)","ended_at":"2026-11-21T04:56:28.848Z"}]}

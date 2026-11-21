@@ -1,0 +1,25 @@
+7.8s run 1 r_mwpybk6p_b63ao done
+11.7s run 2 r_mwpybp2z_7dtat done
+15.4s run 3 r_mwpybs1x_iln7f done
+19.3s run 4 r_mwpybuyx_utby0 done
+23.1s run 5 r_mwpybxyd_x0a3o done
+26.9s run 6 r_mwpyc0wp_9d7sl done
+30.7s run 7 r_mwpyc3s3_zbaiq done
+34.5s run 8 r_mwpyc6qw_2ag3g done
+38.3s run 9 r_mwpyc9oo_76vhr done
+42.1s run 10 r_mwpyccm4_vewmo done
+46.0s run 11 r_mwpycfje_foo9i done
+49.9s run 12 r_mwpycijp_0a93i done
+53.7s run 13 r_mwpycljb_n3052 done
+57.5s run 14 r_mwpycohi_5z58s done
+61.3s run 15 r_mwpycref_e84by done
+65.2s run 16 r_mwpycudp_mj9j8 done
+69.0s run 17 r_mwpycxbn_tmxxz done
+72.8s run 18 r_mwpyd0b4_ewpuc done
+76.7s run 19 r_mwpyd39j_f5aof done
+80.6s run 20 r_mwpyd67n_j7owk done
+80.6s 20 runs took 79s
+88.6s fixture note saves seen: 20
+STDERR_TAIL {"ts":"2026-11-21T05:13:44.672Z","level":"info","msg":"tracking_http_success","event_count":5,"run_id":"r_mwpyd67n_j7owk"}
+{"ts":"2026-11-21T05:13:44.674Z","level":"info","msg":"test_phase","run_id":"r_mwpyd67n_j7owk","phase":"tracking_flushed","ms":3883}
+

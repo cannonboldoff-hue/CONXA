@@ -36,7 +36,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-13 | Agent-driven steps: AI Review + agent span | ✅ passed 2026-11-20 (P-45; 13.6 unit-test only) | Yes (Studio part) |
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | ✅ passed 2026-11-21 (P-34…P-36, P-46); 14.8 big uploads, empty and stuck downloads fixed (RT-18); slow-host wait open (RT-19) | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ⏳ | Mostly |
-| WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ⏳ | Needs an MCP client (ask first) |
+| WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ✅ passed 2026-11-21 (P-48; stdio client not Claude Code; 16.9 older-layer half and sync 401 not reproducible here) | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ⏳ | Partly |
 | WF-18 | Hand-over step (a person solves a CAPTCHA) | ⏳ | Needs a person |
 | WF-19 | Conxa Execute desktop app | ⏳ | Separate app |

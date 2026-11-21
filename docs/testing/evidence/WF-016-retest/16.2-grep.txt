@@ -1,0 +1,15 @@
+16.2 grep (retest) Sat, Nov 21, 2026 10:46:05 AM
+== root
+== root11
+== /c/Users/kiran/.conxa
+== /c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa
+== evidence dir (secrets/tokens)
+state files:
+root/data/cache/sessions/wrk_local__demoqa_state.json
+root/data/cache/sessions/wrk_local__fixtures_state.json
+root/data/cache/sessions/wrk_local__the-internet_state.json
+root/data/cache/sessions/wrk_local__wikipedia_state.json
+root11/data/cache/sessions/wrk_local__demoqa_state.json
+root11/data/cache/sessions/wrk_local__fixtures_state.json
+root11/data/cache/sessions/wrk_local__the-internet_state.json
+root11/data/cache/sessions/wrk_local__wikipedia_state.json

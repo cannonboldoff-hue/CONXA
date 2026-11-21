@@ -1,0 +1,16 @@
+4.4s STATUS  {"active_runs":[{"run_id":"r_mwpy1z7h_2iw8e","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":0,"total":6,"started_at":"2026-11-21T05:04:58.505Z","elapsed_ms":2992,"cancel_requested":false,"waiting_for_host":null},{"run_id":"r_mwpy1zlf_l3q0v","skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","step":0,"total":8,"started_at":"2026-11-21T05:04:58.998Z","elapsed_ms":2499,"cancel_requested":false,"waiting_for_host":null}],"awaiting_auth":[],"recent":[]}
+4.4s ACTIVE at +3s: {"active_runs":[{"run_id":"r_mwpy1z7h_2iw8e","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":0,"total":6,"started_at":"2026-11-21T05:04:58.505Z","elapsed_ms":2992,"cancel_requested":false,"waiting_for_host":null},{"run_id":"r_mwpy1zlf_l3q0v","skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","step":0,"total":8,"started_at":"2026-11-21T05:04:58.998Z","elapsed_ms":2499,"cancel_requested":false,"waiting_for_host":null}],"awaiting_auth":[],"recent":[]}
+4.4s cancel r_mwpy1zlf_l3q0v
+4.4s CANCEL RESP {"cancelled":true,"run_id":"r_mwpy1zlf_l3q0v"}
+4.5s RESULT SHORT mutator after 2.6s isError=true outcome=undefined 
+   Execution cancelled. (run_id: r_mwpy1zlf_l3q0v)
+26.7s RESULT LONG wiki after 25.3s isError=false outcome=done 
+   Done. URL: https://en.wikipedia.org/wiki/Ada_Lovelace
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpy1z7h_2iw8e)
+26.7s STATUS  {"active_runs":[],"awaiting_auth":[],"recent":[{"run_id":"r_mwpy1zlf_l3q0v","skill":"mutator-fixture-72c45380","status":"cancelled","summary":"Execution cancelled. (run_id: r_mwpy1zlf_l3q0v)","ended_at":"2026-11-21T05:05:01.598Z"},{"run_id":"r_mwpy1z7h_2iw8e","skill":"wf1-a-wikipedia-control-r4-71600c18","status":"completed","summary":"Done. URL: https://en.wikipedia.org/wiki/Ada_Lovelace\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.\n(run_id: r_mwpy1z7h_2iw8e)","ended_at":"2026-11-21T05:05:23.773Z"}]}
+STDERR_TAIL {"ts":"2026-11-21T05:05:23.772Z","level":"info","msg":"test_phase","run_id":"r_mwpy1z7h_2iw8e","phase":"tracking_flushed","ms":25267}
+{"ts":"2026-11-21T05:05:23.774Z","level":"info","msg":"tool_call","tool":"get_execution_status"}
+

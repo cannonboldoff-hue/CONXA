@@ -96,3 +96,28 @@ test("a run that has started executing is no longer listed as awaiting, even tho
     assert.strictEqual(reg.status("r_1").state, "running");
   } finally { reg.end("r_1"); }
 });
+
+// WF-16 16.1: every execute call records how it ended, not only one that waited for sign-in.
+const t = (text, _meta) => ({ content: [{ type: "text", text }], ...(_meta ? { _meta } : {}) });
+
+test("recordCallResult: a finished run the caller was given an id for reads back as completed / failed / cancelled / paused", () => {
+  assert.strictEqual(reg.recordCallResult("r_ok", "s", t("Done. URL: https://x\n(run_id: r_ok)")), true);
+  assert.strictEqual(reg.status("r_ok").state, "completed");
+  assert.match(reg.status("r_ok").summary, /^Done\./);
+  reg.recordCallResult("r_bad", "s", { content: [{ type: "text", text: "Step 3 failed." }, { type: "text", text: "(run_id: r_bad)" }], isError: true });
+  assert.strictEqual(reg.status("r_bad").state, "failed");
+  reg.recordCallResult("r_c", "s", t("Execution cancelled. (run_id: r_c)"));
+  assert.strictEqual(reg.status("r_c").state, "cancelled");
+  reg.recordCallResult("r_p", "s", t("Pick one option. (run_id: r_p)", { "conxa/fork": { step_index: 6 } }));
+  assert.strictEqual(reg.status("r_p").state, "paused");
+  assert.deepStrictEqual(reg.listRecent().map((r) => r.run_id), ["r_ok", "r_bad", "r_c", "r_p"]);
+});
+
+test("recordCallResult skips a refusal that never showed the id, and a hand-off to a sign-in wait", () => {
+  assert.strictEqual(reg.recordCallResult("r_x", "s", t("Skill not found: s. Call list_skills.")), false);
+  assert.strictEqual(reg.recordCallResult("r_y", "s", t("Authentication required — sign in. (run_id: r_y)", { "conxa/awaiting_auth": { run_id: "r_y" } })), false);
+  assert.deepStrictEqual(reg.listRecent(), []);
+  // A background continuation of a named run is recorded even when its own answer shows no id.
+  assert.strictEqual(reg.recordCallResult("r_z", "s", t("Retry budget exhausted at step 2."), { continuation: true }), true);
+  assert.strictEqual(reg.status("r_z").state, "failed");
+});

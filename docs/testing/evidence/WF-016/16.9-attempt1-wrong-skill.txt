@@ -1,0 +1,10 @@
+15.3s RESULT 9 branches skill on current app layer after 14.0s isError=false outcome=done 
+   Done. URL: http://127.0.0.1:8099/decision.html?ask=1
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.
+   (run_id: r_mwpwocgg_y6q4t)
+FULL {"content":[{"type":"text","text":"Done. URL: http://127.0.0.1:8099/decision.html?ask=1\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.\n(run_id: r_mwpwocgg_y6q4t)"}],"structuredContent":{"outcome":"done","steps":[{"index":0,"source_step_key":"ff902b8268e789ec#1","intent":null,"verdict":"proven","rung":"performed","required":"performed","checks":[{"rung":"performed","witness":"target","answer":"yes"},{"rung":"accepted","witness":"renderer","answer":"cant_tell"}],"skill":"wf10-branches-r3-16be31f3"},{"index":0,"intent":null,"verdict":"proven","rung":"completed","required":"performed","checks":[{"rung":"performed","witness":"target","answer":"yes"},{"rung":"accepted","witness":"renderer","answer":"cant_tell"},{"rung":"completed","witness":"renderer","answer":"yes"}],"skill":"wf10-branches-r3-16be31f3"}]}}
+STDERR_TAIL {"ts":"2026-11-21T04:26:36.824Z","level":"info","msg":"test_phase","run_id":"r_mwpwocgg_y6q4t","phase":"tracking_flushed","ms":13960}
+{"ts":"2026-11-21T04:26:36.861Z","level":"info","msg":"tracking_http_success","event_count":10,"run_id":"r_mwpwocgg_y6q4t"}
+

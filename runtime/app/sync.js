@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const httpClient = require("./http_client");
 const artifactStore = require("./artifact_store");
 const { ARTIFACT_INDEX_FILE } = artifactStore;
+const { noteAccess } = require("./access_refused");
 
 // Prefer the host-bridged instance (bootstrap.js sets this) so every layer shares one
 // implementation of the junction-handling logic; fall back to a local copy for direct
@@ -109,8 +110,19 @@ async function _syncCompany(skillPacksDir, workspace_id, log, artifactTasks = nu
     }
     if (lastErr) {
       log(`[sync:error] ${workspace_id} delta fetch failed — ${lastErr.message}`);
+      const http = /^HTTP (\d+)$/.exec(lastErr.message);
+      if (http) noteAccess(workspace_id, "sync", Number(http[1]));
       return;
     }
+    noteAccess(workspace_id, "sync", 200);
+  }
+
+  // Only a real skill list may change what is installed. A 304 (fetchJSON resolves it as
+  // {files: []}) or any other 200 body without a `skills` array used to read as "the workspace
+  // has no skills" and hide every installed one.
+  if (!delta || !Array.isArray(delta.skills)) {
+    log(`[sync:warn] ${workspace_id} the answer held no skill list — keeping the installed skills`);
+    return;
   }
 
   // The delta response is authoritative for "what skills does this workspace have

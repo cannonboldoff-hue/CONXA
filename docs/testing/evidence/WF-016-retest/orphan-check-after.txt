@@ -1,0 +1,10 @@
+
+     8099
+     8000
+
+
+
+chrome 29
+electron 4
+node 7
+python 4

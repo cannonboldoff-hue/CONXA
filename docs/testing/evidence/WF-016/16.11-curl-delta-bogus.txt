@@ -1,0 +1,10 @@
+HTTP/1.1 429 Too Many Requests
+date: Sat, 21 Nov 2026 04:32:22 GMT
+server: uvicorn
+retry-after: 260
+x-request-id: e66e481c5f72acd20f5d9b4e
+content-length: 172
+content-type: application/json
+vary: Origin
+
+{"detail":"Too many sync requests. Wait 5 minutes between syncs.","message":"Too many sync requests. Wait 5 minutes between syncs.","request_id":"e66e481c5f72acd20f5d9b4e"}

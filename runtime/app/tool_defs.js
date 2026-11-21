@@ -151,7 +151,7 @@ const CORE_TOOL_DEFS = [
   },
   {
     name: "get_execution_status",
-    description: "Conxa automation: see what is running. Lists every currently running execution (there may be more than one — separate chats, or several skills started at once) with run_id, skill, step progress and elapsed time; every run waiting for the user to sign in (awaiting_auth, with each application's status: waiting / signed_in / closed / failed); and how the most recent runs ended. Pass run_id (from execute_skill's response) to check one run: state is running, awaiting_auth, completed, failed or cancelled, and a finished run carries its result in summary. Call this after execute_skill reports that sign-in is needed — the workflow starts by itself once the user has signed in.",
+    description: "Conxa automation: see what is running. Lists every currently running execution (there may be more than one — separate chats, or several skills started at once) with run_id, skill, step progress and elapsed time; every run waiting for the user to sign in (awaiting_auth, with each application's status: waiting / signed_in / closed / failed); and how the most recent runs ended. Pass run_id (from execute_skill's response) to check one run: state is running, awaiting_auth, completed, failed, cancelled or paused (stopped to wait for an answer), and a finished run carries its result in summary. Call this after execute_skill reports that sign-in is needed — the workflow starts by itself once the user has signed in.",
     inputSchema: {
       type: "object",
       properties: {

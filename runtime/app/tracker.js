@@ -7,6 +7,7 @@ const fs     = require("fs");
 const path   = require("path");
 const crypto = require("crypto");
 const { canonicalJSON } = require("./canonical_json");
+const { noteAccess } = require("./access_refused");
 
 const MAX_QUEUE   = 50;
 const FLUSH_EVERY = 10;   // events before auto-flush
@@ -251,6 +252,7 @@ function createTracker(trackingConfig, runtimeContext) {
     } finally {
       _flushing = false;
     }
+    noteAccess(ctx.company_id || cfg.workspace_id || ctx.workspace_id, "tracking", result.status);
     // A 4xx here would never succeed on a later drain either — same reasoning as drainSpill's
     // own drop-on-permanent-rejection.
     if (!result.ok && !_isPermanentRejection(result.status)) {
@@ -278,7 +280,7 @@ function createTracker(trackingConfig, runtimeContext) {
     if (result.ok) {
       _info("tracking_http_success", { event_count: envelope.evts.length, run_id: _runCtx.rid });
     } else {
-      _warn("tracking_http_failed", { event_count: envelope.evts.length, run_id: _runCtx.rid });
+      _warn("tracking_http_failed", { event_count: envelope.evts.length, run_id: _runCtx.rid, status: result.status });
     }
     return result;
   }

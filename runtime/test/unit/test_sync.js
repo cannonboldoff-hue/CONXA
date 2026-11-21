@@ -65,12 +65,12 @@ function writePack(skillPacksDir, workspace_id, overrides = {}) {
   return path.join(workspaceDir, "pack.json");
 }
 
-function mockDeltaResponse(payload) {
+function mockDeltaResponse(payload, statusCode = 200) {
   return mock.method(https, "get", (_url, _options, callback) => {
     const dataHandlers = [];
     const endHandlers = [];
     const res = {
-      statusCode: 200,
+      statusCode,
       on(event, cb) {
         if (event === "data") dataHandlers.push(cb);
         if (event === "end") endHandlers.push(cb);
@@ -104,6 +104,41 @@ test("no_change delta still repopulates pack.skills and pack.last_synced", async
   assert.ok(!fs.existsSync(path.join(skillPacksDir, "acme", "_default", "skill-a")), "no_change must not create any skill directory");
 
   fs.rmSync(skillPacksDir, { recursive: true, force: true });
+});
+
+// WF-16 16.11: a refused key must keep every installed skill and be said in plain words.
+test("a refused sync key (401/403) keeps the installed skills and marks the workspace refused", async (t) => {
+  const accessRefused = require("../../app/access_refused");
+  accessRefused._reset();
+  for (const status of [401, 403]) {
+    const skillPacksDir = mkSkillPacksDir();
+    const packPath = writePack(skillPacksDir, "acme", { skills: ["skill-a"] });
+    const getMock = mockDeltaResponse({ detail: "invalid_sync_token" }, status);
+    await syncSkillPacks(skillPacksDir, { timeoutMs: 4000, log: () => {} });
+    getMock.mock.restore();
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(packPath, "utf8")).skills, ["skill-a"], `HTTP ${status} must not touch pack.skills`);
+    assert.strictEqual(accessRefused.isRefused("acme"), true, `HTTP ${status} must mark the workspace refused`);
+
+    // The next accepted answer clears it.
+    const okMock = mockDeltaResponse({ skills: [{ name: "skill-a", action: "no_change", group: "_default" }] });
+    await syncSkillPacks(skillPacksDir, { timeoutMs: 4000, log: () => {} });
+    okMock.mock.restore();
+    assert.strictEqual(accessRefused.isRefused("acme"), false);
+    fs.rmSync(skillPacksDir, { recursive: true, force: true });
+  }
+  t.after(() => accessRefused._reset());
+});
+
+test("an answer with no skill list (a 304 or a stray body) never hides the installed skills", async (t) => {
+  for (const [payload, status] of [[{}, 200], [{ files: [] }, 304], [{ skills: "nope" }, 200]]) {
+    const skillPacksDir = mkSkillPacksDir();
+    const packPath = writePack(skillPacksDir, "acme", { skills: ["skill-a", "skill-b"] });
+    const getMock = mockDeltaResponse(payload, status);
+    await syncSkillPacks(skillPacksDir, { timeoutMs: 4000, log: () => {} });
+    getMock.mock.restore();
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(packPath, "utf8")).skills, ["skill-a", "skill-b"], `${status} ${JSON.stringify(payload)}`);
+    fs.rmSync(skillPacksDir, { recursive: true, force: true });
+  }
 });
 
 test("update delta downloads, activates, and repopulates pack.skills", async (t) => {

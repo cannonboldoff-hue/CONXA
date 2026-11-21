@@ -1,0 +1,16 @@
+9.0s STATUS  {"active_runs":[{"run_id":"r_mwpw0cik_3922j","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":0,"total":6,"started_at":"2026-11-21T04:07:43.196Z","elapsed_ms":2787,"cancel_requested":false,"waiting_for_host":null},{"run_id":"r_mwpw0ct5_riy0h","skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","step":0,"total":8,"started_at":"2026-11-21T04:07:43.577Z","elapsed_ms":2406,"cancel_requested":false,"waiting_for_host":null}],"awaiting_auth":[],"recent":[]}
+9.0s ACTIVE at +3s: {"active_runs":[{"run_id":"r_mwpw0cik_3922j","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":0,"total":6,"started_at":"2026-11-21T04:07:43.196Z","elapsed_ms":2787,"cancel_requested":false,"waiting_for_host":null},{"run_id":"r_mwpw0ct5_riy0h","skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","step":0,"total":8,"started_at":"2026-11-21T04:07:43.577Z","elapsed_ms":2406,"cancel_requested":false,"waiting_for_host":null}],"awaiting_auth":[],"recent":[]}
+9.0s cancel r_mwpw0ct5_riy0h
+9.0s CANCEL RESP {"cancelled":true,"run_id":"r_mwpw0ct5_riy0h"}
+9.3s RESULT SHORT mutator after 2.8s isError=true outcome=undefined 
+   Execution cancelled. (run_id: r_mwpw0ct5_riy0h)
+31.4s RESULT LONG wiki after 25.5s isError=false outcome=done 
+   Done. URL: https://en.wikipedia.org/wiki/Ada_Lovelace
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpw0cik_3922j)
+31.5s STATUS  {"active_runs":[],"awaiting_auth":[],"recent":[]}
+STDERR_TAIL {"ts":"2026-11-21T04:08:08.414Z","level":"info","msg":"test_phase","run_id":"r_mwpw0cik_3922j","phase":"tracking_flushed","ms":25218}
+{"ts":"2026-11-21T04:08:08.418Z","level":"info","msg":"tool_call","tool":"get_execution_status"}
+

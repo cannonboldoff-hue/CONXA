@@ -1,0 +1,14 @@
+1.7s list_skills
+{"skills":[{"skill":"wf4-d-i18n-wiki-r5-06fd6288","workspace_id":"wrk_local","name":"Wf4-D-I18N-Wiki-R5-06Fd6288","description":"WF4 D i18n wiki r5","inputs_required":["search_wikipedia"],"sync_status":"unknown","version":"0.1.0","app":"en.wikipedia.org"},{"skill":"mutator-fixture-72c45380","workspace_id":"wrk_local","name":"Mutator-Fixture-72C45380","description":"Mutator fixture","inputs_required":["email","name","shapeshifter"],"sync_status":"unknown","version":"0.1.0","app":"127.0.0.1"},{"skill":"wf13-marie-curie-rt-283e911a","workspace_id":"wrk_local","name":"Wf13-Marie-Curie-Rt-283E911A"
+1.7s get_skill_inputs {"inputs":[{"name":"search_wikipedia","type":"string","description":"Enter search wikipedia"}]}
+44.6s RESULT 16.1 after 42.9s isError=false outcome=done 
+   Done. URL: https://en.wikipedia.org/wiki/Automation
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpvtc90_d8j9c)
+44.6s STATUS r_mwpvtc90_d8j9c {"state":"unknown","run_id":"r_mwpvtc90_d8j9c","reason":"no running, waiting or recently finished run with that run_id"}
+44.6s STATUS  {"active_runs":[],"awaiting_auth":[],"recent":[]}
+STDERR_TAIL {"ts":"2026-11-21T04:02:59.115Z","level":"info","msg":"tool_call","tool":"get_execution_status"}
+{"ts":"2026-11-21T04:02:59.120Z","level":"info","msg":"tool_call","tool":"get_execution_status"}
+

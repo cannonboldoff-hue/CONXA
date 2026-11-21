@@ -1,0 +1,16 @@
+7.7s STATUS  {"active_runs":[{"run_id":"r_mwpy0l2p_23270","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":3,"total":6,"started_at":"2026-11-21T05:03:53.577Z","elapsed_ms":6356,"cancel_requested":false,"waiting_for_host":null},{"run_id":"r_mwpy0ldv_kpo6a","skill":"wf1-a-wikipedia-control-r4-71600c18","workspace_id":"wrk_local","step":0,"total":6,"started_at":"2026-11-21T05:03:53.926Z","elapsed_ms":6007,"cancel_requested":false,"waiting_for_host":["en.wikipedia.org"]}],"awaiting_auth":[],"recent":[]}
+25.7s RESULT call-A after 24.5s isError=false outcome=done 
+   Done. URL: https://en.wikipedia.org/wiki/Ada_Lovelace
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpy0l2p_23270)
+46.6s RESULT call-B after 45.0s isError=false outcome=done 
+   Done. URL: https://en.wikipedia.org/wiki/Ada_Lovelace
+   
+   Warning:
+     This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+   (run_id: r_mwpy0ldv_kpo6a)
+STDERR_TAIL {"ts":"2026-11-21T05:04:38.869Z","level":"info","msg":"tracking_http_success","event_count":9,"run_id":"r_mwpy0ldv_kpo6a"}
+{"ts":"2026-11-21T05:04:38.870Z","level":"info","msg":"test_phase","run_id":"r_mwpy0ldv_kpo6a","phase":"tracking_flushed","ms":44944}
+

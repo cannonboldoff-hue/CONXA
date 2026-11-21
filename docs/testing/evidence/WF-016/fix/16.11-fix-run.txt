@@ -1,0 +1,8 @@
+04:57:50 RUN Done. URL: https://en.wikipedia.org/wiki/Automation
+
+Warning:
+  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the live page.
+(run_id: r_mwpxrldh_cjt42)
+Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it.
+04:57:50 STATUS {"state":"completed","run_id":"r_mwpxrldh_cjt42","skill":"wf4-d-i18n-wiki-r5-06fd6288","status":"completed","summary":"Done. URL: https://en.wikipedia.org/wiki/Automation\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 3/3 expected landmarks are missing on the liv
+04:57:50 LIST {"skills":[...],"total":10,"notice":"Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it."}

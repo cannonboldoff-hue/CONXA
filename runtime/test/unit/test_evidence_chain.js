@@ -238,6 +238,32 @@ test("a permanently-rejected (401) flush is never spilled to disk", async () => 
   });
 });
 
+// WF-16 16.11: a refused tracking key marks the run's workspace so the agent is told in plain words;
+// an accepted flush clears it, and a 5xx says nothing about the key.
+test("a 401/403 tracking flush marks the workspace refused; a 2xx clears it; a 5xx leaves it", async () => {
+  await withTempDataDir(async () => {
+    delete require.cache[require.resolve("../../app/tracker")];
+    const { createTracker } = require("../../app/tracker");
+    const accessRefused = require("../../app/access_refused");
+    accessRefused._reset();
+    const flushTo = async (port) => {
+      const tracker = createTracker(
+        { enabled: true, tracking_url: `http://127.0.0.1:${port}/events`, tracking_token: "t" },
+        { runtime_version: "1.0.0", workflow_id: "wf1", company_id: "ws-x" }
+      );
+      tracker.forRun("run-x", {}).emit("wf_start", {});
+      await tracker.flush();
+      tracker.destroy();
+    };
+    for (const [status, expectRefused] of [[403, true], [500, true], [202, false], [401, true]]) {
+      const s = await startRejectingServer(status);
+      try { await flushTo(s.port); } finally { s.server.close(); }
+      assert.strictEqual(accessRefused.isRefused("ws-x"), expectRefused, `after HTTP ${status}`);
+    }
+    accessRefused._reset();
+  });
+});
+
 test("drainSpill drops an already-spilled line once it comes back 401, instead of keeping it forever", async () => {
   await withTempDataDir(async (dataDir) => {
     delete require.cache[require.resolve("../../app/tracker")];

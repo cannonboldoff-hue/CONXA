@@ -9,6 +9,7 @@ const semver = require("./host_bridge").hostRequire("semver");
 const { loadInstallId } = require("./install_identity");
 const { installedSkillVersions } = require("./installed_versions");
 const { collectSyncErrors } = require("./sync_errors");
+const accessRefused = require("./access_refused");
 const pageScripts = require("./page_scripts");
 const pageStatus = require("./page_status");
 const { plainCause } = require("./errors");
@@ -743,13 +744,7 @@ function _awaitingAuthMessage(names, runId, alreadyOpen) {
     ` Each sign-in tab closes by itself once you are signed in, and the workflow then starts on its own — do not run it again.` +
     ` Check progress with get_execution_status (run_id: ${runId}).`;
 }
-const _textOf = (res) => ((res && res.content) || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
-// Success is the "Done." prefix (Build Studio's Run Test reads it the same way) — err() is just text().
-const _resultStatus = (t) => {
-  const oc = proofMod.outcomeFromText(t);
-  if (oc === "done" || oc === "done_please_check" || oc === "submitted") return "completed";
-  return /^Execution cancelled/.test(t) ? "cancelled" : "failed";
-};
+const _newRunId = () => `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 // -> { runId, names, joined }. `joined` when an identical request was already waiting: the caller
 // is pointed at that run instead of queueing a duplicate that would fire twice on sign-in.
@@ -775,8 +770,7 @@ function _detachUntilSignedIn({ runId, toolName, args, skill, workspaceId, auth 
           summary: `Authentication failed or was cancelled. ${describeAuthWait(waited)}` });
       } else {
         log("info", "auth_resumed", { run_id: runId, skill });
-        const t = _textOf(await _handleTool(toolName, { ...args, _run_id: runId, _after_auth: true }));
-        runRegistry.recordResult(runId, { skill, status: _resultStatus(t), summary: t });
+        await _handleTool(toolName, { ...args, _run_id: runId, _after_auth: true }); // records its own result
       }
     } catch (e) {
       runRegistry.recordResult(runId, { skill, status: "failed", summary: `The workflow could not start: ${e.message}` });
@@ -787,7 +781,26 @@ function _detachUntilSignedIn({ runId, toolName, args, skill, workspaceId, auth 
   return { runId, names, joined: false };
 }
 
+// The one place every run ends, whichever of its many return paths it took — so this is where a
+// run's outcome is recorded for get_execution_status (it used to be recorded only after a sign-in
+// wait), and where a refused installation key is said in plain words.
 async function _handleTool(name, args, extra) {
+  if (name !== "execute_skill" && name !== "execute_sequence") return _handleToolCall(name, args, extra);
+  const runId = args._run_id ? String(args._run_id) : _newRunId();
+  const res = await _handleToolCall(name, { ...args, _run_id: runId }, extra);
+  const first = name === "execute_sequence" ? ((Array.isArray(args.skills) && args.skills[0]) || {}) : args;
+  runRegistry.recordCallResult(runId, String(first.skill || ""), res, { continuation: !!args._run_id });
+  const runs = name === "execute_sequence" ? (Array.isArray(args.skills) ? args.skills : []) : [args];
+  if (res && Array.isArray(res.content) && accessRefused.refusedWorkspaces().length && runs.some((r) => {
+    const entry = r && r.skill ? _resolveSkill(String(r.skill), r.workspace_id ? String(r.workspace_id) : null) : null;
+    return entry && accessRefused.isRefused(entry.workspace_id);
+  })) {
+    res.content.push({ type: "text", text: accessRefused.REFUSED_MESSAGE });
+  }
+  return res;
+}
+
+async function _handleToolCall(name, args, extra) {
   const text = (t) => ({ content: [{ type: "text", text: t }] });
   const err  = (t) => ({ content: [{ type: "text", text: t }], isError: true });
 
@@ -807,7 +820,9 @@ async function _handleTool(name, args, extra) {
         version:         s.manifest.version || "1.0.0",
         app:             appKnowledgeFile.appOfManifest(s.manifest) || null, // the web app it works in
       }));
-    return text(JSON.stringify({ skills, total: skills.length }));
+    // A workspace whose key was refused may list no skills at all, so this does not hang off a skill.
+    const refused = accessRefused.refusedWorkspaces().some((w) => !filterWorkspace || w === filterWorkspace);
+    return text(JSON.stringify({ skills, total: skills.length, ...(refused ? { notice: accessRefused.REFUSED_MESSAGE } : {}) }));
   }
 
   // ── get_skill_inputs ─────────────────────────────────────────────────────────
@@ -1239,9 +1254,10 @@ async function _handleTool(name, args, extra) {
 
     // Acquire a run slot (RT-3: one of possibly several concurrent runs, not a single process-wide
     // lock). runId is generated here — earlier than before — because the registry keys runs by it.
-    // `_run_id` (internal, like `_trigger`): a run that waited for sign-in in the background resumes
-    // under the id its caller was already given, so get_execution_status keeps answering for it.
-    const _runId = args._run_id ? String(args._run_id) : `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    // `_run_id` (internal, like `_trigger`): set by _handleTool for every run, so the id it records
+    // the outcome under is this one; a run that waited for sign-in in the background resumes under
+    // the id its caller was already given, so get_execution_status keeps answering for it.
+    const _runId = args._run_id ? String(args._run_id) : _newRunId();
     // Diagnostic phase markers (test_phase log entries) — pinpoint where a slow "Run Test" click
     // actually spends its time: host-lock wait, the two sequential Chromium launches inside
     // getCachedBrowser (headless session-validate + visible exec context), and the settle/drift
