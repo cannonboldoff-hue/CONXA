@@ -96,6 +96,10 @@ class Assertion(BaseModel):
     # Where a text check's words came from: "result" (words the page showed after the action) or "control" (the label
     # of a button or link that appeared). A control's label is weak proof of a result, so it is never pre-ticked.
     source: str = ""
+    # `url_pattern` only: the site (scheme://host) the pattern names, when it is the site the recording started on. At
+    # run start the runtime swaps it for the site the run actually starts on (runtime/app/start_origin.js), so changing
+    # the start page to another site of the app does not fail every landing check. Empty = never swapped.
+    start_origin: str = ""
 
 
 # Proof of Done (docs/Backend-Schema.md section 3.4z). A step's `effect` says what must be true afterwards for
@@ -274,6 +278,13 @@ class EntityBinding(BaseModel):
     identifier: str = ""           # [contract] text the right row must contain; may be "{{input_name}}"
     source: str = "literal"        # [contract] "input" | "literal"
     confirmed: bool = False        # [contract] vendor confirmed this binding in the editor
+    # [contract] How a row shows the identifier. "whole" (default): the row's own text, one cell or one field IS the
+    # value. "contains": the row's own words hold the value (a suggestion list item "Amelia Brown" for the typed
+    # "Amelia"). A "contains" binding is the person's act: it is inert until `confirmed` (conversation/clarify.py
+    # "pick_match"), because it replaces "this exact text" with "whatever matches what was typed".
+    match: str = "whole"
+    # [contract] The matched row IS the element to act on (a suggestion list item), not a container to look inside.
+    self_target: bool = False
 
 
 class HandlerHints(BaseModel):

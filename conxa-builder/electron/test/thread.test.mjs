@@ -8,6 +8,7 @@ import {
   clockTime,
   earlierLabel,
   editableMessageId,
+  mergeLoadedPage,
   openCards,
   prependPage,
   upsertItem,
@@ -96,4 +97,19 @@ test("only the last message is editable, and only while just replies followed it
   assert.equal(editableMessageId([card("c0", 2, "answered", { updated_ts: "2026-10-18T10:05:00Z" }), ...base]), null);
   assert.equal(editableMessageId([{ ...msg("9", "x"), hidden: true }]), null);
   assert.equal(editableMessageId([]), null);
+});
+
+// WF-15 F2: leave a workflow during a test and come back. The reload is the newest page only; an old failed test
+// card still held locally must not be appended below it, while a card revised in the page and an item that
+// arrived by event during the load are kept.
+test("a reload keeps the newest page in order and drops local history older than it", () => {
+  const at = (id, t, extra = {}) => ({ id, ts: `2026-11-21T05:${t}:00Z`, kind: "assistant_message", text: id, ...extra });
+  const oldFail = { id: "it_old", ts: "2026-11-21T05:10:00Z", kind: "card", card_id: "c_old", revision: 3, state: "failed" };
+  const run = { id: "it_run_1", ts: "2026-11-21T05:30:00Z", kind: "card", card_id: "c_run", revision: 1, state: "running" };
+  const local = [at("old works", "05"), oldFail, at("lets test", "29"), run, at("live", "40")];
+  const page = [at("lets test", "29"), { ...run, id: "it_run_2", revision: 2, state: "passed" }, at("it works", "36")];
+  const out = mergeLoadedPage(local, page);
+  assert.deepEqual(out.map((i) => i.id), ["lets test", "it_run_2", "it works", "live"]);
+  assert.equal(out[1].state, "passed");
+  assert.deepEqual(mergeLoadedPage(local, []).map((i) => i.id), local.map((i) => i.id));
 });

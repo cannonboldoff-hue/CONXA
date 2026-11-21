@@ -26,6 +26,7 @@ from conxa_compile.confidence.uncertainty import audit_reference
 from conxa_compile.editor.action_registry import action_spec, default_action_value, is_supported_action
 from conxa_compile.editor.dto import SkillInputVariable
 from conxa_compile.editor.placeholder_grammar import PLACEHOLDER_RE
+from conxa_compile.editor.step_path import walk_steps
 from conxa_compile.editor.workflow_dto import _build_reference_for_audit, collect_suggestions
 from conxa_compile.policy.bundle import get_policy_bundle
 from pydantic import ValidationError as PydanticValidationError
@@ -1366,9 +1367,7 @@ def _template_assertion_targets(steps: list[Any], literal: str, token: str) -> N
     # Words of the literal on their own ("kicad", "gitignore" from "KiCad.gitignore"): an optional text check on one of
     # them was recorded for THIS value and would be wrong on a run that supplies another.
     parts = {p.lower() for p in re.split(r"\W+", literal) if len(p) >= 3}
-    for step in steps:
-        if not isinstance(step, dict):
-            continue
+    for step in walk_steps(steps):   # loop, branch and popup-option bodies too: a check there names the value as well
         validation = step.get("validation")
         if isinstance(validation, dict) and isinstance(validation.get("assertions"), list):
             validation["assertions"] = [
@@ -1431,9 +1430,7 @@ def _scrub_recorded_echoes(doc: dict[str, Any], literal: str, token: str) -> Non
     if isinstance(fingerprint, dict) and isinstance(fingerprint.get("landmarks"), list):
         kept = [lm for lm in fingerprint["landmarks"] if not mentions(lm)]
         fingerprint["landmarks"], fingerprint["landmark_count"] = kept, len(kept)
-    for step in ((doc.get("skills") or [{}])[0] or {}).get("steps") or []:
-        if not isinstance(step, dict):
-            continue
+    for step in walk_steps(((doc.get("skills") or [{}])[0] or {}).get("steps") or []):
         target = step.get("target")
         if isinstance(target, dict) and isinstance(target.get("fallback_selectors"), list):
             target["fallback_selectors"] = [s for s in target["fallback_selectors"] if not mentions(s)]

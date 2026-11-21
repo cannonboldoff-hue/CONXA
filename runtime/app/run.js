@@ -27,6 +27,7 @@ const { createTabRegistry, resolveStepPage, stepInheritsPage } = require("./tabs
 
 const { appendRecoveryEvent, enterStepScope } = require("./recovery_log");
 const { interpolate } = require("./interpolate");
+const { followStartOrigin } = require("./start_origin");
 const { MAX_CALL_DEPTH } = require("./call_workflow");
 const fork = require("./fork");
 const pageStatus = require("./page_status");
@@ -298,7 +299,15 @@ async function confirmCompleted(ctx, state, step, i, page, completion, preShot) 
 
 // The one file an upload step sends, by name, or null (not an upload, several files, or no readable path). Only the
 // name is ever used, and only to look for it on a page.
-function uploadFileName(step, inputs) {
+function uploadFileName(step, inputs, steps = null) {
+  // A press that sends the files an earlier step chose ("choose files, then press Upload") has no file of its own: its
+  // fresh_look check names that pick (probe.file_from = the pick's step key), and the pick's file is looked for.
+  if (step && step.type !== "upload" && Array.isArray(steps)) {
+    const checks = asArray(asObject(asObject(step.validation).effect).checks);
+    const look = checks.find((c) => c && c.probe && c.probe.type === "fresh_look" && c.probe.file_from);
+    const pick = look && steps.find((s) => s && s.source_step_key === look.probe.file_from);
+    if (pick) return uploadFileName(pick, inputs);
+  }
   if (!step || step.type !== "upload") return null;
   try {
     const paths = resolveUploadPaths(interpolate(String(step.value ?? ""), inputs));
@@ -516,7 +525,7 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
   // runs only when the step carries that check and the check has not been shown to be dead on this site.
   let fresh = null;
   if (effect && notebook && effect.checks.some((c) => c && !(c.calibrated === false && effectProbes.hasBasis(c)) && c.probe && c.probe.type === "fresh_look")) {
-    fresh = await freshLook({ page: notebook.page, registry: ctx.tabs, fileName: uploadFileName(step, state.inputs), countBefore: notebook.nameCountBefore });
+    fresh = await freshLook({ page: notebook.page, registry: ctx.tabs, fileName: uploadFileName(step, state.inputs, ctx.steps), countBefore: notebook.nameCountBefore });
     ctx.tracker.emit("fresh_look", { si: i, a: fresh.answer });
   }
   // The checks that need time or a second page (url_stays, row_with_identity, value_equals), looked at only when asked for.
@@ -1159,7 +1168,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // owns and every visible frame shows, and the request/response facts, so the gate is not limited to one page.
   let completion = { baseline: null, sinceMs: 0 };
   if (COMPLETION_GATE_ENABLED && isNonIdempotent(step)) {
-    const notebook = await openNotebook(ctx, page, null, uploadFileName(step, state.inputs) || identityNeedle(step, state.inputs));
+    const notebook = await openNotebook(ctx, page, null, uploadFileName(step, state.inputs, ctx.steps) || identityNeedle(step, state.inputs));
     completion = { baseline: await captureCompletionBaseline(page, notebook), sinceMs: Date.now(), attempted: true, notebook };
   }
 
@@ -2241,6 +2250,9 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   const boundValues = [...new Set(asArray(steps).map((s) => asObject(asObject(s).entity_binding).identifier)
     .filter(Boolean).map((id) => interpolate(String(id), inputs).trim()).filter(Boolean))];
   if (boundValues.length) steps = steps.map((s) => (s && typeof s === "object" ? { ...s, _bound_values: boundValues } : s));
+  // An address check names the site the recording started on; a run that starts on another site of the app (the person
+  // changed the start page) checks the same landing on its own site (start_origin.js).
+  steps = followStartOrigin(steps, inputs, interpolate);
 
   // Multi-tab: each step declares which tab it runs on (step.tab — see tabs.js). The registry
   // binds tab_0 to startPage and starts listening for new pages immediately, before any step
@@ -2503,16 +2515,28 @@ async function isAuthFailure(page, steps, step = null) {
     titled = AUTH_FAILURE_TITLE_RE.test(await page.title());
   } catch (_) {}
   if (titled) return true;
-  if (!SSO_HOP_RE.test(pathname)) return false;
+  const hop = SSO_HOP_RE.test(pathname);
+  // Any other address ("/" showing a sign-in form after a bounce, WF-15 F1): a visible password box counts only
+  // when no step of this plan types into one, so a workflow that signs in on its own is never read as expired.
+  if (!hop && planTypesPassword(steps)) return false;
   try {
-    return (await countOn(page.locator("input[type=password]"))) > 0;
+    return (await countOn(page.locator(hop ? "input[type=password]" : "input[type=password]:visible"))) > 0;
   } catch (_) {
-    return false; // can't tell: a hop-looking address alone is not proof the session died
+    return false; // can't tell: an address alone is not proof the session died
   }
+}
+
+// Does any step of this plan (nested bodies included) act on a password box, as recorded?
+function planTypesPassword(steps) {
+  return (Array.isArray(steps) ? steps : []).some((s) => s && typeof s === "object" && (
+    String(asObject(asObject(s.identity_bundle).fingerprint).input_type || "").toLowerCase() === "password"
+    || planTypesPassword(s.steps) || planTypesPassword(s.for_each && s.for_each.steps)
+    || planTypesPassword(s.branch && s.branch.steps)));
 }
 
 module.exports = {
   spanBeforeIrreversible,
+  uploadFileName,
   MAX_AGENT_SPANS_PER_RUN,
   NOOP_STEP_TYPES,
   NAVIGATION_STEP_TYPES,

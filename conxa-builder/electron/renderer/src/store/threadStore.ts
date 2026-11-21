@@ -9,7 +9,7 @@ import {
   type Lifecycle,
 } from '@/api/conversationApi'
 import { CmdError } from '@/lib/ipc'
-import { applyDelta, prependPage, upsertItem, upsertMany, type Streaming, type ThreadItem } from '@/lib/thread'
+import { applyDelta, mergeLoadedPage, prependPage, upsertItem, upsertMany, type Streaming, type ThreadItem } from '@/lib/thread'
 
 export type ThreadState = {
   items: ThreadItem[]
@@ -76,7 +76,7 @@ export const useThreadStore = create<Store>((set, get) => ({
       const page = await threadLoad(threadId)
       patch(set, threadId, (t) => ({
         // Anything that arrived by event while the page was loading is already in `t.items`.
-        items: upsertMany(page.items, t.items.filter((i) => !page.items.some((p) => p.id === i.id))),
+        items: mergeLoadedPage(t.items, page.items),
         loading: false,
         loaded: true,
         hasMore: page.has_more,

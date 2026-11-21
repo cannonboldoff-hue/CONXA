@@ -1,0 +1,4 @@
+run02 end secs=161 verdict=Test passed
+run03 end secs=148 verdict=Test passed
+run04 end secs=121 verdict=Test failed at “Click Finish to place the order.”
+STOP run04 not passed

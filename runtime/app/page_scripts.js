@@ -898,6 +898,23 @@ function rowsHoldingWholeValue(rows, wanted) {
   return out;
 }
 
+// The rows (indexes) whose own words HOLD `wanted`, whole words and in order ("Amelia Brown" holds "amelia"; "Carol Ann"
+// holds "carol" too, which is why only a person's "yes" turns this on: entity_binding.match "contains"). For a suggestion
+// list: the row is the item, there is no cell inside it to compare. Case and spacing do not matter.
+function rowsContainingValue(rows, wanted) {
+  var norm = function (v) { return String(v || "").replace(/\s+/g, " ").trim().toLowerCase(); };
+  var want = norm(wanted);
+  var out = [];
+  if (!want) return out;
+  var esc = want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var re = new RegExp("(^|[^\\p{L}\\p{N}_])" + esc + "($|[^\\p{L}\\p{N}_])", "u");
+  for (var r = 0; r < rows.length && r < 2000; r++) {
+    var row = rows[r];
+    if (re.test(norm(row.innerText || row.textContent))) out.push(r);
+  }
+  return out;
+}
+
 // How often `needle` ends a line of the page's visible text (or a visible box's value), with at most closing
 // punctuation after it: "Saved Carol" in "Saved Carol." but not in "Saved Carol Ann". For a check whose words end in
 // the record the run acts on, where a longer look-alike record must not count.
@@ -1032,6 +1049,7 @@ function seedLocalStorage(entries) {
 
 module.exports = {
   rowsHoldingWholeValue,
+  rowsContainingValue,
   countTextEnding,
   countTextOccurrences,
   countPageText,

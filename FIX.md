@@ -2,6 +2,15 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**A sign-in that runs out mid-test is reported as a sign-in, and the chat stays in order — 2026-11-21**
+When a website signed you out in the middle of a test and showed its sign-in form at an ordinary address, the test said a button "wasn't found". It now recognises the sign-in form and pauses with "A sign-in expired during the test", unless the workflow itself fills in a password. Leaving a workflow during a test and coming back no longer puts old test results under the newest messages. A test whose browser tab was closed now says so in plain words instead of "Something went wrong".
+— 2026-11-21
+
+**Captured values, suggestion lists, popup answers and start pages work with new data — 2026-11-21**
+A value Studio reads off a page (a price, a total) used to be found again by its own words, so a different search could not find it. It is now found by where it sits and what is around it. After you type a name and pick from the list that appears, Studio now asks once whether to pick the suggestion that shows what was typed; only your yes turns that on, and it stops if none or several match. A check on a result that appears after a popup's answer ("Successfully Deleted") can now be placed on that answer, and a check on a site follows the start page if you move it to another site of the same app. A button's label that merely appeared no longer counts as proof the work finished.
+Still open: the new check-wording rules are not yet used by every place that offers checks, and unticking a "proof of done" check still leaves it listed.
+— 2026-11-21
+
 **Steps keep their name when the workflow changes, and a few safety gaps are closed — 2026-11-21**
 Everything Studio remembers about a step — your answers, past test results, suggestions — used to be filed under a label worked out from the step's button or box, so a change to how Studio recognises that button could have lost it all. Each step now gets its own permanent label, and older workflows keep exactly the labels they had. The Test button also stays available while a suggested change is waiting, though approving still waits for it.
 Chat can no longer be talked into typing into a password box or sending a run to a sign-in page, and a rename of a typed value no longer rewrites unrelated hidden settings of the step. Pressing "I'm signed in" a moment too early now looks again before saying it couldn't confirm, and re-recording part of a workflow is held back by open questions the same way Test is.

@@ -12,6 +12,9 @@ import re
 # Same causes the old test panel mapped (renderer WorkflowTests.tsx), first match wins.
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"Executable doesn't exist", re.I), "The test browser isn’t installed. Restarting Build Studio should install it."),
+    # The runtime's own sentence (errors.js) or Playwright's raw one: the tab or the whole test browser was closed (WF-15).
+    (re.compile(r"browser tab closed before the step finished|Target (page|closed)|has been closed", re.I),
+     "The test browser closed while this step was running. Run the test again."),
     (re.compile(r"Timeout \d+ms exceeded", re.I), "The page didn’t respond in time."),
     (re.compile(r"net::ERR_NAME_NOT_RESOLVED", re.I), "That website’s address couldn’t be found."),
     (re.compile(r"net::ERR_CONNECTION|net::ERR_INTERNET_DISCONNECTED", re.I), "Couldn’t connect to the website. Check your internet connection."),

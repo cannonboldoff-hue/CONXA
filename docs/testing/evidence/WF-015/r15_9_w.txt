@@ -1,0 +1,4 @@
+[{"u":"https://en.wikipedia.org/wiki/Ada_Lovelace","w":[1280,992,"visible"]}]
+pid=22404 rect=200,40,1500,841
+[{"u":"https://en.wikipedia.org/wiki/Ada_Lovelace","w":[1280,1012,"visible"]}]
+[{"u":"https://en.wikipedia.org/wiki/Ada_Lovelace","w":[1280,1012,"visible"]}]

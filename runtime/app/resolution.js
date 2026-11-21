@@ -77,6 +77,8 @@ function isFrameNotFound(step, roots) {
 async function entityRoots(roots, step, inputs) {
   const eb = asObject(step && step.entity_binding);
   if (!eb.container_selector || !eb.identifier) return roots;
+  if (isInertBinding(eb)) return roots;
+  const matcher = eb.match === "contains" ? pageScripts.rowsContainingValue : pageScripts.rowsHoldingWholeValue;
   const wanted = interpolate(String(eb.identifier), inputs).trim();
   if (!wanted) return [];
   const out = [];
@@ -98,7 +100,7 @@ async function entityRoots(roots, step, inputs) {
       // A row counts only when it shows the value whole (pageScripts.rowsHoldingWholeValue): its own text (a for_each
       // row's identifier), one cell, or one field. Never a substring: with Carol gone, `hasText` "Carol" picked the
       // "Carol Ann" row and the test passed (WF-7).
-      const hits = await withDeadline(() => all.evaluateAll(pageScripts.rowsHoldingWholeValue, wanted),
+      const hits = await withDeadline(() => all.evaluateAll(matcher, wanted),
         Date.now() + DEFAULT_EVAL_DEADLINE_MS, EVAL_TIMED_OUT);
       if (!Array.isArray(hits)) { anyMatch = true; continue; } // fail closed on a hung look — never guess a match
       rows = hits.map(i => all.nth(i));
@@ -114,12 +116,19 @@ async function entityRoots(roots, step, inputs) {
   return out;
 }
 
+// A "contains" binding ("the suggestion that shows what was typed") replaces "this exact text" with "whatever matches", so
+// it is the person's act: until they said yes (`confirmed`, set only by the pick_match answer) it does nothing and the
+// step resolves by its own recorded identity, as it did before the binding existed.
+function isInertBinding(eb) {
+  return eb.match === "contains" && eb.confirmed !== true;
+}
+
 // True only when the step carries an entity binding but narrowing it against the live page
 // found no single matching row — i.e. the bound record isn't on the page (removed, filtered out,
 // or never existed here), not just "no binding to apply".
 function isEntityNotFound(step, roots) {
   const eb = asObject(step && step.entity_binding);
-  return !!(eb.container_selector && eb.identifier) && roots.length === 0;
+  return !!(eb.container_selector && eb.identifier) && !isInertBinding(eb) && roots.length === 0;
 }
 
 // EXEC-38 — the inverse of entityRoots: given a for_each step's row spec, list every row
@@ -314,6 +323,13 @@ async function resolveStep(page, step, inputs, scrollState) {
         { entityNotFound: true, entityAbsent: roots.absent === true, entitySeveral: roots.several === true },
       );
     }
+  }
+  // The row IS the element (a suggestion list item): exactly one row held the value (entityRoots fails closed on none or
+  // several), so it is not searched for again inside itself. Its own address is not consulted: its words are the data.
+  const eb = asObject(step.entity_binding);
+  if (eb.self_target === true && !isInertBinding(eb) && eb.container_selector && eb.identifier && roots.length === 1) {
+    appendRecoveryEvent({ event: "resolve", outcome: "found", signal: "entity_binding.self_target", unique_margin: DEFAULT_UNIQUE_MARGIN });
+    return roots[0];
   }
   const fp = bundleFingerprint(bundle, interpolate, inputs);
   let map = await gatherCandidates(roots, signals, interpolate, inputs);

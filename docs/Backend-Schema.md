@@ -1359,7 +1359,23 @@ class Assertion(BaseModel):
     expected: str       # value_equals only — expected field value (interpolated against runtime inputs)
     timeout_ms: int    # 5000 default
     required: bool     # True = halt on failure (and descend into recovery); False = warning only
+    source: str        # text_present: "result" (words the page showed) | "control" (a button/link label that appeared).
+                       # A control's label passes but is never "the result itself": it caps the proof at "accepted"
+                       # (runtime assertions.js), since a look-alike control elsewhere satisfies it.
+    start_origin: str  # url_pattern only: the site (scheme://host) the pattern names when it is the recording's start
+                       # site (compiler/start_origin.py). At run start the runtime swaps it for the site the run starts
+                       # on (runtime/app/start_origin.js, BUILD-101 (6)); the same stamp rides on a `url_stays` probe.
 ```
+
+`EntityBinding` also carries `match` (`"whole"` default | `"contains"`) and `self_target` (bool). `"contains"` is "the
+suggestion that shows what was typed" (a list item holds the typed words; `rowsContainingValue`), `self_target` means the
+matched row IS the element. The compiler writes it unconfirmed, and it is **inert until `confirmed`**, which only the
+`pick_match` answer sets (runtime `isInertBinding`). A `fresh_look` probe on a press that sends files an earlier step
+chose carries `file_from` (that pick's step id = its `source_step_key`).
+
+A step inside a popup option, loop or branch body is addressed by one of four path forms (`editor/step_path.py`):
+`branch.steps[N]`, `branch.options[J].steps[N]`, `for_each.steps[N]`, `outcome_fork.states[S].options[O].steps[N]`; a
+check placed on one is named `<parent step key>::<path>` (`body_address`).
 
 - `url_changed` — the page address must differ from its value before the action. The runtime
   compares against the live pre-action URL; `target` (the recorded before-URL, may be empty) is

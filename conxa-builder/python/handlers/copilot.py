@@ -41,6 +41,8 @@ def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[st
     from conxa_compile.compiler.action_semantics import action_name
     from conxa_compile.compiler.step_key import step_keys
     from conxa_compile.editor.capability_manifest import ADDRESS_KEYS
+    from conxa_compile.editor.step_path import walk_steps
+    from conxa_core.models.step_identity import step_id_of
 
     guarded_keys = ADDRESS_KEYS - {"branch", "for_each"}
     old_steps = ((before.get("skills") or [{}])[0] or {}).get("steps") or []
@@ -58,26 +60,45 @@ def _keep_address_keys(before: dict[str, Any], after: dict[str, Any]) -> dict[st
             old = old_steps[i]
         if not isinstance(old, dict) or not isinstance(step, dict):
             continue
-        for k in guarded_keys:
-            if step.get(k) == old.get(k) or (k == "url" and _templated_from(old.get(k), step.get(k))):
-                continue
+        if _restore_address_keys(step, old, guarded_keys):
             changed = True
-            if k in old:
-                step[k] = copy.deepcopy(old[k])
-            else:
-                step.pop(k, None)
-        if step.get("url") != old.get("url"):
-            if isinstance(step.get("action"), dict) and "url" in step["action"]:
-                step["action"]["url"] = step.get("url")
-            ctx = (step.get("signals") or {}).get("context") if isinstance(step.get("signals"), dict) else None
-            if isinstance(ctx, dict) and "page_url" in ctx:
-                ctx["page_url"] = step.get("url")
-        if step.get("intent") != old.get("intent"):
-            sem = (step.get("signals") or {}).get("semantic") if isinstance(step.get("signals"), dict) else None
-            for f in ("final_intent", "llm_intent"):
-                if isinstance(sem, dict) and f in sem:
-                    sem[f] = step.get("intent")
+    # A step inside a loop, branch or popup option keeps its address too (BUILD-102 (1)); each is found by its own id, so
+    # a body step this change added, or one saved before ids existed, has no earlier self and is left as written.
+    old_bodies = {sid: s for s in walk_steps(old_steps) if (sid := step_id_of(s))}
+    top_ids = {id(s) for s in new_steps}
+    for step in walk_steps(new_steps):
+        old = old_bodies.get(step_id_of(step))
+        if id(step) not in top_ids and old is not None and _restore_address_keys(step, old, guarded_keys):
+            changed = True
     return doc if changed else None
+
+
+def _restore_address_keys(step: dict[str, Any], old: dict[str, Any], guarded_keys: Any) -> bool:
+    """Put one step's address keys back as they were, and make its shadows follow what code may have changed.
+    True when an address key had been changed."""
+    import copy
+
+    changed = False
+    for k in guarded_keys:
+        if step.get(k) == old.get(k) or (k == "url" and _templated_from(old.get(k), step.get(k))):
+            continue
+        changed = True
+        if k in old:
+            step[k] = copy.deepcopy(old[k])
+        else:
+            step.pop(k, None)
+    if step.get("url") != old.get("url"):
+        if isinstance(step.get("action"), dict) and "url" in step["action"]:
+            step["action"]["url"] = step.get("url")
+        ctx = (step.get("signals") or {}).get("context") if isinstance(step.get("signals"), dict) else None
+        if isinstance(ctx, dict) and "page_url" in ctx:
+            ctx["page_url"] = step.get("url")
+    if step.get("intent") != old.get("intent"):
+        sem = (step.get("signals") or {}).get("semantic") if isinstance(step.get("signals"), dict) else None
+        for f in ("final_intent", "llm_intent"):
+            if isinstance(sem, dict) and f in sem:
+                sem[f] = step.get("intent")
+    return changed
 
 
 def _templated_from(old: Any, new: Any) -> bool:

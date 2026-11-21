@@ -33,7 +33,7 @@ from conxa_compile.editor.capability_manifest import ADDRESS_KEYS, chat_may_writ
 from conxa_compile.editor.describe import describe_step
 from conxa_compile.editor.overlay_identity import bundle_from_descriptor
 from conxa_compile.editor.patch_gate import validate_editor_patch
-from conxa_compile.editor.step_path import StepPathError, get_nested_step, parse_nested_step_path
+from conxa_compile.editor.step_path import StepPathError, get_nested_step, is_best_effort_body, parse_nested_step_path
 from conxa_compile.editor.workflow_mutations import (
     _new_manual_step,
     delete_branch_step,
@@ -119,7 +119,7 @@ def gate_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> list[dict[s
                 target_step = get_nested_step(step, nested_path) if nested_path else step
             except StepPathError:
                 continue
-            in_branch_body = bool(nested_path) and nested_path[0] == "branch"
+            in_branch_body = bool(nested_path) and is_best_effort_body(step, nested_path)
         kind = action_name(target_step).lower()
         value = raw.get("patch")
         patch = _patch_for(field, value)

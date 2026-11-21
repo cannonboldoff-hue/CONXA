@@ -1,0 +1,2 @@
+[{"u":"https://en.wikipedia.org/wiki/Ada_Lovelace","w":[1280,992,"visible"]}]
+[{"u":"https://en.wikipedia.org/wiki/Ada_Lovelace","w":[1280,992,"visible"]}]

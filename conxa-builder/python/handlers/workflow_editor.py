@@ -8,6 +8,7 @@ from handlers.protocol import _CommandError, _deep_merge, _event_sink, _safe_id,
 from conxa_compile.editor.step_path import (
     StepPathError,
     get_nested_step,
+    is_best_effort_body,
     parse_nested_step_path,
     with_nested_step,
 )
@@ -163,7 +164,7 @@ class WorkflowEditorMixin:
             # A for_each loop body runs through the real recovery cascade (unlike a branch body —
             # see validate_editor_patch's docstring), so it must NOT set in_branch_body=True: that
             # would wrongly reject the Validation phase's own recovery/validation patches.
-            merged_nested = self._apply_step_patch(nested_step, patch, in_branch_body=nested_path[0] == "branch")
+            merged_nested = self._apply_step_patch(nested_step, patch, in_branch_body=is_best_effort_body(parent_step, nested_path))
             try:
                 step = with_nested_step(parent_step, nested_path, merged_nested)
             except StepPathError as exc:

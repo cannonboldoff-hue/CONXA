@@ -1,0 +1,1 @@
+Get-CimInstance Win32_Process -Filter "Name='node.exe' or Name='electron.exe' or Name='python.exe'" | % { "{0} {1} {2}" -f $_.ProcessId,$_.Name,($_.CommandLine -replace '\s+',' ').Substring(0,[Math]::Min(90,$_.CommandLine.Length)) }

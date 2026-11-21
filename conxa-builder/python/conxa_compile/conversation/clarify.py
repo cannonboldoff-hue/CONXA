@@ -30,7 +30,9 @@ from typing import Any, Callable
 from conxa_compile.display_text import clean_name
 from conxa_compile.compiler.step_key import step_keys
 from conxa_compile.compiler.identity_bundle import _OPTION_CONTENT_TAGS
+from conxa_compile.editor.step_path import body_address
 from conxa_core.config import settings
+from conxa_core.models.step_identity import child_step_lists
 from conxa_core.models.prose_binding import readable as _readable
 from conxa_core.models.prose_binding import say_text
 
@@ -38,7 +40,7 @@ MAX_QUESTIONS = 5
 MAX_KNOWN_POPUP_QUESTIONS = 2
 _ASSERTION_TYPES = {"text_present", "url_changed", "url_pattern", "state_changed"}
 _PRIORITY = {
-    "human_check": -3, "unsupported": -2, "coverage": -1, "repeat_rows": -0.5, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "chosen_values": 2.5,
+    "human_check": -3, "unsupported": -2, "coverage": -1, "repeat_rows": -0.5, "upload": 0, "fork": 1, "fork_then": 1.2, "known_popup": 1.5, "confirm": 2, "confirm_row": 2.2, "pick_match": 2.3, "chosen_values": 2.5,
     "dropped_value": 2.6, "test_followup": 2.7, "values": 3, "relative_date": 3.1, "skip_when_empty": 3.2, "missing_item": 3.3, "output": 3.5, "popup": 4, "done_when": 5,
 }
 # Ledger passes whose dropped events live on inside a merged step (their value is kept), so a
@@ -811,6 +813,28 @@ def generate_questions(
             step_keys_=[keys[i]], step_name=name,
         ))
 
+    # 2c ─ a pick from a suggestion list whose item shows the words that were typed ("Amelia Brown" for "Amelia"): fixed
+    #      text, or whichever suggestion shows what is typed next time? Only the person's yes changes it (the binding is
+    #      inert until then, runtime/app/resolution.js::isInertBinding), as for a fixed click label.
+    for i, s in enumerate(steps):
+        eb = s.get("entity_binding")
+        ident = str(eb.get("identifier") or "") if isinstance(eb, dict) else ""
+        m = re.fullmatch(r"\{\{(\w+)\}\}", ident.strip())
+        if not (isinstance(eb, dict) and eb.get("match") == "contains" and eb.get("container_selector") and m) or eb.get("confirmed"):
+            continue
+        name, label = step_name(s), _humanize(m.group(1)).lower()
+        out.append(_question(
+            "pick_match", f"pick_match:{keys[i]}", f"When this runs with another {label}, should it pick the suggestion that shows it?",
+            f"While recording, you typed a {label} and then picked “{name}” from the list that appeared. If you say yes, each "
+            f"run picks the one suggestion that shows what it was given. If none shows it, or more than one does, it stops "
+            "instead of guessing.",
+            [
+                {"id": "yes", "label": "Yes, pick the one that shows it", "detail": "Follows the value each run is given."},
+                {"id": "no", "label": "No, always pick the same one", "detail": f"Always picks “{name}”, whatever is typed."},
+            ],
+            step_keys_=[keys[i]], step_name=name,
+        ))
+
     # 3 ─ typed values: fixed, or an input the person running it fills in?
     candidates: list[dict[str, Any]] = []
     for i, s in enumerate(steps):
@@ -1230,10 +1254,25 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
         src = step.get("source_event")
         if isinstance(src, int) and isinstance(seq, int) and src <= seq:
             if src == seq and not _can_hold_checks(step):
-                return ""  # brought up by a step that holds no checks (a popup's answer): the caller says so
+                # Brought up by a step that holds no checks of its own. A popup's answer does: its recorded option's
+                # steps run through the whole step loop, so the words are checked on the step that pressed the answer.
+                # Anything else: "" (the caller says so).
+                return _body_step_for_event(key, step, seq) or ""
             if _can_hold_checks(step):
                 best = key
     return best
+
+
+def _body_step_for_event(key: str, step: dict[str, Any], seq: int) -> str | None:
+    """The address of the step inside this step's popup-option or loop body that was made from event ``seq`` and can hold
+    checks. An if_present or try_dismiss body is best-effort and runs no checks, so it is not looked in."""
+    for suffix, body in child_step_lists(step):
+        if not suffix.startswith(("outcome_fork", "for_each")):
+            continue
+        for j, child in enumerate(body):
+            if isinstance(child, dict) and child.get("source_event") == seq and _can_hold_checks(child):
+                return body_address(key, f"{suffix}[{j}]")
+    return None
 
 
 # ── an answer typed in the person's own words ───────────────────────────────────────────────────────────────────────
@@ -1524,6 +1563,12 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             return ops, "Only acts on that row"
         return ops, "Needs the right row chosen in the editor"
 
+    if kind == "pick_match":
+        if answer.get("choice") == "yes":
+            ops.append({"op": "patch", "step_key": keys[0], "patch": {"entity_binding": {"confirmed": True}}})
+            return ops, "Picks the suggestion that shows what it is given"
+        return ops, "Always picks the same suggestion"
+
     if kind == "fork_then":
         how = {"same": "rejoin", "stop": "stop", "end": "end"}.get(str(answer.get("choice") or ""))
         if how is None:
@@ -1631,9 +1676,17 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             by_step.setdefault(key, {})[int(idx)] = True
         steps = _steps(doc)
         keyed = dict(zip(step_keys(steps), steps))
+        top_keys = list(keyed)
+        # A step inside a popup option or loop body is named by its body address (the parent's key and its path), so a
+        # check can be placed on it; only a top-level step can be "the end".
+        for parent_key in top_keys:
+            for suffix, body in child_step_lists(keyed[parent_key]):
+                for j, child in enumerate(body):
+                    if isinstance(child, dict):
+                        keyed[body_address(parent_key, f"{suffix}[{j}]")] = child
         # "What you see at the end" belongs on the last step that can hold a check: a trailing scroll, a
         # download/tab marker or a decision step cannot, and the patch gate would refuse it.
-        end_key = next((k for k in reversed(keyed) if _can_hold_checks(keyed[k])), None)
+        end_key = next((k for k in reversed(top_keys) if _can_hold_checks(keyed[k])), None)
         # Typed words go on the step that brought them up on screen while recording; only words no saved page shows
         # are checked at the end, and the receipt says so.
         custom_key = (step_where_words_appear(doc, custom) if custom else None)
@@ -1643,8 +1696,8 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         custom_key = custom_key or end_key
         # Words that show only after a popup's answer cannot be checked: a decision step holds no checks, and the step
         # before it runs before the answer (WF-4 Leg A: "Successfully Deleted" after "Yes, Delete").
-        order = list(keyed)
-        after_fork = bool(custom) and custom_unseen and custom_key in keyed and any(
+        order = top_keys
+        after_fork = bool(custom) and custom_unseen and custom_key in order and any(
             _action_name(keyed[k]) == "outcome_fork" for k in order[order.index(custom_key) + 1:])
         if after_fork:
             custom_key = None

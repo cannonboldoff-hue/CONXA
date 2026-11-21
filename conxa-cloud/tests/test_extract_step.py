@@ -289,3 +289,33 @@ def test_a_confirm_only_span_in_front_of_an_irreversible_step_cannot_be_loosened
     # nothing destructive behind it, or no neighbour known: loosening is fine (a plain question)
     validate_editor_patch(_confirm_span(), loosened, POLICY, next_step={"action": {"action": "click"}, "intent": "next"})
     validate_editor_patch(_confirm_span(), loosened, POLICY)
+
+
+# ── a captured value is never found by its own words (BUILD-101 (7)) ────────────────────────────────────────────
+
+
+def test_a_captured_value_is_not_found_by_its_words_but_a_captured_label_still_is():
+    from conxa_compile.compiler.content_free_identity import strip_value_from_identity
+    from conxa_core.models.skill_spec import ElementFingerprint, IdentityBundle, IdentitySignal, SkillStep
+
+    def step(text):
+        sigs = [IdentitySignal(engine="text_based", selector=f'text="{text}"', durability=0.85, orthogonality_class="visible-text"),
+                IdentitySignal(engine="css-id", selector="#price", durability=0.45, orthogonality_class="structural")]
+        return SkillStep(action={"action": "extract"}, identity_bundle=IdentityBundle(
+            signals=sigs, fingerprint=ElementFingerprint(tag="span", inner_text=text, section_heading="Results")))
+
+    value = step("Rs. 400")
+    assert strip_value_from_identity(value, {"tag": "span", "inner_text": "Rs. 400"})
+    assert value.identity_bundle.fingerprint.inner_text == "" and value.identity_bundle.fingerprint.section_heading == "Results"
+    assert [s.selector for s in value.identity_bundle.signals] == ["#price"]
+
+    label = step("Order total")
+    assert not strip_value_from_identity(label, {"tag": "span", "inner_text": "Order total"})
+    assert label.identity_bundle.fingerprint.inner_text == "Order total" and len(label.identity_bundle.signals) == 2
+
+    # never a step with no way to be found: every address names the words, so they all stay
+    only = SkillStep(action={"action": "extract"}, identity_bundle=IdentityBundle(
+        signals=[IdentitySignal(engine="text_based", selector='text="Rs. 400"', durability=0.85, orthogonality_class="visible-text")],
+        fingerprint=ElementFingerprint(tag="span", inner_text="Rs. 400")))
+    strip_value_from_identity(only, {"tag": "span", "inner_text": "Rs. 400"})
+    assert len(only.identity_bundle.signals) == 1

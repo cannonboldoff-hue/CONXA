@@ -36,7 +36,7 @@ _ASKED_BEFORE_COMPILE = {"upload", "chosen_values"}
 _CARRIED_SAFETY = frozenset({"confirm", "confirm_row"})
 _REPLAY_KINDS = frozenset({"upload", "confirm", "popup", "fork", "fork_then", "known_popup"})
 # Kinds built afterwards from the document replay left, so their bindings and step keys are current.
-_REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage", "unsupported", "human_check"})
+_REOPENED_KINDS = frozenset({"repeat_rows", "confirm_row", "pick_match", "values", "relative_date", "skip_when_empty", "missing_item", "output", "done_when", "dropped_value", "coverage", "unsupported", "human_check"})
 
 
 def _thread(workflow_id: str) -> str:
@@ -1287,6 +1287,7 @@ class CompileFlowMixin:
     def _apply_clarify_ops(self, skill_id: str, ops: list[dict[str, Any]], rid: str) -> int:
         """Run an answer's ops through the commands a reviewer would use. Returns steps added."""
         from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
+        from conxa_compile.editor.step_path import split_body_address
         from conxa_compile.editor.workflow_mutations import _scan_placeholder_ids
         from conxa_core.storage.json_store import read_skill, write_skill
 
@@ -1303,7 +1304,10 @@ class CompileFlowMixin:
             before = read_skill(skill_id)
             kind = op["op"]
             if kind == "patch":
-                self.cmd_patch_step({"skill_id": skill_id, "step_index": index_of(op["step_key"]), "patch": op["patch"]}, rid)
+                # A body step is named by its parent's key and its path (`step_path.body_address`).
+                parent_key, body_path = split_body_address(op["step_key"])
+                self.cmd_patch_step({"skill_id": skill_id, "step_index": index_of(parent_key), "patch": op["patch"],
+                                     **({"path": body_path} if body_path else {})}, rid)
                 self._log_edit("patch_step", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "insert_review":
                 i = index_of(op["before_step_key"])

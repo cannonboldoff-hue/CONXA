@@ -31,6 +31,9 @@ def test_a_sentence_that_names_an_action_names_one_the_person_has():
     ("navigation_error: Page.goto: net::ERR_X", "start page can’t be reached"),
     ("The test browser is not showing the page at its normal size, so a click ... Run the test again.", "minimized"),
     ("The window showing the test browser is minimized or hidden, so the page ...", "minimized or hidden"),
+    # WF-15: the run's tab (or the whole test browser) was closed mid-step.
+    ("Step 5 (click) failed: The browser tab closed before the step finished.", "test browser closed"),
+    ("locator.click: Target page, context or browser has been closed", "test browser closed"),
 ])
 def test_runtime_messages_read_in_plain_words(raw, expect):
     out = fs.summarize(raw)

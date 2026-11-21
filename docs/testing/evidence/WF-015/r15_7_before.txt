@@ -1,0 +1,16 @@
+22748 python.exe "C:\Users\kiran\AppData\Local\Programs\Python\Python312\python.exe" -m http.server 8099 --
+23848 node.exe "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs/node_modules/npm/bin/npm-cli.j
+8532 node.exe "node" "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\.bin\\..\concurre
+29728 node.exe "C:\Program Files\nodejs\\node.exe" "C:\Program Files\nodejs\\node_modules\npm\bin\npm-cli
+25464 node.exe "C:\Program Files\nodejs\\node.exe" "C:\Program Files\nodejs\\node_modules\npm\bin\npm-cli
+16368 node.exe "node" "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\.bin\\..\vite\bin
+9376 node.exe "C:\Program Files\nodejs\node.exe" C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\nod
+22404 electron.exe C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.ex
+14912 electron.exe "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.e
+29484 electron.exe "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.e
+6876 python.exe python C:\Users\kiran\Desktop\Conxa\conxa-builder\python\backend.py
+19552 electron.exe "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.e
+24504 python.exe "C:\Users\kiran\AppData\Local\Programs\Python\Python312\python.exe" -m uvicorn app.main:ap
+22520 electron.exe "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.e
+25364 electron.exe "C:\Users\kiran\Desktop\Conxa\conxa-builder\electron\node_modules\electron\dist\electron.e
+23904 python.exe 

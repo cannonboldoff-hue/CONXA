@@ -82,3 +82,22 @@ test("words already on the page, or only hidden in it, never prove the step", as
     await browser.close();
   }
 });
+
+// BUILD-108 (6): a control's label that newly appeared is a check that passed, but not the result itself.
+test("a button's label that appeared is not proof the work finished; a result's words are", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<div id="out"></div>`);
+    const mk = (source) => ({ type: "click", validation: { assertions: [{ type: "text_present", target: "Edit", required: true, timeout_ms: 1500, source }] } });
+    const baseline = await capturePreStepSignature(page, ["Edit"]);
+    await page.evaluate(() => { document.getElementById("out").innerHTML = "<p>Edit</p>"; });
+    for (const [source, rung] of [["control", "accepted"], ["result", "completed"]]) {
+      const v = await verifyStep(page, mk(source), {}, baseline);
+      assert.strictEqual(v.results[0].answer, "yes", source);
+      assert.strictEqual(proof.assertionRung(v.results[0]), rung, source);
+    }
+  } finally {
+    await browser.close();
+  }
+});

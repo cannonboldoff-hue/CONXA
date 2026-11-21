@@ -168,6 +168,8 @@
       "_note": "run.js requires this directly: the evidence notebook (what every tab and visible frame of the run shows, plus request/response metadata) read by completion.js." },
     { "name": "route_template.js",    "profile": "default",
       "_note": "evidence.js requires this: the structure of a URL without its per-run values (twin of the compiler's route_template)." },
+    { "name": "start_origin.js",      "profile": "default",
+      "_note": "run.js requires this directly: an address check follows the site the run starts on when the person changed the start page (BUILD-101 (6))." },
     { "name": "completion.js",        "profile": "default",
       "_note": "run.js requires this directly: the completion gate (action ran is not action finished); reads page_status.js and fork.js." },
     { "name": "scheduler_cli.js",    "profile": "default",

@@ -1159,3 +1159,6 @@ Chat names the real missing button from the real failed run, never invents a dia
 A folder of 3 and of 20 files uploads every file once in name order; a folder given to a single-file input is refused plainly with no recovery and zero tokens; 0-byte files, names with spaces and `é`, and 20/100/200 MB uploads arrive byte-exact; a 200 MB download is kept whole; an empty download and a download that never finishes stop with a plain reason and save nothing. On a local stand-in file host (public hosts blocked). Caveat: a host that answers a 100 MB upload very slowly makes the test fail closed (RT-19). Detail: [`workflow-handoffs/WF-014.md`](workflow-handoffs/WF-014.md).
 
 **What this proves Conxa can do now:** big files and whole folders go through a test run correctly, and bad files fail with a reason a person can read.
+
+## Passed Workflow P-47 — WF-15: endurance, slow sites, chaos (2026-11-21)
+Cases 15.1–15.8, 15.10, 15.11 passed; 15.3 passed on retest; 15.9 passed for window resize only. Blocked/not verified: 15.12 (needs a person to sleep the PC), 15.9 divider drag. Fixed on the way: dead sign-in reported plainly, stale chat cards, closed-browser wording. Evidence: `evidence/WF-015/`, `evidence/WF-015-retest/`; detail in `workflow-handoffs/WF-015.md`.

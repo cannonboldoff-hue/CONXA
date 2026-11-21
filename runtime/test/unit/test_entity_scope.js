@@ -152,3 +152,41 @@ test("a longer look-alike is not the bound row: Carol Ann never stands in for Ca
     { entity_binding: { container_selector: "tr", identifier: "Carol\tc@x" } }, {});
   assert.strictEqual(whole.length, 1);                                 // a for_each row: its own whole text
 });
+
+// ── "the suggestion that shows what was typed" (entity_binding.match "contains", BUILD-102 (6)) ─────────────────────
+const PICK = (extra = {}) => ({
+  entity_binding: { container_selector: "[role=option]", identifier: "{{name}}", source: "input", match: "contains", self_target: true, ...extra },
+});
+
+test("contains: the one suggestion that holds the typed words is the match, case and spacing aside", async () => {
+  const root = fakeRoot(["John Smith", "Amelia   Brown", "Johnny Cash"]);
+  const out = await entityRoots([root], PICK({ confirmed: true }), { name: "amelia" });
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0]._row, "Amelia   Brown");
+});
+
+test("contains: two suggestions that hold the words fail closed, none either", async () => {
+  const root = fakeRoot(["John Smith", "John Doe", "Johnny Cash"]);
+  assert.deepStrictEqual(await entityRoots([root], PICK({ confirmed: true }), { name: "john" }), []);
+  assert.deepStrictEqual(await entityRoots([root], PICK({ confirmed: true }), { name: "zed" }), []);
+});
+
+test("contains: words inside another word are not a match (Car is not Carol)", async () => {
+  const root = fakeRoot(["Carol Ann"]);
+  assert.deepStrictEqual(await entityRoots([root], PICK({ confirmed: true }), { name: "car" }), []);
+});
+
+test("contains: until the person said yes the binding does nothing", async () => {
+  const roots = [fakeRoot(["John Smith", "Johnny Cash"])];
+  const step = PICK({ confirmed: false });
+  assert.strictEqual(await entityRoots(roots, step, { name: "john" }), roots);
+  assert.strictEqual(isEntityNotFound(step, []), false);
+});
+
+test("whole-value bindings are unchanged by the new field", async () => {
+  const root = fakeRoot(["Carol Ann", "Carol"]);
+  const step = { entity_binding: { container_selector: "tr", identifier: "Carol", source: "literal", match: "whole" } };
+  const out = await entityRoots([root], step, {});
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0]._row, "Carol");
+});

@@ -1,0 +1,4 @@
+{"ts":"2026-11-21T00:48:54.060Z","level":"info","msg":"test_phase","run_id":"r_mwpowhou_j38kh","phase":"steps_failed:unknown","ms":8094}
+{"ts":"2026-11-21T00:48:54.061Z","level":"error","msg":"execute_failed","run_id":"r_mwpowhou_j38kh","skill":"wf4-b-shop-checkout-r3-62513831","error":"Swag Labs's saved sign-in expired mid-run. Call execute_skill again — you'll be prompted to sign back in to Swag Labs, then can resume from where this left off."}
+{"ts":"2026-11-21T00:50:14.830Z","level":"info","msg":"test_phase","run_id":"r_mwpoy80o_a04l5","phase":"steps_failed:unknown","ms":8086}
+{"ts":"2026-11-21T00:50:14.830Z","level":"error","msg":"execute_failed","run_id":"r_mwpoy80o_a04l5","skill":"wf4-b-shop-checkout-r3-62513831","error":"Swag Labs's saved sign-in expired mid-run. Call execute_skill again — you'll be prompted to sign back in to Swag Labs, then can resume from where this left off."}

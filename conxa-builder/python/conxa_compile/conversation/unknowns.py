@@ -22,7 +22,7 @@ from conxa_compile.conversation import clarify
 # free-text `note`, which must name its own slot.
 FACET_OF_KIND: dict[str, str] = {
     "value": "variability", "chosen_values": "variability", "values": "variability", "upload": "variability",
-    "relative_date": "provenance", "repeat_rows": "variability",
+    "relative_date": "provenance", "repeat_rows": "variability", "pick_match": "variability",
     "skip_when_empty": "input_domain", "test_followup": "variability", "input_check": "input_domain",
     "missing_item": "alternatives", "fork": "alternatives", "fork_then": "alternatives", "known_popup": "alternatives",
     "popup": "alternatives", "popup_dismiss": "alternatives",

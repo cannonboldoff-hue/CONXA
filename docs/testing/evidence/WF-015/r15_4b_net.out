@@ -1,0 +1,14 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+browserType.connectOverCDP: connect ECONNREFUSED 127.0.0.1:64333
+Call log:
+[2m  - <ws preparing> retrieving websocket url from http://127.0.0.1:64333[22m
+
+    at C:\Users\kiran\Desktop\Conxa\docs\testing\tools\net15b.mjs:10:26
+    at async node:internal/modules/esm/loader:643:26 {
+  name: 'Error'
+}
+
+Node.js v24.19.0

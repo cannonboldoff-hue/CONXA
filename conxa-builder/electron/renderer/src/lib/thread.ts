@@ -58,6 +58,18 @@ export function upsertMany(items: ThreadItem[], incoming: ThreadItem[]): ThreadI
   return incoming.reduce(upsertItem, items)
 }
 
+/**
+ * A freshly loaded newest page, plus only what arrived by event while it loaded (WF-15 F2). A local item older
+ * than the page belongs to earlier history (`loadOlder` brings it back in place); appending it put an old test
+ * card below the newest messages after leaving a workflow and coming back.
+ */
+export function mergeLoadedPage(local: ThreadItem[], page: ThreadItem[]): ThreadItem[] {
+  const ids = new Set(page.map((p) => p.id))
+  const cards = new Set(page.filter((p) => p.card_id).map((p) => p.card_id))
+  const from = page.length ? page[0].ts : ''
+  return upsertMany(page, local.filter((i) => !ids.has(i.id) && ((i.card_id && cards.has(i.card_id)) || i.ts > from)))
+}
+
 /** Prepend an older page (already chronological) without duplicating what is on screen. */
 export function prependPage(items: ThreadItem[], older: ThreadItem[]): ThreadItem[] {
   const seenIds = new Set(items.map((i) => i.id))

@@ -957,3 +957,51 @@ def test_an_input_whose_typed_words_are_unknown_is_not_offered_as_a_check_on_the
     ids = {c["id"] for c in _done_when_choices(doc, {"name": "Sana", "date_of_birth": None})[0]}
     assert "input:name" in ids and "input:date_of_birth" not in ids
     assert "input:date_of_birth" in {c["id"] for c in _done_when_choices(doc)[0]}  # no recording given: as before
+
+
+# ── a pick from a suggestion list: fixed text, or "the one that shows what was typed" (BUILD-102 (6)) ─────────────
+
+
+def _pick_doc(identifier="{{employee_name}}", confirmed=False, match="contains"):
+    steps = [
+        _step("navigate", "open_form"),
+        _step("type", "type_name", value="{{employee_name}}", input_binding="employee_name"),
+        _step("click", "pick_amelia_brown", entity_binding={
+            "container_selector": "[role=option]", "identifier": identifier, "source": "input", "confirmed": confirmed,
+            "match": match, "self_target": True}),
+    ]
+    return _doc(steps, inputs=[{"id": "employee_name", "default": "Amelia"}])
+
+
+def test_a_suggestion_pick_asks_once_and_only_a_yes_switches_it_on():
+    doc = _pick_doc()
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = next(q for q in generate_questions(doc, limit=None) if q["kind"] == "pick_match")
+    assert q["step_keys"] == [keys[2]] and "employee name" in q["title"]
+    assert plan_answer(q, {"choice": "yes"}, doc)[0] == [
+        {"op": "patch", "step_key": keys[2], "patch": {"entity_binding": {"confirmed": True}}}]
+    assert plan_answer(q, {"choice": "no"}, doc)[0] == []   # nothing changes: it keeps picking the same text
+
+
+def test_a_confirmed_or_whole_value_binding_is_not_asked_about():
+    assert not any(q["kind"] == "pick_match" for q in generate_questions(_pick_doc(confirmed=True), limit=None))
+    assert not any(q["kind"] == "pick_match" for q in generate_questions(_pick_doc(match="whole"), limit=None))
+    assert not any(q["kind"] == "pick_match" for q in generate_questions(_pick_doc(identifier="Amelia"), limit=None))
+
+
+def test_a_recorded_suggestion_row_becomes_an_inert_contains_binding_and_a_plain_row_does_not():
+    from conxa_compile.compiler.entity_binding import _searched_row_binding
+
+    def ev(role, text):
+        row = {"tag": "div", "classes": ["opt"], "outer_html": f'<div role="{role}" class="opt"><span>{text}</span></div>'}
+        parent = {"tag": "div", "classes": [], "outer_html": '<div role="listbox"><div role="option"></div></div>'}
+        return {"ancestors": [row, parent]}
+
+    option = _searched_row_binding(ev("option", "Amelia Brown"), ["Amelia"])
+    assert option.match == "contains" and option.self_target is True and option.confirmed is False
+    # the picked item shows exactly what was typed: nothing to follow, and no guess is made
+    assert _searched_row_binding(ev("option", "Amelia"), ["Amelia"]).match == "whole"
+    # a table-like row keeps the whole-value rule (WF-7: Carol is not Carol Ann)
+    row = {"tag": "li", "classes": ["r"], "outer_html": "<li class='r'><span>Carol Ann</span></li>"}
+    plain = _searched_row_binding({"ancestors": [row, {"tag": "ul", "classes": [], "outer_html": "<ul></ul>"}]}, ["Carol"])
+    assert plain.match == "whole" and plain.self_target is False

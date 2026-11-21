@@ -239,3 +239,26 @@ def test_a_later_step_working_never_teaches_the_checklist():
     assert calibrate_effect(copy.deepcopy(eff), {"c1": "no", "c2": "yes"}) == eff
     taught = calibrate_effect(copy.deepcopy(eff), {"c1": "yes", "c2": "yes"})
     assert [c.get("calibrated") for c in taught["checks"]] == [True, True]
+
+
+def test_a_press_that_sends_a_picked_file_looks_for_that_file_when_the_page_is_opened_again():
+    """BUILD-103 (4): "choose files, then press Upload": the press carries the pick's event, later its step id."""
+    press = _click("Upload", extras={"completes_upload": 7})
+    eff = build_effect(press)
+    look = next(c for c in eff.checks if c.probe["type"] == "fresh_look")
+    assert look.probe["file_from_event"] == 7 and look.rung == "result_exists"
+    # not for an ordinary click, and not when the press is not marked as completing a pick
+    assert not [c for c in build_effect(_click("Save"), is_commit=True).checks if c.probe["type"] == "fresh_look"]
+    assert not [c for c in build_effect(_click("Upload", extras={"completes_upload": True})).checks if c.probe["type"] == "fresh_look"]
+
+
+def test_the_pick_event_becomes_the_picks_step_id():
+    from conxa_compile.compiler.build import link_upload_picks
+    from conxa_core.models.skill_spec import SkillStep
+
+    pick = SkillStep(action={"action": "upload"}, source_event=7, step_id="rec7")
+    press = SkillStep(action={"action": "click"}, source_event=9, step_id="rec9",
+                      validation=ValidationBlock(effect=build_effect(_click("Upload", extras={"completes_upload": 7}))))
+    link_upload_picks([pick, press])
+    probe = next(c.probe for c in press.validation.effect.checks if c.probe["type"] == "fresh_look")
+    assert probe == {"type": "fresh_look", "expect": "file_name", "file_from": "rec7"}

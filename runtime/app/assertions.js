@@ -373,7 +373,10 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
 
   // An unrecognized type could not be checked at all (it still fails a required assertion, as before).
   const answer = !recognized ? "cant_tell" : !ok ? "no" : cantTell ? "cant_tell" : "yes";
-  return { type, target, required, ok, recognized, answer, ...(fresh && answer === "yes" ? { fresh: true } : {}), elapsed_ms: Date.now() - startedAt };
+  // `fresh` says "this finds the result itself". A button's or link's label that newly appeared (source "control") is
+  // weak proof of that: a look-alike "Edit" button elsewhere satisfies it. It still counts as a check that passed, no more.
+  const findsTheResult = fresh && answer === "yes" && a.source !== "control";
+  return { type, target, required, ok, recognized, answer, ...(findsTheResult ? { fresh: true } : {}), elapsed_ms: Date.now() - startedAt };
 }
 
 // What a set of results proves, in the same four answers. Any required "no" is a "no"; otherwise one

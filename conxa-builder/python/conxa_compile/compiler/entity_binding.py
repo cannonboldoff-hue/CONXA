@@ -323,13 +323,36 @@ def _searched_row_binding(ev: Step, typed_before: list[str]) -> EntityBinding | 
                 continue
             if any(_whole_value_in(value, seg) for seg in segments):
                 row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
+                # A suggestion list item shows more than what was typed ("Amelia Brown" for "Amelia"): the row IS the
+                # element, and it holds the typed words rather than being them. Inert until the person says so.
+                suggestion = _is_suggestion_row(row, parent, segments, value)
                 return EntityBinding(
                     container_selector=_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
                     identifier=value,
                     source="literal",
                     confirmed=False,
+                    **({"match": "contains", "self_target": True} if suggestion else {}),
                 )
     return None
+
+
+_SUGGESTION_ROLES = frozenset({"option", "menuitem"})
+_SUGGESTION_PARENT_ROLES = frozenset({"listbox", "menu"})
+
+
+def _outer_role(el: dict[str, Any]) -> str:
+    m = _ROLE_ATTR_RE.match(str(el.get("outer_html") or ""))
+    return m.group(1).lower() if m else ""
+
+
+def _is_suggestion_row(row: dict[str, Any], parent: dict[str, Any], segments: list[str], value: str) -> bool:
+    """A list item the page offers as a choice (role option / menuitem, or inside a listbox / menu) whose words go beyond
+    the typed value: picking it is "the suggestion that shows what was typed", not "this exact text"."""
+    if _outer_role(row) not in _SUGGESTION_ROLES and _outer_role(parent) not in _SUGGESTION_PARENT_ROLES:
+        return False
+    want = " ".join(value.lower().split())
+    return len(want) >= 2 and any(" ".join(seg.lower().split()) != want and want in " ".join(seg.lower().split())
+                                  for seg in segments)
 
 
 def detect_entity_binding(

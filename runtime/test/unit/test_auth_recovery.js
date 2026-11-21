@@ -135,6 +135,20 @@ function makePage(url, title = "My App", passwordBoxes = 0) {
     assert.equal(await isAuthFailure(makePage("https://app.example.com/settings/login-history")), false);
   });
 
+  // WF-15 F1: a saved sign-in that ends mid-run bounces to a sign-in form at an ordinary address ("/", title "Swag
+  // Labs"). A visible password box there is the sign-in, unless the plan itself types into a password box.
+  const SHOP_STEPS = [{ type: "navigate", url: "https://shop.example.com/inventory.html" }, { type: "click" }];
+  await test("a sign-in form at an ordinary address, plan never types a password → auth failure", async () => {
+    assert.equal(await isAuthFailure(makePage("https://shop.example.com/", "Swag Labs", 1), SHOP_STEPS), true);
+  });
+
+  await test("the same form when the plan signs in on its own (nested step) → NOT auth failure", async () => {
+    const own = [...SHOP_STEPS, { type: "loop", for_each: { steps: [
+      { type: "type", identity_bundle: { fingerprint: { input_type: "password" } } },
+    ] } }];
+    assert.equal(await isAuthFailure(makePage("https://shop.example.com/", "Swag Labs", 1), own), false);
+  });
+
   // Interactive-login capture detection (_reachedProtectedUrl, host/redirect matching) was
   // replaced by a signed-out baseline compare — see login_signals.js::isSignedInAgainstBaseline
   // and its coverage in test_login_signals.js, including the GitHub www./redirect case that

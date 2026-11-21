@@ -64,6 +64,8 @@ from conxa_compile.compiler.second_opinion import (
     archive_flagged_steps,
     rename_binding_in_step,
 )
+from conxa_compile.compiler.content_free_identity import strip_value_from_identity
+from conxa_compile.compiler.start_origin import stamp_start_origin
 from conxa_compile.compiler.step_key import assign_compile_ids, step_key_index_map, step_keys
 from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
 from conxa_compile.compiler.selector_score import has_usable_unique_signal
@@ -1846,6 +1848,22 @@ def prepare_compile_events(
     return _insert_tab_markers(cleaned_events)
 
 
+def link_upload_picks(steps: list[SkillStep]) -> None:
+    """A press that sends files an earlier step chose looks for THAT step's file name when the page is opened again
+    (BUILD-103 (4)): its fresh_look check carries the pick's event number (effects._mine_checks); here it becomes the
+    pick's step id, which the runtime echoes as the step's source_step_key. A pick that is no longer a step leaves the
+    check unlinked, and the runtime then says "can't tell" rather than looking for nothing."""
+    by_event = {s.source_event: s.step_id for s in steps if s.source_event is not None and s.step_id}
+    for step in steps:
+        effect = step.validation.effect
+        for check in (effect.checks if effect is not None else []):
+            probe = check.probe
+            if probe.get("type") == "fresh_look" and "file_from_event" in probe:
+                pick_id = by_event.get(probe.pop("file_from_event"))
+                if pick_id:
+                    probe["file_from"] = pick_id
+
+
 def _mark_choose_file_presses(events: list[dict[str, Any]], session_root: Path) -> None:
     """Mark each file pick that sent nothing and the later press that sent its files (effects.choose_file_presses), so
     the pick is built as "choose the files" and the press carries the upload's checklist. Reads the recorder's request
@@ -1979,6 +1997,7 @@ def compile_skill_package(
         steps = build_outcome_forks(steps, sid)
     # Each step gets its own id now, before the first step key is read (BUILD-104 (1)).
     assign_compile_ids(steps)
+    link_upload_picks(steps)
 
     _compile_log(
         "compile_phase",
@@ -2092,6 +2111,9 @@ def compile_skill_package(
     except Exception:  # noqa: BLE001 -- advisory pass: never fail a compile
         pass
     add_page_side_proof(steps)
+    # Last of the passes that write address checks: mark those that name the start site (runtime/app/start_origin.js).
+    stamp_start_origin(steps)
+    link_upload_picks(steps)   # again: the second opinion or the proof pass may have rebuilt a step's checks
 
     # PROD-3-DRYRUN layer 4: advisory stage-then-commit lint — never blocks compile/save/publish.
     commit_ordering_warnings = lint_commit_ordering(steps)
@@ -2434,6 +2456,8 @@ def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) 
         step.value = name
         step.input_binding = None
         step.extract = spec
+        if spec["source"] == "text":
+            strip_value_from_identity(step, target)   # the words are the data, never the way to find the element
         step.validation = ValidationBlock()
 
 

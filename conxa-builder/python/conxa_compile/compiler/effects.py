@@ -214,6 +214,13 @@ def _mine_checks(ev: dict[str, Any], kind: str) -> list[EffectCheck]:
         # and more times than before the upload. Read-only (a GET of the page already open); needs a single named file.
         add(rung="result_exists", witness="fresh_look", probe={"type": "fresh_look", "expect": "file_name"},
             plain="the file shows up when the page is opened again")
+    pick_seq = (ev.get("extras") or {}).get("completes_upload")
+    if kind == "upload" and not picked and isinstance(pick_seq, int) and not isinstance(pick_seq, bool):
+        # A press that sends the files an earlier step chose: the same look, for the file that step picked. The pick is
+        # named by its event here; build.py::link_upload_picks turns that into its step key once steps have ids.
+        add(rung="result_exists", witness="fresh_look",
+            probe={"type": "fresh_look", "expect": "file_name", "file_from_event": pick_seq},
+            plain="the file shows up when the page is opened again")
     # Always last: the failure signal. A veto, so an error or refusal beats any amount of good news.
     add(rung="completed", witness="renderer", role="veto", probe={"type": "failure_signal", "scope": "new_since_baseline"},
         plain="the app shows no error or refusal")
