@@ -1,0 +1,198 @@
+{
+  "site": "saucedemo",
+  "login_url": "https://www.saucedemo.com/",
+  "success_url": "https://www.saucedemo.com/inventory.html",
+  "landed_after_sign_in": "https://www.saucedemo.com/inventory.html",
+  "learned": true,
+  "reason": "",
+  "definition": {
+    "version": 1,
+    "probe_url": "https://www.saucedemo.com/inventory.html",
+    "signed_out": {
+      "final_path": "/",
+      "markers": [
+        {
+          "role": "button",
+          "name": "Dismiss error"
+        }
+      ],
+      "password_box": true
+    },
+    "signed_in": {
+      "final_path": "/inventory.html",
+      "endpoints": []
+    },
+    "session_keys": [
+      "session-username"
+    ],
+    "journey_hosts": []
+  },
+  "observations": [
+    {
+      "url": "https://www.saucedemo.com/",
+      "final_url": "https://www.saucedemo.com/",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "session-username"
+      ],
+      "doc_status": 200,
+      "marker_count": 0,
+      "markers_sample": []
+    },
+    {
+      "url": "https://www.saucedemo.com/",
+      "final_url": "https://www.saucedemo.com/",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [
+        {
+          "method": "POST",
+          "path": "/api/unique-events/submit",
+          "status": 401
+        }
+      ],
+      "cookie_names": [],
+      "doc_status": 200,
+      "marker_count": 0,
+      "markers_sample": []
+    },
+    {
+      "url": "https://www.saucedemo.com/",
+      "final_url": "https://www.saucedemo.com/",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "session-username"
+      ],
+      "doc_status": 200,
+      "marker_count": 0,
+      "markers_sample": []
+    },
+    {
+      "url": "https://www.saucedemo.com/inventory.html",
+      "final_url": "https://www.saucedemo.com/inventory.html",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "session-username"
+      ],
+      "doc_status": 404,
+      "marker_count": 15,
+      "markers_sample": [
+        "Open Menu",
+        "All Items",
+        "Dynamic Catalog",
+        "About",
+        "Logout",
+        "Reset App State",
+        "Close Menu",
+        "Cart, empty",
+        "View details for Sauce Labs Backpack",
+        "Add to cart",
+        "View details for Sauce Labs Bike Light",
+        "View details for Sauce Labs Bolt T-Shirt",
+        "View details for Sauce Labs Fleece Jacket",
+        "View details for Sauce Labs Onesie",
+        "View details for Test.allTheThings() T-Shirt (Red)"
+      ]
+    },
+    {
+      "url": "https://www.saucedemo.com/inventory.html",
+      "final_url": "https://www.saucedemo.com/",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [
+        {
+          "method": "POST",
+          "path": "/api/unique-events/submit",
+          "status": 401
+        }
+      ],
+      "cookie_names": [],
+      "doc_status": 404,
+      "marker_count": 1,
+      "markers_sample": [
+        "Dismiss error"
+      ]
+    },
+    {
+      "url": "https://www.saucedemo.com/inventory.html",
+      "final_url": "https://www.saucedemo.com/inventory.html",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "session-username"
+      ],
+      "doc_status": 404,
+      "marker_count": 15,
+      "markers_sample": [
+        "Open Menu",
+        "All Items",
+        "Dynamic Catalog",
+        "About",
+        "Logout",
+        "Reset App State",
+        "Close Menu",
+        "Cart, empty",
+        "View details for Sauce Labs Backpack",
+        "Add to cart",
+        "View details for Sauce Labs Bike Light",
+        "View details for Sauce Labs Bolt T-Shirt",
+        "View details for Sauce Labs Fleece Jacket",
+        "View details for Sauce Labs Onesie",
+        "View details for Test.allTheThings() T-Shirt (Red)"
+      ]
+    }
+  ],
+  "verdicts": [
+    {
+      "verdict": "no",
+      "classes": [
+        "url",
+        "dom"
+      ]
+    },
+    {
+      "verdict": "no",
+      "classes": [
+        "url",
+        "dom"
+      ]
+    },
+    {
+      "verdict": "no",
+      "classes": [
+        "url",
+        "dom"
+      ]
+    },
+    {
+      "verdict": "yes",
+      "classes": [
+        "url",
+        "dom",
+        "session"
+      ]
+    },
+    {
+      "verdict": "no",
+      "classes": [
+        "url",
+        "dom"
+      ]
+    },
+    {
+      "verdict": "yes",
+      "classes": [
+        "url",
+        "dom",
+        "session"
+      ]
+    }
+  ]
+}

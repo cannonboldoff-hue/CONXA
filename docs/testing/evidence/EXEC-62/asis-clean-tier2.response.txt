@@ -1,0 +1,7 @@
+Execution failed at step 2: Step 2 (click) failed: Something unexpected went wrong. (Verification failed: state_changed)
+Page URL: http://127.0.0.1:8099/recovery-fixture.html
+Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery).
+Step intent: {"action":"click","intent":"activate_control_buy_now","target":{"role":"button","name":"Buy Now","text":"buy now","data_testid":"buy-btn"},"anchors":["buy now","div#controls"]}
+(run_id: r_mwq0kjpq_qdrf8)
+
+[images: 0] [error: ] [ms: 25149]

@@ -1,0 +1,25 @@
+BUILD-85 (DT15-2) live re-test, 2026-11-21 — OrangeHRM public demo, Admin > User Management > Username filter.
+
+How it was driven
+  build85_live.py runs the REAL recorder: RecordingSession.start() -> pump loop -> bridge.js -> stop(), with only the
+  browser launch forced headless (+ a CDP port). A second Playwright client connects over CDP and clicks/types with
+  trusted input, so the bridge records it as it would a person. The Build Studio window itself was not driven.
+  Sign-in: public demo user Admin / admin123, saved state passed as storage_state_path.
+  Run: PYTHONPATH="conxa-builder/python;packages/conxa-core" LLM_FREE_API_KEYS=x python build85_live.py <natural|late> <out.json> [delay_ms]
+
+Steps recorded each pass: click Username box, type "Admin", click Search.
+
+1. natural (caption drawn with the box, as OrangeHRM really does)
+   natural_before_fix.json : box click "Username", type "Username", Search button "Username"  <- WRONG caption on the button
+   natural.json (after fix): box click "Username", type "Username", Search button none
+   Cause: captureAssociatedLabel rule 5 takes the first <label> under the element's grandparent; for the Search
+   button the grandparent is the whole filter form. Fix: rules 4-5 (neighbouring <label>) skip buttons and links.
+
+2. late, caption removed before the click and put back 150 ms later (late150.json)
+   click arrived with no caption; an amendment then added "Username" (arrivals list) -> the _lateLabel /
+   _apply_amend_sync path works live. Type step: "Username". Search button: none.
+
+3. late, caption put back 1500 ms later (late1500.json)
+   click and type both arrived with no caption and no amendment came: each step re-reads once, right after the page
+   goes quiet (click: <=250 ms, typing: <=1.5 s after the type step is sent), which is before the caption returns.
+   Known limit, simulated only; the real OrangeHRM page draws its captions with the boxes.

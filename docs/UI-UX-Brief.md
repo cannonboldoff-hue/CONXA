@@ -684,7 +684,9 @@ AppChrome (layout)
 │   ├── Human Edit (HumanEditListPage.tsx — compiled workflows, needs-review-first,
 │   │   → /edit/[skillId] HumanEditPage.tsx, the per-skill editor — see §2.7 — opens
 │   │       a mandatory ReviewQuestionsDialog first if the skill has pending loop/
-│   │       optional-popup questions; Approve returns to the workflow's group page)
+│   │       optional-popup questions, or an open "enter each row of a list?" question
+│   │       (answered through the conversation's own card); Approve returns to the
+│   │       workflow's group page)
 │   ├── Publish Skill Package (PublishPage.tsx — primary release action: workspace-scoped)
 │   ├── Build Installer (BuildInstallerPage.tsx — secondary/optional, requires a published release)
 │   └── Settings

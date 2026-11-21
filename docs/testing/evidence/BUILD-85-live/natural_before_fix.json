@@ -1,0 +1,33 @@
+{
+  "mode": "natural",
+  "binding_errors": [],
+  "steps": [
+    {
+      "action": "click",
+      "value": null,
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": "Username",
+      "target_name": null,
+      "tag": "input",
+      "uid": "vw3n00xq-1"
+    },
+    {
+      "action": "type",
+      "value": "Admin",
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": "Username",
+      "target_name": null,
+      "tag": "input",
+      "uid": "vw3n00xq-2"
+    },
+    {
+      "action": "click",
+      "value": null,
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": "Username",
+      "target_name": null,
+      "tag": "button",
+      "uid": "vw3n00xq-3"
+    }
+  ]
+}

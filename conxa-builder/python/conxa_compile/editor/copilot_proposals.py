@@ -39,6 +39,7 @@ from conxa_compile.editor.workflow_mutations import (
     delete_branch_step,
     flatten_fork_to_recorded_option,
     insert_branch_step,
+    make_table_loop,
     merge_skill_inputs,
     parameterize_click_text,
     parameterize_literal,
@@ -46,6 +47,7 @@ from conxa_compile.editor.workflow_mutations import (
     replace_string_literals_in_skill_document,
     set_date_offset,
     set_fork_policy,
+    set_loop_table,
 )
 from conxa_compile.policy.bundle import get_policy_bundle
 
@@ -365,8 +367,20 @@ def resolve_step_index(doc: dict[str, Any], step_key: str) -> int:
 _STRUCTURAL_OPS = frozenset({
     "insert_step", "delete_step", "move_step", "update_inputs", "replace_literals", "parameterize",
     "body_insert_step", "body_delete_step", "body_move_step", "set_popup_decision", "flatten_popup",
-    "set_date_offset", "rename_workflow",
+    "set_date_offset", "rename_workflow", "set_loop_table", "make_table_loop",
 })
+
+# Table loops (EXEC-63): one code-owned write each, so the input and the loop's source change together.
+_TABLE_LOOP_OPS = frozenset({"set_loop_table", "make_table_loop"})
+
+
+def apply_table_loop_op(doc: dict[str, Any], op: dict[str, Any]) -> dict[str, Any]:
+    """The one mutation behind a table-loop card, for the gate's dry run and for Apply. Step keys are
+    re-resolved against ``doc``; raises ValueError (stale or refused)."""
+    if op.get("op") == "set_loop_table":
+        return set_loop_table(doc, resolve_step_index(doc, str(op.get("step_key") or "")), op.get("columns"))
+    return make_table_loop(doc, str(op.get("from_step_key") or ""), str(op.get("to_step_key") or ""),
+                           op.get("columns"), input_name=str(op.get("name") or "entries"))
 
 # Kinds that cannot be put inside an if-present body: they pause the run, or hold a body of their own
 # (the step path addresses one level only).
@@ -563,6 +577,12 @@ def proposal_summary(p: dict[str, Any]) -> str:
     if op == "parameterize":
         return (f"Make “{p.get('literal')}” a run input called {p.get('name')} "
                 f"({p.get('changed')} place{'s' if p.get('changed') != 1 else ''}); the recorded value stays its default")
+    if op in _TABLE_LOOP_OPS:
+        cols = ", ".join(str(c) for c in p.get("column_names") or [])
+        if op == "set_loop_table":
+            return f"Make the repeated steps in {label} go through a list with the columns {cols}; whoever runs it gives the list"
+        return (f"Repeat {label} to {p.get('to_label') or label} for every row of a list with the columns {cols}; "
+                "the list starts with what you recorded")
     if op == "update_inputs":
         return f"Set the run inputs to: {', '.join(str(i.get('id')) for i in p.get('inputs') or []) or 'none'}"
     if op == "replace_literals":
@@ -619,6 +639,12 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             raw_fields = raw.get("fields")
             fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
             if _names_an_address(action_kind, fields):
+                continue
+            if _check_needs_element(action_kind, fields):
+                # A check step reads its words off an element, and chat never names one: such a step failed every run
+                # ("assert step has no element selector", BUILD-96 (4)). Words on the page become a check on the step
+                # they follow, the same edit Human Edit's Validation panel makes; any other element check gets no card.
+                out.extend({**p, "from_op": op} for p in gate_proposals(doc, _text_check_edit(doc, after_step_key, fields, why, evidence_refs)))
                 continue
             source_step = _resolve_step(doc, identity_from_step_key)[1] if identity_from_step_key else {}
             if refuses_sign_in(action_kind, source_step, fields):
@@ -715,6 +741,19 @@ def gate_structural_proposals(doc: dict[str, Any], raw_proposals: list[Any]) -> 
             out.append({**base, "literal": literal, "name": name, "kinds": kinds, "changed": changed,
                         "preview": {"before": literal, "after": "{{%s}}" % name}})
 
+        elif op in _TABLE_LOOP_OPS:
+            fields = ("step_key", "columns") if op == "set_loop_table" else ("from_step_key", "to_step_key", "columns", "name")
+            built = {**base, **{f: raw[f] for f in fields if raw.get(f) not in (None, "")}}
+            try:
+                apply_table_loop_op(copy.deepcopy(doc), built)  # the same write Apply makes; a refusal drops the card
+            except (ValueError, ProposalError):
+                continue
+            built["column_names"] = [str(c.get("name") if isinstance(c, dict) else c).strip() for c in built["columns"]]
+            built["step_label"] = _step_label(doc, built.get("step_key") or built.get("from_step_key"))
+            if op == "make_table_loop":
+                built["to_label"] = _step_label(doc, built["to_step_key"])
+            out.append({**built, "preview": {"before": None, "after": "A list with the columns " + ", ".join(built["column_names"])}})
+
         elif op in _STEP_SCOPED_OPS:
             built = _gate_step_scoped_op(doc, raw, op, base, policy)
             if built is not None:
@@ -740,6 +779,32 @@ def _names_an_address(kind: str, fields: dict[str, Any]) -> bool:
         if name.split(".")[0] in ADDRESS_KEYS or any(w in name for w in ("url", "selector", "address")):
             return True
     return False
+
+
+_URL_CHECK_KINDS = frozenset({"url", "url_exact", "url_must_be", "exact_url"})
+
+
+def _check_needs_element(kind: str, fields: dict[str, Any]) -> bool:
+    """True for a check / assert step that would read an element (text, selector): only an address check runs
+    without one (``skill_package_builder_saved_skill._saved_check_like_step``; a new check step is a url check)."""
+    check_kind = str(fields.get("check_kind") or "url").strip().lower().replace("-", "_")
+    return kind in ("check", "assert") and check_kind not in _URL_CHECK_KINDS
+
+
+def _text_check_edit(doc: dict[str, Any], after_step_key: str | None, fields: dict[str, Any], why: str,
+                     refs: list[str]) -> list[dict[str, Any]]:
+    """The raw ``validation.assertions`` edit that puts a text check's words on the step it would follow (the last
+    step when it would go at the end), keeping that step's other checks. [] when there are no words to look for."""
+    words = str(fields.get("check_text") or "").strip()
+    keys = step_keys(_steps_of(doc))
+    key = after_step_key or (keys[-1] if keys else None)
+    resolved = _resolve_step(doc, key) if key else None
+    if str(fields.get("check_kind") or "").strip().lower() != "text" or not words or resolved is None:
+        return []
+    current = _current_value(resolved[1], "validation.assertions")
+    kept = [a for a in current if isinstance(a, dict)] if isinstance(current, list) else []
+    return [{"step_key": key, "field": "validation.assertions",
+             "patch": kept + [{"type": "text_present", "target": words, "required": True}], "why": why, "evidence_refs": refs}]
 
 
 def _typed_value_edits(doc: dict[str, Any], literal: str, name: str, why: str, refs: list[str]) -> list[dict[str, Any]]:
@@ -809,7 +874,7 @@ def _gate_step_scoped_op(
             elif identity_from:
                 return None
             raw_fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
-            if _names_an_address(action_kind, raw_fields):
+            if _names_an_address(action_kind, raw_fields) or _check_needs_element(action_kind, raw_fields):
                 return None
             fields = {f: v for f, v in raw_fields.items() if f in editable_fields(action_kind)}
             insert_branch_step(copy.deepcopy(doc), index, action_kind, after_nested, container)

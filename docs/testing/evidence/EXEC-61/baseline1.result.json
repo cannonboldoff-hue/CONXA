@@ -1,0 +1,8 @@
+{
+ "wall_ms": 30480,
+ "text": [
+  "Execution failed at step 3: Step 3 (click) failed: Something unexpected went wrong. (Bound record could not be uniquely located on the page — refusing to act on a different row)\nPage URL: https://github.com/cli/cli/issues\nRecovery ceiling Tier 2 (deterministic cascade only — no agent recovery).\nStep intent: {\"action\":\"click\",\"intent\":\"interact_pull_requests_58__58\",\"target\":{\"role\":\"link\",\"text\":\"pull requests 58 (58)\"},\"anchors\":[\"pull requests 58 (58)\"]}",
+  "Warning:\n  This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.",
+  "(run_id: r_mwq0b5ie_btu14)"
+ ]
+}

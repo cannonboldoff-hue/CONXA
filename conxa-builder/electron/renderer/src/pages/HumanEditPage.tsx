@@ -948,7 +948,7 @@ export function HumanEditPage() {
       }
     />
     {skillId && (
-      <ReviewQuestionsDialog skillId={skillId} wf={wf} onWorkflowUpdated={onWorkflowUpdated} />
+      <ReviewQuestionsDialog skillId={skillId} wf={wf} onWorkflowUpdated={onWorkflowUpdated} workflowId={convWorkflow?.id} />
     )}
     <div className="flex min-h-0 flex-1 border-t border-white/8">
     <div

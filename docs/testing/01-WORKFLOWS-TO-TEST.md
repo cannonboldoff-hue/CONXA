@@ -361,7 +361,7 @@ exactly as recorded.
 | 11.8 | Loop table with 0 rows | Plain "nothing to do" or plain refusal; never a fake pass with 0 records added | S1 |
 | 11.9 | 1 row; 50 rows | Both correct; time and memory noted for 50 | S1 |
 | 11.10 | Two identical rows; a row with commas and quotes | Each typed as given; no merge, no split | S1 |
-| 11.11 | Ask chat to create or edit a table loop | Known gap EXEC-63: plain refusal expected, not a broken half-loop | S2 |
+| 11.11 | Ask chat to create or edit a table loop | Chat offers one Apply card (EXEC-63, 2026-11-21): the table input and the loop change in one step, one Undo; not yet tried live | S2 |
 
 **Failures go to:** EXEC-60/63 (loops), editor patch gate (inputs).
 

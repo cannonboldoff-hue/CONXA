@@ -1,0 +1,38 @@
+{
+  "steps": [
+    {
+      "step_id": 2,
+      "intent": "activate_control_buy_now",
+      "target": {
+        "text": "",
+        "role": "button"
+      },
+      "anchors": [
+        {
+          "text": "buy now",
+          "priority": 2
+        },
+        {
+          "text": "div#controls",
+          "priority": 1
+        }
+      ],
+      "fallback": {
+        "role": "button"
+      },
+      "selector_context": {
+        "primary": "[data-testid=\"buy-btn\"]"
+      },
+      "recorded_context": {
+        "parent": "div#controls",
+        "index_in_parent": 0
+      },
+      "video_context": {
+        "visible_target": "Buy Now button",
+        "screen_before": "Recovery fixture page with Buy Now button",
+        "screen_after": "Buy Now button shows checkmark and top-right status updates",
+        "purpose": "Trigger the purchase action and verify click evidence appears"
+      }
+    }
+  ]
+}

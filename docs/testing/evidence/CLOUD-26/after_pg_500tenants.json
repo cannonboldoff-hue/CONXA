@@ -1,0 +1,25 @@
+﻿{
+  "store": "pg",
+  "tenants": 500,
+  "kv_rows_seeded": 27500,
+  "saas_metadata_bytes": 398239,
+  "seed_s": 1.3,
+  "calls": 200,
+  "p50_ms": 86.4,
+  "p95_ms": 126.1,
+  "mean_ms": 93.2,
+  "queries_per_call": 17.0,
+  "rows_read_per_call": 106.0,
+  "query_kinds_per_call": {
+    "SELECT data FROM kv_store WHERE namespace = %(ns)s AND key =": 8.0,
+    "SELECT pg_advisory_xact_lock(hashtext(%(key)s))": 4.0,
+    "SELECT data FROM kv_store WHERE namespace = %(ns)s AND data-": 5.0
+  },
+  "sanity": {
+    "machines": 3,
+    "execute_seats": 2,
+    "compile_reserved_remaining": null,
+    "workflows_active": 10,
+    "seats": 3
+  }
+}

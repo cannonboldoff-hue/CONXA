@@ -1,0 +1,264 @@
+{
+  "site": "parabank",
+  "login_url": "https://parabank.parasoft.com/parabank/index.htm",
+  "success_url": "https://parabank.parasoft.com/parabank/overview.htm",
+  "landed_after_sign_in": "https://parabank.parasoft.com/parabank/overview.htm",
+  "learned": true,
+  "reason": "",
+  "definition": {
+    "version": 1,
+    "probe_url": "https://parabank.parasoft.com/parabank/overview.htm",
+    "signed_out": {
+      "final_path": "",
+      "markers": [
+        {
+          "role": "a",
+          "name": "Forgot login info?"
+        },
+        {
+          "role": "a",
+          "name": "Register"
+        }
+      ],
+      "password_box": true,
+      "doc_denied": "500"
+    },
+    "signed_in": {
+      "final_path": "",
+      "endpoints": [],
+      "doc_ok": "2xx"
+    },
+    "session_keys": [],
+    "journey_hosts": []
+  },
+  "observations": [
+    {
+      "url": "https://parabank.parasoft.com/parabank/index.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/index.htm",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 200,
+      "marker_count": 28,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Open New Account",
+        "Accounts Overview",
+        "Transfer Funds",
+        "Bill Pay",
+        "Find Transactions",
+        "Update Contact Info",
+        "Request Loan"
+      ]
+    },
+    {
+      "url": "https://parabank.parasoft.com/parabank/index.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/index.htm",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 200,
+      "marker_count": 24,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Forgot login info?",
+        "Register",
+        "Withdraw Funds",
+        "Transfer Funds",
+        "Check Balances",
+        "Make Deposits",
+        "Bill Pay"
+      ]
+    },
+    {
+      "url": "https://parabank.parasoft.com/parabank/index.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/index.htm",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 200,
+      "marker_count": 28,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Open New Account",
+        "Accounts Overview",
+        "Transfer Funds",
+        "Bill Pay",
+        "Find Transactions",
+        "Update Contact Info",
+        "Request Loan"
+      ]
+    },
+    {
+      "url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [
+        {
+          "method": "GET",
+          "path": "/parabank/services_proxy/bank/customers/12212/accounts",
+          "status": 200
+        }
+      ],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 200,
+      "marker_count": 36,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Open New Account",
+        "Accounts Overview",
+        "Transfer Funds",
+        "Bill Pay",
+        "Find Transactions",
+        "Update Contact Info",
+        "Request Loan"
+      ]
+    },
+    {
+      "url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "password_box": true,
+      "otp_like": false,
+      "responses": [],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 500,
+      "marker_count": 14,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Forgot login info?",
+        "Register",
+        "Home",
+        "Site Map",
+        "Contact Us",
+        "www.parasoft.com"
+      ]
+    },
+    {
+      "url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "final_url": "https://parabank.parasoft.com/parabank/overview.htm",
+      "password_box": false,
+      "otp_like": false,
+      "responses": [
+        {
+          "method": "GET",
+          "path": "/parabank/services_proxy/bank/customers/12212/accounts",
+          "status": 200
+        }
+      ],
+      "cookie_names": [
+        "JSESSIONID"
+      ],
+      "doc_status": 200,
+      "marker_count": 36,
+      "markers_sample": [
+        "About Us",
+        "Services",
+        "Products",
+        "Locations",
+        "Admin Page",
+        "home",
+        "about",
+        "contact",
+        "Open New Account",
+        "Accounts Overview",
+        "Transfer Funds",
+        "Bill Pay",
+        "Find Transactions",
+        "Update Contact Info",
+        "Request Loan"
+      ]
+    }
+  ],
+  "verdicts": [
+    {
+      "verdict": "yes",
+      "classes": [
+        "dom",
+        "doc"
+      ]
+    },
+    {
+      "verdict": "no",
+      "classes": [
+        "dom"
+      ]
+    },
+    {
+      "verdict": "yes",
+      "classes": [
+        "dom",
+        "doc"
+      ]
+    },
+    {
+      "verdict": "yes",
+      "classes": [
+        "dom",
+        "doc"
+      ]
+    },
+    {
+      "verdict": "no",
+      "classes": [
+        "dom",
+        "doc"
+      ]
+    },
+    {
+      "verdict": "yes",
+      "classes": [
+        "dom",
+        "doc"
+      ]
+    }
+  ]
+}

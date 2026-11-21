@@ -136,6 +136,66 @@ test("(b) a bar that moves slowly is not stalled: every change restarts the stal
   });
 });
 
+// ── EXEC-61: a chart drawn as progress bars (GitHub's language bar) held every short wait for its whole 15 s ──────
+const CHART = `<div><span role="progressbar" aria-valuenow="96" aria-label="Go: 96.1%" style="display:inline-block;width:96px;height:8px"></span>
+  <span role="progressbar" aria-valuenow="3" aria-label="TypeScript: 2.8%" style="display:inline-block;width:3px;height:8px"></span></div>`;
+const shortOpts = (baseline, over) => gateOpts(baseline, { mode: "short", budgetMs: 5000, staticBarMs: 400, ...over });
+
+test("EXEC-61: a short wait lets go of bars that only show a fixed number, and does not count it as a yes", async () => {
+  await withGatePage(async (page, baseline) => {
+    await page.evaluate((html) => document.body.insertAdjacentHTML("beforeend", html), CHART);
+    const v = await waitForCompletion(page, shortOpts(baseline));
+    assert.strictEqual(v.status, "done", JSON.stringify(v));
+    assert.strictEqual(v.still, true, "quiet is not proof: the caller must count it as cant_tell");
+    assert.ok(v.waitedMs >= 400 && v.waitedMs < 2000, `waited ${v.waitedMs}ms`);
+  });
+});
+
+test("EXEC-61: a spinner (an indicator with no number) still holds a short wait to its budget", async () => {
+  await withGatePage(async (page, baseline) => {
+    await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div role="progressbar" style="width:20px;height:20px"></div><progress style="width:40px"></progress>'));
+    const sample = await page.evaluate(pageScripts.completionProbe);
+    assert.strictEqual(sample.bars, "|", "an indeterminate <progress> records no number");
+    const v = await waitForCompletion(page, shortOpts(baseline, { budgetMs: 1200 }));
+    assert.strictEqual(v.status, "still_working", JSON.stringify(v));
+  });
+});
+
+test("EXEC-61: a bar that moves is not let go early by a short wait", async () => {
+  await withGatePage(async (page, baseline) => {
+    await page.evaluate(() => {
+      document.body.insertAdjacentHTML("beforeend", '<div role="progressbar" aria-valuenow="0" style="width:50px;height:6px"></div>');
+      let n = 0;
+      const t = setInterval(() => {
+        const bar = document.querySelector('[role="progressbar"]');
+        n += 10;
+        if (n >= 100) { clearInterval(t); bar.remove(); } else bar.setAttribute("aria-valuenow", String(n));
+      }, 150); // a change every 150ms for 1.5s, with a 400ms static window
+    });
+    const v = await waitForCompletion(page, shortOpts(baseline));
+    assert.strictEqual(v.status, "done", JSON.stringify(v));
+    assert.notStrictEqual(v.still, true, "it moved, then left: the work was seen to end");
+    assert.ok(v.waitedMs >= 1200, `ended early after ${v.waitedMs}ms`);
+  });
+});
+
+test("EXEC-61: a full wait lets the same chart go too (the step that ended the GitHub run waited 5 min, then failed)", async () => {
+  await withGatePage(async (page, baseline) => {
+    await page.evaluate((html) => document.body.insertAdjacentHTML("beforeend", html), CHART);
+    const v = await waitForCompletion(page, gateOpts(baseline, { staticBarMs: 400 }));
+    assert.strictEqual(v.status, "done", JSON.stringify(v));
+    assert.strictEqual(v.still, true);
+  });
+});
+
+test("EXEC-61: a full wait gives a fixed-number bar a longer window, and an upload (0) never lets it go", async () => {
+  await withGatePage(async (page, baseline) => {
+    await page.evaluate((html) => document.body.insertAdjacentHTML("beforeend", html), CHART);
+    assert.strictEqual((await waitForCompletion(page, gateOpts(baseline, { budgetMs: 1500 }))).status, "timed_out", "20 s by default");
+    assert.strictEqual((await waitForCompletion(page, gateOpts(baseline, { budgetMs: 1500, staticBarMs: 0 }))).status, "timed_out");
+  });
+});
+
 // ── (a) park-and-recheck: a surface that a resting pointer holds open goes away when the pointer does ──────────
 process.env.CONXA_DATA_DIR = process.env.CONXA_DATA_DIR || require("node:os").tmpdir();
 const { parkAndRecheck } = require("../../app/run");

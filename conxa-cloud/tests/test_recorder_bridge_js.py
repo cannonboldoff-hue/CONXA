@@ -1987,6 +1987,18 @@ def test_a_caption_rendered_after_the_step_is_added_when_the_page_settles(page: 
     assert _type_events(page)[0]["target"]["label_text"] == "Username"
 
 
+def test_a_button_below_a_form_field_is_not_captioned_by_that_field(page: Page) -> None:
+    # OrangeHRM's user filter (BUILD-85 live run): the Search button's grandparent is the whole form, so its first
+    # <label> named the button "Username". The box above still gets its caption.
+    _install_bridge(page, """<form><div class="grp"><div><label>Username</label></div><div><input id="u"></div></div>
+      <div class="actions"><button id="go" type="button">Search</button></div></form>""")
+    page.click("#go")
+    page.wait_for_timeout(300)
+    click = next(e for e in _events(page) if (e.get("action") or {}).get("action") == "click")
+    assert not click["target"]["label_text"]
+    assert _label_of(page, "#u") == "Username"
+
+
 def test_a_keyboard_pick_in_a_native_list_is_one_select_step(page: Page) -> None:
     """Focusing a list and pressing the down arrow changes its value. That is one pick: recording the arrow and the
     list's value as typing as well made four steps, and a replayed arrow moved the choice again (WF-3 Leg B)."""

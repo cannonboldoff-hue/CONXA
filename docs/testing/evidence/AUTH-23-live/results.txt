@@ -1,0 +1,56 @@
+AUTH-23 (DT15-1) — live re-test of sign-in learning on ParaBank and saucedemo — 2026-11-21
+
+WHAT RAN
+  auth23_live.py signs in to the public demo site in a headless Chromium (stealth context options from
+  recorder/session.py), then calls the real RecordingSession._perform_learn_auth_sync (desktop, non-embedded
+  path) with the app's sign-in address and success address, exactly as handlers/groups.py passes them on Done.
+  Every probe it made (LIVE / OUT / RELOAD at each address) is logged into the result JSON.
+  auth23_runtime.js then takes the learned definition and the saved session and calls the runtime's real
+  browser.js::_isAuthenticated against the live site: once with the saved session, once with none.
+  Demo logins only: saucedemo standard_user, ParaBank john. Session files were kept in a scratch folder,
+  not here. (If you re-run: the harness writes <out>.state.json beside <out>.json; point <out> at a scratch dir.)
+
+  python auth23_live.py <saucedemo|parabank> <login_url> <success_url> <out.json>
+  node   auth23_runtime.js <out.json>
+  (PYTHONPATH = conxa-builder/python;packages/conxa-core; any dummy LLM_FREE_API_KEYS so settings load)
+
+NOT COVERED
+  The Build Studio window itself was not driven. In Studio the LIVE look comes from a tab in the host panel
+  (_embedded_live_observation_sync); here it comes from a Playwright tab in the same signed-in context.
+  OUT and RELOAD are the same code in both (_standalone_probe_observation_sync).
+
+RESULTS — saucedemo (sign-in https://www.saucedemo.com/ , success .../inventory.html)
+  runs sauce_a, sauce_r1, sauce_r2, sauce_r3: learned 4/4, byte-identical definition each time.
+  1st address "/" : LIVE and OUT both show the login form (password box, 200) -> nothing learned (as in 2026-11-15).
+  Fallback to the success address /inventory.html:
+     LIVE   stays on /inventory.html, no password box, cookie session-username
+     OUT    sent to "/", password box, "Dismiss error" banner
+     RELOAD stays on /inventory.html                        -> self-test passes
+  Definition: signed_in.final_path=/inventory.html; signed_out.final_path=/, marker "Dismiss error", password box;
+  session_keys=[session-username]. No doc_ok/doc_denied: the site answers 404 for /inventory.html both ways.
+  sauce_protected (sign-in address set to /inventory.html directly, the 2026-11-15 workaround): learned, same definition.
+  Runtime pre-flight (sauce_r2, sauce_r3): saved session -> signed in; no session -> not signed in.
+  sauce_r1 runtime check said "not signed in" with its saved session: correct. saucedemo's session cookie lives
+  10 minutes (saved 11:40:07, expires 11:49:30, checked after that). The demo genuinely signs you out.
+
+RESULTS — ParaBank (sign-in .../parabank/index.htm , success .../parabank/overview.htm)
+  runs para_a, para_r1, para_r2: learned 3/3, byte-identical definition each time.
+  1st address index.htm: LIVE has no password box, OUT has one; both 200, same address, JSESSIONID on both sides
+     -> only one class (page content) says "signed in" -> unsure -> nothing learned (as in 2026-11-15).
+  Fallback to the success address overview.htm:
+     LIVE   200, account overview, no password box
+     OUT    500 at the same address, login form ("Forgot login info?", "Register")
+     RELOAD 200                                              -> self-test passes on page content + page status
+  Definition: signed_in.doc_ok=2xx; signed_out.doc_denied=500, markers "Forgot login info?" + "Register",
+  password box; no final_path (no redirect), no session_keys (JSESSIONID is set signed out too).
+  para_protected (sign-in address set to overview.htm directly, the route that failed on 2026-11-15): learned.
+  Runtime pre-flight (para_r1, para_r2): saved session -> signed in; no session -> not signed in.
+
+OUTCOME
+  Both sites now learn a sign-in check that passes the three-way self-test, on the plain setup a person would
+  enter (home/sign-in page + the page they land on). No code change was needed. "Save anyway" no longer needed here.
+
+SIDE OBSERVATION (environment, not the learner)
+  On this machine during the run, closing a headless Chromium took 11-61 s even for a blank page (other sessions
+  were running browsers in parallel). Each learn closes two throwaway browsers, so one Done took 1-3.5 min here.
+  Page loads themselves took 2-3 s. Not investigated further.

@@ -396,6 +396,8 @@ async function confirmCompletedInner(ctx, state, step, i, page, completion, preS
     mode,
     budgetMs: full ? COMPLETION_BUDGET_MS : COMPLETION_SHORT_MS,
     pendingBudgetMs: upload ? COMPLETION_BUDGET_MS : NETWORK_GRACE_MS,
+    // An upload's bar is its work: only its own stall time may end the wait, never a fixed-number rule (EXEC-61).
+    ...(upload ? { staticBarMs: 0 } : {}),
     startGraceMs: COMPLETION_START_GRACE_MS,
     // The step's own stall time, when the compiler wrote one: an indicator unchanged for that long is not work.
     ...(stallAfterMs(step) ? { stallMs: stallAfterMs(step) } : {}),

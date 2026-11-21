@@ -6,9 +6,12 @@ import {
   acceptForEachSuggestion,
   confirmOptionalInterstitial,
   errorMessage,
+  fetchWorkflow,
   rejectForEachSuggestion,
 } from '@/api/workflowApi'
 import { CmdError } from '@/lib/ipc'
+import type { ThreadItem } from '@/lib/thread'
+import { useThreadStore } from '@/store/threadStore'
 import type { ForEachSuggestion, StepEditorDTO, WorkflowResponse } from '@/types/workflow'
 
 // ── Generic review-question chain ──────────────────────────────────────────────────────────
@@ -169,6 +172,32 @@ function buildOptionalPopupReviewItem(skillId: string, step: StepEditorDTO): Rev
   }
 }
 
+/** The question flow's "enter each row of a list it is given?" (a recording that made the same entry several
+ * times), offered here too. It is answered through that same question card, so this dialog and the conversation
+ * reach one answer, one change. Yes is the list, No keeps the recorded entries. An answer that fails is handed
+ * back to the conversation (which says why) instead of holding this dialog open. */
+function buildRepeatRowsReviewItem(
+  threadId: string,
+  card: ThreadItem,
+  skillId: string,
+  act: (threadId: string, cardId: string, action: string, payload?: Record<string, unknown>) => Promise<{ ok?: boolean; message?: string } | null>,
+  handBack: (key: string) => void,
+): ReviewItem {
+  const key = `repeat:${String(card.card_id)}`
+  return {
+    key,
+    nextQuestion: (answers) => (answers.length ? null : { title: String(card.title ?? ''), description: String(card.body ?? '') }),
+    async commit([yes]) {
+      const r = await act(threadId, String(card.card_id), 'choose', { choice: yes ? 'list' : 'same' })
+      if (!r || r.ok === false) {
+        handBack(key)
+        toast.error(r?.message || 'Could not save this answer. Answer it in the conversation instead.')
+      }
+      return fetchWorkflow(skillId)
+    },
+  }
+}
+
 /** Each source turns the live workflow into zero or more pending `ReviewItem`s. A new question
  * kind = one new builder + one entry here; the dialog and chain driver never change. */
 const REVIEW_SOURCES: ((skillId: string, wf: WorkflowResponse) => ReviewItem[])[] = [
@@ -182,6 +211,8 @@ type Props = {
   skillId: string
   wf: WorkflowResponse
   onWorkflowUpdated: (wf: WorkflowResponse) => void
+  /** The workflow whose conversation holds this skill's questions, when it has one. */
+  workflowId?: string
 }
 
 /**
@@ -195,8 +226,24 @@ type Props = {
  * Purely a driver over `ReviewItem`s (see above) — adding a future compound decision (one
  * mutation gated behind several dependent Yes/No answers) never touches this component.
  */
-export function ReviewQuestionsDialog({ skillId, wf, onWorkflowUpdated }: Props) {
-  const items = useMemo(() => REVIEW_SOURCES.flatMap((source) => source(skillId, wf)), [skillId, wf])
+export function ReviewQuestionsDialog({ skillId, wf, onWorkflowUpdated, workflowId }: Props) {
+  const threadId = workflowId ? `wf:${workflowId}` : ''
+  const threadItems = useThreadStore((s) => (threadId ? s.threads[threadId]?.items : undefined))
+  const threadLoaded = useThreadStore((s) => (threadId ? Boolean(s.threads[threadId]?.loaded) : true))
+  const loadThread = useThreadStore((s) => s.load)
+  const act = useThreadStore((s) => s.act)
+  const [handedBack, setHandedBack] = useState<string[]>([])
+  useEffect(() => {
+    if (threadId && !threadLoaded) void loadThread(threadId) // the conversation panel may be closed
+  }, [threadId, threadLoaded, loadThread])
+
+  const items = useMemo(() => {
+    const repeat = (threadItems ?? [])
+      .filter((i) => i.kind === 'card' && i.card_type === 'clarify_question' && i.question_kind === 'repeat_rows' && i.state === 'open')
+      .map((card) => buildRepeatRowsReviewItem(threadId, card, skillId, act, (key) => setHandedBack((k) => [...k, key])))
+      .filter((item) => !handedBack.includes(item.key))
+    return [...repeat, ...REVIEW_SOURCES.flatMap((source) => source(skillId, wf))]
+  }, [skillId, wf, threadItems, threadId, act, handedBack])
 
   const { current, question, answer, busy } = useReviewQuestionChain(items, onWorkflowUpdated)
 

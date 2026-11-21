@@ -6,23 +6,23 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 54 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1) |
-| EXEC — Execution & Recovery | 29 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60 |
-| CLOUD — Cloud | 11 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 13 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 16, 17, 17b (step line), 18 |
+| BUILD — Build Studio | 55 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1) |
+| EXEC — Execution & Recovery | 33 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
+| CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
+| RT — Runtime | 14 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line), 18 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 20 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 24 (2, 3) |
+| AUTH — Authentication | 21 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3) |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **141** | |
+| **Total** | **148** | |
 
 ---
 
-## BUILD — Build Studio (54 done)
+## BUILD — Build Studio (55 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -775,6 +775,12 @@ inferred from `outer_html`, not read directly.
 - **Resolution:** Found from a "GitHub to Drive Handoff" recording that kept 9 of ~12 steps (sessions `59dea81a`, `b6ac8844`, `67178545`): `bridge.js` chained every click's report behind one promise that also held the Proof-of-Done progress watch (up to 15 s), and Stop never asked the page to release what it held. Now `finalizeStateAfterSettle` reports the step at once (`uid`/`bridge`/`seq`) and sends state change / post condition / the app's words as `{_amend}` after the settle; the progress watch runs concurrently and arrives as a second amendment, starting only when progress is new since the act. `RecordingSession._apply_amend_sync` merges by `extras.uid` (before the pause and login drops). Stop calls `window.__skillFlush()` in every frame (open watches cut, `post_watch.cut_by_stop`) and drains until every `seq` has arrived (`_STOP_BARRIER_MAX_S` 10 s); `cmd_stop_recording` now snapshots events after the stop. `capture_gaps` (lost step numbers, failed saves; clicks on non-controls diagnostics-only) go to `recorder_diag.json`, and the Studio adds a plain sentence to "Got it" when steps were lost. Tests: 5 new bridge tests, 9 new session tests, 3 handler tests; docs in `TRD.md` and `Backend-Schema.md`.
 - **Not done / open:** not yet re-recorded in the running Studio against Drive (the real-run check in the plan). A frame destroyed before Stop can still lose its very last step without a trace, because a hole in step numbers cannot show a missing final one. The plan's "trusted click matched no control counts as a gap" was narrowed to diagnostics only, since clicks on plain text are normal.
 
+### BUILD-85 — Label fix on the OrangeHRM username filter, live
+**Resolved:** 2026-11-21
+- **Result:** on the real OrangeHRM demo the Username box gets its caption "Username" on both the click and the typing step, including through the late re-read path (caption removed before the click and restored 150 ms later: a later update added it to the click step). The run found one bug, now fixed: the Search button below the filter was also captioned "Username", because the nearby-`<label>` rule (parent or grandparent) applied to every element and, for the button, the grandparent was the whole form. In `recorder/bridge.js::captureAssociatedLabel`, rules 4 and 5 now skip buttons and links (`button`, `a`, `role=button|link`, `input` of type submit/reset/button/image); rules 1-3 are unchanged. `session.py` and the runtime were not changed; the element-description contract stays in agreement (the compiler never used the caption for buttons and the runtime reads only `labels` and `aria-labelledby`).
+- **How:** headless harness running the real `RecordingSession` start to stop with a second Playwright client clicking and typing; public demo login only. Studio's window was not driven.
+- **Verified:** `pytest tests/test_recorder_bridge_js.py tests/test_element_descriptor_agreement.py` 122 passed (re-run by the main session); new test `test_a_button_below_a_form_field_is_not_captioned_by_that_field`. The agent's 355 further tests in 11 files passed. Evidence: `docs/testing/evidence/BUILD-85-live/`. Limits: see BUILD-115.
+
 ### BUILD-86 — A build refusal whose advice could not be followed
 **Resolved:** 2026-11-18
 The refusal said "Compile the workflow again", but a compiled workflow offered no compile action. A compiled workflow now always offers `rebuild` ("Build again", `conversation/actions.py`, `lifecycle.py`), and the message says: Choose “Build again” for it, or record it again, then build.
@@ -819,7 +825,7 @@ A compiled workflow can always be built again (action `rebuild`, "Build again", 
 **Resolved:** 2026-11-20
 Human Edit's Conversation got a "New conversation" button that adds a divider the chat model reads nothing above (everything stays visible and every open question or change card above keeps working), and an "Edit" link on the person's last message that replaces it and its reply with one new reply, offered only while nothing but a reply followed it (`thread_store.conversation_start` / `editable_message`, a `retract` line, `thread_turn{replaces}`, `thread_new_conversation`). Parts (2) and (3) stay open in `TODO.md`.
 
-## EXEC — Execution & Recovery (29 done)
+## EXEC — Execution & Recovery (33 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -1211,7 +1217,28 @@ Human Edit's Conversation got a "New conversation" button that adds a divider th
 
 ---
 
-## CLOUD — Cloud (11 done)
+### EXEC-61 — 28 s per step on GitHub and a 118 s failure at step 3: measured, then fixed
+**Resolved:** 2026-11-21 (the dominant cost fixed; the two original numbers were not reproduced, see EXEC-67)
+- **Finding:** most of the time went to the completion gate being held by something that is not work: GitHub draws data charts as `role="progressbar"` with a fixed `aria-valuenow` (the Languages bar on the repo home, the ratio bars on Pulse), and the gate counted them as "still working". Each short wait ran its full 15 s, and the last step's full wait ran the whole 5-minute budget and then failed the run on a plain link click. The recovery chain was not the main cost.
+- **Fix:** in `runtime/app/completion.js` a bar that shows a fixed number (`aria-valuenow`, `data-progress`, a `<progress>` value) and does not change is let go: after 3 s on a short wait, after 20 s on a full wait, never on an upload (`run.js` passes `staticBarMs: 0`). The answer is `done` with `still`, which `gateAnswer` already turns into `cant_tell`, so it never counts as proof. A spinner, `aria-busy`, progress words or an open data-changing request still hold the wait. `page_scripts.js::completionProbe`: a `<progress>` with no value attribute no longer reads as 0.
+- **Measured:** replay of the 41-step workflow headless against public github.com/cli/cli as a visitor (no sign-in); 646 s and a failure at step 41 before, 236 s and "Done, please check" after; mean per step 15.6 s to 5.6 s; gate share of step time 76% to 38%.
+- **Verified:** `test_surface_cause.js` 21 of 21 passed (re-run by the main session, 5 new tests); the agent's full `npm test` 1503 pass, 0 fail, 1 skipped. Evidence: `docs/testing/evidence/EXEC-61/` (`breakdown.md`, telemetry, scripts). `docs/TRD.md` completion-gate paragraph updated.
+
+### EXEC-62 — After unbinding "Buy Now", does a renamed button heal?
+**Resolved:** 2026-11-21 (measured and answered; nothing built, as the item said)
+- **Answer:** the renamed `t2` button is found and clicked, but no recovery tier does it: the first, normal lookup finds it through the kept `#checkout-btn` id (trusted-contract rule, margin rule holds), with zero recovery events and zero tokens, at ceiling 2 and 4. A rename that loses id, test id, label and nesting (`d3`) still does not heal (EXEC-28 stands); no variant reaches a Tier 2 a11y heal (EXEC-31 stands). Heal needs the id to survive with no conflicting test id.
+- **How:** original 2026-11-15 recording recompiled with today's compiler (model off), replayed from source over MCP against the fixture on 127.0.0.1:8099, 11 runs.
+- **Finding:** on the fixture as checked in every run fails, the clean page included, at the post-click proof (the click is now judged irreversible and needs a 2xx data-changing request); see EXEC-64 and EXEC-65 in `TODO.md`.
+- **Evidence:** `docs/testing/07-EXEC-62-T2-DRIFT-2026-11-21.md`, `docs/testing/evidence/EXEC-62/`. No repo source edited.
+
+### EXEC-63 — Chat could not create or edit a table loop (EXEC-60 parity)
+**Resolved:** 2026-11-21
+- **Resolution:** chat now creates and changes table loops through two new structural ops on the existing change-card path: `set_loop_table {step_key, columns}` (turns an `items` loop into a `rows` table input, or changes a table loop's columns, in one write so the one-row-source gate never sees a half state; refuses a loop that reads rows off the page, dropping a column a body step still uses, and an input used outside the loop) and `make_table_loop {from_step_key, to_step_key, columns, name?}` (reuses `wrap_repeated_entries` with one copy). The model only names steps and columns; code does every rewrite and address keys are never touched. Apply is the confirm and lands as one undo entry. Human Edit's review dialog now shows the open `repeat_rows` question ("enter each row of a list?") and answers it through the same clarify action as chat.
+- **Deviation:** no new lifecycle action; chat step changes already go through the change card, not `lifecycle.allowed_actions` / `lib/actions.ts`, which were left unchanged.
+- **Verified:** new `conxa-cloud/tests/test_chat_table_loop.py` (6 tests, incl. Apply plus one Undo through a real Backend), re-run by the main session: 6 passed. The session's full `pytest -q tests` was 3793 passed, 1 skipped (before a one-line tweak; focused files re-run after: 31 passed). Renderer typecheck and eslint on changed files clean. Not tried live (see EXEC-66).
+- **Files:** `editor/workflow_mutations.py`, `editor/copilot_proposals.py`, `handlers/copilot.py`, `conversation/harness.py`, `packages/conxa-core/conxa_core/llm/client.py` (prompt op list), `ReviewQuestionsDialog.tsx`, `HumanEditPage.tsx`, `docs/TRD.md` §11.2, `docs/UI-UX-Brief.md`.
+
+## CLOUD — Cloud (12 done)
 
 ### CLOUD-6 — Settings UI: BYOK panel, machine device list, billing add-on control, trial banner
 **Resolved:** 2026-08-22
@@ -1345,13 +1372,20 @@ Human Edit's Conversation got a "New conversation" button that adds a divider th
 - **What fixed it:** the cloud accepts `ai_credits` (canonical) and keeps `human_edit` as a permanent alias, normalized on write; new counters are `ai_credits_*` and reads still sum the legacy ones, so no stored row migrates; `ai_credits_exceeded` is the new pool-exhausted code for callers that send the new class (legacy and Execute callers keep `human_edit_pool_exceeded`); Studio sends `ai_credits` everywhere and retries once as `human_edit` against an older cloud; plan-text labels now say "AI credits". New tests in `test_entitlements.py` and `test_llm_proxy_client_error_detail.py`; full suite green except `test_compile_path_has_no_numpy.py`, which was already failing (its subprocess cannot import `conxa_core`).
 - **Left as is on purpose:** the wallet key `human_edit_tokens`, the setting `entitlements_enforce_human_edit` (renaming an env var would break deployed configs), and the plan-limit key — all internal, none user-visible.
 
+### CLOUD-26 — Entitlements measured against a real database
+**Resolved:** 2026-11-21
+- **Result:** on a local Postgres 16 (via the `pgserver` pip package in a throwaway venv, since removed) with 500 workspaces, `/entitlements/current` cost p50 751 ms (p95 1465 ms) and now costs p50 86 ms (p95 126 ms). No N+1: the query count does not grow with data. Two causes, two fixes: (1) every call read every workspace's rows from the shared reservation, device, execute-grant and workflow namespaces and filtered in Python; the SQL store's `list` now takes an optional `workspace_id` and filters on `data->>'workspace_id'` in the query at the 8 per-workspace call sites (no index needed at this size, no schema change); (2) `saas.ensure_principal` rewrote the whole 394 KB shared metadata document 3 times per GET; it now writes only when the user, workspace, membership or billing default actually changes (also removes 3 lost-update chances per GET).
+- **Behaviour change:** `updated_at` on users and workspaces now means "last changed", not "last seen"; nothing in the backend reads it.
+- **Verified:** `tests/test_entitlements.py` 32 passed, including two new tests that fail on the old code; the agent's full `pytest -q tests` 3796 passed, 1 skipped. Evidence: `docs/testing/evidence/CLOUD-26/`. Not checked: see CLOUD-28.
+- **Files:** `conxa-cloud/backend/app/services/entitlements.py`, `saas.py`, `conxa-cloud/tests/test_entitlements.py`.
+
 ### CLOUD-27 — The publish reply's tracking address pointed at production in a dev setup
 **Resolved:** 2026-11-15
 - **Resolution:** cause was `conxa-cloud/backend/.env` setting `SKILL_API_BASE_URL=https://apis.conxa.in`, which the cloud uses to build the address in its reply. Studio now keeps the reply's path and puts it on the cloud it published to (`backend.py::_rebase_to_cloud`), so the address written into the installer matches the sync address.
 - **Category:** Cloud
 ---
 
-## RT — Runtime (13 done)
+## RT — Runtime (14 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1469,6 +1503,13 @@ Updater.md` §1.3.
 - **Category:** Runtime
 
 ---
+
+### RT-15 — Two calls of the same skill ran side by side outside a host panel
+**Resolved:** 2026-11-21
+- **Original:** two calls of the same skill ran side by side when the manifest had no target host; `host_lock.js` keys on hosts only.
+- **Resolution:** the real cause was in `runtime/app/target_hosts.js::resolveTargetHosts`: a group skill skipped the `target_url` fallback, so a public-site skill in a group with no sign-in apps resolved to no host and locked nothing. The starting-page host now always counts, added to the group's app hosts. No per-skill-name lock was added: a skill with no web starting page still fails open (a name lock would not guard recovery parks and would name a fake host in the timeout message). Side effects: the policy gate now also checks the starting-page host, and `create_schedule` lists it.
+- **Verified:** 2 new tests in `test_target_hosts.js`, 1 in `test_host_lock.js`; re-run by the main session, 17/17 pass; the session's full `npm test` was 1498 pass, 0 fail, 1 skipped. Not yet run live (see RT-21 in `TODO.md`).
+- **Files:** `runtime/app/target_hosts.js`, the two unit tests, `docs/TRD.md` §4.6, `docs/testing/03-ONE-WORKFLOW-RUNBOOK.md` R5.
 
 ### RT-16 / RT-17 — The local run record
 **Resolved:** 2026-11-18
@@ -1666,7 +1707,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (20 done)
+## AUTH — Authentication (21 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -1803,6 +1844,12 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Description:** The probe kept only the first 25 unique buttons/links, so footer links ("Docs", "Contact GitHub Support") fell out of the signed-in observation and were learned as signed-out markers; one "no" overrides every other signal, so a thin signed-in page could read "expired".
 - **Complexity:** S
 
+### AUTH-23 — Live re-test of sign-in learning on ParaBank and saucedemo
+**Resolved:** 2026-11-21
+- **Result:** sign-in learning now works on both real demo sites with no code change. saucedemo (sign-in `/`, success `/inventory.html`) learned 4 of 4 times: the sign-in page looks the same signed in or out, so learning repeated at the success address, where a signed-out visit is sent back to the login page, and passed the self-test. ParaBank (sign-in `index.htm`, success `overview.htm`) learned 3 of 3: at the success address the page answers 200 signed in and 500 signed out, so the new page-status signal (`doc_ok=2xx`, `doc_denied=500`) plus the sign-in form's links passed. Setting the success page directly as the sign-in address (the 2026-11-15 failing route) also learns. The runtime's `browser.js::_isAuthenticated` reads the saved session as signed in and no session as signed out on both.
+- **How:** Studio's window could not be driven; a headless script signed in with the public demo logins and called the real `RecordingSession._perform_learn_auth_sync` with the addresses `handlers/groups.py` passes. Not covered: the Studio host-panel signed-in look (see AUTH-25).
+- **Verified:** `pytest -q tests/test_auth_learning.py tests/test_session_check.py tests/test_recorder_session.py` 121 passed; `node --test test/unit/test_login_signals.js test/unit/test_login_entry_url.js` 118 passed (the agent's runs; not re-run by the main session). Evidence: `docs/testing/evidence/AUTH-23-live/` (`results.txt`, two scripts, result JSONs).
+
 ### AUTH-24 (2, 3) — Stale sign-in warning; "Sign in and test again" used a dead session
 **Resolved:** 2026-11-21
 (2) The "No success URL is set" warning is worked out each time it is read (`groups.py::_live_detect_warning`), so it goes the moment an address exists. (3) A sign-in expiry reported by the runtime is written onto the group's apps (`test_flow.py::_tf_mark_session_expired`), so "Sign in and test again" opens the sign-in window (2026-11-18).
@@ -1830,3 +1877,20 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Resolution:** the recorder emits one event per physical click, so identical consecutive clicks are repeated on purpose. `step_anchors.py::clean_steps` now keeps three or more as a count on the first one (`extras.repeat_count`, then `HandlerHints.repeat_count`), the package builder emits them as the runtime-only step type `repeat_click` with a `count` (a new type, not a new field, so an older runtime refuses it instead of clicking once), and the runtime clicks that many times (capped at 200, each through the click-received check, one failed click stops the run). The step name says "(50 times)" and the clicks are no longer reported as "left out". Exactly two identical clicks still fold to one (a double-click arrives as two clicks and a dblclick). Verified on the real 50-click recording: 50 events -> 1 step, count 50, nothing left out.
 - **Category:** Compiler Correctness
 - **Open follow-up:** no question asks "always 50, or a number you choose?"; the count is fixed at what was recorded (edit it in Human Edit is not wired).
+
+---
+
+## Backlog organisation log
+
+### 2026-11-15 dev test run follow-ups — organised and delegated
+**Resolved:** 2026-11-21 (organisation only; none of the 7 items is implemented yet, so none moves out of `TODO.md`)
+- **What was done:** the seven open follow-ups (AUTH-23, BUILD-85, EXEC-61, CLOUD-26, RT-15, EXEC-63, EXEC-62) became seven independent backlogs `DT15-1`..`DT15-7` in `TODO.md`, each with owned files, kind, priority, wave, dependency and a done-when line. Every original item text is kept unchanged.
+- **Delegation:** wave 1 (DT15-1, 3, 4, 5, 6, 7) handed to six parallel Opus sessions on 2026-11-21; wave 2 (DT15-2, BUILD-85) waits for DT15-1 because both edit `recorder/session.py` and need the live Build Studio.
+- **Rule for the sessions:** plan first, edit only owned files, no commits, no edits to `TODO.md` / `Done.md` / `FIX.md`; the main session records results and moves finished items here.
+- **Completed 2026-11-21:** all seven backlogs reported and were recorded above (RT-15, EXEC-62, EXEC-63, AUTH-23, EXEC-61, BUILD-85, CLOUD-26). DT15-2 ran as wave 2 after DT15-1. Leftovers are filed in `TODO.md` as RT-21, EXEC-64, EXEC-65, EXEC-66, AUTH-25, BUILD-115, EXEC-67, CLOUD-28. Nothing was committed.
+
+### 2026-11-16 end-to-end campaign follow-ups — organised and delegated
+**Resolved:** 2026-11-21 (organisation only; no item is implemented yet, so none moves out of `TODO.md`)
+- **What was done:** the 25 open follow-ups of the section (BUILD-88, 90–111, AUTH-24, RT-17b) were regrouped by owned code into 12 independent backlogs `E2E16-1`..`E2E16-10` (with 6a/6b, 7a/7b) in `TODO.md`, each with owned files, the exact original sub-items it takes, kind, priority, wave and dependency. Every original item text is unchanged; a coverage line and a "no work needed" line keep every sub-item traceable. The section named in the request ("2026-11-16 dev test run") does not exist; the only 11-16 section is "2026-11-16 end-to-end campaign", which was used.
+- **Delegation:** wave 1 (E2E16-1, 3, 6b, 7a) handed to four parallel Opus sessions on 2026-11-21. Wave 2 (2, 5, 9), wave 3 (4, 7b, 8) and wave 4 (6a, 10) wait on shared files or the one live Build Studio (see the table's "Waits for").
+- **Rule for the sessions:** plan first, edit only owned files, no commits, no edits to `TODO.md` / `Done.md` / `FIX.md`; the main session records results and moves finished items here.

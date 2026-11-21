@@ -1,0 +1,8 @@
+Execution failed at step 2: Step 2 (click) failed: Something unexpected went wrong. (Verification failed: state_changed)
+Page URL: http://127.0.0.1:8099/recovery-fixture.html?v=t2
+
+Recovery stopped deliberately: this step is flagged destructive/irreversible (delete, submit, pay, or similar), and the recorded target could not be re-found after the deterministic remedies (scroll/wait/dismiss-overlay) and one verified retry. This step will never fall through to "find something close" — acting on a different-looking element here risks acting on the wrong record. Fix the root cause (page structure, permissions, or the recorded selector) and re-run; do not attempt a candidate override.
+Step intent: {"action":"click","intent":"activate_control_buy_now","target":{"role":"button","name":"Buy Now","text":"buy now","data_testid":"buy-btn"},"anchors":["buy now","div#controls"]}
+(run_id: r_mwq0lp9v_i1052)
+
+[images: 0] [error: ] [ms: 25055]

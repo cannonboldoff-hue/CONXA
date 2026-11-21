@@ -45,6 +45,18 @@ const { IN_PROGRESS_RE } = fork;
 const DEFAULT_START_GRACE_MS = 3000;
 // A wait stops this long before the run's own time limit so the answer still reaches the caller.
 const DEADLINE_MARGIN_MS = 20000;
+// How long bars that each show a fixed value may stay unchanged before the wait calls them a picture, not work
+// (EXEC-61: GitHub draws its language and pulse charts as role=progressbar). A full wait gives them the stall the
+// compiler writes for a step that is not long (effects.py, 20 s). An upload passes 0: it keeps its own rules.
+const STATIC_BAR_MS = 3000;
+const FULL_STATIC_BAR_MS = 20000;
+
+// Every visible indicator reports a value (aria-valuenow, data-progress, a <progress> value): a bar, never a spinner.
+function allDeterminate(sample) {
+  const n = sample.busyCount || 0;
+  const vals = String(sample.bars || "").split("|");
+  return n > 0 && vals.length === n && vals.every(Boolean);
+}
 
 function newTexts(sample, baseline) {
   const before = new Set((baseline && baseline.regions) || []);
@@ -82,7 +94,8 @@ function pageUrl(page) {
  * @param {{baseline: {busyCount:number, regions:string[], url?:string}, sinceMs: number,
  *   mode?: "short"|"full", budgetMs: number, pendingBudgetMs?: number, pollMs?: number, quietMs?: number,
  *   startGraceMs?: number, deadlineAt?: number, deadlineMarginMs?: number, cancelCheck?: () => boolean,
- *   dialogQueue?: any[], stallMs?: number, notebook?: object, signals?: {progress: RegExp|null, failure: RegExp|null}}} o  `stallMs`:
+ *   dialogQueue?: any[], stallMs?: number, staticBarMs?: number, notebook?: object, signals?: {progress: RegExp|null, failure: RegExp|null}}} o
+ *   `staticBarMs`: bars that each show a fixed number and stay unchanged this long are a picture, not work (0 = off). `stallMs`:
  *   an indicator that reads the same for this long is on screen, not working (see `still` on a "done" verdict). `signals` are the app's own
  *   words (app_knowledge.js::signalsFor). `notebook` (evidence.js) widens what is read from the one page
  *   to every tab and visible frame the run owns; without it the wait reads `page` alone, as before.
@@ -98,6 +111,7 @@ async function waitForCompletion(page, o) {
   const startGraceMs = o.startGraceMs ?? DEFAULT_START_GRACE_MS;
   const deadlineMarginMs = o.deadlineMarginMs ?? DEADLINE_MARGIN_MS;
   const pendingBudgetMs = o.pendingBudgetMs ?? budgetMs;
+  const staticBarMs = o.staticBarMs ?? (full ? FULL_STATIC_BAR_MS : STATIC_BAR_MS);
   const start = Date.now();
   const out = (status, extra = {}) => ({ status, waitedMs: Date.now() - start, ...extra });
   const baseUrl = baseline && baseline.url;
@@ -128,7 +142,10 @@ async function waitForCompletion(page, o) {
     // visible forever; waiting for it to leave never ends. Work that is really in flight is held by its open request.
     const sig = `${sample.busyCount || 0}|${sample.bars || ""}|${(sample.regions || []).join("\n")}`;
     if (sig !== lastSig) { lastSig = sig; lastChangeAt = Date.now(); }
-    const stalled = !!(o.stallMs && c.busy && Date.now() - lastChangeAt >= o.stallMs);
+    // Bars that only show a number and never move are let go as well; a spinner or progress words still hold the
+    // wait, and a full wait is still held by any open request. `still` keeps it a cant_tell, never a yes.
+    const staticBar = staticBarMs > 0 && c.busy && !c.busyText && allDeterminate(sample) && Date.now() - lastChangeAt >= staticBarMs;
+    const stalled = !!(o.stallMs && c.busy && Date.now() - lastChangeAt >= o.stallMs) || staticBar;
     if (c.busy) sawBusy = true;
     const urlNow = baseUrl ? pageUrl(page) : null;
     // A first sign the app took the work. Silence before this proves nothing: a tray can open late.

@@ -215,8 +215,11 @@ class _FileKvStore:
     def set(self, namespace: str, key: str, data: Any) -> None:
         db_set(namespace, key, data)
 
-    def list(self, namespace: str) -> list[Any]:
-        return db_list(namespace)
+    def list(self, namespace: str, workspace_id: str | None = None) -> list[Any]:
+        rows = db_list(namespace)
+        if workspace_id is None:
+            return rows
+        return [row for row in rows if isinstance(row, dict) and row.get("workspace_id") == workspace_id]
 
 
 class _SqlKvStore:
@@ -243,12 +246,18 @@ class _SqlKvStore:
             {"ns": namespace, "key": key, "data": json.dumps(data)},
         )
 
-    def list(self, namespace: str) -> list[Any]:
-        rows = self.conn.execute(
-            text("SELECT data FROM kv_store WHERE namespace = :ns ORDER BY created_at"),
-            {"ns": namespace},
-        ).fetchall()
-        return [row[0] for row in rows]
+    def list(self, namespace: str, workspace_id: str | None = None) -> list[Any]:
+        # These namespaces hold every workspace's rows; filtering in SQL keeps a
+        # per-workspace read from scanning (and shipping) the whole platform.
+        if workspace_id is None:
+            sql, params = "SELECT data FROM kv_store WHERE namespace = :ns ORDER BY created_at", {"ns": namespace}
+        else:
+            sql = (
+                "SELECT data FROM kv_store WHERE namespace = :ns AND data->>'workspace_id' = :ws"
+                " ORDER BY created_at"
+            )
+            params = {"ns": namespace, "ws": workspace_id}
+        return [row[0] for row in self.conn.execute(text(sql), params).fetchall()]
 
 
 @contextmanager
@@ -531,7 +540,7 @@ def _reservation_matches(row: dict[str, Any], workspace_id: str, period: str) ->
 
 def _expire_reservations(store: _FileKvStore | _SqlKvStore, workspace_id: str, period: str) -> None:
     now_ts = time.time()
-    for row in store.list(RESERVATION_NS):
+    for row in store.list(RESERVATION_NS, workspace_id):
         if not isinstance(row, dict) or not _reservation_matches(row, workspace_id, period):
             continue
         if row.get("status") != "reserved":
@@ -548,7 +557,7 @@ def _expire_reservations(store: _FileKvStore | _SqlKvStore, workspace_id: str, p
 def _active_reserved_amount(store: _FileKvStore | _SqlKvStore, workspace_id: str, period: str) -> int:
     now_ts = time.time()
     total = 0
-    for row in store.list(RESERVATION_NS):
+    for row in store.list(RESERVATION_NS, workspace_id):
         if not isinstance(row, dict) or not _reservation_matches(row, workspace_id, period):
             continue
         if row.get("status") != "reserved":
@@ -570,7 +579,7 @@ def _workspace_devices(store: _FileKvStore | _SqlKvStore, workspace_id: str) -> 
     """Active (non-revoked) devices — a revoked machine frees its slot
     immediately rather than counting against the limit forever."""
     rows: list[dict[str, Any]] = []
-    for row in store.list(DEVICE_NS):
+    for row in store.list(DEVICE_NS, workspace_id):
         if isinstance(row, dict) and row.get("workspace_id") == workspace_id and not row.get("revoked"):
             rows.append(row)
     return rows
@@ -582,7 +591,7 @@ def list_machines(workspace_id: str) -> list[dict[str, Any]]:
     filter revoked rows out, so the UI can show revocation history."""
     with _locked_store(f"machines:{workspace_id}") as store:
         rows = [
-            row for row in store.list(DEVICE_NS)
+            row for row in store.list(DEVICE_NS, workspace_id)
             if isinstance(row, dict) and row.get("workspace_id") == workspace_id
         ]
     rows.sort(key=lambda row: str(row.get("last_seen") or ""), reverse=True)
@@ -650,7 +659,7 @@ def _workspace_execute_grants(store: _FileKvStore | _SqlKvStore, workspace_id: s
     """Active (pending or claimed) grants — a revoked grant frees its slot
     immediately, same shape as _workspace_devices."""
     rows: list[dict[str, Any]] = []
-    for row in store.list(EXECUTE_GRANT_NS):
+    for row in store.list(EXECUTE_GRANT_NS, workspace_id):
         if (
             isinstance(row, dict)
             and row.get("workspace_id") == workspace_id
@@ -670,7 +679,7 @@ def list_execute_grants(workspace_id: str) -> list[dict[str, Any]]:
     the admin UI — unlike _workspace_execute_grants, doesn't filter them out."""
     with _locked_store(f"execute-grants:{workspace_id}") as store:
         rows = [
-            row for row in store.list(EXECUTE_GRANT_NS)
+            row for row in store.list(EXECUTE_GRANT_NS, workspace_id)
             if isinstance(row, dict) and row.get("workspace_id") == workspace_id
         ]
     rows.sort(key=lambda row: str(row.get("granted_at") or ""), reverse=True)
@@ -690,7 +699,7 @@ def create_execute_grant(principal: Principal, email: str) -> dict[str, Any]:
     limit = limits["execute_seats"]
     workspace_id = principal.workspace_id
     with _locked_store(f"execute-grants:{workspace_id}") as store:
-        for row in store.list(EXECUTE_GRANT_NS):
+        for row in store.list(EXECUTE_GRANT_NS, workspace_id):
             if not isinstance(row, dict) or row.get("workspace_id") != workspace_id or row.get("email") != email:
                 continue
             if row.get("status") == "pending":
@@ -1232,7 +1241,7 @@ def _reconcile_workflow_locks(
     docs/PRD.md §11)."""
     rows = [
         row
-        for row in store.list(WORKFLOW_NS)
+        for row in store.list(WORKFLOW_NS, workspace_id)
         if isinstance(row, dict) and row.get("workspace_id") == workspace_id
     ]
     # created_at is second-resolution (_iso truncates microseconds for display),

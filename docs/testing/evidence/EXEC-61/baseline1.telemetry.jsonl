@@ -1,0 +1,12 @@
+{"e":"wf_start","ts":1795241285818}
+{"e":"drift_detected","ts":1795241292050,"total":2,"missing":2,"drift_ratio":1,"missing_intents":["interact_issues_1_1k__1_1k","interact_pull_requests_58__58"],"url":"about:blank"}
+{"e":"proof","ts":1795241296587,"si":0,"rung":"performed","v":"proven","w":["target"]}
+{"e":"tier_ok","ts":1795241296588,"si":0,"tier":"tier1_compiled","virtualScroll":false}
+{"e":"step_ms","ts":1795241296590,"si":0,"ms":4500}
+{"e":"completion","ts":1795241300580,"si":1,"mode":"short","st":"done","waited":902}
+{"e":"proof","ts":1795241300580,"si":1,"rung":"completed","v":"proven","w":["target","renderer"]}
+{"e":"tier_ok","ts":1795241300582,"si":1,"tier":"tier1_compiled","virtualScroll":false}
+{"e":"step_ms","ts":1795241300584,"si":1,"ms":3994}
+{"e":"step_fail","ts":1795241316117,"si":2,"fc":"entity_not_found"}
+{"e":"step_ms","ts":1795241316119,"si":2,"ms":15534}
+{"e":"wf_fail","ts":1795241316129,"dur":30311,"fsi":2,"fc":"unknown"}

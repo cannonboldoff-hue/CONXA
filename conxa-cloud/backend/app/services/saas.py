@@ -369,32 +369,42 @@ def principal_from_request(request: Request) -> Principal:
     )
 
 
+def _same_fields(old: Any, new: dict[str, Any]) -> bool:
+    return isinstance(old, dict) and all(old.get(key) == value for key, value in new.items())
+
+
 def ensure_principal(principal: Principal) -> None:
     with _lock:
         state = _read_state()
         now = time.time()
-        state.setdefault("users", {})[principal.user_id] = {
+        users = state.setdefault("users", {})
+        workspaces = state.setdefault("workspaces", {})
+        user = {
             "id": principal.user_id,
             "email": principal.email,
             "name": principal.name,
             "auth_provider": principal.auth_provider,
-            "updated_at": now,
         }
-        state.setdefault("workspaces", {})[principal.workspace_id] = {
+        workspace = {
             "id": principal.workspace_id,
             "slug": principal.workspace_slug,
             "name": principal.workspace_name,
-            "updated_at": now,
-            "legacy_imported_at": state.get("workspaces", {})
-            .get(principal.workspace_id, {})
-            .get("legacy_imported_at", now),
+            "legacy_imported_at": (workspaces.get(principal.workspace_id) or {}).get("legacy_imported_at", now),
         }
+        # This runs several times on every request and the document holds every workspace, so rewrite it only
+        # when something real changed (CLOUD-26). updated_at therefore means "last changed", not "last seen".
+        changed = not _same_fields(users.get(principal.user_id), user) or not _same_fields(
+            workspaces.get(principal.workspace_id), workspace
+        )
+        users[principal.user_id] = {**user, "updated_at": now}
+        workspaces[principal.workspace_id] = {**workspace, "updated_at": now}
         memberships = state.setdefault("memberships", [])
         if not any(
             row.get("user_id") == principal.user_id and row.get("workspace_id") == principal.workspace_id
             for row in memberships
             if isinstance(row, dict)
         ):
+            changed = True
             memberships.append(
                 {
                     "user_id": principal.user_id,
@@ -403,7 +413,9 @@ def ensure_principal(principal: Principal) -> None:
                     "created_at": now,
                 }
             )
-        state.setdefault("billing", {}).setdefault(
+        billing = state.setdefault("billing", {})
+        changed = changed or principal.workspace_id not in billing
+        billing.setdefault(
             principal.workspace_id,
             {
                 "plan": "development" if principal.auth_provider == "local" else "free",
@@ -418,7 +430,8 @@ def ensure_principal(principal: Principal) -> None:
                 "updated_at": now,
             },
         )
-        _write_state(state)
+        if changed:
+            _write_state(state)
 
 
 def add_audit_event(

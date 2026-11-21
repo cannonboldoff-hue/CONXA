@@ -804,8 +804,14 @@
       if (txt) return txt;
     }
     // 4. <label> sibling in parent
+    // A button or link is named by its own text: the nearest <label> is a field's ("Username" for the Search button
+    // under the OrangeHRM user filter, whose grandparent is the whole form).
     const parent = el.parentElement;
-    if (parent) {
+    const tag = el.tagName.toLowerCase();
+    const namesItself = tag === "button" || tag === "a"
+      || /^(button|link)$/.test((el.getAttribute("role") || "").toLowerCase())
+      || (tag === "input" && /^(submit|reset|button|image)$/.test((el.getAttribute("type") || "").toLowerCase()));
+    if (parent && !namesItself) {
       const lab = Array.from(parent.querySelectorAll("label")).find(l => l !== el && !l.contains(el));
       if (lab) return safeText(lab, 80);
       // 5. <label> sibling in grandparent

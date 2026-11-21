@@ -63,6 +63,23 @@ test("a non-group (standalone) skill contributes its own target_url host", () =>
   assert.deepStrictEqual(hosts, ["example.com"]);
 });
 
+test("RT-15: a group with no sign-in apps still locks the skill's starting-page host", () => {
+  // WF-16 16.3 attempt 1: a public-site skill in a group with apps: [] resolved to no host, so two
+  // calls of the same skill ran side by side. The target_url host must count.
+  const resolved = [{
+    entry: { workspace_id: "acme", slug: "wiki_search", manifest: { group_id: "g1", target_url: "https://en.wikipedia.org/wiki/Main_Page" } },
+  }];
+  assert.deepStrictEqual(resolveTargetHosts(resolved, deps({ id: "g1", apps: [] })), ["en.wikipedia.org"]);
+});
+
+test("RT-15: a group skill's starting-page host counts even when no group app names it", () => {
+  const resolved = [{
+    entry: { workspace_id: "acme", slug: "billing_report", manifest: { group_id: "g1", target_url: "https://reports.example.org/x" } },
+  }];
+  const hosts = resolveTargetHosts(resolved, deps({ id: "g1", apps: [RENDER] }));
+  assert.deepStrictEqual(hosts.sort(), ["dashboard.render.com", "reports.example.org"]);
+});
+
 test("an unresolvable group contributes no host (fail open — nothing to lock)", () => {
   const resolved = [{
     entry: {

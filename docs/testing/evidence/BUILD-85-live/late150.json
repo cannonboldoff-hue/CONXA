@@ -1,0 +1,54 @@
+{
+  "mode": "late",
+  "binding_errors": [],
+  "arrivals": [
+    {
+      "uid": "afqrzu1q-1",
+      "action": "click",
+      "label_on_arrival": null
+    },
+    {
+      "amend": "afqrzu1q-1",
+      "late_label": "Username"
+    },
+    {
+      "uid": "afqrzu1q-2",
+      "action": "type",
+      "label_on_arrival": "Username"
+    },
+    {
+      "uid": "afqrzu1q-3",
+      "action": "click",
+      "label_on_arrival": null
+    }
+  ],
+  "steps": [
+    {
+      "action": "click",
+      "value": null,
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": "Username",
+      "target_name": null,
+      "tag": "input",
+      "uid": "afqrzu1q-1"
+    },
+    {
+      "action": "type",
+      "value": "Admin",
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": "Username",
+      "target_name": null,
+      "tag": "input",
+      "uid": "afqrzu1q-2"
+    },
+    {
+      "action": "click",
+      "value": null,
+      "url": "https://opensource-demo.orangehrmlive.com/web/index.php/admin/viewSystemUsers",
+      "label_text": null,
+      "target_name": null,
+      "tag": "button",
+      "uid": "afqrzu1q-3"
+    }
+  ]
+}

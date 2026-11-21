@@ -25,7 +25,7 @@ from conxa_compile.compiler.upload_binding import (
 from conxa_compile.confidence.uncertainty import audit_reference
 from conxa_compile.editor.action_registry import action_spec, default_action_value, is_supported_action
 from conxa_compile.editor.dto import SkillInputVariable
-from conxa_compile.editor.placeholder_grammar import PLACEHOLDER_RE
+from conxa_compile.editor.placeholder_grammar import FULL_PLACEHOLDER_RE, PLACEHOLDER_RE
 from conxa_compile.editor.step_path import walk_steps
 from conxa_compile.editor.workflow_dto import _build_reference_for_audit, collect_suggestions
 from conxa_compile.policy.bundle import get_policy_bundle
@@ -1747,7 +1747,8 @@ def wrap_repeated_entries(document: dict[str, Any], suggestion: dict[str, Any], 
     block_len, count = int(suggestion.get("block_len") or 0), int(suggestion.get("count") or 0)
     columns = [c for c in suggestion.get("columns") or [] if isinstance(c, dict)]
     rows = [r for r in suggestion.get("rows") or [] if isinstance(r, dict)]
-    if start is None or block_len < 1 or count < 2 or not columns or len(rows) != count:
+    # count 1 is chat's "repeat these steps for each row of a list" (make_table_loop): one recorded copy, no re-check.
+    if start is None or block_len < 1 or count < 1 or not columns or len(rows) != count:
         raise ValueError("suggestion_stale")
     end = start + block_len * count
     sig = repeat_signature(steps)
@@ -1815,4 +1816,110 @@ def wrap_repeated_entries(document: dict[str, Any], suggestion: dict[str, Any], 
     meta = dict(doc.get("meta") or {})
     meta["version"] = int(meta.get("version", 1)) + 1
     doc["meta"] = meta
+    return doc
+
+
+def _table_columns(columns: Any) -> list[str]:
+    """1-12 unique column names: the same rule the loop's own patch gate holds."""
+    from conxa_compile.editor.patch_gate import _validate_for_each_patch
+
+    cols = [str(c).strip() for c in columns] if isinstance(columns, list) else columns
+    _validate_for_each_patch({"columns": cols})
+    return cols
+
+
+def set_loop_table(document: dict[str, Any], step_index: int, columns: Any) -> dict[str, Any]:
+    """Chat's "make this loop go through a list with these columns" (EXEC-63): in one write, the loop's input becomes
+    (or stays) a table with ``columns`` and the loop reads it (``items_rows``), so the one-row-source rule never sees a
+    half state. The loop body is not touched: ``{{row_id}}`` is the first column's value. A loop that reads rows off
+    the page is refused (where it reads them is a person's change in Human Edit), and so is dropping a column a body
+    step still uses. Recorded rows carry over when every row still has a value in every column."""
+    import json
+
+    cols = _table_columns(columns)
+    doc = copy.deepcopy(document)
+    steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+    if not (0 <= step_index < len(steps)) or action_name(steps[step_index]).lower() != "for_each":
+        raise ValueError("not_a_loop")
+    fe = steps[step_index].get("for_each") if isinstance(steps[step_index].get("for_each"), dict) else {}
+    if str((fe.get("rows") or {}).get("container_selector") or "").strip():
+        raise ValueError("loop_reads_the_page")
+    input_id = str(fe.get("items_rows") or fe.get("items") or "").strip()
+    if not input_id:
+        raise ValueError("loop_has_no_input")
+    used: set[str] = set()
+    _scan_placeholder_ids(fe.get("steps"), used)
+    prefix = f"{fe.get('as') or 'row'}."
+    gone = sorted(u[len(prefix):] for u in used if u.startswith(prefix) and u[len(prefix):] not in cols)
+    if gone:
+        raise ValueError(f"column_in_use:{gone[0]}")
+    elsewhere: set[str] = set()
+    _scan_placeholder_ids([s for i, s in enumerate(steps) if i != step_index], elsewhere)
+    if input_id.lower() in {u.lower() for u in elsewhere}:
+        raise ValueError(f"input_used_elsewhere:{input_id}")
+
+    inputs = [dict(i) for i in doc.get("inputs") or [] if isinstance(i, dict)]
+    old = next((i for i in inputs if str(i.get("id") or "").lower() == input_id.lower()), {})
+    raw = str(old.get("default") or "").strip()
+    if old.get("type") == "rows":
+        try:
+            parsed = json.loads(raw) if raw else []
+        except ValueError:
+            parsed = []
+        rows = [r for r in parsed if isinstance(r, dict)] if isinstance(parsed, list) else []
+    else:  # a comma list fills a one-column table only
+        rows = [{cols[0]: v.strip()} for v in raw.split(",") if v.strip()] if len(cols) == 1 else []
+    rows = [{c: str(r.get(c) or "").strip() for c in cols} for r in rows]
+    row = {"id": input_id, "type": "rows", "columns": cols, "label": old.get("label") or "Entries",
+           "description": old.get("description") or "One row per entry."}
+    if rows and all(all(r.values()) for r in rows):
+        row["default"] = json.dumps(rows)
+    inputs = [row if i is old else i for i in inputs] if old else inputs + [row]
+    _validate_skill_inputs(inputs)
+    doc["inputs"] = inputs
+
+    new_fe = {k: v for k, v in fe.items() if k not in ("items", "rows")}
+    new_fe.update(items_rows=input_id, columns=cols)
+    steps[step_index]["for_each"] = new_fe
+    _invalidate_compile_report(doc)
+    meta = dict(doc.get("meta") or {})
+    meta["version"] = int(meta.get("version", 1)) + 1
+    doc["meta"] = meta
+    return doc
+
+
+def make_table_loop(document: dict[str, Any], from_key: str, to_key: str, columns: Any, *, input_name: str = "entries") -> dict[str, Any]:
+    """Chat's "repeat these steps for every row of a list" (EXEC-63): the recorded steps ``from_key``..``to_key`` become
+    one table loop, each named typing step's value becomes ``{{row.<name>}}``. The same rewrite as a recording that made
+    the entry several times (``wrap_repeated_entries`` with one copy); the list starts with the one recorded row.
+    ``columns`` is ``[{name, step_key}]``; the model names them, code does every rewrite."""
+    from conxa_compile.compiler.loop_suggestion import _REPEAT_EXCLUDED
+
+    steps = ((document.get("skills") or [{}])[0] or {}).get("steps") or []
+    keys = step_keys(steps)
+    if from_key not in keys or to_key not in keys or keys.index(from_key) > keys.index(to_key):
+        raise ValueError("steps_not_found")
+    start, end = keys.index(from_key), keys.index(to_key) + 1
+    if any(action_name(s).lower() in _REPEAT_EXCLUDED for s in steps[start:end]):
+        raise ValueError("cannot_repeat_these_steps")
+    cols = [c for c in columns if isinstance(c, dict)] if isinstance(columns, list) else []
+    names = _table_columns([c.get("name") for c in cols])
+    defaults = {str(i.get("id") or ""): str(i.get("default") or "") for i in document.get("inputs") or [] if isinstance(i, dict)}
+    out, row = [], {}
+    for name, c in zip(names, cols):
+        key = str(c.get("step_key") or "")
+        if key not in keys[start:end] or action_name(steps[keys.index(key)]).lower() not in ("type", "fill"):
+            raise ValueError(f"column_not_a_typed_step:{name}")
+        value = str(steps[keys.index(key)].get("value") or "")
+        whole = FULL_PLACEHOLDER_RE.match(value)
+        row[name] = (defaults.get(whole.group(1), "") if whole else value).strip()
+        out.append({"name": name, "offset": keys.index(key) - start})
+    if len({c["offset"] for c in out}) != len(out):
+        raise ValueError("two_columns_one_step")
+    doc = wrap_repeated_entries(document, {"start_key": from_key, "block_len": end - start, "count": 1,
+                                           "columns": out, "rows": [row], "fixed": []}, input_name=input_name)
+    if not all(row.values()):  # a blank column ends the run: no default beats a broken one
+        for i in doc.get("inputs") or []:
+            if isinstance(i, dict) and i.get("id") == input_name:
+                i.pop("default", None)
     return doc

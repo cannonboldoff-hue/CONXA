@@ -468,6 +468,24 @@ class CopilotMixin:
         if kind == "rename_workflow":
             return self.cmd_rename_skill({"skill_id": skill_id, "title": op.get("name")}, rid)
 
+        if kind in ("set_loop_table", "make_table_loop"):
+            # One code-owned write: the table input and the loop's source change together (EXEC-63).
+            import copy
+
+            from conxa_compile.editor.copilot_proposals import apply_table_loop_op
+            from conxa_core.storage.json_store import write_skill
+
+            snapshot = copy.deepcopy(doc)
+            try:
+                doc = apply_table_loop_op(doc, op)
+            except ValueError as exc:
+                raise _CommandError("proposal_stale", "The steps changed since this was offered, so the list could not be set up.") from exc
+            self._push_undo(skill_id, snapshot)
+            write_skill(skill_id, doc)
+            result = _skill_response(skill_id, doc)
+            result.update(self._history_flags(skill_id))
+            return result
+
         # Every op below acts on one existing step; step_key is re-resolved against the CURRENT document.
         if kind in _STEP_SCOPED_OPS:
             return self._apply_step_scoped_op(skill_id, doc, op, kind, resolve_step_index(doc, str(op.get("step_key") or "").strip()), rid)

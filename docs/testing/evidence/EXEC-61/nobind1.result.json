@@ -1,0 +1,8 @@
+{
+ "wall_ms": 645940,
+ "text": [
+  "Execution failed at step 41: Step 41 (click) failed: This step was still in progress after 5 minutes, so the run stopped instead of reporting success.\nPage URL: https://github.com/cli/cli\nRecovery ceiling Tier 2 (deterministic cascade only — no agent recovery).\nStep intent: {\"action\":\"click\",\"intent\":\"interact_cli\",\"target\":{\"role\":\"link\",\"text\":\"cli\"},\"anchors\":[\"cli\",\"button#_r_1r6d9_:\",\"div:\"]}",
+  "Warning:\n  This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.",
+  "(run_id: r_mwq0cwpv_kv6jv)"
+ ]
+}

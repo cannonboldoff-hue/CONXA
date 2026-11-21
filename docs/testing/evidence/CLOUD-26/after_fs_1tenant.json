@@ -1,0 +1,21 @@
+﻿{
+  "store": "fs",
+  "tenants": 1,
+  "kv_rows_seeded": 55,
+  "saas_metadata_bytes": 1117,
+  "seed_s": 0.0,
+  "calls": 200,
+  "p50_ms": 18.8,
+  "p95_ms": 29.9,
+  "mean_ms": 20.3,
+  "queries_per_call": null,
+  "rows_read_per_call": null,
+  "query_kinds_per_call": null,
+  "sanity": {
+    "machines": 3,
+    "execute_seats": 2,
+    "compile_reserved_remaining": null,
+    "workflows_active": 10,
+    "seats": 3
+  }
+}

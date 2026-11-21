@@ -149,7 +149,7 @@ _CHANGE_WORDS = re.compile(
     r"\b(fix|change|edit|make|set|add|remove|delete|rename|wait|retry|update|replace|instead|"
     r"wrong|doesn'?t|isn'?t|fails?|failed|should|shouldn'?t|skip|insert|move|reorder|input|"
     r"click|press|tap|type|fill|enter|select|choose|pick|scroll|navigate|go to|open|download|upload|"
-    r"then|after|before|only|unless|when|if|condition|agent|span|prompt|popup|dialog|branch|loop|"
+    r"then|after|before|only|unless|when|if|condition|agent|span|prompt|popup|dialog|branch|loop|repeat|list|table|"
     r"retarget|re-target|date|always|never|every)\b", re.I,
 )
 
@@ -174,7 +174,9 @@ def thread_turns(items: list[dict[str, Any]], *, after_id: str | None = None) ->
             continue
         kind = it.get("kind")
         if kind in ("user_message", "assistant_message") and str(it.get("text") or "").strip():
-            out.append({"id": it.get("id"), "role": "user" if kind == "user_message" else "assistant", "text": it["text"]})
+            # A hidden message is Studio's own follow-up in the thread, never something the person said (BUILD-98 (3)).
+            role = "assistant" if kind == "assistant_message" else "studio" if it.get("hidden") else "user"
+            out.append({"id": it.get("id"), "role": role, "text": it["text"]})
     return out
 
 
@@ -317,15 +319,17 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
         thread_id, "user_message", text=message, anchor=anchor, **({"hidden": True} if hidden else {}))))
     items = items + [user_item]
 
+    # Only the person's own words answer a card or start an action; Studio's hidden follow-up never does (BUILD-98 (3)).
+    routable = not anchor and not hidden
     open_question = next((c for c in reversed(items) if c.get("kind") == "card" and c.get("state") == "open" and c.get("choices")), None)
-    if open_question is not None and card_executor is not None and not anchor and open_question.get("multi"):
+    if open_question is not None and card_executor is not None and routable and open_question.get("multi"):
         # A tick-list can't be answered by one mapped choice (reading "yes" as "tick nothing" would
         # silently change the workflow), so a typed reply only points back at the card.
         item = push(emit_item(sink, thread_id, ts.append(
             thread_id, "assistant_message",
             text="That question has several options — tick the ones you want on the card above, then press its button.")))
         return {"turn_id": turn_id, "status": "done", "reply": item["text"], "items": new_items}
-    if open_question is not None and card_executor is not None and not anchor:
+    if open_question is not None and card_executor is not None and routable:
         mapped = map_free_text_to_choice(open_question, message)
         if mapped is not None:
             result = card_executor(open_question, "choose", {"choice": mapped, "message": message})
@@ -346,7 +350,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
 
     # 1.5 ─ a command in free text ("test it", "approve", "record that again"): one of the actions the
     # lifecycle allows right now, never anything else. Side effects wait for a confirm card.
-    if flow_executor is not None and not anchor:
+    if flow_executor is not None and routable:
         routed = _route_command(kind, message, lifecycle, load_digest, workflows, thread_id)
         if routed is not None:
             return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
@@ -662,3 +666,4 @@ def _summarize(thread_id: str, dropped: list[dict[str, Any]], previous: str | No
     summary = str((data or {}).get("summary") or "").strip() if isinstance(data, dict) else ""
     if summary:
         emit_item(sink, thread_id, ts.append(thread_id, "summary", text=summary, covers_through=dropped[-1].get("id")))
+  

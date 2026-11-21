@@ -106,6 +106,21 @@ test("a run with no resolvable target host acquires immediately (fail open, not 
   r.release();
 });
 
+test("RT-15: two calls of one public-site skill (group with no sign-in apps) run one after the other", async () => {
+  const { resolveTargetHosts } = require("../../app/target_hosts");
+  const entry = { workspace_id: "acme", slug: "wiki_search", manifest: { group_id: "g1", target_url: "https://en.wikipedia.org/" } };
+  const hosts = () => resolveTargetHosts([{ entry }], { resolveGroup: () => ({ id: "g1", apps: [] }) });
+  const a = await hostLock.acquireHosts(hosts(), holder("r1", "wiki_search"), {});
+  let calls = 0;
+  const b = await hostLock.acquireHosts(hosts(), holder("r2", "wiki_search"), { isDone: () => (++calls >= 2), pollMs: 5 });
+  assert.strictEqual(b.release, undefined, "the second call must wait while the first holds the host");
+  assert.strictEqual(b.host, "en.wikipedia.org");
+  a.release();
+  const c = await hostLock.acquireHosts(hosts(), holder("r3", "wiki_search"), {});
+  assert.ok(typeof c.release === "function");
+  c.release();
+});
+
 test("activeHosts() reports who holds what", async () => {
   const a = await hostLock.acquireHosts(["render.com"], holder("r1", "deploy-service"), {});
   const active = hostLock.activeHosts();

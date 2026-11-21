@@ -861,3 +861,66 @@ def test_ai_credits_pool_exhaustion_uses_the_new_error_code_only_for_the_new_cla
     )
     assert (new.status_code, new.json()["detail"]) == (402, "ai_credits_exceeded")
     assert (old.status_code, old.json()["detail"]) == (402, "human_edit_pool_exceeded")
+
+
+def test_workspace_scoped_list_reads_only_that_workspace_on_both_stores(monkeypatch, tmp_path):
+    """CLOUD-26: reservation/device/grant/workflow namespaces hold every workspace's rows. A per-workspace read
+    used to fetch them all and filter in Python (~47k rows per entitlements call at 500 workspaces on Postgres);
+    the SQL store now filters in the query. Same rows, same order, on both stores."""
+    import json
+
+    from sqlalchemy import create_engine, text
+
+    from app.services.entitlements import RESERVATION_NS, _FileKvStore, _SqlKvStore
+
+    rows = [("r1", {"workspace_id": "ws_a", "n": 1}), ("r2", {"workspace_id": "ws_b", "n": 2}),
+            ("r3", {"workspace_id": "ws_a", "n": 3}), ("r4", ["not", "a", "dict"])]
+
+    # SQLite understands ->> on JSON text, so it can check the query's shape without a Postgres.
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE kv_store (namespace TEXT, key TEXT, data TEXT, created_at INTEGER)"))
+        for i, (key, data) in enumerate(rows):
+            conn.execute(text("INSERT INTO kv_store VALUES (:ns, :k, :d, :t)"),
+                         {"ns": RESERVATION_NS, "k": key, "d": json.dumps(data), "t": i})
+        sql_store = _SqlKvStore(conn)
+        assert [json.loads(r)["n"] for r in sql_store.list(RESERVATION_NS, "ws_a")] == [1, 3]
+        assert len(sql_store.list(RESERVATION_NS)) == 4
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    for key, data in rows:
+        db_set(RESERVATION_NS, key, data)
+    assert sorted(r["n"] for r in _FileKvStore().list(RESERVATION_NS, "ws_a")) == [1, 3]
+    assert len(_FileKvStore().list(RESERVATION_NS)) == 4
+
+
+def test_ensure_principal_rewrites_shared_metadata_only_when_something_changed(monkeypatch, tmp_path):
+    """CLOUD-26: the metadata document holds every workspace and ensure_principal runs ~3 times per request; an
+    unconditional rewrite was ~80% of /entitlements/current at 500 workspaces on Postgres."""
+    from dataclasses import replace
+
+    from app.services import saas
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    writes: list[int] = []
+    real_write = saas._write_state
+    monkeypatch.setattr(saas, "_write_state", lambda state: (writes.append(1), real_write(state)))
+    principal = Principal(
+        user_id="u_new", workspace_id="ws_new", workspace_slug="ws-new", workspace_name="New",
+        role="owner", email="a@example.test", name="A", auth_provider="clerk",
+    )
+
+    saas.ensure_principal(principal)
+    assert len(writes) == 1  # first sight: user, workspace, membership and billing are created
+    saas.ensure_principal(principal)
+    assert len(writes) == 1
+    client.get("/api/v1/entitlements/current")  # local principal, already seen by the previous call's state
+    before = len(writes)
+    client.get("/api/v1/entitlements/current")
+    assert len(writes) == before  # a plain read writes nothing
+    saas.ensure_principal(replace(principal, name="A renamed"))
+    assert len(writes) == before + 1
+    assert saas._read_state()["users"]["u_new"]["name"] == "A renamed"
+    assert saas._read_state()["billing"]["ws_new"]["trial_started_at"]  # trial clock stamped once, kept

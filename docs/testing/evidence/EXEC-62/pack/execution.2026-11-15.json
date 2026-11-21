@@ -1,0 +1,155 @@
+[
+  {
+    "type": "navigate",
+    "url": "http://127.0.0.1:8099/recovery-fixture.html",
+    "tab": {
+      "id": "tab_0",
+      "index": 0,
+      "opened_by": "initial",
+      "opener_tab": null
+    },
+    "identity_bundle": {
+      "signals": [],
+      "fingerprint": {
+        "role": "",
+        "tag": "",
+        "inner_text": "",
+        "aria_label": "",
+        "name": "",
+        "placeholder": "",
+        "label_text": "",
+        "alt": "",
+        "title": "",
+        "data_testid": "",
+        "input_type": "",
+        "css_class_tokens": [],
+        "anchor_phrases": [],
+        "position_hint": {}
+      },
+      "stable_hash": "",
+      "frame_chain": [],
+      "shadow_path": [],
+      "compat_fingerprint": "",
+      "guid_like_attrs": [],
+      "destructive": false
+    },
+    "handler_hints": {
+      "hover_chain": [],
+      "virtualized_container": "",
+      "allow_forced_action": false,
+      "control_kind": "",
+      "date_picker": {},
+      "choice": {}
+    },
+    "source_step_key": "b961701bb2b2e93e#1"
+  },
+  {
+    "type": "click",
+    "selector": "[data-testid=\"buy-btn\"]",
+    "tab": {
+      "id": "tab_0",
+      "index": 0,
+      "opened_by": "initial",
+      "opener_tab": null
+    },
+    "identity_bundle": {
+      "signals": [
+        {
+          "engine": "testid",
+          "selector": "internal:testid=[data-testid=\"buy-btn\"]",
+          "durability": 0.99,
+          "orthogonality_class": "test-contract",
+          "unique_at_compile": true,
+          "source": "compiler"
+        },
+        {
+          "engine": "role",
+          "selector": "internal:role=button[name=\"Buy Now\"]",
+          "durability": 0.9025,
+          "orthogonality_class": "semantic-aria",
+          "unique_at_compile": true,
+          "source": "compiler"
+        },
+        {
+          "engine": "text_based",
+          "selector": "internal:text=\"Buy Now\"",
+          "durability": 0.8075,
+          "orthogonality_class": "visible-text",
+          "unique_at_compile": true,
+          "source": "compiler"
+        },
+        {
+          "engine": "relational",
+          "selector": "internal:role=button[name=\"Buy Now\"] >> right-of=internal:text=\"Recovery fixture\"",
+          "durability": 0.7125,
+          "orthogonality_class": "spatial-anchor",
+          "unique_at_compile": true,
+          "source": "compiler"
+        },
+        {
+          "engine": "css-id",
+          "selector": "#checkout-btn",
+          "durability": 0.4275,
+          "orthogonality_class": "structural",
+          "unique_at_compile": true,
+          "source": "compiler"
+        }
+      ],
+      "fingerprint": {
+        "role": "button",
+        "tag": "button",
+        "inner_text": "Buy Now",
+        "aria_label": "Buy Now",
+        "name": "",
+        "placeholder": "",
+        "label_text": "Recovery fixture",
+        "alt": "",
+        "title": "",
+        "data_testid": "buy-btn",
+        "input_type": "",
+        "css_class_tokens": [
+          "btn-primary"
+        ],
+        "anchor_phrases": [
+          "Recovery fixture"
+        ],
+        "position_hint": {
+          "x_pct": 0.037,
+          "y_pct": 0.175
+        }
+      },
+      "stable_hash": "8d4cc4a8ed37c7be70a676f45ab8a3a7c5a2c9c9ea35e9f583776bd09d5f9800",
+      "frame_chain": [],
+      "shadow_path": [],
+      "compat_fingerprint": "",
+      "guid_like_attrs": [],
+      "destructive": false
+    },
+    "handler_hints": {
+      "hover_chain": [],
+      "virtualized_container": "",
+      "allow_forced_action": false,
+      "control_kind": "",
+      "date_picker": {},
+      "choice": {}
+    },
+    "validation": {
+      "assertions": [
+        {
+          "type": "state_changed",
+          "target": "",
+          "expected": "",
+          "timeout_ms": 5000,
+          "required": false
+        }
+      ]
+    },
+    "entity_binding": {
+      "container_selector": "body > div",
+      "identifier": "Buy Now",
+      "source": "literal",
+      "confirmed": false
+    },
+    "source_step_key": "8d4cc4a8ed37c7be70a676f45ab8a3a7c5a2c9c9ea35e9f583776bd09d5f9800#1"
+  }
+]

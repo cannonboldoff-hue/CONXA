@@ -801,7 +801,9 @@ function completionProbe() {
     busyCount++;
     var b = busy[i];
     // What each indicator reads right now, so the gate can tell a bar that moves from one that only stays on screen.
-    bars.push(String(b.getAttribute("aria-valuenow") || b.getAttribute("data-progress") || b.value || ""));
+    // An indeterminate <progress> (no value attribute) reads 0 through .value: it shows no number, so it records none.
+    var own = b.tagName === "PROGRESS" && !b.hasAttribute("value") ? "" : b.value;
+    bars.push(String(b.getAttribute("aria-valuenow") || b.getAttribute("data-progress") || own || ""));
     if (!busyWhat) {
       var host = b.closest('[role="dialog"],[role="alertdialog"],[role="status"],[aria-live]');
       busyWhat = (b.tagName.toLowerCase() + (b.getAttribute("role") ? "[" + b.getAttribute("role") + "]" : "") +

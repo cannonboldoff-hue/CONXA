@@ -1,0 +1,7 @@
+Execution failed at step 2: Step 2 (click) failed: Something unexpected went wrong. (Element not found (resolve miss))
+Page URL: http://127.0.0.1:8099/recovery-fixture.html?v=d3
+Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery).
+Step intent: {"action":"click","intent":"activate_control_buy_now","target":{"role":"button","name":"Buy Now","text":"buy now","data_testid":"buy-btn"},"anchors":["buy now","div#controls"]}
+(run_id: r_mwq0o5cy_2kb6i)
+
+[images: 0] [error: ] [ms: 18618]
