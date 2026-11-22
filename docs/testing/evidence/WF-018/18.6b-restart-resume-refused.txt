@@ -1,0 +1,1 @@
+The hand-over window for step 2 has expired or was never opened. Call execute_skill again for "wf18-handover-rw" without resume_from to restart the skill from the beginning.

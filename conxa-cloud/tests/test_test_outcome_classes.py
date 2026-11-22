@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "conxa-builder" / "
 
 from conxa_compile.conversation import failure_summary as fs  # noqa: E402
 from conxa_compile.conversation.lifecycle import derive_lifecycle  # noqa: E402
-from handlers.workflows import _COULDNT_RUN_META_KEY, _extract_couldnt_run, unproven_steps  # noqa: E402
+from handlers.workflows import _COULDNT_RUN_META_KEY, _TEST_RUN_ENV, _extract_couldnt_run, unproven_steps  # noqa: E402
 
 
 def _wf(**kw):
@@ -34,6 +34,13 @@ def test_couldnt_run_is_read_from_meta_only():
     assert _extract_couldnt_run({"_meta": {_COULDNT_RUN_META_KEY: {"kind": "page_size", "step_index": 3}}}) == {
         "kind": "page_size", "step_index": 3}
     assert _extract_couldnt_run({"content": [{"type": "text", "text": "not showing the page at its normal size"}]}) is None
+
+
+def test_handover_timeout_is_a_couldnt_run_and_a_test_never_parks_a_handover():
+    got = _extract_couldnt_run({"_meta": {_COULDNT_RUN_META_KEY: {"kind": "handover_timeout", "step_index": 2}}})
+    assert got == {"kind": "handover_timeout", "step_index": 2}
+    assert _TEST_RUN_ENV["CONXA_HANDOVER_INCALL_MS"] == "600000"
+    assert _TEST_RUN_ENV["CONXA_HANDOVER_NO_PARK"] == "1"
 
 
 def test_unconfirmed_pass_is_not_a_pass_and_offers_no_approve():

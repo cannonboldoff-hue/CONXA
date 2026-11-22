@@ -35,13 +35,16 @@ test.after?.(() => {
 function mockContext() {
   const pageListeners = [];
   const bindings = {};
+  const initScripts = [];
   return {
-    exposeBinding: async (name, fn) => { bindings[name] = fn; },
-    addInitScript: async () => {},
+    // Like Playwright: a name already exposed on the context is refused.
+    exposeBinding: async (name, fn) => { if (bindings[name]) throw new Error(`Function "${name}" has been already registered`); bindings[name] = fn; },
+    addInitScript: async (s) => { initScripts.push(s); },
     pages: () => [],
     on: (evt, cb) => { if (evt === "page") pageListeners.push(cb); },
     off: (evt, cb) => { if (evt === "page") { const i = pageListeners.indexOf(cb); if (i >= 0) pageListeners.splice(i, 1); } },
     _bindings: bindings,
+    _initScripts: initScripts,
     _pageListeners: pageListeners,
   };
 }
@@ -58,23 +61,80 @@ function mockPage(overrides = {}) {
   };
 }
 
+// The banner's binding has a name that is unique per arm; tests find it by prefix.
+const bindingsOf = (context) => Object.keys(context._bindings).filter((k) => k.startsWith("__conxaHandoverDone_"));
+const bindingOf = (context, n = 0) => context._bindings[bindingsOf(context)[n]];
+
 // ── arm() / disarm() ─────────────────────────────────────────────────────────
 
 test("arm: exposes a binding and opens a loopback HTTP listener", async () => {
   const context = mockContext();
   const armed = await handover.arm(context, mockPage(), { message: "Please log in" }, "run-1");
-  assert.ok(typeof context._bindings.__conxaHandoverDone === "function", "binding exposed");
+  assert.ok(typeof bindingOf(context) === "function", "binding exposed");
   assert.ok(Number.isInteger(armed.httpPort) && armed.httpPort > 0, "loopback listener bound");
   assert.ok(armed.token && armed.token.length > 0);
   await armed.disarm();
 });
 
-test("arm: the exposed binding firing resolves signal with \"banner\"", async () => {
+test("arm: the exposed binding firing from the run's page resolves signal with \"banner\"", async () => {
   const context = mockContext();
-  const armed = await handover.arm(context, mockPage(), { message: "m" }, "run-2");
-  context._bindings.__conxaHandoverDone();
+  const page = mockPage();
+  const armed = await handover.arm(context, page, { message: "m" }, "run-2");
+  await bindingOf(context)({ page }, "done");
   assert.strictEqual(await armed.signal, "banner");
   await armed.disarm();
+});
+
+test("arm: two hand-overs on one context each fire their own signal from the banner", async () => {
+  const context = mockContext();
+  const page = mockPage();
+  const first = await handover.arm(context, page, { message: "one" }, "run-a");
+  await bindingOf(context, 0)({ page }, "done");
+  assert.strictEqual(await first.signal, "banner");
+  await first.disarm();
+  const second = await handover.arm(context, page, { message: "two" }, "run-b");
+  assert.strictEqual(bindingsOf(context).length, 2, "a new name per arm, no clash with the first");
+  assert.strictEqual(await bindingOf(context, 1)({ page }, "ping"), true, "the second banner is live");
+  await bindingOf(context, 1)({ page }, "done");
+  assert.strictEqual(await second.signal, "banner", "the second signal is its own, not the first's finished one");
+  await second.disarm();
+});
+
+test("banner ping: false after disarm and false for a page that is not the run's", async () => {
+  const context = mockContext();
+  const page = mockPage();
+  const other = mockPage();
+  const armed = await handover.arm(context, page, { message: "m" }, "run-ping", { tabs: { pages: new Map([["tab_0", page]]) } });
+  const binding = bindingOf(context);
+  assert.strictEqual(await binding({ page }, "ping"), true);
+  assert.strictEqual(await binding({ page: other }, "ping"), false, "someone else's page (Studio, another run)");
+  await binding({ page: other }, "done");
+  const early = await Promise.race([armed.signal, new Promise((r) => setTimeout(() => r("none"), 50))]);
+  assert.strictEqual(early, "none", "a click from a page that isn't the run's does nothing");
+  const popup = mockPage({ opener: async () => page });
+  assert.strictEqual(await binding({ page: popup }, "ping"), true, "a window the run's page opened counts");
+  await armed.disarm();
+  assert.strictEqual(await binding({ page }, "ping"), false, "a stale banner draws nothing");
+});
+
+test("banner script: with no <html> yet it draws on DOMContentLoaded", async () => {
+  const vm = require("vm");
+  const listeners = {};
+  const appended = [];
+  const doc = {
+    documentElement: null,
+    getElementById: () => null,
+    addEventListener: (evt, cb) => { listeners[evt] = cb; },
+    createElement: () => ({ style: {}, appendChild() {}, addEventListener() {} }),
+  };
+  const win = { __b: async () => true };
+  const script = handover._bannerScript("hello", "__b");
+  const run = vm.runInNewContext(script, { document: doc, window: win });
+  await run;
+  assert.ok(listeners.DOMContentLoaded, "waits for the document instead of giving up");
+  doc.documentElement = { appendChild: (el) => appended.push(el) };
+  await listeners.DOMContentLoaded();
+  assert.strictEqual(appended.length, 1, "banner drawn once the document exists");
 });
 
 test("arm: a POST to the loopback listener with the right token resolves signal with \"http\"", async () => {
@@ -283,4 +343,108 @@ test("host_browser.setInputOpen: posts the lift and never throws when the panel 
   const saved = process.env.CONXA_HOST_CONTROL_URL;
   delete process.env.CONXA_HOST_CONTROL_URL; // _controlPost throws: no control channel
   try { await hostBrowser.setInputOpen({ runId: "x", open: true }); } finally { if (saved !== undefined) process.env.CONXA_HOST_CONTROL_URL = saved; }
+});
+
+// ── one shared wait: resume checks, plain stops, never parked where it can't be, Stop closes it ───────────
+
+// Captures what arm() opened so a test can prove the loopback port was closed when the run ended.
+function spyArm() {
+  const real = handover.arm;
+  const armedList = [];
+  handover.arm = async (...a) => { const r = await real(...a); armedList.push(r); return r; };
+  return { armedList, restore: () => { handover.arm = real; } };
+}
+const portIsClosed = (port) => new Promise((resolve) => {
+  const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/x" }, () => resolve(false));
+  req.on("error", () => resolve(true));
+  req.end();
+});
+
+test("runPlan: a resume whose resume_when is not met fails at the hand-over step and the next step never runs", async () => {
+  const steps = [
+    { type: "handover", message: "Please log in", resume_when: { identity_bundle: { signals: [{ engine: "css", selector: "#never" }] } }, resume_when_timeout_ms: 10 },
+    { type: "handover", message: "Never reached" },
+  ];
+  let reachedSecond = false;
+  const context = { ...idleContext, exposeBinding: async () => { reachedSecond = true; } };
+  await assert.rejects(
+    () => runPlan(idlePage, steps, { __handover_done_0: true }, 0, "handover-resume-unmet", { context }),
+    (err) => err.handoverFailed === true && err.failedAt === 0 && !err.handoverPause && /still didn't show/.test(err.message),
+  );
+  assert.strictEqual(reachedSecond, false, "the next step never armed anything");
+});
+
+test("runPlan: a resume whose recorded tab is closed fails at the hand-over step in plain words", async () => {
+  const closed = { ...idlePage, isClosed: () => true };
+  await assert.rejects(
+    () => runPlan(closed, [{ type: "handover", message: "m" }, { type: "handover", message: "n" }], { __handover_done_0: true }, 0, "handover-resume-closed", { context: idleContext }),
+    (err) => err.handoverFailed === true && !/Playwright|Call log/.test(err.message) && /closed during the hand-over/.test(err.message),
+  );
+});
+
+test("revalidate: a failure carries handoverFailed and a plain message", async () => {
+  const tabs = createTabRegistry(mockPage({ isClosed: () => true }));
+  await assert.rejects(
+    () => handover.revalidate(tabs, {}, false),
+    (err) => err.handoverFailed === true && /^The page the person was working on was closed/.test(err.message),
+  );
+});
+
+test("runPlan: a hand-over in a for_each body that outlasts the wait stops the run (no park) and closes the port", async () => {
+  const spy = spyArm();
+  const steps = [{ type: "for_each", items: "names", as: "row", max_iterations: 3, on_row_error: "continue", steps: [{ type: "handover", message: "Please sign" }] }];
+  try {
+    await assert.rejects(
+      () => runPlan(idlePage, steps, { names: "a,b" }, 0, "handover-loop", { context: idleContext }),
+      (err) => err.handoverTimedOut === true && err.handoverFailed === true && !err.handoverPause && /repeated or conditional/.test(err.message),
+    );
+  } finally { spy.restore(); }
+  assert.strictEqual(spy.armedList.length, 1, "one window only: no second row, no restart");
+  assert.strictEqual(await portIsClosed(spy.armedList[0].httpPort), true);
+});
+
+test("runPlan: on_missing ask in a loop body that outlasts the wait stops the run and closes the port", async () => {
+  const spy = spyArm();
+  const steps = [{ type: "for_each", items: "names", as: "row", max_iterations: 3, steps: [BOUND_CLICK] }];
+  try {
+    await assert.rejects(
+      () => runPlan(absentRecordPage(), steps, { names: "a" }, 0, "ask-loop", { context: mockContext() }),
+      (err) => err.handoverTimedOut === true && !err.handoverPause,
+    );
+  } finally { spy.restore(); }
+  assert.strictEqual(spy.armedList.length, 1);
+  assert.strictEqual(await portIsClosed(spy.armedList[0].httpPort), true);
+});
+
+test("runPlan: with CONXA_HANDOVER_NO_PARK=1 a top-level hand-over stops instead of parking", async () => {
+  process.env.CONXA_HANDOVER_NO_PARK = "1";
+  const spy = spyArm();
+  try {
+    await assert.rejects(
+      () => runPlan(idlePage, [{ type: "handover", message: "Please log in" }], {}, 0, "handover-nopark", { context: idleContext }),
+      (err) => err.handoverTimedOut === true && !err.handoverPause && /Nobody pressed Done within/.test(err.message) && !/repeated or conditional/.test(err.message),
+    );
+  } finally { delete process.env.CONXA_HANDOVER_NO_PARK; spy.restore(); }
+  assert.strictEqual(await portIsClosed(spy.armedList[0].httpPort), true);
+});
+
+test("runPlan: Stop during the wait ends the run as cancelled and closes the listeners", async () => {
+  const realMs = handover.HANDOVER_INCALL_MS;
+  handover.HANDOVER_INCALL_MS = 5000;
+  const spy = spyArm();
+  let stop = false;
+  setTimeout(() => { stop = true; }, 150);
+  try {
+    await assert.rejects(
+      () => runPlan(idlePage, [{ type: "handover", message: "Please log in" }], {}, 0, "handover-cancel", { context: idleContext, cancelCheck: () => stop }),
+      (err) => err.cancelled === true,
+    );
+    await new Promise((r) => setTimeout(r, 400)); // the abandoned wait notices Stop and tidies up
+  } finally { handover.HANDOVER_INCALL_MS = realMs; spy.restore(); }
+  assert.strictEqual(await portIsClosed(spy.armedList[0].httpPort), true, "nothing left listening after Stop");
+});
+
+test("buildHandoverRequest: the pause text names the run id", async () => {
+  const resp = await handover.buildHandoverRequest(mockPage(), { message: "m" }, 0, { runId: "run-xyz" });
+  assert.match(resp.content[0].text, /get_execution_status with run_id: run-xyz/);
 });

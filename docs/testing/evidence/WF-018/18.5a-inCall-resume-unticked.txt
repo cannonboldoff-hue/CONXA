@@ -1,0 +1,27 @@
+Execution failed at step 2 (Tier 1–2 cascade exhausted): Step 2 (handover) failed: Something unexpected went wrong. (handover: the expected page state after hand-over was not found)
+Page URL: http://127.0.0.1:8099/handover-fixture.html
+
+Self-healing recovery. The deterministic cascade could not resolve this step's element, so identify it yourself: the ranked element list below is ground truth for what EXISTS on the page, and the screenshots show what it LOOKS like. The "Current page" image is ground truth. No recording-time reference image is available for this step — judge from the current page and the ranked element list alone, and do not assume how the target used to look. Then resume by calling execute_skill again with:
+  resume_from: 1
+  step_overrides: { "1": { "candidate_index": <index>, "confidence": <0-1>, "why": "<one line>" } }
+Rules:
+- Nominate an index from the refreshed ranked element list below, or a selector you can read straight off the image (visible testid/id/label). The runtime re-verifies your pick against a uniqueness gate before acting — it never blindly trusts it.
+- The screenshot is viewport-only; the target may be off-screen (see scrollY) — the element list proves existence even when the image does not; the images settle appearance and disambiguation.
+- Do not guess — if nothing matches, tell the user the page has changed and ask how to proceed.
+
+If the page shows an app error, a question popup that needs the user, or the app has changed so this step no longer makes sense, do NOT pick an element. Answer with step_overrides: { "<index>": { "verdict": { "kind": "fault" | "decision" | "drift", "why": "<one sentence for the user>" } } } and the run will stop with your reason.
+Failed step intent: {"action":"handover","intent":"Pause so a person can tick the I am not a robot box"}
+
+Executed steps (leading context):
+  0: navigate — Open 127.0.0.1
+
+viewport: {"width":1280,"height":720}, scrollY: 0
+
+Interactive elements NOW — refreshed after the failed round, ranked against the recorded target (2 of 2; nominate via candidate_index):
+[0] input type=checkbox #human "on"
+[1] button type=button #submit "Submit request"
+Current page — ground truth:
+(run_id: r_mwru22s5_r4l8l)
+
+meta: null
+images: 1

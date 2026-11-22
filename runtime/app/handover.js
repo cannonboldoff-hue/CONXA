@@ -49,33 +49,47 @@ const HANDOVER_INCALL_MS = Number(process.env.CONXA_HANDOVER_INCALL_MS) || 12000
 // something in it, and come back.
 const HANDOVER_PARK_TTL_MS = Number(process.env.CONXA_HANDOVER_PARK_TTL_MS) || 30 * 60 * 1000;
 
+// Studio's test never parks a hand-over (it waits for the person inside the call instead), and a
+// run that can't be parked stops in plain words when the wait runs out. Read per call so tests can set it.
+const noPark = () => process.env.CONXA_HANDOVER_NO_PARK === "1";
+
 const BANNER_ID = "__conxa_handover_banner__";
 
 // Runs inside the page. Idempotent (a reconnect after navigation re-adds it if a fresh document
 // dropped it; calling it twice on the same document is a no-op via the id check) and self-
 // contained — no dependency on anything else being loaded into the page.
-function _bannerScript(message) {
+function _bannerScript(message, bindingName) {
   const safeMsg = JSON.stringify(String(message || ""));
+  const binding = JSON.stringify(String(bindingName || ""));
+  // A fresh document has no <html> yet when an init script runs: wait for it instead of giving up
+  // (the banner used to vanish after any navigation). The ping asks the runtime whether this is
+  // one of the run's own pages and the hand-over is still open; a stale script draws nothing.
   return `(() => {
-    if (document.getElementById(${JSON.stringify(BANNER_ID)})) return;
-    if (!document.documentElement) return;
-    const el = document.createElement("div");
-    el.id = ${JSON.stringify(BANNER_ID)};
-    el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1a1a2e;color:#fff;padding:12px 16px;font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.35)";
-    const msg = document.createElement("span");
-    msg.textContent = ${safeMsg};
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Done — resume workflow";
-    btn.style.cssText = "background:#4f8cff;color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto";
-    btn.addEventListener("click", () => {
-      btn.disabled = true;
-      btn.textContent = "Resuming…";
-      if (window.__conxaHandoverDone) window.__conxaHandoverDone();
-    });
-    el.appendChild(msg);
-    el.appendChild(btn);
-    document.documentElement.appendChild(el);
+    const add = async () => {
+      if (document.getElementById(${JSON.stringify(BANNER_ID)})) return;
+      if (!document.documentElement) { document.addEventListener("DOMContentLoaded", add, { once: true }); return; }
+      let ok = false;
+      try { ok = (await window[${binding}]("ping")) === true; } catch (_) { ok = false; }
+      if (!ok || document.getElementById(${JSON.stringify(BANNER_ID)})) return;
+      const el = document.createElement("div");
+      el.id = ${JSON.stringify(BANNER_ID)};
+      el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1a1a2e;color:#fff;padding:12px 16px;font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.35)";
+      const msg = document.createElement("span");
+      msg.textContent = ${safeMsg};
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Done — resume workflow";
+      btn.style.cssText = "background:#4f8cff;color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto";
+      btn.addEventListener("click", () => {
+        btn.disabled = true;
+        btn.textContent = "Resuming…";
+        try { window[${binding}]("done"); } catch (_) {}
+      });
+      el.appendChild(msg);
+      el.appendChild(btn);
+      document.documentElement.appendChild(el);
+    };
+    return add();
   })();`;
 }
 
@@ -111,12 +125,29 @@ async function arm(context, page, step, runId, host) {
   // needs no port and works even after the MCP call that armed it has already returned.
   // addInitScript re-injects the banner into every future document (a navigation, a fresh tab)
   // in this context; the immediate evaluate() below covers documents that already exist.
-  // Already exposed is fine (a still-live prior binding on this context) — swallow and move on.
-  await context.exposeBinding("__conxaHandoverDone", () => { fire("banner"); }).catch(() => {});
-  await context.addInitScript(_bannerScript(message)).catch(() => {});
+  // The binding name is unique per arm (Playwright refuses a name already exposed on a context, which
+  // used to leave a second hand-over wired to the first one's finished signal). The context is shared
+  // with other pages (Studio's window, another run's tabs), so the binding itself decides where the
+  // banner shows: only on this run's pages, and only while this hand-over is open.
+  const bindingName = `__conxaHandoverDone_${crypto.randomBytes(8).toString("hex")}`;
+  const ownPages = () => [page, ...((host && host.tabs && host.tabs.pages) ? host.tabs.pages.values() : [])];
+  const isRunPage = async (p) => {
+    if (!p) return false;
+    const own = ownPages();
+    if (own.includes(p)) return true;
+    const opener = typeof p.opener === "function" ? await p.opener().catch(() => null) : null;
+    return !!opener && own.includes(opener);
+  };
+  await context.exposeBinding(bindingName, async (source, op) => {
+    const mine = await isRunPage(source && source.page);
+    if (op === "ping") return !settled && mine;
+    if (mine) fire("banner");
+    return undefined;
+  }).catch(() => {});
+  await context.addInitScript(_bannerScript(message, bindingName)).catch(() => {});
   const livePages = () => { try { return context.pages(); } catch (_) { return [page]; } };
-  await Promise.all(livePages().map((pg) => evalOn(pg, _bannerScript(message)).catch(() => {})));
-  const onNewPage = (pg) => { evalOn(pg, _bannerScript(message)).catch(() => {}); };
+  await Promise.all(livePages().map((pg) => evalOn(pg, _bannerScript(message, bindingName)).catch(() => {})));
+  const onNewPage = (pg) => { evalOn(pg, _bannerScript(message, bindingName)).catch(() => {}); };
   context.on("page", onNewPage);
 
   // 2) File-drop resume: ~/.conxa/resume/<run_id>.cmd. fs.watch for near-instant pickup, plus a
@@ -167,8 +198,9 @@ async function arm(context, page, step, runId, host) {
 
   const disarm = async () => {
     context.off("page", onNewPage);
-    // Playwright has no removeBinding — the exposed function outlives disarm(), but its closure
-    // just calls the now-already-settled `fire` into a no-op, so a stale binding is harmless.
+    // Playwright has no removeBinding — the exposed function outlives disarm(), but its ping now
+    // answers false (and `fire` is a no-op), so a stale init script draws nothing.
+    settled = true;
     clearInterval(fileTick);
     if (watcher) { try { watcher.close(); } catch (_) {} }
     try { fs.unlinkSync(cmdFile); } catch (_) {}
@@ -191,14 +223,14 @@ async function revalidate(tabsRegistry, step, watch) {
     page = await resolveStepPage(tabsRegistry, step, { watch });
   } catch (e) {
     throw Object.assign(
-      new Error("handover: the recorded tab is no longer available after hand-over"),
-      { handoverRevalidationFailed: true, cause: e }
+      new Error("The page the person was working on was closed during the hand-over, so the run stopped. Nothing after this step ran."),
+      { handoverRevalidationFailed: true, handoverFailed: true, cause: e }
     );
   }
   if (page.isClosed()) {
     throw Object.assign(
-      new Error("handover: the page was closed during hand-over"),
-      { handoverRevalidationFailed: true }
+      new Error("The page the person was working on was closed during the hand-over, so the run stopped. Nothing after this step ran."),
+      { handoverRevalidationFailed: true, handoverFailed: true }
     );
   }
   if (step && step.resume_when) {
@@ -206,8 +238,8 @@ async function revalidate(tabsRegistry, step, watch) {
     const ok = await probePresent(page, step.resume_when, {}, timeout).catch(() => false);
     if (!ok) {
       throw Object.assign(
-        new Error("handover: the expected page state after hand-over was not found"),
-        { handoverRevalidationFailed: true }
+        new Error("After Done, the page still didn't show what this step waits for, so the run stopped. Nothing after this step ran."),
+        { handoverRevalidationFailed: true, handoverFailed: true }
       );
     }
   }
@@ -228,7 +260,8 @@ async function buildHandoverRequest(page, step, stepIndex, opts = {}) {
     `not the agent.\nPage URL: ${url}\n\n${message}\n\n` +
     `A banner is showing in the browser window with a "Done — resume workflow" button. Tell the ` +
     `person to complete the step there and click it — the run resumes automatically the moment ` +
-    `they do; no further action is needed from you here.`;
+    `they do; no further action is needed from you here.` +
+    (opts.runId ? ` To see how it ends, call get_execution_status with run_id: ${opts.runId}.` : "");
 
   const content = [{ type: "text", text: header }];
   const shot = await capture(page, { type: "jpeg", quality: 80 });
@@ -256,6 +289,8 @@ async function buildHandoverRequest(page, step, stepIndex, opts = {}) {
 module.exports = {
   HANDOVER_INCALL_MS,
   HANDOVER_PARK_TTL_MS,
+  noPark,
+  _bannerScript,
   arm,
   revalidate,
   buildHandoverRequest,

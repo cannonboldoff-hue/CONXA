@@ -1,0 +1,112 @@
+::ffff:127.0.0.1 - - [22/Nov/2026 21:41:11] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:41:18] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:43:14] "GET /handover-fixture.html HTTP/1.1" 304 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:43:14] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:43:14] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:43:54] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:43:54] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:44:05] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:44:05] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:47:28] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:47:28] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:48:46] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:48:46] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:48:47] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:48:47] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:14] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:14] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:23] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:23] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:26] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:51:26] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:14] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:14] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:14] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:16] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:16] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:40] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:40] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:42] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:57:42] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:00] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:00] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:00] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:01] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:41] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:41] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:41] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 21:58:43] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:20] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:20] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:20] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:21] "GET /mutator.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:59] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:01:59] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:04:41] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:04:41] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:19] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:29] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:29] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:29] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:31] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:34:31] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:40] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:40] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:44] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:44] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:58] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:58] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:36:58] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:37:00] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:04] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:04] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:06] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:06] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:22] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:22] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:22] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:39:23] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:41:29] "GET /note.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:41:53] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:41:53] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:41:56] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:41:56] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:42:12] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:42:12] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:42:12] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:42:14] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:44:34] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:44:34] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:45:05] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:45:05] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:45:05] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:45:07] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:45:07] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:29] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:29] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:29] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:30] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:40] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:40] "GET /__log?handover%3Asubmit%3Aunticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:50] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:50] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:50] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:47:52] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:50:11] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:50:11] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:50:11] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:50:13] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:53:34] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:53:34] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:53:34] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:53:36] "GET / HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:53:36] "GET /handover-fixture.html HTTP/1.1" 200 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:58:33] "GET /handover-fixture.html HTTP/1.1" 304 -
+::ffff:127.0.0.1 - - [22/Nov/2026 22:58:33] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 22:58:33] "GET /favicon.ico HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 23:02:36] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 23:02:36] "GET /__log?handover%3Atick%3Atrue HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 23:02:38] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 23:02:38] "GET /__log?handover%3Asubmit%3Aticked HTTP/1.1" 404 -
+::ffff:127.0.0.1 - - [22/Nov/2026 23:03:09] code 404, message File not found
+::ffff:127.0.0.1 - - [22/Nov/2026 23:03:09] "GET /favicon.ico HTTP/1.1" 404 -

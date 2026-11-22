@@ -217,6 +217,8 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     if (cause.forkDecisionNeeded) err.forkDecisionNeeded = true;
     if (cause.badInput) err.badInput = true;
     if (cause.agentSpanRefused) err.agentSpanRefused = cause.agentSpanRefused;
+    if (cause.handoverFailed) err.handoverFailed = true;
+    if (cause.handoverTimedOut) err.handoverTimedOut = true;
     if (cause.fault) {
       err.fault = true;
       err.faultKind = cause.faultKind;
@@ -743,6 +745,46 @@ function raceCancel(stepPromise, cancelCheck) {
   return Promise.race([stepPromise, cancelled]).finally(() => clearInterval(timer));
 }
 
+// One hand-over wait for both places that ask a person (the hand-over step and on_missing "ask"): arm,
+// then wait for the person's signal, Stop, or the in-call window, whichever comes first. Returns
+// { winner } when the person signalled (listeners already closed) or { armed } when the window ran out
+// and the caller may park it. Stop closes the listeners and throws `cancelled`. A wait that cannot be
+// parked (inside a repeated or conditional step, which has no single row to resume at, or in Studio's
+// test, which waits inside the call instead) ends the run in plain words rather than leaving a park.
+async function waitForPerson(ctx, state, step, i, page) {
+  const armed = await handover.arm(ctx.context, page, step, ctx.runCtx && ctx.runCtx.runId, ctx);
+  let timer;
+  let poll;
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS); });
+  const stopped = new Promise((_, reject) => {
+    if (!ctx.cancelCheck) return;
+    poll = setInterval(() => {
+      if (ctx.cancelCheck()) reject(Object.assign(new Error("Execution cancelled"), { cancelled: true }));
+    }, 100);
+  });
+  stopped.catch(() => {});
+  let winner;
+  try {
+    winner = await Promise.race([armed.signal, timeout, stopped]);
+  } catch (e) {
+    await armed.disarm();
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    clearInterval(poll);
+  }
+  if (winner) { await armed.disarm(); return { winner }; }
+  const nested = state.loopDepth > 0 || state.forkDepth > 0;
+  if (!nested && !handover.noPark()) return { armed };
+  await armed.disarm();
+  ctx.tracker.emit("step_fail", { si: i, fc: "handover_timeout" });
+  const secs = Math.max(1, Math.round(handover.HANDOVER_INCALL_MS / 1000));
+  throw stepFailure(step, i, Object.assign(new Error(
+    `Nobody pressed Done within ${secs >= 120 ? `${Math.round(secs / 60)} minutes` : `${secs} seconds`}, so the run stopped at this step. Nothing after it ran.` +
+    (nested ? " A hand-over inside a repeated or conditional step can't wait longer." : "")
+  ), { handoverFailed: true, handoverTimedOut: true }), null, state.warnings);
+}
+
 // Executes ONE step against the given `steps` array at index `i`, mutating `state` in place
 // (recoveredSteps/hasExecutedStep/prevStepType/prevPage/warnings/dryRunSkipped) and throwing on
 // an unrecoverable failure — exactly the per-iteration body the top-level step loop used to
@@ -945,39 +987,32 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   // re-validating the page — this interception just consumes that marker and moves on.
   if (step.type === "handover") {
     const doneKey = `__handover_done_${i}`;
-    if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
-      delete state.inputs[doneKey];
+    const finish = async (via, inCall) => {
+      // The person may have closed the page or left it somewhere else: check again before the next step.
+      const revalidated = await handover.revalidate(ctx.tabs, step, ctx.watch).catch((e) => {
+        ctx.tracker.emit("step_fail", { si: i, fc: "handover_revalidation_failed" });
+        throw stepFailure(step, i, e, null, state.warnings);
+      });
+      if (via) ctx.tracker.emit("handover_resumed", { si: i, via, inCall });
       state.hasExecutedStep = true;
       state.prevStepType = step.type;
-      state.prevPage = page;
-      return;
+      state.prevPage = revalidated;
+    };
+    if (Object.prototype.hasOwnProperty.call(state.inputs, doneKey)) {
+      delete state.inputs[doneKey];
+      return finish(null);
     }
     if (!ctx.context) {
       // No browser context threaded through (e.g. a unit test harness that calls runPlan
       // directly) — fail loud rather than silently skipping the human gate.
       throw stepFailure(step, i, new Error("handover: no browser context available to arm"), null, state.warnings);
     }
-    const armed = await handover.arm(ctx.context, page, step, ctx.runCtx && ctx.runCtx.runId, ctx);
-    const winner = await Promise.race([
-      armed.signal,
-      new Promise((resolve) => setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS)),
-    ]);
-    if (winner) {
-      await armed.disarm();
-      const revalidated = await handover.revalidate(ctx.tabs, step, ctx.watch).catch((e) => {
-        ctx.tracker.emit("step_fail", { si: i, fc: "handover_revalidation_failed" });
-        throw stepFailure(step, i, e, null, state.warnings);
-      });
-      ctx.tracker.emit("handover_resumed", { si: i, via: winner, inCall: true });
-      state.hasExecutedStep = true;
-      state.prevStepType = step.type;
-      state.prevPage = revalidated;
-      return;
-    }
+    const waited = await waitForPerson(ctx, state, step, i, page);
+    if (waited.winner) return finish(waited.winner, true);
     // In-call wait expired — hand the still-armed signal sources to server.js so it can park
     // the page and let the eventual resume drive itself; disarm() is NOT called here, the park
     // owns armed's lifetime until it resumes or discards.
-    throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step, page, armed, dryRun: ctx.dryRun });
+    throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step, page, armed: waited.armed, dryRun: ctx.dryRun });
   }
 
   // Engine v2 C4: an author-placed span the caller's agent carries out, one action at a time (see
@@ -1323,17 +1358,12 @@ async function runStepFrame(ctx, state, steps, i, frame) {
         return runStepFrame(ctx, state, steps, i, frame);
       }
       const asked = { ...step, type: "handover", message: step.message || `“${step.intent || "This step"}”: its record isn't on the page. Fix that, then click Done.` };
-      const armed = await handover.arm(ctx.context, page, asked, ctx.runCtx && ctx.runCtx.runId, ctx);
-      const winner = await Promise.race([
-        armed.signal,
-        new Promise((resolve) => setTimeout(() => resolve(null), handover.HANDOVER_INCALL_MS)),
-      ]);
-      if (winner) {
-        await armed.disarm();
-        ctx.tracker.emit("handover_resumed", { si: i, via: winner, inCall: true, reason: "on_missing" });
+      const waited = await waitForPerson(ctx, state, asked, i, page);
+      if (waited.winner) {
+        ctx.tracker.emit("handover_resumed", { si: i, via: waited.winner, inCall: true, reason: "on_missing" });
         return runStepFrame(ctx, state, steps, i, frame);
       }
-      throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step: asked, page, armed, dryRun: ctx.dryRun });
+      throw Object.assign(new Error("handover_pause"), { handoverPause: true, stepIndex: i, step: asked, page, armed: waited.armed, dryRun: ctx.dryRun });
     }
     ctx.tracker.emit("step_fail", { si: i, fc: "entity_not_found" });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
@@ -1675,17 +1705,14 @@ async function runForEachStep(ctx, state, step, page, i) {
         for (const n of bodyOutputs) if (state.inputs[n] !== undefined) perRow[n].push(state.inputs[n]);
         processed++;
       } catch (bodyErr) {
-        // Cancellation and a handover pause inside the body are never row-level
-        // failures — they must always propagate immediately regardless of on_row_error. (Note:
-        // patch_gate.py refuses to compile a handover step inside a for_each body in the first
-        // place — unwinding this loop on a pause loses the iteration cursor, so resuming would
-        // restart the loop from row 0 rather than continuing the interrupted row. This branch
-        // only matters if an older/hand-authored pack manages to carry one anyway.)
+        // Cancellation and a stopped hand-over are never row-level failures — they must always
+        // propagate immediately regardless of on_row_error. A hand-over inside the body that outlasts
+        // the in-call wait stops the run (waitForPerson): a pause here would lose the row cursor.
         if (bodyErr && bodyErr.guardPause && bodyErr.loop) {
           bodyErr.loop.perRow = JSON.parse(JSON.stringify(perRow));
           throw bodyErr;
         }
-        if (bodyErr && (bodyErr.cancelled || bodyErr.handoverPause)) throw bodyErr;
+        if (bodyErr && (bodyErr.cancelled || bodyErr.handoverPause || bodyErr.handoverFailed)) throw bodyErr;
         failed++;
         ctx.tracker.emit("for_each_row_fail", { si: i, row_index: idx, continued: onRowError === "continue" });
         if (onRowError !== "continue") throw bodyErr;

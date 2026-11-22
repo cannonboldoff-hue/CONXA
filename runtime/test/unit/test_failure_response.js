@@ -527,3 +527,18 @@ test("failureKind names a deliberate stop instead of calling it 'other'", () => 
   assert.strictEqual(c.detail, "");
   assert.match(plainCause(new Error("boom")).summary, /unexpected/);
 });
+
+test("handoverFailed gives a plain summary and no element list or candidate_index", async () => {
+  const { plainCause } = require("../../app/errors");
+  const msg = "Nobody pressed Done within 2 minutes, so the run stopped at this step. Nothing after it ran.";
+  const err = Object.assign(new Error(`Step 1 (handover) failed: ${msg}`), { handoverFailed: true, failedAt: 0 });
+  assert.strictEqual(plainCause(Object.assign(new Error(msg), { handoverFailed: true })).summary, msg);
+  const page = { url: () => "https://x.example/", screenshot: async () => Buffer.from("x") };
+  const resp = await buildFailureResponse(page, err, entry("handover-stop"), null, null,
+    { ...BASE_DEPS, agentRecoveryEnabled: true, maxRecoveryTier: 4 });
+  const text = resp.content.map((c) => c.text || "").join("\n");
+  assert.match(text, /Nobody pressed Done/);
+  assert.match(text, /tell the person what happened/);
+  assert.ok(!/candidate_index|Interactive elements NOW|step_overrides/.test(text), "no recovery protocol");
+  assert.ok(!/unexpected/.test(text));
+});

@@ -121,3 +121,13 @@ test("recordCallResult skips a refusal that never showed the id, and a hand-off 
   assert.strictEqual(reg.recordCallResult("r_z", "s", t("Retry budget exhausted at step 2."), { continuation: true }), true);
   assert.strictEqual(reg.status("r_z").state, "failed");
 });
+
+test("a hand-over pause that names the run id reads back as paused, then the self-resume finishes under the same id", async () => {
+  const { buildHandoverRequest } = require("../../app/handover");
+  const page = { url: () => "https://x.example", screenshot: async () => Buffer.from("s"), isClosed: () => false };
+  const pause = await buildHandoverRequest(page, { message: "Please sign" }, 1, { runId: "r_ho" });
+  assert.strictEqual(reg.recordCallResult("r_ho", "s", pause), true, "the pause shows the id, so it is recorded");
+  assert.strictEqual(reg.status("r_ho").state, "paused");
+  assert.strictEqual(reg.recordCallResult("r_ho", "s", t("Done. URL: https://x"), { continuation: true }), true);
+  assert.strictEqual(reg.status("r_ho").state, "completed", "the same id now reads as finished");
+});

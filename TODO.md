@@ -29,13 +29,13 @@ Counts are still-open items only.
 | Tier | When | Remaining |
 |---|---|---|
 | PILOT — P0 · Must fix | Before pilot | 12 |
-| PILOT — P1 · Should fix | Before pilot | 36 |
+| PILOT — P1 · Should fix | Before pilot | 37 |
 | PILOT — P2 · Verify live & polish | Before pilot | 37 |
 | LAUNCH — P1 · Required | Before launch | 12 |
 | LAUNCH — P2 · Should have | Before launch | 53 |
 | AFTER LAUNCH | After launch | 35 |
 | PARKED | Only if it starts to hurt | 18 |
-| **Total** | | **203** |
+| **Total** | | **204** |
 
 ---
 
@@ -185,7 +185,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 - **Update (2026-09-02, H-1 was unwinnable by construction — fixture fixed, capability gap logged):** with the tab round-trip above fixed, the same mega-workflow got as far as **step 15** and failed with `destructive_recovery_halted`. Not a timeout: `ACTION_TIMEOUT_MS` is 2500 ms and `locators.js::withLocator` already re-resolves every 120 ms inside it (~20 attempts); the run ended at 2.8 s because `cascade.js` saw `step.destructive === true` and gave the step Layer 1 and nothing more. Root cause: `docs/testing/fixtures/mutator.html` labelled its drifting button **`Submit`**, so the compiled intent was `click_submit_button`, `action_semantics.py::commit_intent_hit` matched the default `commit_intent_substrings: ["submit","confirm"]`, and `classify_consequence` returned `irreversible`. H-1 therefore paired a name-drifting element with a commit-intent target — the very PROD-3 rule that protects real Submit buttons made the drift test permanently unpassable. **Fixed in the fixture, not the policy** (PROD-3 deliberately untouched): the button's label set is now `Go`/`Send`/`Do It`/`Proceed` and its id is `tgt-go`, chosen to clear both `commit_intent_substrings` and `submit_text_tokens`; all drift behaviour (id/class rewrite, random relabel, `appendChild` to end of body every 700 ms) is unchanged. `conxa-cloud/tests/test_fixture_intent_classification.py` now reads the label array straight out of the fixture and asserts against the **live** policy file, so both a fixture edit and a policy-vocabulary change fail loudly; it includes a guard-the-guard case proving the old `Submit` shape still classifies irreversible. Docs updated with the standing constraint (`01-WORKFLOWS-TO-TEST.md`, `03-ONE-WORKFLOW-RUNBOOK.md`), plus the stale `npx serve -l 3000` on the Phase 0 line corrected to the :8099 server every other fixture uses. **Still open:** segment A must be **re-recorded** — `destructive: true` is baked into the existing `execution.json`, so the fixture fix does nothing for pack `mega-workflow-fc8031f2`. That same re-record is already required for the popup `tab_4` fix above, so one recording validates both.
 
-## PILOT — P1: Should fix before the pilot (36 remaining)
+## PILOT — P1: Should fix before the pilot (37 remaining)
 
 Real bugs and gaps a pilot customer is likely to hit in the first week, plus the legal and signing items a pilot installer needs. Do these once P0 is done.
 
@@ -676,6 +676,12 @@ Real bugs and gaps a pilot customer is likely to hit in the first week, plus the
 - **Complexity:** S — procure a Windows EV code-signing certificate (~$200/yr), install it in the build machine's certificate store, and set the env var. No code changes needed.
 - **Success criteria:** a build produced with the certificate installed passes Windows SmartScreen without an "Unknown Publisher" warning.
 
+### EXEC-73 — Hand-over follow-ups from the WF-018 test (what was left out of the first fix)
+- **Category:** Runtime / Build Studio
+- **Items:** (a) *Say why it is waiting:* a hand-over resume waits behind a failed run's recovery park that still holds the site's lock (up to 180 s) and the person gets no feedback; keep the banner up with a "waiting for another workflow on this site" line. (b) *Host exe resume command:* `runtime/host/bootstrap.js` prints "Resume signal sent" without checking that anything is waiting; `arm()` should write a `<run_id>.waiting` file with its pid and the command should refuse, in plain words, when there is none or the pid is dead (ships only with a new installer). (c) *Authoring the check:* Human Edit and chat have no way to set "before going on, check that the page shows..." (`resume_when`, compiled from text on the page / address contains like `wait_until`); also `on_failure: "continue"` on a hand-over is compiled but never read by the runtime, so do not offer it until it is. (d) *Answering "Pause and let a person tick it"* does not insert the hand-over step; a second Confirm card is needed. (e) Resuming inside a loop at the row (reuse RT-9's `loopCursor`) stays under EXEC-22.
+- **Why required:** found by the WF-018 test (`docs/testing/workflow-handoffs/WF-018.md`); none blocks the main hand-over path now that it stops in plain words.
+- **Complexity:** M (each item is S-M on its own).
+
 ## PILOT — P2: Verify live and polish (37 remaining)
 
 Residue from the E2E campaigns and the "what X left open" lists: mostly checks that still need one live run, small wording and ordering fixes, and test hygiene. Run them as one batch during pilot prep.
@@ -773,6 +779,7 @@ Residue from the E2E campaigns and the "what X left open" lists: mostly checks t
 
 ### RT-10 — The hand-over banner is installed on the whole host browser, not just the run's pages
 - **Category:** Runtime / Isolation
+- **Update 2026-11-22 (WF-018):** the banner now draws only on the run's own pages (the binding answers a ping per page). The binding and init script are still context-wide; install them per page if that ever matters.
 - **Description:** `runtime/app/handover.js` arms its "Done" banner with `context.exposeBinding("__conxaHandoverDone")` + `context.addInitScript(_bannerScript(...))`. When the runtime borrows a view from Conxa Execute or Build Studio's test panel (`host_browser.js`), Playwright's one context is the host app's default CDP context, which holds the app's own window and other runs' views — so the banner script and binding reach every page in the host process, including the app UI, until the runtime disconnects. Found while building BUILD-46 (`Done.md`; the recorder's embedded mode installs its bridge per run page for exactly this reason, TRD §4.7a).
 - **Suggested fix:** in host-browser mode, install the binding and init script on the run's own pages (`page.exposeBinding` / `page.addInitScript`, plus pages that open later), as `recorder/session.py::_adopt_run_page_sync` does.
 - **Complexity:** S–M.
@@ -802,7 +809,7 @@ Residue from the E2E campaigns and the "what X left open" lists: mostly checks t
 
 ### BUILD-54 — What BUILD-49..53 left open
 - **Category:** Builder / Runtime
-- **Description:** (1) *Not verified in a live window:* re-record from a step and "record another way" (`browser_panel.adoptRun`, runtime `_handoff_park`, `host_view.adopt`) are unit-tested on each side but were never run against a real Electron window; the runtime's `tab_N` ids and the recorder's `tab_N` ids are assumed to follow the same open order. (2) *Pauses inside a loop:* only the test guard can pause inside a `for_each` body (row cursor); an `ai_review`/hand-over there is still refused by `patch_gate`, and the guard still cannot pause inside a variant-branch body. (3) *Variant branches* cover "from this step to the end" only (no rejoin after the divergence) and are started from Human Edit; no chat phrase or Clarify question starts one. (4) *Failure → Clarify* asks only about a typed input whose test value differed from the recording; a failed clicked-item or page-address value does not yet produce a question. (5) *Tier B agent hand-off* (`failure_response.js`) still shows a templated clicked-item name as `{{name}}` instead of this run's text. (6) *Popup race:* the recorder now holds a popup event until its tab is registered (up to 0.5 s) but this was never reproduced in a real browser. (7) A pack's `required_capabilities` only gates runtimes new enough to read it; older app layers ignore the field.
+- **Description:** (1) *Not verified in a live window:* re-record from a step and "record another way" (`browser_panel.adoptRun`, runtime `_handoff_park`, `host_view.adopt`) are unit-tested on each side but were never run against a real Electron window; the runtime's `tab_N` ids and the recorder's `tab_N` ids are assumed to follow the same open order. (2) *Pauses inside a loop:* only the test guard can pause inside a `for_each` body (row cursor); a hand-over there ends the run in plain words once the in-call wait runs out (no `patch_gate` check exists), and the guard still cannot pause inside a variant-branch body. (3) *Variant branches* cover "from this step to the end" only (no rejoin after the divergence) and are started from Human Edit; no chat phrase or Clarify question starts one. (4) *Failure → Clarify* asks only about a typed input whose test value differed from the recording; a failed clicked-item or page-address value does not yet produce a question. (5) *Tier B agent hand-off* (`failure_response.js`) still shows a templated clicked-item name as `{{name}}` instead of this run's text. (6) *Popup race:* the recorder now holds a popup event until its tab is registered (up to 0.5 s) but this was never reproduced in a real browser. (7) A pack's `required_capabilities` only gates runtimes new enough to read it; older app layers ignore the field.
 - **Complexity:** (1) S, (2) M, (3) M, (4) M, (5) S, (6) S, (7) none (by design).
 
 ### BUILD-48 — In-app recording: follow-ups after BUILD-46

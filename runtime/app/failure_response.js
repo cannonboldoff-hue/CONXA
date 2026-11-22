@@ -354,6 +354,9 @@ function haltReasonNoteText(err) {
     return `\n\nThe run stopped because an input or a setting is not valid, not because an element ` +
       `moved. Fix the input and re-run; do not attempt a candidate override.`;
   }
+  if (err.handoverFailed) {
+    return `\n\nThe run stopped at a step a person had to finish. Do not pick an element; tell the person what happened.`;
+  }
   if (err.couldntConfirm) {
     return `\n\nThe run stopped because it could not confirm that the step finished. The step may well have worked. ` +
       `Do not run it again, and do not attempt a candidate override, until someone has checked the result. Tell the user.`;
@@ -597,7 +600,7 @@ async function buildFailureResponse(page, err, resolvedEntry, runTracker, steps,
 
   // PROD-3 — fail closed, same shape as the ceiling-reached terminal branch above: no digest, no
   // candidate list, no resumable park (server.js's `parkable` check excludes both flags too).
-  if (err.destructiveHalt || err.entityNotFound || err.forkDecisionNeeded || err.badInput || err.fault) {
+  if (err.destructiveHalt || err.entityNotFound || err.forkDecisionNeeded || err.badInput || err.fault || err.handoverFailed) {
     // destructiveHalt is already logged at the moment cascade.js stops (destructive_recovery_halted);
     // entityNotFound has no earlier emit site (resolution.js is pure/sync-agnostic of the log), so
     // it's recorded here instead.

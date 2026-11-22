@@ -586,7 +586,9 @@ def _cancel_active_test_run(workflow_id: str) -> None:
 
 # A test that pauses before a step that can't be undone waits for the person as long as the run allows: the park window
 # is 3 minutes by default, far too short to read a question and decide (BUILD-96 (3)).
-_TEST_RUN_ENV = {"CONXA_RECOVERY_PARK_TTL_MS": "900000"}
+# A hand-over (a person takes the page) is waited for inside the call, up to 10 minutes, and never parked: a parked one
+# could be answered long after the test stopped listening. Past 10 minutes the runtime ends the run as "couldn't run".
+_TEST_RUN_ENV = {"CONXA_RECOVERY_PARK_TTL_MS": "900000", "CONXA_HANDOVER_INCALL_MS": "600000", "CONXA_HANDOVER_NO_PARK": "1"}
 
 class WorkflowsMixin:
     def cmd_create_workflow(self, payload: dict[str, Any], rid: str) -> dict[str, Any]:

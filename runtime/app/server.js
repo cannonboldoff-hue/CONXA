@@ -2580,6 +2580,8 @@ async function _handleToolCall(name, args, extra) {
               skill: primary.entry.slug,
               workspace_id: primary.entry.workspace_id,
               resume_from: runErr.stepIndex,
+              // Same run id: the result of this self-run is then readable under the id the caller holds.
+              _run_id: _runId,
               // The original call's inputs — dropping these meant a resumed run either failed
               // the required-input check or filled every remaining {{placeholder}} with "".
               inputs: args.inputs,
@@ -2637,6 +2639,11 @@ async function _handleToolCall(name, args, extra) {
         // trusted, which says nothing about the workflow. Studio reads this and leaves the last test result alone.
         failResp._meta = { ...(failResp._meta || {}), "conxa/couldnt_run": { kind: "page_size", run_id: _runId, step_index: runErr.failedAt } };
       }
+      if (failResp && runErr.handoverTimedOut) {
+        // Nobody finished the hand-over in the time given and it can't be parked: the run could not be judged,
+        // which says nothing about the workflow. Studio reads this and leaves the last test result alone.
+        failResp._meta = { ...(failResp._meta || {}), "conxa/couldnt_run": { kind: "handover_timeout", run_id: _runId, step_index: runErr.failedAt } };
+      }
       if (failResp && Array.isArray(failResp.content)) {
         // EXEC-36/BUILD-28(a) — same warnings a passing run would have surfaced, so a run that
         // failed BECAUSE of a drift/environment mismatch says so instead of reading like an
@@ -2674,7 +2681,7 @@ async function _handleToolCall(name, args, extra) {
       const parkable = _failedPage && _effAgentEnabled && resolved.length === 1
         && typeof runErr.failedAt === "number" && !runErr.session_expired && !runErr.cancelled
         && !runErr.destructiveHalt && !runErr.entityNotFound
-        && !runErr.forkDecisionNeeded && !runErr.badInput && !runErr.fault && !runErr.agentSpanRefused;
+        && !runErr.forkDecisionNeeded && !runErr.badInput && !runErr.fault && !runErr.agentSpanRefused && !runErr.handoverFailed;
       if (parkable) {
         const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
         if (timer.unref) timer.unref();

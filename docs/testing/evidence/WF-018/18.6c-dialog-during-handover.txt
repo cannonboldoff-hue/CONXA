@@ -1,0 +1,6 @@
+Execution failed at step 3: Step 3 (click) failed: The app showed a message: "person-dialog"
+Page URL: http://127.0.0.1:8099/handover-fixture.html
+
+The run stopped because the app reported a problem (alert). Retrying with a different element will not help. Tell the user what the app said.
+Step intent: {"action":"click","intent":"activate_control_submit_request","target":{"role":"button","text":"submit request"},"anchors":["submit request","h1:account request","p:stand-in for a captcha (wf-18 test fixtu"]}
+(run_id: r_mwruhf6e_91f1r)

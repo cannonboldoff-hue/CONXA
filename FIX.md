@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**When a workflow hands the page to a person, it now waits properly and stops in plain words — 2026-11-22**
+Some steps ask a person to do something only they can do, like ticking a box or signing in. If the person closed the page, left it unfinished, or never came back, the workflow could carry on anyway or end with a confusing message. Now it checks the page again when the person says they are done, and if something is wrong it stops at that step and says what happened. Inside a repeated step it no longer restarts from the beginning and leaves a window open, and a test in Build Studio waits up to ten minutes for the person instead of clicking Submit later on its own. The Done banner also comes back after the page changes, and only shows on the workflow's own pages.
+— 2026-11-22
+
 **The to-do list is now in the order the work has to be done — 2026-11-22**
 The to-do list used to mix urgent fixes with old ideas, and anything new was supposed to jump to the top. It is now split by when the work is needed: before the first pilot customers, before the public launch, after launch, and a parked pile at the very end for stale or low-value items. Inside each part the most important item comes first, the progress table is kept, and the "new items go to the top" rule is gone.
 — 2026-11-22

@@ -38,7 +38,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ✅ passed 2026-11-21 (P-47; 15.12 and 15.9 divider drag not verified) | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ✅ passed 2026-11-21 (P-48; stdio client not Claude Code; 16.9 older-layer half and sync 401 not reproducible here) | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ✅ passed 2026-11-22 (P-49; real Clerk sign-in blocked, 17.1–17.3/17.5 on a mock; 17.4 limitation 11) | Partly |
-| WF-18 | Hand-over step (a person solves a CAPTCHA) | ⏳ | Needs a person |
+| WF-18 | Hand-over step (a person solves a CAPTCHA) | ✅ passed 2026-11-22 (P-50; on a local stand-in, real CAPTCHA blocked) | Needs a person |
 | WF-19 | Conxa Execute desktop app | ⏳ | Separate app |
 | WF-20 | Cloud API: bad tokens, plan limits, cross-company | ⏳ | Yes (API only, local backend) |
 | WF-21 | Go / no-go gate before real customers | ⏳ last | Partly (clean PC, billing, updates blocked) |
@@ -511,7 +511,9 @@ Wrong account, wrong password and abandoned sign-ins are the break tests.
 
 ---
 
-## WF-18 — Hand-over step (a person takes the page)
+## ✅ WF-18 — Hand-over step (a person takes the page) — passed 2026-11-22 (P-50)
+
+**Result:** 18.1–18.6 pass on `fixtures/handover-fixture.html`; real CAPTCHA blocked. Detail: `workflow-handoffs/WF-018.md`.
 
 **Needs a person** to solve a CAPTCHA. **Site:** S13. Record: checkbox → Submit; insert a Hand-Over
 before the checkbox (message, on failure `abort`, resume-when probe = checkbox checked).
