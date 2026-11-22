@@ -1,0 +1,49 @@
+ve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+C
+
+Conxa · 4:17 AM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+●
+Test inputs
+· Comment: Leave at door · Customer name: Grace Hopper
+✕
+Test failed at “Press Enter to save the comment”
+
+0 min 13 s
+
+The box no longer holds what was typed
+
+These steps already ran and may have changed something in the app. Check them there:
+
+Click Send order to send the note
+●
+Open the order note page
+●
+Click into the customer name box
+●
+Type the customer's name
+●
+Click into the name on label box
+●
+Type the name to print on the label
+●
+Click Send order to send the note
+●
+Click into the comment box
+●
+Type into “Comment”
+✕
+Press Enter to save the comment
+Technical details
+Latest test failed
+Find the cause
+Test it
+LP paste form
+127.0.0.1 - - [22/Nov/2026 04:17:33] "GET /live.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:17:33] "GET /flag.txt HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:17:34] "GET /live.html?stage=2&name=Grace+Hopper&label=Grace+Hopper HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:17:34] "GET /flag.txt HTTP/1.1" 200 -
+{"ts":"2026-11-21T22:47:36.142Z","level":"error","msg":"execute_failed","run_id":"r_mwr00ggs_m3g0o","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Comment\" box). The form was not sent, and nothing was typed again."}

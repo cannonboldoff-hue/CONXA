@@ -1,0 +1,52 @@
+ame
+●
+Click into the name on label box
+●
+Type the name to print on the label
+●
+Click Send order to send the note
+●
+Click into the comment box
+✕
+Type into “Comment”
+Technical details
+Execution failed at step 8: Step 8 (type) failed: Something unexpected went wrong. (Verification failed: url_changed)
+Page URL: http://127.0.0.1:8098/live.html?stage=2&name=Grace+Hopper&label=Grace+Hopper
+Recovery ceiling Tier 2 (deterministic cascade only — no agent recovery).
+Step intent: {"action":"type","intent":"enter_comment","target":{"role":"textbox","name":"comment","text":"comment"},"anchors":["comment","form#b"],"value":"{{comment}}"}
+(run_id: r_mwqzs5ga_xe08x)
+Conxa could not confirm this computer's access: the key in this installation was not accepted. The workflows already installed still run, but updates and run reports cannot get through. To fix it, ask whoever gave you these workflows for a new installer and run it.
+Latest test failed
+Find the cause
+Test it
+LP paste form
+LP paste form
+LP1122 temp
+Lifecycle
+●
+Sign in
+●
+Record
+●
+Compile
+●
+Clarify
+●
+Review
+✕
+Test
+Failed
+○
+Approve
+Not approved
+Details
+Starting page
+127.0.0.1:8098
+Apps it uses
+—
+Steps
+—
+Status
+✕
+Latest test failed
+Human Edit

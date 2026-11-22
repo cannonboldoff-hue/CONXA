@@ -1,0 +1,46 @@
+ real thing. Remove it in the app if it was test data.
+
+What was checked
+Approve for packaging
+Test with other inputs
+C
+
+Conxa · 4:16 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+C
+
+Conxa · 4:16 AM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+●
+Test inputs
+· Comment: Leave at door · Customer name: Grace Hopper
+●
+Test passed
+
+9 steps · 0 min 12 s
+
+▲
+Because you let the last steps run, this test did the real thing. Remove it in the app if it was test data.
+
+What was checked
+Approve for packaging
+Test with other inputs
+C
+
+Conxa · 4:16 AM
+
+It works. Approve it when you’re happy — that adds it to the next skill package release. Approving doesn’t publish anything on its own.
+
+Test passed — not yet approved
+Approve
+Test it
+LP paste form
+127.0.0.1 - - [22/Nov/2026 04:16:46] "GET /live.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:16:47] "GET /live.html?stage=2&name=Grace+Hopper&label=Grace+Hopper HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:16:48] "GET /flag.txt HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:16:48] "GET /live.html?stage=3&comment=Leave+at+door HTTP/1.1" 200 -
+{"ts":"2026-11-21T22:45:27.545Z","level":"error","msg":"execute_failed","run_id":"r_mwqzxpfb_u1f5m","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Customer name\" box). The form was not sent, and nothing was typed again."}

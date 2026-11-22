@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Live pass form</title>
+<style>body{font:15px sans-serif;margin:24px}label{display:block;margin:8px 0}input{width:260px;padding:4px}button{padding:6px 14px;margin-top:8px}</style></head>
+<body>
+<h1>Order note</h1>
+<div id="got"></div>
+<form id="a" method="get" action="live.html">
+  <input type="hidden" name="stage" value="2">
+  <label>Customer name <input id="name" name="name" placeholder="Customer name"></label>
+  <label>Name on label <input id="label" name="label" placeholder="Name on label"></label>
+  <button type="submit" id="send">Send order</button>
+</form>
+<form id="b" method="get" action="live.html" style="display:none">
+  <input type="hidden" name="stage" value="3">
+  <label>Comment <input id="comment" name="comment" placeholder="Comment"></label>
+</form>
+<script>
+// Live-pass test page. Stage 1: two boxes + Send. Stage 2: one Comment box sent with Enter. Stage 3: done.
+// When flag.txt says "on", the page changes the Comment box 400 ms after it is typed into (a box that no
+// longer holds what was typed). Off while recording.
+const q = new URLSearchParams(location.search), st = q.get('stage');
+if (st === '2') { document.getElementById('a').style.display='none'; document.getElementById('b').style.display='';
+  document.getElementById('got').textContent = 'Order received for ' + q.get('name') + ' (label: ' + q.get('label') + ')'; }
+if (st === '3') { document.getElementById('a').style.display='none'; document.getElementById('got').textContent = 'Comment saved: ' + q.get('comment'); }
+// Added after test 2 of the live pass: later stages empty form a (its boxes are gone) instead of only hiding it.
+if (st) document.getElementById('a').innerHTML = '';
+let t = null;
+let on = false; fetch('flag.txt', {cache:'no-store'}).then((r) => r.text()).then((x) => { on = x.trim() === 'on'; }).catch(() => {});
+document.getElementById('comment').addEventListener('input', (e) => {
+  if (on && !t) t = setTimeout(() => { e.target.value = e.target.value + ' (changed by page)'; }, Number(localStorage.getItem('lpDelay') || 90));
+});
+</script>
+</body></html>

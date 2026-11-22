@@ -1,0 +1,11 @@
+inputs: ['comment', 'customer_name']
+0 7929ffdaee4597ca#1 navigate value= None input_binding= None recheck_typed= [] consequence= 
+1 rec3 focus value= None input_binding= None recheck_typed= [] consequence= read_only
+2 rec3.2 type value= '{{customer_name}}' input_binding= customer_name recheck_typed= [] consequence= reversible
+3 rec9 focus value= None input_binding= None recheck_typed= [] consequence= read_only
+4 rec9.2 type value= '{{customer_name}}' input_binding= None recheck_typed= [] consequence= reversible
+5 rec10 click value= None input_binding= None recheck_typed= [] consequence= irreversible
+6 rec12 focus value= None input_binding= None recheck_typed= [] consequence= read_only
+7 rec12.2 type value= '{{comment}}' input_binding= comment recheck_typed= [] consequence= reversible
+8 rec13 keyboard_shortcut value= 'Enter' input_binding= None recheck_typed= ['rec3.2', 'rec9.2', 'rec12.2'] consequence= reversible
+1

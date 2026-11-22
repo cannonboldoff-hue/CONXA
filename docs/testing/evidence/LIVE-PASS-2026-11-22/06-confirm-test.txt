@@ -1,0 +1,54 @@
+s in to start.
+
+●
+Test inputs
+· Find customer: Ada Lovelace
+✕
+Test failed at “Read the customer details shown in the list”
+
+0 min 57 s
+
+The element this step needs wasn’t found on the page.
+
+●
+Open the Customers page
+●
+Click into the Find customer search box
+●
+Type the customer's name into the search box
+●
+Press Enter to search for the customer
+●
+Click into the search box again
+●
+Clear the text in the search box
+✕
+Read the customer details shown in the list
+
+Nothing was saved or sent.
+
+Technical details
+
+The try-out couldn’t find the find customer on the page. Did you type the right thing? — waiting for your answer below
+
+1 question need you
+Answer questions
+▲
+In the try-out you typed “Ada Lovelace”, but while recording you typed “Grace Hopper”. The workflow itself may be fine.
+Question 7 of 7
+The try-out couldn’t find the find customer on the page. Did you type the right thing?
+No, I typed it wrong. Let me try again
+I’ll reopen the try-out and point to the box to fix.
+Yes, it was right. Fix the workflow instead
+I’ll look for the problem in the steps.
+I typed it wrong on purpose, that’s fine
+Nothing changes. You can test again whenever you like.
+LP delete customer and email receipt
+127.0.0.1 - - [22/Nov/2026 04:29:04] "GET /list.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:29:05] "GET /confirm.txt HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:29:05] "GET /list.html?q=Ada+Lovelace HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:29:05] "GET /confirm.txt HTTP/1.1" 200 -
+{"ts":"2026-11-21T22:44:06.293Z","level":"error","msg":"execute_failed","run_id":"r_mwqzvysq_dsghi","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Customer name\" box). The form was not sent, and nothing was typed again."}
+{"ts":"2026-11-21T22:45:27.545Z","level":"error","msg":"execute_failed","run_id":"r_mwqzxpfb_u1f5m","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Customer name\" box). The form was not sent, and nothing was typed again."}
+{"ts":"2026-11-21T22:47:36.142Z","level":"error","msg":"execute_failed","run_id":"r_mwr00ggs_m3g0o","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Comment\" box). The form was not sent, and nothing was typed again."}
+{"ts":"2026-11-21T22:59:38.186Z","level":"error","msg":"execute_failed","run_id":"r_mwr0fa6t_l2yoe","skill":"lp-delete-customer-and-email-receipt-6282da96","error":"Step 7 (extract) failed: Something unexpected went wrong. (Element not found (resolve miss))"}

@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Shop search</title>
+<style>body{font:15px sans-serif;margin:24px}input{width:240px;padding:4px}li{margin:6px 0}</style></head>
+<body>
+<h1>Shop search</h1>
+<form method="get" action="results.html"><label>Search products <input id="s" name="s" placeholder="Search products"></label></form>
+<ul id="results"></ul>
+<script>
+// Live-pass results page: each result shows only a price, and the prices change with the search words.
+const s = new URLSearchParams(location.search).get("s") || "";
+let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+if (s) for (let i = 0; i < 4; i++) {
+  const li = document.createElement("li"); li.className = "result";
+  li.innerHTML = `<span class="price">$${((h * (i + 3)) % 9000 / 100 + 5).toFixed(2)}</span> <button type="button">Add to cart</button>`;
+  document.getElementById("results").appendChild(li);
+}
+</script>
+</body></html>

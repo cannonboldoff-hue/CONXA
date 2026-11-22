@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Customers</title>
+<style>body{font:15px sans-serif;margin:24px}table{border-collapse:collapse;margin-top:14px}td,th{border:1px solid #888;padding:4px 10px}input{width:240px;padding:4px}</style></head>
+<body>
+<h1>Customers</h1>
+<form method="get" action="list.html"><label>Find customer <input id="q" name="q" placeholder="Find customer"></label></form>
+<div id="msg"></div>
+<table><thead><tr><th>Name</th><th>Balance</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+// Live-pass list page. Rows matching ?q come first, so the first row's balance changes with the search.
+// When confirm.txt says "on", Delete asks a native confirm() box (never seen while recording).
+const all = [["Grace Hopper", "$12.50"], ["Ada Lovelace", "$40.00"], ["Alan Turing", "$7.25"], ["Katherine Johnson", "$19.99"]];
+const q = (new URLSearchParams(location.search).get("q") || "").toLowerCase();
+const gone = (new URLSearchParams(location.search).get("deleted") || "");
+const rows = all.filter((r) => r[0] !== gone).sort((a, b) => (b[0].toLowerCase().includes(q) && q ? 1 : 0) - (a[0].toLowerCase().includes(q) && q ? 1 : 0));
+if (gone) document.getElementById("msg").textContent = "Deleted " + gone;
+let ask = false; fetch("confirm.txt", { cache: "no-store" }).then((r) => r.text()).then((x) => { ask = x.trim() === "on"; }).catch(() => {});
+const tb = document.getElementById("rows");
+for (const [n, bal] of rows) {
+  const tr = document.createElement("tr"); tr.className = "customer-row";
+  tr.innerHTML = `<td class="name">${n}</td><td class="balance">${bal}</td><td><button type="button" class="info">Show details</button> <button type="button" class="del">Delete</button></td>`;
+  tr.querySelector(".info").addEventListener("click", () => {
+    if (ask && !confirm("Open the details of " + n + "?")) { document.getElementById("msg").textContent = "Details closed"; return; }
+    document.getElementById("msg").textContent = "Details of " + n + ": balance " + bal;
+  });
+  tr.querySelector(".del").addEventListener("click", () => {
+    if (ask && !confirm("Delete " + n + "?")) { document.getElementById("msg").textContent = "Kept " + n; return; }
+    location.href = "list.html?deleted=" + encodeURIComponent(n);
+  });
+  tb.appendChild(tr);
+}
+</script>
+</body></html>

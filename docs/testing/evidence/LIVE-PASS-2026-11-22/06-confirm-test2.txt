@@ -1,0 +1,74 @@
+e customer and email receipt
+
+version 3
+
+Delete a customer from the customer list.
+
+Inputs you’ll provide:
+find customer
+1
+Open the Customers page
+2
+Click into the Find customer search box
+3
+Type the customer's name into the search box
+4
+Press Enter to search for the customer
+✓ 4a
+Check that the page address changes
+5
+Click into the search box again
+6
+Clear the text in the search box
+and 2 more
+
+8 steps · 3 checks · Done when the page changes and “Deleted” appears
+
+Test it
+Review the 2 uncertain steps
+C
+
+Conxa · 4:30 AM
+
+Let’s test it. Fill in the inputs the way a real request would — I’ve put your recorded values in to start.
+
+●
+Test inputs
+· Find customer: Grace Hopper
+✕
+Test failed at “Click Delete on the customer's row”
+
+1 min 06 s
+
+The page didn’t respond in time.
+
+●
+Open the Customers page
+●
+Click into the Find customer search box
+●
+Type the customer's name into the search box
+●
+Press Enter to search for the customer
+●
+Click into the search box again
+●
+Clear the text in the search box
+●
+Read the customer details shown in the list
+✕
+Click Delete on the customer's row
+Technical details
+Latest test failed
+Find the cause
+Test it
+Jump to latest
+LP delete customer and email receipt
+127.0.0.1 - - [22/Nov/2026 04:30:14] "GET /list.html HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:30:14] "GET /confirm.txt HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:30:15] "GET /list.html?q=Grace+Hopper HTTP/1.1" 200 -
+127.0.0.1 - - [22/Nov/2026 04:30:15] "GET /confirm.txt HTTP/1.1" 200 -
+{"ts":"2026-11-21T22:45:27.545Z","level":"error","msg":"execute_failed","run_id":"r_mwqzxpfb_u1f5m","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Customer name\" box). The form was not sent, and nothing was typed again."}
+{"ts":"2026-11-21T22:47:36.142Z","level":"error","msg":"execute_failed","run_id":"r_mwr00ggs_m3g0o","skill":"lp-paste-form-9da0707c","error":"Step 9 (keyboard_shortcut) failed: The box no longer holds what was typed (the \"Comment\" box). The form was not sent, and nothing was typed again."}
+{"ts":"2026-11-21T22:59:38.186Z","level":"error","msg":"execute_failed","run_id":"r_mwr0fa6t_l2yoe","skill":"lp-delete-customer-and-email-receipt-6282da96","error":"Step 7 (extract) failed: Something unexpected went wrong. (Element not found (resolve miss))"}
+{"ts":"2026-11-21T23:00:55.070Z","level":"error","msg":"execute_failed","run_id":"r_mwr0gs2u_viwii","skill":"lp-delete-customer-and-email-receipt-6282da96","error":"Step 8 (click) failed: The page didn't respond in time — the element never appeared or the action never completed. (locator.click: Timeout 2500ms exceeded.)"}

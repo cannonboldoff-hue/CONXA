@@ -1,0 +1,9 @@
+package: /c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa/skill-packs/wrk_local/lp1122-signin-226f8cee/lp-secure-logout-1e84b5c8/v0.1.0
+175
+grep tomsmith|SuperSecretPassword in package:
+/c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa/skill-packs/wrk_local/lp1122-signin-226f8cee/lp-secure-logout-1e84b5c8/v0.1.0/execution.json:0
+/c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa/skill-packs/wrk_local/lp1122-signin-226f8cee/lp-secure-logout-1e84b5c8/v0.1.0/inputs.json:0
+/c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa/skill-packs/wrk_local/lp1122-signin-226f8cee/lp-secure-logout-1e84b5c8/v0.1.0/manifest.json:0
+/c/Users/kiran/.conxa-build-studio-dev/sandbox/.conxa/skill-packs/wrk_local/lp1122-signin-226f8cee/lp-secure-logout-1e84b5c8/v0.1.0/recovery.json:0
+compiled skill_4f817baa has tomsmith count:
+1
