@@ -189,6 +189,7 @@ def _extract_fork_pause(result: dict[str, Any]) -> dict[str, Any] | None:
             # EXEC-49 P5: a popup the workflow was never taught, put to whoever stands in for the MCP client
             # (here: Studio's own model, with "let AI answer" on). Absent on older engines = human-only.
             "agent": bool(fork.get("agent")) and fork.get("requires_human") is False,
+            "native": bool(fork.get("native")),  # the page's own OK/Cancel box, still open on the parked run
             "choices": [{"id": str(c["id"]), "label": str(c.get("label") or c["id"]), "role": str(c.get("role") or "")} for c in choices],
         }
     return None
@@ -477,6 +478,14 @@ def _drive_runtime_pauses(
                 choice = fork_hook(fork) if fork_hook is not None else _FORK_STOP
             valid = {c["id"] for c in fork["choices"]}
             if choice not in valid or choice == _FORK_STOP:
+                if fork["native"]:
+                    # The page's own OK/Cancel box stays open on the parked run until it expires, and OK pressed on it
+                    # meanwhile would still act. Stop ends the park now: the runtime presses Cancel (BUILD-117 (4)).
+                    try:
+                        call({**run_args, "resume_from": fork["step_index"],
+                              "review_results": {str(fork["step_index"]): {"choice": _FORK_STOP}}})
+                    except Exception:  # noqa: BLE001 -- best effort: the park's own expiry still presses Cancel
+                        pass
                 return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
                                 "remaining": 0, "run_id": "", "declined": True}
             run_args = {**run_args, "resume_from": fork["step_index"],

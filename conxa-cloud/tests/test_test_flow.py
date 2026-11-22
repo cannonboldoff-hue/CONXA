@@ -894,6 +894,17 @@ def test_the_standin_choosing_stop_or_an_unlisted_button_ends_the_test():
         assert stopped["declined"] is True and c.args == []
 
 
+def test_a_declined_ok_cancel_box_ends_the_parked_run_with_stop_so_it_is_cancelled_now():
+    # BUILD-117 (4): the page's own OK/Cancel box waits on the parked run; OK pressed on it later would still act.
+    for answer in ("__stop__", "Delete everything"):
+        r = _agent_fork_result()
+        r["_meta"]["conxa/fork"]["native"] = True
+        c = Calls([DONE])
+        _, stopped = c.drive(r, answer_popup=lambda f, content, a=answer: a)
+        assert stopped["declined"] is True
+        assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 2, "review_results": {"2": {"choice": "__stop__"}}}]
+
+
 def test_a_test_ended_at_a_popup_is_kept_on_the_workflow_and_shows_as_partial_in_the_lifecycle(env):
     b, wf, _out = env
 
