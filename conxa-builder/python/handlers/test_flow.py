@@ -47,6 +47,23 @@ def last_test_inputs(workflow: Any) -> dict[str, Any]:
     return {**(getattr(workflow, "last_test_inputs", None) or {}), **_secret_test_inputs.get(getattr(workflow, "id", ""), {})}
 
 
+def _secret_not_held(workflow_id: str, inputs: dict[str, Any]) -> bool:
+    """True when the run needs a secret test input (the inputs card's own rule) that `inputs` lacks: it was typed before
+    Studio restarted, and secrets are kept only in memory."""
+    from conxa_compile.editor.workflow_mutations import inputs_a_run_needs, run_produced_names
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    workflow = get_workflow(workflow_id)
+    doc = read_skill(workflow.skill_id) if workflow is not None and workflow.skill_id else None
+    if not doc:
+        return False
+    produced = run_produced_names(((doc.get("skills") or [{}])[0] or {}).get("steps") or [])
+    return any(is_secret_input(str(r["id"])) and (r.get("type") or "text") == "text" and not r.get("optional")
+               and str(r["id"]).lower() not in produced and str(inputs.get(r["id"], "")).strip() in ("", MASK)
+               for r in inputs_a_run_needs(doc))
+
+
 def _thread(workflow_id: str) -> str:
     return f"wf:{workflow_id}"
 
@@ -72,6 +89,27 @@ def _pick_failing_row(rows: list[dict[str, Any]], failed_key: str | None, failed
         if r is not match and r["status"] == "running":
             r["status"] = "done"
     return match
+
+
+def _changed_before_failure(rows: list[dict[str, Any]], failing: dict[str, Any] | None, changed_keys: list[str],
+                            names: dict[str, tuple[str, bool]]) -> list[str]:
+    """Names of the steps that already ran before the failure and may have changed something in the app (BUILD-100): a
+    step that can't be undone that finished, or one the runtime saw send data. The failing step is not one of them (the
+    card says separately whether its action may have happened). In run order, each name once."""
+    keys = set(changed_keys)
+    out: list[str] = []
+    for r in rows:
+        if r is failing or r.get("status") != "done":
+            continue
+        if r.get("destructive") or (r.get("step_key") and r["step_key"] in keys):
+            out.append(r["name"])
+            keys.discard(r.get("step_key"))
+    failing_key = failing.get("step_key") if failing else None
+    for k in changed_keys:  # a step inside a popup answer or loop has no row of its own
+        if k in keys and k != failing_key and k in names:
+            out.append(names[k][0])
+            keys.discard(k)
+    return list(dict.fromkeys(out))
 
 
 def _built_package_has(output_path: str, slug: str) -> bool:
@@ -308,6 +346,17 @@ class TestFlowMixin:
     def _tf_background(self, workflow_id: str, inputs: dict[str, Any], guard: bool, show_browser: bool,
                        use_ai: bool = False) -> None:
         try:
+            if _secret_not_held(workflow_id, inputs):
+                # "Test again" after a Studio restart: a password or token typed in a test was never saved, so the run
+                # would go without it and fail on the missing value. Ask for it again on a fresh inputs card instead.
+                from conxa_compile.conversation import harness, thread_store as ts
+
+                sink = _event_sink("")
+                harness.emit_item(sink, _thread(workflow_id), ts.append(
+                    _thread(workflow_id), "assistant_message",
+                    text="Studio doesn’t keep a password or other secret after it restarts. Type it again below to test."))
+                self.cmd_flow_test_prepare({"workflow_id": workflow_id}, "")
+                return
             outcome = self._tf_run_test(workflow_id, inputs, guard=guard, show_browser=show_browser, attempt=1, auto=False,
                                         use_ai=use_ai)
             if outcome == "failed":
@@ -627,7 +676,7 @@ class TestFlowMixin:
         already have happened, and the surface a deliberate stop was about. Nothing here is read from message text.
         Empty-handed ({"kind": None, ...}) when no evidence was kept; callers then fall back to the old behaviour."""
         facts: dict[str, Any] = {"kind": None, "took_effect": False, "surface": None, "message": "",
-                                 "failed_step_key": None, "failed_at": None, "candidates": []}
+                                 "failed_step_key": None, "failed_at": None, "candidates": [], "changed_keys": []}
         try:
             from conxa_compile.editor.evidence import build_evidence_bundle
             from conxa_core.storage.workflow_store import get_workflow
@@ -646,6 +695,9 @@ class TestFlowMixin:
             facts["surface"] = surface if isinstance(surface, dict) else None
             cands = ev.get("ambiguous_candidates")
             facts["candidates"] = [str(c.get("name") or "") for c in cands if isinstance(c, dict)] if isinstance(cands, list) else []
+            # Steps of this test that already ran and sent data to the app (BUILD-100), by step key.
+            changed = ev.get("steps_that_changed")
+            facts["changed_keys"] = [str(c["step_key"]) for c in changed if isinstance(c, dict) and c.get("step_key")] if isinstance(changed, list) else []
         except Exception:  # noqa: BLE001 -- facts are a bonus; a failed test must still report
             pass
         return facts
@@ -797,7 +849,8 @@ class TestFlowMixin:
             failing["status"] = "failed"
         # Only claim "nothing was sent" when no step that can't be undone even started AND the runtime does not say
         # the failing step's action may already have happened: a failure AT such a step may have half-happened.
-        nothing_sent = not any(r.get("destructive") for r in rows) and not facts["took_effect"]
+        changed = _changed_before_failure(rows, failing, facts.get("changed_keys") or [], names or {})
+        nothing_sent = not any(r.get("destructive") for r in rows) and not facts["took_effect"] and not changed
         # "Couldn't confirm" / "Partly done" already read in plain words and say something an ordinary
         # failure summary would flatten: the work may have happened. Keep their own sentences.
         own = outcome in ("couldnt_confirm", "partly_done")
@@ -809,6 +862,7 @@ class TestFlowMixin:
         harness.update_card(
             _thread(workflow_id), card_id, sink=sink, state="failed", rows=[dict(r) for r in rows], error=message[:4000],
             summary=summary, failed_step=failing["name"] if failing else "", nothing_sent=(nothing_sent and not own) or not_a_result,
+            changed_steps=[] if not_a_result else changed,
             seconds=int(time.time() - started), outcome=outcome or "failed",
             failure_image=None if not_a_result else self._tf_failure_image(workflow_id), actions=[],
         )

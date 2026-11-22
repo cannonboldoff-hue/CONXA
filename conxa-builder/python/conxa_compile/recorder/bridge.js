@@ -2550,8 +2550,46 @@
     const value = sensitive ? "{{REDACTED}}" : readEditableValue(target);
     const p = serializeTarget(target, "type", value);
     p.action.value = value;
+    // BUILD-110 (2): the whole of this box's text was pasted from another box's copy. Only while it is exactly that.
+    const pasted = sensitive ? null : _pastedInto.get(target);
+    if (pasted && normClip(value) === pasted.text) p.pasted_from = pasted.ref;
     finalizeState(p);
   }
+
+  // BUILD-110 (2), owner rule 2026-11-21: copy (or cut) in one box, paste in another. A copy counts only when it took
+  // the box's whole text, and a paste only when it pasted exactly that text into a different box. Never for a secret box.
+  let _clipSource = null;              // {ref, text}: the last copy or cut taken from a whole box
+  const _pastedInto = new WeakMap();   // box -> {ref, text}: what was pasted into it, and from which box
+  const normClip = (s) => String(s == null ? "" : s).replace(/\r\n/g, "\n");
+  function _selectedText(box) {
+    if (box && typeof box.selectionStart === "number" && typeof box.value === "string") {
+      return box.value.substring(box.selectionStart, box.selectionEnd);
+    }
+    try { return String(window.getSelection() || ""); } catch (_e) { return ""; }
+  }
+  function _onCopy(ev) {
+    _clipSource = null;
+    const box = resolveEditableTarget(eventTargetFromPath(ev));
+    if (!box || isSensitiveEditable(box)) return;
+    const text = normClip(_selectedText(box));
+    if (text && text === normClip(readEditableValue(box))) _clipSource = { ref: elementRef(box), text };
+  }
+  onDoc("copy", _onCopy, true);
+  onDoc("cut", _onCopy, true);
+  onDoc(
+    "paste",
+    (ev) => {
+      const box = resolveEditableTarget(eventTargetFromPath(ev));
+      if (!box) return;
+      _pastedInto.delete(box);
+      const src = _clipSource;
+      let text = "";
+      try { text = normClip(ev.clipboardData ? ev.clipboardData.getData("text/plain") : ""); } catch (_e) { text = ""; }
+      if (!src || isSensitiveEditable(box) || src.ref === elementRef(box) || text !== src.text) return;
+      _pastedInto.set(box, { ref: src.ref, text });
+    },
+    true
+  );
 
   function scheduleInputFlush(el, force) {
     const target = resolveEditableTarget(el);
@@ -3518,7 +3556,32 @@
     }
     // Steps have already left the page; just end any watch so its amendment goes out before the page dies.
     _cutAll = true;
+    _sendDocCopy();
   }, true);
+
+  // The page as it is left, for the steps taken on it (BUILD-99). The recorder copies the page when it reads a step,
+  // which after a link or a sent form is often the next page already, so those steps' uniqueness checks ran blind.
+  // Its words go too: they tell which words on the next page are new (BUILD-95). Top page only, like the recorder's
+  // own copy; built the way Playwright's page.content() builds it, so an unchanged page hashes the same.
+  function _sendDocCopy() {
+    if (window !== window.top || !_seq) return;
+    try {
+      const doctype = document.doctype ? new XMLSerializer().serializeToString(document.doctype) : "";
+      const html = doctype + (document.documentElement ? document.documentElement.outerHTML : "");
+      report({ _doc_copy: { doc_id: DOC_ID, html, ms: Date.now(), results: resultSignature().split("\n").filter(Boolean) } });
+    } catch (_e) {}
+  }
+
+  // What this page says once it has settled, for the step that sent the tab here: a result such as "Thank you for
+  // your order!" is on the next page, which the step's own page never saw (BUILD-95). The recorder keeps only the
+  // words the page left did not show, and only on the step whose landing is this page.
+  if (window === window.top) {
+    const _arrive = () => _waitForDomSettle(500, 4000).then(() => {
+      try { report({ _arrival: { doc_id: DOC_ID, url: location.href, results: resultSignature().split("\n").filter(Boolean) } }); } catch (_e) {}
+    });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _arrive, { once: true });
+    else _arrive();
+  }
 
   // Stop asks every frame to hand over what it holds. Cuts open watches (their amendment goes out within one
   // watch tick), sends any typing still waiting on its debounce, and tells Python how many steps this bridge

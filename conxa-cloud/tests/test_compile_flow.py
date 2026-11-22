@@ -739,50 +739,37 @@ def test_two_writers_to_the_question_file_do_not_lose_each_others_change(env):
     assert got[a] == "a39" and got[c] == "c39"
 
 
-# ── BUILD-55 A4: no question waits on wording ───────────────────────────────────────────────
+# ── BUILD-93 (4): a question card is posted in its final wording (it replaced BUILD-55 A4's reword-in-place) ──
 
 
-def test_the_first_question_appears_in_template_wording_and_is_reworded_in_the_background(env, monkeypatch):
+def test_the_first_question_is_posted_already_reworded_and_never_changes_wording_on_screen(env, monkeypatch):
     b, wf, _out = env
-    gate = threading.Event()
 
     def fake(task, payload, timeout_ms, **k):
-        assert gate.wait(5)                      # the card must already be on screen while this waits
         return {"questions": [{"id": q["id"], "title": "Friendly: " + q["title"]} for q in payload["input"]["questions"]]}
 
     monkeypatch.setattr("conxa_compile.llm.clarify_question_copy.call_llm", fake)
     _fake_compile(b, wf)
     assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
-    first = _cards(wf.id, "clarify_question")[0]
-    assert first["state"] == "open" and not first["title"].startswith("Friendly")
-
-    gate.set()
-    deadline = time.time() + 5
-    while time.time() < deadline and not _cards(wf.id, "clarify_question")[0]["title"].startswith("Friendly"):
-        time.sleep(0.05)
     card = _cards(wf.id, "clarify_question")[0]
     assert card["title"].startswith("Friendly:") and card["state"] == "open"
-    assert clarify_store.load(wf.id)["questions"][0]["title"].startswith("Friendly:")      # later questions are posted reworded
-    assert [c["id"] for c in card["choices"]] == [c["id"] for c in first["choices"]]       # wording never changes the choices
+    # every revision of the card on record carries the final wording: it never showed the template first
+    revisions = [r for r in ts.read_raw(f"wf:{wf.id}") if r.get("card_id") == card["card_id"] and "title" in r]
+    assert revisions and all(r["title"].startswith("Friendly:") for r in revisions)
+    assert all(q["title"].startswith("Friendly:") for q in clarify_store.load(wf.id)["questions"])  # later ones too
 
 
-def test_a_question_answered_while_the_wording_call_runs_is_left_alone(env, monkeypatch):
+def test_a_failed_wording_call_leaves_the_plain_wording_and_the_questions_still_come(env, monkeypatch):
     b, wf, _out = env
-    gate = threading.Event()
 
     def fake(task, payload, timeout_ms, **k):
-        gate.wait(5)
-        return {"questions": [{"id": q["id"], "title": "Friendly: " + q["title"]} for q in payload["input"]["questions"]]}
+        raise RuntimeError("cloud_unreachable")
 
     monkeypatch.setattr("conxa_compile.llm.clarify_question_copy.call_llm", fake)
     _fake_compile(b, wf)
-    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
-    q1 = _cards(wf.id, "clarify_question")[0]
-    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q1["card_id"], "action": "choose", "payload": {"choice": "no"}}, "r")["ok"]
-    gate.set()
-    time.sleep(0.5)
-    done = _cards(wf.id, "clarify_question")[0]
-    assert done["state"] == "answered" and not done["title"].startswith("Friendly")
+    assert b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")["ok"]
+    card = _cards(wf.id, "clarify_question")[0]
+    assert card["state"] == "open" and not card["title"].startswith("Friendly")
 
 
 # ── BUILD-55 B5: a check cut short by a restart is rebuilt when the workflow is opened ─────
@@ -1002,6 +989,7 @@ def test_a_test_of_a_workflow_missing_from_the_built_copy_says_so_plainly(env, m
     pack = SkillPack(workspace_id="ws", company_slug="c", company_name="C", created_at=0.0, updated_at=0.0,
                      build=SkillPackBuild(last_built_at=2.0, output_path=str(settings.data_dir / "skill-packs" / "c"), version="0.1.0"))
     monkeypatch.setattr("conxa_core.storage.skill_pack_store.get_skill_pack", lambda _ws: pack)
+    monkeypatch.setattr(b, "_tf_ensure_built", lambda *_a: None)  # a build that still left it out (BUILD-104 (3))
     with pytest.raises(_CommandError) as e:
         b.cmd_test_workflow({"workflow_id": wf.id}, "t")
     assert e.value.code == "workflow_not_built"
@@ -1083,6 +1071,20 @@ def test_when_the_recap_never_works_no_stand_in_is_posted_and_a_warning_shows(en
     assert not any("ready" in t for t in _texts(wf.id, "assistant_message"))
     assert "Couldn’t write the summary of what was built" in _texts(wf.id, "event")
     assert _cards(wf.id, "clarify_question")  # the questions still follow
+
+
+def test_a_missing_model_answer_has_one_plain_cause():
+    # BUILD-91 (1), BUILD-99 (4): the recorded cause, said in words a person understands; never a stand-in summary.
+    from conxa_compile.conversation.plain_words import plain_ok
+    from conxa_compile.llm.compile_recap import plain_cause
+
+    assert plain_cause([]) == "" and plain_cause(None) == ""
+    offline = plain_cause(["cloud_unreachable"])
+    assert "couldn't reach Conxa Cloud" in offline and plain_cause(["URLError: <urlopen error timed out>"]) == offline
+    assert "wording" in plain_cause(["answer rejected: it must say the number of steps (4)", "answer rejected: x"])
+    busy = plain_cause(["proxy HTTP 502: llm_all_providers_failed; HTTPError 403 auth_failed"])
+    assert busy and busy != offline
+    assert all(plain_ok(m) and "_" not in m for m in (offline, busy))
 
 
 def test_saving_a_step_with_nothing_edited_writes_nothing(env):
@@ -1398,3 +1400,232 @@ def test_the_robot_check_answer_inserts_a_hand_over_step_by_code(env):
     hand = after[1]
     assert (hand["action"] if isinstance(hand["action"], str) else hand["action"]["action"]) == "handover"
     assert hand["value"] == "Please do the robot check, then continue."
+
+
+# ── E2E16-6a: question cards and answers ────────────────────────────────────────────────────
+
+
+def test_a_partly_failed_build_says_the_cause_in_plain_words_and_keeps_the_detail_behind_it(env):
+    """BUILD-99 (4): a second opinion that could not reach the cloud named no cause the person could read."""
+    b, wf, _out = env
+
+    def degraded(skill_id):
+        d = _doc(skill_id)
+        d["compile_report"]["degraded"] = [{"pass": "second_opinion", "reason": "llm_call_failed",
+                                            "detail": "URLError: cloud_unreachable"}]
+        return d
+
+    _fake_compile(b, wf, doc_fn=degraded)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    card = _cards(wf.id, "compile")[0]
+    assert card["state"] == "partial"
+    assert card["cause"] == "Studio couldn't reach Conxa Cloud. Check your internet connection, then build again."
+    assert "llm_call_failed" in card["error"]          # the technical line stays behind "Show details"
+
+
+def test_a_missing_summary_says_why_in_one_plain_sentence_and_writes_no_stand_in(env, monkeypatch):
+    """BUILD-91 (1): "Couldn't write the summary" never said why."""
+    b, wf, _out = env
+
+    def refuse(task, payload, timeout_ms, **k):
+        raise RuntimeError("cloud_unreachable")
+
+    monkeypatch.setattr("conxa_compile.llm.compile_recap.call_llm", refuse)
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    banner = next(i for i in ts.load(f"wf:{wf.id}", limit=200)["items"]
+                  if i["kind"] == "event" and i["text"] == "Couldn’t write the summary of what was built")
+    assert "Studio couldn't reach Conxa Cloud." in banner["subject"]
+    assert not _texts(wf.id, "assistant_message")      # no stand-in summary (BUILD-98 (2))
+
+
+def test_a_part_is_missing_keeps_the_answer_and_opens_the_chat_and_the_editor(env):
+    """BUILD-110 (4): "No, a part is missing" changed nothing and offered no way on."""
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    clarify_store.mutate(wf.id, lambda d: d["questions"].append(
+        {"id": "coverage", "kind": "coverage", "status": "answered", "answer": {"choice": "incomplete"}}))
+    b._flow_post_summary(wf.id, _event_sink("r"))
+    summary = _cards(wf.id, "workflow_summary")[-1]
+    assert summary["summary"]["missing_part"] is True
+    assert "tell me here what it is" in _texts(wf.id, "assistant_message")[-1]
+    assert clarify_store.get_question(wf.id, "coverage")["answer"] == {"choice": "incomplete"}   # the answer is kept
+
+
+_ROWS = ("E1", "E2", "E3", "E4", "E5")
+
+
+def _repeat_doc(skill_id):
+    """Five records entered the same way (WF-3 A, demoqa Web Tables): add, first name, last name, submit."""
+    steps = [{"action": {"action": "navigate"}, "url": "https://x.test/", "intent": "open", "validation": {"assertions": []}}]
+    for r in range(len(_ROWS)):
+        sfx = "" if r == 0 else f"_{r + 1}"
+        base = 100 * (r + 1)
+        for element, binding, seq in (("add", None, base), ("first", f"first_name{sfx}", base + 1),
+                                      ("last", f"last_name{sfx}", base + 2), ("submit", None, base + 3)):
+            s = {"action": {"action": "type" if binding else "click"}, "identity_bundle": {"stable_hash": element},
+                 "intent": f"{element}_{r}", "source_event": seq, "target": {"primary_selector": f"#{element}"},
+                 "validation": {"assertions": []}}
+            if binding:
+                s["value"], s["input_binding"] = "{{" + binding + "}}", binding
+            steps.append(s)
+    inputs = [{"id": s["input_binding"], "type": "text"} for s in steps if s.get("input_binding")]
+    return {"meta": {"id": skill_id, "title": "Add records", "version": 1}, "skills": [{"id": skill_id, "steps": steps}],
+            "inputs": inputs, "compile_report": {"status": "ok", "steps": [{"warnings": []} for _ in steps]}}
+
+
+def _repeat_sources(monkeypatch):
+    typed = {}
+    for r, last in enumerate(_ROWS):
+        typed[100 * (r + 1) + 1], typed[100 * (r + 1) + 2] = "Conxa", last
+    by_seq = {seq: {"action": {"value": typed.get(seq)}, "extras": {"sequence": seq}}
+              for r in range(len(_ROWS)) for seq in range(100 * (r + 1), 100 * (r + 1) + 4)}
+    monkeypatch.setattr("conxa_compile.editor.source_event.find_source_event",
+                        lambda step, doc: by_seq.get(step.get("source_event")))
+
+
+def _kinds(steps):
+    return [s["action"] if isinstance(s["action"], str) else s["action"]["action"] for s in steps]
+
+
+def test_the_list_answer_runs_end_to_end_through_compile_test_inputs_and_packaging(env, monkeypatch):
+    """BUILD-93 (21), unit-proven only (no live Studio): record five entries, answer "Yes, enter each row of a list";
+    the test card offers the five recorded rows, a test runs with them and with a changed list, and the package is a
+    table loop."""
+    from conxa_compile.skill_package_builder_saved_skill import _saved_for_each_step
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _repeat_sources(monkeypatch)
+    _fake_compile(b, wf, doc_fn=_repeat_doc)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    q = _cards(wf.id, "clarify_question")[0]
+    assert q["question_kind"] == "repeat_rows"
+    assert b.cmd_card_action({"thread_id": f"wf:{wf.id}", "card_id": q["card_id"], "action": "choose",
+                              "payload": {"choice": "list"}}, "r")["ok"]
+    doc = read_skill(get_workflow(wf.id).skill_id)
+    loop = next(s for s in doc["skills"][0]["steps"] if _kinds([s]) == ["for_each"])
+    assert loop["for_each"]["items_rows"] == "entries" and loop["for_each"]["columns"] == ["last_name"]
+    assert _saved_for_each_step(loop)["type"] == "for_each_rows"
+    assert [i["id"] for i in doc["inputs"]] == ["entries"]
+    assert clarify_store.summary(wf.id)["unanswered"] == 0
+
+    captured = []
+    monkeypatch.setattr(b, "_tf_background", lambda wid, values, *a: captured.append(values))
+    card_id = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"]
+    entries = next(i for i in _cards(wf.id, "test_inputs")[-1]["inputs"] if i["id"] == "entries")
+    assert entries["value"].splitlines() == list(_ROWS)     # the five recorded rows, one per line
+    b.cmd_flow_test_run({"workflow_id": wf.id, "card_id": card_id, "inputs": {"entries": entries["value"]}}, "r")
+    card_id = b.cmd_flow_test_prepare({"workflow_id": wf.id}, "r")["card_id"]
+    b.cmd_flow_test_run({"workflow_id": wf.id, "card_id": card_id, "inputs": {"entries": "Ada\nGrace"}}, "r")
+    assert captured[0]["entries"] == [{"last_name": v} for v in _ROWS]
+    assert captured[1]["entries"] == [{"last_name": "Ada"}, {"last_name": "Grace"}]
+
+
+def _understood_before(session_dir, choice, facet="repeat"):
+    """What the understanding before the build kept and the person answered: "How many entries each time?"."""
+    session_dir.mkdir(parents=True, exist_ok=True)
+    note = {"kind": "note", "row": "r3", "event_id": 202, "prompt": "How many entries should it add each time?",
+            "choices": [{"id": "c1", "label": "Five, like this recording", "means": "same"},
+                        {"id": "c2", "label": "A number given each time", "means": "list"}]}
+    if facet:
+        note["facet"] = facet
+    (session_dir / "understanding.json").write_text(json.dumps({"source": "model", "goal": "Add records",
+                                                                "questions": [note]}), encoding="utf-8")
+    (session_dir / "decisions.json").write_text(json.dumps([{
+        "qid": "note:r3", "kind": "note", "event_ids": [202], "row_ref": "r3", "skipped": False, "choice": choice,
+        "note": "How many entries should it add each time? x"}]), encoding="utf-8")
+
+
+@pytest.mark.parametrize("choice,answer", [("c2", "list"), ("c1", "same")])
+def test_the_repeat_answered_before_the_build_settles_the_builds_repeat_question(env, monkeypatch, choice, answer):
+    """BUILD-93 (19): the answer to the understanding's repeat note is mapped by code (the option's `means` tag, never
+    its words) onto the build's own repeat question: the person is not asked twice and chat is not handed it."""
+    from conxa_core.storage.json_store import read_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _repeat_sources(monkeypatch)
+    _understood_before(settings.data_dir / "sessions" / "sess1", choice)
+    turns = []
+    monkeypatch.setattr(b, "cmd_thread_turn", lambda p, r: turns.append(p))
+    _fake_compile(b, wf, doc_fn=_repeat_doc)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    assert not [c for c in _cards(wf.id, "clarify_question") if c["question_kind"] == "repeat_rows"]
+    q = next(x for x in clarify_store.load(wf.id)["questions"] if x["kind"] == "repeat_rows")
+    assert q["status"] == "answered" and q["answer"] == {"choice": answer}
+    steps = read_skill(get_workflow(wf.id).skill_id)["skills"][0]["steps"]
+    if answer == "list":
+        assert _kinds(steps) == ["navigate", "for_each"]
+    else:
+        assert "for_each" not in _kinds(steps) and steps[3]["value"] == "E1"      # the recorded value is kept
+    time.sleep(0.2)
+    assert not turns            # the settled note is never routed to chat as well
+
+
+def test_a_repeat_note_without_its_facet_is_left_to_the_builds_own_question(env, monkeypatch):
+    b, wf, _out = env
+    _repeat_sources(monkeypatch)
+    _understood_before(settings.data_dir / "sessions" / "sess1", "c2", facet="")
+    monkeypatch.setattr(b, "cmd_thread_turn", lambda p, r: None)
+    _fake_compile(b, wf, doc_fn=_repeat_doc)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    assert _cards(wf.id, "clarify_question")[0]["question_kind"] == "repeat_rows"
+
+
+def test_a_no_match_note_on_a_row_the_code_question_covers_is_not_sent_to_chat(env, monkeypatch):
+    """BUILD-108 (2): "What should happen if no one matches?" went to chat, which could prepare no change, although
+    the code question "what if the item can't be found?" covers that row."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    sd = settings.data_dir / "sessions" / "sess1"
+    sd.mkdir(parents=True, exist_ok=True)
+    (sd / "understanding.json").write_text(json.dumps({"source": "model", "questions": [
+        {"kind": "note", "row": "r2", "event_id": 4, "facet": "alternatives"},
+        {"kind": "note", "row": "r9", "event_id": 77, "facet": "timing"}]}), encoding="utf-8")
+    (sd / "decisions.json").write_text(json.dumps([
+        {"qid": "note:r2", "kind": "note", "event_ids": [4], "choice": "c1", "note": "What should happen if no one matches? Stop"},
+        {"qid": "note:r9", "kind": "note", "event_ids": [77], "choice": "c1", "note": "Wait for the page? Yes"}]), encoding="utf-8")
+    skill_id = get_workflow(wf.id).skill_id
+    doc = read_skill(skill_id)
+    # the send step acts on the row the typed PO number names (typed at recorded event 4), and "what if it can't be
+    # found?" is already answered on it
+    doc["skills"][0]["steps"][3]["entity_binding"] = {"container_selector": "tbody > tr", "identifier": "{{po_number}}"}
+    doc["skills"][0]["steps"][3]["on_missing"] = "skip"
+    write_skill(skill_id, doc)
+    turns = []
+    monkeypatch.setattr(b, "cmd_thread_turn", lambda p, r: turns.append(p))
+    clarify_store.mutate(wf.id, lambda d: [q.update(status="answered") for q in d["questions"]] and None)
+    clarify_store.mutate(wf.id, lambda d: d.pop("notes_routed", None))
+    b._flow_route_notes(wf.id)
+    time.sleep(0.2)
+    assert len(turns) == 1
+    assert "Wait for the page" in turns[0]["message"] and "no one matches" not in turns[0]["message"]
+
+
+def test_an_unticked_completion_check_is_retired_through_the_answer_path(env):
+    """BUILD-103 (2): the op an untick plans runs through the answer path and the check stops counting."""
+    from conxa_compile.compiler.effects import has_real_proof
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow
+
+    b, wf, _out = env
+    _fake_compile(b, wf)
+    b.cmd_flow_compile({"workflow_id": wf.id}, "rid1")
+    skill_id = get_workflow(wf.id).skill_id
+    doc = read_skill(skill_id)
+    doc["skills"][0]["steps"][3]["validation"]["effect"] = {"kind": "send", "checks": [
+        {"id": "c1", "rung": "completed", "witness": "renderer", "probe": {"type": "new_text", "words": ["Sent"]}}]}
+    write_skill(skill_id, doc)
+    key = step_keys(doc["skills"][0]["steps"])[3]
+    b._apply_clarify_ops(skill_id, [{"op": "retire_effect", "step_key": key}], "r")
+    effect = read_skill(skill_id)["skills"][0]["steps"][3]["validation"]["effect"]
+    assert effect["checks"][0]["calibrated"] is False and effect["checks"][0]["calibration_basis"] == ["author_unticked"]
+    assert not has_real_proof(effect)

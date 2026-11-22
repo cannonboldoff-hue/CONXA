@@ -181,7 +181,10 @@ def _stage_runtime_auth(workflow: Any, company: str, data_dir: Path) -> None:
     if group is None or not group.apps:
         return
 
-    import shutil
+    import json
+    import os
+
+    from conxa_compile.saved_session import read_state
 
     sessions_dir = data_dir / "cache" / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
@@ -189,7 +192,15 @@ def _stage_runtime_auth(workflow: Any, company: str, data_dir: Path) -> None:
     for app in group.apps:
         state_path = Path(str(app.storage_state_path or ""))
         if state_path.is_file():
-            shutil.copy2(state_path, sessions_dir / f"{company}__{app.id}_raw_state.json")
+            try:
+                state = read_state(state_path)
+            except ValueError:
+                continue  # cannot be opened here: the runtime finds no session and asks for a sign-in
+            # The runtime's intake is a plain file it locks with its own key on first read (SG-11).
+            dest = sessions_dir / f"{company}__{app.id}_raw_state.json"
+            dest.write_text(json.dumps(state), encoding="utf-8")
+            st = state_path.stat()
+            os.utime(dest, (st.st_atime, st.st_mtime))  # newest-file-wins in the runtime keys off this, as copy2 kept it
 
 
 def _skill_response(

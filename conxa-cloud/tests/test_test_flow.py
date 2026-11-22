@@ -707,6 +707,22 @@ def test_answering_right_hands_the_failure_to_autofix(env, monkeypatch):
     assert resumed == [{"workflow_id": wf.id}]
 
 
+def test_answering_on_purpose_closes_the_question_and_starts_nothing(env, monkeypatch):
+    """BUILD-109 (2): a test with deliberately bad input. The answer closes the question (Test is allowed again) and
+    neither the re-test card nor Auto-fix starts."""
+    b, wf = _failed_find(env, monkeypatch, "PO-1")
+    monkeypatch.setattr(b, "_tf_investigate", lambda *a: pytest.fail("Auto-fix must wait for the answer"))
+    b._tf_background(wf.id, {"po_number": "PO-1"}, True, False)
+    monkeypatch.setattr(b, "cmd_flow_investigate", lambda *a: pytest.fail("nothing starts"))
+    monkeypatch.setattr(b, "cmd_flow_test_prepare", lambda *a: pytest.fail("nothing starts"))
+    res = b._card_clarify_question(f"wf:{wf.id}", _cards(wf.id, "clarify_question")[0], "choose",
+                                   {"choice": "on_purpose"}, "r", lambda e: None)
+    assert res["ok"]
+    q = next(x for x in clarify_store.load(wf.id)["questions"] if x["kind"] == "input_check")
+    assert q["status"] == "answered"
+    assert "test" in lifecycle_for_workflow(get_workflow(wf.id))["allowed_actions"]
+
+
 def test_evidence_without_the_new_keys_leaves_autofix_untouched(env, monkeypatch):
     b, wf, _out = env
     w = get_workflow(wf.id)
@@ -923,6 +939,33 @@ def test_a_secret_test_input_is_hidden_on_the_card_and_never_saved(env, monkeypa
     thread = str(ts.load(f"wf:{wf.id}", limit=200)["items"])
     assert "ZzDummyPw" not in thread                                         # the thread keeps only a mask
     assert test_flow.last_test_inputs(get_workflow(wf.id))["user_password"] == "ZzDummyPw!8812"   # this session only
+
+
+def test_test_again_after_a_restart_asks_for_the_secret_instead_of_running_without_it(env, monkeypatch):
+    """BUILD-110 (9): a secret test input lives only in memory; after a restart "sign in and test again" (and the
+    automatic re-test) ran without it and failed on the missing value."""
+    from conxa_core.storage.json_store import read_skill, write_skill
+    from conxa_core.storage.workflow_store import get_workflow, set_workflow_test_result
+
+    b, wf, _out = env
+    doc = read_skill("skill_t1")
+    doc["inputs"].append({"id": "user_password", "type": "text"})
+    doc["skills"][0]["steps"][1]["value"] = "{{po_number}} {{user_password}}"
+    write_skill("skill_t1", doc)
+    set_workflow_test_result(wf.id, status="failed", inputs={"po_number": "PO-1", "user_password": "ZzDummyPw!8812"})
+    monkeypatch.setattr(test_flow, "_secret_test_inputs", {})                      # Studio restarted
+    ran: list = []
+    monkeypatch.setattr(b, "_tf_run_test", lambda *a, **k: ran.append(a) or "passed")
+    inputs = test_flow.last_test_inputs(get_workflow(wf.id))
+    assert "user_password" not in inputs
+    b._tf_background(wf.id, inputs, True, True)
+    assert ran == []                                                              # nothing ran without the password
+    card = [c for c in _cards(wf.id, "test_inputs") if c.get("state") == "open"][-1]
+    spec = {i["id"]: i for i in card["inputs"]}
+    assert spec["user_password"]["secret"] is True and spec["user_password"]["value"] == ""
+    assert spec["po_number"]["value"] == "PO-1"                                   # the rest is pre-filled as before
+    b._tf_background(wf.id, {**inputs, "user_password": "ZzDummyPw!8812"}, True, True)
+    assert len(ran) == 1                                                          # with it, the run goes ahead
 
 
 def test_no_just_do_it_lets_the_test_run_past_that_step_and_the_card_says_so(env):

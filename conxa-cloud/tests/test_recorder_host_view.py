@@ -264,7 +264,8 @@ def test_a_sign_in_page_gets_no_bridge_only_membership_and_close() -> None:
     sess = RecordingSession(session_id="s", embedded=True, auth_mode=True)
     page = _ScriptedPage()
     sess._adopt_run_page_sync(page)
-    assert page.calls == ["on:close"]
+    # Only the user-name capture (one binding, one script; test_sign_in_name_scrub.py): no bridge, no listeners.
+    assert page.calls == ["on:close", "expose_binding", "add_init_script"]
     assert id(page) in sess._run_pages_open
 
 

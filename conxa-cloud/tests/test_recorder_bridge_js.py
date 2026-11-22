@@ -89,6 +89,8 @@ def _install_bridge(page: Page, html: str, profile: dict | None = None) -> None:
                 if (payload._bridge_ready) { window.__ready.push(payload); return; }
                 if (payload._gap) { window.__gaps.push(payload); return; }
                 if (payload._secret) { window.__secrets.push(payload._secret); return; }
+                // A page's copy as it is left, and its words once it has settled: page facts, never events.
+                if (payload._doc_copy || payload._arrival) { (window.__pages = window.__pages || []).push(payload); return; }
                 if (payload._amend) {
                     const row = window.__events.find((e) => e.uid === payload._amend);
                     if (!row) return;
@@ -2152,6 +2154,30 @@ def test_words_that_appear_after_a_click_are_recorded_as_the_result_not_the_cont
     assert any("Undo" in line for line in change["dom_diff"]["added"])
 
 
+def test_a_page_that_is_left_sends_its_copy_and_words_for_the_steps_taken_on_it(page: Page) -> None:
+    """BUILD-99 (2) / BUILD-95 (4): the recorder's own copy is often of the next page; this one is of the page left."""
+    _install_bridge(page, "<!DOCTYPE html><h2>Checkout: Overview</h2><a id='finish' href='#'>Finish</a>")
+    page.evaluate("() => window.dispatchEvent(new Event('beforeunload'))")
+    assert not [p for p in page.evaluate("() => window.__pages || []") if p.get("_doc_copy")]  # nothing done here yet
+    page.click("#finish")
+    expected_html = page.content()
+    page.evaluate("() => window.dispatchEvent(new Event('beforeunload'))")
+
+    copy = next(p["_doc_copy"] for p in page.evaluate("() => window.__pages") if p.get("_doc_copy"))
+    assert copy["doc_id"] == _events(page)[0]["doc_id"]
+    assert copy["html"] == expected_html                       # the same text page.content() hashes
+    assert "Checkout: Overview" in copy["results"]
+
+
+def test_a_page_says_what_it_shows_once_it_has_settled(page: Page) -> None:
+    _install_bridge(page, "<h2>Checkout: Complete!</h2><p>Thank you for your order!</p><button>Back Home</button>")
+    page.wait_for_function("() => (window.__pages || []).some((p) => p._arrival)", timeout=6000)
+    arrival = next(p["_arrival"] for p in page.evaluate("() => window.__pages") if p.get("_arrival"))
+    assert arrival["results"] == ["Checkout: Complete!", "Thank you for your order!"]
+    assert arrival["doc_id"] and arrival["url"] == page.url
+    assert _events(page) == []
+
+
 def test_a_click_that_closes_a_fading_dialog_is_recorded_as_closing_it(page: Page) -> None:
     # The box is removed 300ms after the click (a fade-out). The page is quiet before that, so reading it right
     # then called the close "nothing happened" and left the step with no way to prove it worked (WF-9).
@@ -2173,3 +2199,45 @@ def test_a_click_that_closes_a_fading_dialog_is_recorded_as_closing_it(page: Pag
     clicks = _action_events(page, "click")
     assert len(clicks) == 1
     assert clicks[0]["post_condition"]["classified_effect"] == "dialog_closed"
+
+
+_COPY_PASTE_JS = """([src, dst, text]) => {
+    const a = document.getElementById(src), b = document.getElementById(dst);
+    a.focus(); a.select();
+    a.dispatchEvent(new ClipboardEvent("copy", { bubbles: true, cancelable: true }));
+    b.focus();
+    const data = new DataTransfer(); data.setData("text/plain", text);
+    b.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+    b.value = text;
+    b.dispatchEvent(new Event("input", { bubbles: true }));
+}"""
+
+
+def test_a_paste_of_a_whole_box_copied_from_another_box_names_that_box(page: Page) -> None:
+    """BUILD-110 (2): copy the whole of one box, paste it into another: the second box's typing says where it came
+    from, so the compiler can make it "the same value as the first box"."""
+    _install_bridge(page, '<input id="email" aria-label="Email"><input id="again" aria-label="Email again">')
+    page.fill("#email", "ada@x.io")
+    page.wait_for_timeout(80)
+    page.evaluate(_COPY_PASTE_JS, ["email", "again", "ada@x.io"])
+    page.wait_for_timeout(120)
+    typed = _type_events(page)
+    first = next(e for e in typed if e["target"].get("id") == "email")
+    second = next(e for e in typed if e["target"].get("id") == "again")
+    assert second["action"]["value"] == "ada@x.io"
+    assert second["pasted_from"] == first["element_ref"]
+    assert "pasted_from" not in first
+
+
+def test_no_paste_link_without_a_paste_for_part_of_a_box_or_for_a_secret_box(page: Page) -> None:
+    _install_bridge(page, '<input id="a" aria-label="Name"><input id="b" aria-label="Other">'
+                          '<input id="pw" type="password"><input id="c" aria-label="Copy">')
+    page.fill("#a", "Ada Lovelace")
+    page.fill("#b", "Ada Lovelace")                                   # typed, not pasted
+    page.wait_for_timeout(80)
+    page.evaluate(_COPY_PASTE_JS, ["a", "c", "Ada"])                  # pasted text is not the whole first box
+    page.fill("#pw", "hunter2")
+    page.wait_for_timeout(80)
+    page.evaluate(_COPY_PASTE_JS, ["pw", "c", "hunter2"])            # copied from a secret box
+    page.wait_for_timeout(120)
+    assert not any("pasted_from" in e for e in _type_events(page))

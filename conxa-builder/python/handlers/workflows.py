@@ -1163,6 +1163,10 @@ class WorkflowsMixin:
         # Every caller (Publish page, group page, the conversation, re-record replay, copilot verify) runs
         # through here, so this is where an unanswered question blocks a test.
         self._require_no_unanswered_questions([workflow])
+        if workspace_id == LOCAL_WORKSPACE_ID:
+            # Build a fresh test copy first when it is stale or lacks this workflow, as the conversation's Test does,
+            # so the Publish and group pages' Run test behave the same (BUILD-104 (3)).
+            self._tf_ensure_built(workflow, rid)
         pack = get_skill_pack(workspace_id)
         if pack is None or pack.build is None:
             raise _CommandError("skill_package_not_built", "Build the skill package before testing its workflows.")

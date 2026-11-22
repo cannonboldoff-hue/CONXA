@@ -14,6 +14,7 @@ it have returned.
 from __future__ import annotations
 
 import datetime
+import re
 import threading
 import time
 import uuid
@@ -113,6 +114,49 @@ def _check_wish_template(question: dict[str, Any], text: str, doc: dict[str, Any
         return []
     return [{"step_key": key, "field": "validation.assertions", "patch": current + [check],
              "why": f"Check that the page shows the {named[0].replace('_', ' ')} that was typed in"}]
+
+
+# A pre-build note with one of these facets is about what to do when the item is not there.
+_ROW_POLICY_FACETS = frozenset({"alternatives", "failure_policy"})
+
+
+def _understanding_questions(session_dir: Any) -> list[dict[str, Any]]:
+    """The questions the understanding before the build kept (understanding.json), or [] when there is none."""
+    import json
+
+    try:
+        und = json.loads((session_dir / "understanding.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [q for q in (und.get("questions") if isinstance(und, dict) else None) or [] if isinstance(q, dict)]
+
+
+def _note_facets(session_dir: Any) -> dict[str, str]:
+    """Question id of each pre-build note (``note:<row>``, as decisions.py keys it) -> the facet the model tagged it with."""
+    return {f"note:{q.get('row')}": str(q["facet"]) for q in _understanding_questions(session_dir)
+            if q.get("kind") == "note" and q.get("facet")}
+
+
+def _missing_item_events(workflow: Any, questions: list[dict[str, Any]]) -> set[str]:
+    """Recorded events of the steps "what if the item can't be found?" covers (asked, or already set as the step's
+    ``on_missing``), plus the typing of the run input that names their row (a search, then Edit)."""
+    from conxa_compile.compiler.step_key import step_keys
+    from conxa_compile.editor.source_event import find_source_event
+    from conxa_core.storage.json_store import read_skill
+
+    doc = read_skill(workflow.skill_id) if workflow.skill_id else None
+    steps = ((doc or {}).get("skills") or [{}])[0].get("steps") or []
+    keyed = list(zip(step_keys(steps), steps))
+    asked = {k for q in questions if q.get("kind") == "missing_item" for k in q.get("step_keys") or []}
+    rows = [s for k, s in keyed if isinstance(s.get("entity_binding"), dict) and (k in asked or s.get("on_missing"))]
+    named = {n for s in rows for n in re.findall(r"\{\{(\w+)\}\}", str(s["entity_binding"].get("identifier") or ""))}
+    out: set[str] = set()
+    for _k, s in keyed:
+        if any(s is r for r in rows) or (s.get("input_binding") and s["input_binding"] in named):
+            seq = ((find_source_event(s, doc) or {}).get("extras") or {}).get("sequence")
+            if seq is not None:
+                out.add(str(seq))
+    return out
 
 
 class CompileFlowMixin:
@@ -227,9 +271,12 @@ class CompileFlowMixin:
             # the report: the workflow is saved but part of it was never worked out.
             broken = self._flow_degraded_passes(result.get("skill_id"))
             if broken:
+                from conxa_compile.llm.compile_recap import plain_cause
+
+                # `error` stays behind "Show details"; `cause` is the one plain sentence the card says (BUILD-99 (4)).
                 harness.update_card(thread, card_id, sink=sink, state="partial", rows=progress.rows(),
                                     credits_left=progress.credits_left, step_count=result.get("step_count"),
-                                    error="\n".join(broken), actions=["retry", "details"])
+                                    error="\n".join(broken), cause=plain_cause(broken), actions=["retry", "details"])
             else:
                 harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
                                     credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
@@ -359,11 +406,16 @@ class CompileFlowMixin:
         # the document as compiled); the rest are built after replay, from the document it left.
         questions = ask(doc, count=False, kinds=_REPLAY_KINDS) if prior else ask(doc)
         replayed_steps = self._flow_replay_decisions(workflow, result, doc, questions, lambda s: find_source_event(s, doc), sink)
+        settled_repeat: dict[str, Any] | None = None
         if prior:
             questions = [q for q in questions if q["kind"] not in _ASKED_BEFORE_COMPILE]
+            settled_repeat, added = self._flow_settle_repeat(workflow, result["skill_id"])
+            replayed_steps += added
             questions += ask(read_skill(result["skill_id"]) or doc, kinds=_REOPENED_KINDS,
                              typed_fixed_events=self._flow_typed_fixed_events(workflow),
                              skip_events=self._flow_asked_before_events(workflow))
+            if settled_repeat is not None:
+                questions = [q for q in questions if q["id"] != settled_repeat["id"]] + [settled_repeat]
             questions.sort(key=lambda q: clarify._PRIORITY[q["kind"]])
         # Name the slot each question settles, and find (report) or drop (enforce) the vacuous and the
         # duplicated ones. After replay, from the document replay left.
@@ -393,8 +445,8 @@ class CompileFlowMixin:
             shown += 1
             if shown > clarify.MAX_QUESTIONS:
                 q["status"] = "queued"
-        # The questions go out in their plain template wording; a friendlier version follows in the
-        # background (_flow_reword), so no question ever waits on a model.
+        # Saved in their plain template wording; the friendlier wording (_flow_reword) is written over it before the
+        # first card is posted, below.
         clarify_store.save(workflow_id, {
             "skill_id": result["skill_id"], "version": result.get("version"), "recorded_actions": recorded_actions,
             "added_steps": replayed_steps, "step_count_at_compile": len(steps), "questions": questions,
@@ -404,6 +456,8 @@ class CompileFlowMixin:
             **({"assumptions": assumptions} if assumptions else {}),
             # what the questions asked before the build settled (the questions above replace theirs)
             **({"ledger": kept_ledger} if kept_ledger else {}),
+            # the pre-build note whose answer settled the repeat question: applied, so never handed to chat as well
+            **({"settled_notes": [settled_repeat["note_qid"]]} if settled_repeat else {}),
         })
         # Questions now exist, so the lifecycle can see them; clear before the posts below, because
         # the renderer re-reads the lifecycle on each one (the caller's `finally` is only the net).
@@ -440,6 +494,12 @@ class CompileFlowMixin:
         open_qs = [q for q in questions if q.get("status") == "open"]
         coverage = understood.get("coverage") or {}
         recap_why: list[str] = []
+        # The friendlier wording is asked for alongside the recap and waited for before the first card is posted, so a
+        # card never shows one wording and then changes under the person (BUILD-93 (4)). Wording only: when the call
+        # fails, the plain template wording stands.
+        reword = threading.Thread(target=self._flow_reword_safe, args=(workflow_id, sink), daemon=True) if questions else None
+        if reword is not None:
+            reword.start()
         recap = write_recap({
             "step_count": len(steps),
             "goal": "" if cant else str(understood.get("goal_summary") or workflow.task_description or "")[:200],
@@ -457,9 +517,11 @@ class CompileFlowMixin:
             "question_count": len(open_qs),
             "question_titles": [str(q.get("title")) for q in open_qs][:4],
         }, error_detail=recap_why)
+        if reword is not None:
+            reword.join()   # bounded by the model call's own timeout
         runtime_state.set_flags(workflow_id, understanding=False)
         if not recap:
-            # Said nowhere to the person (the banner below is enough); kept so the cause is never lost again.
+            # The full reasons go to the log; the banner below says the cause in one plain sentence (BUILD-91 (1)).
             from conxa_compile.conversation import clarify_events
 
             clarify_events.log(workflow_id, "recap_failed", reasons=" | ".join(recap_why)[:600])
@@ -468,13 +530,61 @@ class CompileFlowMixin:
         if recap:
             harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=recap))
         else:
+            from conxa_compile.llm.compile_recap import plain_cause
+
+            # Why it is missing, never a stand-in summary (BUILD-98 (2)).
             harness.log_event(_thread(workflow_id), "Couldn’t write the summary of what was built", glyph="warn", sink=sink,
-                              subject="The workflow is saved; its questions and summary are below")
+                              subject=" ".join(filter(None, ("The workflow is saved; its questions and summary are below.",
+                                                             plain_cause(recap_why)))))
         if questions:
             self._flow_post_next_question(workflow_id, sink)
-            threading.Thread(target=self._flow_reword_safe, args=(workflow_id, sink), daemon=True).start()
         else:
             self._flow_post_summary(workflow_id, sink)
+
+    def _flow_settle_repeat(self, workflow: Any, skill_id: str) -> tuple[dict[str, Any] | None, int]:
+        """The understanding before the build already asked whether the repeated entries are always these or a list
+        given each time: a note the model tagged ``repeat``, each option tagged ``same`` or ``list``
+        (timeline_understanding.REPEAT_MEANS). Its answer settles the build's own repeat question instead of asking it
+        twice (BUILD-93 (19)), through the same ``plan_answer`` a click uses. Matched by the recorded events of the
+        repeated steps; no match, no tag or a failed edit changes nothing and the build's question is asked.
+        Returns ``(the answered repeat question, steps added)``."""
+        import uuid
+
+        from conxa_compile.compiler.step_key import step_keys
+        from conxa_compile.conversation import clarify, decisions
+        from conxa_compile.editor.source_event import find_source_event
+        from conxa_core.config import settings
+        from conxa_core.storage.json_store import read_skill
+
+        session_dir = settings.data_dir / "sessions" / str(workflow.session_id)
+        means_of = {f"note:{q.get('row')}": {c.get("id"): c.get("means") for c in q.get("choices") or [] if isinstance(c, dict)}
+                    for q in _understanding_questions(session_dir) if q.get("kind") == "note" and q.get("facet") == "repeat"}
+        picked = [(d, means_of[d["qid"]].get(d.get("choice"))) for d in decisions.load(session_dir) if d.get("qid") in means_of]
+        picked = [(d, m) for d, m in picked if m in ("same", "list")]
+        doc = read_skill(skill_id) if picked else None
+        if not doc:
+            return None, 0
+        look = lambda s: find_source_event(s, doc)  # noqa: E731
+        q = next(iter(clarify.generate_questions(doc, source_lookup=look, kinds={"repeat_rows"}, limit=None)), None)
+        if q is None:
+            return None, 0
+        steps = ((doc.get("skills") or [{}])[0] or {}).get("steps") or []
+        keys = step_keys(steps)
+        sug = q["suggestion"]
+        first = keys.index(sug["start_key"])
+        block = steps[first:first + int(sug["block_len"]) * int(sug["count"])]
+        events = {str(((look(s) or {}).get("extras") or {}).get("sequence")) for s in block}
+        hit = next(((d, m) for d, m in picked if {str(e) for e in d.get("event_ids") or []} & events), None)
+        if hit is None:
+            return None, 0
+        answer = {"choice": hit[1]}
+        try:
+            ops, receipt = clarify.plan_answer(q, answer, doc)
+            added = self._run_clarify_ops(skill_id, ops, f"repeat_{uuid.uuid4().hex[:8]}")
+        except Exception:  # noqa: BLE001 -- not applicable now: the build's question is asked instead
+            return None, 0
+        q.update(status="answered", answer=answer, receipt=receipt, carried=True, note_qid=hit[0]["qid"])
+        return q, added
 
     def _flow_carry_settled(self, workflow_id: str, questions: list[dict[str, Any]], skill_id: str) -> tuple[list[dict[str, Any]], int]:
         """Mark as answered each fresh question that asks what an earlier answer already settled: same slot, same
@@ -685,8 +795,17 @@ class CompileFlowMixin:
             if (not settings.clarify_notes_to_chat or workflow is None or not workflow.session_id or data.get("notes_routed")
                     or any(q.get("status") in ("open", "applying") for q in data.get("questions") or [])):
                 return
-            notes = [str(d["note"])[:300] for d in decisions.load(settings.data_dir / "sessions" / workflow.session_id)
-                     if d.get("note")][:5]
+            session_dir = settings.data_dir / "sessions" / workflow.session_id
+            covered = _missing_item_events(workflow, data.get("questions") or [])
+            facets = _note_facets(session_dir)
+            # "What should happen if no one matches?" on a row the code question "what if the item can't be found?"
+            # already covers is that question's to settle (it is asked, or answered, on the step itself), not chat's
+            # (BUILD-108 (2)). Read by the facet the model gave the note, never by its words.
+            settled = set(data.get("settled_notes") or [])
+            notes = [str(d["note"])[:300] for d in decisions.load(session_dir)
+                     if d.get("note") and d.get("qid") not in settled
+                     and not (d.get("choice") and facets.get(str(d.get("qid"))) in _ROW_POLICY_FACETS
+                              and {str(e) for e in d.get("event_ids") or []} & covered)][:5]
             if not notes:
                 return
             clarify_store.mutate(workflow_id, lambda d: d.__setitem__("notes_routed", True))
@@ -741,6 +860,13 @@ class CompileFlowMixin:
                          " — say “ask me” if you want to check them.")
         else:
             text = f"Here’s the workflow, saved as version {summary['version']}."
+        # "No, a part is missing" is kept as the answer; now that nothing else is asked, it opens the way to add the
+        # part: the chat (plain words) or the editor (BUILD-110 (4)).
+        summary["missing_part"] = any(q.get("kind") == "coverage" and (q.get("answer") or {}).get("choice") == "incomplete"
+                                      for q in answered)
+        if summary["missing_part"] and not updated:
+            text += (" You said a part is missing: tell me here what it is and I’ll add it, or use “Add the missing part”"
+                     " to add or record it in the editor.")
         harness.emit_item(sink, _thread(workflow_id), ts.append(_thread(workflow_id), "assistant_message", text=text))
         if not updated:
             self._flow_offer_variants(workflow_id, doc, sink)
@@ -1259,7 +1385,7 @@ class CompileFlowMixin:
         try:
             if choice == "wrong":
                 self.cmd_flow_test_prepare({"workflow_id": workflow_id, "suspect_inputs": question.get("input_ids") or []}, rid)
-            else:
+            elif choice != "on_purpose":  # a deliberately wrong value: answered, nothing to start
                 self.cmd_flow_investigate({"workflow_id": workflow_id}, rid)
         except _CommandError:
             pass  # the card is answered; the person can still press Test or Fix from the lifecycle actions
@@ -1345,6 +1471,19 @@ class CompileFlowMixin:
             elif kind == "confirm_effect":
                 self.cmd_confirm_effect({"skill_id": skill_id, "step_index": index_of(op["step_key"])}, rid)
                 self._log_edit("confirm_effect", skill_id, before, source="clarify", proposal_id=None)
+            elif kind == "retire_effect":
+                # No command door of its own: only an answer the person gave to "How can we tell it worked?" gets here.
+                import copy
+
+                from conxa_compile.editor.workflow_mutations import retire_effect
+
+                doc = read_skill(skill_id) or {}
+                self._push_undo(skill_id, copy.deepcopy(doc))
+                try:
+                    write_skill(skill_id, retire_effect(doc, index_of(op["step_key"])))
+                except ValueError as exc:
+                    raise _CommandError(str(exc), "The step changed since this was asked, so its checks could not be set.") from exc
+                self._log_edit("retire_effect", skill_id, before, source="clarify", proposal_id=None)
             elif kind == "confirm_optional":
                 self.cmd_confirm_optional_interstitial(
                     {"skill_id": skill_id, "step_index": index_of(op["step_key"]), "keep_as_step": bool(op.get("keep_as_step"))}, rid)

@@ -1608,6 +1608,90 @@ def test_a_definition_the_app_already_has_is_tried_at_its_own_address_first(tmp_
     assert asked == ["https://app.test/home"]
 
 
+def test_typing_that_goes_on_keeps_its_number_so_the_live_list_updates_its_row(tmp_path) -> None:
+    """BUILD-91 (2): the live count said 5 where the saved recording had 4; the merged typing came with a new number."""
+    sess = _session_with_page(tmp_path, "merge-seq")
+    rows: list[int] = []
+    sess.event_hook = lambda ev: rows.append(ev.extras["sequence"])
+    sess._consume_payload_sync(_payload("click"))
+    for value in ("Ada", "Ada Lovelace"):
+        typed = _payload("type")
+        typed["action"]["value"] = value
+        sess._consume_payload_sync(typed)
+
+    saved = sess.snapshot_events()
+    assert [e["action"]["value"] for e in saved] == [None, "Ada Lovelace"]
+    assert rows == [1, 2, 2]                                    # one row per saved step
+    assert len(set(rows)) == len(saved)
+
+
+def _doc_step(uid_seq: int, doc: str, url: str = "https://shop.test/checkout") -> dict:
+    p = _stamped(uid_seq)
+    p["doc_id"] = doc
+    p["page"] = {"url": url, "title": ""}
+    return p
+
+
+def test_a_step_whose_page_was_gone_gets_the_copy_its_page_sent_as_it_was_left(tmp_path, monkeypatch) -> None:
+    """BUILD-99 (2): the recorder copied the page after a link had already left it, so the step had no copy."""
+    saved_html: list[str] = []
+    monkeypatch.setattr(recorder_session.snapshot_store, "save_dom_snapshot",
+                        lambda sid, html: (saved_html.append(html), ("h-old", None))[1])
+    sess = _session_with_page(tmp_path, "doc-copy")
+    sess._consume_payload_sync(_doc_step(1, "docA"))            # FakePage has no content(): its own copy is lost
+    assert sess.snapshot_events()[0]["snapshot"]["dom_hash"] == ""
+
+    sess._consume_payload_sync({"_doc_copy": {"doc_id": "docOther", "html": "<html>other</html>", "ms": 5, "results": []}})
+    assert sess.snapshot_events()[0]["snapshot"]["dom_hash"] == ""   # another page's copy is never used
+    sess._consume_payload_sync({"_doc_copy": {"doc_id": "docA", "html": "<html>A</html>", "ms": 7, "results": []}})
+
+    snap = sess.snapshot_events()[0]["snapshot"]
+    assert (snap["dom_hash"], snap["doc_id"], snap["captured_ms"]) == ("h-old", "docA", 7)
+    assert saved_html == ["<html>A</html>"]
+    assert "<html>A</html>" not in (tmp_path / "sessions" / "doc-copy" / "events.jsonl").read_text(encoding="utf-8")
+
+
+def test_a_step_with_its_own_copy_of_its_page_keeps_it(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(recorder_session.snapshot_store, "save_dom_snapshot", lambda sid, html: ("h-new", None))
+    sess = _session_with_page(tmp_path, "doc-copy-kept")
+    sess._consume_payload_sync(_doc_step(1, "docA"))
+    sess._materialized[0].snapshot = sess._materialized[0].snapshot.model_copy(update={"dom_hash": "h-own", "doc_id": "docA"})
+    sess._consume_payload_sync({"_doc_copy": {"doc_id": "docA", "html": "<html>A</html>", "ms": 7, "results": []}})
+    assert sess.snapshot_events()[0]["snapshot"]["dom_hash"] == "h-own"
+
+
+def _left_for(sess: RecordingSession, to_url: str) -> None:
+    sess._consume_payload_sync({"_landing": {"from_url": "https://shop.test/checkout", "to_url": to_url}})
+
+
+def test_the_next_page_words_become_the_result_of_the_step_that_led_there(tmp_path) -> None:
+    """BUILD-95 (4): "Thank you for your order!" is on the page the Finish click opened, which the click never saw."""
+    sess = _session_with_page(tmp_path, "arrival")
+    sess._consume_payload_sync(_doc_step(1, "docA"))
+    sess._consume_payload_sync({"_doc_copy": {"doc_id": "docA", "html": "", "ms": 1,
+                                              "results": ["Checkout: Overview", "Sauce Labs Backpack"]}})
+    arrival = {"doc_id": "docB", "url": "https://shop.test/complete#top",
+               "results": ["Checkout: Complete!", "Sauce Labs Backpack", "Thank you for your order!"]}
+    sess._consume_payload_sync({"_arrival": arrival})          # arrives before the landing is known: waits for it
+    assert sess.snapshot_events()[0]["state_change"]["result_diff"] is None
+    _left_for(sess, "https://shop.test/complete")
+
+    diff = sess.snapshot_events()[0]["state_change"]["result_diff"]
+    assert diff == {"added": ["Checkout: Complete!", "Thank you for your order!"], "removed": [], "next_page": True}
+    sess._consume_payload_sync({"_arrival": {**arrival, "doc_id": "docC", "results": ["Later page"]}})
+    assert sess.snapshot_events()[0]["state_change"]["result_diff"] == diff   # only the first page it reached
+
+
+def test_a_page_the_step_did_not_lead_to_gives_it_no_words(tmp_path) -> None:
+    sess = _session_with_page(tmp_path, "arrival-other")
+    sess._consume_payload_sync(_doc_step(1, "docA"))
+    sess._consume_payload_sync({"_doc_copy": {"doc_id": "docA", "html": "", "ms": 1, "results": []}})
+    _left_for(sess, "https://shop.test/complete")
+    sess._consume_payload_sync({"_arrival": {"doc_id": "docB", "url": "https://elsewhere.test/", "results": ["Hello"]}})
+    sess._consume_payload_sync({"_arrival": {"doc_id": "docA", "url": "https://shop.test/complete", "results": ["Hi"]}})
+    assert sess.snapshot_events()[0]["state_change"]["result_diff"] is None
+
+
 def test_the_summary_tells_the_person_about_clicks_that_were_left_out() -> None:
     import sys
     from pathlib import Path
@@ -1620,3 +1704,49 @@ def test_the_summary_tells_the_person_about_clicks_that_were_left_out() -> None:
     one, two = ignored_click_note({"ignored_clicks": 1}), ignored_click_note({"ignored_clicks": 2})
     assert "1 time on parts of the page" in one and "2 times on parts of the page" in two
     assert "selector" not in one and "won't repeat them" in one
+
+
+def test_final_drain_ends_by_its_time_limit_even_if_a_page_keeps_sending(tmp_path: Path) -> None:
+    """BUILD-93 (20): a page that never stops sending kept Stop draining forever, so the pane stayed open and the
+    video was never written until the pane was closed by hand."""
+    from queue import Empty
+
+    sess = RecordingSession(session_id="endless-drain", data_root=tmp_path)
+    sess._STOP_DRAIN_MAX_S = 0.3
+    sess._open_pages_sync = lambda: []
+    sess._bridge_states_sync = lambda flush=False: []
+    sess._drain_dialog_server_events_sync = lambda: None
+    sess._consume_payload_safe_sync = lambda *a: setattr(sess, "_last_enqueue_at", time.monotonic())
+    sess._write_diagnostics_sync = lambda d: None
+    calls = {"n": 0}
+
+    def _next(final: bool = False):
+        calls["n"] += 1
+        if calls["n"] % 2:
+            return (_payload(), None, None)  # one message every loop: the queue is never idle
+        raise Empty
+
+    sess._next_payload_sync = _next
+    t0 = time.monotonic()
+    sess._final_drain_sync()
+    assert time.monotonic() - t0 < 3.0
+
+
+def test_stop_does_not_return_while_the_recorder_is_still_finishing() -> None:
+    """BUILD-93 (20): Stop returning early let "Recording saved" show while the video was still being written."""
+    import asyncio
+    import threading
+
+    import pytest
+
+    sess = RecordingSession(session_id="slow-teardown")
+    sess._STOP_JOIN_MAX_S = 0.2
+    release = threading.Event()
+    sess._thread = threading.Thread(target=release.wait, daemon=True)
+    sess._thread.start()
+    with pytest.raises(RuntimeError, match="still finishing"):
+        asyncio.run(sess.stop())
+    assert sess._thread is not None
+    release.set()
+    asyncio.run(sess.stop())  # teardown done: Stop returns and forgets the thread
+    assert sess._thread is None and sess.browser_open is False

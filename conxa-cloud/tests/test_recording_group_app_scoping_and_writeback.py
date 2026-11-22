@@ -18,6 +18,7 @@ import pytest  # noqa: E402
 from conxa_core.config import settings  # noqa: E402
 from conxa_core.storage.group_store import add_app, create_group, get_group, set_group_app_auth  # noqa: E402
 from conxa_core.storage.workflow_store import create_workflow  # noqa: E402
+from conxa_compile.saved_session import read_state  # noqa: E402
 from handlers.protocol import _CommandError  # noqa: E402
 from handlers.session import SessionMixin, _refresh_group_app_sessions  # noqa: E402
 import handlers.session as session_module  # noqa: E402
@@ -198,7 +199,7 @@ def test_refresh_writes_rotated_session_back_and_drops_foreign_domain(isolated_d
     assert after.last_error == ""
     assert after.checked_at is not None  # written back only because the sign-in check said "ready"
 
-    saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    saved = read_state(isolated_data_dir / f"{app_id}.json")
     assert saved["cookies"] == [{"name": "session", "domain": "render.test", "path": "/", "value": "new"}]
     assert not (isolated_data_dir / f"{app_id}.json.candidate").exists()
 
@@ -222,7 +223,7 @@ def test_a_recording_that_ended_signed_out_never_replaces_the_saved_session(isol
 
     _refresh_group_app_sessions(workflow.id)
 
-    saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    saved = read_state(isolated_data_dir / f"{app_id}.json")
     assert saved["cookies"][0]["value"] == "signed-in"
     assert not (isolated_data_dir / f"{app_id}.json.candidate").exists()
 
@@ -237,7 +238,7 @@ def test_refresh_is_a_noop_when_no_recording_ever_happened(isolated_data_dir):
     # No merged_group_state.json on disk for this workflow — must not raise.
     _refresh_group_app_sessions(workflow.id)
 
-    saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    saved = read_state(isolated_data_dir / f"{app_id}.json")
     assert saved == {"cookies": [], "origins": []}
 
 
@@ -389,7 +390,7 @@ def test_stop_recording_writes_back_a_session_the_check_confirms(isolated_data_d
     h = _Harness()
     h.cmd_stop_recording({"session_id": "sess1", "workflow_id": workflow.id}, "rid")
 
-    saved = json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    saved = read_state(isolated_data_dir / f"{app_id}.json")
     assert saved["cookies"][0]["value"] == "new"
 
 
@@ -427,7 +428,7 @@ def test_stop_recording_computes_and_saves_recording_duration(isolated_data_dir,
 
 
 def _saved(isolated_data_dir, app_id):
-    return json.loads((isolated_data_dir / f"{app_id}.json").read_text(encoding="utf-8"))
+    return read_state(isolated_data_dir / f"{app_id}.json")
 
 
 def _cookie(name, value):
@@ -466,7 +467,7 @@ def test_write_back_backs_up_the_previous_session(isolated_data_dir, probe_says)
     _refresh_group_app_sessions(workflow.id)
 
     assert _saved(isolated_data_dir, app_id)["cookies"][0]["value"] == "rotated"
-    bak = json.loads((isolated_data_dir / f"{app_id}.json.bak").read_text(encoding="utf-8"))
+    bak = read_state(isolated_data_dir / f"{app_id}.json.bak")
     assert bak["cookies"][0]["value"] == "good"
 
 

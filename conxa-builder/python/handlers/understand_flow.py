@@ -41,7 +41,9 @@ def recording_chat(workflow_id: str, limit: int = 600) -> str:
     from conxa_compile.conversation import thread_store as ts
 
     try:
-        said = [str(it.get("text") or "").strip() for it in ts.fold(ts.read_raw(_thread(workflow_id))) if it.get("kind") == "user_message"]
+        # A hidden message is Studio's own follow-up, never something the person typed (BUILD-98 (3)).
+        said = [str(it.get("text") or "").strip() for it in ts.fold(ts.read_raw(_thread(workflow_id)))
+                if it.get("kind") == "user_message" and not it.get("hidden")]
     except Exception:  # noqa: BLE001 -- context only: a missing thread must never stop the understanding
         return ""
     return " | ".join(s for s in said if s)[-limit:]

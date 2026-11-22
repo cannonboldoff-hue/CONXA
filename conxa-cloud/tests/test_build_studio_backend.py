@@ -758,6 +758,59 @@ def test_finish_group_app_auth_saves_a_definition_that_passes_self_test(backend,
     assert saved.apps[0].auth_definition == learned
 
 
+def test_finish_group_app_auth_tries_the_page_the_person_is_on_when_no_address_is_set(backend, monkeypatch, tmp_path):
+    """AUTH-24 (1): the wizard never asks for the signed-in address, so the first Done also tests the page the sign-in
+    window is on (only its address: no query, no session id in the path) and keeps it once confirmed."""
+    b, _out = backend
+    globals_ = b.cmd_finish_group_app_auth.__globals__
+
+    from conxa_core.config import settings
+    from conxa_core.storage.group_store import create_group, add_app, get_group
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+
+    group = create_group("Sales")
+    group = add_app(group.id, "Example", "https://example.test/login", "")
+    app_id = group.apps[0].id
+    auth_path = tmp_path / "groups" / group.id / "auth" / f"{app_id}.pending.json"
+    seen: list[str] = []
+
+    class FakeSession:
+        reached_wait_url = False
+        browser_open = True
+        current_url = "https://example.test/secure;jsessionid=ABC?token=xyz#access_token=1"
+
+        async def learn_auth(self, login_url, existing_definition, success_url=""):
+            seen.append(success_url)
+            return {"version": 1, "probe_url": success_url, "signed_out": {}, "signed_in": {}, "session_keys": []}, ""
+
+        async def stop(self):
+            auth_path.parent.mkdir(parents=True, exist_ok=True)
+            auth_path.write_text(json.dumps({"cookies": [{"name": "s", "value": "v"}], "origins": []}), encoding="utf-8")
+
+    class FakeRegistry:
+        def get(self, session_id: str):
+            return FakeSession() if session_id == "sess-1" else None
+
+        def pop(self, session_id: str):
+            return None
+
+    monkeypatch.setitem(globals_, "_recorder_registry", FakeRegistry())
+    assert b.cmd_finish_group_app_auth({"session_id": "sess-1", "group_id": group.id, "app_id": app_id}, "rid")["confirmed"]
+    assert seen == ["https://example.test/secure"]
+    assert get_group(group.id).apps[0].success_url == "https://example.test/secure"
+
+
+def test_a_learned_success_url_keeps_an_app_route_but_never_a_token() -> None:
+    from conxa_core.models.workflow import GroupApp
+    from handlers.groups import _learned_success_url
+
+    app = GroupApp(id="a", name="A", login_url="https://x.test/login")
+    assert _learned_success_url("https://x.test/app/#/profile?tab=1", app) == "https://x.test/app/#/profile"
+    assert _learned_success_url("https://x.test/login;jsessionid=1", app) == ""
+
+
 def test_finish_group_app_auth_reconnect_keeps_still_valid_definition_unchanged(backend, monkeypatch, tmp_path):
     """AUTH-15: Reconnecting to a site whose sign-in setup hasn't changed must not rewrite its
     auth_definition to a new (but semantically identical) object — that's what made

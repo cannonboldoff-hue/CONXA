@@ -92,8 +92,7 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
     cmd_start_recording above, which seeds *and* autosaves this same merged file
     instead of a plain single storageState.
     """
-    import json
-
+    from conxa_compile.saved_session import read_state
     from conxa_core.config import settings as _settings
     from conxa_core.storage.group_store import get_group
     from conxa_core.storage.storage_state import keeps_session, refresh_app_state
@@ -108,13 +107,19 @@ def _refresh_group_app_sessions(workflow_id: str) -> None:
     group = get_group(workflow.group_id)
     if group is None:
         return
-    current = json.loads(merged_path.read_text(encoding="utf-8"))
+    try:
+        current = read_state(merged_path)
+    except (OSError, ValueError):
+        return  # nothing readable to write back: every saved sign-in stays as it was
     candidates = []
     for app in group.apps:
         if not app.storage_state_path or not Path(app.storage_state_path).is_file():
             continue
         state_path = Path(app.storage_state_path)
-        previous = json.loads(state_path.read_text(encoding="utf-8"))
+        try:
+            previous = read_state(state_path)
+        except (OSError, ValueError):
+            continue
         refreshed = refresh_app_state(previous, current)
         if not refreshed["cookies"] and not refreshed["origins"]:
             continue  # never blank a working session
@@ -140,9 +145,8 @@ def _adopt_signed_in_sessions(group_id: str, candidates: list[tuple[Any, Path, d
     """Each candidate app's state from the recording replaces its saved session only when the headless sign-in
     check (the one behind "Check now") answers "ready" for it. "expired" or "unverified" (a site Conxa cannot
     check) keeps the saved session: picking up a rotated cookie is not worth risking a signed-out one."""
-    import json
-
     from conxa_compile.recorder.session import check_group_sessions_sync
+    from conxa_compile.saved_session import write_state
     from conxa_core.storage.group_store import get_group, set_group_app_checked
 
     group = get_group(group_id)
@@ -151,14 +155,14 @@ def _adopt_signed_in_sessions(group_id: str, candidates: list[tuple[Any, Path, d
     for app, state_path, previous, refreshed in candidates:
         candidate = state_path.with_name(state_path.name + ".candidate")
         try:
-            candidate.write_text(json.dumps(refreshed), encoding="utf-8")
+            write_state(candidate, refreshed)
             probe_app = app.model_copy(update={"storage_state_path": str(candidate)})
             others = [a for a in group.apps if a.id != app.id]
             verdict = check_group_sessions_sync([probe_app], [probe_app, *others]).get(app.id)
             if verdict != "ready":
                 continue
-            state_path.with_name(state_path.name + ".bak").write_text(json.dumps(previous), encoding="utf-8")
-            state_path.write_text(json.dumps(refreshed), encoding="utf-8")
+            write_state(state_path.with_name(state_path.name + ".bak"), previous)
+            write_state(state_path, refreshed)
             set_group_app_checked(group.id, app.id, "ready")
         except Exception:  # noqa: BLE001 — a failed write-back keeps the saved session, as before
             continue
@@ -398,18 +402,24 @@ class SessionMixin:
 
                 # Seed the recording from every app in the group — all of them were just
                 # confirmed signed in above.
+                from conxa_compile.saved_session import UNREADABLE, read_state, write_state
+
                 states = []
                 for app in group.apps:
                     if app.storage_state_path and Path(app.storage_state_path).is_file():
-                        import json as _json
-                        states.append(_json.loads(Path(app.storage_state_path).read_text(encoding="utf-8")))
+                        try:
+                            states.append(read_state(app.storage_state_path))
+                        except ValueError as exc:  # made on another computer, or damaged
+                            from conxa_core.storage.group_store import set_group_app_error
+
+                            set_group_app_error(group.id, app.id, UNREADABLE)
+                            raise _CommandError("auth_required", f"{app.name}: {UNREADABLE}") from exc
                 merged = merge_storage_states(states)
 
-                import json as _json
                 workflow_dir = Path(_settings.data_dir) / "workflows" / workflow_id
                 workflow_dir.mkdir(parents=True, exist_ok=True)
                 merged_path = workflow_dir / "merged_group_state.json"
-                merged_path.write_text(_json.dumps(merged), encoding="utf-8")
+                write_state(merged_path, merged)
                 storage_state_path = str(merged_path)
                 # Autosave into the same merged file the recorder was seeded from, so
                 # cmd_stop_recording/cmd_cancel_recording can read back what the site did to

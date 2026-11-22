@@ -93,6 +93,10 @@ def _restore_address_keys(step: dict[str, Any], old: dict[str, Any], guarded_key
         ctx = (step.get("signals") or {}).get("context") if isinstance(step.get("signals"), dict) else None
         if isinstance(ctx, dict) and "page_url" in ctx:
             ctx["page_url"] = step.get("url")
+    # The packager prefers `action.value` over `value`, so a value chat changed must not be undone by putting the old
+    # `action` back: the step would ship the old text while showing the new (BUILD-105 (2), as Human Edit writes it).
+    if step.get("value") != old.get("value") and isinstance(step.get("action"), dict) and "value" in step["action"]:
+        step["action"]["value"] = step.get("value")
     if step.get("intent") != old.get("intent"):
         sem = (step.get("signals") or {}).get("semantic") if isinstance(step.get("signals"), dict) else None
         for f in ("final_intent", "llm_intent"):

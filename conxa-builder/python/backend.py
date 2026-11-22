@@ -800,6 +800,14 @@ class Backend(
     def serve(self) -> None:
         # Windows decodes a pipe with the locale code page by default, which turns curly quotes into "â€œ".
         sys.stdin.reconfigure(encoding="utf-8")
+        # Lock any plain saved sign-in before the first command can read or write one (SG-27).
+        try:
+            from conxa_compile.saved_session import seal_plain_sessions
+            from conxa_core.config import settings as _settings
+
+            seal_plain_sessions(_settings.data_dir)
+        except Exception:  # noqa: BLE001 — never block startup; every plain file stays readable
+            pass
         # A video analysis that was still waiting when Studio last closed resumes by itself (C2).
         threading.Thread(target=self._resume_video_jobs, daemon=True).start()
         for line in sys.stdin:

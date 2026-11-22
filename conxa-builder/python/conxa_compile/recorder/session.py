@@ -24,11 +24,12 @@ from playwright.sync_api import sync_playwright
 
 from conxa_core.config import settings
 from conxa_core.metrics.store import metrics
-from conxa_core.models.events import RecordedEvent
+from conxa_core.models.events import RecordedEvent, SnapshotRef
 from conxa_core.models.workflow import GroupApp
 from conxa_core.redact import scrub_urls
 from conxa_core.site import same_host
-from conxa_compile import auth_learning
+from conxa_compile import auth_learning, signin_names
+from conxa_compile.saved_session import read_state, write_state
 from conxa_compile.policy.bundle import get_policy_bundle
 from conxa_compile.policy.timing import resolve_event_timing
 from conxa_core.sanitize import scrub_surrogates as _sanitize_surrogates
@@ -291,7 +292,7 @@ def _probe_group_sessions_sync(targets: list[GroupApp], seed_apps: list[GroupApp
     states: list[dict[str, Any]] = []
     for path in seed_files:
         try:
-            states.append(json.loads(path.read_text(encoding="utf-8")))
+            states.append(read_state(path))
         except (OSError, ValueError):
             continue
 
@@ -390,9 +391,8 @@ def check_group_sessions_sync(
             results[app.id] = "expired"
             continue
         try:
-            with open(app.storage_state_path, encoding="utf-8") as f:
-                json.load(f)
-        except (OSError, ValueError):
+            read_state(app.storage_state_path)
+        except (OSError, ValueError):  # a locked file this machine cannot open is "sign in again" too
             results[app.id] = "expired"
             continue
         probeable.append(app)
@@ -607,6 +607,11 @@ class RecordingSession:
     # recorded dialog_accept/dialog_dismiss steps.
     _dialog_server_events: SimpleQueue = field(default_factory=SimpleQueue)
     _last_snapshot_ref: str = ""
+    # What each recently left document said as it was left (bridge.js resultSignature lines), by its doc id. Memory
+    # only, never saved: it tells which words on the next page are new (_apply_arrival_sync).
+    _doc_results: dict[str, list[str]] = field(default_factory=dict)
+    # The settled words of the last document that arrived on each tab, until the step that led there can take them.
+    _pending_arrivals: dict[str, dict[str, Any]] = field(default_factory=dict)
     # A11y capture: one-strike degradation if slow (> 500ms).
     _last_a11y_capture_time: float = 0.0
     _a11y_skip_count: int = 0
@@ -916,11 +921,24 @@ class RecordingSession:
         self._run_pages_open.add(key)
         page.on("close", lambda _p: self._on_run_page_closed(key))
         if self.auth_mode:
-            return  # a sign-in records nothing: membership and "closed" are all it needs
+            # A sign-in records nothing; it only notes the user name typed, as hashes (signin_names.py).
+            page.expose_binding(signin_names.BINDING, self._on_sign_in_name_sync)
+            page.add_init_script(signin_names.SCRIPT)
+            return
         page.expose_binding("__skillReport", self._binding_sink_sync)
         page.add_init_script(self._bridge_script)
         page.add_init_script(self._dialog_script)
         self._attach_page_listeners(page)
+
+    def _on_sign_in_name_sync(self, _source: Any, value: Any) -> None:
+        """The sign-in window's user-name box (signin_names.SCRIPT): hashes saved beside the pending sign-in, in the
+        group's private folder. The value itself is never stored or logged, not even in an error."""
+        if not self.storage_state_autosave_path or not isinstance(value, str):
+            return
+        try:
+            signin_names.remember(Path(self.storage_state_autosave_path).parent, value)
+        except Exception as exc:  # noqa: BLE001
+            self.binding_errors.append(f"sign_in_name_error: {type(exc).__name__}")
 
     def _on_run_page_closed(self, key: int) -> None:
         # The panel closes a run whose last tab closed (the person closed it, or Studio did):
@@ -982,7 +1000,7 @@ class RecordingSession:
         try:
             self._page_target_ids[id(page)] = host_view.target_id(context, page)
             if not self.adopt and self.storage_state_path and Path(self.storage_state_path).is_file():
-                state = json.loads(Path(self.storage_state_path).read_text(encoding="utf-8"))
+                state = read_state(self.storage_state_path)
                 host_view.seed_storage_state(context, page, state)
             if self.auth_mode:
                 self._adopt_run_page_sync(page)
@@ -1054,13 +1072,13 @@ class RecordingSession:
                 previous = None
                 if path.is_file():
                     try:
-                        previous = json.loads(path.read_text(encoding="utf-8"))
+                        previous = read_state(path)
                     except (OSError, ValueError):
                         previous = None
                 state = host_view.capture_state(self._context, self._open_pages_sync(), previous)
-                path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                write_state(path, state)
             else:
-                self._context.storage_state(path=str(path))
+                write_state(path, self._context.storage_state())
             self._last_storage_state_save_at = now
             if self.auth_mode:
                 self.auth_captured = True
@@ -1079,7 +1097,7 @@ class RecordingSession:
             browser = self._playwright.chromium.launch(headless=True)
             try:
                 context = (
-                    browser.new_context(storage_state=storage_state) if storage_state else browser.new_context()
+                    browser.new_context(storage_state=read_state(storage_state)) if storage_state else browser.new_context()
                 )
                 page = context.new_page()
                 return _navigate_and_observe_sync(page, context, url)
@@ -2043,6 +2061,14 @@ class RecordingSession:
         if isinstance(payload.get("_landing"), dict):
             self._apply_landing_sync(payload["_landing"], self._tab_id_for_page(src_page))
             return
+        if isinstance(payload.get("_doc_copy"), dict):
+            self._apply_doc_copy_sync(payload["_doc_copy"])
+            return
+        if isinstance(payload.get("_arrival"), dict):
+            tab_id = self._tab_id_for_page(src_page) or ""
+            self._pending_arrivals[tab_id] = payload["_arrival"]
+            self._apply_arrival_sync(tab_id)
+            return
         # Counted on arrival, before any drop below, so a step dropped on purpose (paused, a login page) is not
         # mistaken for one that was lost on the way.
         if payload.get("bridge") and isinstance(payload.get("seq"), int):
@@ -2096,6 +2122,9 @@ class RecordingSession:
             if self._materialized and self._should_merge_typing(self._materialized[-1], event):
                 prev = self._materialized[-1]
                 self._delete_visual_assets(session_dir, prev)
+                # The same typing, further along: it keeps its number, so Studio's live list updates that row instead
+                # of adding one (the live count said 5 where the saved recording had 4, BUILD-91).
+                event.extras["sequence"] = prev.extras.get("sequence", event.extras.get("sequence"))
                 self._materialized[-1] = event
             else:
                 self._materialized.append(event)
@@ -2137,6 +2166,72 @@ class RecordingSession:
             self._rewrite_events_jsonl(self.data_root / "sessions" / self.session_id)
         except Exception as exc:  # noqa: BLE001
             self.binding_errors.append(f"landing_error: {exc!s}")
+            return
+        self._apply_arrival_sync(tab_id or "")  # the next page may have settled before its landing was known
+
+    def _apply_doc_copy_sync(self, doc_copy: dict[str, Any]) -> None:
+        """BUILD-99: the copy of a page its bridge sent as the page was left. A step taken on that page whose own copy
+        is missing (the page had gone when the recorder looked) or shows another document gets this one, so its
+        uniqueness checks no longer run blind. The page's words are kept in memory only (_apply_arrival_sync).
+        Never raises."""
+        doc_id = str(doc_copy.get("doc_id") or "")
+        if not doc_id:
+            return
+        self._doc_results[doc_id] = [str(x) for x in (doc_copy.get("results") or []) if isinstance(x, str)][:150]
+        while len(self._doc_results) > 20:
+            self._doc_results.pop(next(iter(self._doc_results)))
+        html = doc_copy.get("html")
+        if not settings.snapshot_dedup_enabled or not isinstance(html, str) or not html:
+            return
+        try:
+            with self._lock:
+                blind = [ev for ev in self._materialized
+                         if ev.doc_id == doc_id and (not ev.snapshot.dom_hash or ev.snapshot.doc_id != doc_id)]
+                if not blind:
+                    return
+                h, _ = snapshot_store.save_dom_snapshot(self.session_id, html)
+                ms = doc_copy.get("ms")
+                fixed = SnapshotRef(
+                    ref=snapshot_store.new_snapshot_ref(), dom_hash=h,
+                    dom_path=snapshot_store.relative_blob_path(self.session_id, h, "html.gz"),
+                    captured_ms=ms if isinstance(ms, int) else int(time.time() * 1000), doc_id=doc_id,
+                )
+                for ev in blind:
+                    ev.snapshot = fixed.model_copy()
+                # The reuse cache may hold the other document's copy under this page's signature: look afresh next time.
+                self._last_dom_sig_short = ""  # type: ignore[attr-defined]
+            self._rewrite_events_jsonl(self.data_root / "sessions" / self.session_id)
+        except Exception as exc:  # noqa: BLE001
+            self.binding_errors.append(f"doc_copy_error: {exc!s}")
+
+    def _apply_arrival_sync(self, tab_id: str) -> None:
+        """BUILD-95: the words a page showed once it settled after a step sent the tab there ("Thank you for your
+        order!"), kept on that step as its result. Only the words the page it left did not show, only for the step whose
+        landing is this page, and only the first page it reached. Never raises."""
+        arrival = self._pending_arrivals.get(tab_id)
+        if not arrival:
+            return
+        bare = lambda u: str(u or "").split("#", 1)[0]  # noqa: E731
+        try:
+            with self._lock:
+                ev = next((e for e in reversed(self._materialized) if not tab_id or (e.tab.id or "") in ("", tab_id)), None)
+                if ev is None or not ev.doc_id or ev.doc_id == str(arrival.get("doc_id") or ""):
+                    return
+                after = ((ev.post_condition.url_delta if ev.post_condition else None) or {}).get("after")
+                if not after or bare(after) != bare(arrival.get("url")):
+                    return  # not (yet) known to be where this step went
+                self._pending_arrivals.pop(tab_id, None)
+                left = self._doc_results.get(ev.doc_id)
+                if left is None or (ev.state_change.result_diff or {}).get("next_page"):
+                    return
+                seen = set(left)
+                added = [x for x in (arrival.get("results") or []) if isinstance(x, str) and x not in seen][:20]
+                if not added:
+                    return
+                ev.state_change.result_diff = {"added": added, "removed": [], "next_page": True}
+            self._rewrite_events_jsonl(self.data_root / "sessions" / self.session_id)
+        except Exception as exc:  # noqa: BLE001
+            self.binding_errors.append(f"arrival_error: {exc!s}")
 
     def _apply_amend_sync(self, payload: dict[str, Any]) -> None:
         """BUILD-80: merge what the page did after a saved step (state change, post condition, the app's words,
@@ -2221,6 +2316,12 @@ class RecordingSession:
         return out
 
     _STOP_BARRIER_MAX_S = 10.0  # the longest Stop waits for frames to hand over their steps
+    # The longest the final drain runs at all. A page that keeps sending messages never lets the queue go idle, and
+    # an endless drain left the pane open and the video unwritten until the pane was closed (BUILD-93 (20)).
+    _STOP_DRAIN_MAX_S = 20.0
+    # How long Stop waits for teardown (drain, video, closing the pane). Past it, Stop fails instead of
+    # letting the recording be reported saved while its video is still being written.
+    _STOP_JOIN_MAX_S = 300.0
 
     def _bridges_settled(self, states: list[dict[str, Any]]) -> bool:
         """True when no watch is still open and every step number a bridge issued has arrived here."""
@@ -2408,6 +2509,8 @@ class RecordingSession:
             extras["element_ref"] = str(payload["element_ref"])  # the same DOM node, however the page changed it
         if payload.get("stands_in_for"):
             extras["stands_in_for"] = str(payload["stands_in_for"])  # the clicked text box this one replaced
+        if payload.get("pasted_from"):
+            extras["pasted_from"] = str(payload["pasted_from"])  # BUILD-110 (2): this box's text was pasted from that box
         # Where the element sits: the shadow hosts it is inside, and its section's heading (bridge.js). The event model
         # has no field for either, so they ride in extras; shadow_path used to be computed and then dropped here.
         if isinstance(payload.get("shadow_path"), list) and payload["shadow_path"]:
@@ -3156,7 +3259,7 @@ class RecordingSession:
                 has_storage_state = bool(self.storage_state_path and Path(self.storage_state_path).is_file())
                 ctx_kwargs: dict[str, Any] = {}
                 if has_storage_state:
-                    ctx_kwargs["storage_state"] = self.storage_state_path
+                    ctx_kwargs["storage_state"] = read_state(self.storage_state_path)  # opened in memory, never a plain file
                 if self.auth_mode and self.window_rect:
                     r = self.window_rect
                     launch_args += [
@@ -3204,6 +3307,9 @@ class RecordingSession:
                     self._context.on("page", self._on_context_page)
                     self._page = self._context.new_page()
                 else:
+                    # A sign-in only notes the user name typed, as hashes (signin_names.py).
+                    self._context.expose_binding(signin_names.BINDING, self._on_sign_in_name_sync)
+                    self._context.add_init_script(signin_names.SCRIPT)
                     self._page = self._context.new_page()
             try:
                 if not self.adopt:  # an adopted page is already where the recording picks up
@@ -3559,6 +3665,8 @@ class RecordingSession:
             idle_for = time.monotonic() - self._last_enqueue_at if self._last_enqueue_at else elapsed
             if elapsed >= 5.0 and idle_for >= 1.0 and drained == 0 and (barrier_ok or elapsed >= self._STOP_BARRIER_MAX_S):
                 break
+            if elapsed >= self._STOP_DRAIN_MAX_S:
+                break
             time.sleep(0.05)
         # Final diagnostics snapshot after all events are drained.
         session_dir = self.data_root / "sessions" / self.session_id
@@ -3569,10 +3677,12 @@ class RecordingSession:
         self._stop_requested.set()
         if self._thread and self._thread.is_alive():
             # Teardown flushes every tab's video and writes videos.json; the understand step reads
-            # it as soon as this returns, so a short timeout races it (two tabs take >5s).
-            self._thread.join(timeout=60)
-        if self._thread and not self._thread.is_alive():
-            self._thread = None
+            # it as soon as this returns, so a short timeout races it (a long recording took >60s).
+            self._thread.join(timeout=self._STOP_JOIN_MAX_S)
+        if self._thread and self._thread.is_alive():
+            # Returning now would let the caller say "Recording saved" and start watching a video not yet written.
+            raise RuntimeError("Studio is still finishing this recording and saving its video. Wait a moment, then try again.")
+        self._thread = None
         self.browser_open = False
 
     def status(self) -> dict[str, Any]:

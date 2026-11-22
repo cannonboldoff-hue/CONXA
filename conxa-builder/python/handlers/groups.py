@@ -64,9 +64,9 @@ def _has_captured_session(auth_path: Path) -> bool:
     if not auth_path.is_file():
         return False
     try:
-        import json as _json
+        from conxa_compile.saved_session import read_state
 
-        data = _json.loads(auth_path.read_text(encoding="utf-8"))
+        data = read_state(auth_path)
     except (OSError, ValueError):
         return False
     if not isinstance(data, dict):
@@ -106,8 +106,10 @@ def _detect_warning(success_url: str, reached: bool, has_definition: bool) -> st
 def _learned_success_url(landed_url: Any, app: Any) -> str:
     """The page the person ended up on once signed in, when the app has no address for it yet. It is the sign-in
     window's own last page, and only used when it is a real page of the same site that is not the sign-in page itself,
-    so a wizard that never asks for it still ends with one. Empty when there is nothing safe to use."""
-    from urllib.parse import urlsplit
+    so a wizard that never asks for it still ends with one. Empty when there is nothing safe to use.
+    It ships in the pack, so only the page's address is kept: no query, no ";jsessionid=" style part, and a fragment
+    only when it is an app route ("#/profile"), never "#access_token=..."."""
+    from urllib.parse import urlsplit, urlunsplit
 
     from conxa_compile.recorder.frame_utils import looks_like_login_page
 
@@ -120,9 +122,11 @@ def _learned_success_url(landed_url: Any, app: Any) -> str:
         return ""
     if got.scheme not in ("http", "https") or not got.netloc or got.netloc != login.netloc:
         return ""
-    if (got.path or "/") == (login.path or "/") or looks_like_login_page(url):
+    path = got.path.split(";", 1)[0]
+    if (path or "/") == (login.path.split(";", 1)[0] or "/") or looks_like_login_page(url):
         return ""
-    return url
+    route = got.fragment.split("?", 1)[0] if got.fragment.startswith("/") else ""
+    return urlunsplit((got.scheme, got.netloc, path, "", route))
 
 
 def _live_detect_warning(app) -> str:
@@ -542,8 +546,11 @@ class GroupsMixin:
         decided = force
         learn_reason = ""
         if sess.browser_open and app_before is not None and not force:
+            # No signed-in address set (the wizard never asks for one): the page the person is on is tried too, so a
+            # site whose sign-in page cannot tell signed in from signed out still confirms on the first Done (AUTH-24 (1)).
+            success_url = app_before.success_url or _learned_success_url(getattr(sess, "current_url", ""), app_before)
             definition, learn_reason = self._loop.run(
-                sess.learn_auth(app_before.login_url, app_before.auth_definition, app_before.success_url or "")
+                sess.learn_auth(app_before.login_url, app_before.auth_definition, success_url)
             )
             if definition is None:
                 # Keep the window open — this is NOT a failure, it's "not yet". The renderer

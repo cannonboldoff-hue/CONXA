@@ -53,6 +53,22 @@ def test_select_all_and_retype_keeps_the_final_value_from_its_own_event():
     assert not [q for q in generate_questions(doc, dropped=ledger, limit=None) if q["kind"] == "dropped_value"]
 
 
+def _rich(event: dict) -> dict:
+    """The same event on a rich-text editor: the recorder names it a text box with a <div> tag (contenteditable)."""
+    return {**event, "target": {**event["target"], "tag": "div"}}
+
+
+def test_a_paste_in_a_rich_text_editor_is_its_typing_once_and_no_key_press():
+    """BUILD-110 (3): Ctrl+V in a contenteditable replayed the running computer's clipboard."""
+    kept, _ = _prepare([_rich(_key(2, "v", "Notes", ctrl=True)), _rich(_box(3, "type", "pasted words", "Notes"))])
+    assert [(e["action"]["action"], e["action"]["value"]) for e in kept] == [("type", "pasted words")]
+
+
+def test_a_shortcut_in_a_rich_text_editor_whose_typing_was_not_recorded_stays():
+    kept, _ = _prepare([_rich(_key(2, "v", "Notes", ctrl=True)), _box(3, "type", "x", "Other box")])
+    assert [e["action"]["action"] for e in kept] == ["keyboard_shortcut", "type"]
+
+
 def test_a_shortcut_outside_text_editing_stays_and_keeps_its_modifiers():
     kept, _ = _prepare([_box(1, "type", "x"), _key(2, "s", ctrl=True)])
     assert [e["action"]["action"] for e in kept] == ["type", "keyboard_shortcut"]

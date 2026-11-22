@@ -39,6 +39,23 @@ def _patch_is_noop(step: dict[str, Any], patch: dict[str, Any]) -> bool:
     return same({**step, "action": act}, patch)
 
 
+SIGN_IN_REFUSAL = ("Signing in is never part of a workflow, so a step can't type a password or open a sign-in page. "
+                   "Studio signs in for the workflow with the app's saved sign-in.")
+
+
+def _refuse_sign_in_edit(step: dict[str, Any], patch: dict[str, Any]) -> None:
+    """Human Edit's half of the chat's sign-in refusal (``copilot_proposals.refuses_sign_in``, BUILD-102 (3)): both paths
+    refuse the same change. Only what the save changes counts; the form re-sends a navigate step's unchanged address."""
+    from conxa_compile.compiler.action_semantics import action_name
+    from conxa_compile.editor.copilot_proposals import refuses_sign_in
+
+    url = str(step.get("url") or "")
+    changed = {k: v for k, v in patch.items() if v != step.get(k)
+               and not (k == "action" and isinstance(v, dict) and str(v.get("url") or url) == url)}
+    if refuses_sign_in(action_name(step).lower(), step, changed):
+        raise _CommandError("sign_in_not_in_workflow", SIGN_IN_REFUSAL)
+
+
 def _structural_refusal(exc: ValueError, fallback: str) -> _CommandError:
     """A refused structural change, in plain words: the shared span-before-irreversible rule always reads the same."""
     from conxa_compile.editor.patch_wording import SPAN_BEFORE_IRREVERSIBLE
@@ -83,6 +100,7 @@ class WorkflowEditorMixin:
             from conxa_compile.editor.patch_wording import plain_patch_error
 
             raise _CommandError(str(exc), plain_patch_error(str(exc))) from exc
+        _refuse_sign_in_edit(step, patch)
 
         merged = _deep_merge(dict(step), patch)
         # A plain deep-merge leaves every DERIVED field stale — semantic.final_intent (which
