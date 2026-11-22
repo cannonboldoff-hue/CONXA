@@ -49,6 +49,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-22](#sg-22-clipboard-steps-and-the-data-an-agent-span-is-shown) | Clipboard steps and the data an agent span is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/agent_span.js` |
 | [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
+| [SG-27](#sg-27-studios-saved-sign-ins-were-plain-files) | Studio's saved sign-ins were plain files | Studio | Medium ✅ Fixed | `conxa_compile/saved_session.py`, `backend.py` |
 
 ---
 
@@ -809,6 +810,44 @@ have not been reviewed.
 
 Add the processor to customer terms and the DPA; review the provider's retention and training terms before the key is
 set in production; consider sending the button label and kind only.
+
+## SG-27 — Studio's Saved Sign-Ins Were Plain Files
+
+**Severity:** Medium ✅ Fixed (2026-11-21)
+**Component:** Build Studio — `conxa_compile/saved_session.py`, its readers in `recorder/session.py`, `handlers/groups.py`, `handlers/session.py`, `handlers/protocol.py`; migration in `backend.py`
+
+### Description
+
+Studio kept each group's saved sign-in as plain Playwright storageState JSON (`data/groups/<id>/auth/<app>.json`, plus
+its `.pending.json`, `.bak` and `.candidate` siblings and each recording's `workflows/<id>/merged_group_state.json`):
+the target site's cookies and localStorage, readable by anything with access to the user's files. The runtime's copy
+was already encrypted (SG-11).
+
+### Fix Applied
+
+- One helper, `saved_session.py` (`read_state` / `write_state`), is the only way Studio reads or writes these files.
+  A file is locked with Windows DPAPI (`CryptProtectData`, current user, app-specific entropy, no UI): the key is the
+  OS's per-user secret, the same store behind Credential Manager and Electron `safeStorage`, so Conxa holds no key.
+  The file keeps its name and is JSON `{"conxa_sealed_session": 1, "dpapi": "<base64>"}`. Every write is opened back
+  and compared before it replaces the old file (temp file + `os.replace`).
+- Playwright is never handed a path: the state is opened into memory and passed as a dict
+  (`new_context(storage_state=dict)`, `context.storage_state()` with no path, or the host panel's own seeding).
+- Migration: `seal_plain_sessions` runs once at backend start, before any command is served. For each plain file it
+  writes the locked copy beside it, reads that copy back, and replaces the plain file only if the content is
+  identical. On any failure the plain file is left exactly as it was and a warning names it.
+- A locked file that cannot be opened here (made on another machine or Windows account, or damaged) raises
+  `SavedSessionUnreadable` (a `ValueError`): the sign-in check reads it as expired ("Session expired — sign in
+  again."), and starting a recording says "This saved sign-in can't be opened on this computer. Sign in again."
+- Tested in `conxa-cloud/tests/test_saved_session.py`; checked on a real Windows machine with a throwaway group.
+
+### Residual risk
+
+- If DPAPI fails on a write, the sign-in is saved plain with a warning (as SG-11 does), so a fresh sign-in is never lost.
+- A test run still hands the test sandbox's runtime a plain `{company}__{app}_raw_state.json`, which the runtime locks
+  with its own key on first read (SG-11 intake).
+- Studio ships for Windows only. On macOS/Linux development machines files stay plain (no stdlib cipher); the upgrade
+  is `keyring` (Keychain / Secret Service) holding an AES-256-GCM key, the runtime's model.
+- A Studio build older than this one reads a locked file as an empty sign-in and asks the person to sign in again.
 
 ## Cross-Reference: TRD §17 (Known Gaps & Tech Debt)
 
