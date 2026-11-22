@@ -142,6 +142,25 @@ def test_a_value_read_from_a_place_in_a_list_asks_always_that_place_and_only_yes
     assert not any(q["kind"] == "pick_match" for q in clarify.generate_questions(_place_doc(confirmed=True), limit=None))
 
 
+def test_build_117_the_yes_answer_passes_the_patch_gate_and_chat_still_cannot_send_it():
+    import pytest
+
+    from conxa_compile.editor.capability_manifest import chat_may_write
+    from conxa_compile.editor.patch_gate import validate_editor_patch
+
+    step = _place_doc()["skills"][0]["steps"][0]
+    q = next(q for q in clarify.generate_questions(_place_doc(), limit=None) if q["kind"] == "pick_match")
+    (op,), _ = clarify.plan_answer(q, {"choice": "yes"}, _place_doc())
+    validate_editor_patch(step, op["patch"], {})          # was refused: "Only the target, the value's name and ..."
+    assert not chat_may_write("extract", op["patch"]), "chat never writes a row binding on a read-a-value step"
+    for patch in ({"entity_binding": {"confirmed": True, "container_selector": "table tr"}},
+                  {"entity_binding": {"position": 2}}):
+        with pytest.raises(ValueError, match="extract_step_allows_only"):
+            validate_editor_patch(step, patch, {})        # only the flag, never where the binding points
+    with pytest.raises(ValueError, match="extract_step_allows_only"):
+        validate_editor_patch({**step, "entity_binding": None}, op["patch"], {})  # nothing code wrote to confirm
+
+
 def test_a_place_binding_is_shipped_to_the_runtime():
     from conxa_compile.skill_package_builder_saved_skill import _copy_saved_common
 

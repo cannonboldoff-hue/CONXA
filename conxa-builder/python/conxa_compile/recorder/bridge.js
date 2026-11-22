@@ -2542,6 +2542,10 @@
     const previous = lastEditableValueByElement.get(target);
     if (!force && previous === compareValue) return;
     lastEditableValueByElement.set(target, compareValue);
+    // BUILD-117 (7): an empty box is typing only when it held text before (the person cleared it). One first seen
+    // empty (a key released on the next page, a focus this bridge never saw) was never typed in: not a step.
+    const empty = readEditableValue(target) === "";
+    if (empty && previous === undefined && !target.defaultValue) return;
     // Changed while the person presses something else (an autocomplete fills the box from the suggestion pressed):
     // that is the press's effect, replayed by the press, not typing. Their own typing was sent at the press.
     if (_pressing && _pressing !== target && !(target.contains && target.contains(_pressing))) return;
@@ -2550,6 +2554,7 @@
     const value = sensitive ? "{{REDACTED}}" : readEditableValue(target);
     const p = serializeTarget(target, "type", value);
     p.action.value = value;
+    if (empty) p.cleared = true; // the box held text and is now empty: the compiler keeps this one as a step
     // BUILD-110 (2): the whole of this box's text was pasted from another box's copy. Only while it is exactly that.
     const pasted = sensitive ? null : _pastedInto.get(target);
     if (pasted && normClip(value) === pasted.text) p.pasted_from = pasted.ref;

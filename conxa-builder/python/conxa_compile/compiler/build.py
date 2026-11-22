@@ -1787,6 +1787,26 @@ def _mark_typed_over(entries: list[dict[str, Any]], before: list[dict[str, Any]]
             entry["pass"] = "typed_over"
 
 
+def _drop_empty_typing(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """BUILD-117 (7): typing that left a box empty is a step only when the box held text just before: the recorder saw
+    it emptied (``extras.cleared``, recorder/bridge.js), or an earlier typing event on the same box on the same page
+    (``extras.element_ref``) put text in it. Otherwise it is the recorder reporting an empty box it saw for the first
+    time (a key released on the next page): never something the person did, so never "Clear the text" in the workflow."""
+    held: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for e in events:
+        action = e.get("action") if isinstance(e.get("action"), dict) else {}
+        extras = e.get("extras") if isinstance(e.get("extras"), dict) else {}
+        ref = str(extras.get("element_ref") or "")
+        if str(action.get("action") or "") in _TYPED_ACTIONS:
+            if action.get("value") == "" and not extras.get("cleared") and ref not in held:
+                continue
+            if action.get("value") and ref:
+                held.add(ref)
+        out.append(e)
+    return out
+
+
 def prepare_compile_events(
     events: list[dict[str, Any]],
     pol: dict[str, Any],
@@ -1825,6 +1845,9 @@ def prepare_compile_events(
     outside = [e for e in human if not in_human_check(e)]
     _record_drops(ledger, human, outside, "human_check")
     human = outside
+    typed = _drop_empty_typing(human)
+    _record_drops(ledger, human, typed, "empty_typing")
+    human = typed
     # The signed-in person's own name/email shown on an account chip must not become a selector or fingerprint in a
     # package other people run. Taken out here, once, so nothing built later can carry it.
     events = drop_personal_target_text(human)
@@ -1881,20 +1904,34 @@ _SENDING_KINDS = frozenset({"send", "save", "delete", "upload", "long_job"})
 
 def _sends_form(steps: list[SkillStep], i: int) -> bool:
     """A step that sends what was typed: one the compiler already gave work to prove (its effect, from the same
-    commit and consequence rules), or Enter pressed straight after typing. No word list of its own."""
+    commit and consequence rules), a press judged as one that can't be undone, or Enter pressed straight after typing.
+    No word list of its own."""
     step = steps[i]
     effect = step.validation.effect
     if effect is not None:
         return effect.kind in _SENDING_KINDS
+    # The model's can't-be-undone judgement lands after effects are built (build.py's second-opinion pass), so a real
+    # "Send order" can carry no effect: its consequence still says it sends (BUILD-117 (1)).
+    if step.consequence == "irreversible" and _step_action_name(step) not in _TYPED_ACTIONS:
+        return True
     return (_step_action_name(step) == "keyboard_shortcut" and step.value == "Enter"
             and i > 0 and _step_action_name(steps[i - 1]) in _TYPED_ACTIONS)
+
+
+def _recorded_page(step: SkillStep, when: str = "before") -> tuple[str, str]:
+    """The tab and address (without its #part) a step was recorded on, or left for (``when="after"``). A compiled
+    step's own ``url`` is empty unless it is a navigate step, so the recorded page state is what tells pages apart."""
+    url = str((step.state.get(when) or {}).get("url") or (step.state.get("before") or {}).get("url") or step.url or "")
+    return str(step.tab.get("id") or ""), url.split("#", 1)[0]
 
 
 def mark_typed_rechecks(steps: list[SkillStep]) -> None:
     """BUILD-110 (1): a step that sends a form names the boxes typed on its page since the last send, so the runtime
     can check, just before sending, that each still holds what was typed (runtime/app/run.js::checkTypedBoxes). A box
     the person filled from a suggestion list (a combobox, or an option picked before the send) is left out: the list
-    puts its own words in the box, so "what was typed" is not what it holds."""
+    puts its own words in the box, so "what was typed" is not what it holds. Only boxes on the send's own page count:
+    the walk back stops at a step recorded on another page or one that left its page (BUILD-117 (1): a box typed on
+    the page before was looked for on the next page, found as a hidden empty copy, and stopped the run)."""
     keys = step_keys(steps)
     last_send = -1
     for i, step in enumerate(steps):
@@ -1902,9 +1939,10 @@ def mark_typed_rechecks(steps: list[SkillStep]) -> None:
             continue
         boxes: list[str] = []
         picked_after = False
+        page = _recorded_page(step)
         for j in range(i - 1, last_send, -1):
             s = steps[j]
-            if s.url != step.url:
+            if _step_action_name(s) == "navigate" or _recorded_page(s) != page or _recorded_page(s, "after") != page:
                 break
             role = str(s.identity_bundle.fingerprint.role or "").lower()
             if role == "option":

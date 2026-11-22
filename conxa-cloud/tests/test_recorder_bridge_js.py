@@ -2229,6 +2229,29 @@ def test_a_paste_of_a_whole_box_copied_from_another_box_names_that_box(page: Pag
     assert "pasted_from" not in first
 
 
+def test_build_117_an_empty_box_seen_for_the_first_time_is_not_typing_and_a_cleared_box_is(page: Page) -> None:
+    """BUILD-117 (7): a key released in a box the bridge never saw get focus (Enter's keyup on the next page) reported
+    'Typed "" into the box'. Only a box that held text and was emptied is typing, and it says so (``cleared``)."""
+    _install_bridge(page, '<input id="q" aria-label="Find"><input id="n" aria-label="Name" value="Old name">')
+    # Focused without a focus event the bridge sees, as when the page focused the box before the bridge was there.
+    page.evaluate("""() => {
+        const stop = (e) => e.stopImmediatePropagation();
+        window.addEventListener("focusin", stop, true);
+        document.getElementById("q").focus();
+        window.removeEventListener("focusin", stop, true);
+        document.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+    }""")
+    page.wait_for_timeout(120)
+    assert _type_events(page) == [], "nothing was typed"
+    page.fill("#q", "lamp")
+    page.wait_for_timeout(80)
+    page.fill("#q", "")                                 # emptied after typing
+    page.fill("#n", "")                                 # a filled-in box emptied
+    page.wait_for_timeout(120)
+    typed = [(e["target"].get("id"), e["action"]["value"], e.get("cleared")) for e in _type_events(page)]
+    assert typed == [("q", "lamp", None), ("q", "", True), ("n", "", True)]
+
+
 def test_no_paste_link_without_a_paste_for_part_of_a_box_or_for_a_secret_box(page: Page) -> None:
     _install_bridge(page, '<input id="a" aria-label="Name"><input id="b" aria-label="Other">'
                           '<input id="pw" type="password"><input id="c" aria-label="Copy">')

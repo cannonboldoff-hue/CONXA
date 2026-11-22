@@ -2124,6 +2124,8 @@ class RecordingSession:
                 self._delete_visual_assets(session_dir, prev)
                 # The same typing, further along: it keeps its number, so Studio's live list updates that row instead
                 # of adding one (the live count said 5 where the saved recording had 4, BUILD-91).
+                if event.extras.get("sequence") == self._seq:
+                    self._seq -= 1  # and its new number goes back, so the live list never skips one (BUILD-117 (7))
                 event.extras["sequence"] = prev.extras.get("sequence", event.extras.get("sequence"))
                 self._materialized[-1] = event
             else:
@@ -2511,6 +2513,8 @@ class RecordingSession:
             extras["stands_in_for"] = str(payload["stands_in_for"])  # the clicked text box this one replaced
         if payload.get("pasted_from"):
             extras["pasted_from"] = str(payload["pasted_from"])  # BUILD-110 (2): this box's text was pasted from that box
+        if payload.get("cleared"):
+            extras["cleared"] = True  # BUILD-117 (7): the box held text and the person emptied it (bridge.js)
         # Where the element sits: the shadow hosts it is inside, and its section's heading (bridge.js). The event model
         # has no field for either, so they ride in extras; shadow_path used to be computed and then dropped here.
         if isinstance(payload.get("shadow_path"), list) and payload["shadow_path"]:

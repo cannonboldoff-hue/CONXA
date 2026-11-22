@@ -1750,3 +1750,17 @@ def test_stop_does_not_return_while_the_recorder_is_still_finishing() -> None:
     release.set()
     asyncio.run(sess.stop())  # teardown done: Stop returns and forgets the thread
     assert sess._thread is None and sess.browser_open is False
+
+
+def test_build_117_merged_typing_gives_its_number_back_and_a_cleared_box_says_so(tmp_path) -> None:
+    """The live list numbers steps by sequence: a typing report merged into the one before kept that row's number and
+    used up its own, so the list went 1, 2, 3, 5. The next event now takes the freed number."""
+    sess = _session_with_page(tmp_path, "typing-numbers")
+    sess._consume_payload_sync(_stamped(1, action="type"))
+    sess._consume_payload_sync(_stamped(2, action="type"))       # the same box, further along: merged into row 1
+    cleared = _stamped(3)
+    cleared["cleared"] = True
+    sess._consume_payload_sync(cleared)
+    events = sess.snapshot_events()
+    assert [e["extras"]["sequence"] for e in events] == [1, 2]
+    assert events[1]["extras"]["cleared"] is True and "cleared" not in events[0]["extras"]

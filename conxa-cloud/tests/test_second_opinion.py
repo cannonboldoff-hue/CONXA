@@ -472,6 +472,20 @@ class ApplySecondOpinionTests(unittest.TestCase):
         self.assertEqual(apply_second_opinion([step], [finding]), [], "already have this exact check")
         self.assertEqual(len(step.validation.assertions), 1)
 
+    def test_an_address_check_goes_only_on_the_step_that_changed_the_address(self) -> None:
+        # BUILD-117 (6): "the web address changes" was put on the typing before Enter and failed every run once ticked.
+        typing, enter = _type_step(), _type_step()
+        typing.state = {"before": {"url": "http://h/a?stage=2"}, "after": {"url": "http://h/a?stage=2"}}
+        enter.state = {"before": {"url": "http://h/a?stage=2"}, "after": {"url": "http://h/a?stage=3"}}
+        for kind in ("url_changed", "url_pattern"):
+            proposal = json.dumps({"type": kind, "target": "" if kind == "url_changed" else "^http://h/a"})
+            self.assertEqual(apply_second_opinion(
+                [typing], [{"step_key": step_keys([typing])[0], "kind": "suggest_assertion", "proposed": proposal}]), [])
+            self.assertEqual(len(apply_second_opinion(
+                [enter], [{"step_key": step_keys([enter])[0], "kind": "suggest_assertion", "proposed": proposal}])), 1)
+        self.assertEqual(typing.validation.assertions, [])
+        self.assertEqual([a.type for a in enter.validation.assertions], ["url_changed", "url_pattern"])
+
     def test_suggest_assertion_malformed_json_applies_nothing(self) -> None:
         step = _type_step()
         keys = step_keys([step])

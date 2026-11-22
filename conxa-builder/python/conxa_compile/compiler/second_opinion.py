@@ -163,6 +163,13 @@ def _apply_one(step: SkillStep, kind: str, current: str, proposed: str) -> bool:
             return False
         if not isinstance(parsed, dict):
             return False
+        # A check that the address changes belongs only on the step that changed it: one the recording saw leave its
+        # address, or a navigate. On the typing before an Enter it fails every run once ticked (BUILD-117 (6)).
+        if str(parsed.get("type") or "") in ("url_changed", "url_pattern"):
+            before, after = ((step.state.get(k) or {}).get("url") for k in ("before", "after"))
+            act = step.action.get("action") if isinstance(step.action, dict) else step.action
+            if act != "navigate" and not (before and after and before != after):
+                return False
         new_assertion = Assertion(
             type=str(parsed.get("type") or ""),
             target=str(parsed.get("target") or ""),

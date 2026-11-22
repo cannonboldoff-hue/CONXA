@@ -61,6 +61,36 @@ def test_a_box_filled_from_a_suggestion_list_is_left_out():
     assert steps[4].handler_hints.recheck_typed == ["b"], "a combobox, and a box before an option pick, are not checked"
 
 
+def _on(step: SkillStep, before: str, after: str | None = None) -> SkillStep:
+    """A compiled step as the compiler writes it: no url of its own, the recorded page in ``state``."""
+    step.url = ""
+    step.tab = {"id": "tab_0"}
+    step.state = {"before": {"url": before}, "after": {"url": after or before}}
+    return step
+
+
+def test_build_117_only_the_send_s_own_page_is_listed_and_an_irreversible_send_gets_its_list():
+    # site/live.html: two boxes, "Send order" (judged can't-be-undone after effects were built: no effect), then a
+    # Comment box on the next page sent with Enter.
+    p1, p2, p3 = "http://h/live.html", "http://h/live.html?stage=2", "http://h/live.html?stage=3"
+    send = _on(SkillStep(step_id="send", action={"action": "click"}, intent="send_order", consequence="irreversible"), p1, p2)
+    enter = _on(SkillStep(step_id="enter", action={"action": "keyboard_shortcut"}, intent="press", value="Enter"), p2, p3)
+    steps = [_on(_typed("name", "customer_name"), p1), _on(_typed("label", "customer_name"), p1), send,
+             _on(_typed("comment", "comment"), p2), enter]
+    mark_typed_rechecks(steps)
+    assert send.handler_hints.recheck_typed == ["name", "label"]
+    assert enter.handler_hints.recheck_typed == ["comment"], "a box typed on the page before is never looked for again"
+
+
+def test_build_117_the_walk_back_stops_at_a_step_that_left_its_page():
+    # No send in between, but the first box's page was left (a link) and came back to the same address.
+    p, other = "http://h/form", "http://h/elsewhere"
+    steps = [_on(_typed("old", "a"), p), _on(_click("away"), p, other), _on(_click("back"), other, p),
+             _on(_typed("new", "b"), p), _on(_send("s"), p)]
+    mark_typed_rechecks(steps)
+    assert steps[4].handler_hints.recheck_typed == ["new"]
+
+
 # ─── BUILD-110 (2) ───────────────────────────────────────────────────────────────────────────
 
 def _ev(seq: int, value: str, ref: str, pasted_from: str = "", input_type: str = "text") -> dict:
@@ -101,3 +131,33 @@ def test_a_first_box_with_a_fixed_value_leaves_the_second_as_recorded():
     steps = [_typed("a", None, seq=1, value="ACME"), _typed("b", "company", seq=2)]
     link_pasted_values(steps, [_ev(1, "ACME", "r1"), _ev(2, "ACME", "r2", pasted_from="r1")])
     assert steps[1].input_binding == "company"
+
+
+# ─── BUILD-117 (7): empty typing ─────────────────────────────────────────────────────────────
+
+def _typing(seq: int, value: str, ref: str, *, cleared: bool = False, url: str = URL) -> dict:
+    extras = {"sequence": seq, "element_ref": ref, **({"cleared": True} if cleared else {})}
+    return {"action": {"action": "type", "value": value}, "target": {"tag": "input", "aria_label": "Search"},
+            "selectors": {"css": "#q"}, "page": {"url": url}, "extras": extras}
+
+
+def test_build_117_empty_typing_is_a_step_only_when_the_box_held_text_before():
+    from conxa_compile.compiler.build import prepare_compile_events
+    from conxa_compile.policy.bundle import get_policy_bundle
+
+    def enter(seq: int) -> dict:
+        return {"action": {"action": "keyboard_shortcut", "value": "Enter"}, "target": {"tag": "input"},
+                "selectors": {"css": "#q"}, "page": {"url": URL}, "extras": {"sequence": seq, "element_ref": "p1:1"}}
+
+    events = [_typing(1, "", "p1:1"),                       # first seen empty: never typed in
+              _typing(2, "desk lamp", "p1:1"), enter(3),
+              _typing(4, "", "p2:1", url=URL + "?s=desk+lamp"),  # same selector, next page, never typed in
+              _typing(5, "lamp", "p2:1", url=URL + "?s=desk+lamp"),
+              _typing(6, "", "p2:1", url=URL + "?s=desk+lamp"),  # emptied after typing: the person cleared it
+              _typing(7, "", "p2:2", cleared=True, url=URL + "?s=desk+lamp")]  # recorder saw a filled box emptied
+    ledger: list[dict] = []
+    kept = prepare_compile_events(events, get_policy_bundle().data, ledger)
+    typed = [(e["extras"]["sequence"], e["action"]["value"]) for e in kept if e["action"]["action"] == "type"]
+    assert (1, "") not in typed and (4, "") not in typed
+    assert (6, "") in typed and (7, "") in typed
+    assert {(d["sequence"], d["pass"]) for d in ledger if d["pass"] == "empty_typing"} == {(1, "empty_typing"), (4, "empty_typing")}
