@@ -2,6 +2,86 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The new fixes were tried in the real app, and most work — 2026-11-22**
+We ran the real Build Studio with test websites to see whether last week's fixes hold up outside the test lab. Saved sign-ins are locked, the question screens, the failure card and the Publish test button all work, and a pasted box reuses the first box's value. Three things do not work yet: answering "Yes, always the first result" is refused, the page's own OK/Cancel box confuses a test run inside Studio, and a form check can stop a run when nothing was wrong. These and a few smaller problems are now on the open list.
+— 2026-11-22
+
+**Forms check their boxes, pasted boxes follow the original, and the page's own OK/Cancel boxes are asked about — 2026-11-22**
+Before a workflow sends a form, it now checks that each box still holds what it typed; if something changed a box, the run stops and says so instead of sending the wrong text. When you copy a whole box and paste it into another while recording, the second box now always gets the same value as the first. When a website pops up its own OK/Cancel box that the recording never saw, the assistant is asked which button to press; if nobody answers in time, Cancel is pressed and the run says it couldn't confirm the step, never that it worked.
+— 2026-11-22
+
+**The finished work from last week's testing list is now filed as done — 2026-11-21**
+Everything that was fixed from the list of loose ends is now moved out of the open list into the finished list, one entry for each problem. What is still open is shorter and easier to read, and one new item collects the small leftovers that the fixes uncovered. All of the fixes have passed the automatic tests; the next step is a hands-on pass in the real app to confirm them.
+— 2026-11-21
+
+**Fewer false "done" results and date checks that read any date format — 2026-11-21**
+A button that simply showed up after a click, like an "Edit" button, no longer counts as proof that the click worked, because it appears either way. A step left with nothing else to show for it now says it couldn't confirm the step, or asks you to check it, instead of reporting success. A check for a date now finds that date however the page writes it, such as "21 Nov 2026" or "11/21/2026", while a date that could be read two ways only matches when it is written the same way round. A step that was still working when the run moved on now ends with "Done, please check" unless a later step showed it worked.
+— 2026-11-21
+
+**Answers that fit how people really test — 2026-11-21**
+When you try a workflow with a wrong value on purpose, Studio's "did you type the right thing?" question now has a third answer, "I typed it wrong on purpose, that's fine". Choosing it closes the question and lets you test again without starting anything else. When you copy a value that changes every time, like the price of the first search result, Studio now asks "Always the first result?" and only reads from that spot if you say yes. Studio also warns you when two rows on the page look exactly the same, before you agree to pick a row by its name.
+— 2026-11-21
+
+**Your sign-in name no longer ships inside your workflows — 2026-11-21**
+When you signed in to an app in Build Studio, the page often showed your name ("Logged in as tomsmith"), and that text was saved inside the workflow your customers receive. Build Studio now notes the name you type when you sign in, keeping only a scrambled fingerprint of it and never your password. Any text around a step that mentions that name is left out of the finished workflow.
+— 2026-11-21
+
+**Question cards answer the way people expect — 2026-11-21**
+The "previous question" arrow now really takes you back to the last answered question so you can choose again. Saying "No, a part is missing" now ends with a clear way on: tell Studio in the chat what is missing, or open the editor to add it. Questions appear in their final wording instead of changing on screen. When a summary or part of a build can't be written, Studio now says why in plain words. A check you untick under "How can we tell it worked?" no longer counts. Testing from the Publish or group page works even when the workflow changed since the last build.
+— 2026-11-21
+
+**The backend launcher no longer fails silently on Windows — 2026-11-21**
+The small script that starts the local cloud backend could stop without a word when its output was being saved to a file, which left people wondering why nothing was running. It now keeps going, and if the backend does stop it says so and suggests checking whether the port is already in use.
+— 2026-11-21
+
+**Saved sign-ins are now locked on your computer — 2026-11-21**
+Build Studio used to keep each site's saved sign-in as an ordinary file that anything on the computer could read. Now each one is locked with Windows' own protection, so only your Windows account on this computer can open it. Existing sign-ins are locked automatically the next time Studio starts, and an old copy is removed only after the locked one is proven to match. If a saved sign-in was made on another computer, Studio asks you to sign in again in plain words.
+— 2026-11-21
+
+**Two plain boxes on a form are no longer mistaken for the same box — 2026-11-21**
+Some forms have boxes with no visible label, like a name box and an email box that look alike. Studio used to give both the same fingerprint, so it could mix them up or think the person was filling the same box twice. Each box's fingerprint now includes the box's own hidden details, such as its internal name, its hint text and what kind of box it is. Workflows already published keep working exactly as before.
+— 2026-11-21
+
+**Signing in confirms on the first "Done" — 2026-11-21**
+On some sites the sign-in page looks the same whether you are signed in or not, so pressing "Done" after signing in said it couldn't confirm. You then had to press "Save anyway". Now Conxa also checks the page you landed on after signing in and remembers it, so the first "Done" works. Nothing extra is asked, and only the plain page address is kept.
+— 2026-11-21
+
+**Deleting a searched record, and picking from a suggestion list, now work from chat — 2026-11-21**
+A workflow that searched for a person and then deleted them could only be released from the step editor. Now a plain question asks whether it should act only on the row showing the name it is given. When the same record shows in two lists on one page, the workflow now uses the list it was recorded in instead of stopping. Picking a name from a suggestion list now offers to follow whatever name is typed next time.
+— 2026-11-21
+
+**Secret links, hidden buttons and test engine copies — 2026-11-21**
+A workflow that opens an invite or sign-in link with a secret code in it now asks the person for that code when it runs, instead of opening a broken link. After Studio restarts, testing again asks for a password typed earlier, instead of failing without it. Radio buttons drawn over a hidden real button are now pressed the way a person presses them. The words that describe each step in a shipped workflow no longer carry names or addresses the person typed, and Studio no longer copies a half-deleted test engine.
+— 2026-11-21
+
+**"How can we tell it worked?" offers better checks — 2026-11-21**
+When a recording ended right after you pressed Submit, Studio stopped offering "you see the name you typed" checks, because it only looked at saved copies of the page. It now also uses what the page itself showed after that press. A dropdown's list of choices no longer counts as words on the screen, so a bank's account-type list is no longer offered as proof. Words that were already on the page around an embedded box, such as a robot check, are no longer accepted as proof either.
+— 2026-11-21
+
+**The recording panel now says plainly when a site can't be reached — 2026-11-21**
+When the page a recording starts on could not be opened, the recording panel showed a long technical browser error. It now says "This site can't be reached — check the address", and the original error is still there under "Technical details". We also confirmed that a test keeps running and passes while Build Studio's window is minimized.
+— 2026-11-21
+
+**A failed test now says what it already did — 2026-11-21**
+When a test stopped partway, the earlier steps were real (a bank transfer could already have gone through), but the failure card did not say so and could even say nothing was sent. The card now lists the steps that already ran and may have changed something, so you know what to check in the app. Error messages are also clearer: a rejected form names the box it is about, an empty value says it was empty instead of "the page didn't respond", and a result the test cannot read says "couldn't confirm" instead of "failed".
+— 2026-11-21
+
+**The editor now refuses to put a sign-in into a workflow, like the chat does — 2026-11-21**
+A workflow must never contain someone's sign-in, but only the chat refused to add one; the step editor let it through. The editor now stops a change that types a password or sends a step to a sign-in page, and says why in plain words. Testing a workflow from the editor also now builds a fresh test copy first, instead of failing because the copy was out of date.
+— 2026-11-21
+
+**The recording now matches what you see, and remembers the page you left — 2026-11-21**
+While recording, the live list of captured actions could show one more action than was saved when you paused in the middle of typing; it now updates that line instead. When a click takes you to a new page, the recorder now keeps a copy of the page you clicked on and notes what the new page says, such as an order confirmation, so later checks have the right page to work from. Copy, paste and undo shortcuts inside rich text editors are no longer replayed with whatever happens to be on the computer's clipboard.
+— 2026-11-21
+
+**Chat and Human Edit now make the same change the same way — 2026-11-21**
+Asking the chat to "add a check after step 5" used to create a check that failed every test run; now it adds the check to that step, exactly as the editor does. Changing a typed value in the editor now saves the same thing as asking for it in chat, and a chat change to a typed value is no longer quietly undone when the workflow is built. Studio's own follow-up after the questions no longer looks like something you wrote, and older change cards no longer show technical text unless you open the details.
+— 2026-11-21
+
+**Clearer workflow names and fewer false "redesigned" warnings — 2026-11-21**
+A test that failed on one button no longer warns that the whole app may have been redesigned, because each part of the page is now counted only once. When a page has several buttons that look the same, such as "Add to cart" on six products, a step can no longer be named after the wrong product. Studio's description of a workflow now knows which browser tab each action happened in, so it won't say a link was opened "from the new tab" when it was clicked in the first one.
+— 2026-11-21
+
 **The list of known loose ends from last week's testing is now sorted into twelve jobs — 2026-11-21**
 After last week's full testing run, about twenty-five small problems were still open, all mixed together in one long list. They are now grouped into twelve separate jobs, each covering one part of the product, with a clear order so two jobs never change the same thing at the same time. Four of the jobs have started; the rest wait for their turn. Nothing in the product itself changed yet.
 — 2026-11-21

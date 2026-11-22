@@ -6,23 +6,23 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 55 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1) |
+| BUILD — Build Studio | 77 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9) |
 | EXEC — Execution & Recovery | 33 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
 | CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
-| RT — Runtime | 14 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line), 18 |
+| RT — Runtime | 15 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line, per-attempt), 18 |
 | PROD — Product | 4 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 21 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3) |
+| AUTH — Authentication | 23 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **148** | |
+| **Total** | **173** | |
 
 ---
 
-## BUILD — Build Studio (55 done)
+## BUILD — Build Studio (77 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -825,6 +825,100 @@ A compiled workflow can always be built again (action `rebuild`, "Build again", 
 **Resolved:** 2026-11-20
 Human Edit's Conversation got a "New conversation" button that adds a divider the chat model reads nothing above (everything stays visible and every open question or change card above keeps working), and an "Edit" link on the person's last message that replaces it and its reply with one new reply, offered only while nothing but a reply followed it (`thread_store.conversation_start` / `editable_message`, a `retract` line, `thread_turn{replaces}`, `thread_new_conversation`). Parts (2) and (3) stay open in `TODO.md`.
 
+### 2026-11-16 end-to-end campaign follow-ups — fixed 2026-11-21 (backlogs E2E16-1 … E2E16-14)
+
+Filed by item, in ID order. Every entry below is **unit-proven; the live Build Studio check is pending** unless it says "live". Parts that are not fixed stay in `TODO.md` under the same ID. Full suite after the run: `pytest -q tests` 3901 passed, 1 skipped; runtime `npm test` 1532 passed, 0 failed.
+
+**Live check 2026-11-22 (real Build Studio, throwaway groups; evidence in `docs/testing/evidence/LIVE-PASS-2026-11-22/`).** Seen working live: AUTH-24 (5) saved sign-ins locked at Studio start (245 plain files before, 245 locked after, a real test still signed in); AUTH-24 (1) "Done" confirms on the first press; AUTH-24 (4) the sign-in name is kept only as a salted hash and the test package has no username or password; BUILD-88 previous-question arrow; BUILD-91 (2) live counter equals saved actions (12 = 12, 7 = 7); BUILD-93 (4) question titles stay the same from first showing to answer; BUILD-93 (17) unreachable start address message; BUILD-100 failure card lists the steps that already ran; BUILD-103 (2) unticking a completion check; BUILD-104 (3) Publish page "Run test" on an out-of-date copy; BUILD-107/108 row questions; BUILD-110 (1) typed-box check stops a real change and nothing is sent; BUILD-110 (2) pasted box reuses the first box's value; BUILD-106 (1) through an MCP client (pause with OK / Cancel / Stop, then OK pressed and reported); the "typed it wrong on purpose" card. **Not seen working:** BUILD-101 (7) "Always the first result?" (answering Yes is refused), BUILD-106 (1) inside a Studio test run (the box is never seen by the runtime), and BUILD-110 (1) can also stop when nothing changed. These are open as BUILD-117 in `TODO.md`. **Not checked:** BUILD-110 (4) "No, a part is missing" (never offered in 5 recordings) and a confirm box on the-internet itself. Every other entry below stays **unit-proven**.
+
+### BUILD-88 — "Previous question" arrow now goes back to an answered question
+**Resolved:** 2026-11-21 (E2E16-6a)
+When the question before is answered, the arrow reopens it like the pencil; when it is still open, the arrow scrolls to it. A question asked again further down is no longer taken for "the one before".
+
+### BUILD-90 — "The app may have been redesigned" after one broken element
+**Resolved:** 2026-11-21 (E2E16-3)
+One element (a sort box, a search box) was saved up to three times as a landmark, so one broken element read as "3/3 landmarks missing". Each element now counts once (`build.py::_build_structural_fingerprint`); on 120 real compiled workflows the Wikipedia search box that counted three times counts once.
+
+### BUILD-91 — Wikipedia leg: live counter and the summary banner
+**Resolved:** 2026-11-21 (E2E16-1, E2E16-3, E2E16-6a)
+(1) "Couldn't write the summary" now adds one plain sentence saying why (`compile_recap.py::plain_cause`); no stand-in summary is written (BUILD-98 (2) decision). (2) Typing that continues after a pause keeps its earlier step number, so the live list updates that row in place and no longer shows one more action than was saved. (3) The 15 s wait is EXEC-61 (done).
+
+### BUILD-92 — A switch back to an earlier tab is described correctly
+**Resolved:** 2026-11-21 (E2E16-3)
+The understanding check now sees which tab each action happened in (`timeline_understanding.py::build_input` sends a `tab` number when a recording uses more than one tab), so a link clicked in the first tab is no longer described as opened "from the new tab". No model call was made to see the new wording.
+
+### BUILD-93 (4, 9, 17, 19, 20, 21) — Dialog-leg and later loose ends
+**Resolved:** 2026-11-21 (E2E16-2, E2E16-3, E2E16-6a, E2E16-12)
+(4) Questions are made in their final wording before the first card is posted (reverses BUILD-55 A4). (9) Hover-page step names: already fixed by `workflow_review.py::_zero_based`. (17) An unreachable start page says "This site can't be reached — check the address" in the recording card; the raw error sits behind "Technical details". (19) The model tags first-read notes with a `facet` (prompt v6) and a repeat note tags each option `same` or `list`; `_flow_settle_repeat` maps the person's pre-build answer onto the build's own repeat question, so they are not asked twice. (20) The recorder's final drain ends after 20 s and `stop()` waits up to 300 s, then says so plainly instead of letting "Recording saved" show early. (21) One end-to-end test drives "Yes, enter each row of a list" through compile to `for_each_rows` with the 5 recorded rows and a changed list. Parts (19) and (21) need a live Studio run.
+
+### BUILD-94 — Closed: what minimizes Studio's window (owner decision: leave it)
+**Resolved:** 2026-11-21 (E2E16-2)
+The `bringToFront` hypothesis was ruled out (an Electron probe and three live tab-switch tests caused no minimize); one unexplained minimize at 11:55:38Z had no Studio cause, most likely the person or the OS. `setMinimizable(false)` cannot stop an OS minimize on a frameless window. The owner chose to leave minimizing alone; the minimize log and the control-op log stay for diagnosis. A side finding stays open in `TODO.md` (the runtime's `bringToFront` steals focus from other apps).
+
+### BUILD-95 (3, 4) — Names shifted on look-alike clicks; next page's words
+**Resolved:** 2026-11-21 (E2E16-1, E2E16-3, E2E16-5)
+(3) A model name that uses words from a look-alike step's recorded test id or row is dropped for the step's plain code-built name (`build.py::_like_steps_words`); on the real saucedemo workflow it drops exactly the 7 wrong names. (4) The recorder now reports the next page's first settled words with the step (`state_change.result_diff.next_page`), and `state_validation.py::_left_the_page` reads them. Live headless probes on a real site; the saucedemo "Thank you for your order!" tick is still offered unticked (see `TODO.md`).
+
+### BUILD-96 (4, 5) — Chat check without an element; "Generate PDF order"
+**Resolved:** 2026-11-21 (E2E16-5, E2E16-6b)
+(4) Chat's "add a check after step N" becomes a "the page shows …" check on that step, the same edit Human Edit's Validation panel makes. (5) "Generate PDF order" is a real button (saucedemo sessions 37ffdcf0 and 3c9321a8); it is offered unticked.
+
+### BUILD-98 (3) — Studio's follow-up no longer reads as the person's message
+**Resolved:** 2026-11-21 (E2E16-6b)
+The hidden follow-up is labelled "Studio (not the person…)" for the model, can never answer a card or start an action, and its reply starts "Following up on what you told me earlier:". `understand_flow.py::recording_chat` skips hidden messages.
+
+### BUILD-99 (2, 4, 5) — Page copy at the click; degraded second opinion; offered checks
+**Resolved:** 2026-11-21 (E2E16-1, E2E16-3, E2E16-5, E2E16-6a)
+(2) The bridge sends one copy of a page when it is left, and a step on that page whose own copy is missing gets it (live headless probe on a real site). (4) A failed build step shows a plain cause (`plain_cause`). (5) A dropdown's choices are no longer "words on the screen" (checked on the real ParaBank recording).
+
+### BUILD-100 — A failed step-by-step test says what it already did
+**Resolved:** 2026-11-21 (E2E16-7a)
+`step_decision` carries `sent_data`; the failure card lists "These steps already ran and may have changed something in the app" and no longer says "Nothing was saved or sent" when earlier steps sent data.
+
+### BUILD-101 (1 residue, 7) — Checks from the page a step left; position of a captured value
+**Resolved:** 2026-11-21 (E2E16-5, E2E16-12)
+(1) A step that left the page (or a form sent back to its own address) gives no checks from the page it left (`state_validation.py::mark_document_changes`, wired in `build.py::prepare_compile_events`). (7) Owner chose design C: a captured value that changes each run gets the question "Always the first result?"; only the person's yes turns the position binding on (`EntityBinding.position`, `resolution.js`); the 0.15 margin is unchanged.
+
+### BUILD-102 (2, 3, 4, 6, 7) — Sign-in refusal in Human Edit and pick-match
+**Resolved:** 2026-11-21 (E2E16-5, E2E16-6b, E2E16-7b, E2E16-8, E2E16-11)
+(2) not reproduced (the failures were real step misses). (3) Human Edit refuses typing a password or going to a sign-in page, with the same word list as chat (`sign_in_not_in_workflow`). (4) Control labels are offered unticked; W-E: a control with a `data-testid` that appears after a click no longer becomes an "element is present" check. (6) A clicked suggestion is now checked as the row itself, so the pick-match question appears. (7) Confirmed live: one "I'm signed in" press resumes the test.
+
+### BUILD-103 (1, 2) — Test while minimized; unticked checks
+**Resolved:** 2026-11-21 (E2E16-2, E2E16-6a)
+(1) A full 8-step tab-switch test replay passed live while Studio stayed minimized (keeping the window up while recording: owner decision, leave it). (2) Unticking a completion check retires it with the dead mark every runtime reader honours; only the person's own untick retires one.
+
+### BUILD-104 (1, 3, 5) — Plain boxes with one hash; Publish Run test; word list
+**Resolved:** 2026-11-21 (E2E16-4, E2E16-6a, E2E16-6b)
+(1) A form field's hash now includes its id (not a page-generated one), form-field name, placeholder and input type, in the recorder-compiler-runtime contract (`stable_hash_input`, 7 new shared-fixture cases); the runtime accepts either the new or the old hash, so published packs resolve as before. Ship the runtime first. (3) `cmd_test_workflow` builds a fresh test copy first, and the Publish/group row no longer greys out Run test for an out-of-date copy. (5) The other-language word list has no defect.
+
+### BUILD-105 (2, 3, 4) — Chat and Human Edit parity
+**Resolved:** 2026-11-21 (E2E16-6b)
+(2) A value or name edit writes identical step data from chat and Human Edit (also fixed: a chat value edit could ship the old text because the address restore put back `action.value`). (3) Cards saved by older builds hide internal names behind "Technical details". (4) A parity test checks that each change Human Edit refuses is also refused by chat.
+
+### BUILD-106 (1, 2) — "Still working" hand-over; unrecorded native OK/Cancel box
+**Resolved:** 2026-11-21 (E2E16-11), 2026-11-22 (E2E16-14)
+(2) A "still working" step that hands over is noted "please check" at the end only if no later step was proven by a check that said more than "it ran"; accept-the-popup flows whose later step proves something stay "Done" (`run.js::resolveLaterProofs`). (1) A `confirm()`/`prompt()` box that the step's own action opened and no next step answers is always put to the MCP client; the runtime never presses a button itself and never asks in dry, loop, destructive or scheduled runs; the open box rides on the pause (`server.js`) and is pressed OK or Cancel with the client's answer; no answer within the 3-minute pause presses Cancel and ends the run as "couldn't confirm", never a pass. Unit-proven only; never seen through a real Chromium `confirm()` across two MCP calls.
+
+### BUILD-107 (2, 3, 5) — Run messages
+**Resolved:** 2026-11-21 (E2E16-7a)
+A rejected form names the box; an empty extracted value says "holds no value to extract"; "please try again later" is no longer "too many requests" and "You must be signed in" is a sign-in that ended. Parts (1) and (4) are only partly done and stay open.
+
+### BUILD-108 (1, 2, 3) — Row binding
+**Resolved:** 2026-11-21 (E2E16-6a, E2E16-8, E2E16-12)
+(1) A step that cannot be undone and is tied to a run input gets the plain `confirm_row` question; a yes releases the publish gate. (2) The "what if no one matches?" note is routed to `missing_item` (tagged `alternatives`/`failure_policy`). (3) The same record in two panels uses the panel it was recorded in (`entity_binding.py::_scope_to_panel`). (5) A partial search term stays unbound (owner decision: keep the whole-value rule).
+
+### BUILD-109 — Twin rows, follow-up question, test engine copy
+**Resolved:** 2026-11-21 (E2E16-6a, E2E16-8, E2E16-9, E2E16-12)
+(1) A twin-row warning ("more than one row shows it; it will stop every time", `EntityBinding.recorded_matches`). (2) The "did you type the right thing?" question has a third answer, "I typed it wrong on purpose, that's fine". (3) Whole-value rule kept (owner decision). (4) A runtime copy cut short by a deleted build is detected, `version.json` is written last, and the copy is retried once.
+
+### BUILD-110 (1, 2, 3, 4, 6, 8, 9) — Typed boxes, paste link, editing shortcuts, "No, a part is missing", launcher, frames, secret links
+**Resolved:** 2026-11-21 (E2E16-1, E2E16-2, E2E16-5, E2E16-6a, E2E16-9), 2026-11-22 (E2E16-14)
+(1) Before a step that sends a form (an existing send/save/delete/upload effect, or Enter straight after typing) the runtime compares each typed box inside the page and stops with "The box no longer holds what was typed" if one changed; a secret box's value never leaves the page; a box that cannot be read never stops the run (`build.py::mark_typed_rechecks`, `HandlerHints.recheck_typed`, `page_scripts.js::typedBoxHolds`). (2) Only when a copy of a whole box and a paste of exactly that text into a different box were detected (never a secret box), the second box becomes "the same value as the first box" and reuses its run input (`build.py::link_pasted_values`, `pasted_from`). Both unit-proven only. (3) Ctrl/Cmd+A/C/V/X/Z/Y in a rich-text box is dropped at compile when the box's own typing was recorded. (4) "No, a part is missing" keeps the answer and points to the chat and an "Add the missing part" button. (6) `scripts/conxa.ps1` no longer dies silently under Windows PowerShell 5.1 and says why the backend stopped. (8) A press inside a frame checks the page copy saved before it. (9) A `REDACTED` address value becomes a run input (`?token=` gives `{{token}}`, `?code=` gives `{{secret_code}}`); "Sign in and test again" asks again for a missing secret after a restart. Part (7) stays open.
+
+### BUILD-111 (1, 2, 3, 4, 5, 6, 7, 9) — Compiler honesty loose ends
+**Resolved:** 2026-11-21 (E2E16-5, E2E16-9, E2E16-11)
+(1) The recompile helper works offline with only `SKILL_ALLOW_NO_PROVIDERS=1`. (2) The 0.45 vs 0.315 gap was an old Studio process still running pre-2026-11-18 score code; the helper now calls the same path as `cmd_compile`. (3) A radio hidden under its own label is pressed through that label (`coveringOwnLabel`, `clickWithWitness`). (4) Measured: 1.2 "can't be undone" questions per workflow (about 19% of clicks "unsure") on 43 short recordings. (5) The words the person typed are removed from shipped step words. (6) A date check accepts any way of writing the same whole date. (7) Page text is read once per question. (9) The "you see the name/email" options now come from the step's own recorded results. Part (8) is a site defect.
+
 ## EXEC — Execution & Recovery (33 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
@@ -1385,7 +1479,7 @@ Human Edit's Conversation got a "New conversation" button that adds a divider th
 - **Category:** Cloud
 ---
 
-## RT — Runtime (14 done)
+## RT — Runtime (15 done)
 
 ### RT-REFACTOR-1 — Runtime refactor audit follow-up: safety nets, boundary, monolith seams
 **Resolved:** 2026-08-22 (all follow-ups closed)
@@ -1518,6 +1612,10 @@ Updater.md` §1.3.
 ### RT-17b (step line) — One run-record line per step
 **Resolved:** 2026-11-21
 `recovery.log` gets a `step_decision` line for every step: how it ended, how long it took, the tab address without query or fragment, the nesting path (`run.js::executeOneStep`).
+
+### RT-17b (per-attempt, frame) — Each recovery attempt is recorded
+**Resolved:** 2026-11-21 (E2E16-7a)
+Every recovery stage writes a `recovery_attempt` line with stage, ok, duration and blocked; the `resolve` line carries the iframe chain. Unit-proven. The new fields (`recovery_attempt`, `frames`, `sent_data`, evidence `steps_that_changed`) are not yet described in `docs/Backend-Schema.md` §4.1.
 
 ### RT-18 — Large uploads and failed downloads in a host panel (WF-14 14.8)
 **Resolved:** 2026-11-20
@@ -1707,7 +1805,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (21 done)
+## AUTH — Authentication (23 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -1854,6 +1952,14 @@ recorded State's cities). None of these block a run; all deserve their own item.
 **Resolved:** 2026-11-21
 (2) The "No success URL is set" warning is worked out each time it is read (`groups.py::_live_detect_warning`), so it goes the moment an address exists. (3) A sign-in expiry reported by the runtime is written onto the group's apps (`test_flow.py::_tf_mark_session_expired`), so "Sign in and test again" opens the sign-in window (2026-11-18).
 
+### AUTH-24 (1, 4, 5) — Sign-in confirms on the first "Done"; username scrub; saved sign-ins locked
+**Resolved:** 2026-11-21 (E2E16-7b, E2E16-10, E2E16-13)
+(1) "Done" also tests the page the person is on and remembers its bare address (`groups.py::_learned_success_url` drops query, `;jsessionid=` and non-route fragments); live: the-internet confirmed on the first Done (34.8 s, was "didn't confirm"), saucedemo on the first Done (45.6 s); the wizard does not need a new question. (4) The sign-in window notes the user name typed (a small `__conxaSignInName` binding; never a password box, never the recorder bridge), keeps only salted SHA-256 hashes in a locked file, and shipped step context containing that name as a whole word is dropped (`signin_names.py`, `selector_filters.py`); unit-proven, not tried in the live panel. (5) Studio's saved sign-ins are locked with Windows DPAPI (`saved_session.py`; 17 read/write sites; SG-27 in `docs/Security.md`); the migration runs at backend start and removes a plain file only after the locked copy is read back identical; checked on a throwaway group on this machine, the 16 real sign-ins lock at the next Studio start.
+
+### AUTH-25 — Live re-check of sign-in learning in the Studio panel (left open from AUTH-23)
+**Resolved:** 2026-11-21 (E2E16-7b)
+(1) The Studio host-panel signed-in look learned and confirmed on the-internet and saucedemo with the same rule as the headless run. (2) Closing a headless browser now takes about 0.7 s (the 11–61 s was machine load); one Done is about 9 s for one address and 35–46 s when two are tried. (3) The stale `probe_url` comment in `runtime/app/browser.js` is corrected.
+
 ## DEAD — Tech debt (1 done)
 
 ### DEAD-1 — `{company}_groups.json` is written by Build Studio but read by nothing in the runtime
@@ -1893,4 +1999,5 @@ recorded State's cities). None of these block a run; all deserve their own item.
 **Resolved:** 2026-11-21 (organisation only; no item is implemented yet, so none moves out of `TODO.md`)
 - **What was done:** the 25 open follow-ups of the section (BUILD-88, 90–111, AUTH-24, RT-17b) were regrouped by owned code into 12 independent backlogs `E2E16-1`..`E2E16-10` (with 6a/6b, 7a/7b) in `TODO.md`, each with owned files, the exact original sub-items it takes, kind, priority, wave and dependency. Every original item text is unchanged; a coverage line and a "no work needed" line keep every sub-item traceable. The section named in the request ("2026-11-16 dev test run") does not exist; the only 11-16 section is "2026-11-16 end-to-end campaign", which was used.
 - **Delegation:** wave 1 (E2E16-1, 3, 6b, 7a) handed to four parallel Opus sessions on 2026-11-21. Wave 2 (2, 5, 9), wave 3 (4, 7b, 8) and wave 4 (6a, 10) wait on shared files or the one live Build Studio (see the table's "Waits for").
+- **Completed 2026-11-21:** all twelve backlogs reported, plus the owner-decision follow-ons E2E16-11 (W-E cap, date-format check, "please check" for a "still working" step), E2E16-12 (prompt facets, twin rows, "typed it wrong on purpose", "Always the first result?") and E2E16-13 (sign-in username scrub). The fixed parts are filed above, one entry per original item; the unfixed parts stay in `TODO.md` (BUILD-93, 94, 95, 96, 97, 98, 101, 102, 103, 104, 106, 107, 108, 110, AUTH-24, RT-17b) and new leftovers are BUILD-116. E2E16-14 (BUILD-110 (1) and (2), BUILD-106 (1)) is in progress. Everything filed is unit-proven; a live Studio pass is pending. Nothing was committed.
 - **Rule for the sessions:** plan first, edit only owned files, no commits, no edits to `TODO.md` / `Done.md` / `FIX.md`; the main session records results and moves finished items here.
