@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -82,6 +84,77 @@ class AuthServiceKeyringCallsTests(unittest.TestCase):
             "conxa-studio-dev", "session", '{"access_token": "x"}'
         )
         fake_keyring.delete_password.assert_called_once_with("conxa-studio-dev", "session")
+
+
+class LoginCancelTests(unittest.TestCase):
+    """Cancel and timeout end a waiting sign-in with a clear code (WF-017 17.5)."""
+
+    def _service(self) -> AuthService:
+        return AuthService(clerk_domain="https://clerk.example", client_id="client")
+
+    def _run_login(self, svc: AuthService, out: dict) -> threading.Thread:
+        def target() -> None:
+            try:
+                svc.login()
+            except RuntimeError as exc:
+                out["error"] = str(exc)
+
+        t = threading.Thread(target=target, daemon=True)
+        t.start()
+        return t
+
+    def _wait_pending(self, svc: AuthService) -> None:
+        for _ in range(100):
+            if svc._pending_login:
+                return
+            time.sleep(0.05)
+        self.fail("login never started waiting")
+
+    def test_cancel_login_ends_a_waiting_login(self) -> None:
+        svc = self._service()
+        out: dict = {}
+        with patch.dict("os.environ", {"CONXA_ENV": "prod", "CONXA_AUTH_PORT": "53741"}), patch(
+            "services.auth_service.webbrowser.open"
+        ):
+            t = self._run_login(svc, out)
+            self._wait_pending(svc)
+            svc.cancel_login()
+            t.join(5)
+        self.assertFalse(t.is_alive())
+        self.assertEqual(out["error"], "login_cancelled")
+        self.assertIsNone(svc._pending_login)
+
+    def test_a_second_login_cancels_the_first(self) -> None:
+        svc = self._service()
+        first: dict = {}
+        second: dict = {}
+        with patch.dict("os.environ", {"CONXA_ENV": "prod", "CONXA_AUTH_PORT": "53751"}), patch(
+            "services.auth_service.webbrowser.open"
+        ):
+            t1 = self._run_login(svc, first)
+            self._wait_pending(svc)
+            first_pending = svc._pending_login
+            t2 = self._run_login(svc, second)
+            t1.join(5)
+            self.assertFalse(t1.is_alive())
+            self.assertEqual(first["error"], "login_cancelled")
+            for _ in range(100):
+                if svc._pending_login is not first_pending and svc._pending_login:
+                    break
+                time.sleep(0.05)
+            svc.cancel_login()
+            t2.join(5)
+        self.assertEqual(second["error"], "login_cancelled")
+
+    def test_timeout_raises_login_timeout(self) -> None:
+        svc = self._service()
+        out: dict = {}
+        with patch.dict("os.environ", {"CONXA_ENV": "prod", "CONXA_AUTH_PORT": "53761"}), patch(
+            "services.auth_service.webbrowser.open"
+        ), patch("services.auth_service._LOGIN_TIMEOUT_S", 0.2):
+            t = self._run_login(svc, out)
+            t.join(5)
+        self.assertEqual(out["error"], "login_timeout")
 
 
 if __name__ == "__main__":

@@ -144,7 +144,7 @@ def test_self_test_fails_when_out_observation_also_reads_signed_in():
     )
     ok3, reason3 = self_test(definition, live, still_signed_in_out, reload_obs=live)
     assert not ok3
-    assert "also read as signed in" in reason3
+    assert "can't tell signed in from signed out" in reason3
 
 
 def test_self_test_fails_when_reload_does_not_confirm():
@@ -159,7 +159,7 @@ def test_self_test_fails_when_reload_does_not_confirm():
     broken_reload = _obs("https://app.acme.com/login", password_box=True, cookie_names=[])
     ok, reason = self_test(definition, live, out, reload_obs=broken_reload)
     assert not ok
-    assert "reload" in reason.lower()
+    assert "didn't stick" in reason.lower()
 
 
 def test_learn_keeps_the_page_status_only_when_signed_out_answers_a_different_class():

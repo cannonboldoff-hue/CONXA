@@ -1171,7 +1171,10 @@ class RecordingSession:
                 finally:
                     live_page.close()
         except Exception as exc:  # noqa: BLE001
-            return None, f"Couldn't check the signed-in page just now: {exc}", False
+            import sys as _sys
+
+            print(f"learn_auth: signed-in page check failed: {exc}", file=_sys.stderr)  # details layer: backend log
+            return None, "Couldn't check your sign-in just now. Click Done again.", False
 
         out_obs = self._standalone_probe_observation_sync(login_url, storage_state=None)
         if out_obs is None:

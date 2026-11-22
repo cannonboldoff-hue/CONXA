@@ -27,6 +27,7 @@ from typing import Any
 
 _KEYRING_SERVICE = "conxa-studio"
 _TOKEN_KEY = "session"
+_LOGIN_TIMEOUT_S = 300  # how long a sign-in waits for the browser
 _REFRESH_LEEWAY_S = 60
 
 
@@ -217,6 +218,7 @@ class AuthService:
         self._client_secret = client_secret
         self._cloud_api = cloud_api.rstrip("/")
         self._lock = threading.RLock()
+        self._pending_login: tuple[threading.Event, dict[str, Any]] | None = None
 
     # -- storage -------------------------------------------------------------
 
@@ -245,6 +247,14 @@ class AuthService:
 
     # -- login ---------------------------------------------------------------
 
+    def cancel_login(self) -> None:
+        """End a sign-in that is waiting for the browser. No-op when none is waiting."""
+        pending = self._pending_login
+        if pending:
+            done, result = pending
+            result.setdefault("error", "login_cancelled")
+            done.set()
+
     def login(self, *, on_event=None) -> dict[str, Any]:
         """Run the interactive PKCE login. Returns ``{org_id, user_id, ...}``."""
         if _dev_skip_auth():
@@ -255,6 +265,9 @@ class AuthService:
         state = secrets.token_urlsafe(16)
         result: dict[str, Any] = {}
         done = threading.Event()
+        self.cancel_login()  # a newer sign-in replaces an abandoned one
+        pending = (done, result)
+        self._pending_login = pending
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_a):  # silence default logging
@@ -322,11 +335,14 @@ class AuthService:
 
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
-        done.wait(timeout=300)
+        finished = done.wait(timeout=_LOGIN_TIMEOUT_S)
         server.shutdown()
+        server.server_close()  # frees the callback port for the next try
+        if self._pending_login is pending:
+            self._pending_login = None
 
         if not result.get("code"):
-            raise RuntimeError(result.get("error") or "login_timeout_or_cancelled")
+            raise RuntimeError(result.get("error") or ("login_cancelled" if finished else "login_timeout"))
 
         tokens = self._exchange_code(result["code"], verifier, redirect_uri)
         tokens["userinfo"] = self._fetch_userinfo_with_retry(tokens["access_token"])

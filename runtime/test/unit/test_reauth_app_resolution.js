@@ -68,6 +68,9 @@ async function run() {
       fallbackUrl: "https://dashboard.render.com",
     });
     assert.strictEqual(withDefinition.hasAuthDefinition, true, "Billing has a learned definition");
+    // The auto-retry text uses this sentence alone; it must not tell the agent to call again.
+    assert.ok(withDefinition.summary && withDefinition.summary.includes("expired mid-run"), "summary is set");
+    assert.ok(!/execute_skill/.test(withDefinition.summary), "summary does not mention execute_skill");
 
     const withoutDefinition = await browser.captureReAuth(WORKSPACE_ID, "https://dashboard.render.com/login", null, tmpDataDir, () => {}, {
       groupId: "g1",

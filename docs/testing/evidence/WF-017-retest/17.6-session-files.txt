@@ -1,0 +1,14 @@
+== /c/Users/kiran/.conxa-build-studio-dev/data/groups/adb125c4-c5ee-4657-9583-3505d8cd7e63/auth/code-site.json
+{"conxa_sealed_session": 1, "dpapi": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAcXU+7OFWRk68tDZb5ogRXwAAAAACAAAAAAAQZgAAAAEAACAAAAAzwyRTNmsXFMljGDs0dqfsHqQwGZIm5q4FjnnZlY
+0
+== /c/Users/kiran/.conxa-build-studio-dev/data/groups/bdea0095-d9cf-47e7-9cbc-f9cca3f2b336/auth/the-internet.json
+{"conxa_sealed_session": 1, "dpapi": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAcXU+7OFWRk68tDZb5ogRXwAAAAACAAAAAAAQZgAAAAEAACAAAADvEyIZTucfdwL+E7Y7P2fDtL+koH5CqdFBNtAzpx
+0
+-- all pending/plain leftovers:
+/c/Users/kiran/.conxa-build-studio-dev/data/groups/adb125c4-c5ee-4657-9583-3505d8cd7e63/auth:
+code-site.json
+
+/c/Users/kiran/.conxa-build-studio-dev/data/groups/bdea0095-d9cf-47e7-9cbc-f9cca3f2b336/auth:
+signin-names.sealed
+the-internet.json
+0

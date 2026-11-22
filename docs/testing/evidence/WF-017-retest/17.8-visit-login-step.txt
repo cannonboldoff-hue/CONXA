@@ -1,0 +1,17 @@
+45.7s RESULT wf17-visit-login  44.6s isError=false meta={} 
+   Execution failed at step 2 (Tier 1–2 cascade exhausted): Step 2 (click) failed: Something unexpected went wrong. (Verification failed: text_present)
+   Page URL: http://127.0.0.1:8101/login
+   
+   Self-healing recovery. The deterministic cascade could not resolve this step's element, so identify it yourself: the ranked element list below is ground truth for what EXISTS on the page, and the screenshots show what it LOOKS like. The "Current page" image is ground truth. No recording-time reference image is available for this step — judge from the current page and the ranked element list alone, and do not assume how the target used to look. Then resume by calling execute_skill again with:
+     resume_from: 1
+     step_overrides: { "1": { "candidate_index": <index>, "confidence": <0-1>, "why": "<one line>" } }
+   Rules:
+   - Nominate an index from the refreshed ranked element list below, or a selector you can rea
+45.7s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T12:09:31.377Z","level":"info","msg":"execute_start","run_id":"r_mwrsnsvb_311nr","tool":"execute_skill","run_count":1,"skill":"wf17-visit-login","workspace_id":"wrk_local","total_steps":2,"watch":false,"trigger":"chat","max_recovery_tier":4,"concurrent_runs":1,"tracking":{"enabled":true,"tracking_url_present":true,"tracking_token_present":false,"company_id":"","workspace_id":"wrk_local","sync_endpoint":"http://127.0.0.1:8000/api/v1/workflows/v2/wrk_local/skill-packs/delta"}}
+{"ts":"2026-11-22T12:09:31.378Z","level":"warn","msg":"tracking_token_missing","workspace_id":"wf17_ws","workflow_id":"wf17-visit-login"}
+{"ts":"2026-11-22T12:09:31.379Z","level":"info","msg":"tracking_run_started","run_id":"r_mwrsnsvb_311nr","company":"wrk_local","workflow_id":"wf17-visit-login","tracking_url_present":true,"tracking_token_present":false}
+{"ts":"2026-11-22T12:09:31.411Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:09:31.569Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:2/2_valid","ms":159,"network_checked":0,"ttl_cached":2}
+{"ts":"2026-11-22T12:10:15.803Z","level":"error","msg":"execute_failed","run_id":"r_mwrsnsvb_311nr","skill":"wf17-visit-login","error":"Step 2 (click) failed: Something unexpected went wrong. (Verification failed: text_present)"}
+{"ts":"2026-11-22T12:10:15.901Z","level":"info","msg":"recovery_park_created","run_id":"r_mwrsnsvb_311nr","skill":"wf17-visit-login","step_index":1}

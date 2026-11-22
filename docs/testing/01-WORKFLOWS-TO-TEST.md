@@ -37,7 +37,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-14 | Files at scale: all-at-once, cross-run leaks, collisions | ✅ passed 2026-11-21 (P-34…P-36, P-46); 14.8 big uploads, empty and stuck downloads fixed (RT-18); slow-host wait open (RT-19) | Local fixture; public hosts blocked |
 | WF-15 | Endurance, slow sites, chaos, a person interfering mid-run | ✅ passed 2026-11-21 (P-47; 15.12 and 15.9 divider drag not verified) | Mostly |
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ✅ passed 2026-11-21 (P-48; stdio client not Claude Code; 16.9 older-layer half and sync 401 not reproducible here) | Needs an MCP client (ask first) |
-| WF-17 | Sign-in everywhere: Studio login, target-site sessions | ⏳ | Partly |
+| WF-17 | Sign-in everywhere: Studio login, target-site sessions | ✅ passed 2026-11-22 (P-49; real Clerk sign-in blocked, 17.1–17.3/17.5 on a mock; 17.4 limitation 11) | Partly |
 | WF-18 | Hand-over step (a person solves a CAPTCHA) | ⏳ | Needs a person |
 | WF-19 | Conxa Execute desktop app | ⏳ | Separate app |
 | WF-20 | Cloud API: bad tokens, plan limits, cross-company | ⏳ | Yes (API only, local backend) |
@@ -486,7 +486,9 @@ WF-13 skill → install → sync.
 
 ---
 
-## WF-17 — Sign-in everywhere
+## ✅ WF-17 — Sign-in everywhere — passed 2026-11-22 (P-49)
+
+**Result:** see `workflow-handoffs/WF-017.md`. 17.6 path correction: Studio's saved sign-ins are in `~/.conxa-build-studio*/data/groups/<id>/auth/`, the runtime's in `cache/sessions/`.
 
 Studio-run sign-in through a group was already proven in WF-1 Leg B (P-16). This WF covers the rest.
 Wrong account, wrong password and abandoned sign-ins are the break tests.
@@ -621,6 +623,7 @@ broken update rollback. Sign GO / NO-GO with date, tester and versions at the en
 8. The host exe stays `--no-bytecode`; a Playwright crash in any runtime test → suspect this first.
 9. The margin gate may refuse a click that looks fine — refusing safely is the design, not a bug.
 10. Hand-over inside a loop loses its place; a pause doesn't survive a runtime restart (EXEC-22).
+11. Studio's local work (workflows, groups, chats, saved sign-ins) belongs to the machine, not the signed-in account. After sign-out and a different sign-in, the first account's work still shows and can be published into the new account's company. Owner decision 2026-11-22: leave as designed (WF-17 17.4, AUTH-26).
 
 New limitations → `TODO.md`. Doc contradictions → `docs/TRD.md` / `docs/App-Flow.md`. Every fix →
 an entry in `FIX.md`. A WF passes → its section moves to `02-WORKFLOWS-PASSED.md` (next P number)

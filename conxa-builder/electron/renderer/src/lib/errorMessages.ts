@@ -178,6 +178,14 @@ export const errorMessages: Record<string, string> = {
   nothing_to_undo: "There's nothing to undo.",
   nothing_to_redo: "There's nothing to redo.",
 
+  // Sign-in
+  login_timeout: "Sign-in wasn't finished in time. Click Sign in to try again.",
+  login_failed: "Sign-in didn't work. Click Sign in to try again.",
+  state_mismatch: "Sign-in didn't work. Click Sign in to try again.",
+  login_identity_missing: "Sign-in didn't work. Click Sign in to try again.",
+  auth_port_unavailable: "Sign-in couldn't start. Close other Conxa windows, then click Sign in to try again.",
+  auth_not_configured: "Sign-in isn't set up on this computer. Reinstall Build Studio or contact support.",
+
   // Transport / system
   unknown_command: "Something went wrong inside the app. Please try again.",
   internal_error: "Something went wrong inside the app. Please try again.",

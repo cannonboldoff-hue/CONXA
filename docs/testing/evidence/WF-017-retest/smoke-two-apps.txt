@@ -1,0 +1,8 @@
+83.9s RESULT wf17-two-apps both signed in 5.9s isError=false meta={"outcome":"done","steps":[{"index":0,"source_step_key":"87c333b5a24623c2#1","intent":null,"verdict":"proven","rung":"performed","required":"performed","checks":[{"rung":"performed","witness":"target","answer":"yes"},{"rung":"accepted","witness":"renderer","answer":"cant_tell"}],"skill":"wf17-two-ap 
+   Done. URL: http://localhost:8101/reports
+   (run_id: r_mwrskf8u_x2vmw)
+83.9s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T12:06:53.636Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-a"}
+{"ts":"2026-11-22T12:06:53.687Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-b"}
+{"ts":"2026-11-22T12:06:53.837Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:06:56.332Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:2/2_valid","ms":2495,"network_checked":2,"ttl_cached":0}

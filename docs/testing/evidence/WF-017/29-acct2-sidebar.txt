@@ -1,0 +1,551 @@
+Conxa
+Browser
+Chat
+New group
+Publish
+59
+Build Installer
+App maps
+Search
+Ctrl K
+Chats
+Create a workflow named LP price check i…
+Every Monday, export last week’s report …
+Create a workflow named WF13 delete rt i…
+Create a workflow named WF13 marie curie…
+Create a workflow named WF13 delete gate…
+Create a workflow named WF13 marie curie…
+Create a workflow named WF12 buy rt3c in…
+Create a workflow named WF12 buy rt3 in …
+Create a workflow named WF12 note rt3b i…
+Create a workflow named WF12 note rt3 in…
+Create a workflow named WF12 note rt2 in…
+Create a workflow named WF12 note rt1 in…
+Create a workflow named WF12 buy rt1 in …
+Create a workflow named WF12 note r1 in …
+Create a workflow named WF12 buy r1 in t…
+Create a workflow named WF11 twin retest…
+Create a workflow named WF11 HP retest i…
+Create a workflow named WF11 loop r2 dec…
+Create a workflow named WF11 loop r1 in …
+Create a workflow named WF10 fork r4 in …
+Create a workflow named WF10 branches r3…
+Record a probe workflow: open example.co…
+Groups
+Operations
+○
+WF10 branches popups r1
+Not recorded yet
+○
+Probe Workflow
+Not recorded yet
+Sales
+▲
+6
+▲
+WF13A gmail link only 2
+A proposed change is waiting — apply or dismiss it
+○
+Gmail sent check 2 (read only)
+Not recorded yet
+○
+WF13A gmail link only
+Not recorded yet
+○
+Gmail sent check 2 (read only)
+Not recorded yet
+○
+WF13A gmail prefilled send 2
+Not recorded yet
+○
+WF13A gmail prefilled send
+Not recorded yet
+▲
+WF13A gmail send
+A proposed change is waiting — apply or dismiss it
+○
+Gmail sent check (read only)
+Not recorded yet
+▲
+WF3 github tour 40
+A proposed change is waiting — apply or dismiss it
+✕
+Github to Drive Handoff
+Latest test failed
+▲
+WF13 Sales drive shared
+Test passed — not yet approved
+○
+WF13 Sales drive shared
+Not recorded yet
+▲
+WF13 Sales github PRs
+Test passed — not yet approved
+Probe group
+▲
+60
+●
+WF4 D i18n wiki r5
+Approved
+✕
+WF13 delete rt
+Latest test failed
+●
+WF13 marie curie rt
+Approved
+●
+WF13 marie curie
+Approved
+✕
+WF13 delete gate
+Latest test failed
+▲
+WF12 buy rt3c
+Ready to test
+▲
+WF12 note rt3b
+Ready to test
+✕
+WF12 buy rt3
+Latest test failed
+▲
+WF12 note rt3
+Ready to test
+▲
+WF12 note rt2
+Ready to test
+▲
+WF12 note rt1
+Ready to test
+✕
+WF12 buy rt1
+Latest test failed
+▲
+WF12 note r1
+Ready to test
+▲
+WF12 buy r1
+Ready to test
+●
+WF11 HP retest
+Approved
+▲
+WF11 note r1
+Test passed — not yet approved
+▲
+WF11 twin retest
+Test passed — not yet approved
+✕
+WF11 loop r3 declined
+Latest test failed
+▲
+WF11 loop r2 declined
+6 questions need you
+✕
+WF11 loop r1
+Latest test failed
+▲
+WF10 branches r3
+Test passed — not yet approved
+▲
+WF10 branches r1
+Test passed — not yet approved
+✕
+WF10 decision r3
+Latest test failed
+●
+WF9 r5 practice form noclose
+Approved
+✕
+WF9 r5 dialog close check
+Latest test failed
+▲
+WF9 r5 practice form
+Test passed — not yet approved
+●
+WF9 r4 text box
+Approved
+▲
+WF9 r4 practice form 3
+Test passed — not yet approved
+○
+WF9 r4 practice form 2
+Not recorded yet
+○
+WF9 r4 practice form
+Not recorded yet
+○
+WF9 r4 practice form
+Not recorded yet
+●
+WF9 r3 date picker
+Approved
+●
+WF9 r3 visitor card
+Approved
+●
+WF9 r3 text box
+Approved
+▲
+WF9 r3 practice form
+Test passed — not yet approved
+○
+WF9 round3 practice form b
+Not recorded yet
+▲
+WF9 round3 practice form
+Recorded · ready to compile
+●
+WF9 round2 date picker
+Approved
+●
+WF9 round2 visitor card
+Approved
+▲
+WF9 round2 practice form
+A proposed change is waiting — apply or dismiss it
+●
+WF9 round2 text box
+Approved
+▲
+WF9 retest visitor card
+1 question need you
+▲
+WF9 retest date picker
+1 question need you
+✕
+WF9 retest practice form
+Latest test failed
+✕
+WF9 retest text box
+Latest test failed
+●
+WF9 text box r2
+Approved
+✕
+WF9 visitor card
+Latest test failed
+▲
+WF9 date picker
+Test passed — not yet approved
+✕
+WF9 practice form
+Latest test failed
+○
+WF9 text box
+Not recorded yet
+▲
+WF8 B8 remove Bike Light
+1 question need you
+●
+WF4 C relay two sites r6
+Approved
+○
+WF4 C relay two sites r4
+Not recorded yet
+✕
+WF4 C relay two sites r3
+Latest test failed
+✕
+WF4 C relay two sites r2
+Latest test failed
+○
+WF4 C relay two sites r1
+Not recorded yet
+●
+WF4 D i18n wiki r2
+Approved
+▲
+WF4 D i18n wiki r1
+Test passed — not yet approved
+▲
+WF9 mega slice 3
+Test passed — not yet approved
+✕
+WF9 mega slice 2
+Latest test failed
+▲
+WF9 mega slice
+4 steps less certain
+○
+WF9 mega slice
+Not recorded yet
+✕
+WF4 relay two sites
+Latest test failed
+▲
+WF4 i18n wiki
+Test passed — not yet approved
+✕
+Mega A-B
+Latest test failed
+▲
+WF2 drag cdp
+Test passed — not yet approved
+✕
+WF5 twenty files
+Latest test failed
+✕
+Recovery rf
+Latest test failed
+▲
+Dismiss df
+Test passed — not yet approved
+✕
+WF2 hover drag
+Latest test failed
+▲
+WF3 fifty clicks
+Test passed — not yet approved
+▲
+WF13B github PR open
+Test passed — not yet approved
+▲
+WF5 download
+Test passed — not yet approved
+✕
+WF6 inputs
+Latest test failed
+▲
+WF1 add remove
+Ready to test
+○
+WF2 hovers
+Not recorded yet
+○
+WF1 add remove
+Not recorded yet
+○
+WF5 download
+Not recorded yet
+○
+WF6 inputs
+Not recorded yet
+○
+WF1 add remove
+Not recorded yet
+▲
+WF2 hovers
+Recorded · ready to compile
+○
+WF1 add remove b
+Not recorded yet
+○
+WF1 add remove
+Not recorded yet
+▲
+WF2 hovers
+Recorded · ready to compile
+○
+WF1 add remove
+Not recorded yet
+○
+WF2 hovers
+Not recorded yet
+○
+WF1 add remove
+Not recorded yet
+○
+WF2 hovers
+Not recorded yet
+○
+WF2 add remove
+Not recorded yet
+▲
+WF2 hovers
+Recorded · ready to compile
+▲
+WF1 js alert
+Test passed — not yet approved
+✕
+WF1 checkboxes
+Latest test failed
+▲
+WF1 dynamic loading
+Test passed — not yet approved
+○
+WF1 login flash
+Not recorded yet
+▲
+Recovery fixture
+Test passed — not yet approved
+✕
+Mutator fixture
+Latest test failed
+○
+Probe click
+Not recorded yet
+Shop test
+▲
+3
+●
+WF4 B shop checkout r3
+Approved
+○
+WF4 B shop checkout signin tmp3
+Not recorded yet
+●
+WF3 B shop loop r2
+Approved
+○
+WF3 D bank marathon
+Not recorded yet
+✕
+WF3 B shop loop x6
+Latest test failed
+○
+WF4 saucedemo cart
+Not recorded yet
+○
+WF4 saucedemo cart2
+Not recorded yet
+✕
+WF4 B shop checkout r2
+Latest test failed
+✕
+WF4B saucedemo checkout
+Latest test failed
+○
+WF4 B shop checkout signin tmp2
+Not recorded yet
+○
+WF4 B shop checkout signin tmp
+Not recorded yet
+○
+WF4 B shop checkout r1
+Not recorded yet
+HR test
+▲
+4
+●
+WF4 A hr user crud r6
+Approved
+✕
+WF4 A hr user crud r5
+Latest test failed
+✕
+WF4 A hr user crud r4
+Latest test failed
+✕
+WF4 A hr user crud r2
+Latest test failed
+○
+WF4 A hr user crud r1
+Not recorded yet
+✕
+WF4A orangehrm user search
+Latest test failed
+○
+WF4 A hr user crud r3
+Not recorded yet
+Bank test
+▲
+2
+✕
+WF3 D bank marathon r2
+Latest test failed
+○
+WF3D bank nav
+Not recorded yet
+✕
+WF3 D bank marathon r1
+Latest test failed
+Juice test
+▲
+2
+✕
+WF4E juice review exact
+Latest test failed
+✕
+WF4E juice review 3
+Latest test failed
+○
+WF4E juice review 2
+Not recorded yet
+○
+WF4E juice review
+Not recorded yet
+E2E 2026-11-16
+▲
+60
+●
+WF1 D new tab round trip r3
+Approved
+✕
+WF1 A wikipedia control r4
+Latest test failed
+▲
+WF8 8.13 recaptcha demo r4
+Ready to test
+●
+WF8 secrets leak check r2
+Approved
+●
+WF8 secrets leak check
+Approved
+▲
+WF8 8.13 recaptcha demo r3
+Last test ended at “A person does the robot check” — not a full pass
+▲
+WF8 8.13 recaptcha demo r2
+1 question need you
+●
+WF-6 false success main
+Approved
+●
+WF8 8.2-8.5 keyboard and paste r2
+Approved
+●
+WF8 8.1 script events r2
+Approved
+▲
+WF8 8.13 recaptcha demo
+Test passed — not yet approved
+▲
+WF8 8.12 excalidraw r3
+Test passed — not yet approved
+○
+WF8 8.12 canvas local r2
+Not recorded yet
+▲
+WF8 8.12 excalidraw r2
+Ready to test
+▲
+WF8 8.12 excalidraw
+Test passed — not yet approved
+○
+WF8 8.12 canvas sketch
+Not recorded yet
+○
+WF8 8.11 empty recording
+Not recorded yet
+●
+WF8 8.10 idle five minutes
+Approved
+●
+WF8 8.9 click while loading
+Approved
+●
+WF8 8.8 close tab open tab
+Approved
+●
+WF8 8.6 mouse r6
+Approved
+●
+WF8 8.7 back forward reload r2
+Approved
+▲
+WF8 8.7 back forward reload
+Test passed — not yet approved
+●
+WF8 8.6 mouse r5
+Approved
+▲
+WF8 8.6 mouse tricks r4
+Test passed — not yet approved
+▲
+WF8 8.6 mouse tricks r3
+1 question need you
+▲
+WF8 8.6 mouse tricks r2
+Test passed — not yet app

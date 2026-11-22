@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Layers } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cmd } from '@/lib/ipc'
+import { cmd, CmdError } from '@/lib/ipc'
 import { errorMessage } from '@/api/workflowApi'
 import type { Identity } from '@/contexts/AuthContext'
 
@@ -21,9 +21,16 @@ export function LoginOverlay({ onLogin }: { onLogin: (identity: Identity) => voi
         setLoading(false)
       }
     } catch (err) {
-      setError(errorMessage(err, 'Sign-in failed. Please try again.'))
+      // A person's own Cancel is not an error: go back to the plain button.
+      if (!(err instanceof CmdError && err.code === 'login_cancelled')) {
+        setError(errorMessage(err, 'Sign-in didn\'t work. Click Sign in to try again.'))
+      }
       setLoading(false)
     }
+  }
+
+  function handleCancel() {
+    cmd('cancel_login').catch(() => {})
   }
 
   return (
@@ -57,6 +64,16 @@ export function LoginOverlay({ onLogin }: { onLogin: (identity: Identity) => voi
           <p className="mt-4 text-center text-xs text-zinc-500">
             Complete sign-in in your browser window, then return here.
           </p>
+        )}
+
+        {loading && (
+          <button
+            type="button"
+            className="mt-2 block w-full text-center text-xs text-zinc-400 underline hover:text-zinc-200"
+            onClick={handleCancel}
+          >
+            Cancel
+          </button>
         )}
 
         {error && (

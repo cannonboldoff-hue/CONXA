@@ -1735,6 +1735,8 @@ async function captureReAuth(workspace_id, loginUrl, authManager, sessionsDir, l
       // generic ladder: the whole reason mid-run auto-login was deliberately left out before was
       // that generic detection wasn't confident enough to trust unattended.
       hasAuthDefinition: Boolean(app.auth_definition),
+      // The sentence alone, for the auto-retry text that says what happens next in its own words.
+      summary: `${app.name}'s saved sign-in expired mid-run.`,
       message: `${app.name}'s saved sign-in expired mid-run. Call execute_skill again — ` +
         `you'll be prompted to sign back in to ${app.name}, then can resume from where this left off.`,
     };

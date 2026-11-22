@@ -1,0 +1,19 @@
+12.7s expire expired    expired 1 sessions
+15.9s RESULT wf17-two-apps App B expired 3.2s isError=true meta={"conxa/session_expired":{"run_id":"r_mwrsmlvg_nubrv","step_index":null}} 
+   This workflow belongs to the WF17 fixture group and requires authentication to 2 applications. Sign in to App B in the window that just opened, then run the skill again. Once signed in, call execute_skill again to run this skill. (run_id: r_mwrsmlvg_nubrv)
+18.4s RESULT wf17-a-only A only after B expired 2.4s isError=true meta={"conxa/session_expired":{"run_id":"r_mwrsmodf_i7nje","step_index":null}} 
+   Sign-in for App B is already waiting in an open window — finish signing in there, then run the skill again. Once signed in, call execute_skill again to run this skill. (run_id: r_mwrsmodf_i7nje)
+20.8s RESULT wf17-b-only B only after B expired 2.5s isError=true meta={"conxa/session_expired":{"run_id":"r_mwrsmq9e_qc1cv","step_index":null}} 
+   Sign-in for App B is already waiting in an open window — finish signing in there, then run the skill again. Once signed in, call execute_skill again to run this skill. (run_id: r_mwrsmq9e_qc1cv)
+20.8s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T12:08:35.569Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-a"}
+{"ts":"2026-11-22T12:08:35.598Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-b"}
+{"ts":"2026-11-22T12:08:35.675Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:08:38.008Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:1/2_valid","ms":2333,"network_checked":2,"ttl_cached":0}
+{"ts":"2026-11-22T12:08:38.860Z","level":"error","msg":"execute_failed","run_id":"r_mwrsmlvg_nubrv","skill":"wf17-two-apps","error":"This workflow belongs to the WF17 fixture group and requires authentication to 2 applications. Sign in to App B in the window that just opened, then run the skill again."}
+{"ts":"2026-11-22T12:08:38.900Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:08:41.306Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:1/2_valid","ms":2406,"network_checked":1,"ttl_cached":1}
+{"ts":"2026-11-22T12:08:41.309Z","level":"error","msg":"execute_failed","run_id":"r_mwrsmodf_i7nje","skill":"wf17-a-only","error":"Sign-in for App B is already waiting in an open window — finish signing in there, then run the skill again."}
+{"ts":"2026-11-22T12:08:41.346Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:08:43.758Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:1/2_valid","ms":2412,"network_checked":1,"ttl_cached":1}
+{"ts":"2026-11-22T12:08:43.761Z","level":"error","msg":"execute_failed","run_id":"r_mwrsmq9e_qc1cv","skill":"wf17-b-only","error":"Sign-in for App B is already waiting in an open window — finish signing in there, then run the skill again."}

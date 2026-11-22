@@ -1,0 +1,15 @@
+17.6 target-site session files after real group sign-in (the-internet tomsmith, saucedemo standard_user), Sun, Nov 22, 2026 11:41:53 AM
+total 16
+drwxr-xr-x 1 kiran 197609    0 Nov 22 11:41 .
+drwxr-xr-x 1 kiran 197609    0 Nov 22 11:32 ..
+-rw-r--r-- 1 kiran 197609  604 Nov 22 11:41 signin-names.sealed
+-rw-r--r-- 1 kiran 197609  880 Nov 22 11:41 swag-labs.json
+-rw-r--r-- 1 kiran 197609 1992 Nov 22 11:37 the-internet.json
+auth/swag-labs.json: first 70 bytes: {"conxa_sealed_session": 1, "dpapi": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA
+auth/the-internet.json: first 70 bytes: {"conxa_sealed_session": 1, "dpapi": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA
+auth/signin-names.sealed: first 70 bytes: {"conxa_sealed_session": 1, "dpapi": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA
+grep readable markers (SuperSecretPassword, tomsmith, rack.session, secret_sauce, standard_user, session-username, "cookies", "origins") in group folder:
+auth/signin-names.sealed:0
+auth/swag-labs.json:0
+auth/the-internet.json:0
+opens only through Studio own saved_session._open (Windows DPAPI): yes, rack.session cookie recovered

@@ -1,0 +1,8 @@
+13.2s RESULT wf17-a-only  4.5s isError=true meta={"conxa/session_expired":{"run_id":"r_mwrgc6x0_5hfl2","step_index":null}} 
+   This workflow belongs to the WF17 fixture group and requires authentication to 2 applications. Sign in to App B in the window that just opened, then run the skill again. Once signed in, call execute_skill again to run this skill. (run_id: r_mwrgc6x0_5hfl2)
+13.2s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T06:24:34.186Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-a"}
+{"ts":"2026-11-22T06:24:34.235Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-b"}
+{"ts":"2026-11-22T06:24:34.387Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T06:24:37.504Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:1/2_valid","ms":3117,"network_checked":2,"ttl_cached":0}
+{"ts":"2026-11-22T06:24:38.692Z","level":"error","msg":"execute_failed","run_id":"r_mwrgc6x0_5hfl2","skill":"wf17-a-only","error":"This workflow belongs to the WF17 fixture group and requires authentication to 2 applications. Sign in to App B in the window that just opened, then run the skill again."}

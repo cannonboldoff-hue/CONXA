@@ -13,6 +13,12 @@ from conxa_core.storage.workflow_store import get_workflow as _get_workflow
 from handlers.protocol import _CommandError, _emit_event, _event_sink, _safe_id
 
 
+_LOGIN_CODES = frozenset({
+    "login_cancelled", "login_timeout", "auth_port_unavailable",
+    "auth_not_configured", "login_identity_missing", "state_mismatch",
+})
+
+
 def _recording_duration_seconds(events: list[dict[str, Any]]) -> float | None:
     """Wall-clock length of a recording: last event's timestamp minus the first's.
 
@@ -293,7 +299,16 @@ class SessionMixin:
         return _bootstrap_pkg.ensure_all(self._cloud_api, on_event=_event_sink(rid))
 
     def cmd_login(self, _payload: dict[str, Any], rid: str) -> dict[str, Any]:
-        return {"identity": self._auth_service().login(on_event=_event_sink(rid))}
+        try:
+            return {"identity": self._auth_service().login(on_event=_event_sink(rid))}
+        except RuntimeError as exc:
+            text = str(exc)
+            # Clerk's own "error: description" text is not a code; keep it as the message only.
+            raise _CommandError(text if text in _LOGIN_CODES else "login_failed", text) from exc
+
+    def cmd_cancel_login(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        self._auth_service().cancel_login()
+        return {"ok": True}
 
     def cmd_logout(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         self._auth_service().logout()

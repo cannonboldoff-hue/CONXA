@@ -1571,7 +1571,7 @@ def test_learning_tries_the_success_address_when_the_sign_in_address_learns_noth
     def fake(probe_url, existing=None):
         asked.append(probe_url)
         if probe_url.endswith("/login"):
-            return None, "The signed-in page didn't confirm sign-in against what was learned.", True
+            return None, "You don't look signed in yet. Check your details, finish signing in, then click Done again.", True
         return {"version": 1, "probe_url": probe_url}, "", False
 
     sess._learn_auth_at_sync = fake

@@ -343,13 +343,13 @@ def self_test(definition: dict, live_obs: dict, out_obs: dict, reload_obs: dict)
     explanation of which leg failed, never raw signal data."""
     live_v = evaluate(definition, live_obs)["verdict"]
     if live_v != "yes":
-        return False, "The signed-in page didn't confirm sign-in against what was learned."
+        return False, "You don't look signed in yet. Check your details, finish signing in, then click Done again."
     out_v = evaluate(definition, out_obs)["verdict"]
     if out_v == "yes":
-        return False, "A signed-out browser also read as signed in — the learned signals aren't specific enough."
+        return False, "Conxa can't tell signed in from signed out on this site. If you are signed in, click Save anyway."
     reload_v = evaluate(definition, reload_obs)["verdict"]
     if reload_v != "yes":
-        return False, "The saved session didn't confirm sign-in when reloaded fresh."
+        return False, "Your sign-in didn't stick when Conxa reopened the site. Sign in again, then click Done."
     return True, ""
 
 

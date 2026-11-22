@@ -1,0 +1,9 @@
+16.8s expire expired    expired 2 sessions
+47.8s RESULT wf17-slow expire mid-run 45.2s isError=false meta={"conxa/awaiting_auth":{"run_id":"r_mwrskpgf_jkdnm"}} 
+   App A's saved sign-in expired mid-run. Opening a sign-in window now — finish signing in and "wf17-slow" resumes on its own from where it left off; you do not need to call execute_skill again. Check progress with get_execution_status (run_id: r_mwrskpgf_jkdnm).
+47.8s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T12:07:07.061Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T12:07:07.496Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:2/2_valid","ms":434,"network_checked":0,"ttl_cached":2}
+{"ts":"2026-11-22T12:07:52.050Z","level":"info","msg":"reauth_app_resolved","workspace_id":"wrk_local","appId":"app-a","matchedBy":"failing-page-host"}
+{"ts":"2026-11-22T12:07:52.057Z","level":"error","msg":"execute_failed","run_id":"r_mwrskpgf_jkdnm","skill":"wf17-slow","error":"App A's saved sign-in expired mid-run. Call execute_skill again — you'll be prompted to sign back in to App A, then can resume from where this left off."}
+{"ts":"2026-11-22T12:07:52.101Z","level":"info","msg":"mid_run_reauth_retry","run_id":"r_mwrskpgf_jkdnm","skill":"wf17-slow","step_index":1}

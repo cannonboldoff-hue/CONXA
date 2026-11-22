@@ -2200,6 +2200,7 @@ async function _handleToolCall(name, args, extra) {
                   // below auto-retry this run instead of only telling the person to call
                   // execute_skill again by hand.
                   hasAuthDefinition: Boolean(refreshResult.hasAuthDefinition),
+                  summary: refreshResult.summary,
                 }
               );
             }
@@ -2388,7 +2389,7 @@ async function _handleToolCall(name, args, extra) {
           });
           return {
             content: [{ type: "text", text:
-              `${runErr.message} Opening a sign-in window now — finish signing in and "${retrySlug}" resumes on its own ` +
+              `${runErr.summary || runErr.message} Opening a sign-in window now — finish signing in and "${retrySlug}" resumes on its own ` +
               `from where it left off; you do not need to call execute_skill again. ` +
               `Check progress with get_execution_status (run_id: ${_runId}).` }],
             _meta: { "conxa/awaiting_auth": { run_id: _runId } },

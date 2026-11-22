@@ -1,0 +1,12 @@
+import { createRequire } from "node:module"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.join(here, "../../../runtime/package.json"))("playwright");
+const b = await chromium.connectOverCDP(`http://127.0.0.1:${process.argv[2]}`);
+const s = b.contexts().flatMap((c) => c.pages()).find((p) => /localhost:517\d/.test(p.url()));
+await s.getByPlaceholder("App name").nth(0).fill(process.env.A1);
+await s.getByPlaceholder(/app\.example\.com/).nth(0).fill(process.env.U1);
+await s.getByRole("button", { name: /Add another app/i }).click();
+await s.getByPlaceholder("App name").nth(1).fill(process.env.A2);
+await s.getByPlaceholder(/app\.example\.com/).nth(1).fill(process.env.U2);
+await s.screenshot({ path: "../evidence/WF-017/03b-apps.png" });
+console.log("ok"); process.exit(0);

@@ -1,0 +1,12 @@
+8.3s RESULT wf17-visit-login  3.9s isError=false meta={"outcome":"done","steps":[{"index":0,"source_step_key":"6208df130af90fff#1","intent":null,"verdict":"proven","rung":"performed","required":"performed","checks":[{"rung":"performed","witness":"target","answer":"yes"},{"rung":"accepted","witness":"renderer","answer":"cant_tell"}],"skill":"wf17-visit- 
+   Done. URL: http://127.0.0.1:8101/app
+   (run_id: r_mwrge7ck_irrhl)
+8.3s STDERR (auth-related, last 25) 
+{"ts":"2026-11-22T06:26:08.122Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-a"}
+{"ts":"2026-11-22T06:26:08.151Z","level":"info","msg":"plaintext_session_reencrypted","workspace_id":"wrk_local__app-b"}
+{"ts":"2026-11-22T06:26:08.193Z","level":"info","msg":"execute_start","run_id":"r_mwrge7ck_irrhl","tool":"execute_skill","run_count":1,"skill":"wf17-visit-login","workspace_id":"wrk_local","total_steps":2,"watch":false,"trigger":"chat","max_recovery_tier":4,"concurrent_runs":1,"tracking":{"enabled":true,"tracking_url_present":true,"tracking_token_present":false,"company_id":"","workspace_id":"wrk_local","sync_endpoint":"http://127.0.0.1:8000/api/v1/workflows/v2/wrk_local/skill-packs/delta"}}
+{"ts":"2026-11-22T06:26:08.194Z","level":"warn","msg":"tracking_token_missing","workspace_id":"wf17_ws","workflow_id":"wf17-visit-login"}
+{"ts":"2026-11-22T06:26:08.195Z","level":"info","msg":"tracking_run_started","run_id":"r_mwrge7ck_irrhl","company":"wrk_local","workflow_id":"wf17-visit-login","tracking_url_present":true,"tracking_token_present":false}
+{"ts":"2026-11-22T06:26:08.243Z","level":"info","msg":"test_phase","phase":"group_auth_validate_start:App A,App B","ms":0}
+{"ts":"2026-11-22T06:26:10.345Z","level":"info","msg":"test_phase","phase":"group_auth_validate_done:2/2_valid","ms":2102,"network_checked":2,"ttl_cached":0}
+{"ts":"2026-11-22T06:26:11.984Z","level":"info","msg":"execute_success","run_id":"r_mwrge7ck_irrhl","skill":"wf17-visit-login","url":"http://127.0.0.1:8101/app"}

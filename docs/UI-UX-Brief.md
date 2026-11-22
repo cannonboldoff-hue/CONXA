@@ -92,10 +92,11 @@ First-launch choice ("I'm new, show me how" / "I've done this before"), a demo p
 **Outputs:** Auth state set in `AuthContext`.  
 **User goal:** Authenticate once and be remembered.
 
+While the browser is open the overlay shows a "Cancel" link (`cancel_login`); cancelling returns to the plain button with no error. A timeout or failed sign-in shows plain text ("Click Sign in to try again"), keyed on the codes `login_timeout` / `login_failed` etc.; Sign in is the retry.
+
 **UX issues:**
 - No visual feedback that the browser has opened and is waiting.
 - No timeout indicator (5-minute wait; user may not know the window expired).
-- Error messages from Clerk (e.g. `clerk_token_error`) are displayed raw without user-friendly translation.
 
 ---
 
