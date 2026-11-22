@@ -116,6 +116,9 @@ const PARK_TTL_MS = Number(process.env.CONXA_RECOVERY_PARK_TTL_MS) || 180000;
 // Proof of Done: a step whose work was still running when its call ran out of time is parked this long (15 min:
 // a big upload is slow) so a later call can check on it. Nothing is repeated on the way back.
 const PROOF_PARK_TTL_MS = Number(process.env.CONXA_PROOF_PARK_TTL_MS) || 900000;
+// BUILD-106 (1): a park key whose question about the page's own OK/Cancel box got no answer in time -> that step's
+// index. The box was answered Cancel and the park closed; the late answer is told the run ended as "couldn't confirm".
+const _unansweredNativeBoxes = new Map();
 // RT-3: parks are keyed per skill (`${workspace_id}:${slug}`), not a single process-wide slot —
 // discarding one run's park must never touch a sibling run's parked recovery window.
 // Releases the park's browser lease and host lock (if it held either — see browser.js's
@@ -259,6 +262,7 @@ let sweepOldRuns;
 let extractZipOnce;
 let declaredOutputNames;
 let flattenAnswer;
+let dismissNativeQuestions;
 let getCachedBrowser;
 let getAuthContext;
 let awaitAuthPending;
@@ -285,7 +289,7 @@ try {
   skillLoader  = require("./skill_loader");
   sync         = require("./sync");
   authManager  = require("./auth_manager");
-  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce, declaredOutputNames, flattenAnswer } = require("./run"));
+  ({ runPlan, enrichStepsWithRecovery, applyStepOverrides, appendRecoveryEvent, clearRetryBudget, checkRetryBudget, isAuthFailure, stepAssertions, frameScopedInventory, uniqueDownloadName, sweepOldRuns, extractZipOnce, declaredOutputNames, flattenAnswer, dismissNativeQuestions } = require("./run"));
   ({ getCachedBrowser, releaseCachedBrowser, teardownExecBrowser, captureReAuth, gracefulShutdown,
      getAuthContext, awaitAuthPending, describeAuthWait, authAppStatus,
      _resolveGroup: resolveGroup } = require("./browser"));
@@ -1579,6 +1583,8 @@ async function _handleToolCall(name, args, extra) {
     const _peekForkPark = _forkAnswered ? _getParkedRecovery(_parkKey) : null;
     const _resumeForkStep = !!(_forkAnswered && _peekForkPark && _peekForkPark.forkStepIndex === primary.resumeFrom);
     if (_forkAnswered && !_resumeForkStep) {
+      const _nativeExpired = _unansweredNativeBoxes.get(_parkKey) === primary.resumeFrom;
+      _unansweredNativeBoxes.delete(_parkKey);
       appendRecoveryEvent({ event: "fork_resume_refused", slug: primary.entry.slug, step_index: primary.resumeFrom });
       _runTracker.emit("wf_fail", { dur: Date.now() - _wfStartAt, fsi: primary.resumeFrom, fc: "fork_resume_refused" });
       if (_abortSignal) _abortSignal.removeEventListener("abort", _onAbort);
@@ -1586,6 +1592,13 @@ async function _handleToolCall(name, args, extra) {
       await _receiptFlush;
       await _tracker.flush();
       _tracker.destroy();
+      if (_nativeExpired) {
+        const n = primary.resumeFrom + 1;
+        return { ...err(
+          `No answer came in time for the page's OK/Cancel box at step ${n}, so Cancel was pressed and the run ended. ` +
+          `I couldn't confirm that step ${n} finished: check the app before running "${primary.entry.slug}" again.`
+        ), structuredContent: { outcome: "couldnt_confirm" } };
+      }
       return err(
         `The popup decision for step ${primary.resumeFrom + 1} has expired or was never opened. Call ` +
         `execute_skill again for "${primary.entry.slug}" without resume_from to restart the skill from the beginning.`
@@ -1770,6 +1783,8 @@ async function _handleToolCall(name, args, extra) {
     // session-expired, and the generic non-parkable-failure branch — can actually see them.
     let _attachPageListeners = null;
     let _trackOpenedTab = null;
+    // Same reason: the popup-pause branch in catch{} hands the open OK/Cancel box over with the park.
+    let _dialogQueue = [];
     const _detachContextListeners = () => {
       if (!_context) return;
       _context.off("page", _attachPageListeners);
@@ -1983,7 +1998,9 @@ async function _handleToolCall(name, args, extra) {
       const _downloads = [];
       const _downloadSaves = [];
       const _downloadQueue = [];
-      const _dialogQueue = [];
+      // A resumed popup pause brings the page's own OK/Cancel box it is answering (BUILD-106 (1)): the box is still
+      // open on the parked page and its Dialog lives in the previous call's queue.
+      _dialogQueue = _park && Array.isArray(_park.dialogQueue) ? _park.dialogQueue.splice(0) : [];
 
       const _takenNames = new Set();
 
@@ -2455,12 +2472,23 @@ async function _handleToolCall(name, args, extra) {
       // no retry budget -- nothing has been clicked.
       if (runErr.forkPause) {
         const _forkPage = runErr.page || page;
-        const timer = setTimeout(() => { _discardPark(_parkKey, "ttl"); }, PARK_TTL_MS);
+        // The page's own OK/Cancel box (BUILD-106 (1)) stays open across the pause: its Dialog rides on the park and is
+        // answered on resume. With no answer in time it is answered Cancel, never OK, and the run ends "couldn't confirm".
+        const _nativeBox = !!(runErr.info && runErr.info.native);
+        _unansweredNativeBoxes.delete(_parkKey);
+        const timer = setTimeout(() => {
+          if (!_nativeBox) { _discardPark(_parkKey, "ttl"); return; }
+          _unansweredNativeBoxes.set(_parkKey, runErr.stepIndex);
+          appendRecoveryEvent({ event: "native_box_unanswered", slug: primary.entry.slug, step_index: runErr.stepIndex, outcome: "couldnt_confirm" });
+          dismissNativeQuestions(_dialogQueue).finally(() => _discardPark(_parkKey, "ttl"));
+        }, PARK_TTL_MS);
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
           page: _forkPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, forkStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
           forkChoices: (runErr.info.choices || []).map((c) => c.id), forkInfo: runErr.info,
-          pageFingerprint: await capturePageFingerprint(_forkPage),
+          ...(_nativeBox ? { dialogQueue: _dialogQueue } : {}),
+          // A page behind an open OK/Cancel box cannot answer: nothing is read off it (the fork resume never compares it).
+          pageFingerprint: _nativeBox ? null : await capturePageFingerprint(_forkPage),
           leaseKey: _leaseKey, hostRelease: _hostRelease,
           attachPageListeners: _attachPageListeners, trackOpenedTab: _trackOpenedTab });
         await closeExtraTabs(_openedTabs, _forkPage);

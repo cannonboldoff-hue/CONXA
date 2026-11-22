@@ -190,3 +190,41 @@ test("whole-value bindings are unchanged by the new field", async () => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0]._row, "Carol");
 });
+
+// ── "Always the first result?" (entity_binding.position, BUILD-101 (7)) ─────────────────────────────────────────────
+const PLACE = (extra = {}) => ({ entity_binding: { container_selector: "ul.results > li", identifier: "", position: 1, ...extra } });
+function listsRoot(lists) { // rows spread over `lists` parents
+  const rows = lists.flatMap((n, p) => Array.from({ length: n }, (_, i) => ({ parentElement: `list${p}`, _row: `${p}:${i}` })));
+  return {
+    locator() {
+      return { async count() { return rows.length; }, async evaluateAll(fn, arg) { return fn(rows, arg); }, nth(i) { return rows[i]; } };
+    },
+  };
+}
+
+test("place: until the person said yes the binding does nothing", async () => {
+  const roots = [listsRoot([3])];
+  assert.strictEqual(await entityRoots(roots, PLACE(), {}), roots);
+  assert.strictEqual(isEntityNotFound(PLACE(), []), false);
+});
+
+test("place: once confirmed, the Nth row of the one list is the scope", async () => {
+  const out = await entityRoots([listsRoot([3])], PLACE({ confirmed: true, position: 2 }), {});
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0]._row, "0:1");
+});
+
+test("place: two lists, too few rows or two frames fail closed, never absent", async () => {
+  const two = await entityRoots([listsRoot([2, 2])], PLACE({ confirmed: true }), {});
+  assert.deepStrictEqual(two, []);
+  assert.notStrictEqual(two.absent, true);
+  assert.deepStrictEqual(await entityRoots([listsRoot([1])], PLACE({ confirmed: true, position: 2 }), {}), []);
+  assert.deepStrictEqual(await entityRoots([listsRoot([2]), listsRoot([2])], PLACE({ confirmed: true }), {}), []);
+  assert.strictEqual(isEntityNotFound(PLACE({ confirmed: true }), []), true);
+});
+
+test("place: a binding with words keeps matching by its words", async () => {
+  const out = await entityRoots([fakeRoot(["Carol", "Bob"])], PLACE({ confirmed: true, identifier: "Bob", position: 1 }), {});
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0]._row, "Bob");
+});

@@ -161,10 +161,13 @@ function scoreCandidate(node, fingerprint) {
   return weight > 0 ? score / weight : 0;
 }
 
-// True when the node's stable_hash exactly matches the recorded fingerprint's.
+// True when the node's stable_hash exactly matches the recorded fingerprint's. A pack built before form fields were
+// hashed by their own id/name/placeholder/type holds the older hash (legacyStableHash). The new input adds a
+// `|field|` part, so an old hash and a new one do not match each other by accident.
 function stableHashMatch(node, fingerprint) {
   const fp = fingerprint || {};
-  return !!(fp.stable_hash && node && node.stableHash && node.stableHash === fp.stable_hash);
+  if (!fp.stable_hash || !node) return false;
+  return node.stableHash === fp.stable_hash || node.legacyStableHash === fp.stable_hash;
 }
 
 // resolve(signals, fingerprint, root, opts)

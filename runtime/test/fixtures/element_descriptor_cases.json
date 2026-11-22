@@ -6,5 +6,12 @@
   {"name": "a button with role and data attributes", "html": "<button role=\"menuitem\" data-key=\"export\" data-command=\"run\" class=\"is-open btn\">Export</button>", "selector": "button"},
   {"name": "an element with a generated data value", "html": "<button data-id=\"a1B2c3D4e5F6g7H8\" data-action=\"save\">Save</button>", "selector": "button"},
   {"name": "text split over lines", "html": "<a href=\"#x\">  Order\n   history  </a>", "selector": "a"},
-  {"name": "aria-label beats everything", "html": "<button aria-label=\"Close dialog\" title=\"x\">X</button>", "selector": "button"}
+  {"name": "aria-label beats everything", "html": "<button aria-label=\"Close dialog\" title=\"x\">X</button>", "selector": "button"},
+  {"name": "two plain boxes, a name box and an email box", "html": "<input id=\"userName\" placeholder=\"Full Name\" type=\"text\" class=\"form-control\"><input id=\"userEmail\" placeholder=\"name@example.com\" type=\"email\" class=\"form-control\">", "selector": "#userName", "twin": "#userEmail"},
+  {"name": "two plain boxes that differ only by id", "html": "<input id=\"first\" class=\"box\"><input id=\"last\" class=\"box\">", "selector": "#first", "twin": "#last"},
+  {"name": "two plain boxes that differ only by form-field name", "html": "<input name=\"city\" class=\"box\"><input name=\"zip\" class=\"box\">", "selector": "input[name=city]", "twin": "input[name=zip]"},
+  {"name": "two plain boxes that differ only by placeholder", "html": "<input placeholder=\"City\" class=\"box\"><input placeholder=\"Zip code\" class=\"box\">", "selector": "input[placeholder=City]", "twin": "input[placeholder='Zip code']"},
+  {"name": "two plain boxes that differ only by type", "html": "<input class=\"box\"><input type=\"password\" class=\"box\">", "selector": "input:not([type])", "twin": "input[type=password]"},
+  {"name": "an id handed out per render is left out", "html": "<input id=\":r1:\" class=\"box\"><input id=\"input-23\" class=\"box\">", "selector": "input[id='input-23']", "twin": "input[id=':r1:']", "same_as_twin": true},
+  {"name": "a text area with an id and a placeholder", "html": "<textarea id=\"notes\" placeholder=\"Notes\"></textarea>", "selector": "#notes"}
 ]

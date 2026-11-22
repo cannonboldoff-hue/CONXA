@@ -352,11 +352,19 @@ async function recoverStep(page, step, inputs, slug, stepIndex, primarySelector,
     }
     return false;
   };
+  // RT-17b: each attempt's own time and outcome goes into the local run record, so a slow recovery shows which stage
+  // spent it. Never throws past the stage: a logging failure must not change what recovery does.
+  const timed = async (stage, run) => {
+    const t0 = Date.now();
+    let out = false;
+    try { out = await run(); return out; }
+    finally { appendRecoveryEvent({ event: "recovery_attempt", slug, step_index: stepIndex, stage, ok: !!out, duration_ms: Date.now() - t0, ...(g.blocked ? { blocked: g.blocked } : {}) }); }
+  };
 
   // Layer 1 — deterministic exception ladder (targeted single remedy).
   // (Alternate-signal recovery is inherent: resolveStep already walks all bundle signals in
   // durability order, so there is no separate legacy compiled-selector tier.)
-  const l1 = await layer1Ladder(page, step, inputs, slug, stepIndex, primarySelector, primaryErr, baseline, g, runCtx);
+  const l1 = await timed("layer1", () => layer1Ladder(page, step, inputs, slug, stepIndex, primarySelector, primaryErr, baseline, g, runCtx));
   if (l1) {
     tracker.emit("tier_ok", { si: stepIndex, tier: "layer1", sel: l1 });
     return { tier: "L1", method: l1 };
@@ -382,7 +390,7 @@ async function recoverStep(page, step, inputs, slug, stepIndex, primarySelector,
   // candidate pick is re-identification by another name.
   if (step.destructive !== true) {
     bail();
-    if (await recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, baseline, g)) return { tier: "L2", method: "a11y" };
+    if (await timed("a11y", () => recoverWithA11y(page, step, inputs, slug, stepIndex, tracker, baseline, g))) return { tier: "L2", method: "a11y" };
     if (stopped()) return fail();
   } else {
     appendRecoveryEvent({ event: "destructive_reidentify_skipped", slug, step_index: stepIndex });
@@ -390,19 +398,23 @@ async function recoverStep(page, step, inputs, slug, stepIndex, primarySelector,
   }
 
   bail();
-  await page.waitForTimeout(250).catch(() => {}); // page/context/browser may have closed mid-recovery
-  if (await recoverWithSelector(page, step, inputs, primarySelector, () => {
-    appendRecoveryEvent({ event: "transient_recovered", slug, step_index: stepIndex });
-  }, baseline, g)) return { tier: "L2", method: "transient" };
+  if (await timed("transient", async () => {
+    await page.waitForTimeout(250).catch(() => {}); // page/context/browser may have closed mid-recovery
+    return recoverWithSelector(page, step, inputs, primarySelector, () => {
+      appendRecoveryEvent({ event: "transient_recovered", slug, step_index: stepIndex });
+    }, baseline, g);
+  })) return { tier: "L2", method: "transient" };
   if (stopped()) return fail();
 
   // Layer 2 — re-hover-then-retry (menu reveals), then dialog scoping.
   if (asArray(asObject(step.handler_hints).hover_chain).length) {
     bail();
-    await walkHoverChain(page, step, inputs);
-    if (await recoverWithSelector(page, step, inputs, primarySelector, () => {
-      appendRecoveryEvent({ event: "layer2_rehover", slug, step_index: stepIndex });
-    }, baseline, g)) return { tier: "L2", method: "rehover" };
+    if (await timed("rehover", async () => {
+      await walkHoverChain(page, step, inputs);
+      return recoverWithSelector(page, step, inputs, primarySelector, () => {
+        appendRecoveryEvent({ event: "layer2_rehover", slug, step_index: stepIndex });
+      }, baseline, g);
+    })) return { tier: "L2", method: "rehover" };
     if (stopped()) return fail();
   }
 
@@ -416,7 +428,7 @@ async function recoverStep(page, step, inputs, slug, stepIndex, primarySelector,
   // wrong click mutates the page before the agent tier ever sees it, and no later tier can undo
   // that. Identity guessing belongs where a wrong guess is caught, not where it is dispatched.
   bail();
-  return (await recoverWithDialogScope(page, step, inputs, slug, stepIndex, primarySelector, tracker, baseline, g))
+  return (await timed("dialog", () => recoverWithDialogScope(page, step, inputs, slug, stepIndex, primarySelector, tracker, baseline, g)))
     ? { tier: "L2", method: "dialog" }
     : fail();
 }

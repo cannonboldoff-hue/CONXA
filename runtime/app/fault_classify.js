@@ -20,9 +20,11 @@ const KINDS = ["auth_expired", "no_permission", "network", "rate_limited", "dupl
 
 // Priority order: the first kind with a match wins, most specific first.
 const TEXT_RULES = [
-  ["auth_expired", /\b(session (has )?(expired|timed out|ended)|signed out|logged out|sign ?in again|log ?in again|please (log|sign) ?in|token (has )?expired|not authenticated|unauthori[sz]ed)\b/i],
+  // "You must be signed in" is about the sign-in, not what was typed (it used to fall to "validation" on "must be").
+  ["auth_expired", /\b(session (has )?(expired|timed out|ended)|signed out|logged out|sign ?in again|log ?in again|please (log|sign) ?in|(must|need to) be (logged|signed) in|not (logged|signed) in|token (has )?expired|not authenticated|unauthori[sz]ed)\b/i],
   ["no_permission", /\b(do(es)?(n'?t| not) have (the )?(permission|access|rights)|no (permission|access)|access denied|permission denied|forbidden|not authori[sz]ed|insufficient (permissions?|privileges?))\b/i],
-  ["rate_limited", /\b(too many (requests|attempts)|rate limit(ed)?|slow down|quota (exceeded|reached)|try again (later|in))\b/i],
+  // A plain "please try again later" says nothing about request counts: only a wait with a number does.
+  ["rate_limited", /\b(too many (requests|attempts)|rate limit(ed)?|slow down|quota (exceeded|reached)|try again in \d+)/i],
   ["network", /\b(network error|no (internet|connection)|connection (lost|failed|error|problem)|you are offline|can'?t reach|could not connect|failed to fetch|request timed out)\b/i],
   ["not_found", /\b(not found|no longer (exists|available)|does(n'?t| not) exist|has been (deleted|removed|moved)|can'?t be found|cannot be found)\b/i],
   ["duplicate", /\b(already (exists|taken|in use|registered|been used)|duplicate|must be unique|is taken)\b/i],
@@ -116,7 +118,8 @@ const PLAIN = {
 
 function faultMessage(fault) {
   const lead = PLAIN[fault.kind] || "The app reported a problem";
-  return fault.source === "text" ? `${lead}: "${fault.evidence}"` : `${lead} (${fault.evidence})`;
+  const where = fault.field ? ` in "${short(fault.field).slice(0, 60)}"` : "";
+  return fault.source === "text" ? `${lead}${where}: "${fault.evidence}"` : `${lead} (${fault.evidence})`;
 }
 
 module.exports = { KINDS, classifyFault, alertFault, classifyCompletionFailure, faultMessage, statusKind, NEEDS_ACTED };

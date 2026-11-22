@@ -159,6 +159,18 @@ function executedStepsBreadcrumb(steps, failedAt) {
   return lines.length ? `Executed steps (leading context):\n${lines.join("\n")}` : null;
 }
 
+// BUILD-100: the steps of this test that already ran and sent data to the app, from the run's own step_decision lines
+// (run.js). A test that pauses and resumes is several calls, so the record is read from the latest fresh start (the
+// top-level step 0) onward, not from this call alone. Keys and positions only: no value from the page.
+function stepsThatChanged(slug) {
+  const decisions = recoveryLog.readRecentEvents(slug, 0, (r) => r.event === "step_decision");
+  let from = 0;
+  decisions.forEach((d, k) => { if (d.step_index === 0 && !d.path) from = k; });
+  return decisions.slice(from)
+    .filter((d) => d.outcome === "ok" && d.sent_data === true)
+    .map((d) => ({ step_index: d.step_index, ...(d.step_key ? { step_key: d.step_key } : {}), ...(d.path ? { path: d.path } : {}), type: d.type }));
+}
+
 // Gather the ground-truth interactive-element inventory AFTER the cascade: T1/T2 remedies
 // (dismiss-overlay, scroll, re-hover, ...) change the page, so the state the agent reasons
 // about must be captured fresh. Merges a frame-scoped inventory when the step targets an
@@ -499,6 +511,7 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       inventory,
       overlay,
       recovery_trail: recoveryLog.readRecentEvents(slug, deps.runStartTs),
+      steps_that_changed: stepsThatChanged(slug),
       // BUILD-26 stage (e): the EXEC-24 guard flags on `err` — without these the copilot cannot
       // tell "the click may already have fired" from "the element was never found", which is the
       // single most important thing to know before proposing a retest.
@@ -723,6 +736,7 @@ module.exports = {
   digestTargetContext,
   expectedStateBlock,
   executedStepsBreadcrumb,
+  stepsThatChanged,
   recordedContextBlock,
   anchorSentenceBlock,
   videoContextBlock,

@@ -76,6 +76,23 @@ function extractDescriptor(el) {
     ? (el.getAttribute("value") || "") : "";
   const axName = (ariaLabel || nameAttr || valueLabel || shownText.slice(0, 80)).trim();
   const hashPayload = `${tag}|${hashAttrStr}|${axName}`;
+  // A form field also hashes its own id (unless handed out per render), form-field name, placeholder and input type,
+  // so two plain boxes differ (compiler/stable_hash.py::form_field_part, same rule). A pack built before carries the
+  // hash without it, so that one is kept too (_legacyHashPayload) and resolver.js accepts either.
+  let fieldPart = "";
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    const rawId = (el.getAttribute("id") || "").trim();
+    // compiler/selector_filters.py::is_dynamic_id
+    const dynamicId = !rawId || rawId.startsWith("_r_") || rawId.replace(/^\\+/, "").startsWith(":")
+      || /^(?:ember|react|vue|ng|mat|cdk)[-_]?\d+/i.test(rawId) || /[:][a-z0-9]{6,}/i.test(rawId)
+      || /-[a-f0-9]{8,}\b/i.test(rawId) || (/\d/.test(rawId) && /[_\-]/.test(rawId));
+    fieldPart = [
+      ["id", dynamicId ? "" : rawId],
+      ["name", nameAttr.trim()],
+      ["placeholder", (el.getAttribute("placeholder") || "").trim()],
+      ["type", tag === "input" ? (typeAttr.trim() || "text") : ""],
+    ].filter(p => p[1]).map(([k, v]) => `${k}=${v}`).join("&");
+  }
 
   // Implicit-role best effort. This must cover every tag the compiler can record a role for,
   // not just the interactive ones: resolver.js's roleAgrees() returns false whenever EITHER
@@ -163,7 +180,8 @@ function extractDescriptor(el) {
     testid: el.getAttribute("data-testid") || el.getAttribute("data-test-id") || "",
     anchorNeighbors: neighbors,
     sectionHeading,
-    _hashPayload: hashPayload,
+    _hashPayload: fieldPart ? `${hashPayload}|field|${fieldPart}` : hashPayload,
+    _legacyHashPayload: fieldPart ? hashPayload : "",
   };
 }
 
@@ -263,6 +281,31 @@ function readClickWitness() {
   const t = w.seen[0][0];
   const words = ((t && (t.getAttribute && (t.getAttribute("aria-label") || t.getAttribute("id"))) || t && t.innerText || "") + "").trim().slice(0, 40);
   return { state: "elsewhere", where: ((t && t.tagName) || "element").toLowerCase() + (words ? ` "${words}"` : "") };
+}
+
+// A radio or checkbox drawn by its own label (the input not rendered, transparent, or tucked behind the label): how to
+// reach the label a person presses. `{ wrap: true }` when the label holds the input, `{ forId }` when it points at it by
+// id, null when the input can take the click itself or something other than its own label covers it.
+function coveringOwnLabel(el) {
+  const type = String((el && el.type) || "").toLowerCase();
+  if ((type !== "radio" && type !== "checkbox") || !el.labels || !el.labels.length) return null;
+  const shown = (n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+  const labels = Array.from(el.labels).filter(shown);
+  if (!labels.length) return null;
+  let label = labels[0];
+  if (shown(el)) {
+    let r = el.getBoundingClientRect();
+    if (r.top < 0 || r.left < 0 || r.bottom > window.innerHeight || r.right > window.innerWidth) {
+      el.scrollIntoView({ block: "center", inline: "center" });
+      r = el.getBoundingClientRect();
+    }
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (!hit || hit === el) return null;
+    label = labels.find((l) => l === hit || l.contains(hit));
+    if (!label) return null;
+  }
+  if (label.contains(el)) return { wrap: true };
+  return el.id && !el.id.includes('"') ? { forId: el.id } : null;
 }
 
 // Where to put the pointer to reveal a hidden element: the centres of its nearest visible ancestors, innermost first
@@ -547,14 +590,38 @@ function faultProbe() {
     if (t) alerts.push(t);
   }
   const invalid = [];
+  // The field each message is about, by its label, so a refusal can name it (BUILD-107). `native`: the browser's own
+  // words for a value it refused after the person tried to send the form.
+  const fields = [];
+  const nameOf = (el) => {
+    if (!el) return "";
+    const lab = el.labels && el.labels[0];
+    return clean((lab && (lab.innerText || lab.textContent)) || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.getAttribute("name") || "").slice(0, 60);
+  };
   for (const el of document.querySelectorAll('[aria-invalid="true"]')) {
     if (invalid.length >= 4) break;
     if (!visible(el)) continue;
     const ids = `${el.getAttribute("aria-errormessage") || ""} ${el.getAttribute("aria-describedby") || ""}`.split(/\s+/).filter(Boolean);
     const t = clean(ids.map((id) => document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent).join(" "));
-    if (t) invalid.push(t);
+    if (t) { invalid.push(t); fields.push({ field: nameOf(el), text: t }); }
   }
-  return { offline: navigator.onLine === false, alerts, invalid };
+  for (const el of document.querySelectorAll("input, select, textarea")) {
+    if (fields.length >= 6) break;
+    let refused = false;
+    try { refused = el.matches(":user-invalid"); } catch (_) { refused = false; }
+    if (!refused || !visible(el) || !el.validationMessage) continue;
+    fields.push({ field: nameOf(el), text: clean(el.validationMessage), native: true });
+  }
+  // An error written next to a field but not linked to it: only its words can make it a fault (fault_classify.js).
+  for (const el of document.querySelectorAll('form [class*="error" i], form [class*="invalid" i]')) {
+    if (invalid.length >= 6) break;
+    if (!visible(el) || el.querySelector("input, select, textarea, button")) continue;
+    const t = clean(el.innerText || el.textContent);
+    if (!t || t.length > 120 || invalid.includes(t)) continue;
+    invalid.push(t);
+    fields.push({ field: nameOf(el.parentElement && el.parentElement.querySelector("input, select, textarea")), text: t });
+  }
+  return { offline: navigator.onLine === false, alerts, invalid, fields };
 }
 
 // EXEC-30 — live overlay probe. domInventory() truncates at 50 entries IN DOM ORDER, so a modal
@@ -917,6 +984,16 @@ function rowsContainingValue(rows, wanted) {
   return out;
 }
 
+// How many lists the rows sit in (distinct parents). A row bound by its place ("always the first result") is taken only
+// from a selector that is exactly one list on the page: two lists would make "the first" a guess.
+function rowListCount(rows) {
+  var parents = [];
+  for (var r = 0; r < rows.length && r < 2000; r++) {
+    if (parents.indexOf(rows[r].parentElement) === -1) parents.push(rows[r].parentElement);
+  }
+  return parents.length;
+}
+
 // How often `needle` ends a line of the page's visible text (or a visible box's value), with at most closing
 // punctuation after it: "Saved Carol" in "Saved Carol." but not in "Saved Carol Ann". For a check whose words end in
 // the record the run acts on, where a longer look-alike record must not count.
@@ -950,6 +1027,20 @@ function countPageText(needle) {
   var count = 0;
   for (var at = hay.indexOf(n); at !== -1; at = hay.indexOf(n, at + n.length)) count++;
   return count;
+}
+
+// What countTextOccurrences reads, as text: the page's visible text, then what each visible text box holds (none when
+// `pageOnly`). For a date check, which reads the dates in it on the runtime side (assertions.js::countDates).
+function screenTexts(pageOnly) {
+  var _TEXT_BOX_TYPES = { "": 1, text: 1, search: 1, email: 1, url: 1, tel: 1, number: 1, date: 1, "datetime-local": 1, month: 1, week: 1, time: 1, textarea: 1 };
+  var parts = [String((document.body && document.body.innerText) || "")];
+  var fields = !pageOnly && typeof document.querySelectorAll === "function" ? document.querySelectorAll("input, textarea") : [];
+  for (var i = 0; i < fields.length; i++) {
+    var el = fields[i];
+    if (!_TEXT_BOX_TYPES[String(el.type || "").toLowerCase()] || el.offsetParent === null) continue;
+    if (typeof el.value === "string" && el.value) parts.push(el.value);
+  }
+  return parts;
 }
 
 // (agent_span) Runs inside the page. Numbers every visible interactive element and marks it so the runtime can find
@@ -1049,12 +1140,36 @@ function seedLocalStorage(entries) {
   }
 }
 
+// BUILD-110 (1): what a box shows right after the run typed into it (a box that formats as you type, "(555) 123-4567",
+// shows that). Kept in the page itself, keyed by the element, so nothing the box holds ever leaves the page.
+function noteTypedBox(el) {
+  const tag = (el.tagName || "").toUpperCase();
+  const v = tag === "INPUT" || tag === "TEXTAREA" ? el.value : el.isContentEditable ? el.innerText : null;
+  if (v == null) return false;
+  (globalThis.__conxaTypedBoxes = globalThis.__conxaTypedBoxes || new WeakMap()).set(el, String(v));
+  return true;
+}
+
+// BUILD-110 (1): just before a form is sent, does the box still hold what the run typed? Compared here, in the page, so
+// a secret box's value is never read out: only "same" or "different" comes back (null: not a box). Same when the box
+// shows what it showed right after typing, or the typed text itself (spaces aside).
+function typedBoxHolds(el, typed) {
+  const tag = (el.tagName || "").toUpperCase();
+  const v = tag === "INPUT" || tag === "TEXTAREA" ? el.value : el.isContentEditable ? el.innerText : null;
+  if (v == null) return null;
+  const norm = (s) => String(s).replace(/\s+/g, " ").trim();
+  const kept = globalThis.__conxaTypedBoxes ? globalThis.__conxaTypedBoxes.get(el) : undefined;
+  return String(v) === kept || norm(v) === norm(typed) ? "same" : "different";
+}
+
 module.exports = {
   rowsHoldingWholeValue,
   rowsContainingValue,
+  rowListCount,
   countTextEnding,
   countTextOccurrences,
   countPageText,
+  screenTexts,
   armPrompt,
   takePromptAnswered,
   extractDescriptor,
@@ -1066,6 +1181,7 @@ module.exports = {
   revealHoverPoints,
   armClickWitness,
   readClickWitness,
+  coveringOwnLabel,
   preStepSignature,
   settleSignature,
   environmentSignature,
@@ -1098,4 +1214,6 @@ module.exports = {
   clipboardWrite,
   clipboardRead,
   seedLocalStorage,
+  noteTypedBox,
+  typedBoxHolds,
 };

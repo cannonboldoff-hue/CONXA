@@ -92,6 +92,14 @@ test("stable_hash match acts as tie-breaker", () => {
   assert.strictEqual(r.node, b);
 });
 
+test("a pack built before form-field hashing still tie-breaks on its old hash", () => {
+  const a = { role: "textbox", name: "", text: "", stableHash: "newA", legacyStableHash: "oldShared" };
+  const b = { role: "textbox", name: "", text: "", stableHash: "newB", legacyStableHash: "oldB" };
+  const root = mockRoot({ [ROLE_SIG.selector]: [a, b] });
+  assert.strictEqual(resolve([ROLE_SIG], { role: "textbox", stable_hash: "oldB" }, root, { uniqueMargin: 0.1 }).node, b);
+  assert.strictEqual(resolve([ROLE_SIG], { role: "textbox", stable_hash: "newA" }, root, { uniqueMargin: 0.1 }).node, a);
+});
+
 test("scoreCandidate rewards testid agreement", () => {
   const fp = { data_testid: "x", role: "button", aria_label: "X" };
   const match = scoreCandidate({ testid: "x", role: "button", name: "X" }, fp);

@@ -110,7 +110,10 @@ async function gatherCandidates(roots, signals, interpolate, inputs, perSignalCa
         try { d = await evalOn(item, _extractDescriptor); } catch (_) { continue; }
         if (!d || d === EVAL_TIMED_OUT) continue;
         d.stableHash = d._hashPayload ? _sha256(d._hashPayload) : "";
+        // The hash a pack built before form fields were hashed by their own markup carries (page_scripts.js).
+        if (d._legacyHashPayload) d.legacyStableHash = _sha256(d._legacyHashPayload);
         delete d._hashPayload;
+        delete d._legacyHashPayload;
         d._loc = item;
         descriptors.push(d);
       }

@@ -40,6 +40,32 @@ test("rotation keeps three older files, then drops the oldest", () => {
   assert.ok(!fs.existsSync(`${log.RECOVERY_LOG}.4`), "never a fourth");
 });
 
+test("RT-17b: every recovery stage writes its own duration and outcome", async () => {
+  const { recoverStep } = require("../../app/cascade");
+  const page = { waitForTimeout: async () => {} };
+  const tracker = { emit: () => {} };
+  log.enterStepScope({ run_id: "r-cascade", slug: "wf-cascade", step_index: 2 });
+  const result = await recoverStep(page, { destructive: true, type: "click", handler_hints: {} }, {}, "wf-cascade", 2, "sel", tracker, { verifyFail: true });
+  assert.strictEqual(result, false);
+  const attempts = lines().filter((l) => l.event === "recovery_attempt" && l.run_id === "r-cascade");
+  assert.deepStrictEqual(attempts.map((a) => a.stage), ["layer1", "transient", "dialog"]);
+  for (const a of attempts) {
+    assert.strictEqual(a.ok, false);
+    assert.ok(Number.isInteger(a.duration_ms) && a.duration_ms >= 0);
+  }
+});
+
+test("BUILD-100: the steps that already sent data are read from the latest fresh start, failed steps left out", () => {
+  const { stepsThatChanged } = require("../../app/failure_response");
+  const slug = "wf-changed";
+  const d = (step_index, extra = {}) => log.appendRecoveryEvent({ event: "step_decision", slug, step_index, outcome: "ok", type: "click", ...extra });
+  d(0); d(1, { sent_data: true, step_key: "old#1" });   // an earlier test of the same workflow
+  d(0); d(1, { sent_data: true, step_key: "a#1" }); d(2); // this test: started again at step 0
+  d(3, { sent_data: true, step_key: "b#1", path: [3] });  // inside a loop
+  d(4, { sent_data: true, step_key: "c#1", outcome: "failed" });
+  assert.deepStrictEqual(stepsThatChanged(slug).map((s) => s.step_key), ["a#1", "b#1"]);
+});
+
 test("detail that stays on this computer never appears in a tracker.emit call", () => {
   const localOnly = /\b(checks|tied|signals|candidates)\s*[:,}]/;
   const appDir = path.join(__dirname, "..", "..", "app");

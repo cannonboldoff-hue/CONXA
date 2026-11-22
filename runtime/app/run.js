@@ -269,13 +269,23 @@ async function detectFault(ctx, page, step, { mayHaveActed, sinceMs, nextStep = 
   const p = probe && probe !== EVAL_TIMED_OUT ? probe : {};
   const seen = pageStatus.recent(page, sinceMs);
   const lost = notebook ? notebook.mutationFailure() : pageStatus.mutationFailure(page, sinceMs);
-  const fault = classifyFault({
+  let fault = classifyFault({
     alerts: [...(p.alerts || []), ...(p.invalid || [])],
     offline: !!p.offline,
     status: seen ? seen.status : null,
     dropped: lost ? lost.why : null,
     mayHaveActed,
   });
+  const fields = Array.isArray(p.fields) ? p.fields.filter((f) => f && f.text) : [];
+  // The browser itself refused a value the person tried to send ("Please fill out this field."): a rejected form,
+  // whatever its words are. Only for a step that may have acted, like any other text the page shows.
+  const refused = !fault && mayHaveActed && fields.find((f) => f.native);
+  if (refused) fault = { kind: "validation", source: "text", evidence: String(refused.text).slice(0, 120) };
+  // Name the field the refusal is about when the message came from one (BUILD-107 (2)).
+  if (fault && fault.source === "text") {
+    const owner = fields.find((f) => f.field && String(f.text).replace(/\s+/g, " ").trim().startsWith(fault.evidence.slice(0, 60)));
+    if (owner) fault.field = owner.field;
+  }
   return fault && fault.kind === "auth_expired" && landedAsRecorded(step, page) ? null : fault;
 }
 
@@ -366,9 +376,22 @@ async function openNotebook(ctx, page, baseline = null, fileName = null) {
   }
 }
 
+// Counts, once per notebook, an action that sent data to the app: a data-changing request that is not the page's own
+// background traffic, or a form posted to this site. Read before the notebook stops listening.
+function noteSentData(ctx, nb) {
+  if (!nb || nb.sentCounted) return;
+  try {
+    const sent = nb.mutationStarted() || nb.entries().some((e) => e.rt === "document" && !["GET", "HEAD", "OPTIONS"].includes(e.m) && !e.xs);
+    if (!sent) return;
+    nb.sentCounted = true;
+    ctx.sentDataCount = (ctx.sentDataCount || 0) + 1;
+  } catch (_) { /* evidence, never a reason to fail a step */ }
+}
+
 function closeNotebook(ctx, only = null) {
   const nb = only || ctx.notebook;
   if (!nb) return;
+  noteSentData(ctx, nb);
   try { nb.close(); } catch (_) { /* already closed */ }
   if (ctx.notebook === nb) ctx.notebook = null;
 }
@@ -593,7 +616,12 @@ async function proveStep(ctx, state, step, i, { verify = null, gate = null, reco
     }
     return;
   }
-  if (move.do === "wait") return; // the next step's own checks (or a popup it owns) take over
+  if (move.do === "wait") {
+    // The next step's own checks (or a popup it owns) take over. If none of the later steps' checks confirms anything,
+    // the run says "please check" for this one (resolveLaterProofs; owner decision 2026-11-21, BUILD-106 (2)).
+    (state.proof.waits = state.proof.waits || []).push({ at: state.proof.steps.length - 1, note: proof.unconfirmedNote(step, i) });
+    return;
+  }
   if (String(j.verdict).startsWith("failed_")) {
     // A failure signal in the step's own checklist (an error or refusal the app showed, a reply that said no): an
     // ordinary failure, not "couldn't confirm". The action already happened, so it never enters recovery.
@@ -641,6 +669,13 @@ function resolveLaterProofs(state, ran) {
     if (at >= 0) state.proof.notes.splice(at, 1);
   }
   state.proof.later = kept;
+  // A "still working" step handed over to the next one is confirmed only by a later step proven by a check that said
+  // yes to more than "it ran" (a recorded popup's answer, the result showing). Otherwise: "please check" for it.
+  const confirms = (s) => s.verdict === "proven" && s.checks.some((c) => c.answer === "yes" && c.rung !== "performed" && c.role !== "veto");
+  for (const w of state.proof.waits || []) {
+    if (!state.proof.steps.slice(w.at + 1).some(confirms)) state.proof.notes.push(w.note);
+  }
+  state.proof.waits = [];
 }
 
 // Before a run stops on a popup nothing answers, the pointer is taken off the page ONCE and the page is looked at again.
@@ -740,6 +775,7 @@ async function executeOneStep(ctx, state, steps, i) {
     ...(stepNow.source_step_key ? { step_key: stepNow.source_step_key } : {}),
   });
   let decision = { outcome: "ok" };
+  const sentBefore = ctx.sentDataCount || 0;
   try {
     return await runStepFrame(ctx, state, steps, i, frame);
   } catch (e) {
@@ -751,11 +787,14 @@ async function executeOneStep(ctx, state, steps, i) {
   } finally {
     state.stepPath.pop();
     // The run's own account of the step in one line (RT-17b): how it ended, how long it took, and which tab it ran on
-    // (address without query or fragment, so no value from the page is written down).
+    // (address without query or fragment, so no value from the page is written down). `sent_data`: the step (or a step
+    // inside it) sent data to the app, so a run that fails later can say what it already changed (BUILD-100).
     try {
       let tab;
       try { tab = frame.page ? String(frame.page.url()).split(/[?#]/)[0] : undefined; } catch (_) { tab = undefined; }
-      appendRecoveryEvent({ event: "step_decision", step_index: i, type: stepNow.type, duration_ms: Date.now() - startedAt, tab, path: state.stepPath.length ? state.stepPath.slice() : undefined, ...decision });
+      noteSentData(ctx, ctx.notebook);
+      const sent = (ctx.sentDataCount || 0) > sentBefore ? { sent_data: true } : {};
+      appendRecoveryEvent({ event: "step_decision", step_index: i, type: stepNow.type, duration_ms: Date.now() - startedAt, tab, path: state.stepPath.length ? state.stepPath.slice() : undefined, ...decision, ...sent });
     } catch (_) {}
     // How long the whole step took (resolve, act, completion gate, proof). With the "completion" event's own
     // `waited`, it shows where a slow step spent its time (EXEC-61). Nested steps report their own.
@@ -1157,6 +1196,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     appendRecoveryEvent({ event: "fault_detected", slug: ctx.slug, step_index: i, kind: "human_check", source: wall });
     throw stepFailure(step, i, Object.assign(new Error(HUMAN_CHECK_MESSAGE), { fault: true, faultKind: "human_check" }), null, state.warnings);
   }
+  // A step that sends a form: every box the run typed for it must still hold what was typed (BUILD-110 (1)).
+  await checkTypedBoxes(ctx, state, step, i, page);
   noteBackground(ctx);
   const preShot = await maybeCapturePreStep(page, step);
   const primarySelector = baseSelector(step, state.inputs);
@@ -1200,10 +1241,12 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   }
 
   let primaryErr = null;
+  const queuedBefore = Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue.length : 0; // boxes already open (BUILD-106 (1))
   try {
     const io = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
     await executeStep(page, step, state.inputs, io);
     failOnUnexpectedAlert(ctx, state, step, i, nextStep, preShot);
+    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore);
     // Phase 8: independent post-condition verification.
     const verdict = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
     // Fleet-visible audit: one event per step that actually carries assertions, pass or fail,
@@ -1218,6 +1261,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     }
     const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
     await proveStep(ctx, state, step, i, { verify: verdict, gate: gateV, preShot, notebook: completion.notebook, filesChosen: io.filesChosen });
+    await noteTypedBox(ctx, state, step, page);
     // BUILD-30: set by resolution.js::maybeScrollForVirtualization when this step only
     // resolved after a scroll pass — a distinct success reason so BUILD-28's drift dashboard
     // stops classifying a virtualized row as drift; it isn't a page redesign, it's a scroll
@@ -1230,6 +1274,8 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   } catch (err) {
     if (err && err.completionGate) throw err; // the action already happened: never recover into a re-run
     primaryErr = err;
+    // The action hung on the page's own OK/Cancel box: ask about it before any evidence is read off a blocked page.
+    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore);
     primaryErr.earlyDomSnapshot = await captureEarlyDomSnapshot(page, step, state.inputs);
     primaryErr.failedPage = page;
   } finally {
@@ -1324,6 +1370,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
           emitVerifyResult(ctx, i, verdict2);
           const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
           await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook });
+          await noteTypedBox(ctx, state, step, page);
           ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
           state.hasExecutedStep = true;
           state.prevStepType = step.type;
@@ -1340,6 +1387,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
           if (verdict2.pass) {
             const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
             await proveStep(ctx, state, step, i, { verify: verdict2, gate: gateV, preShot, notebook: completion.notebook, filesChosen: io2.filesChosen });
+            await noteTypedBox(ctx, state, step, page);
             ctx.tracker.emit("tier_ok", { si: i, tier: "tier1_compiled_settled" });
             state.hasExecutedStep = true;
             state.prevStepType = step.type;
@@ -1382,7 +1430,12 @@ async function runStepFrame(ctx, state, steps, i, frame) {
       "This step sent its data to the app, but the result it showed when it was recorded didn't appear. "
       + "It was not tried again, so nothing is sent twice. Check the app before running this again."),
     { fault: true, faultKind: "unconfirmed", actionMayHaveTakenEffect: true, recoveryHaltReason: "action-sent-request" });
-    throw stepFailure(step, i, cause, preShot, state.warnings);
+    // The app took the data and nothing could read the result (it may be drawn on a canvas): the run's verdict is
+    // "couldn't confirm", the same as any other unreadable result, never a plain failure (BUILD-107 (4)). Still an error.
+    throw Object.assign(stepFailure(step, i, cause, preShot, state.warnings), {
+      couldntConfirm: true,
+      proof: { steps: state.proof.steps.slice(), notes: state.proof.notes.slice() },
+    });
   }
 
   // EXEC-24 — seed the guard with what we already know about the primary attempt. Two ways
@@ -1429,6 +1482,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
   emitVerifyResult(ctx, i, guard.lastVerify);
   const gateV = await confirmCompleted(ctx, state, step, i, page, completion, preShot);
   await proveStep(ctx, state, step, i, { verify: guard.lastVerify || null, gate: gateV, recovered: true, preShot, notebook: completion.notebook });
+  await noteTypedBox(ctx, state, step, page);
   state.recoveredSteps++;
   state.hasExecutedStep = true;
   state.prevStepType = step.type;
@@ -1698,6 +1752,74 @@ async function observeDialog(page, ctx) {
   }
 }
 
+// BUILD-106 (1), owner rule 2026-11-21: a native OK/Cancel box (confirm/prompt) that no step of this workflow answers
+// is always put to the MCP client; the runtime never presses either button itself. Its words go to the client as they
+// are, never read for meaning. Never asked in a dry, loop, destructive or scheduled run, or when nobody can be asked:
+// those keep today's fail-closed path. The box opened from this step's action, so the action already ran (`acted`).
+async function askAboutNativeQuestion(ctx, state, step, i, page, owner, queuedBefore) {
+  // Only a box THIS step's action opened: one already open before it was left by a step that may not ask (a
+  // destructive one), and asking here would get round that rule.
+  if (queuedBefore > 0 || !ctx.answerPopups || ctx.scheduled || ctx.dryRun || step.destructive === true) return;
+  if (state.loopDepth > 0 || state.forkDepth > 0 || (owner && POPUP_OWNERS.has(owner.type))) return;
+  const d = Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue[0] : null;
+  const type = d && typeof d.type === "function" ? d.type() : "";
+  if (type !== "confirm" && type !== "prompt") return;
+  try {
+    agentPopupPause(ctx, state, step, page, i, await observeDialog(page, ctx), { acted: true });
+  } catch (e) {
+    if (e && typeof e === "object") e.completionGate = true; // the action already ran: never recover into a re-run
+    throw e;
+  }
+}
+
+// Closes every OK/Cancel box still waiting with Cancel, never OK. Only on the way out of a run that ends anyway (a
+// stop, an answer that cannot be used, a wait nobody answered), so failure evidence never waits on an open box.
+function dismissNativeQuestions(queue) {
+  const done = [];
+  if (!Array.isArray(queue)) return Promise.all(done);
+  for (let k = queue.length - 1; k >= 0; k--) {
+    const d = queue[k];
+    const type = d && typeof d.type === "function" ? d.type() : "";
+    if (type !== "confirm" && type !== "prompt") continue;
+    queue.splice(k, 1);
+    done.push(Promise.resolve().then(() => d.dismiss()).catch(() => {})); // already closed
+  }
+  return Promise.all(done);
+}
+
+// BUILD-110 (1): "the box still holds what was typed". The compiler lists, on a step that sends a form, the boxes typed
+// on its page since the last send (handler_hints.recheck_typed: step keys). Right after the run types into one, the
+// page notes what the box showed; just before the send each box is compared in the page. A box that changed stops the
+// run: it is never typed again. `resolve` is the run's own element finder (injected by tests).
+async function noteTypedBox(ctx, state, step, page, resolve = resolveStep) {
+  const key = step && step.source_step_key;
+  if (!key || !ctx.typedRechecks || !ctx.typedRechecks.has(key) || (step.type !== "fill" && step.type !== "type")) return;
+  (state.typedBoxes = state.typedBoxes || new Map()).set(key, { step, typed: interpolate(String(step.value ?? ""), state.inputs) });
+  try {
+    await evalOn(await resolve(page, step, state.inputs), pageScripts.noteTypedBox, undefined, 1500);
+  } catch (_) { /* the box is then compared with the typed text alone */ }
+}
+
+async function checkTypedBoxes(ctx, state, step, i, page, resolve = resolveStep) {
+  for (const key of asArray(asObject(step.handler_hints).recheck_typed)) {
+    const box = state.typedBoxes && state.typedBoxes.get(key);
+    if (!box) continue; // this run did not type it (a resumed call, a skipped step): nothing to compare with
+    let said = null;
+    try {
+      said = await evalOn(await resolve(page, box.step, state.inputs), pageScripts.typedBoxHolds, box.typed, 1500);
+    } catch (_) { said = null; }
+    if (said !== "different") continue; // gone or unreadable: can't tell, which never stops a run
+    const fp = asObject(asObject(box.step.identity_bundle).fingerprint);
+    const name = String(fp.label_text || fp.aria_label || fp.placeholder || "").trim().slice(0, 60);
+    ctx.tracker.emit("step_fail", { si: i, fc: "typed_box_changed" });
+    appendRecoveryEvent({ event: "typed_box_changed", slug: ctx.slug, step_index: i, box: key });
+    throw stepFailure(step, i, Object.assign(
+      new Error(`The box no longer holds what was typed${name ? ` (the "${name}" box)` : ""}. The form was not sent, and nothing was typed again.`),
+      { fault: true, faultKind: "box_changed" },
+    ), null, state.warnings);
+  }
+}
+
 // Click a visible dialog button the PERSON chose by its label -- the unknown-popup path, where no
 // compiled option exists to run. Scoped to the topmost open dialog and an exact accessible-name
 // match, so a same-named button elsewhere on the page can never be hit. The label came from the
@@ -1771,6 +1893,7 @@ async function confirmForkDialogClosed(ctx, state, step, page, i, answered, titl
     return !fork.stillShowing(answered, seen);
   }, 3000);
   if (!closed) {
+    if (seen && seen.native) dismissNativeQuestions(ctx.dialogQueue); // the run ends: never leave its evidence waiting on it
     ctx.tracker.emit("step_fail", { si: i, fc: "fork_dialog_still_open" });
     throw stepFailure(step, i, new Error(`The "${title}" popup is still open after choosing "${chosenLabel}".`), null, state.warnings);
   }
@@ -1850,6 +1973,7 @@ function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, know
       knownFromMap: !!known,
       agent: true,
       acted: !!acted,
+      ...(probe && probe.native ? { native: true } : {}), // the page's own OK/Cancel box: answered by run.js, not clicked
       stepIntent: step.intent || step.type || "",
       choices,
     },
@@ -1877,6 +2001,7 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
   const byAgent = state.inputs[`__fork_agent_${i}`] === 1;
   for (const k of ["choice", "acted", "agent"]) delete state.inputs[`__fork_${k}_${i}`];
   const fail = (code, message, extra = {}) => {
+    dismissNativeQuestions(ctx.dialogQueue); // the run ends here: an OK/Cancel box left open would hang its evidence
     ctx.tracker.emit("step_fail", { si: i, fc: code });
     throw stepFailure(step, i, Object.assign(new Error(message), extra), null, state.warnings);
   };
@@ -1909,14 +2034,24 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
       state.warnings.push(`Dry run: did not click "${choice}" in the "${title}" popup.`);
     } else {
       try {
-        await clickDialogButtonByLabel(page, choice);
+        if (probe.native) {
+          // The page's own OK/Cancel box: pressed through the browser, with the button the caller named. A prompt keeps
+          // the text the page put in it; nothing is typed.
+          const d = ctx.dialogQueue.shift();
+          if (fork.norm(choice) === "ok") await d.accept(typeof d.defaultValue === "function" ? d.defaultValue() : undefined);
+          else await d.dismiss();
+        } else {
+          await clickDialogButtonByLabel(page, choice);
+        }
       } catch (e) {
         ctx.tracker.emit("step_fail", { si: i, fc: "fork_click_failed" });
         throw stepFailure(step, i, e, null, state.warnings);
       }
       await confirmForkDialogClosed(ctx, state, step, page, i, fork.surfaceSignature(probe), title, choice);
     }
-    state.warnings.push(`The "${title}" popup was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`);
+    state.warnings.push(probe.native
+      ? `The page's OK/Cancel box was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`
+      : `The "${title}" popup was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`);
   }
 
   if (!acted) return false; // the step's own action never ran: let it run now that the way is clear
@@ -2244,7 +2379,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     skippedByInput: [],
     // Proof of Done: what each step proved (see proveStep), plain notes for a low-risk step that could
     // not be confirmed, and where the run stopped because a risky one could not be.
-    proof: { steps: [], notes: [], stopped: null, later: [] },
+    proof: { steps: [], notes: [], stopped: null, later: [], waits: [] },
   };
   // The record values this run acts on (every bound row's identifier): a text check ending in one must not pass on a
   // longer look-alike ("Saved Carol" in "Saved Carol Ann", assertions.js::endsInBoundValue). Each step gets the list.
@@ -2347,6 +2482,9 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
     callees: callees || null, // call_workflow: the workflows this one calls, loaded and checked at run start
     callStack: [slug],
     answerPopups: answerPopups === true, // EXEC-49: an MCP client may be asked about an unrecorded question popup
+    // BUILD-110 (1): the boxes a later send re-reads. shortcut: from the plan's own steps only; a send inside a loop body
+    // or popup option is not re-checked. Upgrade if a recorded loop ever sends a form.
+    typedRechecks: new Set(asArray(steps).flatMap((s) => asArray(asObject(asObject(s).handler_hints).recheck_typed))),
     agentSpans: agentSpans !== false,   // Engine v2 C4: false (a scheduled run) = an agent_span step fails closed
     hostOwned: hostOwned === true, hostRunId: hostRunId ?? runId, // page_geometry.js: who to ask to repair the page size
   };
@@ -2557,6 +2695,9 @@ module.exports = {
   detectFault,
   countSurface,
   askAboutBlockingPopup,
+  dismissNativeQuestions,
+  noteTypedBox,
+  checkTypedBoxes,
   parkAndRecheck,
   runIfDecision,
   collectOutputs,

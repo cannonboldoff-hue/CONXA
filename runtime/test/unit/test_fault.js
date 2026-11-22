@@ -132,6 +132,29 @@ test("detectFault: an aria-invalid message counts like an alert", async () => {
   assert.strictEqual((await detectFault(CTX, page, { type: "type" }, { mayHaveActed: true, sinceMs: 0 })).kind, "validation");
 });
 
+test("detectFault: a rejection names the field it is about (BUILD-107 (2))", async () => {
+  const page = mockPage({ fault: { offline: false, alerts: [], invalid: ["Email is invalid"], fields: [{ field: "Email", text: "Email is invalid" }] } });
+  const f = await detectFault(CTX, page, { type: "click" }, { mayHaveActed: true, sinceMs: 0 });
+  assert.strictEqual(f.field, "Email");
+  assert.strictEqual(faultMessage(f), `The app rejected what was entered in "Email": "Email is invalid"`);
+});
+
+test("detectFault: the browser's own refusal of a field is a rejected form, only for a step that acted (BUILD-107 (1))", async () => {
+  const fault = { offline: false, alerts: [], invalid: [], fields: [{ field: "Name", text: "Please fill out this field.", native: true }] };
+  const f = await detectFault(CTX, mockPage({ fault }), { type: "click" }, { mayHaveActed: true, sinceMs: 0 });
+  assert.deepStrictEqual([f.kind, f.field], ["validation", "Name"]);
+  assert.strictEqual(await detectFault(CTX, mockPage({ fault }), { type: "click" }, { mayHaveActed: false, sinceMs: 0 }), null);
+});
+
+test("alert wordings are not mislabelled (BUILD-107 (5))", () => {
+  const kind = (t) => (classifyFault({ alerts: [t], mayHaveActed: true }) || { kind: null }).kind;
+  assert.strictEqual(kind("Something went wrong. Please try again later."), null, "not 'too many requests'");
+  assert.strictEqual(kind("Try again in 30 seconds"), "rate_limited");
+  assert.strictEqual(kind("You must be signed in to do that"), "auth_expired", "not 'rejected what was entered'");
+  assert.strictEqual(kind("Session expired. Please try again."), "auth_expired");
+  assert.strictEqual(kind("Password must be at least 8 characters"), "validation");
+});
+
 test("detectFault: a decision popup is never a fault, and neither is a fork step or a pending native dialog", async () => {
   const fault = { offline: true, alerts: ["Session expired"], invalid: [] };
   const decision = { title: "Upload options", text: "", controls: [{ name: "Replace" }, { name: "Keep both" }, { name: "Cancel" }] };

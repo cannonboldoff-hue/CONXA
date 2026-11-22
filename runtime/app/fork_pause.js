@@ -127,12 +127,18 @@ async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, li
   const actedNote = info.acted
     ? "\nThe step's own action already ran; this popup appeared as a result. After you answer, the step's result is re-checked, not repeated.\n"
     : "";
+  // BUILD-106 (1): the page's own OK/Cancel box. Its words are passed on exactly as the page wrote them, for you to read;
+  // Conxa does not read meaning into them. It stays open until you answer; with no answer in time Cancel is pressed.
+  const popup = info.native
+    ? `Popup: the page's own OK/Cancel box. Its words, as the page wrote them:\n${info.text || "(no words)"}\n` +
+      `It stays open until you answer. If no answer comes in time, Cancel is pressed and the run ends as "couldn't confirm".\n`
+    : `Popup: ${info.title || "(untitled)"}${info.text ? `\n${info.text}` : ""}\n`;
   const header =
     `Execution paused at step ${stepIndex + 1}: a popup this workflow was never taught about appeared and needs an answer.\n` +
     `Page URL: ${url}\n` +
     (goal ? `Workflow: ${goal}\n` : "") +
     (info.stepIntent ? `Step: ${info.stepIntent}\n` : "") +
-    `Popup: ${info.title || "(untitled)"}${info.text ? `\n${info.text}` : ""}\n${actedNote}\n` +
+    `${popup}${actedNote}\n` +
     `Decide using what the user is trying to get done. If you are not sure which button is right, ` +
     `ASK THE USER in the chat before answering -- it is their data. Pick only a button from this list:\n` +
     `${lines.join("\n")}\n\n` +
@@ -141,7 +147,8 @@ async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, li
     `  review_results: { "${stepIndex}": { "choice": "<id from the list above>" } }${retryNote}`;
 
   const content = [{ type: "text", text: header }];
-  const shot = await capture(page, { type: "jpeg", quality: 80 });
+  // No picture while the page's own box is open: the page is frozen behind it, so a screenshot could only wait.
+  const shot = info.native ? null : await capture(page, { type: "jpeg", quality: 80 });
   if (shot) {
     content.push(
       { type: "text", text: "Current page:" },
@@ -156,6 +163,7 @@ async function buildAgentRequest(page, stepIndex, info, opts, { url, choices, li
         title: info.title || "",
         message: info.text || "",
         reason: info.reason || "",
+        ...(info.native ? { native: true } : {}),
         unknown: true,
         suggested: null,
         choices: choices.map((c) => ({ id: c.id, label: c.label, role: c.role })),

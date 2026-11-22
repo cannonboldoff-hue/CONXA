@@ -32,12 +32,15 @@ async function rootCandidates(page, step, inputs) {
   if (!frameChain.length) return [page];
 
   let roots = [page];
+  let paths = [[]]; // RT-17b: the frame selectors each root was reached through, for the local run record
   for (const frameSpec of frameChain) {
     const sigs = asArray(frameSpec.signals)
       .filter(s => s && s.selector)
       .sort((a, b) => (b.durability || 0) - (a.durability || 0));
     const next = [];
-    for (const root of roots) {
+    const nextPaths = [];
+    for (let r = 0; r < roots.length; r++) {
+      const root = roots[r];
       if (!root || typeof root.frameLocator !== "function") continue;
       for (const s of sigs) {
         const selector = interpolate(String(s.selector), inputs);
@@ -48,11 +51,14 @@ async function rootCandidates(page, step, inputs) {
         } catch (_) { exists = false; }
         if (!exists) continue;
         next.push(root.frameLocator(selector));
+        nextPaths.push([...paths[r], selector]);
       }
     }
     roots = next;
+    paths = nextPaths;
     if (!roots.length) break;
   }
+  roots.frames = paths;
 
   // A non-empty frame_chain that resolved to zero roots means the containing iframe itself
   // could not be located (e.g. its identifying attribute churned to a new value on reattach).
@@ -76,6 +82,7 @@ function isFrameNotFound(step, roots) {
 // way as zero — an ambiguous binding is not a binding. Never falls back to the unscoped roots.
 async function entityRoots(roots, step, inputs) {
   const eb = asObject(step && step.entity_binding);
+  if (eb.container_selector && boundPlace(eb)) return isInertBinding(eb) ? roots : placeRoots(roots, eb);
   if (!eb.container_selector || !eb.identifier) return roots;
   if (isInertBinding(eb)) return roots;
   const matcher = eb.match === "contains" ? pageScripts.rowsContainingValue : pageScripts.rowsHoldingWholeValue;
@@ -119,8 +126,33 @@ async function entityRoots(roots, step, inputs) {
 // A "contains" binding ("the suggestion that shows what was typed") replaces "this exact text" with "whatever matches", so
 // it is the person's act: until they said yes (`confirmed`, set only by the pick_match answer) it does nothing and the
 // step resolves by its own recorded identity, as it did before the binding existed.
+// A place binding ("always the first result", BUILD-101 (7)) is the person's act the same way: their yes only.
 function isInertBinding(eb) {
-  return eb.match === "contains" && eb.confirmed !== true;
+  return (eb.match === "contains" || boundPlace(eb) > 0) && eb.confirmed !== true;
+}
+
+// The 1-based place of a row bound by where it sits (entity_binding.position, no identifier), or 0.
+function boundPlace(eb) {
+  return !eb.identifier && Number.isInteger(eb.position) && eb.position > 0 ? eb.position : 0;
+}
+
+// The Nth row of a selector that is exactly one list on the page. The element is then found inside that row by its own
+// signals, so uniqueMargin still decides it. Two lists, too few rows or a hung look fail closed ([]), never "absent",
+// so on_missing can never skip on it.
+async function placeRoots(roots, eb) {
+  const place = boundPlace(eb);
+  const out = [];
+  for (const root of roots) {
+    if (!root || typeof root.locator !== "function") continue;
+    try {
+      const all = root.locator(eb.container_selector);
+      const total = await countOn(all);
+      const lists = await withDeadline(() => all.evaluateAll(pageScripts.rowListCount),
+        Date.now() + DEFAULT_EVAL_DEADLINE_MS, EVAL_TIMED_OUT);
+      if (total !== EVAL_TIMED_OUT && total >= place && lists === 1) out.push(all.nth(place - 1));
+    } catch (_) { /* fail closed */ }
+  }
+  return out.length === 1 ? out : [];
 }
 
 // True only when the step carries an entity binding but narrowing it against the live page
@@ -128,7 +160,7 @@ function isInertBinding(eb) {
 // or never existed here), not just "no binding to apply".
 function isEntityNotFound(step, roots) {
   const eb = asObject(step && step.entity_binding);
-  return !!(eb.container_selector && eb.identifier) && !isInertBinding(eb) && roots.length === 0;
+  return !!(eb.container_selector && (eb.identifier || boundPlace(eb))) && !isInertBinding(eb) && roots.length === 0;
 }
 
 // EXEC-38 — the inverse of entityRoots: given a for_each step's row spec, list every row
@@ -324,11 +356,14 @@ async function resolveStep(page, step, inputs, scrollState) {
       );
     }
   }
+  // Which iframe(s) the search ran in (RT-17b). shortcut: with several matching frames all are listed, not the
+  // winner's own; tag candidates with their root if that ever matters.
+  const frames = Array.isArray(frameRoots.frames) && frameRoots.frames.some((p) => p.length) ? { frames: frameRoots.frames } : {};
   // The row IS the element (a suggestion list item): exactly one row held the value (entityRoots fails closed on none or
   // several), so it is not searched for again inside itself. Its own address is not consulted: its words are the data.
   const eb = asObject(step.entity_binding);
   if (eb.self_target === true && !isInertBinding(eb) && eb.container_selector && eb.identifier && roots.length === 1) {
-    appendRecoveryEvent({ event: "resolve", outcome: "found", signal: "entity_binding.self_target", unique_margin: DEFAULT_UNIQUE_MARGIN });
+    appendRecoveryEvent({ event: "resolve", outcome: "found", signal: "entity_binding.self_target", unique_margin: DEFAULT_UNIQUE_MARGIN, ...frames });
     return roots[0];
   }
   const fp = bundleFingerprint(bundle, interpolate, inputs);
@@ -349,6 +384,7 @@ async function resolveStep(page, step, inputs, scrollState) {
     unique_margin: DEFAULT_UNIQUE_MARGIN,
     ...(result && result.tied ? { tied: result.tied } : {}),
     signals: signals.map(s => ({ selector: s.selector, matches: (map[s.selector] || []).length })),
+    ...frames,
   });
   if (result && result.node && result.node._loc) {
     return result.node._loc;

@@ -46,16 +46,85 @@ function popupsOpened(page) {
   return box.n;
 }
 
+// ── A date check in any format (BUILD-111 (6), owner decision 2026-11-21) ──────────────────────────────────────────────
+// Words that are, as a whole, one complete date (day, month, four-digit year) match that date however the page writes
+// it: "21 Nov 2026" = "11/21/2026" = "2026-11-21" = "Nov 21, 2026". Nothing else is loosened: any other words keep the
+// exact match. A numeric date that reads two ways ("03/04/2026") matches only a numeric date with the same two numbers
+// in the same order, on either side. Month names come from one closed English table; a date in another language does
+// not parse and keeps the exact match. Deterministic: no locale, no clock.
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTH_OF = new Map([...MONTH_NAMES.map((m, k) => [m, k + 1]), ...MONTH_NAMES.map((m, k) => [m.slice(0, 3), k + 1]), ["sept", 9]]);
+const MON = [...MONTH_OF.keys()].sort((x, y) => y.length - x.length).join("|");
+const ORD = "(?:st|nd|rd|th)?";
+// Each way a date is written, with how its numbers read. A date never starts inside a word or number, and never runs into
+// a longer number; a letter may follow ("2026-11-21T10:00").
+const DATE_FORMS = [
+  [`(\\d{4})([-/.])(\\d{1,2})\\2(\\d{1,2})`, (g) => ({ y: +g[1], m: +g[3], d: +g[4] })],
+  [`(\\d{1,2})([-/.])(\\d{1,2})\\2(\\d{4})`, (g) => numericDate(+g[1], +g[3], +g[4])],
+  [`(\\d{1,2})${ORD}[ -](${MON})\\.?,?[ -](\\d{4})`, (g) => ({ y: +g[3], m: MONTH_OF.get(g[2]), d: +g[1] })],
+  [`(${MON})\\.? (\\d{1,2})${ORD},? (\\d{4})`, (g) => ({ y: +g[3], m: MONTH_OF.get(g[1]), d: +g[2] })],
+].map(([src, read]) => ({ whole: new RegExp(`^${src}$`, "u"), any: new RegExp(`(?<![\\p{L}\\p{N}])${src}(?!\\p{N})`, "gu"), read }));
+
+// "a/b/yyyy": a number over 12 says which is the day; two equal numbers read the same either way; otherwise it is
+// ambiguous and keeps its two numbers in the order written.
+function numericDate(a, b, y) {
+  if (a > 12 && b > 12) return null;
+  if (a > 12) return { y, m: b, d: a };
+  if (b > 12 || a === b) return { y, m: a, d: b };
+  return { y, a, b, ambiguous: true };
+}
+
+function realDate(v) {
+  if (!v) return null;
+  if (v.ambiguous) return v.a >= 1 && v.b >= 1 ? v : null;
+  return v.m >= 1 && v.m <= 12 && v.d >= 1 && v.d <= new Date(Date.UTC(v.y, v.m, 0)).getUTCDate() ? v : null;
+}
+
+// The date `text` is, as a whole, or null (not a date, part of a sentence, no year, another language).
+function parseDate(text) {
+  const t = String(text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (t.length > 40) return null;
+  for (const f of DATE_FORMS) {
+    const g = f.whole.exec(t);
+    if (g) return realDate(f.read(g));
+  }
+  return null;
+}
+
+function sameDate(want, seen) {
+  if (want.ambiguous || seen.ambiguous) return !!(want.ambiguous && seen.ambiguous && want.y === seen.y && want.a === seen.a && want.b === seen.b);
+  return want.y === seen.y && want.m === seen.m && want.d === seen.d;
+}
+
+// How many dates in these texts are `want` (from parseDate), in any way of writing it.
+function countDates(parts, want) {
+  let n = 0;
+  for (const part of parts) {
+    const hay = String(part ?? "").replace(/\s+/g, " ").toLowerCase();
+    for (const f of DATE_FORMS) {
+      for (const g of hay.matchAll(f.any)) {
+        const seen = realDate(f.read(g));
+        if (seen && sameDate(want, seen)) n++;
+      }
+    }
+  }
+  return n;
+}
+
 // How often `text` is visibly on the page, frames included. A step inside a frame shows its result there (a tab's
 // panel in a demo frame, WF-2 Segment D): counting the top document alone read 0 before and 0 after, so the text
 // could never be "new" and the step never proven. Before and after are counted the same way.
 // `ending`: count only where the text ends a line (pageScripts.countTextEnding), see endsInBoundValue.
 // `pageOnly`: the page's text alone, never what a box holds (pageScripts.countPageText).
+// Words that are one whole date are counted as that date, however the page writes it (parseDate below); a date is one
+// whole token on the page, so `ending` has nothing to add there.
 async function countTextAcross(page, text, ending = false, pageOnly = false) {
   const frames = typeof page.frames === "function" ? page.frames() : [page];
+  const date = parseDate(text);
   let total = null;
   for (const f of frames) {
-    const n = await (ending ? evalOn(f, pageScripts.countTextEnding, pageOnly ? { text, pageOnly } : text)
+    const n = await (date ? evalOn(f, pageScripts.screenTexts, pageOnly).then((parts) => (Array.isArray(parts) ? countDates(parts, date) : null))
+      : ending ? evalOn(f, pageScripts.countTextEnding, pageOnly ? { text, pageOnly } : text)
       : pageOnly ? evalOn(f, pageScripts.countPageText, text) : evalOn(f, pageScripts.countTextOccurrences, text))
       .catch(() => null);
     if (typeof n === "number") total = (total || 0) + n;
@@ -372,9 +441,13 @@ async function evaluateAssertion(roots, page, a, inputs, baseline, capMs = 0, st
   }
 
   // An unrecognized type could not be checked at all (it still fails a required assertion, as before).
-  const answer = !recognized ? "cant_tell" : !ok ? "no" : cantTell ? "cant_tell" : "yes";
-  // `fresh` says "this finds the result itself". A button's or link's label that newly appeared (source "control") is
-  // weak proof of that: a look-alike "Edit" button elsewhere satisfies it. It still counts as a check that passed, no more.
+  // W-E (owner decision 2026-11-21): a button's or link's label that newly appeared (source "control") appears whether
+  // or not the action worked, and a look-alike "Edit" elsewhere satisfies it. The compiler's own (advisory) one is never
+  // proof: when it holds it says "can't tell", so a step with nothing else to show for it is "couldn't confirm". One a
+  // person ticked (required) is their own word for "it worked": it counts as a check that passed, no more.
+  const capped = a.source === "control" && !required;
+  const answer = !recognized ? "cant_tell" : !ok ? "no" : cantTell || capped ? "cant_tell" : "yes";
+  // `fresh` says "this finds the result itself". A control's label never does.
   const findsTheResult = fresh && answer === "yes" && a.source !== "control";
   return { type, target, required, ok, recognized, answer, ...(findsTheResult ? { fresh: true } : {}), elapsed_ms: Date.now() - startedAt };
 }
@@ -471,4 +544,6 @@ module.exports = {
   watchedTexts,
   watchedAbsents,
   withDeadline,
+  parseDate,
+  countDates,
 };

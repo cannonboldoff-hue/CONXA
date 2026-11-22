@@ -41,8 +41,8 @@ function appendRecoveryEvent(event) {
 }
 
 // BUILD-26 stage (a1) — the copilot's recovery-trail evidence. Filters by slug plus a ts floor.
-// Caps at 200 matches, newest last.
-function readRecentEvents(slug, sinceTs) {
+// Caps at 200 matches, newest last. `keep` (optional) narrows the lines before the cap.
+function readRecentEvents(slug, sinceTs, keep = null) {
   try {
     if (!fs.existsSync(RECOVERY_LOG)) return [];
     const floor = typeof sinceTs === "number" ? sinceTs : Date.parse(sinceTs || "") || 0;
@@ -54,6 +54,7 @@ function readRecentEvents(slug, sinceTs) {
       if (slug && rec.slug !== slug) continue;
       const t = Date.parse(rec.ts || "");
       if (Number.isFinite(t) && t < floor) continue;
+      if (keep && !keep(rec)) continue;
       out.push(rec);
     }
     return out.slice(-200);

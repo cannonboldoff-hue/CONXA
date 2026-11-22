@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { signalToLocator, gatherCandidates, bundleFingerprint, roleLocator, textLocator, toLocator } = require("../../app/resolve_adapter");
+const { signalToLocator, gatherCandidates, bundleFingerprint, roleLocator, textLocator, toLocator, _sha256 } = require("../../app/resolve_adapter");
 const { resolve } = require("../../app/resolver");
 
 const idInterp = (s) => s;  // identity interpolate for tests
@@ -184,6 +184,18 @@ test("gatherCandidates computes a stableHash from the payload", async () => {
   assert.strictEqual(typeof d.stableHash, "string");
   assert.strictEqual(d.stableHash.length, 64);  // sha256 hex
   assert.strictEqual(d._hashPayload, undefined);
+  assert.strictEqual(d.legacyStableHash, undefined);  // nothing added to the hash, no second one
+});
+
+test("gatherCandidates also keeps a form field's pre-field-hashing hash", async () => {
+  const el = { evaluate: async () => ({ role: "textbox", name: "", text: "", testid: "",
+    _hashPayload: "input|||field|id=userName&type=text", _legacyHashPayload: "input||" }) };
+  const root = rootWithCandidates({ role: [el] });
+  const signals = [{ engine: "role", selector: "internal:role=textbox", durability: 0.95 }];
+  const d = (await gatherCandidates([root], signals, idInterp, {}))[signals[0].selector][0];
+  assert.strictEqual(d.legacyStableHash, _sha256("input||"));
+  assert.notStrictEqual(d.stableHash, d.legacyStableHash);
+  assert.strictEqual(d._legacyHashPayload, undefined);
 });
 
 test("bundleFingerprint folds stable_hash into the fingerprint", () => {

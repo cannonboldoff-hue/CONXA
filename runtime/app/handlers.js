@@ -420,6 +420,17 @@ async function clickWithWitness(locator) {
   }
 }
 
+// A radio drawn by its own label (the input hidden or tucked behind it) is pressed on that label, as a person does; a
+// click aimed at the input itself is "intercepted" by the label. Anything else covering the input still fails as before.
+async function clickRadio(locator) {
+  const target = locator.first();
+  const via = await evalOn(target, pageScripts.coveringOwnLabel, undefined, 800).catch(() => null);
+  const label = via && via.wrap ? target.locator("xpath=ancestor::label[1]")
+    : via && via.forId ? target.locator(`xpath=ancestor::*[last()]//label[@for="${via.forId}"]`)
+      : null;
+  await clickWithWitness(label || locator);
+}
+
 const MAX_REPEAT_CLICKS = 200;
 
 const HANDLERS = {
@@ -504,9 +515,24 @@ const HANDLERS = {
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) {
       throw Object.assign(new Error(`This extract step has no valid output name ("${name}").`), { badInput: true });
     }
-    await runLocatorStep(page, step, inputs, async locator => {
-      inputs[name] = await readExtractValue(locator.first(), asObject(step.extract), inputs);
-    });
+    try {
+      await runLocatorStep(page, step, inputs, async locator => {
+        inputs[name] = await readExtractValue(locator.first(), asObject(step.extract), inputs);
+      });
+    } catch (err) {
+      // An empty element has no size, so it never counts as visible and the wait ran out ("didn't respond in time").
+      // If the one element the recording points at is there and holds nothing, say that instead (BUILD-107 (3)).
+      // Its value is never used: an element that could not be seen is not read.
+      if (err && !err.badInput && !err.ambiguous && !step._explicit_selector) {
+        const loc = await resolveStep(page, step, inputs).catch(() => null);
+        if (loc) {
+          let empty = null;
+          await readExtractValue(loc.first(), asObject(step.extract), inputs).catch((e) => { if (e && e.emptyValue) empty = e; });
+          if (empty) throw empty;
+        }
+      }
+      throw err;
+    }
   },
 
   dblclick: async (page, step, inputs) => {
@@ -624,14 +650,10 @@ const HANDLERS = {
         : "";
       const selector = optionSelector(option, choice) || fallback;
       if (!selector) throw new Error(`No selector available for option "${option.label || option.value}"`);
-      await runLocatorStep(page, stepWithSelector(step, selector), inputs, locator => {
-        return locator.click({ timeout: ACTION_TIMEOUT_MS });
-      });
+      await runLocatorStep(page, stepWithSelector(step, selector), inputs, locator => clickRadio(locator));
       return;
     }
-    await runLocatorStep(page, step, inputs, locator => {
-      return locator.click({ timeout: ACTION_TIMEOUT_MS });
-    });
+    await runLocatorStep(page, step, inputs, locator => clickRadio(locator));
   },
 
   date_pick: async (page, step, inputs) => {
@@ -1181,7 +1203,7 @@ async function readExtractValue(loc, spec, inputs = {}) {
     if (!m) throw Object.assign(new Error(`The value found ("${value.slice(0, 60)}") does not match the expected pattern ${spec.pattern}.`), { badInput: true });
     value = m[1] !== undefined ? m[1] : m[0];
   }
-  if (value === "") throw Object.assign(new Error("The element was found but it holds no value to extract."), { badInput: true });
+  if (value === "") throw Object.assign(new Error("The element was found but it holds no value to extract."), { badInput: true, emptyValue: true });
   return value;
 }
 

@@ -718,9 +718,9 @@ async function _signedOutBaseline(session, entryUrl) {
 // idea, see that module's docstring), reading only what evaluate() consumes: no cookie values, no
 // response bodies, no query string/fragment retained anywhere. Owns its own navigation to
 // definition.probe_url so the response listener is attached before anything loads — a caller that
-// already navigated `page` elsewhere gets overridden, which in practice is a no-op since
-// probe_url is always the app's login_url, the same address every existing call site already
-// used as entryUrl.
+// already navigated `page` elsewhere gets overridden. probe_url is the address the definition was
+// learned at: the app's login_url, or its signed-in (success) page when the sign-in page could not
+// tell signed in from signed out (AUTH-23); callers pass the definition's own address, never assume it.
 async function _gatherDefinitionObservation(page, probeUrl) {
   const responses = [];
   const onResponse = (resp) => {

@@ -500,6 +500,7 @@ test("runPlan: a step that sent data but showed no result is never done again", 
     (err) => {
       assert.strictEqual(err.recoveryHaltReason, "action-sent-request");
       assert.strictEqual(err.actionMayHaveTakenEffect, true);
+      assert.strictEqual(err.couldntConfirm, true, "the verdict is 'couldn't confirm', never a plain failure (BUILD-107 (4))");
       assert.match(err.message, /sent its data to the app.*not tried again/);
       return true;
     },
@@ -507,4 +508,9 @@ test("runPlan: a step that sent data but showed no result is never done again", 
   assert.deepStrictEqual(page.pressed, ["Enter"], "pressed exactly once");
   assert.ok(events.some(([c, d]) => c === "step_fail" && d.fc === "sent_no_result"));
   assert.ok(!events.some(([c]) => c === "repair_event" || c === "tier_ok"));
+  // The run record says the step sent data (BUILD-100), so a later failure card can list it.
+  const { RECOVERY_LOG } = require("../../app/recovery_log");
+  const decision = fs.readFileSync(RECOVERY_LOG, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
+    .find((r) => r.event === "step_decision" && r.slug === "slug-wf6-sent");
+  assert.strictEqual(decision.sent_data, true);
 });
