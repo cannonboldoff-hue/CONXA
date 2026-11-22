@@ -6,7 +6,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 77 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9) |
+| BUILD — Build Studio | 78 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7) |
 | EXEC — Execution & Recovery | 33 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
 | CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 15 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line, per-attempt), 18 |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 23 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **173** | |
+| **Total** | **174** | |
 
 ---
 
-## BUILD — Build Studio (77 done)
+## BUILD — Build Studio (78 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -918,6 +918,10 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 ### BUILD-111 (1, 2, 3, 4, 5, 6, 7, 9) — Compiler honesty loose ends
 **Resolved:** 2026-11-21 (E2E16-5, E2E16-9, E2E16-11)
 (1) The recompile helper works offline with only `SKILL_ALLOW_NO_PROVIDERS=1`. (2) The 0.45 vs 0.315 gap was an old Studio process still running pre-2026-11-18 score code; the helper now calls the same path as `cmd_compile`. (3) A radio hidden under its own label is pressed through that label (`coveringOwnLabel`, `clickWithWitness`). (4) Measured: 1.2 "can't be undone" questions per workflow (about 19% of clicks "unsure") on 43 short recordings. (5) The words the person typed are removed from shipped step words. (6) A date check accepts any way of writing the same whole date. (7) Page text is read once per question. (9) The "you see the name/email" options now come from the step's own recorded results. Part (8) is a site defect.
+
+### BUILD-117 (1, 2, 3, 4, 6, 7) — Problems found by the live Studio pass
+**Resolved:** 2026-11-22 (unit-proven; not yet seen working live)
+(1) A form send re-checks only the boxes typed on its own page since the last send: the page is told apart by tab and the recorded before/after address, not the compiled step's address (empty except on navigate steps), and an irreversible click now counts as a send (`build.py::_recorded_page`, `_sends_form`). (2) Answering "Yes, always the first one" works: on a read-a-value step the edit rules accept `entity_binding` only as exactly `{"confirmed": …}` on a step that already has a binding (`patch_gate.py`); chat still cannot send it. (3) Inside the one bound row, an absolute XPath is cut at the row's own depth and read from the row (`resolution.js::rowRelativeSignals`, `page_scripts.js::elementDepth`), so the right cell is read for any customer in tens of milliseconds, not after the 31 s fallback; when the bound row was found the failure card no longer asks "Did you type the right thing?" (`run.js`, `failure_response.js`). (4) At the end of a run (any end other than the pause asking about the box) the runtime presses Cancel on every open confirm/prompt, never OK (`run.js::dismissNativeQuestions`); a step stuck behind such a box reads "The page asked … in its own OK/Cancel box. Nobody could answer it during this run, so Cancel was pressed and the run stopped." (`errors.js::plainCause`); when Studio's stand-in model declines a box it resumes once with Stop (`workflows.py`). (6) A web-address check from the second opinion is applied only to a navigate step or a step whose recorded before and after addresses differ (`second_opinion.py`). (7) An empty typing event is kept only if the box held text just before (marked `cleared`) or earlier typing in the same box put text in it; the live list no longer skips a number (`bridge.js`, `session.py`, `build.py::_drop_empty_typing`). Tests: `test_typed_box_and_paste_link.py`, `test_question_cards_and_answers.py`, `test_second_opinion.py`, `test_recorder_bridge_js.py`, `test_recorder_session.py`, `test_test_flow.py`, `runtime/test/unit/test_bound_row_xpath.js`, `test_native_box_run_end.js`. Leftovers stay in `TODO.md` under BUILD-117.
 
 ## EXEC — Execution & Recovery (33 done)
 

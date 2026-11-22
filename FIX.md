@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Fixes for what the real-app test found — 2026-11-22**
+The real-app test found that "Yes, always the first result" was refused, that a form check could stop a run when nothing was wrong, and that the website's own OK/Cancel box could be left open and still act after a test failed. All three are fixed: the answer now works, the check only looks at boxes on the same page, and an unanswered OK/Cancel box is now cancelled when the test ends. Reading a value from a chosen row now works for any customer, empty typing no longer shows up as a step, and a "web address changes" check is only added to the step that causes it. These are tested in the lab but not yet seen in the real app.
+— 2026-11-22
+
 **The new fixes were tried in the real app, and most work — 2026-11-22**
 We ran the real Build Studio with test websites to see whether last week's fixes hold up outside the test lab. Saved sign-ins are locked, the question screens, the failure card and the Publish test button all work, and a pasted box reuses the first box's value. Three things do not work yet: answering "Yes, always the first result" is refused, the page's own OK/Cancel box confuses a test run inside Studio, and a form check can stop a run when nothing was wrong. These and a few smaller problems are now on the open list.
 — 2026-11-22
