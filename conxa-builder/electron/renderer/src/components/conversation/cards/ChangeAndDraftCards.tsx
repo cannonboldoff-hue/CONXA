@@ -13,6 +13,13 @@ export type CardProps = { threadId: string; item: ThreadItem }
 const asText = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v))
 const asPretty = (v: unknown) => (v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v, null, 2))
 
+// Internal names and element addresses (conversation/plain_words.py, harness.post_editor_hint_card). Cards saved by
+// older builds still carry them; they move behind the details row instead of the default view (BUILD-105 (3)).
+const TECHNICAL = /`|\b(?:entity_binding|validation|identity_bundle|handler_hints|run_if|input_binding|for_each|branch|target)\.\w+|\[object Object\]|\bundefined\b|role=|\[name=|internal:|xpath|#[A-Za-z][\w-]*|\bselector\b/i
+// An input's own name (send_email) is fine in a code-written summary; in a title or a model's reason it is a field name.
+const SNAKE = /\b[a-z]+_[a-z0-9_]+\b/
+export const readsPlainly = (text: string, strict = true) => !TECHNICAL.test(text) && !(strict && SNAKE.test(text))
+
 /** The recording being watched back before any question is asked: running, done, or failed with Retry. */
 export function WatchingVideoCard({ threadId, item }: CardProps) {
   const act = useThreadStore((s) => s.act)
@@ -45,7 +52,11 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
   const [note, setNote] = useState('')
   const state = String(item.state)
   const preview = (item.preview ?? null) as { before?: unknown; after?: unknown } | null
-  const summaries = (Array.isArray(item.summaries) ? item.summaries : []).map(String)
+  const allSummaries = (Array.isArray(item.summaries) ? item.summaries : []).map(String)
+  const summaries = allSummaries.filter((s) => readsPlainly(s, false))
+  const rawTitle = String(item.title ?? 'Proposed change')
+  const why = asText(item.why)
+  const technical = [rawTitle, why].filter((t) => t && !readsPlainly(t)).concat(allSummaries.filter((s) => !summaries.includes(s)))
   const proposals = Array.isArray(item.proposals) ? (item.proposals as { field?: unknown }[]) : []
   // The field's own name, for the person who opens the exact change; the title uses plain words.
   const field = proposals.length === 1 && typeof proposals[0]?.field === 'string' ? proposals[0].field : ''
@@ -59,7 +70,7 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
   return (
     <CardShell
       glyph={glyph}
-      title={String(item.title ?? 'Proposed change')}
+      title={readsPlainly(rawTitle) ? rawTitle : 'Proposed change'}
       meta={state === 'open' ? 'Not applied yet' : state === 'applied' ? (item.auto === true ? 'Applied automatically — you can undo it' : 'Applied') : state === 'undone' ? 'Undone' : state === 'dismissed' ? 'Dismissed' : undefined}
       footer={
         <>
@@ -80,22 +91,25 @@ export function PendingChangeCard({ threadId, item }: CardProps) {
         <ul className="list-disc space-y-1 pl-4 leading-[1.6]">
           {summaries.map((s, i) => <li key={i}>{s}</li>)}
         </ul>
-      ) : item.why ? <p className="leading-[1.6]">{asText(item.why)}</p> : null}
-      {preview && (preview.before !== undefined || preview.after !== undefined) && (
+      ) : why && readsPlainly(why) ? <p className="leading-[1.6]">{why}</p> : technical.length > 0 ? (
+        <p className="leading-[1.6]">A change to this workflow. Open “Show exact change” to see it.</p>
+      ) : null}
+      {((preview && (preview.before !== undefined || preview.after !== undefined)) || technical.length > 0) && (
         <details className="mt-2">
           <summary className="cursor-pointer text-xs text-[var(--text-meta)]">Show exact change</summary>
           <div className="mt-1 max-h-60 space-y-1 overflow-auto rounded-[8px] bg-[var(--bg-raised)] p-2.5 font-mono text-xs">
+            {technical.map((t, i) => <p key={i} className="whitespace-pre-wrap break-all text-[var(--text-meta)]">{t}</p>)}
             {field && <p className="text-[var(--text-meta)]">Field: {field}</p>}
-            {preview.before !== undefined && (
+            {preview?.before !== undefined && (
               <>
                 <p className="text-[var(--text-meta)]">Before</p>
-                <pre className="whitespace-pre-wrap break-all text-[var(--text-meta)] line-through">{asPretty(preview.before)}</pre>
+                <pre className="whitespace-pre-wrap break-all text-[var(--text-meta)] line-through">{asPretty(preview?.before)}</pre>
               </>
             )}
-            {preview.after !== undefined && (
+            {preview?.after !== undefined && (
               <>
                 <p className="text-[var(--text-meta)]">After</p>
-                <pre className="whitespace-pre-wrap break-all text-[var(--text-primary)]">{asPretty(preview.after)}</pre>
+                <pre className="whitespace-pre-wrap break-all text-[var(--text-primary)]">{asPretty(preview?.after)}</pre>
               </>
             )}
           </div>

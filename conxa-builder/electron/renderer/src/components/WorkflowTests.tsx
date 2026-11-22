@@ -246,6 +246,8 @@ function testStatusBadge(wf: Workflow) {
   )
 }
 
+// Edited since the last build. Run test still works (the backend builds a fresh test copy first, BUILD-104 (3)); only
+// the inputs are read from the saved workflow then, since the old copy may not list them yet.
 function isStaleTest(wf: Workflow, skillPackBuild: SkillPackBuild | null) {
   return (
     wf.edited_at != null &&
@@ -285,7 +287,7 @@ export function WorkflowTestRow({
   // An unanswered question blocks every test (the backend refuses too); "open" is the lifecycle's questions-waiting state.
   const lifecycleQ = useQuery({ queryKey: ['lifecycle', wf.id], queryFn: () => getLifecycle(wf.id), retry: false })
   const questionsOpen = lifecycleQ.data?.lifecycle.substate === 'open'
-  const blockedReason = questionsOpen ? 'Answer Studio’s questions first' : stale ? 'Rebuild the skill package first' : undefined
+  const blockedReason = questionsOpen ? 'Answer Studio’s questions first' : undefined
 
   // EXEC-35: visible elapsed time while a test runs, so a stuck "Testing…" reads as
   // "how long has this been going" instead of a static, unreadable label.
@@ -316,8 +318,10 @@ export function WorkflowTestRow({
       // download->upload binding exists to supply automatically.
       let declared: unknown = null
       try {
-        const compiled = await getCompiledSkill(wf.slug)
-        declared = compiled.files['input.json'] ?? null
+        if (!stale) {
+          const compiled = await getCompiledSkill(wf.slug)
+          declared = compiled.files['input.json'] ?? null
+        }
       } catch {
         declared = null
       }
@@ -352,7 +356,7 @@ export function WorkflowTestRow({
     return () => {
       alive = false
     }
-  }, [wf.id, wf.skill_id, wf.slug, wf.last_test_inputs])
+  }, [wf.id, wf.skill_id, wf.slug, wf.last_test_inputs, stale])
 
   async function runTest() {
     setLogs([])
@@ -433,7 +437,7 @@ export function WorkflowTestRow({
     setInputDialogOpen(false)
   }
 
-  const canRun = !stale && !questionsOpen && !running && Boolean(wf.skill_id)
+  const canRun = !questionsOpen && !running && Boolean(wf.skill_id)
 
   return (
     <div className="overflow-hidden rounded-lg border border-white/8 bg-white/[0.02]">
@@ -441,10 +445,8 @@ export function WorkflowTestRow({
       <div className="flex items-center justify-between gap-3 px-3 py-2.5">
         <div className="min-w-0 overflow-hidden">
           <p className="truncate text-sm font-medium text-white">{wf.name}</p>
-          {questionsOpen ? (
+          {questionsOpen && (
             <p className="mt-0.5 text-xs text-amber-400">Answer Studio’s questions first. Open the workflow’s conversation to answer them.</p>
-          ) : stale && (
-            <p className="mt-0.5 text-xs text-amber-400">Edited since last build — rebuild before testing</p>
           )}
           {wf.last_test_status === 'failed' && wf.last_test_error && !runError && logs.length === 0 && (
             <p className="mt-0.5 truncate text-xs text-red-300">{formatRuntimeError(wf.last_test_error)}</p>
@@ -485,8 +487,7 @@ export function WorkflowTestRow({
                 size="sm"
                 variant="outline"
                 onClick={() => openInputDialog('edit')}
-                disabled={stale || !wf.skill_id}
-                title={stale ? 'Rebuild the skill package first' : undefined}
+                disabled={!wf.skill_id}
               >
                 <SlidersHorizontal className="size-3.5" />
                 Inputs
@@ -596,7 +597,7 @@ export function WorkflowTestRow({
             <Button
               type="submit"
               form={`workflow-inputs-${wf.id}`}
-              disabled={inputDialogMode === 'run' ? !canRun : stale || !wf.skill_id}
+              disabled={inputDialogMode === 'run' ? !canRun : !wf.skill_id}
             >
               {inputDialogMode === 'run' ? (
                 running ? (

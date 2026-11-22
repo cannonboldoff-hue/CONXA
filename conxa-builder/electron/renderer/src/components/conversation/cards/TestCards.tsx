@@ -347,6 +347,7 @@ export function TestRunCard({ threadId, item }: CardProps) {
     // Not a result about the workflow: the test never ran, or its browser could not be trusted. Never "failed".
     const notAResult = outcome === 'couldnt_run' || outcome === 'package_build'
     const unsureTitle = outcome === 'partly_done' ? 'Only part of it was done' : 'Couldn’t confirm it worked'
+    const changed = (Array.isArray(item.changed_steps) ? item.changed_steps : []).map(String)
     return (
       <CardShell
         glyph={unsure || notAResult ? 'warn' : 'fail'}
@@ -368,6 +369,15 @@ export function TestRunCard({ threadId, item }: CardProps) {
             alt="The page at the moment the step failed"
             className="mt-3 max-h-56 w-full rounded-[8px] border border-[var(--border-subtle)] object-contain object-top"
           />
+        )}
+        {changed.length > 0 && (
+          // BUILD-100: the test stopped partway, but earlier steps were real. Say which, so the person can check the app.
+          <div className="mt-3">
+            <p className="text-sm text-[var(--text-primary)]">These steps already ran and may have changed something in the app. Check them there:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-[var(--text-secondary)]">
+              {changed.map((name, k) => <li key={k}>{name}</li>)}
+            </ul>
+          </div>
         )}
         <div className="mt-3">{rowList}</div>
         {item.nothing_sent === true && <p className="mt-2 text-xs text-[var(--text-secondary)]">Nothing was saved or sent.</p>}

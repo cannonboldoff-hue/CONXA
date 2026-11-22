@@ -9,7 +9,7 @@ import {
   flowSignInDone,
 } from '@/api/conversationApi'
 import { Button } from '@/components/ui/button'
-import { CardShell } from '@/components/conversation/parts'
+import { CardShell, Disclosure } from '@/components/conversation/parts'
 import type { CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
 import { useFlowAction } from '@/components/conversation/cards/useFlowAction'
 import { selectSession, useRecordingStore } from '@/store/recordingStore'
@@ -19,6 +19,14 @@ import { cn } from '@/lib/utils'
 import { NEEDS_ACTION_HINT } from '@/lib/errorMessages'
 
 const workflowIdOf = (threadId: string) => threadId.replace(/^wf:/, '')
+
+// The recorder hands over the start page's raw browser error ("navigation_error: Page.goto: net::ERR_…"): say it
+// plainly and keep the raw words one click away (BUILD-93 (17)).
+function plainRecordingWarning(w: string): string {
+  if (!/navigation_error|Page\.goto/i.test(w)) return w
+  if (/Timeout \d+ms exceeded/i.test(w)) return 'The start page is slow to open. Wait for it to show, then carry on.'
+  return 'This site can’t be reached — check the address.'
+}
 
 type Refs = { session_id?: string; embedded?: boolean } | undefined
 
@@ -210,7 +218,15 @@ export function RecordingCard({ threadId, item }: CardProps) {
               : `Recording everything you do in ${inPanel ? 'the browser on the right' : 'the browser window'}${item.host ? ` · ${String(item.host)}` : ''}`}
           </p>
           {last && <p className="mt-1 text-xs text-[var(--text-secondary)]">Last: {last.text}</p>}
-          {warnings.map((w) => <p key={w} className="mt-1 text-xs text-status-warn">▲ {w}</p>)}
+          {warnings.map((w) => {
+            const plain = plainRecordingWarning(w)
+            return (
+              <div key={w}>
+                <p className="mt-1 text-xs text-status-warn">▲ {plain}</p>
+                {plain !== w && <Disclosure label="Technical details">{w}</Disclosure>}
+              </div>
+            )
+          })}
           <h4 className="mb-1.5 mt-4 text-[0.6875rem] font-medium text-[var(--text-meta)]">Captured so far · {count}</h4>
           {session.rows.length === 0 ? (
             <p className="text-xs text-[var(--text-meta)]">Nothing yet — do the first step in the browser.</p>

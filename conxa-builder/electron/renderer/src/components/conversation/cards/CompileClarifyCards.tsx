@@ -105,7 +105,7 @@ export function CompileCard({ threadId, item }: CardProps) {
           </>
         }
       >
-        <p>Your workflow is saved, but I couldn’t finish working out what some steps are for. Building again usually fixes it.</p>
+        <p>Your workflow is saved, but I couldn’t finish working out what some steps are for. {typeof item.cause === 'string' && item.cause ? item.cause : 'Building again usually fixes it.'}</p>
         {showDetails && <p className="mt-2 whitespace-pre-wrap font-mono text-xs text-[var(--text-meta)]">{error || 'No details were reported.'}</p>}
       </CardShell>
     )
@@ -180,11 +180,21 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
     setBusy(false)
   }
 
-  // Questions sit in the thread in order; the arrows move between them.
-  const questionIds = (items ?? []).filter((i) => i.kind === 'card' && i.question_kind).map((i) => String(i.card_id))
-  const at = questionIds.indexOf(String(item.card_id))
-  const prevId = at > 0 ? questionIds[at - 1] : ''
-  const goPrev = () => document.getElementById(`q-${prevId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  // Questions sit in the thread in order; the arrows move between them. A question that was gone back to and asked
+  // again below is history, not a step back.
+  const questions = (items ?? []).filter((i) => i.kind === 'card' && i.question_kind && i.state !== 'reverted')
+  const at = questions.findIndex((i) => String(i.card_id) === String(item.card_id))
+  const prev = at > 0 ? questions[at - 1] : undefined
+  const prevId = prev ? String(prev.card_id) : ''
+  // Going back to an answered question opens it again, as its pencil does; an open one is only scrolled to.
+  const prevReopens = prev?.can_reopen === true && (prev.state === 'answered' || prev.state === 'skipped')
+  const goPrev = async () => {
+    if (!prevReopens) return void document.getElementById(`q-${prevId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setBusy(true)
+    const r = await act(threadId, prevId, 'reopen')
+    setBusy(false)
+    if (r && r.ok === false && r.message) toast.error(r.message)
+  }
 
   if (state === 'reverted') {
     return <p className="text-xs text-[var(--text-meta)]">{title} — went back, asked again below</p>
@@ -244,7 +254,8 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
       title={title}
       footer={
         <>
-          <Button variant="ghost" size="icon-sm" disabled={busy || !prevId} onClick={goPrev} aria-label="Previous question"><ChevronLeft /></Button>
+          <Button variant="ghost" size="icon-sm" disabled={busy || !prevId} onClick={() => void goPrev()} aria-label="Previous question"
+            title={prevReopens ? 'Go back to the previous question and choose again' : undefined}><ChevronLeft /></Button>
           {multi && <Button variant="ghost" size="icon-sm" disabled={busy} onClick={next} aria-label="Confirm and go to the next question"><ChevronRight /></Button>}
           {multi && <span className="text-xs text-[var(--text-meta)]">{choices.length > 0 ? 'Tick what applies, then press the arrow.' : 'Type what you’ll see, then press the arrow.'}</span>}
           {canCheck && <Button variant="outline" size="sm" disabled={busy} onClick={() => send('checked')}>I’ve checked it — it’s right</Button>}
@@ -320,6 +331,8 @@ type Summary = {
   queued?: number
   /** Things the harness was sure about, so it did not ask; say "ask me" to be asked them. */
   assumptions?: { qid: string; title: string; default: string }[]
+  /** "Does this cover everything?" was answered "No, a part is missing". */
+  missing_part?: boolean
 }
 
 /** The workflow as it stands. The counts add up across screens: compiled + added = steps now. */
@@ -356,6 +369,7 @@ export function WorkflowSummaryCard({ threadId, item }: CardProps) {
       footer={
         <>
           {canTest && <Button variant="brand" size="sm" disabled={busy} onClick={test}>Test it</Button>}
+          {s.missing_part && openEdit && <Button variant="outline" size="sm" onClick={openEdit}>Add the missing part</Button>}
           {s.uncertain > 0 && openEdit && (
             <Button variant="outline" size="sm" onClick={openEdit}>
               Review the {s.uncertain} uncertain step{s.uncertain === 1 ? '' : 's'}

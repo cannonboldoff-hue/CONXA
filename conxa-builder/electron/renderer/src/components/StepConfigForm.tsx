@@ -810,16 +810,17 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
       const primarySelector = selectors[0] || ''
       const fallbackSelectors = selectors.slice(1)
       const anchors = parseAnchorRows(values.anchors)
-      const patch: Record<string, unknown> = {
-        semantic_description: values.intent,
-        action: {
-          action: actionKind,
-        },
-        target: {
-          primary_selector: primarySelector,
-          fallback_selectors: fallbackSelectors,
-        },
-        signals: {
+      // Only what was edited is sent, so a value or name edit writes exactly what chat's same edit writes; sending the
+      // untouched address fields too turned `action` into an object and re-derived recovery (BUILD-105 (2)).
+      const shown = defaultsFromStep(step)
+      const edited = (...keys: (keyof FormValues)[]) => keys.some((k) => JSON.stringify(values[k]) !== JSON.stringify(shown[k]))
+      const addressEdited = edited('selectors', 'css', 'aria', 'text_based', 'xpath', 'anchors')
+      const patch: Record<string, unknown> = {}
+      if (edited('intent')) patch.semantic_description = values.intent
+      if (addressEdited) {
+        patch.action = { action: actionKind }
+        patch.target = { primary_selector: primarySelector, fallback_selectors: fallbackSelectors }
+        patch.signals = {
           selectors: {
             css: values.css || primarySelector,
             aria: values.aria,
@@ -827,17 +828,18 @@ export const StepConfigForm = memo(forwardRef<StepConfigFormHandle, Props>(
             xpath: values.xpath,
           },
           anchors,
-        },
-      }
-      if (canEditField('value')) {
-        patch.value = values.value
-        patch.action = {
-          action: actionKind,
-          value: values.value,
         }
       }
-      if (canEditField('validation')) patch.validation = { assertions: values.assertions }
-      Object.assign(patch, conditionPatch(step, values))
+      if (canEditField('value') && edited('value')) {
+        patch.value = values.value
+        if (addressEdited) patch.action = { action: actionKind, value: values.value }
+      }
+      if (canEditField('validation') && edited('assertions')) patch.validation = { assertions: values.assertions }
+      if (edited('run_if_input', 'run_if_op', 'run_if_value', 'on_missing')) Object.assign(patch, conditionPatch(step, values))
+      if (Object.keys(patch).length === 0) {
+        methods.reset(shown) // nothing differs from the saved step: nothing to write
+        return
+      }
       try {
         const res = await patchStep(skillId, patchIndex, patch, false, path)
         onWorkflowUpdated(res.workflow)

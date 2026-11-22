@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { CardShell, Disclosure } from '@/components/conversation/parts'
 import { useOpenEdit } from '@/components/conversation/cards/CompileClarifyCards'
-import type { CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
+import { readsPlainly, type CardProps } from '@/components/conversation/cards/ChangeAndDraftCards'
 import { useThreadStore } from '@/store/threadStore'
 
 /** A typed command with a side effect (record, compile, test, approve…). Nothing has happened until Confirm. */
@@ -55,10 +55,15 @@ export function ActionLinkCard({ threadId, item }: CardProps) {
     else if (target === 'workflow' && item.workflow_id) navigate(`/w/${String(item.workflow_id)}`)
     else toast.error('That isn’t available yet.')
   }
-  // The model's reason may name element addresses: kept one click away, never in the title.
+  // The model's reason may name element addresses: kept one click away, never in the title. A card saved by an
+  // older build has the reason in its title ("Open step 3 in Human Edit — role=button…"), so it is split here.
+  const [head, ...tail] = String(item.title ?? 'Open').split(' — ')
+  const reason = tail.join(' — ')
+  const oldReason = reason && !readsPlainly(reason, false) ? reason : ''
+  const detail = [typeof item.detail === 'string' ? item.detail : '', oldReason].filter(Boolean).join('\n')
   return (
-    <CardShell title={String(item.title ?? 'Open')} footer={<Button variant="brand" size="sm" onClick={go}>Open</Button>}>
-      {typeof item.detail === 'string' && item.detail ? <Disclosure label="Technical details">{item.detail}</Disclosure> : null}
+    <CardShell title={oldReason ? head : String(item.title ?? 'Open')} footer={<Button variant="brand" size="sm" onClick={go}>Open</Button>}>
+      {detail ? <Disclosure label="Technical details">{detail}</Disclosure> : null}
     </CardShell>
   )
 }
