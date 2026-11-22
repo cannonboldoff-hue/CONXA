@@ -38,6 +38,12 @@ function plainCause(err) {
   // A deliberate stop (a popup with no recorded answer, an app fault, a bad input, "couldn't confirm") is thrown
   // with a sentence written for a person. It is the summary; wrapping it as "unexpected" would hide the cause.
   if (err && (err.forkDecisionNeeded || err.fault || err.badInput || err.agentSpanRefused)) return { summary: detail, detail: "" };
+  // The step hung on the page's own OK/Cancel box that no one here may answer (cascade.js marks it); run.js presses
+  // Cancel before the run ends. Said as such, not as "the page didn't respond" (BUILD-117 (4)).
+  if (err && err.dialogPending && (err.dialogPendingType === "confirm" || err.dialogPendingType === "prompt")) {
+    const words = String(err.dialogPendingMessage || "").trim().slice(0, 200);
+    return { summary: `The page asked${words ? ` "${words}"` : " a question"} in its own OK/Cancel box. Nobody could answer it during this run, so Cancel was pressed and the run stopped.`, detail };
+  }
   for (const [re, summary] of PATTERNS) {
     if (re.test(raw)) return { summary, detail };
   }

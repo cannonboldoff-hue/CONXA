@@ -328,7 +328,7 @@ const PRIMARY = Symbol("primary-target");
 // before giving up, for a step whose target may be virtualized out of the DOM.
 async function resolveStep(page, step, inputs, scrollState) {
   const bundle = asObject(step.identity_bundle);
-  const signals = asArray(bundle.signals).filter(s => s && s.selector);
+  let signals = asArray(bundle.signals).filter(s => s && s.selector);
   if (!signals.length) {
     throw Object.assign(
       new Error("Step has no identity_bundle.signals — pack must be recompiled"),
@@ -367,6 +367,10 @@ async function resolveStep(page, step, inputs, scrollState) {
     return roots[0];
   }
   const fp = bundleFingerprint(bundle, interpolate, inputs);
+  // Inside the bound row, a recorded absolute XPath is read from that row (BUILD-117 (3)).
+  if (roots !== frameRoots) signals = await rowRelativeSignals(roots, signals);
+  // The row the run's input names is on the page: a miss below is about the element, never the input (Studio's card).
+  const rowFound = roots !== frameRoots && !!eb.identifier && roots.length > 0;
   let map = await gatherCandidates(roots, signals, interpolate, inputs);
   let result = resolveSignals(signals, fp, { queryAll: sel => map[sel] || [] }, {});
   if (!(result && result.node && result.node._loc) && !(result && result.ambiguous)) {
@@ -409,10 +413,31 @@ async function resolveStep(page, step, inputs, scrollState) {
     }
     throw Object.assign(
       new Error(`Ambiguous element resolution (no signal cleared uniqueness gate)${why ? ` [${why}]` : ""}`),
-      { ambiguous: true, signalCounts, ambiguousCandidates },
+      { ambiguous: true, signalCounts, ambiguousCandidates, ...(rowFound ? { rowFound } : {}) },
     );
   }
-  throw Object.assign(new Error("Element not found (resolve miss)"), { resolveMiss: true, signalCounts });
+  throw Object.assign(new Error("Element not found (resolve miss)"), { resolveMiss: true, signalCounts, ...(rowFound ? { rowFound } : {}) });
+}
+
+// A recorded absolute XPath (/html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[2]) names the recorded row by its place. Read
+// from inside the bound row Playwright makes it ./html[1]/... and it finds nothing, so a step bound to a row by an
+// input missed whenever that row was not the recorded one (BUILD-117 (3)). The part below the row is read from the row
+// (./td[2]), only when the path passes through an element of the row's own tag at the row's own depth; otherwise the
+// signal is left as it was. shortcut: one bound row only (one frame); several frames keep the absolute path.
+const isAbsoluteXpath = (s) => s.engine === "xpath" && /^(xpath=)?\/[^/]/.test(String(s.selector));
+async function rowRelativeSignals(rows, signals) {
+  if (rows.length !== 1 || !signals.some(isAbsoluteXpath)) return signals;
+  let at = null;
+  try { at = await evalOn(rows[0], pageScripts.elementDepth); } catch (_) { at = null; }
+  if (!at || at === EVAL_TIMED_OUT) return signals;
+  return signals.map((s) => {
+    if (!isAbsoluteXpath(s)) return s;
+    const parts = String(s.selector).replace(/^xpath=/, "").split("/").slice(1);
+    const own = parts[at.depth - 1];
+    if (!own || own.replace(/\[\d+\]$/, "").toLowerCase() !== at.tag) return s;
+    const below = parts.slice(at.depth);
+    return { ...s, selector: below.length ? `./${below.join("/")}` : "." };
+  });
 }
 
 const GATE_ENABLED = process.env.CONXA_GATE !== "0";

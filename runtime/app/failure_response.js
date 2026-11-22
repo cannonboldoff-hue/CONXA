@@ -37,6 +37,15 @@ const artifactStore = require("./artifact_store");
 const recoveryLog = require("./recovery_log");
 const { inputsReferenced } = require("./interpolate");
 
+// The run inputs the failing step reads. An input that named the step's row is left out when that row was found on
+// the page (err.rowFound): the value was right, and Studio must not ask "did you type the right thing?" (BUILD-117 (3)).
+function inputRefs(err, inputs) {
+  const refs = inputsReferenced(err.failedStep, inputs);
+  if (!err.rowFound || !err.failedStep) return refs;
+  const named = new Set(inputsReferenced({ id: (err.failedStep.entity_binding || {}).identifier || "" }, inputs).map((r) => r.id));
+  return refs.filter((r) => !named.has(r.id));
+}
+
 // One normalized class for the failure, read from flags the throw sites already set. The Studio
 // uses it to tell "could not find the element" apart from every other failure.
 // Deliberate stops come first: they were not a failure to find or click anything, and calling them "other" is
@@ -526,7 +535,7 @@ async function _writeStudioEvidence(page, err, resolvedEntry, steps, failedAt, s
       // The surface a deliberate stop was about (title, buttons, whether it blocks the page), as data. The generic
       // overlay above is only the recovery ladder's view of an intercepted click.
       left_open_surface: err.leftOpenSurface || null,
-      input_refs: inputsReferenced(err.failedStep, deps.inputs),
+      input_refs: inputRefs(err, deps.inputs),
       signal_counts: Array.isArray(err.signalCounts) ? err.signalCounts : null,
       // Names (never scores) of the elements an "ambiguous" failure could not choose between.
       ambiguous_candidates: Array.isArray(err.ambiguousCandidates) ? err.ambiguousCandidates : null,
@@ -746,4 +755,5 @@ module.exports = {
   dismissRejectedNoteText,
   _writeStudioEvidence,
   failureKind,
+  inputRefs,
 };

@@ -994,6 +994,14 @@ function rowListCount(rows) {
   return parents.length;
 }
 
+// How deep an element sits below the document (html = 1) and its tag: where a recorded absolute XPath passes through
+// it (resolution.js::rowRelativeSignals).
+function elementDepth(el) {
+  var n = 0;
+  for (var e = el; e; e = e.parentElement) n++;
+  return { depth: n, tag: String(el.tagName || "").toLowerCase() };
+}
+
 // How often `needle` ends a line of the page's visible text (or a visible box's value), with at most closing
 // punctuation after it: "Saved Carol" in "Saved Carol." but not in "Saved Carol Ann". For a check whose words end in
 // the record the run acts on, where a longer look-alike record must not count.
@@ -1166,6 +1174,7 @@ module.exports = {
   rowsHoldingWholeValue,
   rowsContainingValue,
   rowListCount,
+  elementDepth,
   countTextEnding,
   countTextOccurrences,
   countPageText,

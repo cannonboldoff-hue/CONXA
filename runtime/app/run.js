@@ -202,6 +202,7 @@ function stepFailure(step, stepIndex, cause, preShot, warnings) {
     // Dropped here until now, so the class of a find-failure was lost before it reached the evidence.
     if (cause.ambiguous) err.ambiguous = true;
     if (cause.resolveMiss) err.resolveMiss = true;
+    if (cause.rowFound) err.rowFound = true;
     if (Array.isArray(cause.signalCounts)) err.signalCounts = cause.signalCounts;
     if (Array.isArray(cause.ambiguousCandidates)) err.ambiguousCandidates = cause.ambiguousCandidates;
     if (cause.entityNotFound) err.entityNotFound = true;
@@ -2501,6 +2502,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   }
 
   let endedAt = null;
+  let pausedOnBox = false;
   const ran = new Set(); // source_step_key of every step that executed and passed (feeds resolveLaterProofs)
   try {
     for (let i = startFrom; i < steps.length; i++) {
@@ -2518,8 +2520,14 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
         throw e;
       }
     }
+  } catch (e) {
+    pausedOnBox = !!(e && e.forkPause && e.info && e.info.native);
+    throw e;
   } finally {
     closeNotebook(ctx); // however the plan ends, no listener outlives it
+    // An OK/Cancel box nobody answered is pressed Cancel before the run ends, never left open: a host panel's view
+    // outlives the run, and OK pressed there later would still act (BUILD-117 (4)). Only the pause asking about it keeps it.
+    if (!pausedOnBox) await dismissNativeQuestions(dialogQueue);
   }
   // The run is not over while an alert nobody answered is still up: the app spoke after the last step.
   if (endedAt === null && steps.length) failOnUnexpectedAlert(ctx, state, steps[steps.length - 1], steps.length - 1, null, null);
