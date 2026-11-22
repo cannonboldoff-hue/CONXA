@@ -113,6 +113,9 @@ function createWindow() {
   };
   mainWindow.on("maximize", sendMaximizeState);
   mainWindow.on("unmaximize", sendMaximizeState);
+  // A minimized window lays its views out at 0x0; the panel holds a run's page at size meanwhile.
+  mainWindow.on("minimize", () => void browserPanel.setMinimized(true));
+  mainWindow.on("restore", () => void browserPanel.setMinimized(false));
   // A chat turn parked on a confirm card must not hang forever if the window goes away.
   mainWindow.on("closed", () => settleConfirms(false));
 
@@ -137,10 +140,14 @@ const ERROR_MESSAGES = {
   not_signed_in: "Sign in to CONXA in Settings to use this mode.",
   not_authenticated: "Your CONXA sign-in expired. Sign in again in Settings.",
   session_expired: "Your CONXA sign-in expired. Sign in again in Settings.",
-  login_timeout: "Sign-in timed out. Try again.",
+  login_timeout: "Sign-in timed out. Click Sign in to try again.",
+  login_cancelled: "", // the person pressed Cancel: not an error, nothing to say
   auth_not_configured: "Sign-in isn't set up in this build.",
   login_identity_missing: "CONXA couldn't read your account details after sign-in. Try again.",
   execute_context_not_available: "You don't have Conxa Execute access in that workspace anymore.",
+  llm_all_providers_failed: "Conxa couldn't reach its AI service just now. Try again in a moment.",
+  llm_reasoning_only_no_content: "The AI didn't write an answer this time. Try again.",
+  workspace_concurrency_limit: "This workspace is busy with other requests. Try again in a few seconds.",
   no_session: "No active chat session.",
   panel_empty: "Nothing is open in the browser panel yet.",
 };
@@ -167,7 +174,8 @@ function handle(channel, fn) {
     try {
       return await fn(event, payload);
     } catch (e) {
-      const code = e.code || `${channel.replace(/[:.]/g, "_")}_error`;
+      // login_timeout, not_authenticated... are thrown as a plain Error(code): their message is the code.
+      const code = e.code || (Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, e.message) ? e.message : `${channel.replace(/[:.]/g, "_")}_error`);
       console.error(`ipc ${channel} failed:`, e);
       return fail(code, humanMessage(code, e.message));
     }
@@ -223,6 +231,7 @@ handle("sessions:rename", async (_e, payload) => ({ ok: true, title: await sessi
 handle("sessions:search", async (_e, payload) => ({ ok: true, results: await sessionsStore.searchSessions(payload && payload.query) }));
 
 handle("auth:login", async () => ({ ok: true, identity: await authService.login() }));
+handle("auth:cancel", () => { authService.cancelLogin(); return { ok: true }; });
 
 ipcMain.handle("auth:logout", () => {
   authService.logout();
@@ -539,7 +548,11 @@ async function chatSend(payload) {
       return text;
     },
   });
-  if (!result.ok) return fail("model_error", result.error);
+  if (!result.ok) {
+    // The server sometimes answers with a bare code (execute_context_not_available, ...): say it in words.
+    const err = String(result.error || "");
+    return fail("model_error", /^[a-z][a-z0-9_]*$/.test(err) ? humanMessage(err) : err);
+  }
 
   if (reasoning) {
     const last = result.messages[result.messages.length - 1];

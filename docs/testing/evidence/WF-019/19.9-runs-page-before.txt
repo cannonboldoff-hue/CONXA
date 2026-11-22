@@ -1,0 +1,102 @@
+Conxa
+Browser
+New chat
+Ctrl N
+Search
+Skills
+Runs
+Recents
+hello from solo
+hello from new seat
+hello from alpha
+hello from gamma
+Run wf17-a-only please
+Run wf17-slow fifth
+Run wf17-slow fourth
+Run wf17-slow third
+Run wf17-slow now
+Run wf17-slow
+What skills do I have?
+What skills do I have?
+What skills do I have?
+SP
+Solo Person
+Personal
+Runs
+The latest skill runs on this computer, from chat and from forms.
+All
+Done
+Failed
+Waiting
+wf17-a-only
+Done
+5 minutes ago
+0:23
+Chat
+wf17-slow
+Done
+5 minutes ago
+0:15
+Form
+wf17-slow
+Done
+6 minutes ago
+0:16
+Chat
+wf17-slow
+Done
+7 minutes ago
+0:15
+Chat
+wf17-slow
+Failed
+8 minutes ago
+0:34
+Chat
+wf17-slow
+Done
+9 minutes ago
+0:15
+Chat
+wf17-slow
+Done
+10 minutes ago
+0:15
+Chat
+wf17-slow
+Done
+11 minutes ago
+0:15
+Form
+wf17-a-only
+Done
+12 minutes ago
+0:02
+Form
+wf17-a-only
+Waiting for sign-in
+14 minutes ago
+0:00
+Form
+wf17-a-only
+Failed
+16 minutes ago
+0:00
+Form
+wf17-a-only
+Failed
+17 minutes ago
+0:41
+Chat
+CONXA
+Settings
+General
+Software update
+General
+Appearance
+Theme
+Light
+Dark
+Your CONXA account
+Signed in as solo@example.test.
+Sign out

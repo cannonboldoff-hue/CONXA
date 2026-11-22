@@ -35,7 +35,16 @@ function chatOf(runId) {
   return _chatOf.get(runId) ?? null;
 }
 
+// Only the shield, which nothing drives, is parked at _HIDDEN. A page lays out at its view's size (zoomed), so a
+// view shrunk to 0x0 is a 0-wide page and one born at 0x0 stays that way: every other view is hidden with
+// setVisible(false) and keeps its bounds, so a run's page keeps the size it was recorded at whether or not
+// anyone can see it (same as Build Studio's panel).
 const _HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
+const _validRect = (r) => !!r && r.width > 0 && r.height > 0;
+// The page height a fit-to-width pane may ask for. runtime/app/page_geometry.js mirrors MIN_H (a pytest keeps them equal).
+const MIN_H = 480, MAX_H = 1440;
+let _minimized = false; // the window is minimized: its views lay out at 0x0, so a run's page is held by an override instead
+let _lastRect = null; // the last real pane rect, so a new tab is placed without waiting for the renderer to report
 
 let _win = null; // the BaseWindow/BrowserWindow whose contentView hosts every run's views
 let _onTabsChanged = null; // (runId, tabs) => void — wired by main.js to push to the renderer
@@ -66,8 +75,8 @@ function _hostOf(url) {
 function _describeTab(run, t) {
   const wc = t.view.webContents;
   const url = wc.isDestroyed() ? "" : wc.getURL();
-  const title = wc.isDestroyed() ? "" : wc.getTitle();
   const shown = _isMarker(url) ? "" : url;
+  const title = wc.isDestroyed() || !shown ? "" : wc.getTitle(); // a marker page's title is its internal address
   return {
     id: t.id,
     active: t.id === run.activeTabId,
@@ -90,10 +99,12 @@ function _emitTabsChanged(runId, meta) {
   _onTabsChanged(runId, run.tabs.map((t) => _describeTab(run, t)), meta);
 }
 
-// Fixed-viewport runs: the page always sees viewport.width x height at DPR 1, drawn at `run.scale`
-// (see setActiveBounds), so a site lays out as it did when recorded however big the panel is. Same CDP
-// call as Build Studio's panel (conxa-builder/electron/browser_panel.js), issued through Electron's
-// debugger so it survives navigation.
+// Fixed-viewport runs: the page always lays out viewport.width wide, so a site looks as it did when recorded
+// however big the panel is. Same approach as Build Studio's panel (conxa-builder/electron/browser_panel.js):
+// the runtime drives the page over CDP, and CDP input is NOT mapped through a metrics override's `scale` (a click
+// lands at 1/scale of where it was aimed), so the page is shrunk with the view's zoom factor instead; the page
+// lays out at pane/zoom = viewport.width CSS pixels and CDP input lands exactly. No override is set while the run
+// is on screen. Overrides are issued through Electron's debugger so they survive navigation.
 function _debugger(tab) {
   if (tab.view.webContents.isDestroyed()) return null;
   const dbg = tab.view.webContents.debugger;
@@ -106,13 +117,51 @@ function _debugger(tab) {
   }
 }
 
+function _setZoom(tab, z) {
+  try { if (!tab.view.webContents.isDestroyed()) tab.view.webContents.setZoomFactor(z); } catch (err) {
+    console.error("browser_panel: setZoomFactor failed", err);
+  }
+}
+
+// On screen (placed, window up): zoom, and any override this tab held is cleared. Minimized, or no pane rect yet
+// (a view made or sized then reads 0x0): zoom 1 and an override at scale 1 holds the page at width x height, so
+// input still lands. The override is never sent with a scale other than 1.
 function _emulate(run, tab) {
   if (!run.viewport) return;
+  if (!_minimized && run.rect) {
+    _setZoom(tab, run.scale);
+    if (!tab.overridden) return;
+    tab.overridden = false;
+    const dbg = _debugger(tab);
+    return dbg ? dbg.sendCommand("Emulation.clearDeviceMetricsOverride").catch(() => {}) : undefined;
+  }
+  _setZoom(tab, 1);
   const dbg = _debugger(tab);
   if (!dbg) return;
+  tab.overridden = true;
   return dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
-    width: run.viewport.width, height: run.viewport.height, deviceScaleFactor: 1, mobile: false, scale: run.scale,
+    width: run.viewport.width, height: run.height, deviceScaleFactor: 1, mobile: false, scale: 1,
   }).catch((err) => console.error("browser_panel: setDeviceMetricsOverride failed", err));
+}
+
+// main.js reports the window's minimize / restore. At restore the shown run is laid out again, since bounds set
+// while minimized only take effect once the window has a size.
+async function setMinimized(on) {
+  if (_minimized === !!on) return;
+  _minimized = !!on;
+  for (const run of _runs.values()) {
+    if (!run.viewport) continue;
+    for (const t of run.tabs) {
+      if (t.view.webContents.isDestroyed() || !t.view.webContents.getURL()) continue; // no debugger before a first page
+      if (!_minimized) {
+        const dbg = _debugger(t);
+        if (dbg) await dbg.sendCommand("Emulation.clearDeviceMetricsOverride").catch(() => {});
+        t.overridden = false;
+      }
+      await _emulate(run, t);
+    }
+    if (!_minimized && run.shownRect && run.rect && run.activeTabId) _layout(run, run.activeTabId, run.rect);
+  }
 }
 
 // The page's real size, read back, and put right if it drifted. Chromium ignores a repeat of the override
@@ -131,10 +180,13 @@ async function _ensureGeometry(run, tab) {
       return Array.isArray(v) ? v : null;
     } catch (_) { return null; }
   };
-  const fits = (v) => !!v && v[0] === run.viewport.width && v[1] === run.viewport.height && Math.abs(v[2] - 1) < 0.01;
+  // A zoomed page's DPR is the screen's DPR times the zoom and its layout size is the pane divided by the zoom, so
+  // it is off by a pixel from rounding: the width must be 1280 and the height the run's, whatever the DPR.
+  const fits = (v) => !!v && Math.abs(v[0] - run.viewport.width) <= 1 && Math.abs(v[1] - run.height) <= 2;
   let live = await read();
   if (fits(live)) return { ok: true, live };
   try { await dbg.sendCommand("Emulation.clearDeviceMetricsOverride"); } catch (_) { /* the set below still runs */ }
+  tab.overridden = false;
   await _emulate(run, tab);
   live = await read();
   return { ok: fits(live), live };
@@ -145,7 +197,13 @@ async function _ensureGeometry(run, tab) {
 async function ensureGeometry(runId) {
   const run = _runs.get(runId);
   if (!run) throw new Error(`browser_panel: no run ${runId}`);
-  const results = await Promise.all(run.tabs.map((t) => _ensureGeometry(run, t)));
+  const check = () => Promise.all(run.tabs.map((t) => _ensureGeometry(run, t)));
+  let results = await check();
+  if (!results.every((r) => r.ok) && run.rect && run.activeTabId) {
+    // A view left without its size is only put right by laying the run out again from the pane's last rect.
+    _layout(run, run.activeTabId, run.rect);
+    results = await check();
+  }
   return { ok: results.every((r) => r.ok), tabs: results.length };
 }
 
@@ -153,7 +211,7 @@ function _viewport(v) {
   if (!v) return null;
   const width = Math.round(Number(v.width)), height = Math.round(Number(v.height));
   if (!(width > 0 && height > 0)) throw new Error("viewport needs a positive width and height");
-  return { width, height };
+  return v.fit === "width" ? { width, height, fit: "width" } : { width, height };
 }
 
 // While the runtime drives a run, the person's mouse must not reach the page: a hover opens a menu the recording never
@@ -238,17 +296,21 @@ function _createTab(run, runId, label, meta, loginKey, background = false, human
   for (const ev of ["page-title-updated", "did-navigate", "did-navigate-in-page", "did-start-loading", "did-stop-loading"]) {
     view.webContents.on(ev, () => _emitTabsChanged(runId));
   }
-  view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // hidden until the renderer reports a rect
-  view.webContents.loadURL(_markerUrl(runId, tabId)).catch(() => {});
-  _emulate(run, { view }); // after loadURL: attaching the debugger to a never-navigated view crashes Electron
+  const tab = { id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null, human: Boolean(loginKey) || human };
+  view.setVisible(false); // hidden until the renderer reports a rect; sized below from the last one, never 0x0
+  view.webContents.loadURL(tab.markerUrl).catch(() => {});
+  _emulate(run, tab); // after loadURL: attaching the debugger to a never-navigated view crashes Electron
   // A navigation (marker page -> real site, a new render process) can drop the override, leaving the
   // page at full size inside a shrunk view. Check (and put right) each time a page is ready.
-  for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => { _ensureGeometry(run, { view }).catch(() => {}); });
-  run.tabs.push({ id: tabId, view, markerUrl: _markerUrl(runId, tabId), label: label || null, loginKey: loginKey || null, human: Boolean(loginKey) || human });
+  for (const ev of ["dom-ready", "did-finish-load"]) view.webContents.on(ev, () => { _ensureGeometry(run, tab).catch(() => {}); });
+  run.tabs.push(tab);
   if (_win) _win.contentView.addChildView(view);
   // A background tab (a judge/prover probe, focus:false) must not steal the shown view from the
-  // sign-in the user is typing into — it stays parked at 0x0 until closed.
+  // sign-in the user is typing into — it stays hidden (at its size) until closed.
   if (!background || run.activeTabId === null) run.activeTabId = tabId;
+  // Placed now, from what the panel already knows, so a step that opens a tab reads its size right away.
+  const rect = run.rect || _lastRect;
+  if (rect) { run.rect = rect; _layout(run, run.activeTabId, rect); }
   _emitTabsChanged(runId, meta);
   return tabId;
 }
@@ -306,7 +368,8 @@ async function saveDownload(runId, url, dest, timeoutMs = 120000) {
 function newView(runId, { label, focus, loginKey, viewport } = {}) {
   let run = _runs.get(runId);
   if (!run) {
-    run = { partition: _partitionFor(runId), tabs: [], activeTabId: null, downloads: [], viewport: _viewport(viewport), scale: 1 };
+    run = { partition: _partitionFor(runId), tabs: [], activeTabId: null, downloads: [], viewport: _viewport(viewport), scale: 1, rect: null, hidden: true };
+    run.height = run.viewport ? run.viewport.height : null; // the page's live CSS height; follows the pane with fit "width"
     _runs.set(runId, run);
     _hookDownloads(runId, run.partition);
   }
@@ -423,50 +486,84 @@ async function runEnd(runId) {
   if (_onTabsChanged) _onTabsChanged(runId, []);
 }
 
-// Renderer reports where the (non-tab-strip) panel rect is, in window-local pixels.
-// Only the active tab's view gets shown there; every other tab in every run is
-// parked off-screen (0x0) rather than destroyed, so switching tabs is instant.
+// A viewport with fit "width" fills the rect: the page stays viewport.width CSS pixels wide, is drawn at
+// rect.width / viewport.width, and its height is whatever then fills the rect (kept between MIN_H and MAX_H, so a
+// short or tall pane gets a centred or top-anchored page).
+function _fitBox(run, rect) {
+  const { width: W } = run.viewport;
+  let s = rect.width / W;
+  let H = Math.round(rect.height / s);
+  if (H < MIN_H) {
+    H = MIN_H;
+    s = rect.height / MIN_H;
+    const width = Math.round(W * s);
+    return { s, H, shown: { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y, width, height: rect.height } };
+  }
+  if (H > MAX_H) {
+    H = MAX_H;
+    return { s, H, shown: { x: rect.x, y: rect.y, width: rect.width, height: Math.round(MAX_H * s) } };
+  }
+  return { s, H, shown: rect };
+}
+
+// Renderer reports where the (non-tab-strip) panel rect is, in window-local pixels. Only the active tab's view
+// is shown there; every other view is hidden (never shrunk, never destroyed), so switching tabs is instant.
+// A zero rect (a folded panel, a minimized window) is "nothing to show here", not "make the page zero wide".
 function setActiveBounds(runId, tabId, rect) {
   const run = _runs.get(runId);
   if (!run) return;
-  for (const [id, r] of _runs) {
-    if (id === runId) continue;
-    for (const t of r.tabs) t.view.setBounds(_HIDDEN); // a native view never goes away on its own
-    if (r.shield) r.shield.setBounds(_HIDDEN);
-    r.shownRect = null;
-  }
+  if (!_validRect(rect)) { hideAll(); return; }
+  _lastRect = rect;
+  run.rect = rect;
+  run.hidden = false;
+  for (const [id, r] of _runs) if (id !== runId) _hideRun(r);
+  _layout(run, tabId, rect);
+  _shown = { runId, tabId };
+}
+
+// Sizes every tab of the run for `rect` and shows `tabId` there. A tab that is not shown keeps the same bounds
+// (hidden, never shrunk), so switching tabs, or a hidden panel, never changes what a page measures.
+function _layout(run, tabId, rect) {
   let shown = rect;
   if (run.viewport) {
-    // Letterboxed: the view keeps the viewport's aspect ratio, shrunk (never enlarged) to fit the rect
-    // and centred; every tab of the run shares one scale so none shows at a stale size.
-    const { width: W, height: H } = run.viewport;
-    const s = Math.min(rect.width / W, rect.height / H, 1);
-    const width = Math.round(W * s), height = Math.round(H * s);
-    shown = { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y + Math.floor((rect.height - height) / 2), width, height };
-    if (s > 0 && Math.abs(s - run.scale) > 1e-4) {
-      run.scale = s;
-      for (const t of run.tabs) _emulate(run, t);
+    let s, H = run.height;
+    if (run.viewport.fit === "width") {
+      ({ s, H, shown } = _fitBox(run, rect));
+    } else {
+      // An older runtime sends no `fit`: letterboxed, shrunk (never enlarged) to fit the rect and centred.
+      const { width: W, height: VH } = run.viewport;
+      s = Math.min(rect.width / W, rect.height / VH, 1);
+      const width = Math.round(W * s), height = Math.round(VH * s);
+      shown = { x: rect.x + Math.floor((rect.width - width) / 2), y: rect.y + Math.floor((rect.height - height) / 2), width, height };
     }
+    // Every tab of the run shares one scale and height (hidden ones too), so a tab never shows at a stale size;
+    // a tab still held by an override (placed before any rect, or while minimized) moves to the zoom.
+    const changed = s > 0 && (Math.abs(s - run.scale) > 1e-4 || H !== run.height);
+    if (changed) { run.scale = s; run.height = H; }
+    for (const t of run.tabs) if (changed || t.overridden) _emulate(run, t);
   }
   for (const t of run.tabs) {
-    t.view.setBounds(t.id === tabId ? shown : _HIDDEN);
+    t.view.setBounds(shown);
+    t.view.setVisible(t.id === tabId && !run.hidden);
   }
   run.activeTabId = tabId;
-  run.shownRect = shown;
-  _layoutShield(run, run.tabs.find((t) => t.id === tabId), shown);
-  _shown = { runId, tabId };
+  run.shownRect = run.hidden ? null : shown;
+  _layoutShield(run, run.tabs.find((t) => t.id === tabId), run.shownRect);
 }
 
 // The last tab placed on screen — what "Capture the browser panel" grabs.
 let _shown = null;
 
-// The user hid the panel: park every view. Showing it again re-reports bounds via setActiveBounds.
+function _hideRun(run) {
+  for (const t of run.tabs) t.view.setVisible(false);
+  if (run.shield) run.shield.setBounds(_HIDDEN);
+  run.shownRect = null;
+  run.hidden = true;
+}
+
+// The user hid the panel: hide every view. Showing it again re-reports bounds via setActiveBounds.
 function hideAll() {
-  for (const run of _runs.values()) {
-    for (const t of run.tabs) t.view.setBounds(_HIDDEN);
-    if (run.shield) run.shield.setBounds(_HIDDEN);
-    run.shownRect = null;
-  }
+  for (const run of _runs.values()) _hideRun(run);
   _shown = null;
 }
 
@@ -490,18 +587,16 @@ async function capture(runId, tabId, { type = "jpeg", quality = 80 } = {}) {
   return { data: buf.toString("base64") };
 }
 
-// The user moved to another chat: park every view that belongs to a different chat at 0x0. The
-// views stay alive (the run keeps going); coming back re-places them via setActiveBounds.
+// The user moved to another chat: hide every view that belongs to a different chat. The views stay alive and
+// keep their size (the run keeps going); coming back re-places them via setActiveBounds.
 function setVisibleChat(chatId) {
   for (const [runId, run] of _runs) {
     const owner = _chatOf.get(runId);
     if (owner && owner !== chatId) {
-      for (const t of run.tabs) t.view.setBounds(_HIDDEN);
-      if (run.shield) run.shield.setBounds(_HIDDEN);
-      run.shownRect = null;
+      _hideRun(run);
       if (_shown && _shown.runId === runId) _shown = null;
     }
   }
 }
 
-module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, capture, loginDone, saveDownload, ensureGeometry, setInputOpen };
+module.exports = { init, tagRun, chatOf, newView, newTab, closeTab, navigate, runEnd, setActiveBounds, setVisibleChat, hideAll, captureVisible, capture, loginDone, saveDownload, ensureGeometry, setInputOpen, setMinimized };

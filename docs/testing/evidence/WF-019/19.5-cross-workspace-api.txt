@@ -1,0 +1,5 @@
+solo user -> target 'org_alpha': 403 {"detail":"execute_context_not_available","message":"execute_context_not_available","request_id":"e2fe6053cd7172cd3c0a9c
+solo user -> target 'org_gamma': 403 {"detail":"execute_context_not_available","message":"execute_context_not_available","request_id":"36a8fa86ae7a7d536012e3
+solo user -> target 'personal_user_mock1': 403 {"detail":"execute_context_not_available","message":"execute_context_not_available","request_id":"74df76d71ea37afccc6abf
+solo user -> target 'personal_user_solo': 200 data: {"type": "text", "text": "MOCK MODEL "}  data: {"type": "text", "text": "says hello "}  data: {"type": "text", "te
+solo user -> target '': 200 data: {"type": "text", "text": "MOCK MODEL "}  data: {"type": "text", "text": "says hello "}  data: {"type": "text", "te

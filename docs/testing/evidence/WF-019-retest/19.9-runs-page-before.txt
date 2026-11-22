@@ -1,0 +1,93 @@
+Conxa
+Browser
+New chat
+Ctrl N
+Search
+Skills
+Runs
+Recents
+Run wf19-clicks
+Run wf19-clicks
+Run wf19-clicks
+hello from alpha
+hello from the grant workspace
+What skills do I have?
+Run wf19-long
+Run wf19-long
+Run wf19-long
+Run wf19-long
+Run wf19-long
+Run wf17-slow
+Run wf17-slow
+Run wf17-slow
+Run wf17-slow
+What skills do I have?
+MP
+Mock Person 1
+Alpha Team (mock)
+Runs
+The latest skill runs on this computer, from chat and from forms.
+All
+Done
+Failed
+Waiting
+wf19-clicks
+Done
+1 minute ago
+0:48
+Chat
+wf19-clicks
+Done
+2 minutes ago
+0:46
+Chat
+wf17-a-only
+Done
+7 minutes ago
+0:02
+Form
+wf19-long
+Done
+9 minutes ago
+0:53
+Chat
+wf19-long
+Done
+10 minutes ago
+0:59
+Chat
+wf19-long
+Done
+11 minutes ago
+0:53
+Chat
+wf19-long
+Done
+12 minutes ago
+0:46
+Chat
+wf19-long
+Done
+13 minutes ago
+0:46
+Chat
+wf17-slow
+Done
+16 minutes ago
+0:16
+Chat
+wf17-slow
+Done
+18 minutes ago
+0:17
+Chat
+wf17-slow
+Done
+19 minutes ago
+0:17
+Chat
+wf17-slow
+Done
+21 minutes ago
+0:59
+Chat

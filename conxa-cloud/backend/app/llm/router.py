@@ -372,6 +372,16 @@ class LLMRouter:
         # other vision task is unaffected (multimodal stays False).
         multimodal = for_vision and (_copilot_modality(task, payload) == "multimodal")
 
+        # Counts what already reached the caller: a retry after that would repeat it (the caller joins every
+        # attempt's chunks, so a tool call's arguments come out as `{}{}`) and bill a second generation.
+        forwarded = 0
+        stream_to = on_delta
+        if on_delta is not None:
+            def stream_to(item: Any) -> None:
+                nonlocal forwarded
+                forwarded += 1
+                on_delta(item)
+
         for attempt in range(self.max_retries):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -423,7 +433,7 @@ class LLMRouter:
                     min(timeout_ms, int(remaining * 1000)),
                     error_detail=error_detail,
                     attempt=attempt,
-                    on_delta=on_delta,
+                    on_delta=stream_to,
                     for_vision=for_vision,
                     multimodal=multimodal,
                 )
@@ -435,6 +445,11 @@ class LLMRouter:
 
             if result is not None:
                 return result
+
+            if forwarded:
+                if error_detail is not None:
+                    error_detail.append("router: stream failed after part of the reply was already sent; not retried")
+                break
 
             # Continue to next provider on failure
             _debug_log(f"router: retry {attempt + 1}/{self.max_retries} for task {task}")
@@ -636,6 +651,7 @@ class LLMRouter:
                 # error surfaces as an HTTPError before any body streams (handled below), or as
                 # an empty stream, which the caller (route_text/route_vision) treats as failure.
                 full_text_parts: list[str] = []
+                saw_tool_call = False
                 observed: dict[str, Any] = {}
                 with request.urlopen(req, timeout=timeout_s) as res:
                     status_code = getattr(res, "status", None) or getattr(res, "code", None)
@@ -647,6 +663,8 @@ class LLMRouter:
                         for item in _iter_sse_deltas(res, observed=observed):
                             if item["type"] == "text":
                                 full_text_parts.append(item["text"])
+                            elif item["type"] == "tool_call":
+                                saw_tool_call = True
                             on_delta(item)
                     else:
                         for chunk in _iter_sse_text_deltas(res, observed=observed):
@@ -677,7 +695,8 @@ class LLMRouter:
                             "response_bytes": len(full_text.encode("utf-8")),
                         },
                     )
-                if not full_text:
+                # A turn that is only a tool call (no words before it) is a normal reply, not an empty one.
+                if not full_text and not saw_tool_call:
                     # BUILD-33: a reasoning-capable model can spend its whole completion budget
                     # on hidden chain-of-thought and write zero content — a real, paid-for
                     # generation, not a dead provider. Every other retry against the same entry

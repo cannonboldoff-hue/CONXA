@@ -1,0 +1,2 @@
+{"grant_id":"JI8x9DSNxnqJyx5oNVzr4avrF3c2iNk1aXXb9jgARE0","workspace_id":"org_gamma","email":"mock1@example.test","status":"pending","granted_at":"2026-11-22T19:21:00Z","granted_by":"user_admin","claimed_at":null,"claimed_user_id":null,"revoked_at":null,"revoked_by":null}
+{"detail":"execute_grant_already_claimed","message":"execute_grant_already_claimed","request_id":"87b1620a9ad48fa888fd45c6"}

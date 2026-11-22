@@ -1,0 +1,4 @@
+newseat@example.test claimed user_newseat
+mock1@example.test claimed user_mock1
+newseat@example.test revoked user_newseat
+mock1@example.test revoked user_mock1

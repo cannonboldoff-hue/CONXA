@@ -1,0 +1,6 @@
+     45 "POST /api/v1/llm/proxy/text/stream
+     25 "GET /api/v1/execute/contexts
+      3 "POST /api/v1/entitlements/execute-grants
+      3 "GET /api/v1/entitlements/execute-grants
+      2 "POST /api/v1/entitlements/execute-grants/revoke
+      1 "GET /healthz

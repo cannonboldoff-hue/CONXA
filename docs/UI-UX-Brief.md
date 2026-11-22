@@ -929,6 +929,7 @@ The Execute desktop app (`conxa-execute/app/renderer/src/`) is built from the th
 
 | Screen | What it shows |
 |---|---|
+| Sign in | Before anything else: the Conxa mark, "Sign in to Conxa" and one button. While the browser is open the button reads "Waiting for your browser..." (disabled) with a **Cancel** link under it; Cancel returns to the plain button with no error and frees the sign-in at once. A timeout shows "Sign-in timed out. Click Sign in to try again." |
 | Title bar | Sidebar toggle, back/forward, the current chat's name (menu: Rename, Delete), the **Browser** show/hide toggle (disabled until a run opens the panel), window controls |
 | Sidebar | Conxa mark, **New chat** (Ctrl N), **Search / Skills / Runs**, Recents (a green dot while a chat's turn is running), account footer (name + active workspace, opens Settings) |
 | Home (empty chat) | "Good {morning/afternoon/evening}, {first name}", the composer, chips for three skills (prefill "Run …") and **Browse all skills** |

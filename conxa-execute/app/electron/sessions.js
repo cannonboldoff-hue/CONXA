@@ -9,9 +9,7 @@
  * never calls the backend. (Signing in to CONXA is required to reach any
  * mode including BYOK, but BYOK's chat requests still go straight from this
  * device to your own model endpoint, never through conxa-execute's backend.)
- * Top-up/Subscription/workspace-pool modes additionally push each session to
- * the backend session API (see execute_client.js) for cross-device sync;
- * this store stays the source of truth for local reads.
+ * Chats are never sent to the backend: they stay on this device only.
  */
 const crypto = require("crypto");
 const storage = require("../vendor/opencode/storage/storage");

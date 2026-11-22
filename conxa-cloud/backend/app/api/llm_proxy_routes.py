@@ -339,6 +339,7 @@ def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> Str
 
     def _generate():
         full_text_parts: list[str] = []
+        tool_text_parts: list[str] = []
         saw_tool_call = False
         worker_error: Exception | None = None
         try:
@@ -358,6 +359,9 @@ def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> Str
                         full_text_parts.append(item["text"])
                     elif item.get("type") == "tool_call":
                         saw_tool_call = True
+                        # The call's name and arguments are generated output too: a turn that is only a
+                        # tool call must not be metered as zero tokens.
+                        tool_text_parts.append(f"{item.get('name') or ''}{item.get('arguments_delta') or ''}")
                     yield f"data: {json.dumps(item)}\n\n"
                 else:
                     full_text_parts.append(item)
@@ -388,7 +392,7 @@ def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> Str
                 yield f"data: {json.dumps({'error': message, 'error_detail': error_detail[:8]})}\n\n"
                 return
 
-            output_tokens = llm_metering.estimate_response_tokens({"text": full_text})
+            output_tokens = llm_metering.estimate_response_tokens({"text": full_text + "".join(tool_text_parts)})
             llm_metering.record_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
             try:
                 if usage_class == "execute_chat":

@@ -94,6 +94,7 @@ export type Bridge = {
   searchSessions: (p: { query: string }) => Promise<{ ok: boolean; results?: SearchHit[]; message?: string }>;
   captureScreen: () => Promise<{ ok: boolean; dataUrl?: string; message?: string }>;
   authLogin: () => Promise<{ ok: boolean; identity?: Identity; code?: string; message?: string }>;
+  authCancel: () => Promise<{ ok: boolean }>;
   authLogout: () => Promise<{ ok: boolean }>;
   authStatus: () => Promise<{ ok: boolean; signedIn: boolean; identity?: Identity | null }>;
   getContexts: () => Promise<{ ok: boolean; contexts?: ExecuteContext[]; active_workspace_id?: string; message?: string }>;

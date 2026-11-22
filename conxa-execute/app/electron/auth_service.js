@@ -223,7 +223,15 @@ function devLogin() {
   return claimsFromTokens({ userinfo });
 }
 
+// The sign-in the person is waiting on, if any: rejecting it with login_cancelled frees its callback port at once.
+let cancelPending = null;
+
+function cancelLogin() {
+  if (cancelPending) cancelPending(new Error("login_cancelled"));
+}
+
 async function login() {
+  cancelLogin(); // a newer sign-in replaces one the person abandoned
   if (devSkipAuth()) return devLogin();
   if (!clerkDomain() || !clientId()) {
     // ponytail: dev-only bypass, real Clerk app not wired up yet — remove once CONXA_EXECUTE_CLERK_DOMAIN/CLIENT_ID are set
@@ -238,6 +246,8 @@ async function login() {
     resolveCode = res;
     rejectCode = rej;
   });
+  codePromise.catch(() => {}); // a cancel can land before the race below listens
+  cancelPending = rejectCode;
 
   const { server, port } = await findServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
@@ -275,14 +285,16 @@ async function login() {
 
   await shell.openExternal(authorizeUrl);
 
-  let code;
+  let code, timer;
   try {
     code = await Promise.race([
       codePromise,
-      new Promise((_resolve, reject) => setTimeout(() => reject(new Error("login_timeout")), 300_000)),
+      new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("login_timeout")), 300_000); }),
     ]);
   } finally {
+    clearTimeout(timer);
     server.close();
+    if (cancelPending === rejectCode) cancelPending = null;
   }
 
   const tokens = await exchangeCode(code, verifier, redirectUri);
@@ -326,4 +338,4 @@ async function currentIdentity() {
   return identity && identity.user_id ? identity : null;
 }
 
-module.exports = { login, logout, getToken, currentIdentity };
+module.exports = { login, cancelLogin, logout, getToken, currentIdentity };

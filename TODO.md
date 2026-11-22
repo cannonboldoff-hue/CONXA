@@ -29,13 +29,13 @@ Counts are still-open items only.
 | Tier | When | Remaining |
 |---|---|---|
 | PILOT — P0 · Must fix | Before pilot | 12 |
-| PILOT — P1 · Should fix | Before pilot | 37 |
+| PILOT — P1 · Should fix | Before pilot | 38 |
 | PILOT — P2 · Verify live & polish | Before pilot | 37 |
 | LAUNCH — P1 · Required | Before launch | 12 |
 | LAUNCH — P2 · Should have | Before launch | 53 |
 | AFTER LAUNCH | After launch | 35 |
 | PARKED | Only if it starts to hurt | 18 |
-| **Total** | | **204** |
+| **Total** | | **205** |
 
 ---
 
@@ -62,7 +62,7 @@ Things that corrupt a workflow without telling anyone, stop releases and updates
 - **Complexity:** S — set `CLOUD_API_URL` = `https://apis.conxa.in` and `CLOUD_ADMIN_TOKEN` = the prod Render service's own `CONXA_ADMIN_TOKEN` value as a repo variable/secret, then either re-tag or manually POST the already-built `host-v3.2.0`/`app-v3.2.0` artifacts (URLs/SHA-256 already known) to seed stable without a rebuild.
 - **Success criteria:** `curl https://apis.conxa.in/api/v1/manifest.json` shows `conxa_runtime`/`conxa_app` at the latest tagged versions, and a subsequent tag+push updates it automatically with no manual step.
 
-- [ ] **AUTH-26 — Studio's local work is machine-wide, not per account (WF-17 17.4, found 2026-11-22).** After Sign out and a sign-in as a different account, the first account's workflows, groups, chats and saved sign-ins still show, and Publish / Build Installer send them to the new account's company. Owner decision 2026-11-22: leave as designed. Options if it is ever reopened: record the owner and ask on account switch (small), or a data folder per account (large). Plan in `docs/testing/workflow-handoffs/WF-017.md`.
+- [ ] **AUTH-26 — Studio's local work is machine-wide, not per account (WF-17 17.4, found 2026-11-22).** After Sign out and a sign-in as a different account, the first account's workflows, groups, chats and saved sign-ins still show, and Publish / Build Installer send them to the new account's company. Owner decision 2026-11-22: leave as designed. **Same for Conxa Execute (WF-19 F3, owner decision 2026-11-23):** its chats and run history are also machine-wide (`history.js`, `sessions.js`), left as designed and listed as limitation 12 in `docs/testing/01-WORKFLOWS-TO-TEST.md`; reopening this item reopens both. Options if it is ever reopened: record the owner and ask on account switch (small), or a data folder per account (large). Plan in `docs/testing/workflow-handoffs/WF-017.md`.
 
 ### BUILD-23 — A failed compile drops steps silently and reports no warning naming them
 - **Category:** Builder
@@ -185,7 +185,7 @@ https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
 
 - **Update (2026-09-02, H-1 was unwinnable by construction — fixture fixed, capability gap logged):** with the tab round-trip above fixed, the same mega-workflow got as far as **step 15** and failed with `destructive_recovery_halted`. Not a timeout: `ACTION_TIMEOUT_MS` is 2500 ms and `locators.js::withLocator` already re-resolves every 120 ms inside it (~20 attempts); the run ended at 2.8 s because `cascade.js` saw `step.destructive === true` and gave the step Layer 1 and nothing more. Root cause: `docs/testing/fixtures/mutator.html` labelled its drifting button **`Submit`**, so the compiled intent was `click_submit_button`, `action_semantics.py::commit_intent_hit` matched the default `commit_intent_substrings: ["submit","confirm"]`, and `classify_consequence` returned `irreversible`. H-1 therefore paired a name-drifting element with a commit-intent target — the very PROD-3 rule that protects real Submit buttons made the drift test permanently unpassable. **Fixed in the fixture, not the policy** (PROD-3 deliberately untouched): the button's label set is now `Go`/`Send`/`Do It`/`Proceed` and its id is `tgt-go`, chosen to clear both `commit_intent_substrings` and `submit_text_tokens`; all drift behaviour (id/class rewrite, random relabel, `appendChild` to end of body every 700 ms) is unchanged. `conxa-cloud/tests/test_fixture_intent_classification.py` now reads the label array straight out of the fixture and asserts against the **live** policy file, so both a fixture edit and a policy-vocabulary change fail loudly; it includes a guard-the-guard case proving the old `Submit` shape still classifies irreversible. Docs updated with the standing constraint (`01-WORKFLOWS-TO-TEST.md`, `03-ONE-WORKFLOW-RUNBOOK.md`), plus the stale `npx serve -l 3000` on the Phase 0 line corrected to the :8099 server every other fixture uses. **Still open:** segment A must be **re-recorded** — `destructive: true` is baked into the existing `execution.json`, so the fixture fix does nothing for pack `mega-workflow-fc8031f2`. That same re-record is already required for the popup `tab_4` fix above, so one recording validates both.
 
-## PILOT — P1: Should fix before the pilot (37 remaining)
+## PILOT — P1: Should fix before the pilot (38 remaining)
 
 Real bugs and gaps a pilot customer is likely to hit in the first week, plus the legal and signing items a pilot installer needs. Do these once P0 is done.
 
@@ -680,6 +680,12 @@ Real bugs and gaps a pilot customer is likely to hit in the first week, plus the
 - **Category:** Runtime / Build Studio
 - **Items:** (a) *Say why it is waiting:* a hand-over resume waits behind a failed run's recovery park that still holds the site's lock (up to 180 s) and the person gets no feedback; keep the banner up with a "waiting for another workflow on this site" line. (b) *Host exe resume command:* `runtime/host/bootstrap.js` prints "Resume signal sent" without checking that anything is waiting; `arm()` should write a `<run_id>.waiting` file with its pid and the command should refuse, in plain words, when there is none or the pid is dead (ships only with a new installer). (c) *Authoring the check:* Human Edit and chat have no way to set "before going on, check that the page shows..." (`resume_when`, compiled from text on the page / address contains like `wait_until`); also `on_failure: "continue"` on a hand-over is compiled but never read by the runtime, so do not offer it until it is. (d) *Answering "Pause and let a person tick it"* does not insert the hand-over step; a second Confirm card is needed. (e) Resuming inside a loop at the row (reuse RT-9's `loopCursor`) stays under EXEC-22.
 - **Why required:** found by the WF-018 test (`docs/testing/workflow-handoffs/WF-018.md`); none blocks the main hand-over path now that it stops in plain words.
+- **Complexity:** M (each item is S-M on its own).
+
+### EXEC-74 — Conxa Execute follow-ups from the WF-019 test (left out of the first fix)
+- **Category:** Execute / Runtime
+- **Items:** (a) *F7, a form run parked on sign-in is never followed:* the card stays "Waiting for sign-in" and the history row stays `awaiting_auth` after the run ended; only chat runs are followed (`main.js::followRun` needs a history-only branch and a push to the form card). (b) *F10, two `conxa-runtime` processes per launch:* `mcp_client.js::ensureEngine` has no in-flight promise so two first calls both spawn; no leak seen. (c) *F11, closing the browser panel mid-run is not confirmed or explained:* the page disappears and the chat says nothing until the step times out ~34 s later. (d) *F12, the chat that is running a skill is missing from Recents until its turn ends:* after "New chat" the person cannot get back to it mid-run. (e) *F13, a seat workspace is named "Workspace" in the picker:* re-check on real Clerk first (the mock admin token carried no `org_name`). (f) *Solo Personal row has no `credits_remaining`:* `entitlement_routes.py::get_execute_contexts` adds it after the credits loop.
+- **Why required:** found by the WF-019 test (`docs/testing/workflow-handoffs/WF-019.md`); none blocks a run now that the page-size and tool-only-reply bugs are fixed.
 - **Complexity:** M (each item is S-M on its own).
 
 ## PILOT — P2: Verify live and polish (37 remaining)

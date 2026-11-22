@@ -1,0 +1,1 @@
+execute_electron_procs=4 runtimes=2 pw_chromium_procs=0 pw_chromium_browsers=0 node=8 python=8 electron_all=8

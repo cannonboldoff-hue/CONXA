@@ -193,6 +193,7 @@ export function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
   const [switchingContext, setSwitchingContext] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [sidebarError, setSidebarError] = useState("");
   const [browserHidden, setBrowserHidden] = useState(false);
   const [browserRuns, setBrowserRuns] = useState(0);
@@ -345,6 +346,11 @@ export function App() {
   useEffect(() => { void api.panel.setChat({ chatId: sessionId }); }, [api, sessionId]);
 
   useEffect(() => {
+    // The result of one skill's form run must never show under another skill.
+    setFormMsg("");
+    setFormDetail("");
+    setFormOk(true);
+    setFormDetailsOpen(false);
     if (!selected) {
       setSchema({});
       setValues({});
@@ -408,7 +414,7 @@ export function App() {
     const r = await api.execute({ skill: selected.skill, workspace_id: selected.workspace_id, inputs: values });
     setBusy(false);
     setFormOk(Boolean(r.ok));
-    setFormMsg(!r.ok ? (r.message || "Run failed") : `${statusLabel(r.status || "failed")}${r.run_id ? ` · ${r.run_id}` : ""}`);
+    setFormMsg(!r.ok ? (r.message || "Run failed") : statusLabel(r.status || "failed"));
     setFormDetail(r.ok ? r.text || "" : "");
     await refreshHistory();
   }
@@ -506,12 +512,20 @@ export function App() {
 
   async function login() {
     setLoginError("");
+    setSigningIn(true);
     const r = await api.authLogin();
+    if (r.code === "login_cancelled") return; // the person pressed Cancel: back to the plain button, no error
+    setSigningIn(false);
     if (r.ok) {
       await refreshAccount();
     } else {
       setLoginError(r.code === "auth_not_configured" ? "Sign-in isn't set up yet. Contact support." : r.message || "Sign-in failed.");
     }
+  }
+
+  async function cancelLogin() {
+    setSigningIn(false);
+    await api.authCancel();
   }
 
   async function logout() {
@@ -700,7 +714,8 @@ export function App() {
         <BrandMark size={34} />
         <div className="text-[22px] font-medium tracking-[-0.02em]">Sign in to Conxa</div>
         <p className="max-w-xs text-center text-sm text-fg-muted">Sign in with your Conxa account to use Execute.</p>
-        <Button className="px-5 py-2.5" onClick={login}>Sign in with Conxa</Button>
+        <Button className="px-5 py-2.5" onClick={login} disabled={signingIn}>{signingIn ? "Waiting for your browser..." : "Sign in with Conxa"}</Button>
+        {signingIn && <button type="button" className="text-sm text-fg-muted underline hover:text-fg" onClick={cancelLogin}>Cancel</button>}
         {loginError && <p className="max-w-xs text-center text-sm text-err">{loginError}</p>}
       </div>
     );

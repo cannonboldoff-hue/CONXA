@@ -22,6 +22,8 @@ class FakeWebContents {
     this.calls = [];
     this.handlers = {};
     this.emulations = []; // Emulation.setDeviceMetricsOverride params, in order
+    this.zoom = 1; // setZoomFactor, the way a driven run is shrunk to fit the pane
+    this.title = "";
     this.methods = []; // every CDP method sent, in order
     this.live = null; // what the page reports as [innerWidth, innerHeight, devicePixelRatio]; null = unreadable
     this.debugger = {
@@ -51,7 +53,8 @@ class FakeWebContents {
   on(ev, fn) { this.handlers[ev] = fn; }
   loadURL(u) { this.url = u; this.calls.push(`load:${u}`); return Promise.resolve(); }
   getURL() { return this.url; }
-  getTitle() { return ""; }
+  getTitle() { return this.title; }
+  setZoomFactor(z) { this.zoom = z; }
   isDestroyed() { return false; }
   isLoading() { return false; }
   reload() { this.calls.push("reload"); }
@@ -59,8 +62,9 @@ class FakeWebContents {
   close() { this.closed = true; }
 }
 class FakeView {
-  constructor() { this.webContents = new FakeWebContents(); this.bounds = null; }
+  constructor() { this.webContents = new FakeWebContents(); this.bounds = null; this.visible = true; }
   setBounds(b) { this.bounds = b; }
+  setVisible(v) { this.visible = v; }
 }
 
 const realLoad = Module._load;
@@ -95,20 +99,99 @@ test("newView returns the tabId and carries the label into the tab descriptor", 
   assert.strictEqual(last.tabs[0].url, "", "the internal marker URL must never reach the address bar");
 });
 
-test("a fixed-viewport run letterboxes into a small panel and every tab, new ones too, sees the full page size", () => {
-  const vp = { width: 1280, height: 720 };
+test("the marker page never becomes a tab label", () => {
+  panel.newView("run-marker");
+  const wc = added[added.length - 1].webContents;
+  wc.title = "about:blank?conxa_run=run-marker&conxa_tab=ab12"; // what the blank marker page calls itself
+  wc.handlers["page-title-updated"]();
+  assert.strictEqual(last.tabs[0].label, "New tab");
+  wc.url = "https://app.test/home";
+  wc.title = "Home";
+  wc.handlers["page-title-updated"]();
+  assert.strictEqual(last.tabs[0].label, "Home");
+});
+
+test("a run with no pane rect yet is held at 1280 x height by an override at scale 1, and moves to zoom (override cleared) once placed", async () => {
+  // Runs before any test reports a pane rect, so the module has no "last rect" to place the tab from.
+  const vp = { width: 1280, height: 720, fit: "width" };
+  const { tabId } = panel.newView("run-unplaced", { viewport: vp });
+  const wc = added[added.length - 1].webContents;
+  assert.deepStrictEqual(wc.emulations, [{ width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, scale: 1 }]);
+  assert.strictEqual(wc.zoom, 1);
+  panel.setActiveBounds("run-unplaced", tabId, { x: 0, y: 0, width: 640, height: 600 }); // zoom 0.5, height 1200
+  await settle();
+  assert.strictEqual(wc.zoom, 0.5);
+  assert.ok(wc.methods.includes("Emulation.clearDeviceMetricsOverride"), "the override is cleared once the pane places it");
+  // a minimized window lays views out at 0x0: the page is held by an override at zoom 1, and comes back at restore
+  wc.methods.length = 0; wc.emulations.length = 0;
+  await panel.setMinimized(true);
+  assert.strictEqual(wc.zoom, 1);
+  assert.deepStrictEqual(wc.emulations, [{ width: 1280, height: 1200, deviceScaleFactor: 1, mobile: false, scale: 1 }]);
+  wc.methods.length = 0; wc.emulations.length = 0;
+  await panel.setMinimized(false);
+  assert.ok(wc.methods.includes("Emulation.clearDeviceMetricsOverride"));
+  assert.deepStrictEqual(wc.emulations, [], "no override while the run is on screen");
+  assert.strictEqual(wc.zoom, 0.5);
+});
+
+test("a driven run is shrunk with the view's zoom, never an emulation scale; width 1280, height follows the pane (480-1440)", () => {
+  const vp = { width: 1280, height: 720, fit: "width" };
   const { tabId } = panel.newView("run-vp", { viewport: vp });
   const first = added[added.length - 1];
   panel.setActiveBounds("run-vp", tabId, { x: 10, y: 20, width: 640, height: 600 });
-  // 640/1280 = 0.5 fits width; 360px tall, centred in the 600px rect
-  assert.deepStrictEqual(first.bounds, { x: 10, y: 20 + 120, width: 640, height: 360 });
-  assert.deepStrictEqual(first.webContents.emulations.pop(), { ...vp, deviceScaleFactor: 1, mobile: false, scale: 0.5 });
+  // 640/1280 = 0.5: the page lays out 1280 wide and 1200 tall, drawn in the whole pane
+  assert.deepStrictEqual(first.bounds, { x: 10, y: 20, width: 640, height: 600 });
+  assert.strictEqual(first.webContents.zoom, 0.5);
   const tab2 = panel.newTab("run-vp", { label: "second" });
   const second = added[added.length - 1];
-  assert.deepStrictEqual(second.webContents.emulations[0], { ...vp, deviceScaleFactor: 1, mobile: false, scale: 0.5 });
-  // a panel bigger than the viewport never enlarges it
-  panel.setActiveBounds("run-vp", tab2.tabId, { x: 0, y: 0, width: 2000, height: 1500 });
-  assert.deepStrictEqual(second.bounds, { x: 360, y: 390, width: 1280, height: 720 });
+  assert.strictEqual(second.webContents.zoom, 0.5, "a new tab is placed at once from the run's pane, not left at 0x0");
+  assert.deepStrictEqual(second.bounds, { x: 10, y: 20, width: 640, height: 600 });
+  // a short pane keeps the page 480 tall (shrunk further, centred); a tall one stops at 1440
+  panel.setActiveBounds("run-vp", tab2.tabId, { x: 0, y: 0, width: 640, height: 200 });
+  assert.deepStrictEqual(second.bounds, { x: 53, y: 0, width: 533, height: 200 });
+  assert.ok(Math.abs(second.webContents.zoom - 200 / 480) < 1e-9);
+  assert.strictEqual(first.webContents.zoom, second.webContents.zoom, "every tab of the run shares one zoom");
+  panel.setActiveBounds("run-vp", tab2.tabId, { x: 0, y: 0, width: 1280, height: 3000 });
+  assert.deepStrictEqual(second.bounds, { x: 0, y: 0, width: 1280, height: 1440 });
+  assert.strictEqual(second.webContents.zoom, 1);
+  for (const v of [first, second]) {
+    assert.ok(v.webContents.emulations.every((e) => e.scale === 1), "an emulation scale is never sent: CDP input is not mapped through it");
+  }
+});
+
+test("a viewport without fit (an older runtime) still letterboxes, with zoom, and is never enlarged", () => {
+  const { tabId } = panel.newView("run-nofit", { viewport: { width: 1280, height: 720 } });
+  const view = added[added.length - 1];
+  panel.setActiveBounds("run-nofit", tabId, { x: 10, y: 20, width: 640, height: 600 });
+  assert.deepStrictEqual(view.bounds, { x: 10, y: 20 + 120, width: 640, height: 360 });
+  assert.strictEqual(view.webContents.zoom, 0.5);
+  panel.setActiveBounds("run-nofit", tabId, { x: 0, y: 0, width: 2000, height: 1500 });
+  assert.deepStrictEqual(view.bounds, { x: 360, y: 390, width: 1280, height: 720 });
+  assert.strictEqual(view.webContents.zoom, 1);
+});
+
+test("a zero rect hides the views and leaves every size as it was", () => {
+  const { tabId } = panel.newView("run-zero", { viewport: { width: 1280, height: 720, fit: "width" } });
+  const view = added[added.length - 1];
+  panel.setActiveBounds("run-zero", tabId, { x: 0, y: 0, width: 640, height: 600 });
+  assert.strictEqual(view.visible, true);
+  const before = view.bounds;
+  panel.setActiveBounds("run-zero", tabId, { x: 0, y: 0, width: 0, height: 0 });
+  assert.strictEqual(view.visible, false);
+  assert.deepStrictEqual(view.bounds, before, "hidden, never shrunk to 0x0");
+  assert.strictEqual(view.webContents.zoom, 0.5);
+});
+
+test("a hidden view keeps its bounds (setVisible false) instead of being shrunk to 0x0", () => {
+  const { tabId } = panel.newView("run-hide");
+  const view = added[added.length - 1];
+  const rect = { x: 5, y: 5, width: 300, height: 200 };
+  panel.setActiveBounds("run-hide", tabId, rect);
+  panel.hideAll();
+  assert.strictEqual(view.visible, false);
+  assert.deepStrictEqual(view.bounds, rect);
+  panel.setActiveBounds("run-hide", tabId, rect);
+  assert.strictEqual(view.visible, true);
 });
 
 test("a run without a viewport fills the panel rect as before", () => {
@@ -224,9 +307,8 @@ test("AUTH-6: loginDone writes the file-drop signal for a real login tab, and no
   assert.deepStrictEqual(panel.loginDone("run-authdone", "nope"), { ok: false }, "an unknown tab id is a no-op, not a throw");
 });
 
-test("setVisibleChat parks other chats' views (still alive); untagged runs stay visible", () => {
+test("setVisibleChat hides other chats' views (still alive, same size); untagged runs stay visible", () => {
   const rect = { x: 10, y: 10, width: 300, height: 200 };
-  const hidden = { x: 0, y: 0, width: 0, height: 0 };
   panel.tagRun("run-chat-a", "chat-a");
   const a = panel.newView("run-chat-a");
   const viewA = added[added.length - 1];
@@ -234,45 +316,52 @@ test("setVisibleChat parks other chats' views (still alive); untagged runs stay 
   const viewNone = added[added.length - 1];
   panel.setActiveBounds("run-chat-a", a.tabId, rect);
   assert.deepStrictEqual(viewA.bounds, rect);
+  assert.strictEqual(viewA.visible, true);
   panel.setVisibleChat("chat-b");
-  assert.deepStrictEqual(viewA.bounds, hidden, "chat A's view is parked when chat B is shown");
-  assert.strictEqual(viewA.webContents.closed, undefined, "parked, not destroyed");
+  assert.strictEqual(viewA.visible, false, "chat A's view is hidden when chat B is shown");
+  assert.deepStrictEqual(viewA.bounds, rect, "hidden, never shrunk to 0x0");
+  assert.strictEqual(viewA.webContents.closed, undefined, "hidden, not destroyed");
   panel.setActiveBounds("run-no-chat", n.tabId, rect);
   panel.setVisibleChat("chat-b");
-  assert.deepStrictEqual(viewNone.bounds, rect, "a run outside any chat is never parked");
+  assert.strictEqual(viewNone.visible, true, "a run outside any chat is never hidden");
   panel.setActiveBounds("run-chat-a", a.tabId, rect); // back in chat A
-  assert.deepStrictEqual(viewA.bounds, rect);
-  assert.deepStrictEqual(viewNone.bounds, hidden, "showing one run parks every other run's view");
+  assert.strictEqual(viewA.visible, true);
+  assert.strictEqual(viewNone.visible, false, "showing one run hides every other run's view");
+  assert.deepStrictEqual(viewNone.bounds, rect);
 });
 
 const settle = () => new Promise((r) => setImmediate(r));
 
-test("a page that becomes ready at the wrong size is cleared and set again, at the run's current scale", async () => {
+test("a page that becomes ready at the wrong size is cleared and put back on the run's current zoom", async () => {
   const { tabId } = panel.newView("run-reapply", { viewport: { width: 1280, height: 720 } });
   const view = added[added.length - 1];
   panel.setActiveBounds("run-reapply", tabId, { x: 0, y: 0, width: 640, height: 600 }); // s = 0.5
   const wc = view.webContents;
   for (const ev of ["dom-ready", "did-finish-load"]) {
-    for (const live of [[1280, 720, 1.25], [1024, 576, 1], null]) { // drifted DPR, drifted size, unreadable
+    for (const live of [[1100, 720, 1], [1280, 500, 1], null]) { // drifted width, drifted height, unreadable
       wc.live = live;
+      wc.zoom = 1; // whatever drifted it
       wc.methods.length = 0; wc.emulations.length = 0;
       wc.handlers[ev]();
       await settle();
-      assert.ok(wc.methods.indexOf("Emulation.clearDeviceMetricsOverride") < wc.methods.indexOf("Emulation.setDeviceMetricsOverride"), "clears before it sets: a repeat of the same override is a no-op to Chromium");
-      assert.strictEqual(wc.emulations.pop().scale, 0.5);
+      assert.ok(wc.methods.includes("Emulation.clearDeviceMetricsOverride"), "clears first: Chromium ignores a repeat of an override it holds");
+      assert.deepStrictEqual(wc.emulations, [], "no override while the run is on screen: the zoom shrinks the page");
+      assert.strictEqual(wc.zoom, 0.5);
     }
   }
 });
 
-test("a page that is already at the recorded size is left alone", async () => {
+test("a page at the recorded width and height is left alone, whatever its DPR (a zoomed page's DPR is screen x zoom)", async () => {
   const { tabId } = panel.newView("run-reapply-ok", { viewport: { width: 1280, height: 720 } });
   const wc = added[added.length - 1].webContents;
   panel.setActiveBounds("run-reapply-ok", tabId, { x: 0, y: 0, width: 640, height: 600 });
-  wc.live = [1280, 720, 1];
-  wc.methods.length = 0;
-  wc.handlers["dom-ready"]();
-  await settle();
-  assert.ok(!wc.methods.includes("Emulation.clearDeviceMetricsOverride") && !wc.methods.includes("Emulation.setDeviceMetricsOverride"));
+  for (const live of [[1280, 720, 1], [1280, 720, 0.625], [1281, 719, 0.5]]) {
+    wc.live = live;
+    wc.methods.length = 0;
+    wc.handlers["dom-ready"]();
+    await settle();
+    assert.ok(!wc.methods.includes("Emulation.clearDeviceMetricsOverride") && !wc.methods.includes("Emulation.setDeviceMetricsOverride"));
+  }
 });
 
 test("ensure_geometry repairs every tab of the run, hidden ones too, and says whether it held", async () => {
@@ -280,14 +369,18 @@ test("ensure_geometry repairs every tab of the run, hidden ones too, and says wh
   const first = added[added.length - 1].webContents;
   panel.newTab("run-ensure", {});
   const second = added[added.length - 1].webContents;
-  first.live = [1280, 720, 1.25];
-  second.live = [1280, 720, 1];
+  first.live = [1024, 720, 1];
+  second.live = [1280, 720, 1.25];
   first.methods.length = 0; second.methods.length = 0;
   const r = await panel.ensureGeometry("run-ensure");
   assert.strictEqual(r.tabs, 2);
   assert.ok(first.methods.includes("Emulation.clearDeviceMetricsOverride"), "the drifted tab was repaired");
   assert.ok(!second.methods.includes("Emulation.clearDeviceMetricsOverride"), "the healthy tab was not touched");
   assert.strictEqual(r.ok, false, "the fake still reports the old size after the repair, so it did not hold");
+  second.live = [1280, 720, 1];
+  assert.strictEqual((await panel.ensureGeometry("run-ensure")).tabs, 2);
+  first.live = [1280, 720, 1];
+  assert.strictEqual((await panel.ensureGeometry("run-ensure")).ok, true, "both tabs at the recorded size: held");
   await assert.rejects(() => panel.ensureGeometry("no-such-run"), /no run/);
 });
 

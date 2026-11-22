@@ -50,6 +50,7 @@ test("runPlan: a host-owned page stuck at the wrong size ends the run as a page_
       assert.strictEqual(err.faultKind, "page_size");
       assert.strictEqual(err.failedAt, 0);
       assert.match(err.message, /not showing the page at its normal size/);
+      assert.doesNotMatch(err.message, /Build Studio|the test/, "shared by both apps: names neither");
       return true;
     },
   );
@@ -70,6 +71,7 @@ test("runPlan: a page with no width (the window is minimized) says to bring the 
   pageWidth = 0; repairFixesPage = false; repairs.length = 0;
   await assert.rejects(
     runPlan(page(), [{ type: "navigate", url: "https://app.test/next" }], {}, 0, "slug-size-hidden", OPTS([])),
-    (err) => err.faultKind === "page_size" && /minimized or hidden/.test(err.message) && /Bring the window back/.test(err.message),
+    (err) => err.faultKind === "page_size" && /minimized or hidden/.test(err.message) && /Bring the window back/.test(err.message)
+      && !/Build Studio|the test/.test(err.message),
   );
 });

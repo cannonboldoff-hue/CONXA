@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld("conxaExecute", {
   searchSessions: (payload) => ipcRenderer.invoke("sessions:search", payload),
   captureScreen: () => ipcRenderer.invoke("screen:capture"),
   authLogin: () => ipcRenderer.invoke("auth:login"),
+  authCancel: () => ipcRenderer.invoke("auth:cancel"),
   authLogout: () => ipcRenderer.invoke("auth:logout"),
   authStatus: () => ipcRenderer.invoke("auth:status"),
   getContexts: () => ipcRenderer.invoke("account:contexts"),

@@ -39,7 +39,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-16 | Through a real agent (MCP): install, run, pause, parallel, cancel | ✅ passed 2026-11-21 (P-48; stdio client not Claude Code; 16.9 older-layer half and sync 401 not reproducible here) | Needs an MCP client (ask first) |
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ✅ passed 2026-11-22 (P-49; real Clerk sign-in blocked, 17.1–17.3/17.5 on a mock; 17.4 limitation 11) | Partly |
 | WF-18 | Hand-over step (a person solves a CAPTCHA) | ✅ passed 2026-11-22 (P-50; on a local stand-in, real CAPTCHA blocked) | Needs a person |
-| WF-19 | Conxa Execute desktop app | ⏳ | Separate app |
+| WF-19 | Conxa Execute desktop app | ✅ passed 2026-11-23 (P-51; mock sign-in and model, real Clerk/model/second PC blocked) | Separate app |
 | WF-20 | Cloud API: bad tokens, plan limits, cross-company | ⏳ | Yes (API only, local backend) |
 | WF-21 | Go / no-go gate before real customers | ⏳ last | Partly (clean PC, billing, updates blocked) |
 
@@ -531,17 +531,19 @@ before the checkbox (message, on failure `abort`, resume-when probe = checkbox c
 
 ---
 
-## WF-19 — Conxa Execute desktop app
+## ✅ WF-19 — Conxa Execute desktop app — passed 2026-11-23 (P-51)
+
+**Result:** see `workflow-handoffs/WF-019.md`.
 
 Separate app; sign in the same way as Studio (browser PKCE).
 
 | # | Do | Must happen | If wrong |
 |---|---|---|---|
 | 19.1 | Sign in with Studio also open | No interference; each app catches its own redirect | S1 |
-| 19.2 | Workspace picker | Lists personal, real organizations and Execute-seat workspaces; choice survives restart | S2 |
+| 19.2 | Workspace picker | Lists real organizations and Execute-seat workspaces (Personal only when there is nothing else); choice survives restart | S2 |
 | 19.3 | Seat granted to a new email; sign in as it | Workspace appears with no code to paste | S1 |
 | 19.4 | "What skills do I have?" then "Run <skill>" | Streams; real skills; a real run starts | S1 |
-| 19.5 | Send a message on personal, then on a team workspace | Active workspace is obvious; the spend lands on the selected one | S0 |
+| 19.5 | Send a message on one workspace, then on another (Personal only for a solo user) | Active workspace is obvious; the spend lands on the selected one | S0 |
 | 19.6 | Watch a run in the in-app browser panel | The real runtime page, live; only one Chromium doing the work | S0 if two browsers |
 | 19.7 | A run that needs a target-site sign-in | The panel shows the sign-in state and clears it when done | S1 |
 | 19.8 | Switch away from the panel mid-run and back | Live view reconnects, no frozen frame | S2 |
@@ -626,6 +628,7 @@ broken update rollback. Sign GO / NO-GO with date, tester and versions at the en
 9. The margin gate may refuse a click that looks fine — refusing safely is the design, not a bug.
 10. Hand-over inside a loop loses its place; a pause doesn't survive a runtime restart (EXEC-22).
 11. Studio's local work (workflows, groups, chats, saved sign-ins) belongs to the machine, not the signed-in account. After sign-out and a different sign-in, the first account's work still shows and can be published into the new account's company. Owner decision 2026-11-22: leave as designed (WF-17 17.4, AUTH-26).
+12. Conxa Execute's chats and run history also belong to the machine, not the signed-in account: after sign-out and a different sign-in, the first account's chat titles, replies and run rows still show. Skills and saved site sign-ins are machine-wide too, so hiding chats would isolate nothing. Owner decision 2026-11-23: leave as designed (WF-19 F3, AUTH-26).
 
 New limitations → `TODO.md`. Doc contradictions → `docs/TRD.md` / `docs/App-Flow.md`. Every fix →
 an entry in `FIX.md`. A WF passes → its section moves to `02-WORKFLOWS-PASSED.md` (next P number)

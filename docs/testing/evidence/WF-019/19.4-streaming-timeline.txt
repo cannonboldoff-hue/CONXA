@@ -1,0 +1,4 @@
+0.17s: "MOCK MODEL "
+0.33s: "MOCK MODEL says hello "
+0.48s: "MOCK MODEL says hello (I saw "
+0.65s: "MOCK MODEL says hello (I saw 2 messages). "

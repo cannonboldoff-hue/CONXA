@@ -2201,8 +2201,11 @@ str}` → claims a grant made out to the caller's own email. Phase-1 fallback pa
 automatic (`GET /api/v1/execute/contexts` below).
 
 **GET /api/v1/execute/contexts** (any signed-in user, added 2026-09-17) — `{"contexts": [{workspace_id,
-workspace_name, kind: "personal"|"member"|"grant", credits_remaining}], "active_workspace_id": str}`.
-Conxa Execute's personal/team context switcher: every workspace the caller can use Execute under.
+workspace_name, kind: "member"|"grant", credits_remaining}], "active_workspace_id": str}`.
+Conxa Execute's context switcher: every Clerk organisation the caller belongs to (`member`) and every
+workspace where they hold a claimed Execute seat (`grant`). The caller's own personal workspace is listed
+(as `kind: "member"`, name "Personal") only when they have neither, i.e. a solo user; it is dropped for
+anyone on a team or seat (decision 2026-09-25).
 Also auto-claims any `pending` grant matching the caller's verified email as a side effect. See
 `docs/TRD.md` §13.7.
 
