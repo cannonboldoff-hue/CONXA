@@ -417,6 +417,17 @@ class TestSearchedRowBinding:
     def test_part_of_a_word_is_not_the_searched_value(self):
         assert detect_entity_binding(_search_result_event(), typed_before=["Car"]) is None
 
+    def test_it_counts_the_saved_page_rows_that_show_the_value(self):
+        """BUILD-109 (1): twin rows the value cannot tell apart are counted so the questions can warn about them."""
+        twin = _CAROL.replace("103", "104").replace("carol@", "carol2@")
+        carolann = _CAROL.replace("103", "105").replace("Carol", "Carolann").replace("carol@", "ann@")  # part of a word does not count
+        page = f"<html><body><table><tbody>{_CAROL}{twin}{carolann}</tbody></table></body></html>"
+        eb = detect_entity_binding(_search_result_event(body=_CAROL + twin), dom_html=page, typed_before=["Carol"])
+        assert eb.recorded_matches == 2
+        one = f"<html><body><table><tbody>{_CAROL}</tbody></table></body></html>"
+        assert detect_entity_binding(_search_result_event(), dom_html=one, typed_before=["Carol"]).recorded_matches == 1
+        assert detect_entity_binding(_search_result_event(), typed_before=["Carol"]).recorded_matches == 0  # no page
+
     def test_passwords_and_keys_are_never_a_row_identity(self):
         assert typed_values([_typed("Carol", input_type="password"), _typed("x"),
                              {"action": {"action": "keyboard_shortcut", "value": "Carol"}}]) == []
@@ -517,3 +528,119 @@ def test_an_upgraded_row_name_keeps_the_text_around_the_typed_value():
     assert template_identifier("Invoice #12345", "12345", "invoice_no") == "Invoice #{{invoice_no}}"
     assert template_identifier("Carol", "carol", "search_by_name") == "{{search_by_name}}"
     assert template_identifier("Carolann", "Carol", "x") == "Carolann"            # never part of a word
+
+
+# ── E2E16-8: the same record in two panels, and a picked suggestion that is the clicked target itself ───────────
+
+
+def _panel(pid: str, rows: str, *, cls: str = "") -> str:
+    attrs = f' id="{pid}"' if pid else ""
+    attrs += f' class="{cls}"' if cls else ""
+    return f"<section{attrs}><table><tbody>{rows}</tbody></table></section>"
+
+
+def _carol_in_panel(rows: str, *, pid: str = "results", cls: str = "") -> dict:
+    ev = _search_result_event(body=rows)
+    ev["ancestors"] += [{"tag": "section", "id": pid, "classes": [cls] if cls else [], "outer_html": ""},
+                        {"tag": "body", "id": "", "classes": [], "outer_html": ""}]
+    return ev
+
+
+def test_the_same_record_in_two_panels_is_bound_in_the_panel_it_was_recorded_in():
+    """BUILD-108 (3): "Results" and "Recently edited" both show Carol under `tbody > tr`, so every run refused as
+    "more than one row". The list is scoped by the nearest ancestor that leaves only one list's rows."""
+    others = "".join(_CAROL.replace("103", str(n)).replace("Carol", name).replace("carol", name.lower())
+                     for n, name in ((101, "Alice"), (102, "Bob")))
+    page = f"<html><body>{_panel('results', others + _CAROL)}{_panel('recent', _CAROL)}</body></html>"
+    eb = detect_entity_binding(_carol_in_panel(others + _CAROL), dom_html=page, typed_before=["Carol"])
+    assert eb.container_selector == "#results tbody > tr" and eb.identifier == "Carol"
+    # the row-text path (a Delete with nothing typed) is scoped the same way, so Carol counts once
+    eb = detect_entity_binding(_carol_in_panel(others + _CAROL), dom_html=page, destructive=True)
+    assert eb.container_selector == "#results tbody > tr"
+    # no saved page, or one list only: unchanged
+    assert detect_entity_binding(_carol_in_panel(_CAROL), typed_before=["Carol"]).container_selector == "tbody > tr"
+    one = f"<html><body>{_panel('results', _CAROL)}</body></html>"
+    assert detect_entity_binding(_carol_in_panel(_CAROL), dom_html=one, typed_before=["Carol"]).container_selector == "tbody > tr"
+    # two panels nothing tells apart keep the plain list: the runtime still refuses rather than guess
+    same = f"<html><body>{_panel('', _CAROL, cls='panel')}{_panel('', _CAROL, cls='panel')}</body></html>"
+    eb = detect_entity_binding(_carol_in_panel(_CAROL, pid="", cls="panel"), dom_html=same, typed_before=["Carol"])
+    assert eb.container_selector == "tbody > tr"
+
+
+# The click on OrangeHRM's employee suggestion, as the recorder saves it (session 56ac04e6, WF-4 Leg A): the option
+# itself is the target, so the chain starts at the list.
+_ORANGE_LIST = ('<div data-v-3ebc98ba="" data-v-390abb6d="" role="listbox" class="oxd-autocomplete-dropdown --positon-bottom">'
+                '<div data-v-da59eaf4="" data-v-390abb6d="" role="option" class="oxd-autocomplete-option">'
+                '<span data-v-08362132="">Amelia  Brown</span><!----><!----></div></div>')
+
+
+def _orangehrm_pick() -> dict:
+    return {
+        "action": {"action": "click", "value": None},
+        "semantic": {"role": "option"},
+        "target": {"tag": "div", "id": None, "classes": ["oxd-autocomplete-option"], "inner_text": "Amelia Brown",
+                   "role": "option", "attributes": {"role": "option"}},
+        "ancestors": [
+            {"tag": "div", "id": "", "classes": ["oxd-autocomplete-dropdown", "--positon-bottom"], "outer_html": _ORANGE_LIST},
+            {"tag": "div", "id": "", "classes": ["oxd-autocomplete-wrapper"], "outer_html": f'<div class="oxd-autocomplete-wrapper">{_ORANGE_LIST}</div>'},
+            {"tag": "div", "id": "", "classes": [], "outer_html": ""},
+        ],
+    }
+
+
+def test_a_picked_suggestion_that_is_the_clicked_target_gets_the_inert_pick_match_binding():
+    """BUILD-102 (6): the binding was never seen on the live OrangeHRM page because only the target's parents were
+    searched for a row, and the parent of a clicked option is the list."""
+    from types import SimpleNamespace
+
+    eb = detect_entity_binding(_orangehrm_pick(), typed_before=["Amelia"])
+    assert eb is not None and (eb.match, eb.self_target, eb.confirmed) == ("contains", True, False)
+    assert eb.container_selector == '[role="listbox"] > [role="option"]' and eb.identifier == "Amelia"
+    step = SimpleNamespace(entity_binding=eb)
+    upgrade_entity_binding_identifiers([step], {"employee_name": "Amelia"})
+    assert step.entity_binding.identifier == "{{employee_name}}"
+    # the option is exactly what was typed, or nothing typed shows in it: not bound (that would change what is clicked)
+    assert detect_entity_binding(_orangehrm_pick(), typed_before=["Amelia Brown"]) is None
+    assert detect_entity_binding(_orangehrm_pick(), typed_before=["Asha"]) is None
+
+
+# ── BUILD-101 (7): a captured value whose words change every run is bound by its place, inert until a yes ───────────
+
+
+def _result(name: str, price: str) -> str:
+    return f'<li class="result"><a>{name}</a><span class="price">{price}</span></li>'
+
+
+_RESULTS = _result("Red mug", "Rs. 400") + _result("Blue mug", "Rs. 550") + _result("Tall mug", "Rs. 610")
+
+
+def _price_capture(price: str = "Rs. 400", *, action: str = "extract", source: str = "text") -> dict:
+    return {
+        "action": {"action": action, "value": None},
+        "extras": {"extract": {"source": source}},
+        "target": {"tag": "span", "classes": ["price"], "inner_text": price},
+        "ancestors": [
+            {"tag": "li", "id": None, "classes": ["result"], "outer_html": _result("Red mug", "Rs. 400") if price == "Rs. 400" else _result("Blue mug", price)},
+            {"tag": "ul", "id": None, "classes": ["results"], "outer_html": f'<ul class="results">{_RESULTS}</ul>'},
+            {"tag": "body", "id": None, "classes": [], "outer_html": ""},
+        ],
+    }
+
+
+def test_a_captured_value_in_one_list_is_bound_by_its_place_and_left_unconfirmed():
+    page = f'<html><body><ul class="results">{_RESULTS}</ul></body></html>'
+    eb = detect_entity_binding(_price_capture(), dom_html=page)
+    assert (eb.container_selector, eb.position, eb.identifier, eb.confirmed) == ("ul.results > li.result", 1, "", False)
+    assert detect_entity_binding(_price_capture("Rs. 550"), dom_html=page).position == 2
+
+
+def test_no_place_binding_without_a_saved_page_one_list_or_a_value():
+    page = f'<html><body><ul class="results">{_RESULTS}</ul></body></html>'
+    assert detect_entity_binding(_price_capture()) is None                                  # no saved page
+    two = f'<html><body><ul class="results">{_RESULTS}</ul><ul class="results">{_RESULTS}</ul></body></html>'
+    assert detect_entity_binding(_price_capture(), dom_html=two) is None                    # two lists: "first" is a guess
+    assert detect_entity_binding(_price_capture(action="click"), dom_html=page) is None     # not a captured value
+    assert detect_entity_binding(_price_capture(source="value"), dom_html=page) is None
+    label = _price_capture()
+    label["target"]["inner_text"] = "Price"                                                 # a label, not a value
+    assert detect_entity_binding(label, dom_html=page).position == 0  # found by its words as before, never by place

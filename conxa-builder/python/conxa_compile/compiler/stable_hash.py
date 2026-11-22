@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from conxa_compile.compiler.selector_filters import is_dynamic_id
+
 _DYNAMIC_CLASS_TOKENS = frozenset({
     "focus", "hover", "active", "focus-visible", "focus-within",
     "loading", "animating", "transitioning", "selected", "disabled",
@@ -68,4 +70,44 @@ def compute_stable_hash(element_data: dict[str, Any]) -> str:
     ).strip()
 
     payload = f"{tag_path}|{sorted_attrs}|{ax_name}"
+    # Opt-in (BUILD-104 (1)): only a caller that passes `form_field` gets it, so every other hash stays byte-identical.
+    field = form_field_part(tag, element_data.get("form_field"))
+    if field:
+        payload += f"|field|{field}"
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+_FORM_FIELD_TAGS = frozenset({"input", "textarea", "select"})
+
+
+def form_field_part(tag: str, field: dict[str, Any] | None) -> str:
+    """A form field's own markup, so two plain boxes differ: its id (unless handed out per render), form-field name,
+    placeholder and, for an input, type. Never what was typed. Mirrors runtime/app/page_scripts.js::extractDescriptor;
+    runtime/test/fixtures/element_descriptor_cases.json pins both."""
+    if tag not in _FORM_FIELD_TAGS or not isinstance(field, dict):
+        return ""
+    el_id = str(field.get("id") or "").strip()
+    parts = [
+        ("id", "" if is_dynamic_id(f"#{el_id}") else el_id),
+        ("name", str(field.get("name") or "").strip()),
+        ("placeholder", str(field.get("placeholder") or "").strip()),
+        ("type", (str(field.get("type") or "").strip().lower() or "text") if tag == "input" else ""),
+    ]
+    return "&".join(f"{k}={v}" for k, v in parts if v)
+
+
+def stable_hash_input(target: dict[str, Any], semantic: dict[str, Any] | None = None) -> dict[str, Any]:
+    """compute_stable_hash's input for one recorded event (bridge.js target + semantic)."""
+    return {
+        "tag": str(target.get("tag") or ""),
+        "parent_tag": "",
+        "aria_label": str(target.get("aria_label") or ""),
+        "name": str(target.get("name") or ""),
+        "inner_text": str(target.get("inner_text") or "")[:80],
+        "value_label": str(target.get("value_label") or ""),
+        "attributes": target.get("attributes") or {},
+        "form_field": {
+            "id": target.get("id"), "name": target.get("name"), "placeholder": target.get("placeholder"),
+            "type": (semantic or {}).get("input_type"),
+        },
+    }

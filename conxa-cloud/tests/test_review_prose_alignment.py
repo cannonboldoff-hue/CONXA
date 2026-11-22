@@ -40,6 +40,28 @@ def test_shifted_names_fall_back_to_the_steps_own_wording():
     assert steps[1].semantic_description != "Add the bolt t-shirt again"
 
 
+def test_a_name_of_another_like_button_is_dropped_even_far_away():
+    # saucedemo (BUILD-95 (3)): six "Add to cart" buttons told apart only by their test id; the video reading put
+    # the bolt t-shirt's name on the onesie's button, several steps away from the bolt t-shirt's own click.
+    def add(testid: str) -> SkillStep:
+        step = _step("Add to cart")
+        step.identity_bundle.fingerprint.data_testid = testid
+        return step
+
+    steps = [add("add-to-cart-sauce-labs-bolt-t-shirt"), _step("Open Menu"), _step("Checkout"), _step("Continue"),
+             add("add-to-cart-sauce-labs-onesie"), add("add-to-cart-sauce-labs-onesie")]
+    graph = SimpleNamespace(steps=[
+        SimpleNamespace(index=0, intent="Add the bolt t-shirt to the cart", intent_token=""),
+        SimpleNamespace(index=4, intent="Add the bolt t-shirt to the cart", intent_token=""),
+        SimpleNamespace(index=5, intent="Add the onesie to the shopping cart again", intent_token=""),
+    ])
+    _apply_workflow_review_to_steps(steps, graph)
+    assert steps[0].semantic_description == "Add the bolt t-shirt to the cart"
+    assert steps[4].semantic_description != "Add the bolt t-shirt to the cart"
+    # Its own item, and words no like button owns ("shopping"), keep the model's name; so does a repeat click.
+    assert steps[5].semantic_description == "Add the onesie to the shopping cart again"
+
+
 def test_a_captured_value_is_named_by_its_label_not_by_the_value():
     from conxa_compile.compiler.build import _extract_label
 

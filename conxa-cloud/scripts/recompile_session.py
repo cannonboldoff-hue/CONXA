@@ -2,17 +2,19 @@
 
 Usage: python scripts/recompile_session.py <session_id> [--out DIR]
 
-Calls the compiler the way Build Studio's compile does (same pipeline drops, the workflow's task description when the
-session belongs to one) and writes compile_report.json / compiled_package.json to DIR (default: a folder under the
-system temp directory), never into the recording's own folder.
+Calls the compiler with what Build Studio's `handlers/compile.py::cmd_compile` passes (same pipeline drops, the
+workflow's name, task description and pre-build answers when the session belongs to one, the same input clean-up after)
+and writes compile_report.json / compiled_package.json to DIR (default: a folder under the system temp directory),
+never into the skill store or the recording's own folder.
 
-Without the cloud connection (SKILL_ALLOW_NO_PROVIDERS=1) the model-written parts are rules-only; the step addresses
-and identity are the same either way.
+Studio's recordings live under its home: set CONXA_STUDIO_HOME (e.g. ~/.conxa-build-studio-dev) to read them. Point it
+at a copy when you change files such as the session's pinned second_opinion.json. A Studio left running across a code
+change compiles with the old code until restarted, so compare against a recompile, not an old Studio package.
 
-The compiler's LLM calls go through the metered cloud connection that Build Studio installs. This script
-installs the same one, so it needs a signed-in Studio token:
-  CONXA_TOKEN       the token Studio sends to the cloud (required)
+  CONXA_TOKEN       a signed-in Studio token: the model calls go through the metered cloud connection
   CONXA_CLOUD_API   the cloud address (default http://127.0.0.1:8000)
+  SKILL_ALLOW_NO_PROVIDERS=1 without CONXA_TOKEN: offline, no model calls at all; the model-written parts are
+                    rules-only, the step addresses and identity are the same either way.
 """
 
 from __future__ import annotations
@@ -25,6 +27,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT.parent / "conxa-builder" / "python"))  # services.llm_proxy_client
+
+
+class OfflineRouter:
+    """No model at all: every call fails the way an empty provider pool does, so each model-written part
+    falls back to its rules-only answer (the same thing the test suite sees without provider keys)."""
+
+    def route_text(self, *_args, **_kwargs):
+        raise RuntimeError("offline recompile: no LLM providers")
+
+    route_vision = route_text
 
 
 def main() -> int:
@@ -44,12 +56,14 @@ def main() -> int:
     offline = os.environ.get("SKILL_ALLOW_NO_PROVIDERS", "").strip() in ("1", "true", "True")
     if not token and not offline:
         print("CONXA_TOKEN is not set. The compiler needs Build Studio's cloud connection for its LLM calls: "
-              "set CONXA_TOKEN to a signed-in Studio token (and CONXA_CLOUD_API if the cloud is not on 127.0.0.1:8000). "
-              "On a dev machine with the cloud running locally, this pair works: "
-              "CONXA_TOKEN=dev-skip-auth-token SKILL_ALLOW_NO_PROVIDERS=1.")
+              "set CONXA_TOKEN to a signed-in Studio token (and CONXA_CLOUD_API if the cloud is not on 127.0.0.1:8000), "
+              "or set SKILL_ALLOW_NO_PROVIDERS=1 for a rules-only compile with no model calls.")
         return 1
-    if token:
-        from conxa_core import llm as core_llm
+    from conxa_core import llm as core_llm
+
+    if not token:
+        core_llm.set_router(OfflineRouter())
+    else:
         from services.llm_proxy_client import LLMProxyClient
 
         core_llm.set_router(LLMProxyClient(
@@ -60,21 +74,16 @@ def main() -> int:
         ))
 
     from conxa_compile.compiler.build import compile_skill_package
-    from conxa_core.config import settings
+    from conxa_compile.compiler.upload_binding import filter_runtime_only_inputs
+    from conxa_compile.editor.workflow_mutations import reconcile_inputs_with_step_values
     from conxa_compile.pipeline.run import pipeline_drops, run_pipeline
+    from conxa_core.storage.session_events import read_session_events, session_events_path
+    from handlers.compile import CompileMixin
 
-    session_dir = settings.data_dir / "sessions" / session_id
-    events_path = session_dir / "events.jsonl"
-    if not events_path.is_file():
-        print(f"events.jsonl not found at {events_path}")
+    raw_events = read_session_events(session_id)
+    if not raw_events:
+        print(f"No events at {session_events_path(session_id)} (Studio's recordings live under CONXA_STUDIO_HOME)")
         return 1
-
-    raw_events: list[dict] = []
-    with open(events_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                raw_events.append(json.loads(line))
 
     print(f"Loaded {len(raw_events)} events from {session_id}")
 
@@ -86,22 +95,28 @@ def main() -> int:
 
     print(f"Pipeline produced {len(normalized)} normalized events")
 
-    # What Studio passes besides the events: the workflow's description (when this session belongs to one).
-    task_text = ""
+    # What Studio's cmd_compile passes besides the events: the workflow's name and description plus the
+    # answers given before the build (when this session belongs to a workflow).
+    task_text, title = "", f"Recompiled {session_id[:8]}"
     try:
         from conxa_core.storage.workflow_store import list_workflows
 
         owner = next((w for w in list_workflows() if getattr(w, "session_id", "") == session_id), None)
-        task_text = (owner.task_description or "").strip() if owner is not None else ""
+        if owner is not None:
+            task_text = (owner.task_description or "").strip()
+            title = (owner.name or "").strip() or title
     except Exception:  # noqa: BLE001 — a recompile without the description is still useful
         task_text = ""
+    notes = CompileMixin._setup_notes(session_id)
+    if task_text and notes:
+        task_text += "\n\nAnswers given before the build: " + " | ".join(notes)
 
     try:
         package = compile_skill_package(
             normalized,
             skill_id=f"skill_{session_id}",
             source_session_id=session_id,
-            title=f"Recompiled {session_id[:8]}",
+            title=title,
             version=1,
             **({"task_description": task_text} if task_text else {}),
             pipeline_drops=pipeline_drops(raw_events, normalized),
@@ -152,10 +167,12 @@ def main() -> int:
         json.dump(report, f, indent=2)
     print(f"\nFull report written to {out_path}")
 
-    # Save the package too
+    # Save the package too, after the same input clean-up Studio applies before it stores the skill
+    doc, _ = reconcile_inputs_with_step_values(package.model_dump(mode="json"))
+    doc["inputs"] = filter_runtime_only_inputs(list(doc.get("inputs") or []))
     pkg_path = out_dir / "compiled_package.json"
     with open(pkg_path, "w", encoding="utf-8") as f:
-        json.dump(package.model_dump(mode="json"), f, indent=2)
+        json.dump(doc, f, indent=2)
     print(f"Full package written to {pkg_path}")
 
     return 0

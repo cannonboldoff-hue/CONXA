@@ -459,8 +459,9 @@ def test_input_check_names_the_doubtful_values_in_plain_words_and_edits_nothing(
     q = input_check_question(suspects, defs, {"gitignore_file": "gitignore", "region": "asia"}, "r_1")
     assert q["kind"] == "input_check" and q["id"] == "input_check:r_1" and q["input_ids"] == ["gitignore_file", "region"]
     assert "“gitignore”" in q["body"] and "“Ada.gitignore”" in q["body"] and "“asia”" in q["body"]
-    assert [c["id"] for c in q["choices"]] == ["wrong", "right"]
-    assert plan_answer(q, {"choice": "wrong"}, {})[0] == [] and plan_answer(q, {"choice": "right"}, {})[0] == []
+    assert [c["id"] for c in q["choices"]] == ["wrong", "right", "on_purpose"]
+    assert all(plan_answer(q, {"choice": c}, {})[0] == [] for c in ("wrong", "right", "on_purpose"))
+    assert "on purpose" in q["choices"][2]["label"] and "nothing changes" in plan_answer(q, {"choice": "on_purpose"}, {})[1]
     assert input_check_question([], defs, {}, "r_1") is None
 
 
@@ -670,9 +671,25 @@ def test_an_unconfirmed_row_on_a_step_that_cant_be_undone_is_asked_about():
     assert plan_answer(q, {"choice": "no"}, doc)[0] == []  # chat never re-points a step: that is Human Edit
 
 
-def test_a_confirmed_row_or_a_row_named_by_the_run_is_not_asked_again():
+def test_a_confirmed_row_is_not_asked_again():
     assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(confirmed=True), limit=None))
-    assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(identifier="{{item}}"), limit=None))
+    assert not any(q["kind"] == "confirm_row" for q in generate_questions(_row_doc(identifier="{{item}}", confirmed=True), limit=None))
+
+
+def test_a_row_named_by_the_run_is_asked_about_in_plain_words():
+    """BUILD-108 (1): search, then Delete. The publish gate needs the row confirmed, and no question asked it, so only
+    Human Edit could release it."""
+    doc = _row_doc(identifier="{{search_by_name}}")
+    keys = step_keys(doc["skills"][0]["steps"])
+    q = next(q for q in generate_questions(doc, limit=None) if q["kind"] == "confirm_row")
+    assert "the search by name it is given" in q["title"] and "{{" not in q["title"] + q["body"]
+    assert plan_answer(q, {"choice": "yes"}, doc)[0] == [
+        {"op": "patch", "step_key": keys[1], "patch": {"entity_binding": {"confirmed": True}}}]
+    assert plan_answer(q, {"choice": "no"}, doc)[0] == []
+    # a suggestion pick is asked once, by pick_match, whose yes confirms the row too
+    pick = _row_doc(identifier="{{search_by_name}}")
+    pick["skills"][0]["steps"][1]["entity_binding"]["match"] = "contains"
+    assert not any(q["kind"] == "confirm_row" for q in generate_questions(pick, limit=None))
 
 
 def test_an_address_check_is_offered_with_the_address_a_person_can_read():
@@ -897,7 +914,7 @@ def test_a_ticked_input_is_checked_on_the_step_that_showed_it_not_the_last(monke
     keys = step_keys(doc["skills"][0]["steps"])
     q = _q(doc, "done_when")
     assert q["recorded"].get("po_number")
-    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words: keys[2])
+    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words, memo=None: keys[2])
     ops, _ = plan_answer(q, {"selected": ["input:po_number"]}, doc)
     check = {"type": "text_present", "target": "{{po_number}}", "required": True}
     holders = [o["step_key"] for o in ops if check in o["patch"]["validation"]["assertions"]]
@@ -909,11 +926,11 @@ def test_an_input_whose_words_no_page_showed_or_that_were_already_there_is_not_o
 
     doc = _invoice_doc()
     for answer in ("", clarify.ALREADY_SHOWN):
-        monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words, a=answer: a)
+        monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words, memo=None, a=answer: a)
         ids = {c["id"] for c in _q(doc, "done_when")["choices"]}
         assert not any(i.startswith("input:") for i in ids), (answer, ids)
     # nothing to read (no recording): today's choice stays, on the last step
-    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words: None)
+    monkeypatch.setattr(clarify, "step_where_words_appear", lambda d, words, memo=None: None)
     q = _q(doc, "done_when")
     assert "input:po_number" in {c["id"] for c in q["choices"]}
     (op,) = plan_answer(q, {"selected": ["input:po_number"]}, doc)[0]

@@ -1726,3 +1726,35 @@ def test_recovery_json_carries_no_typed_value_from_the_video_words():
     assert "ravi.kumar1987" not in text and "gmail" not in text and "14 Park" not in text
     entry = out["steps"][0] if isinstance(out.get("steps"), list) else next(iter(out.values()))[0]
     assert entry["video_context"]["visible_target"] == "Send button"
+
+
+def test_recovery_video_words_drop_what_the_person_typed(tmp_path, monkeypatch):
+    """SG-25 residual: a name or address with no digit or quote passed the scrub. The recording's own typed values
+    (3+ characters) are now removed first; a short typed value leaves ordinary words alone; no recording, no change."""
+    from conxa_core.config import settings
+    from conxa_compile.skill_package_builder_saved_skill import _build_saved_skill_recovery, _recorded_typed_values
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    sess = tmp_path / "sessions" / "sess_typed"
+    sess.mkdir(parents=True)
+    events = [{"action": {"action": "type", "value": "Asha Verma"}}, {"action": {"action": "type", "value": "Park Road"}},
+              {"action": {"action": "type", "value": "Mr"}}, {"action": {"action": "type", "value": "{{REDACTED}}"}},
+              {"action": {"action": "click"}}]
+    (sess / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+
+    typed = _recorded_typed_values("sess_typed")
+    assert sorted(typed) == ["Asha Verma", "Park Road"]  # "Mr" is too short, a hidden value is not a value
+    step = {
+        "action": {"action": "click"}, "intent": "send_card", "target": {"role": "button", "primary_selector": "#send"},
+        "video_context": {"visible_target": "Send button", "purpose": "sends the card for Mr Smith",
+                          "screen_after": "The Full Name field now contains asha verma", "screen_before": "Card for Asha, park road"},
+    }
+    vc = _build_saved_skill_recovery([step], [1], None, typed)["steps"][0]["video_context"]
+    text = json.dumps(vc).lower()
+    assert "asha" not in text and "verma" not in text and "park" not in text and "road" not in text
+    assert vc["visible_target"] == "Send button" and "Full Name field" in vc["screen_after"]
+    assert "Mr Smith" in vc["purpose"]
+
+    assert _recorded_typed_values("no_such_session") == [] and _recorded_typed_values("") == []
+    plain = _build_saved_skill_recovery([step], [1], None, _recorded_typed_values("no_such_session"))
+    assert plain["steps"][0]["video_context"]["screen_before"] == "Card for Asha, park road"

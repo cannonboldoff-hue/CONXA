@@ -5,6 +5,8 @@ saved in the recording, the compiled workflow and the logs, and the typed test i
 
 from __future__ import annotations
 
+import json
+
 from conxa_core.redact import MASK, mask_secret_inputs, scrub_url, scrub_urls, secret_hash
 
 DONE = "http://localhost:8128/secrets-done.html?dn=Ada&pw=ZzDummyPw%218812&tok=tok_DUMMY_Q7r2x9"
@@ -47,3 +49,53 @@ def test_secret_test_inputs_are_saved_as_a_mask_and_read_back_as_absent(tmp_path
     workflow_store.save_workflow(wf)
     assert "ZzDummyPw" not in "".join(p.read_text(encoding="utf-8") for p in tmp_path.rglob("*.json"))
     assert workflow_store.get_workflow("wf_secret").last_test_inputs == {"display_name": "Ada"}
+
+
+def _compile_opening(url: str):
+    import shutil
+    from contextlib import ExitStack
+
+    from conxa_compile.compiler.build import compile_skill_package
+    from conxa_compile.editor.workflow_mutations import reconcile_inputs_with_step_values
+    from conxa_compile.pipeline.run import run_pipeline
+    from tests.test_phases import _compile_with_vision_mocks, _minimal_click_event
+
+    ev = _minimal_click_event()
+    ev["page"] = {**(ev.get("page") or {}), "url": url}
+    ev["tab"] = {**(ev.get("tab") or {}), "url": url}
+    evs = run_pipeline([scrub_urls(ev)])          # what the recorder writes down
+    data_dir, *patchers = _compile_with_vision_mocks("sess-secret-link", evs)
+    try:
+        with ExitStack() as stack:
+            for p in patchers:
+                stack.enter_context(p)
+            pkg = compile_skill_package(evs, skill_id="s", source_session_id="sess-secret-link", title="t", version=1)
+    finally:
+        shutil.rmtree(data_dir, ignore_errors=True)
+    doc, _ = reconcile_inputs_with_step_values(pkg.model_dump(mode="json"))
+    return doc
+
+
+def test_a_hidden_address_value_becomes_a_secret_input_the_person_fills_in():
+    """BUILD-110 (9): an invite link (?token=…, ?code=…) compiled with the literal REDACTED, so the workflow could
+    never open it. The value is now a run input whose name reads as secret (hidden on the test card, never saved)."""
+    from conxa_core.redact import is_secret_input
+
+    doc = _compile_opening("https://app.test/invite?token=tok_DUMMY_Q7r2x9&code=ZzCode1&page=2")
+    nav = doc["skills"][0]["steps"][0]
+    assert nav["action"] == "navigate"
+    assert nav["url"] == "https://app.test/invite?token={{token}}&code={{secret_code}}&page=2"
+    ids = {i["id"] for i in doc["inputs"]}
+    assert {"token", "secret_code"} <= ids and all(is_secret_input(i) for i in ("token", "secret_code"))
+    text = json.dumps(doc)
+    assert "tok_DUMMY" not in text and "ZzCode1" not in text
+    assert "REDACTED" not in json.dumps(nav.get("validation"))   # (the step's tab still notes where it was recorded)
+    for s in doc["skills"][0]["steps"]:   # no address check carries the placeholder as literal text to match
+        for a in (s.get("validation") or {}).get("assertions") or []:
+            assert "{{" not in str(a.get("target") or "")
+
+
+def test_a_plain_address_is_compiled_unchanged():
+    doc = _compile_opening("https://app.test/list?page=2&sort=name")
+    assert doc["skills"][0]["steps"][0]["url"] == "https://app.test/list?page=2&sort=name"
+    assert not any(str(i.get("id")).startswith("secret_") for i in doc.get("inputs") or [])

@@ -17,6 +17,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from conxa_compile.compiler.content_free_identity import is_value_text
 from conxa_compile.compiler.input_binding import derive_input_binding
 from conxa_compile.compiler.selector_filters import is_dynamic_id, is_low_quality_anchor
 from conxa_compile.compiler.stable_hash import strip_dynamic_classes
@@ -302,47 +303,124 @@ def edited_values(events: list[Step]) -> set[str]:
     return out
 
 
-def _searched_row_binding(ev: Step, typed_before: list[str]) -> EntityBinding | None:
+def _searched_row_binding(ev: Step, typed_before: list[str], dom_html: str | None = None) -> EntityBinding | None:
     """A data row that shows a value the person typed earlier is that value's row: the result of a search, or the
     entry just added. It is bound even when it is the only row (a search that finds one record shows one row; on the
     next run it may show none, or a look-alike elsewhere on the page), so the run acts on that row or stops."""
     if not typed_before:
         return None
     ancestors = ev.get("ancestors") or []
-    for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH)):
-        row = ancestors[i] or {}
-        parent = ancestors[i + 1] or {}
+    # (row, its list, index of the first ancestor above the list)
+    pairs = [(ancestors[i] or {}, ancestors[i + 1] or {}, i + 2) for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH))]
+    # A clicked option is the target itself (bridge.js::resolveMeaningfulTarget), so its chain starts at the list: the
+    # option is the row (BUILD-102 (6): OrangeHRM's picked suggestion was never bound).
+    item = _clicked_item(ev)
+    if item is not None and ancestors:
+        pairs.insert(0, (item, ancestors[0] or {}, 1))
+    for row, parent, above in pairs:
         row_tag = str(row.get("tag") or "").strip().lower()
-        if not row_tag or not _names_a_data_row(row, row_tag)                 or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
+        if row is not item and (not row_tag or not _names_a_data_row(row, row_tag)
+                                or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS):
             continue
-        segments = _row_text_segments(str(row.get("outer_html") or ""))
+        segments = [row["text"]] if row is item else _row_text_segments(str(row.get("outer_html") or ""))
         for value in reversed(typed_before):  # the latest typed value is the one this row answers
             # (the control's own label is not excluded here: a field's label is often the row's name, and a value the
             # person typed is never a label repeated on every row unless it is one of these words)
             if value.lower() in _NON_IDENTIFYING_TOKENS:
                 continue
             if any(_whole_value_in(value, seg) for seg in segments):
-                row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
                 # A suggestion list item shows more than what was typed ("Amelia Brown" for "Amelia"): the row IS the
                 # element, and it holds the typed words rather than being them. Inert until the person says so.
                 suggestion = _is_suggestion_row(row, parent, segments, value)
+                if row is item:
+                    if not suggestion:
+                        continue  # the option is exactly what was typed: binding it would change what is clicked
+                    container = (f'[role="{_outer_role(parent)}"] > [role="{row["role"]}"]'
+                                 if _outer_role(parent) in _SUGGESTION_PARENT_ROLES else f'[role="{row["role"]}"]')
+                else:
+                    row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
+                    container = _scope_to_panel(_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
+                                                ancestors[above:], dom_html)
                 return EntityBinding(
-                    container_selector=_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
+                    container_selector=container,
                     identifier=value,
                     source="literal",
                     confirmed=False,
+                    recorded_matches=_rows_showing(container, value, dom_html),
                     **({"match": "contains", "self_target": True} if suggestion else {}),
                 )
     return None
+
+
+def _rows_showing(container: str, value: str, dom_html: str | None) -> int:
+    """How many of the saved page's rows show ``value`` in full (BUILD-109 (1): over 1 = twin rows). 0 = no saved page."""
+    if not dom_html:
+        return 0
+    try:
+        rows = BeautifulSoup(dom_html, "html.parser").select(container)
+    except Exception:  # an unusual selector is not a reason to lose the binding
+        return 0
+    return sum(1 for r in rows if any(_whole_value_in(value, seg) for seg in _row_text_segments(str(r))))
 
 
 _SUGGESTION_ROLES = frozenset({"option", "menuitem"})
 _SUGGESTION_PARENT_ROLES = frozenset({"listbox", "menu"})
 
 
+def _clicked_item(ev: Step) -> dict[str, Any] | None:
+    """The clicked target as a row, when it is a list item the page offers as a choice (role option / menuitem)."""
+    target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
+    role = str(target.get("role") or "").strip().lower()
+    text = " ".join(str(target.get("inner_text") or "").split())
+    if role not in _SUGGESTION_ROLES or not text:
+        return None
+    return {"tag": target.get("tag"), "classes": target.get("classes") or [], "role": role, "text": text}
+
+
 def _outer_role(el: dict[str, Any]) -> str:
+    if el.get("role"):
+        return str(el["role"]).lower()
     m = _ROLE_ATTR_RE.match(str(el.get("outer_html") or ""))
     return m.group(1).lower() if m else ""
+
+
+_PANEL_SEARCH_DEPTH = 8
+
+
+def _stable_selector(el: dict[str, Any]) -> str:
+    el_id = str(el.get("id") or "").strip()
+    if el_id and re.fullmatch(r"[A-Za-z_-][\w-]*", el_id) and not is_dynamic_id(f"#{el_id}"):
+        return f"#{el_id}"
+    tag = str(el.get("tag") or "").strip().lower()
+    classes = _css_class_selector(strip_dynamic_classes([str(c) for c in (el.get("classes") or [])]))
+    return f"{tag}{classes}" if tag and classes else ""
+
+
+def _scope_to_panel(container: str, above: list[dict[str, Any]], dom_html: str | None) -> str:
+    """The same rows can show in two panels ("Results" and "Recently edited", both ``tbody > tr``): the record then
+    shows twice and every run refuses as "more than one row" (BUILD-108 (3)). Put the nearest ancestor above the list
+    whose id or classes leave only one list's rows in front of it. Read from the saved page only: no page, no change,
+    and a panel nothing names keeps the plain selector (the runtime still refuses rather than guess)."""
+    if not dom_html or container.startswith("#"):  # a list with its own id is one list already
+        return container
+    try:
+        soup = BeautifulSoup(dom_html, "html.parser")
+        if len({id(r.parent) for r in soup.select(container)}) < 2:
+            return container
+    except Exception:  # an unusual selector is not a reason to lose the binding
+        return container
+    for el in above[:_PANEL_SEARCH_DEPTH]:
+        prefix = _stable_selector(el or {})
+        if not prefix:
+            continue
+        scoped = f"{prefix} {container}"
+        try:
+            hits = soup.select(scoped)
+        except Exception:
+            continue
+        if hits and len({id(r.parent) for r in hits}) == 1:
+            return scoped
+    return container
 
 
 def _is_suggestion_row(row: dict[str, Any], parent: dict[str, Any], segments: list[str], value: str) -> bool:
@@ -359,6 +437,59 @@ def detect_entity_binding(
     ev: Step, *, dom_html: str | None = None, destructive: bool = False, address_unique: bool = False,
     typed_before: list[str] | None = None, edited: set[str] | frozenset[str] = frozenset(),
 ) -> EntityBinding | None:
+    """The row a step acts on (``_row_binding``), or, for a captured value no words can find, its place in the list
+    (``_position_binding``, inert until the person says yes)."""
+    # shortcut: a capture that got a words binding (two rows with the same price) is not offered the place; add it if seen.
+    found = _row_binding(ev, dom_html=dom_html, destructive=destructive, address_unique=address_unique,
+                         typed_before=typed_before, edited=edited)
+    return found if found is not None else _position_binding(ev, dom_html)
+
+
+# clarify.py words the place up to "tenth"; nobody means "always the 14th result".
+_MAX_POSITION = 10
+
+
+def _position_binding(ev: Step, dom_html: str | None) -> EntityBinding | None:
+    """A captured value whose words change every run ("Rs. 400", the first result's price, BUILD-101 (7)) cannot name
+    its row, and the row's other words change with the search too. What stays is its place: the Nth row of a list that
+    is the only such list on the saved page, the recorded row found there exactly once. The binding is inert until the
+    person answers "Always the first result?" with yes (conversation/clarify.py, runtime/app/resolution.js::
+    isInertBinding). No saved page, no binding."""
+    extras = ev.get("extras") if isinstance(ev.get("extras"), dict) else {}
+    spec = extras.get("extract") if isinstance(extras.get("extract"), dict) else {}
+    target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
+    if (str((ev.get("action") or {}).get("action") or "").lower() != "extract" or str(spec.get("source") or "text") != "text"
+            or not dom_html or not is_value_text(target.get("inner_text"))):
+        return None
+    try:
+        soup = BeautifulSoup(dom_html, "html.parser")
+    except Exception:
+        return None
+    ancestors = ev.get("ancestors") or []
+    for i in range(min(len(ancestors) - 1, _MAX_ROW_SEARCH_DEPTH)):
+        row, parent = ancestors[i] or {}, ancestors[i + 1] or {}
+        row_tag = str(row.get("tag") or "").strip().lower()
+        if not row_tag or not _names_a_data_row(row, row_tag) \
+                or str(parent.get("tag") or "").strip().lower() in _HEADER_PARENTS:
+            continue
+        row_classes = strip_dynamic_classes([str(c) for c in (row.get("classes") or [])])
+        container = _scope_to_panel(_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
+                                    ancestors[i + 2:], dom_html)
+        try:
+            rows = soup.select(container)
+        except Exception:  # an unusual selector is not a reason to fail the compile
+            continue
+        mine = {seg.lower() for seg in _row_text_segments(str(row.get("outer_html") or ""))}
+        at = [n for n, r in enumerate(rows) if mine and mine <= {seg.lower() for seg in _row_text_segments(str(r))}]
+        if len(rows) >= _MIN_SIBLINGS and len({id(r.parent) for r in rows}) == 1 and len(at) == 1 and at[0] < _MAX_POSITION:
+            return EntityBinding(container_selector=container, position=at[0] + 1, confirmed=False)
+    return None
+
+
+def _row_binding(
+    ev: Step, *, dom_html: str | None = None, destructive: bool = False, address_unique: bool = False,
+    typed_before: list[str] | None = None, edited: set[str] | frozenset[str] = frozenset(),
+) -> EntityBinding | None:
     """Walk the recorded ancestor chain outward; the first ancestor with >=2 structurally
     matching siblings is treated as the row. Returns None when nothing repeats — there is no
     wrong row to guard against.
@@ -372,7 +503,7 @@ def detect_entity_binding(
 
     A row showing a value typed earlier in the recording (``typed_before``: a search, a new entry) is bound by that value
     before any of this (``_searched_row_binding``). Text the workflow itself types over (``edited``) never names a row."""
-    searched = _searched_row_binding(ev, list(typed_before or []))
+    searched = _searched_row_binding(ev, list(typed_before or []), dom_html)
     if searched is not None:
         return searched
     if address_unique and not destructive and dom_html:
@@ -392,7 +523,8 @@ def detect_entity_binding(
         siblings = _direct_child_count(str(parent.get("outer_html") or ""), row_tag, set(row_classes))
         if siblings < _MIN_SIBLINGS:
             continue
-        container_selector = _build_container_selector(parent, row_tag, _css_class_selector(row_classes))
+        container_selector = _scope_to_panel(_build_container_selector(parent, row_tag, _css_class_selector(row_classes)),
+                                             ancestors[i + 2:], dom_html)
         rows_html, complete = _sibling_rows_html(ev, row, parent, container_selector, row_tag, row_classes, dom_html)
         # The control's own words appear in this row only (an account number link): its own address already picks the
         # row, and a binding on other row text (a balance that changes after a transfer) only adds a way to fail.

@@ -6,6 +6,8 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from conxa_compile import signin_names
+
 if TYPE_CHECKING:
     from conxa_core.models.skill_spec import IdentitySignal
 
@@ -266,12 +268,34 @@ def scrub_email(text: str) -> str:
 _MAX_LABEL_TEXT = 60
 
 
-def drop_personal_target_text(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def without_sign_in_names(value: Any, names: list[tuple[str, frozenset[str]]]) -> Any:
+    """The value with every string that has a user name typed in a sign-in window in it (signin_names.mentions)
+    blanked, and dropped from lists."""
+    if isinstance(value, str):
+        return "" if signin_names.mentions(value, names) else value
+    if isinstance(value, list):
+        return [without_sign_in_names(v, names) for v in value
+                if not (isinstance(v, str) and signin_names.mentions(v, names))]
+    if isinstance(value, dict):
+        return {k: without_sign_in_names(v, names) for k, v in value.items()}
+    return value
+
+
+def drop_personal_target_text(
+    events: list[dict[str, Any]], names: list[tuple[str, frozenset[str]]] | None = None,
+) -> list[dict[str, Any]]:
     """Events with the text the person's own account put on the page taken out of everything that describes the
     element (its target, the selectors the recorder built for it, and its surroundings), once, before any selector,
     fingerprint or binding is built from it. Whatever is built later cannot carry what is not there.
     A text with a personal email address in it (has_personal_email), or a label too long to be one label, is
-    blanked; nothing else changes. The input events are not modified."""
+    blanked; so is surrounding text with a user name typed in a sign-in window (`names`, read from this machine's
+    groups when None). Nothing else changes. The input events are not modified."""
+    if names is None:
+        from conxa_core.config import settings  # noqa: PLC0415
+
+        # shortcut: every group's names, not only this workflow's group (the compile does not know its group); a
+        # common user name ("admin") also drops matching surroundings elsewhere. Pass the group down if that bites.
+        names = signin_names.load(settings.data_dir)
     out: list[dict[str, Any]] = []
     for ev in events:
         if not isinstance(ev, dict):
@@ -292,6 +316,9 @@ def drop_personal_target_text(events: list[dict[str, Any]]) -> list[dict[str, An
         for key in ("selectors", "context"):
             if isinstance(ev.get(key), dict):
                 cleaned = _without_personal_email(ev[key])
+                if key == "context":
+                    # Only the surroundings: a target or selector named "Admin" is the app's, kept for the step.
+                    cleaned = without_sign_in_names(cleaned, names)
                 if cleaned != ev[key]:
                     ev = {**ev, key: cleaned}
         out.append(ev)

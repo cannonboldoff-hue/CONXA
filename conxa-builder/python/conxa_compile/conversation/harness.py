@@ -180,6 +180,8 @@ def thread_turns(items: list[dict[str, Any]], *, after_id: str | None = None) ->
     return out
 
 
+FOLLOW_UP_LEAD = "Following up on what you told me earlier: "
+
 EDIT_REFUSED = ("Only your last message can be changed, and only while nothing but my reply came after it. "
                 "Send a new message instead.")
 
@@ -380,6 +382,7 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
             turns=turns,
             extra_sections=extra,
             anchor=anchor,
+            from_studio=hidden,
         )
 
     pack = make_pack()
@@ -424,6 +427,9 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
     except TurnCancelled:
         return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
     reply = "".join(parts).strip() or _reply_text(result)
+    if reply and hidden:
+        # The person never sent the message this answers, so the reply says it starts on its own (BUILD-98 (3)).
+        reply = FOLLOW_UP_LEAD + reply
     if cancel.is_set():
         return {"turn_id": turn_id, "status": "cancelled", "reply": "", "items": new_items}
 
@@ -666,4 +672,3 @@ def _summarize(thread_id: str, dropped: list[dict[str, Any]], previous: str | No
     summary = str((data or {}).get("summary") or "").strip() if isinstance(data, dict) else ""
     if summary:
         emit_item(sink, thread_id, ts.append(thread_id, "summary", text=summary, covers_through=dropped[-1].get("id")))
-  

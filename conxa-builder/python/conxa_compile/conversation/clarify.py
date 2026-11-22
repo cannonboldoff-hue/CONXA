@@ -141,6 +141,10 @@ def _steps(doc: dict[str, Any]) -> list[dict[str, Any]]:
 # ── generation ──────────────────────────────────────────────────────────────────────────────
 
 
+# How a recorded place in a list is said ("Always the first result?"); entity_binding.py binds no place beyond these.
+_ORDINALS = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+
+
 def _question(kind: str, qid: str, title: str, body: str, choices: list[dict[str, Any]], *, multi: bool = False,
               step_keys_: list[str] | None = None, **extra: Any) -> dict[str, Any]:
     return {
@@ -281,7 +285,7 @@ def _coverage_question(note: str) -> dict[str, Any]:
         f"{note} If a part is missing, add it now, before you try it out. That way the try-out checks the whole job.",
         [
             {"id": "complete", "label": "Yes, that’s everything", "detail": "The recording shows what I wanted."},
-            {"id": "incomplete", "label": "No, a part is missing", "detail": "I\u2019ll add or record the missing part in the editor."},
+            {"id": "incomplete", "label": "No, a part is missing", "detail": "Tell me in the chat what\u2019s missing, or add or record it in the editor."},
         ],
     )
 
@@ -374,9 +378,23 @@ def input_check_question(suspects: list[dict[str, Any]], input_defs: list[dict[s
         [
             {"id": "wrong", "label": "No, I typed it wrong. Let me try again", "detail": "I\u2019ll reopen the try-out and point to the box to fix."},
             {"id": "right", "label": "Yes, it was right. Fix the workflow instead", "detail": "I\u2019ll look for the problem in the steps."},
+            # BUILD-109 (2): a test with deliberately bad input. An answer that starts nothing, not a skip.
+            {"id": "on_purpose", "label": "I typed it wrong on purpose, that\u2019s fine",
+             "detail": "Nothing changes. You can test again whenever you like."},
         ],
         input_ids=ids,
     )
+
+
+def _twin_rows_sentence(eb: dict[str, Any], doc: dict[str, Any]) -> str:
+    """The saved page showed the row's words on more than one row (``EntityBinding.recorded_matches``): those words
+    cannot tell the rows apart, so say it before the person agrees to them (BUILD-109 (1)). '' otherwise."""
+    if int(eb.get("recorded_matches") or 0) < 2:
+        return ""
+    recorded = {str(i.get("id")): str(i.get("default") or "") for i in doc.get("inputs") or [] if isinstance(i, dict)}
+    shown = _readable(re.sub(r"\{\{(\w+)\}\}", lambda m: recorded.get(m.group(1)) or m.group(0),
+                             str(eb.get("identifier") or "")))[:60]
+    return f" On the page you recorded, more than one row shows “{shown}”, so a run looking for “{shown}” stops every time."
 
 
 def _is_irreversible(step: dict[str, Any]) -> bool:
@@ -489,6 +507,7 @@ def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = No
     if choices or effect_choices:
         referenced = " ".join(str(a.get("target") or "") for s in steps
                               for a in (s.get("validation") or {}).get("assertions") or [] if isinstance(a, dict))
+        memo: dict[str, Any] = {}  # the recording and its pages, read once for every input (BUILD-111 (7))
         for inp in doc.get("inputs") or []:
             iid = str(inp.get("id") or "") if isinstance(inp, dict) else ""
             if iid and iid != "file_path" and "{{" + iid + "}}" not in referenced and not any(
@@ -497,7 +516,7 @@ def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = No
                 words = str((recorded or {}).get(iid) or "")
                 if recorded is not None and not words:
                     continue  # words nobody saw typed cannot be proven on the screen; no recording given keeps the old offer
-                where = step_where_words_appear(doc, words) if words else None
+                where = step_where_words_appear(doc, words, memo=memo) if words else None
                 if where == "" or where == ALREADY_SHOWN:
                     continue
                 choices.append({"id": f"input:{iid}", "label": f"You see the {_humanize(iid).lower()} on the screen",
@@ -800,12 +819,29 @@ def generate_questions(
                 or eb.get("confirmed")):
             continue
         ident = str(eb.get("identifier") or "").strip()
-        if not ident or "{{" in ident:
-            continue  # a run input names the row each time; nothing recorded to confirm
+        if not ident or ("{{" in ident and eb.get("match") == "contains"):
+            continue  # a suggestion pick asks "pick_match" below; its yes confirms the row too
         name = step_name(s)
+        named = re.search(r"\{\{(\w+)\}\}", ident)
+        if named:
+            # A run input names the row each time (search, then Delete): the publish gate still needs a yes, so ask in
+            # plain words what the row is tied to (BUILD-108 (1): only Human Edit could release it).
+            label = _humanize(named.group(1)).lower()
+            out.append(_question(
+                "confirm_row", f"confirm_row:{keys[i]}", f"Should “{name}” only act on the row that shows the {label} it is given?",
+                f"This step can’t be undone. Each run it looks for the one row that shows the {label} it was given. If no row "
+                f"shows it, or more than one does, it stops instead of guessing.{_twin_rows_sentence(eb, doc)}",
+                [
+                    {"id": "yes", "label": "Yes, only that row", "detail": f"Locks it to the row that shows the {label}."},
+                    {"id": "no", "label": "No, it should pick a different row", "detail": "Nothing changes here. Choose the right row in the editor before this can be published."},
+                ],
+                step_keys_=[keys[i]], step_name=name,
+            ))
+            continue
         out.append(_question(
             "confirm_row", f"confirm_row:{keys[i]}", f"Is the row with “{_readable(ident)[:60]}” the one “{name}” should act on?",
-            "This step can’t be undone, so it only ever acts on the row with that text. If the text matches no row, or more than one, it stops instead of guessing.",
+            "This step can’t be undone, so it only ever acts on the row with that text. If the text matches no row, or more than one, it stops instead of guessing."
+            + _twin_rows_sentence(eb, doc),
             [
                 {"id": "yes", "label": "Yes, that’s the row", "detail": "Locks it to that row."},
                 {"id": "no", "label": "No, it should pick a different row", "detail": "Nothing changes here. Choose the right row in the editor before this can be published."},
@@ -827,12 +863,32 @@ def generate_questions(
             "pick_match", f"pick_match:{keys[i]}", f"When this runs with another {label}, should it pick the suggestion that shows it?",
             f"While recording, you typed a {label} and then picked “{name}” from the list that appeared. If you say yes, each "
             f"run picks the one suggestion that shows what it was given. If none shows it, or more than one does, it stops "
-            "instead of guessing.",
+            f"instead of guessing.{_twin_rows_sentence(eb, doc)}",
             [
                 {"id": "yes", "label": "Yes, pick the one that shows it", "detail": "Follows the value each run is given."},
                 {"id": "no", "label": "No, always pick the same one", "detail": f"Always picks “{name}”, whatever is typed."},
             ],
             step_keys_=[keys[i]], step_name=name,
+        ))
+
+    # 2d ─ a captured value whose words change every run sits in a list: always the Nth result? Same kind and answer as
+    #      2c (yes confirms the binding; it is inert until then), worded by the recorded place (BUILD-101 (7)).
+    for i, s in enumerate(steps):
+        eb = s.get("entity_binding")
+        place = int(eb.get("position") or 0) if isinstance(eb, dict) else 0
+        if not (0 < place <= len(_ORDINALS) and eb.get("container_selector")) or eb.get("confirmed"):
+            continue
+        name, nth = step_name(s), _ORDINALS[place - 1]
+        out.append(_question(
+            "pick_match", f"pick_match:{keys[i]}", f"Always the {nth} result?",
+            f"While recording, “{name}” read a value from the {nth} result in the list. That value changes every run, so "
+            f"it can’t be found by its words. If you say yes, each run reads it from the {nth} result, whatever it "
+            f"shows. If there is no such list, or it has fewer results, it stops instead of guessing.",
+            [
+                {"id": "yes", "label": f"Yes, always the {nth} one", "detail": f"Reads it from the {nth} result each run."},
+                {"id": "no", "label": "No, find it the way it was recorded", "detail": "Nothing changes here."},
+            ],
+            step_keys_=[keys[i]], step_name=name, position=place,
         ))
 
     # 3 ─ typed values: fixed, or an input the person running it fills in?
@@ -995,7 +1051,8 @@ def generate_questions(
         name = step_name(s)
         out.append(_question(
             "missing_item", f"missing_item:{keys[i]}", f"What should “{name}” do if the item can\u2019t be found on the page?",
-            "This step works on one particular item. It might be gone, for example if someone already dealt with it.",
+            "This step works on one particular item. It might be gone, for example if someone already dealt with it."
+            + _twin_rows_sentence(s["entity_binding"], doc),
             [
                 {"id": "skip", "label": "Skip it and keep going", "detail": "Only when the list is showing and the item is clearly not in it."},
                 {"id": "ask", "label": "Stop and ask a person", "detail": "It waits with the browser open until someone sorts it out."},
@@ -1162,7 +1219,20 @@ def _cause_by_clock(events: list[dict[str, Any]], pressed: list[int], first: int
     return (after_clean or before)[-1]
 
 
-def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
+def _shown_after(events: list[dict[str, Any]], i: int, needle: str) -> bool:
+    """Whether the recorder's own record of the words the page showed after step ``i`` (bridge.js result signature, never
+    a control's label) holds ``needle``: on the same page, or on the page the step led to once it settled (``next_page``).
+    Words from a page the step left are that page's last moment, never its result. ``events`` carry
+    ``state_validation.mark_document_changes``' stamps."""
+    from conxa_compile.compiler.state_validation import _left_the_page
+
+    rd = (events[i].get("state_change") or {}).get("result_diff") or {}
+    if not any(needle in _words_in(str(w)) for w in rd.get("added") or []):
+        return False
+    return bool(rd.get("next_page")) or not _left_the_page(events[i])
+
+
+def step_where_words_appear(doc: dict[str, Any], words: str, memo: dict[str, Any] | None = None) -> str | None:
     """The step after which ``words`` were on the screen while recording (its step key); "" when the saved pages were
     read and none shows them, None when there is no recording to read or no step brought them up, ``ALREADY_SHOWN`` when they
     were on the screen before the step that would hold them. Typed as "how we
@@ -1175,8 +1245,12 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     it is the last press (click, Enter) after the last copy without the words, up to the first copy with them; with none
     there, the first press after it that still shares that copy; with none at all, the first other action there.
     Placed by the clock when the recording has one (``_cause_by_clock``), by copy order otherwise (recordings made before
-    the recorder stamped each page copy)."""
+    the recorder stamped each page copy). When no saved page shows them (the recording ended on the step that brought
+    them up), the step whose own recorded result holds them is the one (``_shown_after``).
+
+    ``memo``: one dict shared by calls about the same doc, so the recording and its pages are read once."""
     from conxa_compile.compiler.navigation_effects import _INTERACTION_ACTIONS
+    from conxa_compile.compiler.state_validation import mark_document_changes
     from conxa_core.storage.session_events import read_session_events
     from conxa_core.storage.snapshots import read_dom_snapshot
     from conxa_compile.compiler.selector_filters import _parse_soup
@@ -1185,14 +1259,21 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     needle = _words_in(words)
     if not session or not needle:
         return None
-    try:
-        events = read_session_events(session)
-    except Exception:  # noqa: BLE001 — no recording to read: the caller keeps its own placement
+    memo = {} if memo is None else memo
+    if "events" not in memo:
+        try:
+            memo["events"] = mark_document_changes([dict(e) for e in read_session_events(session)])
+        except Exception:  # noqa: BLE001 — no recording to read: the caller keeps its own placement
+            memo["events"] = None
+    events = memo["events"]
+    if events is None:
         return None
 
     def visible_text(html: str) -> str:
         soup = _parse_soup(html)
-        for tag in soup(["script", "style", "noscript", "template"]):
+        # A dropdown's options are choices, not words on the screen (ParaBank's account type list read as "you see the
+        # account type", BUILD-99 (5)); its chosen value is the person's own input, never a result.
+        for tag in soup(["script", "style", "noscript", "template", "select", "datalist"]):
             tag.decompose()
         # A result panel kept hidden until the step shows it (ParaBank's "Transfer Complete!"): not on the screen yet.
         for tag in soup.find_all(lambda t: t.has_attr("hidden") or t.get("aria-hidden") == "true" or re.search(
@@ -1204,34 +1285,57 @@ def step_where_words_appear(doc: dict[str, Any], words: str) -> str | None:
     def action(i: int) -> str:
         return str((events[i].get("action") or {}).get("action") or "").lower()
 
-    page = [str((e.get("page") or {}).get("url") or "").split("#", 1)[0] for e in events]
+    def tab(i: int) -> str:
+        return str((events[i].get("tab") or {}).get("id") or "")
+
+    # A step inside a frame records the frame's own address; the page on the screen is the tab's (WF-8 8.13: the robot
+    # check's frame address read as a new page).
+    page = [str(((e.get("tab") or {}) if (e.get("frame") or {}).get("chain") else (e.get("page") or {})).get("url") or "")
+            .split("#", 1)[0] for e in events]
     hashes = [str((e.get("snapshot") or {}).get("dom_hash") or "") for e in events]
+    texts: dict[str, str] = memo.setdefault("texts", {})
     shows: dict[str, bool] = {}
     for h in set(hashes) - {""}:
-        html = read_dom_snapshot(session, h) or ""
-        shows[h] = needle in visible_text(html) if html else False
+        if h not in texts:
+            html = read_dom_snapshot(session, h) or ""
+            texts[h] = visible_text(html) if html else ""
+        shows[h] = bool(texts[h]) and needle in texts[h]
     first = next((i for i, h in enumerate(hashes) if shows.get(h)), None)
     if first is None:
-        return "" if shows else None
-    last_sharing = max(i for i, h in enumerate(hashes) if h == hashes[first])
-    seen_on = page[last_sharing]
-    if page[first] != seen_on:
-        arrived = next(i for i in range(first, len(events)) if page[i] == seen_on)
-        cause = next((i for i in range(arrived - 1, -1, -1) if action(i) in _INTERACTION_ACTIONS), None)
+        # No saved page shows them: the recording may have ended on the step that brought them up (BUILD-111 (9): a
+        # practice form recorded up to Submit, whose thank-you box no saved copy holds). That step recorded them itself.
+        cause = next((i for i in range(len(events)) if _shown_after(events, i, needle)), None)
+        if cause is None:
+            return "" if shows else None
     else:
-        without = max((i for i in range(first) if hashes[i] and not shows.get(hashes[i])), default=-1)
-        pressed = [i for i in range(without + 1, last_sharing + 1) if action(i) in ("click", "dblclick", "keyboard_shortcut", "submit")]
-        acted = [i for i in range(without + 1, last_sharing + 1) if action(i) in _INTERACTION_ACTIONS]
-        upto = [i for i in pressed if i <= first]
-        # Late beats early: a check one step late still sees words that stay on the screen; one step early fails.
-        cause = upto[-1] if upto else (pressed or acted or [None])[0]
-        # With the clock (the recorder stamps when it looked at the page, and when each press happened) the cause is
-        # the last press made before the first look that shows the words, and after the last look that did not.
-        timed = _cause_by_clock(events, pressed, first, without)
-        if timed is not None:
-            cause = timed
+        last_sharing = max(i for i, h in enumerate(hashes) if h == hashes[first])
+        seen_on = page[last_sharing]
+        if page[first] != seen_on:
+            arrived = next(i for i in range(first, len(events)) if page[i] == seen_on)
+            cause = next((i for i in range(arrived - 1, -1, -1) if action(i) in _INTERACTION_ACTIONS), None)
+        else:
+            without = max((i for i in range(first) if hashes[i] and not shows.get(hashes[i])), default=-1)
+            pressed = [i for i in range(without + 1, last_sharing + 1) if action(i) in ("click", "dblclick", "keyboard_shortcut", "submit")]
+            acted = [i for i in range(without + 1, last_sharing + 1) if action(i) in _INTERACTION_ACTIONS]
+            upto = [i for i in pressed if i <= first]
+            # Late beats early: a check one step late still sees words that stay on the screen; one step early fails.
+            cause = upto[-1] if upto else (pressed or acted or [None])[0]
+            # With the clock (the recorder stamps when it looked at the page, and when each press happened) the cause is
+            # the last press made before the first look that shows the words, and after the last look that did not.
+            timed = _cause_by_clock(events, pressed, first, without)
+            if timed is not None:
+                cause = timed
     if cause is None:
         return None  # on screen before anything was done: no step brought them up
+    # A press inside a frame is described by the frame's own text, so the page around it is read from the copy saved
+    # just before it on the same tab: words that copy already shows were on the screen before the press (BUILD-110 (8)).
+    if (events[cause].get("frame") or {}).get("chain"):
+        prev = next((i for i in range(cause - 1, -1, -1) if hashes[i] and tab(i) == tab(cause)), None)
+        looked = (events[prev].get("snapshot") or {}).get("captured_ms") if prev is not None else None
+        pressed_at = _press_ms(events[cause])
+        late = isinstance(looked, int) and pressed_at is not None and looked > pressed_at  # that copy was taken after the press
+        if prev is not None and shows.get(hashes[prev]) and not late:
+            return ALREADY_SHOWN
     # A press made inside a box that already showed the words did not bring them up; the press that opened that box
     # did (a thank-you box shown by Submit, then closed). Saved copies are taken a moment after each press, so the
     # first copy showing the words is the closing press's, not the opener's.
@@ -1278,6 +1382,9 @@ def _body_step_for_event(key: str, step: dict[str, Any], seq: int) -> str | None
 # ── an answer typed in the person's own words ───────────────────────────────────────────────────────────────────────
 # Code reads the words into one of the offered choices; nothing else answers a question. Words that name no single
 # choice leave it open, so an irreversible step never falls back to "just do it" on an answer nobody could read.
+# The yes/no/none/all lists read which offered option the person's own answer names; they never judge a page or a step.
+# shortcut: a few languages only (BUILD-104 (5)); words in any other language leave the question open or go to the
+# person's wish path (a change card they apply), never a guess. Add a language here only if testers ask for it.
 OWN_WORDS_MAX = 500
 _YES_WORDS = frozenset({"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "haan", "han", "haa", "ji", "हाँ", "हां", "जी",
                         "si", "sí", "oui", "ja", "sim", "да", "はい", "是", "对", "نعم", "evet"})
@@ -1478,7 +1585,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
 
     if kind == "coverage":
         if answer.get("choice") == "incomplete":
-            return ops, "A part is missing — add it in the editor before you rely on this"
+            return ops, "A part is missing — tell me in the chat what it is, or add it in the editor"
         return ops, "Covers everything you wanted"
 
     if kind == "relative_date":
@@ -1517,8 +1624,10 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         return ops, "Whoever uses it still fills it in"
 
     if kind == "input_check":
-        # No edit to the workflow either way; the handler acts on the choice (re-test or Auto-fix).
-        return ops, ("Trying again with a corrected value" if answer.get("choice") == "wrong" else "Keeping the value — looking at the steps")
+        # No edit to the workflow either way; the handler acts on the choice (re-test, Auto-fix, or nothing).
+        return ops, {"wrong": "Trying again with a corrected value",
+                     "on_purpose": "Fine: the wrong value was on purpose, nothing changes"}.get(
+                         answer.get("choice"), "Keeping the value — looking at the steps")
 
     if kind == "dropped_value":
         return ops, "Left out"
@@ -1564,10 +1673,11 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         return ops, "Needs the right row chosen in the editor"
 
     if kind == "pick_match":
+        nth = _ORDINALS[question["position"] - 1] if question.get("position") else ""
         if answer.get("choice") == "yes":
             ops.append({"op": "patch", "step_key": keys[0], "patch": {"entity_binding": {"confirmed": True}}})
-            return ops, "Picks the suggestion that shows what it is given"
-        return ops, "Always picks the same suggestion"
+            return ops, f"Always reads the {nth} result" if nth else "Picks the suggestion that shows what it is given"
+        return ops, "Finds it the way it was recorded" if nth else "Always picks the same suggestion"
 
     if kind == "fork_then":
         how = {"same": "rejoin", "stop": "stop", "end": "end"}.get(str(answer.get("choice") or ""))
@@ -1674,6 +1784,13 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
                 continue
             key, _, idx = cid.rpartition("#")  # step keys may contain "#" themselves
             by_step.setdefault(key, {})[int(idx)] = True
+        # A completion check the person unticked is retired, as an unticked assertion is below (BUILD-103 (2)): it no
+        # longer counts toward proving the step, nor is it listed as one. Only the person's own untick does this; a
+        # default the harness assumed retires nothing.
+        if not answer.get("assume"):
+            ops.extend({"op": "retire_effect", "step_key": str(c["id"])[len("effect:"):]}
+                       for c in question.get("choices") or [] if str(c.get("id") or "").startswith("effect:")
+                       and c["id"] not in selected)
         steps = _steps(doc)
         keyed = dict(zip(step_keys(steps), steps))
         top_keys = list(keyed)

@@ -56,7 +56,7 @@ from conxa_compile.compiler.selector_score import (
     rank_selectors_scored,
     score_selector_row,
 )
-from conxa_compile.compiler.stable_hash import compute_stable_hash
+from conxa_compile.compiler.stable_hash import compute_stable_hash, stable_hash_input
 from conxa_compile.llm import model_ledger
 from conxa_compile.compiler.second_opinion import (
     apply_effect_judgements,
@@ -70,7 +70,7 @@ from conxa_compile.compiler.step_key import assign_compile_ids, step_key_index_m
 from conxa_compile.compiler.identity_bundle import generate_deterministic_signals
 from conxa_compile.compiler.selector_score import has_usable_unique_signal
 from conxa_compile.compiler.selector_grammar import display_to_signal, signal_to_display
-from conxa_compile.compiler.state_validation import capture_state_snapshot, compare_state, merge_dom_diff_evidence, optimize_scroll, scroll_payload, validation_from_diff
+from conxa_compile.compiler.state_validation import capture_state_snapshot, compare_state, mark_document_changes, merge_dom_diff_evidence, optimize_scroll, scroll_payload, validation_from_diff
 from conxa_compile.compiler.step_anchors import clean_anchors, clean_steps, fix_step_order, generate_stable_selector
 from conxa_core.config import settings
 from conxa_core.models.events import RecordedEvent
@@ -288,10 +288,24 @@ _MARKER_TITLES = {
 }
 
 
+def _secret_values_as_inputs(url: str) -> str:
+    """`url` with each address value the recording hid (`?token=REDACTED`, conxa_core.redact) turned into a run input
+    (`{{token}}`, `{{secret_code}}`), so an invite or magic link can be opened with the value the person fills in. The
+    input's name always reads as secret, so the test card hides it and Studio never saves it."""
+    from conxa_core.redact import REDACTED, is_secret_input  # noqa: PLC0415
+
+    def one(m: re.Match[str]) -> str:
+        name = re.sub(r"[^a-z0-9]+", "_", m.group(2).lower()).strip("_") or "value"
+        return f"{m.group(1)}{m.group(2)}={{{{{name if is_secret_input(name) else 'secret_' + name}}}}}"
+
+    return re.sub(rf"([?&#])([^=&#?]+)={REDACTED}(?=$|[&#])", one, url) if REDACTED in url else url
+
+
 def _navigate_step(url: str, tab: dict[str, Any]) -> SkillStep:
     """A synthetic `navigate` step to `url` — used everywhere the compiler has to insert a page
     load the recording itself never performed as a user action (a tab open, the recording's own
     starting page)."""
+    url = _secret_values_as_inputs(url)
     site = _site_of(url)
     return SkillStep(
         action="navigate",
@@ -582,16 +596,7 @@ def _build_identity_bundle(
             {"phase": "identity_bundle_low_orthogonality", "classes": list(distinct_classes)},
         )
 
-    element_data = {
-        "tag": str(target.get("tag") or ""),
-        "parent_tag": "",
-        "aria_label": str(target.get("aria_label") or ""),
-        "name": str(target.get("name") or ""),
-        "inner_text": str(target.get("inner_text") or "")[:80],
-        "value_label": str(target.get("value_label") or ""),
-        "attributes": target.get("attributes") or {},
-    }
-    s_hash = compute_stable_hash(element_data)
+    s_hash = compute_stable_hash(stable_hash_input(target, ev.get("semantic")))
 
     # Extract testid for guid_like_attrs check
     data_testid = ""
@@ -883,6 +888,7 @@ def _build_structural_fingerprint(steps: list[SkillStep]) -> dict[str, Any]:
     (after a click that navigated, or in another tab) cannot be on that page yet, so it is never a landmark:
     its element being "missing" at start would be a false "the app was redesigned" warning."""
     landmarks: list[dict[str, Any]] = []
+    seen: set[Any] = set()
     first_tab = (getattr(steps[0], "tab", None) or {}) if steps else {}
     start_key = _page_key(first_tab.get("url") or getattr(steps[0], "url", "") if steps else "")
     left_start_page = False
@@ -901,7 +907,11 @@ def _build_structural_fingerprint(steps: list[SkillStep]) -> dict[str, Any]:
         primary = step.target.get("primary_selector", "")
         # A landmark must be named by something a person or the site gave the element (a test id, a label, its words).
         # A bare recorded selector path is the same fragile guess the step itself starts from, so it proves nothing.
-        if fp.data_testid or fp.aria_label or fp.inner_text:
+        # One element is one landmark: a box that is focused, typed into and pressed Enter on is still one element,
+        # and three copies of it read as "3/3 landmarks missing" when only that element broke (BUILD-90).
+        element = primary or (fp.data_testid, fp.aria_label, fp.inner_text[:60], fp.tag)
+        if (fp.data_testid or fp.aria_label or fp.inner_text) and element not in seen:
+            seen.add(element)
             # No model wording in here: the same recording must fingerprint the same on every compile.
             landmarks.append({
                 "primary_selector": primary,
@@ -1845,6 +1855,7 @@ def prepare_compile_events(
     # Insert tab_open/tab_switch markers at tab-boundary crossings — after clean_steps/
     # fix_step_order so the synthetic marker events never have to satisfy those functions'
     # assumptions about real recorded event shape.
+    cleaned_events = mark_document_changes(cleaned_events)
     return _insert_tab_markers(cleaned_events)
 
 
@@ -1862,6 +1873,79 @@ def link_upload_picks(steps: list[SkillStep]) -> None:
                 pick_id = by_event.get(probe.pop("file_from_event"))
                 if pick_id:
                     probe["file_from"] = pick_id
+
+
+_TYPED_ACTIONS = frozenset({"type", "fill"})
+_SENDING_KINDS = frozenset({"send", "save", "delete", "upload", "long_job"})
+
+
+def _sends_form(steps: list[SkillStep], i: int) -> bool:
+    """A step that sends what was typed: one the compiler already gave work to prove (its effect, from the same
+    commit and consequence rules), or Enter pressed straight after typing. No word list of its own."""
+    step = steps[i]
+    effect = step.validation.effect
+    if effect is not None:
+        return effect.kind in _SENDING_KINDS
+    return (_step_action_name(step) == "keyboard_shortcut" and step.value == "Enter"
+            and i > 0 and _step_action_name(steps[i - 1]) in _TYPED_ACTIONS)
+
+
+def mark_typed_rechecks(steps: list[SkillStep]) -> None:
+    """BUILD-110 (1): a step that sends a form names the boxes typed on its page since the last send, so the runtime
+    can check, just before sending, that each still holds what was typed (runtime/app/run.js::checkTypedBoxes). A box
+    the person filled from a suggestion list (a combobox, or an option picked before the send) is left out: the list
+    puts its own words in the box, so "what was typed" is not what it holds."""
+    keys = step_keys(steps)
+    last_send = -1
+    for i, step in enumerate(steps):
+        if not _sends_form(steps, i):
+            continue
+        boxes: list[str] = []
+        picked_after = False
+        for j in range(i - 1, last_send, -1):
+            s = steps[j]
+            if s.url != step.url:
+                break
+            role = str(s.identity_bundle.fingerprint.role or "").lower()
+            if role == "option":
+                picked_after = True
+            if _step_action_name(s) in _TYPED_ACTIONS and role != "combobox" and not picked_after:
+                boxes.append(keys[j])
+        step.handler_hints.recheck_typed = boxes[::-1]
+        last_send = i
+
+
+def link_pasted_values(steps: list[SkillStep], events: list[dict[str, Any]]) -> None:
+    """BUILD-110 (2), owner rule 2026-11-21: copy in one box, paste in another. Only when the recorder saw a paste into
+    a box (``extras.pasted_from``: the box the copied text came from, recorder/bridge.js) and the pasted text is exactly
+    what that box was given by an earlier step, the second box takes "the same value as the first box": the first box's
+    run input. Without a recorded paste nothing changes. A secret box is never linked this way. Runs after the second
+    opinion, so a renamed input is the name both boxes share."""
+    by_seq = {(e.get("extras") or {}).get("sequence"): e for e in events}
+    typed_on: dict[str, list[tuple[SkillStep, Any]]] = {}   # element token -> (step, recorded value), in order
+
+    def secret(ev: dict[str, Any], raw: Any) -> bool:
+        return "REDACTED" in str(raw) or str((ev.get("semantic") or {}).get("input_type") or "").lower() == "password"
+
+    for step in steps:
+        ev = by_seq.get(step.source_event)
+        if ev is None or _step_action_name(step) not in _TYPED_ACTIONS:
+            continue
+        extras = ev.get("extras") or {}
+        raw = (ev.get("action") or {}).get("value")
+        source_ref = str(extras.get("pasted_from") or "")
+        if source_ref and isinstance(raw, str) and raw and not secret(ev, raw):
+            first = next((s for s, v in reversed(typed_on.get(source_ref, [])) if v == raw), None)
+            if (first is not None and first.input_binding and first.value == "{{" + first.input_binding + "}}"
+                    and first is not step):
+                if step.input_binding:
+                    rename_binding_in_step(step, step.input_binding, first.input_binding)
+                else:
+                    step.value = "{{" + first.input_binding + "}}"
+                step.input_binding = None   # not an input of its own: it is the first box's
+        ref = str(extras.get("element_ref") or "")
+        if ref and not secret(ev, raw):
+            typed_on.setdefault(ref, []).append((step, raw))
 
 
 def _mark_choose_file_presses(events: list[dict[str, Any]], session_root: Path) -> None:
@@ -2114,6 +2198,8 @@ def compile_skill_package(
     # Last of the passes that write address checks: mark those that name the start site (runtime/app/start_origin.js).
     stamp_start_origin(steps)
     link_upload_picks(steps)   # again: the second opinion or the proof pass may have rebuilt a step's checks
+    link_pasted_values(steps, cleaned_events)   # BUILD-110 (2): after the second opinion, so input names are final
+    mark_typed_rechecks(steps)                  # BUILD-110 (1): needs final step keys and effects
 
     # PROD-3-DRYRUN layer 4: advisory stage-then-commit lint — never blocks compile/save/publish.
     commit_ordering_warnings = lint_commit_ordering(steps)
@@ -2222,6 +2308,37 @@ def _prose_borrows_from_neighbour(prose: str, own_words: list[set[str]], i: int)
     return bool(foreign) and bool(own_words[i] or near)
 
 
+def _like_steps_words(steps: list[SkillStep]) -> list[set[str]]:
+    """For each step, the words that name ANOTHER step's element with the same caption and not its own.
+
+    Six "Add to cart" buttons share their words; only what the site gave each one (its test id, the row it sits in)
+    tells them apart. A name that uses another one's words (saucedemo: "Add the bolt t-shirt" on the onesie's button,
+    BUILD-95 (3)) is checked against the recorded target here, not against a list of meanings. The test id is used
+    only among like elements: next to unlike ones its words ("shopping-cart-link") are too loose to judge a name."""
+    def fingerprint(step: SkillStep) -> Any:
+        return getattr(getattr(step, "identity_bundle", None), "fingerprint", None)
+
+    def caption(step: SkillStep) -> str:
+        fp = fingerprint(step)
+        return " ".join(str(getattr(fp, "inner_text", "") or getattr(fp, "aria_label", "") or "").lower().split())
+
+    def identity(step: SkillStep) -> set[str]:
+        testid = str(getattr(fingerprint(step), "data_testid", "") or "")
+        return _step_own_words(step) | (set(_WORD_RE.findall(testid.lower())) - _COMMON_NAME_WORDS)
+
+    captions = [caption(s) for s in steps]
+    words = [identity(s) for s in steps]
+    by_caption: dict[str, set[str]] = {}
+    for c, w in zip(captions, words):
+        if c:
+            by_caption.setdefault(c, set()).update(w)
+    out: list[set[str]] = []
+    for c, w in zip(captions, words):
+        # Words shared by every like element ("add", "cart", "sauce", "labs") are in this step's own set, so drop out.
+        out.append(by_caption[c] - w if c else set())
+    return out
+
+
 def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowIntentGraph) -> int:
     """Write the merged review call's per-step prose onto the already-compiled,
     already-collapsed `steps` list, and backfill `step.intent` from
@@ -2239,12 +2356,15 @@ def _apply_workflow_review_to_steps(steps: list[SkillStep], graph: WorkflowInten
     knows whether the compile report (built before this ran) needs rebuilding."""
     prose_by_index = {s.index: s for s in graph.steps if s.intent}
     own_words = [_step_own_words(st) for st in steps]
+    like_words = _like_steps_words(steps)
     backfilled = 0
     for i, step in enumerate(steps):
         entry = prose_by_index.get(i)
         prose = entry.intent if entry else None
-        # A name built from a neighbour's words is a line shifted by one: drop it for the step's own wording.
-        if prose and _prose_borrows_from_neighbour(prose, own_words, i):
+        # A name built from a neighbour's words is a line shifted by one, and a name that is another like element's
+        # (another row's "Add to cart") came from a misread video: drop it for the step's own wording.
+        if prose and (_prose_borrows_from_neighbour(prose, own_words, i)
+                      or set(_WORD_RE.findall(prose.lower())) & like_words[i]):
             prose = None
         # The model's wording is a guess about what a step does; the step's own action is a fact. A drag, a typed
         # value or a pick described as "Open the page" was wrongly lined up with a neighbour: drop that wording and

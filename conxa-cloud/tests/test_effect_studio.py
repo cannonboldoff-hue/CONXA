@@ -61,14 +61,16 @@ def test_a_step_whose_checks_were_all_agreed_to_is_not_asked_again():
     assert clarify._done_when_choices(doc)[0] == []
 
 
-def test_ticking_it_agrees_to_the_checks_and_leaving_it_unticked_changes_nothing():
+def test_ticking_it_agrees_to_the_checks_and_unticking_it_retires_them():
+    # BUILD-103 (2): an unticked option used to stay listed and counted as a completion check.
     doc = _doc(_step("upload", "Upload the file", UPLOAD()))
     key = step_keys(clarify._steps(doc))[0]
     q = [q for q in clarify.generate_questions(doc) if q["kind"] == "done_when"][0]
     ticked, _ = clarify.plan_answer(q, {"selected": [f"effect:{key}"]}, doc)
     assert ticked == [{"op": "confirm_effect", "step_key": key}]
     unticked, _ = clarify.plan_answer(q, {"selected": []}, doc)
-    assert unticked == []
+    assert unticked == [{"op": "retire_effect", "step_key": key}]
+    assert clarify.plan_answer(q, {"selected": [], "assume": True}, doc)[0] == []   # only the person's untick
 
 
 def test_a_step_that_cannot_be_undone_without_proof_makes_the_question_unskippable():

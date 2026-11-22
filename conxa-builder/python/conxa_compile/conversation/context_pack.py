@@ -31,6 +31,10 @@ DEFAULT_CHAT_BUDGET = 6_000
 SUMMARIZE_AFTER_DROPPED = 6
 
 
+# A message Studio sent itself in the thread: the person never wrote it and cannot see it (BUILD-98 (3)).
+_STUDIO_LABEL = "Studio (not the person; they did not write or see this)"
+
+
 def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4) if text else 0
 
@@ -93,10 +97,12 @@ def build_context_pack(
     turns: list[dict[str, Any]] | None = None,
     extra_sections: list[tuple[str, str]] | None = None,
     anchor: str | None = None,
+    from_studio: bool = False,
 ) -> ContextPack:
-    """Assemble the user-text for one model call. ``turns`` are ``{"role": "user"|"assistant",
-    "text": str}`` oldest first. ``extra_sections`` are ``(title, text)`` blocks that always ride
-    along (e.g. the capability manifest for the proposal call)."""
+    """Assemble the user-text for one model call. ``turns`` are ``{"role": "user"|"assistant"|"studio",
+    "text": str}`` oldest first ("studio": a follow-up Studio sent itself, which the person never wrote or saw).
+    ``extra_sections`` are ``(title, text)`` blocks that always ride along (e.g. the capability manifest for the
+    proposal call). ``from_studio``: ``message`` is such a follow-up, not the person's words."""
     fixed: list[str] = []
     if lifecycle:
         # Current state, read fresh each turn: it wins over anything said earlier in the thread (an approval an edit
@@ -124,7 +130,7 @@ def build_context_pack(
         fixed.append(f"The person is looking at: {anchor}")
     for title, text in extra_sections or []:
         fixed.append(f"{title}:\n{text}")
-    tail = f"Person's message: {message}"
+    tail = (_STUDIO_LABEL if from_studio else "Person's message") + f": {message}"
 
     used = sum(estimate_tokens(s) for s in fixed) + estimate_tokens(tail)
     remaining = max(0, budget_tokens - used)
@@ -155,7 +161,8 @@ def build_context_pack(
     all_turns = [t for t in (turns or []) if isinstance(t, dict) and str(t.get("text") or "").strip()]
     for i in range(len(all_turns) - 1, -1, -1):
         t = all_turns[i]
-        line = f"{str(t.get('role') or 'user')}: {str(t.get('text')).strip()}"
+        role = str(t.get("role") or "user")
+        line = f"{_STUDIO_LABEL if role == 'studio' else role}: {str(t.get('text')).strip()}"
         cost = estimate_tokens(line)
         if cost <= remaining:
             kept.append(line)

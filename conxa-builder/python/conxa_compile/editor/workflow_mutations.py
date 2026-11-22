@@ -255,6 +255,42 @@ def confirm_effect(document: dict[str, Any], step_index: int) -> dict[str, Any]:
     return doc
 
 
+# The basis written when the author unticked a completion check: never a check id, so it is never read as a test run's.
+AUTHOR_UNTICKED = "author_unticked"
+
+
+def retire_effect(document: dict[str, Any], step_index: int) -> dict[str, Any]:
+    """The author unticked a step's completion checks in "How can we tell it worked?" (BUILD-103 (2)): they no longer
+    count. Written as the dead mark every reader already honours (``effects._dead``, the runtime's ``effect_probes`` /
+    ``result_probes`` / ``run.js``), so no proof path can still lean on one. Only the person's untick calls this; a step
+    left with nothing to prove it ends "couldn't confirm", never a pass. Code only, the opposite of ``confirm_effect``."""
+    from conxa_compile.compiler.effects import _finish_checks
+
+    doc = dict(document)
+    skills = list(doc.get("skills") or [])
+    if not skills:
+        raise ValueError("no_skills_block")
+    block = dict(skills[0])
+    steps = list(block.get("steps") or [])
+    if step_index < 0 or step_index >= len(steps):
+        raise ValueError("step_index_out_of_range")
+    step = dict(steps[step_index])
+    validation = dict(step.get("validation") or {})
+    effect = validation.get("effect")
+    if not isinstance(effect, dict):
+        raise ValueError("step_has_no_effect")
+    live = {id(c) for c in _finish_checks(effect)}
+    checks = [dict(c, confirmed=False, calibrated=False, calibration_basis=[AUTHOR_UNTICKED]) if id(c) in live else dict(c)
+              for c in effect.get("checks") or []]
+    validation["effect"] = {**effect, "checks": checks}
+    step["validation"] = validation
+    steps[step_index] = step
+    block["steps"] = steps
+    skills[0] = block
+    doc["skills"] = skills
+    return doc
+
+
 def calibrate_effects(document: dict[str, Any], observed_by_key: dict[str, dict[str, str]]) -> tuple[dict[str, Any], int]:
     """Apply what a PASSING test run showed to the steps' effects: ``{step_key: {check_id: answer}}``. Returns the new
     document and how many steps changed. A step whose key is not found, or that has no effect, is left alone."""

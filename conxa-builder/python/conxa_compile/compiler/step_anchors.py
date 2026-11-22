@@ -274,14 +274,18 @@ def _native_list_echo(step: Step) -> bool:
 _TEXT_EDIT_KEYS = frozenset({"a", "c", "v", "x", "z", "y"})
 
 
-def _text_edit_shortcut(step: Step) -> bool:
+def _text_edit_shortcut(step: Step, steps: list[Step]) -> bool:
     """Select-all, copy, cut, paste, undo or redo inside a text box. The box's own typing event already holds what these
     left in it (a paste arrives as typing of the pasted text), and replay fills that value. Replayed, the keys add
     nothing, or worse: Ctrl+V pastes whatever is on the clipboard of the computer running it (WF-8: the replay typed a
-    literal "v", and "A" after the company name)."""
-    if action_name(step) != "keyboard_shortcut" or not is_editable_target(step) \
-            or str((step.get("target") or {}).get("tag") or "").lower() == "select":
+    literal "v", and "A" after the company name). A rich-text editor (contenteditable, which the recorder marks as a
+    text box with no tag of its own) counts only when its own typing was recorded too (BUILD-110 (3))."""
+    if action_name(step) != "keyboard_shortcut" or str((step.get("target") or {}).get("tag") or "").lower() == "select":
         return False
+    if not is_editable_target(step):
+        rich = str((step.get("semantic") or {}).get("input_type") or "").lower() == "text"
+        if not rich or not any(action_name(s) == "type" and _same_node(step, s) for s in steps):
+            return False
     try:
         key = json.loads(_event_value(step) or "{}")
     except ValueError:
@@ -363,7 +367,7 @@ def clean_steps(steps: list[Step], policy: dict[str, Any] | None = None) -> list
     pending_submit: Step | None = None
     use_submit_truncate = _truncate_after_terminal_submit(pol)
     for raw in _typing_flushed_at_unload(steps):
-        if _native_list_echo(raw) or _text_edit_shortcut(raw):
+        if _native_list_echo(raw) or _text_edit_shortcut(raw, steps):
             continue
         step = dict(raw)
         step = _normalize_prep_click_to_focus(step, pol)

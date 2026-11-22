@@ -426,6 +426,15 @@ def test_structural_fingerprint_only_covers_the_page_the_run_starts_on():
     assert [lm["data_testid"] for lm in fp["landmarks"]] == ["first-link"]
 
 
+def test_structural_fingerprint_counts_one_element_once():
+    # BUILD-90: choose, press a key and type in one sort box were three landmarks of one element, so that one
+    # element breaking read as "3/3 landmarks missing" (the app was redesigned).
+    box = [_make_step(i, "[data-test=sort]", "sort", "Sort", "select") for i in ("pick", "press", "type")]
+    other = _make_step("add", "[data-test=add]", "add", "Add to cart", "button")
+    fp = _build_structural_fingerprint([*box, other])
+    assert [lm["data_testid"] for lm in fp["landmarks"]] == ["sort", "add"]
+
+
 # ─── Phase 1: Selector durability scoring ────────────────────────────────────
 
 def test_durability_testid_beats_xpath():

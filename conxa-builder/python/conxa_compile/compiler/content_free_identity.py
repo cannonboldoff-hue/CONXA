@@ -22,14 +22,19 @@ def _norm(text: Any) -> str:
     return " ".join(str(text or "").lower().split())
 
 
+def is_value_text(text: Any) -> bool:
+    """Text with a digit in it is a value ("Rs. 400"); one without is a label ("Order total") and a label is a fine way to
+    find an element: it is the same line build.py::_extract_label draws between naming a capture and not naming it."""
+    words = _norm(text)
+    return len(words) >= 2 and bool(re.search(r"\d", words))
+
+
 def strip_value_from_identity(step: Any, target: dict[str, Any]) -> bool:
     """Remove the element's own text (``target["inner_text"]``, as recorded) from ``step``'s identity bundle: its
     fingerprint words, every address that names it, and the hash name. Returns True when anything changed."""
     words = _norm(target.get("inner_text"))
     bundle = getattr(step, "identity_bundle", None)
-    # Text with a digit in it is a value ("Rs. 400"); one without is a label ("Order total") and a label is a fine way to
-    # find an element: it is the same line build.py::_extract_label draws between naming a capture and not naming it.
-    if len(words) < 2 or bundle is None or not re.search(r"\d", words):
+    if bundle is None or not is_value_text(words):
         return False
     changed = False
     fp = bundle.fingerprint

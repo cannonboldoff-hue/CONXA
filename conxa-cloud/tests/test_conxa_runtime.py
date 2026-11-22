@@ -678,3 +678,56 @@ class TestCallRuntimeToolEnv:
 
         with pytest.raises(RuntimeToolError, match="No packed runtime executable"):
             call_runtime_tool(runtime_dir, "test_tool", {})
+
+
+def test_a_build_that_swaps_the_app_layer_mid_copy_is_staged_again_from_the_new_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """BUILD-109 (4): build-app-local.ps1 moves the new version in, then deletes the old one. A test that started
+    copying the old one copied half of it, and the sandbox label still said it was staged."""
+    import json as _json
+    import shutil as _shutil
+
+    from conxa_compile import conxa_runtime
+
+    monkeypatch.setenv("SKILL_DATA_DIR", str(tmp_path))
+    mk = TestEnsureTestSandbox()
+    runtime_dir = mk._make_runtime_dir(tmp_path)
+    old_app = mk._make_app_dir(tmp_path, "app-v0.0.0-local.1")
+    (old_app / "version.json").write_text(_json.dumps({"files": {"server.jsc": "x", "run.js": "y"}}), encoding="utf-8")
+    (old_app / "run.js").write_bytes(b"run")
+    real_copytree = _shutil.copytree
+    calls = []
+
+    def copy_while_the_build_swaps(src, dst, *a, **k):
+        calls.append(Path(src).name)
+        if len(calls) == 1:   # the build lands the new version and deletes the old one under the copy
+            new_app = mk._make_app_dir(tmp_path, "app-v0.0.0-local.2")
+            (new_app / "version.json").write_text(_json.dumps({"files": {"server.jsc": "x"}}), encoding="utf-8")
+            (Path(src) / "run.js").unlink()
+            out = real_copytree(src, dst, *a, **k)
+            _shutil.rmtree(src)
+            return out
+        return real_copytree(src, dst, *a, **k)
+
+    monkeypatch.setattr(conxa_runtime.shutil, "copytree", copy_while_the_build_swaps)
+    conxa_dir, _ = conxa_runtime.ensure_test_sandbox(runtime_dir, old_app)
+    assert calls == ["app-v0.0.0-local.1", "app-v0.0.0-local.2"]
+    meta = _json.loads((conxa_dir / "version.json").read_text(encoding="utf-8"))
+    assert meta["app_version"] == "app-v0.0.0-local.2"
+    assert (conxa_dir / "conxa-app" / "app-v0.0.0-local.2" / "server.jsc").is_file()
+
+
+def test_a_cut_short_copy_never_writes_the_new_label(tmp_path: Path) -> None:
+    import json as _json
+
+    from conxa_compile.conxa_runtime import SourceChangedWhileCopying, stage_runtime_payload
+
+    mk = TestStageRuntimePayload()
+    runtime_dir = mk._make_runtime_dir(tmp_path / "deps")
+    app_dir = mk._make_app_dir(tmp_path / "deps")
+    (app_dir / "version.json").write_text(_json.dumps({"files": {"server.jsc": "x", "gone.js": "y"}}), encoding="utf-8")
+    dest = tmp_path / "out"
+    dest.mkdir()
+    (dest / "version.json").write_text('{"runtime_version": "old", "app_version": "old"}', encoding="utf-8")
+    with pytest.raises(SourceChangedWhileCopying):
+        stage_runtime_payload(dest, runtime_dir, app_dir)
+    assert _json.loads((dest / "version.json").read_text(encoding="utf-8"))["app_version"] == "old"

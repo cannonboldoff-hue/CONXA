@@ -248,14 +248,13 @@ def _apply_top_level_step_fields(
 
 
 def _normalize_step_anchor_blocks(step: dict[str, Any]) -> dict[str, Any]:
+    # An absent list (or block) stays absent; only a present one is cleaned (BUILD-104 (8)). Adding empty ones made a
+    # Human Edit value edit differ from the same chat edit (BUILD-105 (2)).
     out = dict(step)
-    signals = dict(out.get("signals") or {})
-    recovery = dict(out.get("recovery") or {})
-    signals["anchors"] = normalize_anchor_list(signals.get("anchors") or [])
-    if "anchors" in recovery:  # an absent list stays absent (BUILD-104 (8)); only a present one is cleaned
-        recovery["anchors"] = normalize_anchor_list(recovery["anchors"] or [])
-    out["signals"] = signals
-    out["recovery"] = recovery
+    for block in ("signals", "recovery"):
+        held = out.get(block)
+        if isinstance(held, dict) and "anchors" in held:
+            out[block] = {**held, "anchors": normalize_anchor_list(held["anchors"] or [])}
     return out
 
 

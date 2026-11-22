@@ -556,6 +556,16 @@ def test_model_input_carries_title_popup_buttons_what_the_page_said_and_video_ag
     assert "video" not in rows[0] and "buttons" not in rows[0]
 
 
+def test_model_input_says_which_tab_an_action_was_in_only_when_there_are_several():
+    # BUILD-92 (the-internet /windows): the second link was clicked back in the first tab, not "from" the new one.
+    url = "https://the-internet.herokuapp.com/windows"
+    merged = [{**event(1, "click", "Click Here", url=url), "tab": "tab_0"}, {**event(2, "popup", "", url=url), "tab": "tab_1"},
+              {**event(3, "click", "Elemental Selenium", url=url), "tab": "tab_0"}, {**event(4, "click", "Other", url=url), "tab": "tab_0"}]
+    assert [r.get("tab") for r in TU.build_input(merged, "", "", [])["rows"]] == [1, 2, 1, None]
+    one_tab = [{**r, "tab": "tab_0"} for r in merged]
+    assert all("tab" not in r for r in TU.build_input(one_tab, "", "", [])["rows"])
+
+
 def test_a_long_recording_drops_scrolls_first_and_never_a_row_a_candidate_rests_on(monkeypatch):
     monkeypatch.setattr(TU, "MAX_ROWS", 10)
     merged = [event(n, "scroll") for n in range(1, 9)] + [
@@ -829,3 +839,14 @@ def test_values_left_out_by_the_caps_are_named_in_the_note():
     assert labels == [f"Item {TU.MAX_CLICK_CANDIDATES + 1}", f"Item {TU.MAX_CLICK_CANDIDATES + 2}"]
     said = limits_sentence({"candidates": cuts, "left_out": labels})
     assert said.startswith("2 more values to check were left out (“Item 7”, “Item 8”)")
+
+
+def test_the_prompt_names_every_note_facet_the_reader_accepts():
+    """BUILD-93 (19), BUILD-108 (2): the reader keeps `facet`/`means` only from closed lists; the model must be told them."""
+    from conxa_core.llm.client import _openai_messages_for_task
+
+    system = _openai_messages_for_task("timeline_understanding", {})[0]["content"]
+    assert '"facet": "note only' in system and '"facet":"alternatives"' in system  # the shape and the example note
+    for facet in sorted(TU.AUDIT_FACETS | {"repeat"}):
+        assert facet in system, facet
+    assert "`means`" in system and all(f"`{m}`" in system for m in TU.REPEAT_MEANS)

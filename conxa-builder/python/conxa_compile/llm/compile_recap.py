@@ -58,6 +58,24 @@ def _problem(message: str, facts: dict[str, Any]) -> str:
     return f"it must include exactly: {', '.join(missing)}" if missing else ""
 
 
+_UNREACHABLE = re.compile(r"cloud_unreachable|urlerror|connection|timed? ?out|getaddrinfo|unreachable", re.IGNORECASE)
+
+
+def plain_cause(error_detail: list[str] | None) -> str:
+    """Why a model answer is missing, in one sentence a person understands ('' when nothing was recorded).
+
+    Used for the missing summary (``write_recap``'s ``error_detail``) and a build step that got no answer
+    (``compile_report["degraded"]`` detail). Only explains: it never stands in for the missing text."""
+    lines = [str(e) for e in error_detail or [] if str(e).strip()]
+    if not lines:
+        return ""
+    if all(e.startswith("answer rejected") for e in lines):
+        return "The AI's wording didn't pass Studio's checks, so it isn't shown. Nothing else is affected."
+    if _UNREACHABLE.search(" ".join(lines)):
+        return "Studio couldn't reach Conxa Cloud. Check your internet connection, then build again."
+    return "The AI service didn't answer. Building again usually fixes it."
+
+
 def write_recap(facts: dict[str, Any], *, error_detail: list[str] | None = None) -> str | None:
     """The message, or None after ``_ATTEMPTS`` failed tries. There is no stand-in text: the caller says so."""
     key = cache_key(_CACHE_VERSION, facts=facts)

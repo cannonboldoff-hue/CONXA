@@ -225,6 +225,9 @@ def stage_runtime_payload(
     exe_name = exe.name
     _info(f"Staging {exe_name} from {exe}")
     shutil.copy2(exe, dest / exe_name)
+    if not exe.is_file() or exe.stat().st_size != (dest / exe_name).stat().st_size:
+        # A local build (build-runtime-local.ps1) was still writing it, or replaced it, while it was copied.
+        raise SourceChangedWhileCopying(f"{runtime_dir} changed while it was being copied")
     _info(f"{exe_name} staged ({(dest / exe_name).stat().st_size // 1024} KB)")
 
     # ── keytar ────────────────────────────────────────────────────────────────
@@ -236,16 +239,6 @@ def stage_runtime_payload(
         )
     shutil.copy2(keytar, dest / "keytar.node")
     _info("keytar.node staged")
-
-    # ── version.json (records both layers so sandbox can detect updates) ──────
-    (dest / "version.json").write_text(
-        json.dumps({
-            "runtime_version": runtime_dir.name,
-            "app_version": app_dir.name if app_dir else None,
-        }),
-        encoding="utf-8",
-    )
-    _info("version.json written")
 
     # ── app layer ─────────────────────────────────────────────────────────────
     # bootstrap.js's version_manager.resolveCurrent() requires conxa-app/current to be
@@ -259,7 +252,12 @@ def stage_runtime_payload(
         version_dest = app_root / app_dir.name
         if version_dest.exists():
             shutil.rmtree(version_dest)
-        shutil.copytree(str(app_dir), str(version_dest))
+        try:
+            shutil.copytree(str(app_dir), str(version_dest))
+        except OSError as exc:  # a file went missing mid-copy: the build is deleting this version
+            raise SourceChangedWhileCopying(f"{app_dir} changed while it was being copied") from exc
+        if not app_dir.is_dir() or not _app_copy_complete(version_dest):
+            raise SourceChangedWhileCopying(f"{app_dir} changed while it was being copied")
         link = app_root / "current"
         if not _ensure_junction(link, version_dest):
             detail = f"exists={os.path.lexists(link)} is_link={_is_link(link)}"
@@ -283,6 +281,31 @@ def stage_runtime_payload(
         _info(f"conxa-app/ staged ({kb} KB, version={app_dir.name}, from {app_dir})")
     else:
         _info("WARNING: conxa-app not found in deps — app layer will not be pre-installed")
+
+    # ── version.json (records both layers so sandbox can detect updates) ──────
+    # Written last: a copy cut short leaves the old label, so the sandbox stages again next time instead of running a
+    # half-copied engine under the new one.
+    (dest / "version.json").write_text(
+        json.dumps({
+            "runtime_version": runtime_dir.name,
+            "app_version": app_dir.name if app_dir else None,
+        }),
+        encoding="utf-8",
+    )
+    _info("version.json written")
+
+
+class SourceChangedWhileCopying(OSError):
+    """A local build replaced or deleted the runtime/app version Studio was copying (BUILD-109 (4))."""
+
+
+def _app_copy_complete(version_dest: Path) -> bool:
+    """The app layer's own version.json (its build writes it last) and every file it lists arrived."""
+    try:
+        files = json.loads((version_dest / "version.json").read_text(encoding="utf-8")).get("files") or {}
+    except (OSError, ValueError):
+        return False
+    return all((version_dest / name).is_file() for name in files)
 
 
 def resolve_test_sandbox_dir() -> Path:
@@ -341,7 +364,15 @@ def ensure_test_sandbox(
         except Exception:
             pass
     if need_stage:
-        stage_runtime_payload(conxa_dir, runtime_dir, app_dir)
+        try:
+            stage_runtime_payload(conxa_dir, runtime_dir, app_dir)
+        except SourceChangedWhileCopying:
+            # A local build swapped the version while it was copied (it deletes the old one after the new one lands):
+            # copy the one that is there now, once.
+            fresh_runtime, fresh_app = resolve_runtime_dir(), _bootstrap_app_dir()
+            if fresh_runtime is None or (fresh_runtime, fresh_app) == (runtime_dir, app_dir):
+                raise
+            stage_runtime_payload(conxa_dir, fresh_runtime, fresh_app)
 
     # ── chromium: junction/symlink → deps/chromium (no per-test copy) ────────
     chromium_source = _deps_chromium_dir()

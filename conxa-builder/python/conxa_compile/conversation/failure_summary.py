@@ -75,6 +75,9 @@ _DOWNLOAD_REASONS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"none arrived within", re.I), "No file started downloading at this step."),
 ]
 _DOWNLOAD_OTHER = "The file couldn’t be downloaded."
+# A read step whose element was there but empty. Also marked bad input only to skip recovery (BUILD-107 (3)).
+_EMPTY_VALUE = re.compile(r"holds no value to extract", re.I)
+_EMPTY_VALUE_SENTENCE = "The value this step reads was empty on the page, so the test stopped instead of using nothing."
 
 # A part the AI agent did on its own ended without finishing (runtime server.js: "Agent span at step N ended (<code>): ...").
 # The reason is known exactly, so it is said, not hidden behind the generic line (WF-13).
@@ -115,6 +118,8 @@ def summarize(message: str, failure_kind: str | None = None, candidates: list[st
         sentence = gave_up if span.group(1).lower() == "gave_up" else _SPAN_REASONS.get(span.group(1).lower(), "The AI agent couldn’t finish this part.")
     elif _DOWNLOAD.search(text):
         sentence = next((s for p, s in _DOWNLOAD_REASONS if p.search(text)), _DOWNLOAD_OTHER)
+    elif _EMPTY_VALUE.search(text):
+        sentence = _EMPTY_VALUE_SENTENCE
     elif failure_kind in _KIND_FIRST:
         sentence = _BY_KIND[failure_kind]
     elif (failure_kind or "").startswith("fault:"):

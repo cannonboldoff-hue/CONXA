@@ -89,6 +89,28 @@ RULES: dict[str, dict[str, Any]] = {
         "guesses": set(), "unsafe": set(), "page_decides": True},
     "note": {"choices": None, "guesses": set(), "unsafe": set(), "page_decides": False},
 }
+# A first-read `note` may name what it settles with a `facet`: one of the second read's AUDIT_FACETS, or "repeat" (the
+# same entry made several times: always these, or a list given each time?). A "repeat" note also tags each option with
+# `means` from REPEAT_MEANS, so code, not words, maps the answer onto the build's own repeat question
+# (handlers/compile_flow.py::_flow_settle_repeat). A facet or tag outside the lists is dropped and counted.
+REPEAT_MEANS = ("same", "list")
+
+
+def _note_facet(q: dict[str, Any], choices: list[dict[str, Any]], report: dict[str, Any]) -> str:
+    """The checked facet of a first-read note, or ''. A "repeat" note counts only when exactly one option means "same"
+    and exactly one means "list": anything else could map an answer onto the wrong rewrite, so it stays a plain note."""
+    facet = str(q.get("facet") or "")
+    if not facet:
+        return ""
+    if facet not in AUDIT_FACETS | {"repeat"}:
+        _log(report, "shape", "unknown_facet", facet)
+        return ""
+    if facet == "repeat" and sorted(str(c.get("means") or "") for c in choices if c.get("means")) != sorted(REPEAT_MEANS):
+        _log(report, "shape", "repeat_without_means", str(q.get("row")))
+        return ""
+    return facet
+
+
 _FALLBACK_PROMPT = {
     "upload": "Is the file the same every time?",
     "confirm_before": "Should it check with someone before this step?",
@@ -372,9 +394,17 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
     # no `kind` on an event, `url` and `title` only when they change, and `seen` without what the row before said.
     # A candidate none of whose rows are sent is marked ``unsent`` and left out: the model cannot judge what it cannot see.
     rows: list[dict[str, Any]] = []
-    prev_url, prev_title, prev_after = None, None, ""
+    prev_url, prev_title, prev_after, prev_tab = None, None, "", None
     sent = _select_rows(merged, candidates)
     sent_refs = {r["row_ref"] for r in sent}
+    # Which tab each action happened in (1 = the first one), only when there is more than one and only when it changes.
+    # Without it, a click back in the first tab read as made "from" the new tab (BUILD-92: the-internet /windows).
+    tab_no: dict[str, int] = {}
+    for r in merged:
+        if r.get("kind") == "event" and r.get("tab"):
+            tab_no.setdefault(str(r["tab"]), len(tab_no) + 1)
+    if len(tab_no) < 2:
+        tab_no = {}
     for r in sent:
         seen = _seen(r.get("segment"), prev_after)
         if r.get("kind") == "event":
@@ -386,6 +416,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
                 "value": "(hidden)" if value == "{{REDACTED}}" else (str(value)[:VALUE_CHARS] if value else None),
                 "url": r.get("url") if r.get("url") != prev_url else None,
                 "title": scrub_email(r["title"]) if r.get("title") and r.get("title") != prev_title else None,
+                "tab": tab_no.get(str(r.get("tab"))) if tab_no.get(str(r.get("tab"))) != prev_tab else None,
                 "seen": seen, "dialog": r.get("dialog") or None, "peers": r.get("peers") or None,
                 "control": (r.get("control") or {}).get("kind") or None,
                 "buttons": r.get("dialog_buttons") or None,
@@ -395,6 +426,7 @@ def build_input(merged: list[dict[str, Any]], task: str, chat: str, candidates: 
             }
             prev_url = r.get("url") or prev_url
             prev_title = r.get("title") or prev_title
+            prev_tab = tab_no.get(str(r.get("tab"))) or prev_tab
         else:
             row = {"ref": r["row_ref"], "kind": "observation", "type": r.get("type"),
                    "seconds": r.get("seconds"), "seen": seen}
@@ -453,7 +485,10 @@ def _choices_for(effect: str, offered: Any) -> list[dict[str, Any]]:
         picked = [c for c in offered or [] if isinstance(c, dict) and _text(c.get("label"), 90)][:3]
         if len(picked) < 2:
             return []
-        return [{"id": f"c{i}", "label": _text(c["label"], 90), "detail": ""} for i, c in enumerate(picked, 1)]
+        # `means`: what an option of a "repeat" note says, from a closed list (checked in _checked_questions).
+        return [{"id": f"c{i}", "label": _text(c["label"], 90), "detail": "",
+                 **({"means": str(c["means"])} if str(c.get("means") or "") in REPEAT_MEANS else {})}
+                for i, c in enumerate(picked, 1)]
     given = {str(c.get("id")): c for c in offered or [] if isinstance(c, dict)}
     out = []
     for cid, label, detail in RULES[effect]["choices"]:
@@ -617,10 +652,13 @@ def _checked_questions(raw_questions: Any, rows: dict[str, Any], by_ref: dict[st
             _log(report, "override", "guess_contradicts_verdict", ref)      # the model's own two answers disagree
             guess = "varies"
         rank = q.get("cost_rank")
+        facet = _note_facet(q, choices, report) if effect == "note" else ""
+        if facet != "repeat":
+            choices = [{k: v for k, v in c.items() if k != "means"} for c in choices]
         out.append({"kind": effect, "row": row["row_ref"], "event_id": row.get("event_id"), "prompt": prompt,
                     "why": why, "choices": choices, "best_guess": guess,
                     "cost_rank": rank if isinstance(rank, int) and not isinstance(rank, bool) else 99,
-                    **({"ref": ref} if ref else {})})
+                    **({"ref": ref} if ref else {}), **({"facet": facet} if facet else {})})
     return out
 
 

@@ -108,9 +108,54 @@ def compare_state(before: dict[str, Any], after: dict[str, Any]) -> dict[str, An
     }
 
 
+def document_after(events: list[Step], i: int) -> str:
+    """Whether the page document of step ``i`` was still the one there afterwards: "same", "left" or "" (can't tell).
+
+    Read from the next step the person took on the same tab, outside any frame: each page document carries its own id
+    (bridge.js DOC_ID), so the same id means the step stayed on that document (a route change inside one page, saucedemo's
+    Finish) and another id means it left it, whatever the address says. A saved page copy's id cannot tell: the recorder
+    replaces a copy taken after the page was left with the one the page sent as it was left (session.py). A navigation
+    the person made themselves in between ends the search (Back can bring the same document back)."""
+    from conxa_compile.compiler.navigation_effects import _navigation_value
+
+    ev = events[i]
+    doc = str(ev.get("doc_id") or "")
+    if not doc or (ev.get("frame") or {}).get("chain"):
+        return ""
+    tab = str((ev.get("tab") or {}).get("id") or "")
+    for later in events[i + 1:]:
+        if str((later.get("tab") or {}).get("id") or "") != tab:
+            continue
+        if action_name(later) == "manual_navigate":
+            if _navigation_value(later).get("cause") == "action":
+                continue  # what a step did itself (folded into it at compile)
+            return ""
+        other = "" if (later.get("frame") or {}).get("chain") else str(later.get("doc_id") or "")
+        if other:
+            return "same" if other == doc else "left"
+    return ""
+
+
+def mark_document_changes(events: list[Step]) -> list[Step]:
+    """Stamp each step with ``post_condition.document`` ("same" / "left") where the recording can tell (``document_after``),
+    so a step's own evidence says whether its page diff is the page it left. Returns the same list."""
+    for i, ev in enumerate(events):
+        found = document_after(events, i)
+        if found:
+            ev["post_condition"] = {**(ev.get("post_condition") or {}), "document": found}
+    return events
+
+
 def _left_the_page(ev: Step) -> bool:
-    """True when the recorder saw the address change across this step (a landing), so its page diff is the old page's."""
-    ud = ((ev.get("post_condition") or {}).get("url_delta")) or {}
+    """True when this step's page diff is the page it left: the recorder saw the next page arrive (``result_diff.next_page``),
+    the next step ran on another document (``post_condition.document``), or, when that cannot be told, the address changed.
+    A route change inside the same document is not leaving: the diff is the page after the step."""
+    pc = ev.get("post_condition") or {}
+    if pc.get("document") == "left" or (((ev.get("state_change") or {}).get("result_diff")) or {}).get("next_page"):
+        return True
+    if pc.get("document") == "same":
+        return False
+    ud = pc.get("url_delta") or {}
     before, after = str(ud.get("before") or "").split("#", 1)[0], str(ud.get("after") or "").split("#", 1)[0]
     return bool(before and after and before != after)
 
@@ -128,13 +173,16 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
     """
     sc = ev.get("state_change") or {}
     dom_diff = sc.get("dom_diff") or {}
-    added_lines = [str(x) for x in (dom_diff.get("added") or [])][:20]
+    result_diff = sc.get("result_diff") or {}
     # A step that left the page was last seen on the page it left: what "appeared" there is that page's closing
-    # moment (a search box's suggestions), never a result of the step. Nothing is derived from it.
-    if _left_the_page(ev):
+    # moment (a search box's suggestions), never a result of the step. Nothing is derived from it. The one exception is
+    # what the recorder saw on the page the step led to, once it settled (``next_page``: words the page left did not show).
+    left = _left_the_page(ev)
+    if left and not result_diff.get("next_page"):
         return state_diff
-    # Words the page showed after the action, on the same page (bridge.js resultSignature): the real results.
-    result_words = [w.strip() for w in ((sc.get("result_diff") or {}).get("added") or []) if isinstance(w, str) and len(w.strip()) >= 3][:6]
+    added_lines = [] if left else [str(x) for x in (dom_diff.get("added") or [])][:20]
+    # Words the page showed after the action (bridge.js resultSignature, never a control's label): the real results.
+    result_words = [w.strip() for w in (result_diff.get("added") or []) if isinstance(w, str) and len(w.strip()) >= 3][:6]
     if not added_lines and not result_words:
         return state_diff
 
@@ -150,7 +198,10 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
         # "You see the words “100”", WF-8 8.12); a page-text check can never see it.
         if parts[0].strip().lower() in ("input", "select", "textarea"):
             text = ""
-        if testid:
+        # W-E (owner decision 2026-11-21): a button or link that appears after a click appears whether or not the click
+        # worked (an "Edit" beside a saved and an unsaved form alike), so it is never an "it is there" check that could
+        # prove the click. Its label is still offered, unticked (control_text below).
+        if testid and parts[0].strip().lower() not in ("button", "a"):
             extra_selectors.append(f'[data-testid="{testid}"]')
         if text and len(text) >= 3:
             extra_text.append(text)

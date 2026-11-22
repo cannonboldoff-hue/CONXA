@@ -325,7 +325,7 @@ def _copy_saved_common(step: dict[str, Any], out: dict[str, Any]) -> dict[str, A
         out["destructive"] = True
 
     eb = step.get("entity_binding")
-    if isinstance(eb, dict) and eb.get("container_selector") and eb.get("identifier"):
+    if isinstance(eb, dict) and eb.get("container_selector") and (eb.get("identifier") or eb.get("position")):
         out["entity_binding"] = eb
     # run_if: runtime/app/run.js::runIfDecision reads it off the execution step.
     run_if = step.get("run_if")
@@ -1217,7 +1217,9 @@ def _saved_recovery_anchor_sentence(step: dict[str, Any]) -> str:
 _RECORDED_CONTEXT_SIBLING_MAX = 8
 
 
-def _recorded_context_for_saved_step(step: dict[str, Any]) -> dict[str, Any]:
+def _recorded_context_for_saved_step(
+    step: dict[str, Any], names: list[tuple[str, frozenset[str]]] | None = None,
+) -> dict[str, Any]:
     """Where this element sat on the page AT RECORDING TIME — the structural before-picture.
 
     The agent recovery tier is handed a ranked list of what is on the page *now*. That describes
@@ -1234,6 +1236,12 @@ def _recorded_context_for_saved_step(step: dict[str, Any]) -> dict[str, Any]:
     context = signals.get("context") if isinstance(signals.get("context"), dict) else {}
     if not context:
         return {}
+    if names:
+        # A workflow compiled before the compile-time scrub (selector_filters.drop_personal_target_text) knew the
+        # sign-in name still carries it: no surrounding text naming the account reaches recovery.json.
+        from conxa_compile.compiler.selector_filters import without_sign_in_names  # noqa: PLC0415
+
+        context = without_sign_in_names(context, names)
 
     out: dict[str, Any] = {}
     parent = str(context.get("parent") or "").strip()
@@ -1333,11 +1341,42 @@ def _write_saved_visual_assets(
     return visuals_dir if wrote else None
 
 
+def _recorded_typed_values(session_id: str) -> list[str]:
+    """What the person typed in the recording, held in memory only: the words the video scrub cannot recognise as data
+    on its own ("Ravi Kumar", "Park Road"). Values under 3 characters are left alone so ordinary words survive (and the
+    scrub already drops anything with a digit). Empty when the recording is gone."""
+    if not session_id:
+        return []
+    try:
+        from conxa_core.storage.session_events import read_session_events
+
+        events = read_session_events(session_id)
+    except Exception:  # noqa: BLE001 -- no recording: the scrub works as it did
+        return []
+    values = {str((ev.get("action") or {}).get("value") or "").strip() for ev in events if isinstance(ev, dict)
+              and str((ev.get("action") or {}).get("action") or "") in ("type", "fill", "input")}
+    return [v for v in values if len(v) >= 3 and v != "{{REDACTED}}"]
+
+
+def _without_typed(text: Any, typed: list[str]) -> str:
+    """`text` with each typed value, and each of its words of 3+ characters, removed as whole words in any case."""
+    s = str(text or "")
+    pieces = set(typed) | {w for v in typed for w in v.split() if len(w) >= 3}
+    for piece in sorted(pieces, key=len, reverse=True):
+        s = re.sub(rf"(?<!\w){re.escape(piece)}(?!\w)", " ", s, flags=re.IGNORECASE)
+    return s
+
+
 def _build_saved_skill_recovery(
     source_steps: list[dict[str, Any]],
     step_ids: list[int],
     visuals_dir: Path | None = None,
+    typed: list[str] | None = None,
 ) -> dict[str, Any]:
+    from conxa_compile import signin_names  # noqa: PLC0415
+    from conxa_core.config import settings  # noqa: PLC0415
+
+    names = signin_names.load(settings.data_dir)
     entries: list[dict[str, Any]] = []
     for step, step_id in zip(source_steps, step_ids):
         action = _step_action_name(step)
@@ -1372,7 +1411,7 @@ def _build_saved_skill_recovery(
             "fallback": {"role": target_role},
             "selector_context": {"primary": selector},
         }
-        recorded_context = _recorded_context_for_saved_step(step)
+        recorded_context = _recorded_context_for_saved_step(step, names)
         if recorded_context:
             entry["recorded_context"] = recorded_context
         visual_ref = _saved_step_visual_ref(step_id, visuals_dir)
@@ -1387,7 +1426,9 @@ def _build_saved_skill_recovery(
         if isinstance(video_context, dict) and any(str(v or "").strip() for v in video_context.values()):
             # What a person typed can sit in these words ("the Email field now contains 'a@b.com'"), and this file
             # ships to customers: same scrub the proof picker applies before showing them to a model.
-            entry["video_context"] = {k: _scrub_words(video_context.get(k), 200) for k in ("visible_target", "screen_before", "screen_after", "purpose")}
+            # A name or address with no digit or quote passes that scrub, so the recording's own typed values go first.
+            entry["video_context"] = {k: _scrub_words(_without_typed(video_context.get(k), typed or []), 200)
+                                      for k in ("visible_target", "screen_before", "screen_after", "purpose")}
         # BUILD-25 stage e: the compiler's second-opinion pass's label_phase
         # finding. Read by runtime/app/failure_response.js's Tier B recovery
         # prompt as a workflow-position prior. Absent on any step the pass
@@ -1525,7 +1566,7 @@ def _build_workflow_from_saved_skill(
         skill_dir=skill_dir,
         source_session_id=source_session_id,
     )
-    recovery = _build_saved_skill_recovery(source_steps, step_ids, visuals_dir)
+    recovery = _build_saved_skill_recovery(source_steps, step_ids, visuals_dir, _recorded_typed_values(source_session_id))
     (skill_dir / "execution.json").write_text(dumps_safe(execution_steps, indent=2, ensure_ascii=False), encoding="utf-8")
     (skill_dir / "recovery.json").write_text(dumps_safe(recovery, indent=2, ensure_ascii=False), encoding="utf-8")
     (skill_dir / "input.json").write_text(dumps_safe({"inputs": inputs}, indent=2, ensure_ascii=False), encoding="utf-8")
