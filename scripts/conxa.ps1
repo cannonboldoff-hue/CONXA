@@ -110,12 +110,17 @@ Write-Host "-----------------------------------------------------------------"
 
 $port = if ($env:PORT) { $env:PORT } else { "8000" }
 
+# Windows PowerShell 5.1 turns each stderr line of a native program into an error when the caller
+# redirects output; with "Stop" uvicorn's first INFO line would end the script silently.
+$ErrorActionPreference = "Continue"
+
 switch ($Target) {
   "env"      { break }
   "backend"  {
     Set-Location "$Root\conxa-cloud\backend"
     if ($Env -eq "dev") { python -m uvicorn app.main:app --reload --host 127.0.0.1 --port $port }
     else                { python -m uvicorn app.main:app --host 127.0.0.1 --port $port }
+    if ($LASTEXITCODE) { Write-Host "The cloud backend stopped (exit code $LASTEXITCODE). If port $port is already in use, stop what holds it or set PORT; otherwise see the lines above." }
   }
   "frontend" {
     Set-Location "$Root\conxa-cloud\frontend"
