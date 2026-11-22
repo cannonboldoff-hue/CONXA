@@ -285,6 +285,14 @@ class EntityBinding(BaseModel):
     match: str = "whole"
     # [contract] The matched row IS the element to act on (a suggestion list item), not a container to look inside.
     self_target: bool = False
+    # [contract] How many rows on the saved page showed the identifier. Over 1 = twin rows the identifier cannot tell
+    # apart, so a run refuses there every time; the questions about this row say so (conversation/clarify.py). 0 = not
+    # counted (no saved page, or a package built before this field existed).
+    recorded_matches: int = 0
+    # [contract] Bound by place, not words (BUILD-101 (7)): the row is the Nth (1-based) of `container_selector`, a list
+    # that must be exactly one list on the page; `identifier` stays empty. Set for a captured value whose words change
+    # every run. The person's act: inert until `confirmed` (conversation/clarify.py "Always the first result?"). 0 = off.
+    position: int = 0
 
 
 class HandlerHints(BaseModel):
@@ -308,6 +316,10 @@ class HandlerHints(BaseModel):
     control_kind: str = ""
     date_picker: dict[str, Any] = Field(default_factory=dict)
     choice: dict[str, Any] = Field(default_factory=dict)
+    # BUILD-110 (1): on a step that sends a form, the step keys of the boxes typed on its page since the last send.
+    # Just before this step runs, the runtime checks each still holds what the run typed (run.js::checkTypedBoxes).
+    # Written by code only (build.py::mark_typed_rechecks); empty on every other step and on older packages.
+    recheck_typed: list[str] = Field(default_factory=list)
 
 
 class VideoContext(BaseModel):
