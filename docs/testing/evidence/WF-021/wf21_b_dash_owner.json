@@ -1,0 +1,194 @@
+{
+ "rows": [
+  {
+   "p": "/",
+   "status": 200,
+   "loadMs": 136,
+   "finalPath": "/",
+   "errors": 7,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "CONXA How it works Examples Security Pricing FAQ Docs Sign in Get started Show it once. Any agent runs it. Con"
+  },
+  {
+   "p": "/pricing",
+   "status": 200,
+   "loadMs": 153,
+   "finalPath": "/pricing",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "CONXA How it works Examples Security Pricing FAQ Docs Sign in Get started Pay for reach, not for runs. Unlimit"
+  },
+  {
+   "p": "/docs",
+   "status": 200,
+   "loadMs": 150,
+   "finalPath": "/docs",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "CONXA How it works Examples Security Pricing FAQ Docs Sign in Get started Docs home PRODUCT DOCS Platform Over"
+  },
+  {
+   "p": "/sign-in",
+   "status": 200,
+   "loadMs": 91,
+   "finalPath": "/sign-in",
+   "errors": 5,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": ""
+  },
+  {
+   "p": "/dashboard",
+   "status": 200,
+   "loadMs": 119,
+   "finalPath": "/dashboard",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/dashboard/workflows",
+   "status": 200,
+   "loadMs": 198,
+   "finalPath": "/dashboard/workflows",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/dashboard/impact",
+   "status": 200,
+   "loadMs": 213,
+   "finalPath": "/dashboard/impact",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/dashboard/healing",
+   "status": 200,
+   "loadMs": 137,
+   "finalPath": "/dashboard/healing",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/fleet",
+   "status": 200,
+   "loadMs": 138,
+   "finalPath": "/fleet",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/audit",
+   "status": 200,
+   "loadMs": 288,
+   "finalPath": "/audit",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/packages",
+   "status": 200,
+   "loadMs": 157,
+   "finalPath": "/packages",
+   "errors": 9,
+   "nonNetworkErrors": [
+    "[query failed] [skill-pack] ApiError: Skill pack not found.\n    at http://localhost:3100/_next/static/chunks/0qv3gi9tv7cv_.js:1:6179\n    at r (http://localhost:"
+   ],
+   "apiFail": [
+    "404 /api/v1/workflows/skill-packs/current",
+    "404 /api/v1/workflows/skill-packs/current"
+   ],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/packages/installer",
+   "status": 200,
+   "loadMs": 293,
+   "finalPath": "/packages/installer",
+   "errors": 9,
+   "nonNetworkErrors": [
+    "[query failed] [skill-pack] ApiError: Skill pack not found.\n    at http://localhost:3100/_next/static/chunks/0qv3gi9tv7cv_.js:1:6179\n    at r (http://localhost:"
+   ],
+   "apiFail": [
+    "404 /api/v1/workflows/skill-packs/current",
+    "404 /api/v1/workflows/skill-packs/current"
+   ],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/billing",
+   "status": 200,
+   "loadMs": 156,
+   "finalPath": "/billing",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/team",
+   "status": 200,
+   "loadMs": 231,
+   "finalPath": "/team",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/settings",
+   "status": 200,
+   "loadMs": 201,
+   "finalPath": "/settings",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  },
+  {
+   "p": "/report-bug",
+   "status": 200,
+   "loadMs": 125,
+   "finalPath": "/report-bug",
+   "errors": 6,
+   "nonNetworkErrors": [],
+   "apiFail": [],
+   "end": "",
+   "text": "Conxa Workspace OPERATE Dashboard Skill Packages Audit Fleet MANAGE Team Billing Settings Report a bug Terms ·"
+  }
+ ],
+ "blocked": [
+  "wf21-mock.clerk.accounts.dev",
+  "i.ytimg.com"
+ ]
+}

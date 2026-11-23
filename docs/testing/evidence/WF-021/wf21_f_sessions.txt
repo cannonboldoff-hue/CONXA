@@ -1,0 +1,37 @@
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           604 ~/.conxa-build-studio-dev/data/groups\02a46da2-318f-44b6-979b-1ff182c010a7\auth\app-a.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           604 ~/.conxa-build-studio-dev/data/groups\02a46da2-318f-44b6-979b-1ff182c010a7\auth\app-b.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           496 build-studio-dev/data/groups\02a46da2-318f-44b6-979b-1ff182c010a7\auth\signin-names.sealed
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           151152 onxa-build-studio-dev/data/groups\14815b51-ca32-49a6-8f9a-f9683654547d\auth\orangehrm.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           151152 -build-studio-dev/data/groups\14815b51-ca32-49a6-8f9a-f9683654547d\auth\orangehrm.json.bak
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           604 build-studio-dev/data/groups\51174e6e-efe6-485a-bbdb-a5dfb0d0c750\auth\signin-names.sealed
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           880 onxa-build-studio-dev/data/groups\51174e6e-efe6-485a-bbdb-a5dfb0d0c750\auth\swag-labs.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           1992 a-build-studio-dev/data/groups\51174e6e-efe6-485a-bbdb-a5dfb0d0c750\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           496 build-studio-dev/data/groups\53bc2667-48f4-4602-8a92-8e2934d357ed\auth\signin-names.sealed
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           796 a-build-studio-dev/data/groups\53bc2667-48f4-4602-8a92-8e2934d357ed\auth\two-step-app.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           19400 /.conxa-build-studio-dev/data/groups\5468933b-1e3d-42af-91ef-106c5cd69d26\auth\github.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           19400 nxa-build-studio-dev/data/groups\5468933b-1e3d-42af-91ef-106c5cd69d26\auth\github.json.bak
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           17224 /.conxa-build-studio-dev/data/groups\5468933b-1e3d-42af-91ef-106c5cd69d26\auth\google.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           17224 nxa-build-studio-dev/data/groups\5468933b-1e3d-42af-91ef-106c5cd69d26\auth\google.json.bak
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           3824 a-build-studio-dev/data/groups\56941ff2-2317-4c7c-af74-026cc8c8f965\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           2376 a-build-studio-dev/data/groups\86e2fa5f-6beb-4f58-9d7c-dbe6616de044\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           796 onxa-build-studio-dev/data/groups\adb125c4-c5ee-4657-9583-3505d8cd7e63\auth\code-site.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           752 conxa-build-studio-dev/data/groups\bc263170-8218-4d0f-a050-6ab929484ea3\auth\parabank.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           496 build-studio-dev/data/groups\bdea0095-d9cf-47e7-9cbc-f9cca3f2b336\auth\signin-names.sealed
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           1992 a-build-studio-dev/data/groups\bdea0095-d9cf-47e7-9cbc-f9cca3f2b336\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           816 onxa-build-studio-dev/data/groups\eeac6c0d-42c1-44c1-8342-9e489232c276\auth\swag-labs.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           880 -build-studio-dev/data/groups\eeac6c0d-42c1-44c1-8342-9e489232c276\auth\swag-labs.json.bak
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           3848 a-build-studio-dev/data/groups\f3639ec8-e200-4af9-8d4c-a74134ee025f\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           3420 nxa-build-studio-dev/data/groups\f8b0981b-e55f-4f1a-9328-1dba77c5d3f4\auth\juice-shop.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           3420 build-studio-dev/data/groups\f8b0981b-e55f-4f1a-9328-1dba77c5d3f4\auth\juice-shop.json.bak
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           2376 a-build-studio-dev/data/groups\fd391f6f-f437-491b-9c7b-0b5cc4734b84\auth\the-internet.json
+JSON other (keys: ['conxa_sealed_session', 'dpapi'])           1992 ild-studio-dev/data/groups\fd391f6f-f437-491b-9c7b-0b5cc4734b84\auth\the-internet.json.bak
+JSON other (keys: ['wrk_local__github', 'wrk_local__google',   440 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\_auth_validation_cache.json
+JSON other (keys: ['wrk_local__orangehrm', 'wrk_local__parab   176 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\_landing_urls.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    18728 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__github_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    15920 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__google_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    3052 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__juice-shop_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    150840 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__orangehrm_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    340 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__parabank_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    352 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__swag-labs_state.json
+JSON envelope (keys: ['data', 'iv', 'tag'])                    2732 ~/.conxa-build-studio-dev/sandbox/data/cache/sessions\wrk_local__the-internet_state.json
+Counter({'JSON other': 29, 'JSON envelope': 7})

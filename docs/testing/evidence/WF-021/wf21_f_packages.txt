@@ -1,0 +1,2 @@
+package credential check on this machine (Studio built packs + output):
+files scanned: 1988 (data/skill-packs + output); auth.json / storageState / *.sealed / cookies filenames: none; text grep secret_sauce, SuperSecretPassword!, admin123: no hits

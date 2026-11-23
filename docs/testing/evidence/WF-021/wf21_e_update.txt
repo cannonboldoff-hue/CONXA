@@ -1,0 +1,15 @@
+setup: current=app-v1.0.0 (installed app-v1.0.0), host_version=host-v1.0.0, test public key stamped
+manifest signed: True conxa_app default: app-v1.5.0
+[S1 same version published -> no update] current=app-v1.0.0 | stderr: (no bootstrap lines)
+[S2 newer app layer app-v1.1.0 (valid)] current=app-v1.1.0 | stderr: [bootstrap] info app_update_activated {"version":"app-v1.1.0","previousVersion":"app-v1.0.0"}
+S2 PASS - app-v1.1.0 active: True dirs: ['app-v1.0.0', 'app-v1.1.0', 'current']
+[S3 min_host host-v9.0.0 > host-v1.0.0] current=app-v1.1.0 | stderr: (no bootstrap lines)
+S3 PASS - not downloaded, current stays app-v1.1.0
+[S4 sha256 mismatch on app-v1.3.0] current=app-v1.1.0 | stderr: [bootstrap] warn artifact_download_retry {"url":"http://127.0.0.1:8171/conxa-app-app-v1.3.0.zip","attempt":0,"error":"sha256 mismatch: expected ffffffffffffffffffffffffff || [bootstrap] warn artifact_download_retry {"url":"http://127.0.0.1:8171/conxa-app-app-v1.3.0.zip","attempt":1,"error":"sha256 mismatch: expected ffffffffffffffffffffffffff || [bootstrap] warn app_update_failed {"error":"download failed after 2 attempts: sha256 mismatch: expected ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
+S4 PASS - current app-v1.1.0
+[S5 bad update app-v1.4.0 (server.js throws)] current=app-v1.1.0 | stderr: [bootstrap] info app_update_activated {"version":"app-v1.4.0","previousVersion":"app-v1.1.0"} || [bootstrap] failed to load C:\Users\kiran\AppData\Local\Temp\wf21\upd\conxa\conxa-app\app-v1.4.0\server.js: WF21 deliberately broken app layer || [bootstrap] primary app layer unusable — rolled back to C:\Users\kiran\AppData\Local\Temp\wf21\upd\conxa\conxa-app\app-v1.1.0
+S5 PASS - rolled back to app-v1.1.0 | 'rolled back' logged: True
+[S5b next launch after rollback] current=app-v1.1.0 | stderr: [bootstrap] info app_update_activated {"version":"app-v1.4.0","previousVersion":"app-v1.1.0"} || [bootstrap] failed to load C:\Users\kiran\AppData\Local\Temp\wf21\upd\conxa\conxa-app\app-v1.4.0\server.js: WF21 deliberately broken app layer || [bootstrap] primary app layer unusable — rolled back to C:\Users\kiran\AppData\Local\Temp\wf21\upd\conxa\conxa-app\app-v1.1.0
+S5b current after 2nd launch: app-v1.1.0 (bad version tried again: True )
+[S6 host trusts a different Ed25519 key (manifest signature must fail)] current=app-v1.1.0 | stderr: [bootstrap] warn manifest_signature_invalid {} || [bootstrap] warn manifest_unavailable {} || {"ts":"2026-11-23T00:42:31.571Z","level":"warn","msg":"manifest_signature_invalid"} || {"ts":"2026-11-23T00:42:31.571Z","level":"warn","msg":"manifest_unavailable"}
+S6 PASS - no update from a manifest that fails verification; current app-v1.1.0

@@ -1,0 +1,106 @@
+== WF-20 B: cross-company (A = org_a, B = org_b), both Pro so every gate is open and only identity can stop A ==
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_a","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_retent...
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_b","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_retent...
+  A: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=2act/0lock/limit=500 trial_expired=False
+  B: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+
+-- seed B's data --
+  [publish b_secret_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_b","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_b/delta","sync_token":"vmuR0cgrDsmh6MvidlDDmA_ad5NWygpgpY3swGdjvY0","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8160/api/tracking/org_b/events","tracking_to...
+  B slug=org_b (tracking+sync tokens captured, not printed)
+  [B create workflow] POST /api/v1/workflows -> 200 {"workflow":{"id":"b9b91665-f848-45e0-ad00-05c81005d086","slug":"b-secret-wf-b9b91665","name":"B-SECRET-WF","owner_user_id":"user_b","workspace_id":"org_b","group_id":"fb02bc5f-29a4-41e1-92ec-13311ed0baeb","target_url":"https://b.example","protected_url":"","p...
+  [B telemetry] POST /api/v1/tracking/org_b/events -> 202 {"ok":true}
+  [B own policy] PUT /api/v1/tracking/org_b/policy -> 200 {"policy_version":1,"workspace_id":"org_b","key_id":"conxa-manifest-1","issued_at":1795394787,"expires_at":1795999587,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":["b-original.example"],"signature":"CzIFitYuqpmagwRCKPFVNx+5XjKtCyVL2W1xiU...
+  [B own installer] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=orig&distribution=internal -> 200 {"slug":"org_b","version":"1.0.0","sha256":"bca27cd50cd998e4b7c19c77d87e0817699499f90ac1fa38ee69110c00f029c5","size":23,"download_url":"/api/v1/installers/org_b","version_download_url":"/api/v1/installers/org_b/versions/1.0.0"}
+  [B app-graph contribution] PUT /api/v1/app-graphs/b.example/contributions/skill:b_secret_skill -> 200 {"ok":true}
+  [B video job] POST /api/v1/video/analyze?duration_s=5 -> 200 {"job_id":"job_1b0ec5307bc84c95b9c6b46bad513d5f"}
+  [B reads own job] GET /api/v1/video/analyze/job_1b0ec5307bc84c95b9c6b46bad513d5f -> 200 {"job_id":"job_1b0ec5307bc84c95b9c6b46bad513d5f","status":"succeeded","error":null,"result":{"segments":[{"action_kind":"click","visible_target":"SECRET screen text: Quarterly salary sheet","intent":"open","purpose":"p","screen_before":"a","screen_after":"b","...
+  B job job_1b0ec5307bc84c95b9c6b46bad513d5f: succeeded for B = True
+  [publish a_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_a","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_a/delta","sync_token":"Q79XyKGrcWG7I7lgWZb0ia0hImCJpRjglvjZj3T0kH0","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8160/api/tracking/org_a/events","tracking_to...
+  [A own app-graph] PUT /api/v1/app-graphs/a.example/contributions/skill:a_skill -> 200 {"ok":true}
+
+-- A reads (every GET route; response scanned for any B marker) --
+  A GET /workflows -> 200 clean  {'workflows': []}
+  A GET /workflows/skill-packs -> 200 clean  {'skill_packs': [{'workspace_id': 'org_a', 'display_name': 'org_a', 'status': 'idle', 'bui
+  A GET /workflows/skill-packs/current -> 200 clean  {'skill_pack': {'workspace_id': 'org_a', 'display_name': 'org_a', 'status': 'idle', 'build
+  A GET /workflows/generations -> 404 clean  {'detail': 'Workflow not found.', 'message': 'Workflow not found.', 'request_id': 'ce18b21
+  A GET /workflows/installer/versions -> 200 clean  {'slug': 'org_a', 'versions': []}
+  A GET /tracking/companies -> 200 clean  {'companies': [{'company': 'org_a', 'display_name': 'org_a', 'workspace_id': 'org_a', 'run
+  A GET /tracking/dashboard?range=30d -> 200 clean  {'range': '30d', 'metrics': {'total_installs': 0, 'active_users': 0, 'active_companies': 0
+  A GET /tracking/activity -> 200 clean  {'runs': [], 'next_cursor': None, 'generated_at': 1795394790803}
+  A GET /tracking/diagnostics -> 200 clean  {'workspace_id': 'org_a', 'user_id': 'user_a', 'personal_workspace_id': 'personal_user_a',
+  A GET /tracking/drift -> 200 clean  {'queue': [], 'total': 0, 'pre_exec': [], 'pre_exec_total': 0}
+  A GET /tracking/roi-assumptions -> 200 clean  {'default_minutes': 8, 'hourly_rate': 65, 'currency': 'USD', 'per_workflow': {}}
+  A GET /audit-events -> 200 clean  {'audit_events': [{'id': 'evt_1795394790251', 'action': 'skill_publish_succeeded', 'user_i
+  A GET /usage -> 200 clean  {'workspace_id': 'org_a', 'skills': 0, 'packages': 0, 'workflows': 0, 'jobs': 1, 'active_j
+  A GET /dashboard -> 200 clean  {'workspace': {'id': 'org_a', 'slug': 'org-a', 'name': 'Workspace', 'role': 'admin'}, 'sta
+  A GET /me -> 200 clean  {'user': {'id': 'user_a', 'email': 'a@t.test', 'name': None, 'auth_provider': 'clerk'}, 'w
+  A GET /workspaces/current -> 200 clean  {'workspace': {'id': 'org_a', 'slug': 'org-a', 'name': 'Workspace', 'role': 'admin'}}
+  A GET /billing/subscription -> 200 clean  {'subscription': {'plan': 'pro', 'status': 'active', 'updated_at': 1795394787.0676644, 'cu
+  A GET /entitlements/machines -> 200 clean  {'machines': []}
+  A GET /entitlements/execute-grants -> 200 clean  {'grants': []}
+  A GET /entitlements/installer-domain -> 200 clean  {'domain': ''}
+  A GET /execute/contexts -> 200 clean  {'contexts': [{'workspace_id': 'org_a', 'workspace_name': 'org_a', 'kind': 'member', 'cred
+  A GET /telemetry/runtimes -> 200 clean  {'registrations': [], 'stale_count': 0, 'version_distribution': {}, 'total': 0, 'limit': 1
+  A GET /legal/acceptances -> 200 clean  {'version': '2026-08-29', 'acceptances': []}
+  A GET /legal/current -> 200 clean  {'version': '2026-08-29', 'documents': [{'id': 'terms', 'title': 'Terms And Conditions', '
+  A GET /app-graphs -> 200 clean  {'apps': [{'app_key': 'a.example', 'contributions': 1}]}
+  A GET /workspace/llm-key -> 200 clean  {'configured': False}
+  A GET /subscriptions/plans -> 200 clean  {'plans': [{'tier': 'free', 'name': 'Free', 'amount': 0, 'currency': 'INR', 'period': None
+  A GET /subscriptions/addons -> 200 clean  {'addons': [{'tier': 'credits_addon_20', 'name': '+20 compiles', 'amount': 3999, 'currency
+  A GET /packages/bundles/org_b/release -> 404 clean  {'detail': 'package_bundle_not_found', 'message': 'package_bundle_not_found', 'request_id'
+  A GET /packages/bundles/b_secret_skill/release -> 404 clean  {'detail': 'package_bundle_not_found', 'message': 'package_bundle_not_found', 'request_id'
+  A GET /workflows/v1/deployments -> 422 clean  {'detail': [{'type': 'missing', 'loc': ['query', 'skill_slug'], 'msg': 'Field required', '
+  A GET /workflows/v1/groups -> 200 clean  {'slug': 'org_a', 'groups': [{'group_id': 'wf21grp', 'group_name': 'WF21', 'workflows': [{
+  A GET /workflows/v1/releases/events?skill_slug=b_secret_skill -> 200 clean  {'slug': 'org_a', 'skill_slug': 'b_secret_skill', 'events': []}
+  A GET /workflows/v1/releases/1.0.0?skill_slug=b_secret_skill -> 404 clean  {'detail': 'release_not_found', 'message': 'release_not_found', 'request_id': '7154ba21d70
+  A GET /workflows/v1/releases/1.0.0/diff?skill_slug=b_secret_skill -> 404 clean  {'detail': 'release_not_found', 'message': 'release_not_found', 'request_id': 'efbe7701d7f
+  A GET /workflows/v1/skill-packs/versions?skill_slug=b_secret_skill -> 200 clean  {'slug': 'org_a', 'skill_slug': 'b_secret_skill', 'versions': [], 'current_stable': None}
+  A GET /workflows/org_b/installer/versions -> 403 clean  {'detail': 'workspace_forbidden', 'message': 'That belongs to a different workspace.', 're
+  A GET /workflows/b9b91665-f848-45e0-ad00-05c81005d086 -> 404 clean  {'detail': 'Workflow not found.', 'message': 'Workflow not found.', 'request_id': '4805c03
+  A GET /tracking/org_b/runs -> 200 clean  {'runs': [], 'total': 0, 'workspace_id': 'org_a', 'total_all_workspaces': 1, 'hidden_works
+  A GET /tracking/org_b/runs/run-b-secret -> 404 clean  {'detail': 'run_not_found_for_workspace', 'message': 'run_not_found_for_workspace', 'reque
+  A GET /tracking/org_b/reconcile -> 200 clean  {'range': '30d', 'workspace_id': 'org_b', 'runs_started': 0, 'runs_completed': 0, 'runs_ab
+  A GET /tracking/workflows/org_b/b_secret_skill -> 200 clean  {'company': 'org_b', 'workflow': 'b_secret_skill', 'range': '7d', 'granularity': 'day', 'g
+  A GET /tracking/workflows/org_a/b_secret_skill -> 200 clean  {'company': 'org_a', 'workflow': 'b_secret_skill', 'range': '7d', 'granularity': 'day', 'g
+  A GET /app-graphs/b.example/contributions -> 200 clean  {'app_key': 'b.example', 'contributions': []}
+  A GET /app-graphs/b.example/field -> 200 clean  {'app_key': 'b.example', 'popups': []}
+  A GET /app-graphs/a.example/contributions -> 200 clean  {'app_key': 'a.example', 'contributions': [{'id': 'skill:a_skill', 'path': None, 'popups':
+  A GET /jobs -> 404 clean  {'detail': 'Not Found'}
+  A GET /jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f -> 404 clean  {'detail': 'Not Found'}
+  A GET /jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f/events -> 404 clean  {'detail': 'Not Found'}
+  A GET /video/analyze/job_1b0ec5307bc84c95b9c6b46bad513d5f -> 404 clean  {'detail': 'unknown_job_id', 'message': "We couldn't find that job. It may have already fi
+  A GET /tracking/org_b/policy -> 401 clean  {'detail': 'invalid_tracking_token', 'message': 'invalid_tracking_token', 'request_id': '4
+  A GET /skill-packs/org_b/delta -> 401 clean  {'detail': 'invalid_sync_token', 'message': 'invalid_sync_token', 'request_id': 'da8122d48
+  A GET /workflows/v1/org_b/skill-packs/delta -> 401 clean  {'detail': 'invalid_sync_token', 'message': 'invalid_sync_token', 'request_id': '536056b07
+
+-- A writes against B --
+  [A delete B's workflow] DELETE /api/v1/workflows/b9b91665-f848-45e0-ad00-05c81005d086 -> 404 {"detail":"Workflow not found.","message":"Workflow not found.","request_id":"14f9401a720ea689cdb38a68"}
+  [B still has workflow?] GET /api/v1/workflows/b9b91665-f848-45e0-ad00-05c81005d086 -> 200 {"workflow":{"id":"b9b91665-f848-45e0-ad00-05c81005d086","slug":"b-secret-wf-b9b91665","name":"B-SECRET-WF","owner_user_id":"user_b","workspace_id":"org_b","group_id":"fb02bc5f-29a4-41e1-92ec-13311ed0baeb","target_url":"https://b.example","protected_url":"","p...
+  [A writes B's governance policy] PUT /api/v1/tracking/org_b/policy -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"518d718fb05d38ac2232272a"}
+  [runtime-style fetch: tracking token only, no bearer] GET /api/v1/tracking/org_b/policy -> 200 {"key_id":"conxa-manifest-1","enforce":false,"windows":[],"issued_at":1795394787,"signature":"CzIFitYuqpmagwRCKPFVNx+5XjKtCyVL2W1xiUor+JG5Ftkv3xA1YK9t0w3raWchX19Pg63LuLvb6IWBcwLzBA==","expires_at":1795999587,"denied_hosts":["b-original.example"],"workspace_id"...
+  [B fetches its policy with JWT + tracking token] GET /api/v1/tracking/org_b/policy -> 200 {"key_id":"conxa-manifest-1","enforce":false,"windows":[],"issued_at":1795394787,"signature":"CzIFitYuqpmagwRCKPFVNx+5XjKtCyVL2W1xiUor+JG5Ftkv3xA1YK9t0w3raWchX19Pg63LuLvb6IWBcwLzBA==","expires_at":1795999587,"denied_hosts":["b-original.example"],"workspace_id"...
+  [A uploads installer into B's slug via legacy route] POST /api/v1/workflows/org_b/installer/upload?version=9.9.9&release_notes=evil&distribution=internal -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"18fd517eaee1220d72a147b8"}
+  public download of B's installer now returns: "{'detail': 'invalid_or_expired_download_link', 'message': 'T" (status 401)
+  [B version list] GET /api/v1/workflows/installer/versions -> 200 {"slug":"org_b","versions":[{"slug":"org_b","version":"1.0.0","release_notes":"orig","filename":"org_b-Setup.exe","sha256":"bca27cd50cd998e4b7c19c77d87e0817699499f90ac1fa38ee69110c00f029c5","size":23,"uploaded_at":1795394787.6587367,"workspace_id":"org_b","is_...
+  [A PATCH B bundle release] PATCH /api/v1/packages/bundles/org_b/release -> 404 {"detail":"package_bundle_not_found","message":"package_bundle_not_found","request_id":"daa0733fc752cdad329f30f6"}
+  [A archive b_secret_skill (A's own slug)] POST /api/v1/workflows/v1/skills/archive -> 422 {"detail":[{"type":"missing","loc":["query","skill_slug"],"msg":"Field required","input":null}]}
+  [A's tracking token into B's feed] POST /api/v1/tracking/org_b/events -> 401 {"detail":"invalid_tracking_token","message":"invalid_tracking_token","request_id":"74f9474a790c20bd66aecf9c"}
+  [A's sync token against B's pack] GET /api/v1/skill-packs/org_b/delta -> 401 {"detail":"invalid_sync_token","message":"invalid_sync_token","request_id":"74fb21ce65c6c3a4db882999"}
+  [no sync token against B's pack] GET /api/v1/skill-packs/org_b/delta -> 401 {"detail":"invalid_sync_token","message":"invalid_sync_token","request_id":"fffb7b1f7f7dc9d3583e11d6"}
+  [CONTROL B's own sync token] GET /api/v1/skill-packs/org_b/delta -> 200 {"skills":[]}
+  [A cancels B's job] POST /api/v1/jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f/cancel -> 404 {"detail":"Not Found"}
+  job routes (A and B) now: {'/jobs': 404, '/jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f': 404, '/jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f/events': 404, 'B /jobs': 404, 'B /jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f': 404, 'B /jobs/job_1b0ec5307bc84c95b9c6b46bad513d5f/events': 404}; cancel: 404
+  [B's job after A's cancel] GET /api/v1/video/analyze/job_1b0ec5307bc84c95b9c6b46bad513d5f -> 200 {"job_id":"job_1b0ec5307bc84c95b9c6b46bad513d5f","status":"succeeded","error":null,"result":{"segments":[{"action_kind":"click","visible_target":"SECRET screen text: Quarterly salary sheet","intent":"open","purpose":"p","screen_before":"a","screen_after":"b","...
+  [A deletes B's app-graph (A's own namespace)] DELETE /api/v1/app-graphs/b.example/contributions/skill:b_secret_skill -> 200 {"ok":true}
+  [B app-graph after] GET /api/v1/app-graphs/b.example/contributions -> 200 {"app_key":"b.example","contributions":[{"id":"skill:b_secret_skill","path":null,"popups":[],"actions":[],"app_key":"b.example","screens":[],"signals":{"failure":[],"success":[],"progress":[]},"created_at":1795394787.7064183,"workspace_id":"org_b"}]}
+  B after attacks: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=1act/0lock/limit=500 trial_expired=False
+  A after attacks: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=3act/0lock/limit=500 trial_expired=False
+
+-- verdicts --
+  leaks in A's GET responses: []
+  B workflow alive after A's DELETE: True
+  A's PUT of B's policy: HTTP 403; B's policy now contains A's text: False
+  A's legacy installer upload into B's slug: HTTP 403; B's public download now A's bytes: False
+  B's own job after A's cancel call: succeeded
+  runtime-style policy fetch (X-Tracking-Token only) status: 200 (extra finding if 401)
+  >>> RESULT 20.2: PASS  - no B data in any A response; no write reached B

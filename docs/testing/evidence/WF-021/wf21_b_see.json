@@ -1,0 +1,103 @@
+{
+ "owner /packages": {
+  "text": "Skill Packages Published skills for customers. Groups of published skills that customers install via the Company Agent. Installer Open Build Studio Compile credits 500 left this month 0 / 500used No groups yet Create a group in Build Studio — it appears here immediately, even before any workflow is published. Open Build Studio Download Build Studio",
+  "buttons": [
+   "More details",
+   "Open Build Studio",
+   "Open Build Studio",
+   "Download Build Studio"
+  ]
+ },
+ "owner /packages/installer": {
+  "text": "Installer Installers and published groups. Installer downloads and published workflow groups. Back Skill pack not found.",
+  "buttons": [
+   "More details"
+  ]
+ },
+ "owner /team": {
+  "text": "Team Members, roles, and seats. Manage workspace members, their roles, and seat assignments. Admin Pro plan wf20-client Manage members, roles, and seats for this workspace. Manage members Seats SEATS 1 / 10 9 remaining YOUR ROLE Admin Workspace permissions PLAN Pro Billing controls seats LAST TEAM ACTIVITY None No activity yet Role guide Use the least access each teammate needs. Owner Full workspace and billing control. Owner Admin Manage members and workspace operations. Admin Member Use shared workspace resources. Member Team operations Related controls for seats and activity. Seat plan Review included seats and billing. Audit activity No activity yet Members Invite teammates, update roles, and manage organization membership. Conxa Execute seats Grant Conxa Execute access to people independent of Build Studio membership — their chat draws from this workspace's AI Usage Credits pool. 0 ",
+  "buttons": [
+   "More details",
+   "Invite"
+  ]
+ },
+ "owner /settings": {
+  "text": "Settings Workspace identity and admin entry points. Workspace identity, access context, and admin entry points. Workspace Workspace name wf20-client Workspace slug org-a Workspace ID org_a Current role Admin Access & Security Authentication Enforced Dashboard access is bound to the active Clerk organization context. Session verification Needs attention Shows whether this dashboard request is tied to a verified workspace identity. Signed-in user Clerk user_owner@wf21.test Administration Team Manage workspace members and access. Billing Review plan, usage, and subscription state. Audit Inspect workspace activity and export evidence. Build Studio Devices No devices registered yet Devices appear here the first time Build Studio compiles or signs in from a new machine. Bring Your Own LLM Key (Enterprise BYOK) No custom LLM key configured Point compiles at your own Azure OpenAI deployment for ",
+  "buttons": [
+   "More details",
+   "Configure key"
+  ]
+ },
+ "owner /billing": {
+  "text": "Billing Plans and payment controls. Plans, usage, and payment controls for this workspace. Refresh Workspace Usage Customer-visible meters for the current billing cycle. Seats Workspace members 1 / 10 Available 10% used 9 remaining Skill Pack Slots Published skill pack products — / — Available 0% used — remaining Execute Seats People with Conxa Execute access 0 / 100 Available 0% used 100 remaining Compile Credits Fresh workflow compiles 0 / 500 Available 0% used 500 remaining AI Usage Credits LLM-assisted recovery, edits, and Execute chat usage 0 / 10M Available 0% used 10M remaining Compile Credit Add-Ons One-time top-ups that never expire — used automatically after your monthly allowance runs out. +20 compiles One-time ₹3,999 pay once +20 compile credits (never expire) +200,000 AI credits (never expire) Used after your monthly allowance runs out Buy once +50 compiles One-time ₹9,999 p",
+  "buttons": [
+   "More details",
+   "Refresh",
+   "Buy once",
+   "Buy once",
+   "Buy once",
+   "Buy once",
+   "Free plan[disabled]",
+   "Choose Starter",
+   "Current plan[disabled]",
+   "Contact us"
+  ]
+ },
+ "owner /audit": {
+  "text": "Audit Workspace activity trail. Workspace event history for skill package operations, releases, billing, and administrative actions. Refresh Export CSV Events loaded 0 Latest 200 records Actors 0 Unique user IDs Resource types 0 Operational surfaces Latest event None No events found All actions No audit events match the current filters Try a broader search or action filter.",
+  "buttons": [
+   "More details",
+   "Refresh",
+   "Export CSV[disabled]"
+  ]
+ },
+ "member /packages": {
+  "text": "Skill Packages Published skills for customers. Groups of published skills that customers install via the Company Agent. Installer Open Build Studio Compile credits 500 left this month 0 / 500used You need admin access in this workspace to do that.",
+  "buttons": [
+   "More details",
+   "Open Build Studio"
+  ]
+ },
+ "member /packages/installer": {
+  "text": "Installer Installers and published groups. Installer downloads and published workflow groups. Back Skill pack not found.",
+  "buttons": [
+   "More details"
+  ]
+ },
+ "member /team": {
+  "text": "Team Members, roles, and seats. Manage workspace members, their roles, and seat assignments. Member Pro plan wf20-client Manage members, roles, and seats for this workspace. Manage members Seats SEATS 1 / 10 9 remaining YOUR ROLE Member Workspace permissions PLAN Pro Billing controls seats LAST TEAM ACTIVITY None No activity yet Role guide Use the least access each teammate needs. Owner Full workspace and billing control. Owner Admin Manage members and workspace operations. Admin Member Use shared workspace resources. Member Team operations Related controls for seats and activity. Seat plan Review included seats and billing. Audit activity No activity yet Members Invite teammates, update roles, and manage organization membership. Conxa Execute seats Grant Conxa Execute access to people independent of Build Studio membership — their chat draws from this workspace's AI Usage Credits pool. ",
+  "buttons": [
+   "More details",
+   "Invite"
+  ]
+ },
+ "member /settings": {
+  "text": "Settings Workspace identity and admin entry points. Workspace identity, access context, and admin entry points. Workspace Workspace name wf20-client Workspace slug org-a Workspace ID org_a Current role Member Access & Security Authentication Enforced Dashboard access is bound to the active Clerk organization context. Session verification Needs attention Shows whether this dashboard request is tied to a verified workspace identity. Signed-in user Clerk user_member@wf21.test Administration Team Manage workspace members and access. Billing Review plan, usage, and subscription state. Audit Inspect workspace activity and export evidence. Build Studio Devices You need admin access in this workspace to do that. Bring Your Own LLM Key Owner or admin required BYOK configuration is managed by workspace owners and admins on the Enterprise plan.",
+  "buttons": [
+   "More details"
+  ]
+ },
+ "member /billing": {
+  "text": "Billing Plans and payment controls. Plans, usage, and payment controls for this workspace. Refresh Workspace Usage Customer-visible meters for the current billing cycle. Seats Workspace members 1 / 10 Available 10% used 9 remaining Skill Pack Slots Published skill pack products — / — Available 0% used — remaining Execute Seats People with Conxa Execute access 0 / 100 Available 0% used 100 remaining Compile Credits Fresh workflow compiles 0 / 500 Available 0% used 500 remaining AI Usage Credits LLM-assisted recovery, edits, and Execute chat usage 0 / 10M Available 0% used 10M remaining Compile Credit Add-Ons One-time top-ups that never expire — used automatically after your monthly allowance runs out. +20 compiles One-time ₹3,999 pay once +20 compile credits (never expire) +200,000 AI credits (never expire) Used after your monthly allowance runs out Buy once +50 compiles One-time ₹9,999 p",
+  "buttons": [
+   "More details",
+   "Refresh",
+   "Buy once",
+   "Buy once",
+   "Buy once",
+   "Buy once",
+   "Free plan[disabled]",
+   "Choose Starter",
+   "Current plan[disabled]",
+   "Contact us"
+  ]
+ },
+ "member /audit": {
+  "text": "Audit Workspace activity trail. Workspace event history for skill package operations, releases, billing, and administrative actions. Refresh Export CSV Events loaded 0 Latest 200 records Actors 0 Unique user IDs Resource types 0 Operational surfaces Latest event None No events found All actions No audit events match the current filters Try a broader search or action filter.",
+  "buttons": [
+   "More details",
+   "Refresh",
+   "Export CSV[disabled]"
+  ]
+ }
+}

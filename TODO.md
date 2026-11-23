@@ -2093,6 +2093,8 @@ Kept at the end on purpose. Dead-code cleanups, legacy renames, research chores,
 
 - [ ] **AUTH-27 — "Done" on a two-step login's code screen takes ~2m40 to answer (WF-17 17.9, S2, found 2026-11-22).** The time is spent in the Studio backend (settle-and-retry of the sign-in check, see BUILD-98 (4)), not the browser panel; a wrong password on the-internet also took 1–3 min the first time. Dev Studio does not log backend stderr, so not confirmed. Also S3: one runtime message says "call execute_skill again" twice.
 
+- [ ] **CLOUD-29 — S3 findings from the WF-21 go / no-go run (2026-11-23).** (1) Startup does not require `SKILL_CORS_ALLOWED_ORIGINS`, `CONXA_ADMIN_TOKEN`, `SKILL_CLERK_AUTHORIZED_PARTIES` or `CLERK_SECRET_KEY`. (2) An unreachable database hangs startup silently. (3) A member sees owner buttons (Billing Choose Starter / Buy once, Team Invite); the click is refused with a plain message. (4) `/packages` logs a "Skill pack not found" console error on an empty workspace. (5) A bad app layer is retried on every launch. (6) The WF-21 spec's "promotion" wording is stale (that workflow was deleted). Pilot conditions are in `docs/testing/workflow-handoffs/WF-021.md`.
+
 ## Final Review Notes (from the audits that produced this file)
 
 - Every row in `docs/Security.md`'s security-gaps table (SG-01 through SG-13) has a corresponding item above or is confirmed already fully resolved with no residual work.

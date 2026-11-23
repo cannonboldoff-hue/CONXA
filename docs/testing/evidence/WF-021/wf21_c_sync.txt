@@ -1,0 +1,11 @@
+source package files: {'execution.json': 'ba9e360204d6', 'inputs.json': '43804bea3c4f', 'manifest.json': '524e25f6a75d', 'recovery.json': 'c91354bd5e4a'}
+credential grep on package files: no hits
+publish -> 200 {'slug': 'org_a', 'version': '0.2.0', 'files_written': 4, 'sync_url': '/api/v1/workflows/v2/org_a/skill-packs/delta'}
+release -> 200 {'slug': 'org_a', 'skill_slug': 'wf21-sync-0-2-0', 'released': '0.2.0', 'previous_stable': None}
+staged ONLY pack.json at C:\Users\kiran\AppData\Local\Temp\wf21\upd\conxa\skill-packs\org_a -> ['pack.json']
+bootstrap sync exit 0 | stdout: [sync:status] org_a updated (2 skills: wf21-sync-probe@0.1.1, wf21-sync-0-2-0@0.2.0) / [bootstrap] sync: install-time skill sync complete | stderr: 
+synced files on disk: {'execution.json': 'skill-packs\\org_a\\wf21grp\\wf21-sync-0-2-0\\v0.2.0\\execution.json', 'inputs.json': 'skill-packs\\org_a\\wf21grp\\wf21-sync-0-2-0\\v0.2.0\\inputs.json', 'manifest.json': 'skill-packs\\org_a\\wf21grp\\wf21-sync-0-2-0\\v0.2.0\\manifest.json', 'recovery.json': 'skill-packs\\org_a\\wf21grp\\wf21-sync-0-2-0\\v0.2.0\\recovery.json'}
+SHA-256 of every synced file matches the published source: True
+pack.json after sync: skills = ['wf21-sync-probe', 'wf21-sync-0-2-0'] last_synced set: True
+delta with a wrong token -> 401
+auth.json / storageState anywhere under the install dir: none

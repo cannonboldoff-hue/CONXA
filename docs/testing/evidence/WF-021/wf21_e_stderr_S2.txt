@@ -1,0 +1,11 @@
+[bootstrap] info app_update_activated {"version":"app-v1.1.0","previousVersion":"app-v1.0.0"}
+{"ts":"2026-11-23T00:40:56.455Z","level":"info","msg":"runtime_bootstrap","version":"0.0.0-dev","conxa_dir":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\conxa","conxa_data_dir":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\data","skill_packs_dir":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\conxa\\skill-packs","cache_dir":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\data\\cache","log_file":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\data\\logs\\runtime.log"}
+{"ts":"2026-11-23T00:40:56.746Z","level":"info","msg":"skill_index_loaded","count":0}
+{"ts":"2026-11-23T00:40:56.753Z","level":"info","msg":"mcp_connected","version":"0.0.0-dev","conxa_dir":"C:\\Users\\kiran\\AppData\\Local\\Temp\\wf21\\upd\\conxa","max_recovery_tier":4,"agent_recovery":true}
+{"ts":"2026-11-23T00:40:57.015Z","level":"warn","msg":"artifact_download_retry","url":"https://github.com/cannonboldoff-hue/CONXA/releases/download/host-v1.0.0/conxa-runtime.exe","attempt":0,"error":"HTTP 404"}
+{"ts":"2026-11-23T00:40:57.746Z","level":"warn","msg":"artifact_download_retry","url":"https://github.com/cannonboldoff-hue/CONXA/releases/download/host-v1.0.0/conxa-runtime.exe","attempt":1,"error":"HTTP 404"}
+{"ts":"2026-11-23T00:40:58.953Z","level":"warn","msg":"artifact_download_retry","url":"https://github.com/cannonboldoff-hue/CONXA/releases/download/host-v1.0.0/conxa-runtime.exe","attempt":2,"error":"HTTP 404"}
+{"ts":"2026-11-23T00:41:01.207Z","level":"warn","msg":"artifact_download_retry","url":"https://github.com/cannonboldoff-hue/CONXA/releases/download/host-v1.0.0/conxa-runtime.exe","attempt":3,"error":"HTTP 404"}
+{"ts":"2026-11-23T00:41:05.462Z","level":"warn","msg":"artifact_download_retry","url":"https://github.com/cannonboldoff-hue/CONXA/releases/download/host-v1.0.0/conxa-runtime.exe","attempt":4,"error":"HTTP 404"}
+{"ts":"2026-11-23T00:41:05.463Z","level":"warn","msg":"host_update_failed","error":"download failed after 5 attempts: HTTP 404"}
+{"ts":"2026-11-23T00:41:05.464Z","level":"info","msg":"sync_complete","count":0}

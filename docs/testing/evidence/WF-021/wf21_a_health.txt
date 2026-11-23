@@ -1,0 +1,30 @@
+healthz x50: all200=True p50=3.4ms p95=29.6ms max=57.8ms
+readyz x10: {200} {"status":"ready","database":"up"} max=34.9ms
+backend log: 65 lines, suspicious lines: 0
+anonymous GET /api/v1/entitlements/current -> 401
+postgres kv_store rows: 0
+kv_store table exists: 1
+filesystem kv dir present: False
+
+== every required secret removed one at a time (prod, auth on, real startup check) ==
+  missing SKILL_DATABASE_URL               booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_DATABASE_URL (filesystem fallback is not allowed in production)
+  missing SKILL_CLERK_ISSUER               booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_CLERK_ISSUER
+  missing SKILL_CLERK_JWKS_URL             booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_CLERK_JWKS_URL
+  missing SKILL_CORS_ALLOWED_ORIGINS       booted=True readyz=200 exit=None 
+  missing CASHFREE_APP_ID                  booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CASHFREE_APP_ID / CASHFREE_SECRET_KEY / CASHFREE_WEBHOOK_SECRET
+  missing CASHFREE_SECRET_KEY              booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CASHFREE_APP_ID / CASHFREE_SECRET_KEY / CASHFREE_WEBHOOK_SECRET
+  missing CASHFREE_WEBHOOK_SECRET          booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CASHFREE_APP_ID / CASHFREE_SECRET_KEY / CASHFREE_WEBHOOK_SECRET
+  missing CASHFREE_STARTER_PLAN_ID         booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CASHFREE_STARTER_PLAN_ID / CASHFREE_PRO_PLAN_ID
+  missing CASHFREE_PRO_PLAN_ID             booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CASHFREE_STARTER_PLAN_ID / CASHFREE_PRO_PLAN_ID
+  missing SKILL_API_BASE_URL               booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_API_BASE_URL (set to prevent X-Forwarded-Host injection into pack
+  missing SKILL_TRACKING_HMAC_SECRET       booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_TRACKING_HMAC_SECRET (required so telemetry ingest rejects unreco
+  missing SKILL_INSTALLER_SIGNING_KEY      booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_INSTALLER_SIGNING_KEY (required to sign time-limited installer do
+  missing CONXA_MANIFEST_SIGNING_KEY       booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: CONXA_MANIFEST_SIGNING_KEY (required so self-update manifests are verif
+  missing SKILL_TWELVELABS_API_KEY         booted=False readyz=None exit=3 RuntimeError: Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: SKILL_TWELVELABS_API_KEY (Pegasus video analysis is a hard dependency o
+  missing LLM_FREE_API_KEYS                booted=False readyz=None exit=1 pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+  missing CONXA_ADMIN_TOKEN                booted=True readyz=200 exit=None 
+  missing SKILL_CLERK_AUTHORIZED_PARTIES   booted=True readyz=200 exit=None 
+  missing CLERK_SECRET_KEY                 booted=True readyz=200 exit=None 
+  DB URL unreachable: booted=False readyz=None exit=None
+  no DB + startup check bypassed (test hook): booted=True readyz=(503, '{"status":"unavailable","database":"filesystem","error":"auth_required but no database configured"}')
+DB URL unreachable (postgresql://...:1): process starts but stays in "Application startup" (init_db blocks); /healthz never answers within 15s, so readyz can never say ready. Not a pass-by-accident.

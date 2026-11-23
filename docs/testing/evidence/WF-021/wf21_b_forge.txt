@@ -1,0 +1,3 @@
+member + forged identity headers via Next proxy POST /api/v1/subscriptions/create -> 403 b'{"detail":"admin_role_required","message":"You need admin access in this workspace to do t'
+member + forged identity headers via Next proxy GET /api/v1/workflows/installer/versions -> 403 b'{"detail":"admin_role_required","message":"You need admin access in this workspace to do t'
+member + forged identity headers via Next proxy POST /api/v1/entitlements/admin/billing -> 401 b'{"detail":"Unauthorized","message":"Unauthorized","request_id":"f71111234abde92eddf52a17"}'

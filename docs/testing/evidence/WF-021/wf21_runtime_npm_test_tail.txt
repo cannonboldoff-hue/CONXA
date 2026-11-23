@@ -1,0 +1,12 @@
+✔ wait_until: on_timeout continue lets the run go on (0.189ms)
+✔ wait_until: an error that is not a timeout is not swallowed (0.2241ms)
+✔ wait_until: a missing or unknown condition is a clear, non-retryable error (0.5528ms)
+ℹ tests 1568
+ℹ suites 0
+ℹ pass 1567
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 342776.2173
+EXIT 0

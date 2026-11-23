@@ -1,0 +1,418 @@
+[
+[
+"bearer->backend",
+"GET",
+"/api/v1/entitlements/execute-grants",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/entitlements/execute-grants",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/entitlements/execute-grants/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/entitlements/installer-domain",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/entitlements/installer-domain",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/entitlements/machines",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/entitlements/machines/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/legal/acceptances",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"PATCH",
+"/api/v1/packages/bundles/{bundle_slug}/release",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/subscriptions/addon/order",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/subscriptions/create",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/telemetry/runtimes/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"PUT",
+"/api/v1/tracking/roi-assumptions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"PUT",
+"/api/v1/tracking/{workspace_id}/policy",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows/installer/upload",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/workflows/installer/versions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows/publish",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows/{installer_version}/releases/{version}/release",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows/{installer_version}/releases/{version}/rollback",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"POST",
+"/api/v1/workflows/{installer_version}/skill-packs/upload",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/workflows/{installer_version}/skill-packs/versions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"DELETE",
+"/api/v1/workflows/{workflow_id}",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"PUT",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"DELETE",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"bearer->backend",
+"GET",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/entitlements/execute-grants",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/entitlements/execute-grants",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/entitlements/execute-grants/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/entitlements/installer-domain",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/entitlements/installer-domain",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/entitlements/machines",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/entitlements/machines/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/legal/acceptances",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"PATCH",
+"/api/v1/packages/bundles/{bundle_slug}/release",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/subscriptions/addon/order",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/subscriptions/create",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/telemetry/runtimes/revoke",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"PUT",
+"/api/v1/tracking/roi-assumptions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"PUT",
+"/api/v1/tracking/{workspace_id}/policy",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows/installer/upload",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/workflows/installer/versions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows/publish",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows/{installer_version}/releases/{version}/release",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows/{installer_version}/releases/{version}/rollback",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"POST",
+"/api/v1/workflows/{installer_version}/skill-packs/upload",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/workflows/{installer_version}/skill-packs/versions",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"DELETE",
+"/api/v1/workflows/{workflow_id}",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"PUT",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"DELETE",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+],
+[
+"cookie->next proxy",
+"GET",
+"/api/v1/workspace/llm-key",
+403,
+"PASS",
+"{\"detail\":\"admin_role_required\",\"message\":\"You need admin access in th"
+]
+]

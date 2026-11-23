@@ -1,0 +1,2 @@
+/billing Choose Starter | mutating calls: [ 'POST /api/v1/subscriptions/create -> 403' ] | new text: You need admin do that.
+/team Invite | mutating calls: [] | new text: Enter valid email address.

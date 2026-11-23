@@ -1,0 +1,20 @@
+  Generating static pages using 11 workers (34/46) 
+✓ Generating static pages using 11 workers (46/46) in 773ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/v1/[...path]
+├ ƒ /audit
+├ ƒ /billing
+├ ƒ /dashboard
+├ ƒ /dashboard/healing
+├ ƒ /dashboard/impact
+├ ƒ /dashboard/runs/[company]/[runId]
+├ ƒ /dashboard/workflows
+├ ƒ /dashboard/workflows/[company]/[slug]
+├ ○ /docs
+├ ● /docs/[slug]
+│ ├ /docs/platform
+│ ├ /docs/claude-automation
