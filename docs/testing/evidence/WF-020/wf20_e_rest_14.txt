@@ -1,0 +1,98 @@
+== WF-20 E rows ['14'] tag=e83847 ==
+
+#### 20.14 timed grant, analytics retention, pool routing, BYOK, add-ons
+
+-- (a) timed grant
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ae83847_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  [grant pro for 7 days] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ae83847_free","plan":"pro","expires_at":1795988647,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"ful...
+  during grant: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [duration_days=0] POST /api/v1/entitlements/admin/billing -> 422 {"detail":[{"type":"greater_than","loc":["body","duration_days"],"msg":"Input should be greater than 0","input":0,"ctx":{"gt":0}}]}
+  [duration_days=-3] POST /api/v1/entitlements/admin/billing -> 422 {"detail":[{"type":"greater_than","loc":["body","duration_days"],"msg":"Input should be greater than 0","input":-3,"ctx":{"gt":0}}]}
+  [duration_days=3651] POST /api/v1/entitlements/admin/billing -> 422 {"detail":[{"type":"less_than_equal","loc":["body","duration_days"],"msg":"Input should be less than or equal to 3650","input":3651,"ctx":{"le":3650}}]}
+  [seed billing org_e14ae83847_free {"plan_expires_at": 1795383843.5911849}] -> {"plan": "pro", "status": "active", "plan_expires_at": 1795383843.5911849, "updated_at": 1795383877.072822, "trial_started_at": 1795383847.7067444}
+  grant expired (no job ran): plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  [ops route after the grant ended] GET /api/v1/tracking/dashboard -> 403 {"detail":"ops_tier_required","message":"ops_tier_required","request_id":"be03a130debf6c34e0501de5"}
+  [permanent pro re-assign clears expiry] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ae83847_free","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","an...
+  permanent pro: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [unknown plan] POST /api/v1/entitlements/admin/billing -> 400 {"detail":"unknown_plan: must be one of ['enterprise', 'free', 'pro', 'starter']","message":"unknown_plan: must be one of ['enterprise', 'free', 'pro', 'starter']","request_id":"b312bb44fd07ed1f9220be38"}
+  [no workspace_id/email] POST /api/v1/entitlements/admin/billing -> 400 {"detail":"workspace_id or email required","message":"workspace_id or email required","request_id":"099a725cf8ac83e4f890c2fa"}
+
+-- (b) analytics retention (runs aged through the test store: server_ts shifted; a 90-day wait is not possible)
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14be83847_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic"...
+  [publish ret_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_e14be83847_starter","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_e14be83847_starter/delta","sync_token":"CMNRHsfuF27hQuGR91JBZTatBLF6YflZW2YGOV55bOA","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/t...
+  [seed agerun org_e14be83847_starter r-30 30] -> aged r-30 30.0 days
+  [seed agerun org_e14be83847_starter r-100 100] -> aged r-100 100.0 days
+  [seed agerun org_e14be83847_starter r-400 400] -> aged r-400 400.0 days
+  starter: activity feed shows runs ['r-30', 'r-now'] (want 2)
+  starter: GET /tracking/{ws}/runs total=4
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14be83847_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","ana...
+  [publish ret_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_e14be83847_pro","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_e14be83847_pro/delta","sync_token":"qdWsv4Nt3yD_LvrRV70EMahjxOTMtKSLHvzriWeFC1o","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  [seed agerun org_e14be83847_pro r-30 30] -> aged r-30 30.0 days
+  [seed agerun org_e14be83847_pro r-100 100] -> aged r-100 100.0 days
+  [seed agerun org_e14be83847_pro r-400 400] -> aged r-400 400.0 days
+  pro: activity feed shows runs ['r-100', 'r-30', 'r-now'] (want 3)
+  pro: GET /tracking/{ws}/runs total=4
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14be83847_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","...
+  [publish ret_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_e14be83847_enterprise","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_e14be83847_enterprise/delta","sync_token":"0qpVbgrUeQI45eh_wqO8CUz8BcPru7mGqwKQ4QWMkLE","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140...
+  [seed agerun org_e14be83847_enterprise r-30 30] -> aged r-30 30.0 days
+  [seed agerun org_e14be83847_enterprise r-100 100] -> aged r-100 100.0 days
+  [seed agerun org_e14be83847_enterprise r-400 400] -> aged r-400 400.0 days
+  enterprise: activity feed shows runs ['r-100', 'r-30', 'r-400', 'r-now'] (want 4)
+  enterprise: GET /tracking/{ws}/runs total=4
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14be83847_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  [free activity] GET /api/v1/tracking/activity -> 403 {"detail":"ops_tier_required","message":"ops_tier_required","request_id":"aa7e69f3e42864e68fb6db69"}
+
+-- (c) compile pool routing (the mock LLM answers with the key of the pool that served the call)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ce83847_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  free: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  free: compile_pool=free served by key-free
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ce83847_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic"...
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-starter"}
+  starter: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  starter: compile_pool=starter served by key-starter
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ce83847_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","ana...
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-pro"}
+  pro: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  pro: compile_pool=pro served by key-pro
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ce83847_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","...
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  enterprise: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  enterprise: compile_pool=premium served by key-free
+
+-- (d) BYOK (Azure OpenAI key, Enterprise only; key stored encrypted; the 'Azure' endpoint is the local mock)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14de83847_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  [free PUT key] PUT /api/v1/workspace/llm-key -> 403 {"detail":"byok_requires_enterprise","message":"byok_requires_enterprise","request_id":"befe1154a492bf26c3f8ea34"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14de83847_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic"...
+  [starter PUT key] PUT /api/v1/workspace/llm-key -> 403 {"detail":"byok_requires_enterprise","message":"byok_requires_enterprise","request_id":"8caba02556929ec8e95d509d"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14de83847_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","ana...
+  [pro PUT key] PUT /api/v1/workspace/llm-key -> 403 {"detail":"byok_requires_enterprise","message":"byok_requires_enterprise","request_id":"db7c299079ce0cb98f7cf3f4"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14de83847_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","...
+  [enterprise PUT key] PUT /api/v1/workspace/llm-key -> 200 {"configured":true,"provider":"azure_openai","endpoint":"http://127.0.0.1:8142","deployment":"dep1","api_version":"2024-08-01-preview"}
+  [GET key meta] GET /api/v1/workspace/llm-key -> 200 {"configured":true,"provider":"azure_openai","endpoint":"http://127.0.0.1:8142","deployment":"dep1","api_version":"2024-08-01-preview"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"byok:byok-secret-key-123"}
+  enterprise compile call served by: byok:byok-secret-key-123
+  [member PUT key] PUT /api/v1/workspace/llm-key -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"2fc4129268e71ede88747e54"}
+  [DELETE key] DELETE /api/v1/workspace/llm-key -> 200 {"deleted":true}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-starter"}
+  after DELETE served by: key-starter
+
+-- (e) add-on packs: wallet stacks, and unstacks as credits are used (purchase itself = Cashfree = BLOCKED; wallet credited through grant_credit_wallet, the function a verified payment calls)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e14ee83847_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  [seed usage org_e14ee83847_free 25] -> usage set org_e14ee83847_free:2026-11 25
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"207f93c5ec6fd6f367e874c6"}
+  [seed wallet org_e14ee83847_free 20 200000] -> {'compile_credits': 20, 'human_edit_tokens': 200000}
+  [seed wallet org_e14ee83847_free 50 500000] -> {'compile_credits': 70, 'human_edit_tokens': 700000}
+  after +20 and +50 packs (stack): plan=free seats=1/1 machines=0/1 compile=25+0res/25 pool=0/500000 wallet=70/700000 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  after 5 wallet-funded compiles (unstack): plan=free seats=1/1 machines=0/1 compile=30+0res/25 pool=0/500000 wallet=65/700000 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  after 70 wallet-funded compiles: plan=free seats=1/1 machines=0/1 compile=95+0res/25 pool=0/500000 wallet=0/700000 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"0de3ad23db477dd4f8335d23"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  pool beyond 500k using the wallet's 700k tokens: plan=free seats=1/1 machines=0/1 compile=95+0res/25 pool=900080/500000 wallet=0/474980 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  4th 900KB call (pool 500k exhausted, wallet 700k): 200
+  [addon order, no Cashfree creds] POST /api/v1/subscriptions/addon/order -> 500 {"detail":"Cashfree credentials not configured","message":"Cashfree credentials not configured","request_id":"346b355649aa0e1beeafa2e4"}
+  [forged payment webhook] POST /api/v1/subscriptions/webhooks/cashfree-orders -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"0e5b6a2441831ad5c1529b4d"}
+  note: enterprise (premium pool, none configured) fell back to key-free
+  note: add-on order without Cashfree credentials -> 500 Cashfree credentials not configured (BLOCKED: real purchase, payment page and webhook need Cashfree sandbox keys)
+  note: forged Cashfree webhook (no valid signature) -> 401 missing_bearer_token
+  >>> RESULT 20.14: FAIL S2 - BYOK member PUT -> 402

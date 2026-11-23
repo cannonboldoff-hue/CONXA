@@ -2049,7 +2049,7 @@ For a brand-new skill (no previous publish), `previous_version` is `null` and th
 
 ### 5.1b Installer Upload + History (installer becomes a secondary, advanced artifact)
 
-**POST /api/v1/workflows/{slug}/installer/upload?filename=...&version=...&release_notes=...** (raw octet-stream body) — uploads a built installer `.exe`. No product/skill-pack-slot entitlement check here (that gate lives on skill-pack publish only, §5.1/§5.3 — installer upload is optional and unmetered, matching the requirement that a failed/skipped installer upload never fails a Build Installer run). Duplicate-version upload → 409 `installer_version_exists`. Response:
+**POST /api/v1/workflows/{slug}/installer/upload?filename=...&version=...&release_notes=...** (raw octet-stream body) — uploads a built installer `.exe`. Admin of the owning workspace only (members: 403 `admin_role_required`). `{slug}` must be the caller's own workspace id or slug, else 403 `workspace_forbidden`; a generation value (`v1`/`v2`, what shipped Studios send) means "my own slug". The same rule applies to `GET /workflows/{slug}/installer/versions`. No product/skill-pack-slot entitlement check here (that gate lives on skill-pack publish only, §5.1/§5.3 — installer upload is optional and unmetered, matching the requirement that a failed/skipped installer upload never fails a Build Installer run). Duplicate-version upload → 409 `installer_version_exists`. Response:
 ```json
 {
   "slug": "acme", "version": "1.2.0", "sha256": "abc123...", "size": 20480000,
@@ -2315,6 +2315,13 @@ installer for it, tracked in the `publish_owners` KV namespace (one row per slug
 `{slug, workspace_id, claimed_at}`). `_assert_owner`/`_assert_not_owned_by_other` still gate slug
 takeover; there is no longer a *count* limit on how many slugs a workspace may claim.
 
+**POST /api/v1/entitlements/admin/billing** (`Authorization: Bearer CONXA_ADMIN_TOKEN`) — body
+`{workspace_id | email, plan, duration_days?, entitlement_overrides?}`. `entitlement_overrides` is an
+optional object (e.g. `{"seats": 99}`) stored on the billing record as-is and validated per key when read
+(`_limits_from_billing`); it replaces earlier overrides, `{}` clears them, omitting it leaves them alone.
+The response `limits` is the effective result. Enterprise with no overrides gets Pro's numbers (seats 10,
+machines 10, Execute seats 100, AI credits 10M) as a floor.
+
 ### 5.4 Billing
 
 The live payment gateway is **Cashfree** (switched from Razorpay 2026-06-30 — see `cashfree_routes.py`, mounted at `/api/v1/subscriptions`).
@@ -2393,11 +2400,11 @@ Response:
 {"success": true}
 ```
 
-Fetches `GET /api/v2/subscriptions/{subscription_id}` from Cashfree, resolves the tier from the returned `planId`, and upserts the billing record (`plan`, `status: "active"`, `subscription_id`, `current_period_end`).
+The subscription must belong to the caller's workspace (the `cashfree_sub_workspace` mapping written at checkout): another workspace's, or an unknown, id returns 403 `subscription_forbidden` before Cashfree is called. Fetches `GET /api/v2/subscriptions/{subscription_id}` from Cashfree, resolves the tier from the returned `planId`, and only when the status is `ACTIVE` upserts the billing record (`plan`, `status: "active"`, `subscription_id`, `current_period_end`); any other status returns 400 `subscription_not_active` and changes nothing.
 
 **POST /api/v1/subscriptions/webhooks/cashfree**
 
-Cashfree webhook endpoint. When `cashfree_webhook_secret` is configured, the signature is verified by sorting all `cf_`-prefixed payload fields, concatenating `key+value` pairs, and comparing against the provided signature using the shared secret (`_cf_webhook_signature()`). Activation/charge events refresh `current_period_end`; cancellation clears it.
+Cashfree webhook endpoint. Public at the sign-in gate (Cashfree sends no Clerk token) and fail-closed: no `cashfree_webhook_secret` configured returns 503 `webhook_not_configured`, a missing or wrong signature returns 400 `invalid_signature` (the `cashfree-orders` webhook follows the same rules). The signature is verified by sorting all `cf_`-prefixed payload fields, concatenating `key+value` pairs, and comparing against the provided signature using the shared secret (`_cf_webhook_signature()`). Activation/charge events refresh `current_period_end`; cancellation clears it.
 
 ### 5.5 LLM Proxy Usage Class
 
@@ -2581,7 +2588,7 @@ normalizes input rather than trusting it.
 ### 5.7b Governance Policy (PROD-18)
 
 **PUT /api/v1/tracking/{workspace_id}/policy**
-**Header: Authorization: Bearer {clerk_jwt}** — admin only (`require_admin`), gated `ops_tier=full`.
+**Header: Authorization: Bearer {clerk_jwt}** — admin only (`require_admin`), gated `ops_tier=full`. `{workspace_id}` must be the caller's own workspace id or slug (else 403 `workspace_forbidden`); the policy is always stored under the slug, which is what the runtime reads.
 
 Request body: `{windows: [...], denied_hosts: [...], enforce, require_receipt, ttl_s}` — see
 §4.2a for the field shapes. Validates every window's `tz` against the IANA database
@@ -2592,7 +2599,7 @@ signed document (§4.2a shape).
 
 **GET /api/v1/tracking/{workspace_id}/policy**
 **Header: X-Tracking-Token: {token}** — the same per-workspace tracking token ingest uses,
-not a Clerk session. This is deliberate: a workspace with telemetry disabled has no token
+not a Clerk session (the route is public at the sign-in gate; the handler checks the token). This is deliberate: a workspace with telemetry disabled has no token
 and therefore cannot fetch policy either — you cannot govern what you cannot audit (see
 `docs/Audit-and-Control.md` §5). Returns the stored signed document, or **404** if the
 workspace has never had a policy written (a signal the runtime treats as "genuinely

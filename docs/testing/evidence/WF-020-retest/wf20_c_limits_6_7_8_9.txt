@@ -1,0 +1,239 @@
+== WF-20 C rows ['6', '7', '8', '9'] tag=t89438 ==
+
+#### 20.6 compile credits (reserve -> commit; cap = plan limit; payment-shaped 402)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t89438_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: cap=25
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  after 22 committed: plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"75c0319c347b3222d78d92cb"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_free-b","status":"released"}
+  after release b: plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"b9e7677cb626648d87d92eab"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_free-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_free-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_free-a","status":"committed"}
+  after commit a: plan=free seats=1/1 machines=0/1 compile=23+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-free'}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t89438_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: cap=200
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  [seed usage org_c6t89438_starter 197] -> usage set org_c6t89438_starter:2026-11 197
+  after 197 committed: plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"9ca42e4c2898af98ff23bf67"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_starter-b","status":"released"}
+  after release b: plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"67cabbed70278c2aa59c37cc"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_starter-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_starter-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_starter-a","status":"committed"}
+  after commit a: plan=starter seats=1/3 machines=0/3 compile=198+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-starter'}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t89438_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: cap=500
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [seed usage org_c6t89438_pro 497] -> usage set org_c6t89438_pro:2026-11 497
+  after 497 committed: plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"2606540199e0d215010b7d7c"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_pro-b","status":"released"}
+  after release b: plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"602f3f6a430f881ecb26557e"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_pro-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t89438_pro-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t89438_pro-a","status":"committed"}
+  after commit a: plan=pro seats=1/10 machines=0/10 compile=498+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-pro'}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t89438_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":null,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":true,"ops_tier"...
+
+-- enterprise: cap=None
+  before: plan=enterprise seats=1/10 machines=0/10 compile=0+0res/None pool=0/10000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  30 reserve+commit on Enterprise (unlimited): 30/30 ok
+  after: plan=enterprise seats=1/10 machines=0/10 compile=30+0res/None pool=0/10000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+
+-- reservation expiry: server TTL is max(60s, setting) -> waiting 63s once for all plans (c and d reservations above were never committed) --
+  free after TTL: plan=free seats=1/1 machines=0/1 compile=23+0res/25 pool=520/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_free-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"ce06950365fb467aeb66094a"}
+  starter after TTL: plan=starter seats=1/3 machines=0/3 compile=198+0res/200 pool=520/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_starter-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"ea9ce9e9df9a7f4000a63c06"}
+  pro after TTL: plan=pro seats=1/10 machines=0/10 compile=498+0res/500 pool=519/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t89438_pro-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"8bcf43c930e0d83429bd3490"}
+  >>> RESULT 20.6: PASS  - Free 25 / Starter 200 / Pro 500 caps -> 402 compile_credit_limit_exceeded at cap+1; same id twice counts once; release returns; reservation expired after TTL; Enterprise unlimited
+
+#### 20.7 human-edit token pool (402 human_edit_pool_exceeded for the legacy class, ai_credits_exceeded for the new name)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t89438_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: pool=500000
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  4 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=675060/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"430db2f667c9b2b00910d4e0"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t89438_free-after-pool","status":"reserved","remaining_compile_credits":24}
+  after compile call: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=675060/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t89438_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: pool=2500000
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  3 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=3750040/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"62893455ccdfe203f1af0dc4"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-starter"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t89438_starter-after-pool","status":"reserved","remaining_compile_credits":199}
+  after compile call: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=3750040/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t89438_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: pool=10000000
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  7 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=11250114/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"c82314fa097b4c4d5e94629c"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-pro"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t89438_pro-after-pool","status":"reserved","remaining_compile_credits":499}
+  after compile call: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=11250114/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t89438_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":null,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":true,"ops_tier"...
+
+-- enterprise: pool=0
+  before: plan=enterprise seats=1/10 machines=0/10 compile=0+0res/None pool=0/10000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-starter"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-pro"}
+  enterprise after: plan=enterprise seats=1/10 machines=0/10 compile=0+0res/None pool=1040/10000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  note: free: pool used 675060 of 500000 (overshoot 175060 tokens: one call may cross the cap)
+  note: starter: pool used 3750040 of 2500000 (overshoot 1250040 tokens: one call may cross the cap)
+  note: pro: pool used 11250114 of 10000000 (overshoot 1250114 tokens: one call may cross the cap)
+  note: enterprise(no overrides) first human_edit call -> 200 None
+  >>> RESULT 20.7: PASS  - pool cap -> 402 human_edit_pool_exceeded (legacy) / ai_credits_exceeded (new class); compile calls + compile credits unaffected. free: pool used 675060 of 500000 (overshoot 175060 tokens: one call may cross the cap) | starter: pool used 3750040 of 2500000 (overshoot 1250040 tokens: one call may cross the cap) | pro: pool used 11250114 of 10000000 (overshoot 1250114 tokens: one call may cross the cap) | enterprise(no overrides) first human_edit call -> 200 None
+
+#### 20.8 machines (X-Conxa-Machine header on compile reserve / LLM proxy; revoke frees a slot)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t89438_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: machines=1
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  1/1 machines registered
+  at cap: plan=free seats=1/1 machines=1/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"b501601734e9a4b4bd4e9f61"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_free-mk","status":"reserved","remaining_compile_credits":23}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"7c6f86517626496cee46bf21"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_free-mn","status":"reserved","remaining_compile_credits":22}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"ba20da5def6ce3e8c28d930c"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t89438_free","machine_hash":"mach-new","last_ip":"127.0.0.1","first_seen":"2026-11-22T23:22:41Z","last_seen":"2026-11-22T23:22:41Z"},{"workspace_id":"org_c8t89438_free","machine_hash":"mach-0","last_ip":"127.0.0.1","first_se...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"62ff05921b31e5a297e5a673"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t89438_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: machines=3
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  3/3 machines registered
+  at cap: plan=starter seats=1/3 machines=3/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"f1e7b9f2e15f9630c1fd6836"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_starter-mk","status":"reserved","remaining_compile_credits":196}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"e02cac08f97b063beffb6fff"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=starter seats=1/3 machines=2/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_starter-mn","status":"reserved","remaining_compile_credits":195}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"ffcc86926400cdf11ecf4858"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t89438_starter","machine_hash":"mach-new","last_ip":"127.0.0.1","first_seen":"2026-11-22T23:22:52Z","last_seen":"2026-11-22T23:22:52Z"},{"workspace_id":"org_c8t89438_starter","machine_hash":"mach-0","last_ip":"127.0.0.1","fi...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"98da67239aafc868bbadf10e"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t89438_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: machines=10
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  10/10 machines registered
+  at cap: plan=pro seats=1/10 machines=10/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"a22b705bef4238beab9f412b"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_pro-mk","status":"reserved","remaining_compile_credits":489}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"bad78d49d1ae60c3fb7585f0"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=pro seats=1/10 machines=9/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_pro-mn","status":"reserved","remaining_compile_credits":488}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"80886a4ca9b612db9335987a"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t89438_pro","machine_hash":"mach-new","last_ip":"127.0.0.1","first_seen":"2026-11-22T23:23:11Z","last_seen":"2026-11-22T23:23:11Z"},{"workspace_id":"org_c8t89438_pro","machine_hash":"mach-0","last_ip":"127.0.0.1","first_seen...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"5ce039deefd1242463579f01"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t89438_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":null,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":true,"ops_tier"...
+
+-- enterprise: machines=0
+  before: plan=enterprise seats=1/10 machines=0/10 compile=0+0res/None pool=0/10000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t89438_enterprise-m0","status":"reserved","remaining_compile_credits":null}
+  NOTE enterprise(no overrides) machine limit is 0: first machine -> 200 None (judged under 20.16, not 20.8)
+  >>> RESULT 20.8: PASS  - Free 1/Starter 3/Pro 10 -> 402 machine_limit_exceeded at cap+1 (reserve and LLM proxy); known machine OK; revoke frees exactly one slot; revoked machine counts as new
+
+#### 20.9 seats (Clerk member count from the local mock; gate is count > limit at a NEW member's first request)
+
+-- free: seats=1
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_free"}
+  [new member, count=1 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_free"}
+  [new member, count=2 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"25d568857624dfc832422e00"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"ec523b7b6a1a58951db854a5"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_free"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 2, 'limit': 1, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_free"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_free"}
+
+-- starter: seats=3
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_starter"}
+  [new member, count=3 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_starter"}
+  [new member, count=4 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"4f68be9d14dd95328df20fdb"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"589d8b82caeef69329944449"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_starter"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 4, 'limit': 3, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_starter"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_starter"}
+
+-- pro: seats=10
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [new member, count=10 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [new member, count=11 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"ecfad4557ad989f387f74b72"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"5621c969e27fa4e48ce46da2"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 11, 'limit': 10, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_pro","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","anal...
+  [existing owner after downgrade to starter with 6 members] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_pro"}
+  [new member after downgrade] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"a105ff92a3eb367613053e6c"}
+
+-- enterprise: seats=0
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":null,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":true,"ops_tier"...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_enterprise"}
+  enterprise FIRST member (billing set before anyone signed in) -> 200 None
+  NOTE (judged under 20.16): the very first member of a new Enterprise workspace (no overrides, seat limit 0) gets 200 None
+  [ent2 owner first sight as free] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_enterprise_late"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t89438_enterprise_late","plan":"enterprise","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":null,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":true,"ops_...
+  [ent2 owner after upgrade] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_enterprise_late"}
+  [ent2 NEW member, count=2] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t89438_enterprise_late"}
+  enterprise existing owner after upgrade -> 200; new member -> 200 None
+  NOTE (judged under 20.16): a NEW member of an Enterprise workspace with no overrides gets 200
+  >>> RESULT 20.9: PASS  - Free 1/Starter 3/Pro 10: new member beyond cap -> 402 seat_limit_exceeded; existing members unaffected (also after downgrade); fails open when the Clerk member API is down/dropped (documented). Clerk itself is a local mock (BLOCKED against real Clerk).

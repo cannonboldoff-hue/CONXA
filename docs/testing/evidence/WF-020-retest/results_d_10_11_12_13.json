@@ -1,0 +1,30 @@
+{
+ "20.10": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "caps 25/200/500 -> 402 workflow_limit_exceeded; republish at cap OK; Pro->Starter locks the 300 oldest (workflow_locked), newest still republishes; upgrade unlocks; Enterprise unlimited"
+  }
+ ],
+ "20.11": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "day 29 ok; day 31: reserve/LLM(compile+human-edit)/publish/installer/video -> 402 trial_expired; sync (200), tracking (202, both URLs), dashboard reads keep working; paid plans never expire; upgrade clears it. (Backdated through the test store: a 30-day wait is not possible.)"
+  }
+ ],
+ "20.12": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free internal-only (external 402 distribution_not_permitted); Starter/Pro external OK; white-label only Enterprise (402 white_label_not_permitted below). Matches pricing page; NOTE PRD.md says Starter is internal-only, pricing page + code say Starter external"
+  }
+ ],
+ "20.13": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free: all 403 ops_tier_required; Starter: basic 200, full (drift/reconcile/policy/field) 403; Pro+Enterprise: all 200"
+  }
+ ]
+}

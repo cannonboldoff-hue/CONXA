@@ -204,12 +204,11 @@ Everything is under `/api/v1/` except health checks and the permanent telemetry 
 | `POST /api/v1/workflows/{installer_version}/skill-packs/upload` | Skill pack publish (mandatory; cloud error fails the publish) | Clerk JWT |
 | `POST /api/v1/workflows/publish` | Unversioned publish (§3.3) | Clerk JWT |
 | `GET /api/v1/workflows/{installer_version}/skill-packs/versions` | Release history for the Publish page | Clerk JWT |
-| `POST /api/v1/workflows/{installer_version}/installer/upload` | Installer upload (optional; failure only surfaces as `cloud_upload_error`) | Clerk JWT |
-| `POST /api/v1/workflows/{slug}/installer/upload` | Unversioned installer upload (§3.3) | Clerk JWT |
+| `POST /api/v1/workflows/{installer_version}/installer/upload` | Installer upload (optional; failure only surfaces as `cloud_upload_error`). The generation value means "my own slug" | Clerk JWT, admin |
+| `POST /api/v1/workflows/{slug}/installer/upload` | Unversioned installer upload (§3.3). `{slug}` must be the caller's own workspace (403 `workspace_forbidden`); a generation value (`v1`/`v2`) means "my own slug" | Clerk JWT, admin |
 | `GET /api/v1/workflows/{installer_version}/{workspace_id}/skill-packs/delta` | Runtime per-skill delta sync (§5.7) | Rate-limited; `sync_token` |
 | `GET /api/v1/skill-packs/{workspace_id}/delta` | Unversioned delta sync (§3.3) | same |
 | `GET /api/v1/workflows` / `GET /api/v1/workflows/skill-packs[/{workspace_id}]` | Dashboard workflow + skill pack views | Clerk JWT |
-| `GET /api/v1/jobs/{job_id}` | Job status | Clerk JWT |
 
 **Updates** (§5.7)
 
@@ -246,8 +245,8 @@ Everything is under `/api/v1/` except health checks and the permanent telemetry 
 |---|---|---|
 | `POST /api/v1/subscriptions/create` | Create Cashfree subscription → `auth_link` | Clerk JWT |
 | `POST /api/v1/subscriptions/addon/{order,verify}` | One-time add-on via Payment Link / post-redirect verify | owner/admin / Clerk JWT |
-| `POST /api/v1/subscriptions/webhooks/cashfree` | Subscription webhook; HMAC over sorted `cf_` fields | Webhook secret |
-| `POST /api/v1/subscriptions/webhooks/cashfree-orders` | Add-on PG webhook; HMAC over `timestamp + raw body` | Webhook secret |
+| `POST /api/v1/subscriptions/webhooks/cashfree` | Subscription webhook; HMAC over sorted `cf_` fields. Public at the sign-in gate; fails closed (503 `webhook_not_configured` with no secret, 400 `invalid_signature` on a missing or wrong signature) | Webhook secret |
+| `POST /api/v1/subscriptions/webhooks/cashfree-orders` | Add-on PG webhook; HMAC over `timestamp + raw body`. Public; same fail-closed rules | Webhook secret |
 | `GET /api/v1/subscriptions/addons` | Add-on catalog (`ADDON_TIERS`) | Clerk JWT |
 
 **Also documented elsewhere in this file**
@@ -2202,7 +2201,7 @@ Defined in `PLAN_LIMITS` (`entitlements.py`), exposed at `GET /api/v1/entitlemen
 | `free` | 1 | 1 | 1 | 25 | 500K | 30-day trial, internal, `ops_tier` none |
 | `starter` | 3 | 3 | 25 | 200 | 2.5M | external, basic ops, own pool |
 | `pro` | 10 | 10 | 100 | 500 | 10M | external, full ops, own pool, Conxa-branded |
-| `enterprise` | overrides | overrides | overrides | overrides | overrides | white-label, full ops, `premium` pool, BYOK |
+| `enterprise` | 10 (Pro floor) | 10 | 100 | unlimited | 10M | white-label, full ops, `premium` pool, BYOK. Numbers are a floor until `entitlement_overrides` is set through the admin billing route (`POST /entitlements/admin/billing`) |
 | `development` | unlimited | | | | | all capabilities |
 
 Legacy `basic` normalizes to `starter`. **Usage period:** `billing:<current_period_end_unix>` for subscribed workspaces (resets at the payment date), else the UTC calendar month.
@@ -2324,6 +2323,7 @@ Numbered gaps and fix status live in `docs/Security.md` (SG-01…). This section
 | Boundary | Mechanism |
 |---|---|
 | Cloud API | Clerk JWT (RS256 via JWKS); `require_admin` RBAC on publish, release, rollback, archive, workflow create/delete, billing, BYOK, grants |
+| Company id in a URL or body | Never trusted for a write: `deps.own_workspace_slug` requires the caller's own workspace id or slug (403 `workspace_forbidden`) and returns the slug to store under; stored owners are compared for subscription and add-on verify (SG-28) |
 | Build Studio / Execute login | Clerk PKCE (S256), tokens in OS keyring / `safeStorage` |
 | Runtime → cloud | Installer-embedded `sync_token` (read-only, one workspace) and tracking token; `compare_digest` |
 | Target-platform sessions | AES-256-GCM, per-machine key in the OS keychain; never leave the machine; never in build output |

@@ -30,6 +30,10 @@ PUBLIC_PATHS = {
     # Signed, unauthenticated self-update manifest polled by every installed
     # runtime (runtime/manifest_manager.js) — no Clerk session exists at that point.
     "/api/v1/manifest.json",
+    # Cashfree cannot send a Clerk token; both handlers verify the webhook signature
+    # themselves and fail closed (503 with no secret set, 400 on a missing/bad signature).
+    "/api/v1/subscriptions/webhooks/cashfree",
+    "/api/v1/subscriptions/webhooks/cashfree-orders",
 }
 
 # Runtime telemetry ingestion uses its own package token; tracking reads stay behind Clerk.
@@ -88,6 +92,10 @@ def _is_public_path(path: str, method: str = "GET") -> bool:
         return True
     if method.upper() == "GET" and normalized.startswith("/api/v1/workflows/"):
         return any(normalized.endswith(s) for s in PUBLIC_VERSIONED_WORKFLOW_SUFFIXES_GET)
+    # The runtime fetches its governance policy with only X-Tracking-Token (the handler
+    # checks it). PUT stays behind sign-in.
+    if method.upper() == "GET" and normalized.startswith("/api/v1/tracking/") and normalized.endswith("/policy"):
+        return True
     if method.upper() == "POST":
         if normalized.endswith("/events") and any(normalized.startswith(p) for p in PUBLIC_TRACKING_EVENT_PREFIXES):
             return True

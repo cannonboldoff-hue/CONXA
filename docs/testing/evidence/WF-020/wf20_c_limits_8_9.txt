@@ -1,0 +1,107 @@
+== WF-20 C rows ['8', '9'] tag=t83757 ==
+
+#### 20.8 machines (X-Conxa-Machine header on compile reserve / LLM proxy; revoke frees a slot)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83757_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: machines=1
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  1/1 machines registered
+  at cap: plan=free seats=1/1 machines=1/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"bfbd184746dbb1d30e4e7f14"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_free-mk","status":"reserved","remaining_compile_credits":23}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"96cc3b9ad9181297e1e66d8f"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_free-mn","status":"reserved","remaining_compile_credits":22}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"a121b140fee4ef861fb5e9f0"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83757_free","machine_hash":"mach-0","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:37Z","last_seen":"2026-11-22T21:42:38Z","revoked":true},{"workspace_id":"org_c8t83757_free","machine_hash":"mach-new","last_ip":"127.0...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"12ce94c9c3bda43f65aba051"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83757_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: machines=3
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  3/3 machines registered
+  at cap: plan=starter seats=1/3 machines=3/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"8e09683e5cd1ed03c6f2b418"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_starter-mk","status":"reserved","remaining_compile_credits":196}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"d14f90263f6af098bbc7a929"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=starter seats=1/3 machines=2/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_starter-mn","status":"reserved","remaining_compile_credits":195}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"451aac9c91650dbe3a3e1955"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83757_starter","machine_hash":"mach-0","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:38Z","last_seen":"2026-11-22T21:42:39Z","revoked":true},{"workspace_id":"org_c8t83757_starter","machine_hash":"mach-new","last_ip":...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"ae7cff38d8150592e02757fd"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83757_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: machines=10
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  10/10 machines registered
+  at cap: plan=pro seats=1/10 machines=10/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"487dc5957a446aba53597966"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_pro-mk","status":"reserved","remaining_compile_credits":489}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"4fd27a9e560142b0e3ad5637"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=pro seats=1/10 machines=9/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83757_pro-mn","status":"reserved","remaining_compile_credits":488}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"d9cdb10d74070747ddf22ab1"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83757_pro","machine_hash":"mach-8","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:41Z","last_seen":"2026-11-22T21:42:41Z"},{"workspace_id":"org_c8t83757_pro","machine_hash":"mach-9","last_ip":"127.0.0.1","first_seen":...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"7df95f4dcac7bd31bb341fe3"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83757_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+
+-- enterprise: machines=0
+  before: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"a773e40c396b669669496cc3"}
+  NOTE enterprise(no overrides) machine limit is 0: first machine -> 402 machine_limit_exceeded (judged under 20.16, not 20.8)
+  >>> RESULT 20.8: PASS  - Free 1/Starter 3/Pro 10 -> 402 machine_limit_exceeded at cap+1 (reserve and LLM proxy); known machine OK; revoke frees exactly one slot; revoked machine counts as new
+
+#### 20.9 seats (Clerk member count from the local mock; gate is count > limit at a NEW member's first request)
+
+-- free: seats=1
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_free"}
+  [new member, count=1 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_free"}
+  [new member, count=2 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"a5ba9f068079e48fe938d2e8"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"4d6c13de3281bef6289821be"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_free"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 2, 'limit': 1, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_free"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_free"}
+
+-- starter: seats=3
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_starter"}
+  [new member, count=3 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_starter"}
+  [new member, count=4 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"8ee79a621f5060b3ae3fd082"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"5a6d06fd2f5815e03c683ce1"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_starter"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 4, 'limit': 3, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_starter"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_starter"}
+
+-- pro: seats=10
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [new member, count=10 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [new member, count=11 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"01c467a55dfaece68b697f86"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"29ff287654c44df0369e05eb"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 11, 'limit': 10, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_pro","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","anal...
+  [existing owner after downgrade to starter with 6 members] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_pro"}
+  [new member after downgrade] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"687d35e0a6dc275d3c313023"}
+
+-- enterprise: seats=0
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+  [first member, count=1] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"2ebd81d3bf193b1ae0a884df"}
+  enterprise FIRST member (billing set before anyone signed in) -> 402 seat_limit_exceeded
+  [ent2 owner first sight as free] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_enterprise_late"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83757_enterprise_late","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full...
+  [ent2 owner after upgrade] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83757_enterprise_late"}
+  [ent2 NEW member, count=2] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"f95bdf09c841e7fc52355882"}
+  enterprise existing owner after upgrade -> 200; new member -> 402 seat_limit_exceeded
+  >>> RESULT 20.9: FAIL S1 - free: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); starter: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); pro: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); enterprise(no overrides): the very first member of a new Enterprise workspace gets 402 seat_limit_exceeded (seat limit 0); enterprise(no overrides): every NEW member refused (seat_limit_exceeded, limit 0)

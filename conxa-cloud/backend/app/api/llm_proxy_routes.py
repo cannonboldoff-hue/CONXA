@@ -210,7 +210,8 @@ def _meter_and_call(
         )
 
     output_tokens = llm_metering.estimate_response_tokens(result)
-    llm_metering.record_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
+    if usage_class == "compile":  # the backstop guards compile only; other classes have their own pools
+        llm_metering.record_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
     try:
         if usage_class == "execute_chat":
             record_execute_pool_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
@@ -393,7 +394,8 @@ def _meter_and_stream(request: Request, body: ProxyBody, *, vision: bool) -> Str
                 return
 
             output_tokens = llm_metering.estimate_response_tokens({"text": full_text + "".join(tool_text_parts)})
-            llm_metering.record_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
+            if usage_class == "compile":  # the backstop guards compile only; other classes have their own pools
+                llm_metering.record_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)
             try:
                 if usage_class == "execute_chat":
                     record_execute_pool_usage(org_id, input_tokens=input_tokens, output_tokens=output_tokens)

@@ -1,0 +1,185 @@
+== WF-20 A: auth matrix against http://127.0.0.1:8140
+routes tested: 118 (90 paths in OpenAPI + hidden)
+
+-- 20.1 matrix: status histogram per bad token (all routes) --
+  no_header                            {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  empty_bearer                         {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  garbage                              {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  garbage_jwtshape                     {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  alg_none                             {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  bad_signature(attacker RSA key)      {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  hs256_key_confusion                  {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  expired(-120s)                       {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  wrong_issuer                         {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  unknown_kid                          {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+  huge_20KB                            {200: 10, 400: 4, 401: 101, 404: 2, 503: 1}
+
+-- routes that answered something other than 401 to a bad token (public-by-design, or a bug) --
+  GET /  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/health  <- 11/11 bad tokens  statuses=[404]
+  GET /api/v1/installers/{slug}  <- 11/11 bad tokens  statuses=[404]
+  GET /api/v1/installers/{slug}/versions/{version}  <- 11/11 bad tokens  statuses=[400]
+  GET /api/v1/manifest.json  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/conxa-app-manifest  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/conxa-runtime-manifest  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/deps-manifest  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/execute/latest.yml  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/studio-manifest  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/updates/studio/latest.yml  <- 11/11 bad tokens  statuses=[200]
+  GET /api/v1/workflows/{installer_version}/{workspace_id}/skill-packs/delta  <- 11/11 bad tokens  statuses=[400]
+  GET /healthz  <- 11/11 bad tokens  statuses=[200]
+  GET /readyz  <- 11/11 bad tokens  statuses=[503]
+  POST /api/v1/telemetry/runtime-start  <- 11/11 bad tokens  statuses=[200]
+  POST /api/v1/workflows/{installer_version}/{workspace_id}/skill-packs/{slug}/artifacts  <- 11/11 bad tokens  statuses=[400]
+  POST /api/v1/workflows/{installer_version}/{workspace_id}/tracking/events  <- 11/11 bad tokens  statuses=[400]
+
+5xx / transport errors / stack traces seen: 0
+
+-- sample bodies --
+  [no_header] GET /api/v1/entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"f31a87dbb963e608df1befb6"}
+  [garbage] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"2f7deb21a688fdf3e0a6e633"}
+  [expired(-120s)] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"33370f56ad205170cdddf0ef"}
+  [bad_signature(attacker RSA key)] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"9ac4fb54866e03c1ad298c0d"}
+  [alg_none] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"73c2a581b2432280c0982e23"}
+  [hs256_key_confusion] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"e8157f724582b54fd28677a1"}
+  [wrong_issuer] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"63c7b12e73b9e9b381701770"}
+  [unknown_kid] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"3a3dafe7525ae6d360577f95"}
+  [huge] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"ef974f455fd3b9d6a62c2dc5"}
+  [Basic scheme] GET /api/v1/entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"080e1a5273f357c4cc070e5d"}
+  [Bearer, no token] GET /api/v1/entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"4fe241bf3d87518b3bb2c6d1"}
+  [valid token + trailing junk] GET /api/v1/entitlements/current -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"faff7e26e7cd9aa9ab9c4d76"}
+  [wrong authorized party] GET /api/v1/entitlements/current -> 403 {"detail":"invalid_authorized_party","message":"Your session isn't valid for this application. Please sign in again.","request_id":"6328edb7dab9380673809abc"}
+  [CONTROL valid A] GET /api/v1/entitlements/current -> 200 {"workspace_id":"org_a","plan":"free","period":"2026-11","reset_at":"2026-12-01T00:00:00Z","trial_ends_at":"2026-12-22T21:21:21Z","trial_expired":false,"wallet":{"compile_credits":0,"human_edit_tokens":0,"ai_usage_credits":0},"meters":{"seats":{"used":1,"limit...
+
+routes with non-401 for SOME but not all bad tokens: []
+public-by-design routes (non-401 for every bad token):
+   GET /  no-token status=200
+   GET /api/v1/health  no-token status=404
+   GET /api/v1/installers/{slug}  no-token status=404
+   GET /api/v1/installers/{slug}/versions/{version}  no-token status=400
+   GET /api/v1/manifest.json  no-token status=200
+   GET /api/v1/updates/conxa-app-manifest  no-token status=200
+   GET /api/v1/updates/conxa-runtime-manifest  no-token status=200
+   GET /api/v1/updates/deps-manifest  no-token status=200
+   GET /api/v1/updates/execute/latest.yml  no-token status=200
+   GET /api/v1/updates/studio-manifest  no-token status=200
+   GET /api/v1/updates/studio/latest.yml  no-token status=200
+   GET /api/v1/workflows/{installer_version}/{workspace_id}/skill-packs/delta  no-token status=400
+   GET /healthz  no-token status=200
+   GET /readyz  no-token status=503
+   POST /api/v1/telemetry/runtime-start  no-token status=200
+   POST /api/v1/workflows/{installer_version}/{workspace_id}/skill-packs/{slug}/artifacts  no-token status=400
+   POST /api/v1/workflows/{installer_version}/{workspace_id}/tracking/events  no-token status=400
+  >>> RESULT 20.1: PASS  - 11 bad-token kinds x 118 routes: all 401 except 17 public-by-design routes; 0 5xx, 0 stack traces
+
+-- path-trick probes with no token (must never reach a protected route) --
+  GET /api/v1/entitlements/current/ -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"d4a8
+  GET /api/v1//entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"68f4
+  GET /API/V1/entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"e7c7
+  GET /api/v1/entitlements/current%00 -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"e2f5
+  GET /api/v1/updates/../entitlements/current -> 404 {"detail":"Not Found"}
+  GET /api/v1/updates/%2e%2e/entitlements/current -> 404 {"detail":"Not Found"}
+  GET /api/v1/installers/../entitlements/current -> 404 {"detail":"Not Found"}
+  GET /api/v1/skill-packs/../entitlements/current -> 404 {"detail":"Not Found"}
+  GET /api/v1/tracking/x/events/../../../entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"d323
+  GET /api/v1/entitlements/current;a=b -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"2459
+  GET /api/v1/entitlements/current?/events -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"e897
+  POST /api/v1/entitlements/admin/billing/events -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"8146
+  POST /api/v1/usage/compile/reserve/events -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"2b42
+  POST /api/v1/tracking/events -> 404 {"detail":"Not Found"}
+  POST /api/v1/workflows/x/tracking/events -> 404 {"detail":"Not Found"}
+  POST /api/v1/workflows/publish/artifacts -> 404 {"detail":"Not Found"}
+
+== 20.3 admin routes with a normal user's token ==
+  [org admin A JWT] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"34be7d71d34bc4842fdaefc2"}
+  [org admin A JWT] POST /api/v1/admin/workflows/generations -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"bb27752fb9bd953dabc92e87"}
+  [org admin A JWT] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"0c43f11be73bb2798f3a8ffd"}
+  [org member JWT] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"e041074a039259a07a93d4cd"}
+  [org member JWT] POST /api/v1/admin/workflows/generations -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"16e0b0ef83d7838af05986f5"}
+  [org member JWT] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"485a4dba1e153989628d5e2b"}
+  [no token] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"92993c95ac28ede79615a8e9"}
+  [no token] POST /api/v1/admin/workflows/generations -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"198be2628484f44deb6a370c"}
+  [no token] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"d5954cd9fbb52a59ce75ebd3"}
+  [garbage] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"f30fde52b064af470c9807b1"}
+  [garbage] POST /api/v1/admin/workflows/generations -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"3be8993bdaa2075e4e44d02e"}
+  [garbage] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"976b80030246460ea586971d"}
+  [wrong admin token] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"10f4f9790ead8cfe6789ece7"}
+  [wrong admin token] POST /api/v1/admin/workflows/generations -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"0b4767620076577a91f6662b"}
+  [wrong admin token] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"e4aa9b43625b130cd11b2324"}
+  [empty bearer] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"2c790434b086a80bf3fcc879"}
+  [empty bearer] POST /api/v1/admin/workflows/generations -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"b40d5007a2b7f6e28ac3713a"}
+  [empty bearer] POST /api/v1/admin/component-versions/runtime -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"1cad54703efeb0eb3e80284b"}
+  org_a plan after attempts: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  [CONTROL real admin token] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_a","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_retention_days...
+  [JWT + spoofed proxy headers] POST /api/v1/entitlements/admin/billing -> 401 {"detail":"Unauthorized","message":"Unauthorized","request_id":"156560851888db1a546301f2"}
+  [A JWT + spoofed proxy identity for org_b] GET /api/v1/workspaces/current -> 200 {"workspace":{"id":"org_a","slug":"org-a","name":"Workspace","role":"admin"}}
+  >>> RESULT 20.3: PASS  - org-admin JWT, member JWT, no/garbage/wrong/empty token refused (401) on all 3 admin routes; real admin token works; plan unchanged
+
+== 20.4 LLM proxy without a token ==
+  [no token] POST /api/v1/llm/proxy/text -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"cef1da0f3b658c3826d84ffb"}
+  [garbage] POST /api/v1/llm/proxy/text -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"d0aa3feb27ee1c65bf123050"}
+  [expired] POST /api/v1/llm/proxy/text -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"efeaf58c3ac80f1957995c2c"}
+  [no token] POST /api/v1/llm/proxy/vision -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"0535db1eb1ad345018fc67db"}
+  [garbage] POST /api/v1/llm/proxy/vision -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"5f2c48db8914ecf22ef3694d"}
+  [expired] POST /api/v1/llm/proxy/vision -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"50047a574aa09ac4f85dc809"}
+  [no token] POST /api/v1/llm/proxy/decide -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"d1243f1924373d7fff339f73"}
+  [garbage] POST /api/v1/llm/proxy/decide -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"c52106aa6acee77cc9538701"}
+  [expired] POST /api/v1/llm/proxy/decide -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"3f2fca546d1abd755f2f96b5"}
+  [no token] POST /api/v1/llm/proxy/text/stream -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"fe5525eda27d7f6c33392a81"}
+  [garbage] POST /api/v1/llm/proxy/text/stream -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"117a8fdd2cd777920f831b85"}
+  [expired] POST /api/v1/llm/proxy/text/stream -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"f158606004956abb6ab9db7b"}
+  [no token] POST /api/v1/llm/proxy/vision/stream -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"2e8d2956303a24455ea8ff46"}
+  [garbage] POST /api/v1/llm/proxy/vision/stream -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"b55946c5e1166999e0b058b0"}
+  [expired] POST /api/v1/llm/proxy/vision/stream -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"c30da25f3e9ec9aa6432ec2d"}
+  [no token] GET /api/v1/llm/proxy/usage -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"f63bf3958f7960ed1baa9542"}
+  [garbage] GET /api/v1/llm/proxy/usage -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"51b89a256a8355ddcdef1117"}
+  [expired] GET /api/v1/llm/proxy/usage -> 401 {"detail":"invalid_clerk_token","message":"Your session has expired. Please sign in again.","request_id":"8ac4c1213f3e55916bd84bf1"}
+  >>> RESULT 20.4: PASS  - 6 LLM proxy routes x (no/garbage/expired token) -> 401 even with the X-Conxa-Client header; no provider call made
+
+== 20.5 routes outside /api/v1 ==
+outside /api/v1 (OpenAPI): ['/', '/api/tracking/{workspace_id}/events', '/healthz', '/readyz']
+unexpected (excluding probe paths / and /healthz,/readyz and the tracking alias): []
+  [valid token] GET /api/entitlements/current -> 404 {"detail":"Not Found"}
+  [no token] GET /api/entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"080939f32e5ed3248af94386"}
+  [valid token] GET /entitlements/current -> 404 {"detail":"Not Found"}
+  [no token] GET /entitlements/current -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"3e6fb80f9a1c056276d57f5d"}
+  [valid token] GET /api/workflows -> 404 {"detail":"Not Found"}
+  [no token] GET /api/workflows -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"32108aa9f5e1e68e91754ae0"}
+  [valid token] GET /workflows -> 404 {"detail":"Not Found"}
+  [no token] GET /workflows -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"348c6e700c52cf2b79fe889c"}
+  [valid token] GET /api/skill-packs/x/delta -> 404 {"detail":"Not Found"}
+  [no token] GET /api/skill-packs/x/delta -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"9c414b165afe0f48bb9e7947"}
+  [valid token] GET /api/tracking/x/runs -> 404 {"detail":"Not Found"}
+  [no token] GET /api/tracking/x/runs -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"2a72d15b199b4cbd8266bec2"}
+  [valid token] POST /api/llm/proxy/text -> 404 {"detail":"Not Found"}
+  [no token] POST /api/llm/proxy/text -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"4cfe83235781b1c7d0055966"}
+  [valid token] GET /docs -> 200 
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <link rel="shortcut icon"...
+  [no token] GET /docs -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"b1db6e96ebb5476756afa865"}
+  [valid token] GET /redoc -> 200 
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Conxa Cloud - ReDoc</title>
+    <!-- needed for adaptive design -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <link href="https://fonts.go...
+  [no token] GET /redoc -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"690543848ea4f037f24ca361"}
+  [valid token] GET /openapi.json -> 200 {"openapi":"3.1.0","info":{"title":"Conxa Cloud","version":"0.1.0"},"paths":{"/api/v1/jobs":{"get":{"tags":["jobs"],"summary":"List Jobs","operationId":"list_jobs_api_v1_jobs_get","responses":{"200":{"description":"Successful Response","content":{"application/...
+  [no token] GET /openapi.json -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"dbb4058440eb53d62d7ead98"}
+  [valid token] GET /health -> 404 {"detail":"Not Found"}
+  [no token] GET /health -> 404 {"detail":"Not Found"}
+  [valid token] GET /metrics -> 404 {"detail":"Not Found"}
+  [no token] GET /metrics -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"e8cdcd80379a5dec48acdeae"}
+  [valid token] GET /admin -> 404 {"detail":"Not Found"}
+  [no token] GET /admin -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"201b26b2d6162000ca91e20e"}
+  [valid token] GET /api/health -> 404 {"detail":"Not Found"}
+  [no token] GET /api/health -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"7e5d05c9ef9af6c3a8229733"}
+  >>> RESULT 20.5: PASS  - outside /api/v1: ['/', '/api/tracking/{workspace_id}/events', '/healthz', '/readyz']

@@ -1,0 +1,30 @@
+{
+ "20.6": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free 25 / Starter 200 / Pro 500 caps -> 402 compile_credit_limit_exceeded at cap+1; same id twice counts once; release returns; reservation expired after TTL; Enterprise unlimited"
+  }
+ ],
+ "20.7": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "pool cap -> 402 human_edit_pool_exceeded (legacy) / ai_credits_exceeded (new class); compile calls + compile credits unaffected. free: pool used 675060 of 500000 (overshoot 175060 tokens: one call may cross the cap) | starter: pool used 3750040 of 2500000 (overshoot 1250040 tokens: one call may cross the cap) | pro: pool used 11250114 of 10000000 (overshoot 1250114 tokens: one call may cross the cap) | enterprise(no overrides) first human_edit call -> 200 None"
+  }
+ ],
+ "20.8": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free 1/Starter 3/Pro 10 -> 402 machine_limit_exceeded at cap+1 (reserve and LLM proxy); known machine OK; revoke frees exactly one slot; revoked machine counts as new"
+  }
+ ],
+ "20.9": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free 1/Starter 3/Pro 10: new member beyond cap -> 402 seat_limit_exceeded; existing members unaffected (also after downgrade); fails open when the Clerk member API is down/dropped (documented). Clerk itself is a local mock (BLOCKED against real Clerk)."
+  }
+ ]
+}

@@ -64,6 +64,11 @@ ERROR_MESSAGES: dict[str, str] = {
     "customer_email_required": "We need an email address on file to set up billing. Add one to your account and try again.",
     "webhook_billing_update_failed": "We received your payment but couldn't update your plan yet. This will retry automatically.",
     "webhook_cancel_failed": "We couldn't process your subscription cancellation yet. This will retry automatically.",
+    "workspace_forbidden": "That belongs to a different workspace.",
+    "subscription_forbidden": "That subscription belongs to a different workspace.",
+    "subscription_not_active": "That subscription isn't active yet, so your plan wasn't changed.",
+    "webhook_not_configured": "Payment notifications aren't set up on this server.",
+    "invalid_signature": "That payment notification couldn't be verified.",
     "webhook_grant_failed": "We received your payment but couldn't grant your credits yet. This will retry automatically.",
 }
 

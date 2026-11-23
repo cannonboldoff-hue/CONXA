@@ -29,13 +29,14 @@ from pydantic import BaseModel, Field
 from conxa_core.config import settings
 from conxa_core.db import db_get, db_set, db_list_kv, using_database
 from conxa_core.sync_paths import sync_delta_path
+from conxa_core.workspace import workspace_dir_slug
 from conxa_core.storage.skill_pack_store import (
     get_skill_pack,
     get_or_create_skill_pack,
     save_skill_pack,
 )
 from conxa_core.models.workflow import SkillPackBuild, SkillPackInstaller
-from app.api.deps import current_principal, entitlement_http_error
+from app.api.deps import current_principal, entitlement_http_error, own_workspace_slug
 from app.api.installer_storage import (
     installer_dir,
     installer_version_dir,
@@ -444,7 +445,6 @@ def post_publish(body: PublishBody, request: Request) -> dict[str, Any]:
     for why this can never be removed."""
     principal = current_principal(request)
     require_admin(principal)
-    from conxa_core.workspace import workspace_dir_slug
     slug = workspace_dir_slug(principal.workspace_id)
     return _publish_skill_pack_impl(slug, body, principal, request, installer_version=None)
 
@@ -456,7 +456,6 @@ def post_publish_v2(
     principal = current_principal(request)
     require_admin(principal)
     installer_version = validate_installer_version(installer_version)
-    from conxa_core.workspace import workspace_dir_slug
     slug = workspace_dir_slug(principal.workspace_id)
     return _publish_skill_pack_impl(slug, body, principal, request, installer_version=installer_version)
 
@@ -467,7 +466,6 @@ def get_skill_pack_versions_v2(
 ) -> dict[str, Any]:
     principal = current_principal(request)
     require_admin(principal)
-    from conxa_core.workspace import workspace_dir_slug
     slug = workspace_dir_slug(principal.workspace_id)
     return _skill_pack_versions_impl(slug, skill_slug, request)
 
@@ -660,12 +658,23 @@ async def _upload_installer_impl(slug: str, request: Request) -> dict[str, Any]:
     }
 
 
+def _legacy_own_slug(request: Request, slug: str) -> str:
+    """Legacy ``/workflows/{slug}/installer/...`` routes: the path value must be the caller's
+    own workspace. A generation value (``v1``/``v2``) is what shipped Studios put there, so
+    it means "my own slug" rather than a shared slot."""
+    principal = current_principal(request)
+    slug = _validate_slug(slug)
+    if slug in SUPPORTED_INSTALLER_GENERATIONS:
+        return workspace_dir_slug(principal.workspace_id)
+    return own_workspace_slug(principal, slug)
+
+
 @router.post("/{slug}/installer/upload")
 async def post_installer_upload(slug: str, request: Request) -> dict[str, Any]:
     """Legacy, unversioned installer-upload route. Kept permanently — see
     ``post_installer_upload_v2`` for the versioned equivalent, and
     docs/TRD.md §3.3 for why this can never be removed."""
-    return await _upload_installer_impl(slug, request)
+    return await _upload_installer_impl(_legacy_own_slug(request, slug), request)
 
 
 @router.post("/installer/upload")
@@ -676,7 +685,6 @@ async def post_installer_upload_v2(request: Request) -> dict[str, Any]:
     disambiguate. See docs/TRD.md's back-compat table."""
     principal = current_principal(request)
     require_admin(principal)
-    from conxa_core.workspace import workspace_dir_slug
     slug = workspace_dir_slug(principal.workspace_id)
     return await _upload_installer_impl(slug, request)
 
@@ -751,7 +759,7 @@ def get_installer_versions(slug: str, request: Request) -> dict[str, Any]:
     """Legacy, unversioned route. Kept permanently — see
     ``get_installer_versions_v2`` for the versioned equivalent, and
     docs/TRD.md §3.3 for why this can never be removed."""
-    return _installer_versions_impl(slug, request)
+    return _installer_versions_impl(_legacy_own_slug(request, slug), request)
 
 
 @router.get("/installer/versions")
@@ -762,7 +770,6 @@ def get_installer_versions_v2(request: Request) -> dict[str, Any]:
     calls. See docs/TRD.md's back-compat table."""
     principal = current_principal(request)
     require_admin(principal)
-    from conxa_core.workspace import workspace_dir_slug
     slug = workspace_dir_slug(principal.workspace_id)
     return _installer_versions_impl(slug, request)
 

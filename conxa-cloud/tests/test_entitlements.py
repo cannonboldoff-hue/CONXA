@@ -288,29 +288,29 @@ def test_compile_llm_usage_does_not_consume_human_edit_pool(monkeypatch, tmp_pat
     assert entitlements["meters"]["human_edit_tokens"]["used"] == 0
 
 
-def test_installer_upload_duplicate_version_rejected_but_new_slug_allowed(monkeypatch, tmp_path):
-    """There is no per-slug slot limit any more (removed 2026-08-08) — a
-    workspace may publish under unlimited slugs on any plan. Only the
-    per-version duplicate-upload guard, and the internal/external distribution
-    gate (see test_distribution_gating_on_installer_upload below), remain."""
+def test_installer_upload_duplicate_version_rejected_and_other_workspace_slug_forbidden(monkeypatch, tmp_path):
+    """One workspace has one installer slot: its own slug. Uploading under any other
+    company's slug is refused (403); only the per-version duplicate-upload guard and
+    the internal/external distribution gate (see
+    test_distribution_gating_on_installer_upload below) apply within it."""
     monkeypatch.setattr(settings, "data_dir", tmp_path)
     monkeypatch.setattr(settings, "database_url", "")
     _set_plan("free")
 
     first = client.post(
-        "/api/v1/workflows/slug-one/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=First",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=First",
         content=b"MZfirst",
     )
     duplicate = client.post(
-        "/api/v1/workflows/slug-one/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=Duplicate",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=Duplicate",
         content=b"MZduplicate",
     )
     update = client.post(
-        "/api/v1/workflows/slug-one/installer/upload?filename=Setup.exe&version=1.0.1&release_notes=Second",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.1&release_notes=Second",
         content=b"MZsecond",
     )
-    another_slug = client.post(
-        "/api/v1/workflows/slug-two/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=First",
+    other_workspace_slug = client.post(
+        "/api/v1/workflows/someone_elses_slug/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=First",
         content=b"MZother",
     )
 
@@ -318,7 +318,8 @@ def test_installer_upload_duplicate_version_rejected_but_new_slug_allowed(monkey
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "installer_version_exists"
     assert update.status_code == 200, update.text
-    assert another_slug.status_code == 200, another_slug.text
+    assert other_workspace_slug.status_code == 403
+    assert other_workspace_slug.json()["detail"] == "workspace_forbidden"
 
 
 def _publish(slug: str, skill_slug: str, version: str):
@@ -401,11 +402,11 @@ def test_distribution_gating_on_installer_upload(monkeypatch, tmp_path):
     _set_plan("free")
 
     internal_ok = client.post(
-        "/api/v1/workflows/dist-one/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x",
         content=b"MZinternal",
     )
     external_blocked = client.post(
-        "/api/v1/workflows/dist-two/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external",
         content=b"MZexternal",
     )
 
@@ -415,18 +416,18 @@ def test_distribution_gating_on_installer_upload(monkeypatch, tmp_path):
 
     _set_plan("starter")
     starter_external_ok = client.post(
-        "/api/v1/workflows/dist-starter/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.1&release_notes=x&distribution=external",
         content=b"MZstarterexternal",
     )
     assert starter_external_ok.status_code == 200, starter_external_ok.text
 
     _set_plan("pro")
     external_ok = client.post(
-        "/api/v1/workflows/dist-three/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.2&release_notes=x&distribution=external",
         content=b"MZexternal2",
     )
     white_label_blocked = client.post(
-        "/api/v1/workflows/dist-four/installer/upload"
+        "/api/v1/workflows/wrk_local/installer/upload"
         "?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external&white_label=true",
         content=b"MZbranded",
     )
@@ -437,8 +438,8 @@ def test_distribution_gating_on_installer_upload(monkeypatch, tmp_path):
 
     _set_plan("enterprise", distribution="external", white_label=True)
     white_label_ok = client.post(
-        "/api/v1/workflows/dist-five/installer/upload"
-        "?filename=Setup.exe&version=1.0.0&release_notes=x&distribution=external&white_label=true",
+        "/api/v1/workflows/wrk_local/installer/upload"
+        "?filename=Setup.exe&version=1.0.3&release_notes=x&distribution=external&white_label=true",
         content=b"MZbranded2",
     )
     assert white_label_ok.status_code == 200, white_label_ok.text
@@ -499,9 +500,8 @@ def test_seat_limit_blocks_new_member_but_allows_known_one(monkeypatch, tmp_path
         ensure_seats_available(newcomer)
     assert exc_info.value.code == "seat_limit_exceeded"
 
-    # Enterprise's seat count defaults to 0 (a floor forcing an explicit
-    # per-contract override, see PLAN_LIMITS) — only an explicit "unlimited"
-    # override actually lifts the cap.
+    # Enterprise's seat count starts at Pro's floor of 10 (see PLAN_LIMITS) —
+    # only an explicit "unlimited" override lifts the cap beyond it.
     upsert_billing(
         "org_seat_test",
         {"plan": "enterprise", "entitlement_overrides": {"seats": "unlimited"}},
@@ -924,3 +924,83 @@ def test_ensure_principal_rewrites_shared_metadata_only_when_something_changed(m
     assert len(writes) == before + 1
     assert saas._read_state()["users"]["u_new"]["name"] == "A renamed"
     assert saas._read_state()["billing"]["ws_new"]["trial_started_at"]  # trial clock stamped once, kept
+
+
+def test_ai_credits_tokens_never_block_compile_backstop(monkeypatch, tmp_path):
+    """The 5M monthly backstop counts compile tokens only: heavy AI-credit use (Pro's pool
+    is 10M) must not stop a compile call."""
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    monkeypatch.setattr(settings, "entitlements_enforce_compile", False)
+    monkeypatch.setattr(settings, "entitlements_enforce_machines", False)
+    monkeypatch.setattr(settings, "llm_proxy_monthly_token_quota", 1_000)
+    _set_plan("pro")
+    from app.api import llm_proxy_routes
+
+    class _FakeRouter:
+        def route_text(self, task, payload, timeout_ms, *, error_detail=None, pool=None):
+            return {"text": "ok"}
+
+    monkeypatch.setattr(llm_proxy_routes, "get_router", lambda: _FakeRouter())
+    ai = client.post(
+        "/api/v1/llm/proxy/text",
+        json={"task": "chat", "payload": {"prompt": "x" * 8000}, "usage_class": "ai_credits"},
+        headers=STUDIO_HEADER,
+    )
+    assert ai.status_code == 200, ai.text
+    assert llm_metering.get_usage("wrk_local")["input_tokens"] == 0  # not counted against the backstop
+    compile_call = client.post(
+        "/api/v1/llm/proxy/text",
+        json={"task": "compile", "payload": {"prompt": "x"}, "usage_class": "compile"},
+        headers=STUDIO_HEADER,
+    )
+    assert compile_call.status_code == 200, compile_call.text
+
+
+def test_enterprise_without_overrides_is_usable_and_admin_can_raise_limits(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    from app.services.entitlements import current_entitlements
+
+    upsert_billing("org_ent", {"plan": "enterprise"})  # no overrides at all
+    principal = Principal(
+        user_id="u1", workspace_id="org_ent", workspace_slug="ent", workspace_name="Ent",
+        role="owner", email=None, name=None, auth_provider="clerk",
+    )
+    meters = current_entitlements(principal)["meters"]
+    assert meters["seats"]["limit"] == 10 and meters["machines"]["limit"] == 10
+    assert meters["execute_seats"]["limit"] == 100 and meters["human_edit_tokens"]["limit"] == 10_000_000
+
+    monkeypatch.setattr("app.api.updates_routes._ADMIN_TOKEN", "adm")
+    r = client.post(
+        "/api/v1/entitlements/admin/billing",
+        json={"workspace_id": "org_ent", "plan": "enterprise", "entitlement_overrides": {"seats": 99}},
+        headers={"Authorization": "Bearer adm"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["limits"]["seats"] == 99
+    assert current_entitlements(principal)["meters"]["seats"]["limit"] == 99
+
+
+def test_over_seat_new_member_gets_402_not_503_on_wrapped_routes(monkeypatch, tmp_path):
+    """entitlements/current and usage/compile/* wrap current_principal in try/except; the
+    mapper must pass its 402 through instead of turning it into "entitlements_unavailable"."""
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "database_url", "")
+    monkeypatch.setattr(settings, "entitlements_enforce_seats", True)
+    import app.api.deps as deps_mod
+    import app.services.entitlements as entitlements_mod
+
+    upsert_billing("org_over_seat", {"plan": "free"})  # free's seat limit is 1
+    newcomer = Principal(
+        user_id="u_over_seat", workspace_id="org_over_seat", workspace_slug="over-seat",
+        workspace_name="Over Seat", role="member", email=None, name=None, auth_provider="clerk",
+    )
+    monkeypatch.setattr(deps_mod, "principal_from_request", lambda request: newcomer)
+    monkeypatch.setattr(entitlements_mod, "_clerk_org_member_count", lambda principal: 2)
+
+    current = client.get("/api/v1/entitlements/current")
+    reserve = client.post("/api/v1/usage/compile/reserve", json={"reservation_id": "cmp_over_seat"})
+    for res in (current, reserve):
+        assert res.status_code == 402, res.text
+        assert res.json()["detail"] == "seat_limit_exceeded"

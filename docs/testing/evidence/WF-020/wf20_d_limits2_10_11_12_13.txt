@@ -1,0 +1,195 @@
+== WF-20 D rows ['10', '11', '12', '13'] tag=d84415 ==
+
+#### 20.10 workflows (publish ledger; cap = compile-credit number)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_r...
+
+-- free: cap=25; ledger holds 25 workflows (first 23 written by the product's own ledger function in the test store because a publish costs ~0.5 s here, the last 2 through real POST /workflows/publish)
+  [seed workflows org_d10d84415_free 23] -> ledger rows 23
+  [publish s023@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_free","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_free/delta","sync_token":"onVZRjAAB_8ShrfJ1zyVe64zgB-3KZNhULiMiEY_e1Q","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  [publish s024@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_free","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_free/delta","sync_token":"onVZRjAAB_8ShrfJ1zyVe64zgB-3KZNhULiMiEY_e1Q","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  at cap: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=25act/0lock/limit=25 trial_expired=False
+  [publish s_over@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"a9e49d660866bc215e1418cf"}
+  [publish s000@1.0.1] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_free","version":"1.0.1","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_free/delta","sync_token":"onVZRjAAB_8ShrfJ1zyVe64zgB-3KZNhULiMiEY_e1Q","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+
+  -- free ws: upgrade to starter lets a 26th workflow in
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_free","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","an...
+  [publish s_after_upgrade@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_free","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_free/delta","sync_token":"onVZRjAAB_8ShrfJ1zyVe64zgB-3KZNhULiMiEY_e1Q","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic",...
+
+-- starter: cap=200; ledger holds 200 workflows (first 198 written by the product's own ledger function in the test store because a publish costs ~0.5 s here, the last 2 through real POST /workflows/publish)
+  [seed workflows org_d10d84415_starter 198] -> ledger rows 198
+  [publish s198@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_starter","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_starter/delta","sync_token":"1BEEJqLXO9z8rj9f8KAxsGxND2wMxwljPTQCcj2w_VA","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tra...
+  [publish s199@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_starter","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_starter/delta","sync_token":"1BEEJqLXO9z8rj9f8KAxsGxND2wMxwljPTQCcj2w_VA","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tra...
+  at cap: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=200act/0lock/limit=200 trial_expired=False
+  [publish s_over@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"8c98cc5500e2c5067a8909ce"}
+  [publish s000@1.0.1] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_starter","version":"1.0.1","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_starter/delta","sync_token":"1BEEJqLXO9z8rj9f8KAxsGxND2wMxwljPTQCcj2w_VA","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tra...
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","anal...
+
+-- pro: cap=500; ledger holds 500 workflows (first 498 written by the product's own ledger function in the test store because a publish costs ~0.5 s here, the last 2 through real POST /workflows/publish)
+  [seed workflows org_d10d84415_pro 498] -> ledger rows 498
+  [publish s498@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_pro","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_pro/delta","sync_token":"eAL2SWQqoJcxcbi6kFo1FhXEq0OyfUnJNPIG8Kpkzw4","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+  [publish s499@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_pro","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_pro/delta","sync_token":"eAL2SWQqoJcxcbi6kFo1FhXEq0OyfUnJNPIG8Kpkzw4","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+  at cap: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=500act/0lock/limit=500 trial_expired=False
+  [publish s_over@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"c765e1cdc200a2b490e8d971"}
+  [publish s000@1.0.1] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_pro","version":"1.0.1","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_pro/delta","sync_token":"eAL2SWQqoJcxcbi6kFo1FhXEq0OyfUnJNPIG8Kpkzw4","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+
+  -- downgrade pro -> starter (cap 200 with 500 published)
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_pro","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","ana...
+  after downgrade: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=200act/300lock/limit=200 trial_expired=False
+  locked set == the 300 OLDEST (s000..s299): yes
+  [publish s000@1.0.2] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_locked","message":"workflow_locked","request_id":"7f8b68c8ec9b6a5add1ee4de"}
+  republish oldest (locked) -> 402 workflow_locked
+  [publish s499@1.0.1] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_pro","version":"1.0.1","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_pro/delta","sync_token":"eAL2SWQqoJcxcbi6kFo1FhXEq0OyfUnJNPIG8Kpkzw4","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+  [publish s_new@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"744b76d4ad5ab1145f2cc128"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","anal...
+  after upgrade back to pro: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=500act/0lock/limit=500 trial_expired=False
+  [publish s000@1.0.3] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_pro","version":"1.0.3","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_pro/delta","sync_token":"eAL2SWQqoJcxcbi6kFo1FhXEq0OyfUnJNPIG8Kpkzw4","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_pro","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  pro->free: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=25act/475lock/limit=25 trial_expired=False
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","anal...
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d10d84415_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","a...
+
+-- enterprise: cap=None; ledger holds 30 workflows (first 28 written by the product's own ledger function in the test store because a publish costs ~0.5 s here, the last 2 through real POST /workflows/publish)
+  [seed workflows org_d10d84415_enterprise 28] -> ledger rows 28
+  [publish s028@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_enterprise","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_enterprise/delta","sync_token":"ybqCtlDuL8XkmCtz-RqWlphdjc64Xvl-yajnQvJvMCI","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/a...
+  [publish s029@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_enterprise","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_enterprise/delta","sync_token":"ybqCtlDuL8XkmCtz-RqWlphdjc64Xvl-yajnQvJvMCI","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/a...
+  at cap: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=30act/0lock/limit=None trial_expired=False
+  [publish s_over@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_enterprise","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_enterprise/delta","sync_token":"ybqCtlDuL8XkmCtz-RqWlphdjc64Xvl-yajnQvJvMCI","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/a...
+  [publish s000@1.0.1] POST /api/v1/workflows/publish -> 200 {"slug":"org_d10d84415_enterprise","version":"1.0.1","files_written":1,"sync_url":"/api/v1/skill-packs/org_d10d84415_enterprise/delta","sync_token":"ybqCtlDuL8XkmCtz-RqWlphdjc64Xvl-yajnQvJvMCI","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/a...
+  >>> RESULT 20.10: PASS  - caps 25/200/500 -> 402 workflow_limit_exceeded; republish at cap OK; Pro->Starter locks the 300 oldest (workflow_locked), newest still republishes; upgrade unlocks; Enterprise unlimited
+
+#### 20.11 trial expiry (Free, 30 days) - backdated via the test store; sync + tracking must keep working
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d11d84415_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_r...
+  [publish keep_working@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d11d84415_free","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d11d84415_free/delta","sync_token":"fPp9DrjGE3PVqX0qP9Syl6hyLsF7YrmLbwzJ4h56fpc","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  free, day 0: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=1act/0lock/limit=25 trial_expired=False
+  [seed billing org_d11d84415_free {"trial_started_at": 1792879091.2129047}] -> {"plan": "free", "status": "active", "plan_expires_at": null, "updated_at": 1795384702.9104202, "trial_started_at": 1792879091.2129047}
+  day 29: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=1act/0lock/limit=25 trial_expired=False
+  [seed billing org_d11d84415_free {"trial_started_at": 1792706307.1778061}] -> {"plan": "free", "status": "active", "plan_expires_at": null, "updated_at": 1795384719.20073, "trial_started_at": 1792706307.1778061}
+  day 31 (expired): plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=1act/0lock/limit=25 trial_expired=True
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"31a6637905803a3b7c54ef12"}
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"ff99d21646b08add85c250e3"}
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"f83f899b8b81d2700213b46f"}
+  [publish after_expiry@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"aa7e3f7fdda4c6a35a61e657"}
+  [installer upload] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=x -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"7d15c0f5370c1281f02d1f54"}
+  [video analyze] POST /api/v1/video/analyze?duration_s=5 -> 402 {"detail":"trial_expired","message":"Your trial has ended. Upgrade to keep going.","request_id":"bcad92158a215264aac05592"}
+  -- things that must KEEP working on an expired trial --
+  [runtime sync with sync token] GET /api/v1/skill-packs/org_d11d84415_free/delta -> 200 {"skills":[]}
+  [runtime telemetry] POST /api/v1/tracking/org_d11d84415_free/events -> 202 {"ok":true}
+  [runtime telemetry, bare /api/tracking alias] POST /api/tracking/org_d11d84415_free/events -> 202 {"ok":true}
+  [dashboard list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d11pd84415_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic"...
+  [seed billing org_d11pd84415_starter {"trial_started_at": 1760824728.3858309}] -> {"plan": "starter", "status": "active", "plan_expires_at": null, "updated_at": 1795384738.9489233, "trial_started_at": 1760824728.3858309}
+  [publish paid_ok@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d11pd84415_starter","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d11pd84415_starter/delta","sync_token":"pqKwt_miCj4cRWamNwEC2tFfgYRNWYkBNnx8d4yi_sc","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/t...
+  starter with 400-day-old trial stamp: trial_expired=False publish=200
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d11pd84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","ana...
+  [seed billing org_d11pd84415_pro {"trial_started_at": 1760824746.6793838}] -> {"plan": "pro", "status": "active", "plan_expires_at": null, "updated_at": 1795384757.3454065, "trial_started_at": 1760824746.6793838}
+  [publish paid_ok@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d11pd84415_pro","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d11pd84415_pro/delta","sync_token":"BWekQLXJ6lLIYd4VCA8C1GNTir5v6U86TVI-UxFQ7LI","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  pro with 400-day-old trial stamp: trial_expired=False publish=200
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d11pd84415_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","...
+  [seed billing org_d11pd84415_enterprise {"trial_started_at": 1760824762.6589468}] -> {"plan": "enterprise", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1760824762.65
+  [publish paid_ok@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d11pd84415_enterprise","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d11pd84415_enterprise/delta","sync_token":"si9yFMiI8nN9fTJcninKqoyieNkNCgjNU4YwVRr60gs","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140...
+  enterprise with 400-day-old trial stamp: trial_expired=False publish=200
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d11d84415_free","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","an...
+  expired ws upgraded to starter: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=1act/0lock/limit=200 trial_expired=False
+  [publish after_upgrade@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_d11d84415_free","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_d11d84415_free/delta","sync_token":"fPp9DrjGE3PVqX0qP9Syl6hyLsF7YrmLbwzJ4h56fpc","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/...
+  >>> RESULT 20.11: PASS  - day 29 ok; day 31: reserve/LLM(compile+human-edit)/publish/installer/video -> 402 trial_expired; sync (200), tracking (202, both URLs), dashboard reads keep working; paid plans never expire; upgrade clears it. (Backdated through the test store: a 30-day wait is not possible.)
+
+#### 20.12 external distribution + white-label (installer upload gate)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d12d84415_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_r...
+
+-- free
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  [upload external wl=False] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=t&distribution=external&white_label=false -> 402 {"detail":"distribution_not_permitted","message":"distribution_not_permitted","request_id":"bba556fe9f12f0d43ae456b5"}
+  [upload internal wl=False] POST /api/v1/workflows/installer/upload?version=1.0.1&release_notes=t&distribution=internal&white_label=false -> 200 {"slug":"org_d12d84415_free","version":"1.0.1","sha256":"cacf8f637af06fe3b7aad6999e37fcf5e5991ec9da87dca575864649694b6c3b","size":8,"download_url":"/api/v1/installers/org_d12d84415_free","version_download_url":"/api/v1/installers/org_d12d84415_free/versions/1....
+  [upload internal wl=True] POST /api/v1/workflows/installer/upload?version=1.0.2&release_notes=t&distribution=internal&white_label=true -> 402 {"detail":"white_label_not_permitted","message":"white_label_not_permitted","request_id":"0082b8e0b558973af495e80a"}
+  [upload external wl=True] POST /api/v1/workflows/installer/upload?version=1.0.3&release_notes=t&distribution=external&white_label=true -> 402 {"detail":"distribution_not_permitted","message":"distribution_not_permitted","request_id":"e275238d811d5cd9e93d5300"}
+  statuses (external, internal, white-label internal, white-label external) = (402, 200, 402, 402); wl error ids: white_label_not_permitted, distribution_not_permitted
+  [upload external wl=False] POST /api/v1/workflows/installer/upload?version=1.0.4&release_notes=t&distribution=external&white_label=false -> 402 {"detail":"distribution_not_permitted","message":"distribution_not_permitted","request_id":"1c4cf716e87e664310d4c9d6"}
+  free external body: {'detail': 'distribution_not_permitted', 'message': 'distribution_not_permitted', 'request_id': '1c4cf716e87e664310d4c9d6'}
+  [member upload] POST /api/v1/workflows/installer/upload?version=9.0.0&release_notes=t -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"1217f3c65b3b2f87326c4f53"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d12d84415_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic",...
+
+-- starter
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  [upload external wl=False] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=t&distribution=external&white_label=false -> 200 {"slug":"org_d12d84415_starter","version":"1.0.0","sha256":"795212545ad4825af23ddac6fa3d3b8342661b585670c64d85ce42b23e93e333","size":8,"download_url":"/api/v1/installers/org_d12d84415_starter","version_download_url":"/api/v1/installers/org_d12d84415_starter/ve...
+  [upload internal wl=False] POST /api/v1/workflows/installer/upload?version=1.0.1&release_notes=t&distribution=internal&white_label=false -> 200 {"slug":"org_d12d84415_starter","version":"1.0.1","sha256":"cacf8f637af06fe3b7aad6999e37fcf5e5991ec9da87dca575864649694b6c3b","size":8,"download_url":"/api/v1/installers/org_d12d84415_starter","version_download_url":"/api/v1/installers/org_d12d84415_starter/ve...
+  [upload internal wl=True] POST /api/v1/workflows/installer/upload?version=1.0.2&release_notes=t&distribution=internal&white_label=true -> 402 {"detail":"white_label_not_permitted","message":"white_label_not_permitted","request_id":"c0f1e50c89cf3338a945476a"}
+  [upload external wl=True] POST /api/v1/workflows/installer/upload?version=1.0.3&release_notes=t&distribution=external&white_label=true -> 402 {"detail":"white_label_not_permitted","message":"white_label_not_permitted","request_id":"410904a3281d0b5195704034"}
+  statuses (external, internal, white-label internal, white-label external) = (200, 200, 402, 402); wl error ids: white_label_not_permitted, white_label_not_permitted
+  [member upload] POST /api/v1/workflows/installer/upload?version=9.0.0&release_notes=t -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"22d843ecdfa39cd20c144822"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d12d84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","anal...
+
+-- pro
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [upload external wl=False] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=t&distribution=external&white_label=false -> 200 {"slug":"org_d12d84415_pro","version":"1.0.0","sha256":"795212545ad4825af23ddac6fa3d3b8342661b585670c64d85ce42b23e93e333","size":8,"download_url":"/api/v1/installers/org_d12d84415_pro","version_download_url":"/api/v1/installers/org_d12d84415_pro/versions/1.0.0...
+  [upload internal wl=False] POST /api/v1/workflows/installer/upload?version=1.0.1&release_notes=t&distribution=internal&white_label=false -> 200 {"slug":"org_d12d84415_pro","version":"1.0.1","sha256":"cacf8f637af06fe3b7aad6999e37fcf5e5991ec9da87dca575864649694b6c3b","size":8,"download_url":"/api/v1/installers/org_d12d84415_pro","version_download_url":"/api/v1/installers/org_d12d84415_pro/versions/1.0.1...
+  [upload internal wl=True] POST /api/v1/workflows/installer/upload?version=1.0.2&release_notes=t&distribution=internal&white_label=true -> 402 {"detail":"white_label_not_permitted","message":"white_label_not_permitted","request_id":"0f75a6ca96c8d02e157816d0"}
+  [upload external wl=True] POST /api/v1/workflows/installer/upload?version=1.0.3&release_notes=t&distribution=external&white_label=true -> 402 {"detail":"white_label_not_permitted","message":"white_label_not_permitted","request_id":"cc0120cb8e3e623823ea4dc1"}
+  statuses (external, internal, white-label internal, white-label external) = (200, 200, 402, 402); wl error ids: white_label_not_permitted, white_label_not_permitted
+  [member upload] POST /api/v1/workflows/installer/upload?version=9.0.0&release_notes=t -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"d2ebcc212697278819cffd4c"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d12d84415_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","a...
+
+-- enterprise
+  before: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  [upload external wl=False] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=t&distribution=external&white_label=false -> 200 {"slug":"org_d12d84415_enterprise","version":"1.0.0","sha256":"795212545ad4825af23ddac6fa3d3b8342661b585670c64d85ce42b23e93e333","size":8,"download_url":"/api/v1/installers/org_d12d84415_enterprise","version_download_url":"/api/v1/installers/org_d12d84415_ente...
+  [upload internal wl=False] POST /api/v1/workflows/installer/upload?version=1.0.1&release_notes=t&distribution=internal&white_label=false -> 200 {"slug":"org_d12d84415_enterprise","version":"1.0.1","sha256":"cacf8f637af06fe3b7aad6999e37fcf5e5991ec9da87dca575864649694b6c3b","size":8,"download_url":"/api/v1/installers/org_d12d84415_enterprise","version_download_url":"/api/v1/installers/org_d12d84415_ente...
+  [upload internal wl=True] POST /api/v1/workflows/installer/upload?version=1.0.2&release_notes=t&distribution=internal&white_label=true -> 200 {"slug":"org_d12d84415_enterprise","version":"1.0.2","sha256":"0a2498a46d5e1cc1ca1d8a1d54dd5eeab6fd120c8be02c999b31b85c09ae6a01","size":8,"download_url":"/api/v1/installers/org_d12d84415_enterprise","version_download_url":"/api/v1/installers/org_d12d84415_ente...
+  [upload external wl=True] POST /api/v1/workflows/installer/upload?version=1.0.3&release_notes=t&distribution=external&white_label=true -> 200 {"slug":"org_d12d84415_enterprise","version":"1.0.3","sha256":"df0f1b8207baef0b3e4113132f185f5f78274ca1be7c751bc8ef67be85df207f","size":8,"download_url":"/api/v1/installers/org_d12d84415_enterprise","version_download_url":"/api/v1/installers/org_d12d84415_ente...
+  statuses (external, internal, white-label internal, white-label external) = (200, 200, 200, 200); wl error ids: None, None
+  [member upload] POST /api/v1/workflows/installer/upload?version=9.0.0&release_notes=t -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"707803dd7c86fdeff8ab5297"}
+  >>> RESULT 20.12: FAIL S1 - enterprise: member upload -> 402
+
+#### 20.13 ops screens (403 ops_tier_required; basic on Starter, all on Pro+)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d13d84415_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_r...
+
+-- free
+  [basic] GET /tracking/dashboard -> 403 ops_tier_required
+  [basic] GET /tracking/activity -> 403 ops_tier_required
+  [basic] GET /tracking/roi-assumptions -> 403 ops_tier_required
+  [basic] GET /audit-events -> 403 ops_tier_required
+  [basic] GET /tracking/org_d13d84415_free/runs -> 403 ops_tier_required
+  [basic] GET /tracking/workflows/org_d13d84415_free/x -> 403 ops_tier_required
+  [full] GET /tracking/drift -> 403 ops_tier_required
+  [full] GET /tracking/org_d13d84415_free/reconcile -> 403 ops_tier_required
+  [full] GET /app-graphs/b.example/field -> 403 ops_tier_required
+  [full] PUT policy PUT /api/v1/tracking/org_d13d84415_free/policy -> 403 {"detail":"ops_tier_required","message":"ops_tier_required","request_id":"3001733cd82e3c03224f5644"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d13d84415_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic",...
+
+-- starter
+  [basic] GET /tracking/dashboard -> 200 
+  [basic] GET /tracking/activity -> 200 
+  [basic] GET /tracking/roi-assumptions -> 200 
+  [basic] GET /audit-events -> 200 
+  [basic] GET /tracking/org_d13d84415_starter/runs -> 200 
+  [basic] GET /tracking/workflows/org_d13d84415_starter/x -> 200 
+  [full] GET /tracking/drift -> 403 ops_tier_required
+  [full] GET /tracking/org_d13d84415_starter/reconcile -> 403 ops_tier_required
+  [full] GET /app-graphs/b.example/field -> 403 ops_tier_required
+  [full] PUT policy PUT /api/v1/tracking/org_d13d84415_starter/policy -> 403 {"detail":"ops_tier_required","message":"ops_tier_required","request_id":"f5736cce05f93a3d6e3056b8"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d13d84415_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","anal...
+
+-- pro
+  [basic] GET /tracking/dashboard -> 200 
+  [basic] GET /tracking/activity -> 200 
+  [basic] GET /tracking/roi-assumptions -> 200 
+  [basic] GET /audit-events -> 200 
+  [basic] GET /tracking/org_d13d84415_pro/runs -> 200 
+  [basic] GET /tracking/workflows/org_d13d84415_pro/x -> 200 
+  [full] GET /tracking/drift -> 200 
+  [full] GET /tracking/org_d13d84415_pro/reconcile -> 200 
+  [full] GET /app-graphs/b.example/field -> 200 
+  [full] PUT policy PUT /api/v1/tracking/org_d13d84415_pro/policy -> 200 {"policy_version":1,"workspace_id":"org_d13d84415_pro","key_id":"conxa-manifest-1","issued_at":1795384776,"expires_at":1795989576,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":[],"signature":""}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_d13d84415_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","a...
+
+-- enterprise
+  [basic] GET /tracking/dashboard -> 200 
+  [basic] GET /tracking/activity -> 200 
+  [basic] GET /tracking/roi-assumptions -> 200 
+  [basic] GET /audit-events -> 200 
+  [basic] GET /tracking/org_d13d84415_enterprise/runs -> 200 
+  [basic] GET /tracking/workflows/org_d13d84415_enterprise/x -> 200 
+  [full] GET /tracking/drift -> 200 
+  [full] GET /tracking/org_d13d84415_enterprise/reconcile -> 200 
+  [full] GET /app-graphs/b.example/field -> 200 
+  [full] PUT policy PUT /api/v1/tracking/org_d13d84415_enterprise/policy -> 200 {"policy_version":1,"workspace_id":"org_d13d84415_enterprise","key_id":"conxa-manifest-1","issued_at":1795384777,"expires_at":1795989577,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":[],"signature":""}
+  >>> RESULT 20.13: PASS  - Free: all 403 ops_tier_required; Starter: basic 200, full (drift/reconcile/policy/field) 403; Pro+Enterprise: all 200

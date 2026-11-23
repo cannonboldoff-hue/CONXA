@@ -67,7 +67,7 @@ async def post_analyze(request: Request) -> dict[str, Any]:
         return result
 
     # resource_id carries the owning workspace so GET can enforce ownership
-    # (job_routes.py's generic reads don't check the caller).
+    # (the old generic job reads were removed: they never checked the caller).
     job = await enqueue_job("video_analyze", _run, resource_id=workspace_id)
     return {"job_id": job.job_id}
 

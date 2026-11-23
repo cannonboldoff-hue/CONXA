@@ -1,0 +1,23 @@
+{
+ "20.14": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "timed grant reverts with no job and re-assign clears expiry; retention filters old runs (90/365/unlimited); pool routing free/starter/pro verified; BYOK 403 byok_requires_enterprise below Enterprise, routed to customer deployment on Enterprise, key never echoed; add-on wallet stacks and unstacks; real purchase BLOCKED. enterprise (premium pool, none configured) fell back to key-free | add-on order without Cashfree credentials -> 500 Cashfree credentials not configured (BLOCKED: real purchase, payment page and webhook need Cashfree sandbox keys) | forged Cashfree webhook (no valid signature) -> 503 webhook_not_configured"
+  }
+ ],
+ "20.15": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "fresh start (no entitlement env) enforces all 6 gates; each SKILL_ENTITLEMENTS_ENFORCE_<X>=false switches off only its own gate (compile also covers the workflow cap; distribution also covers white-label). Note: the variable needs the SKILL_ prefix; the bare spec name is ignored"
+  }
+ ],
+ "20.16": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "first member sign-in -> 200 None; compile reserve -> 200; compile commit -> 200; publish -> 200; LLM compile call -> 200; LLM human-edit call (AI credits) -> 200; LLM ai_credits call -> 200; first machine registers -> 200; external + white-label installer -> 200; ops: drift (full tier) -> 200; first Execute grant -> 200; second member joins -> 200; BYOK key -> 200"
+  }
+ ]
+}

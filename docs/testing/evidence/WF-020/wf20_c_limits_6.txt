@@ -1,0 +1,86 @@
+== WF-20 C rows ['6'] tag=t83639 ==
+
+#### 20.6 compile credits (reserve -> commit; cap = plan limit; payment-shaped 402)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t83639_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: cap=25
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  after 22 committed: plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"4718ad9d3299c0a020ad8384"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_free-b","status":"released"}
+  after release b: plan=free seats=1/1 machines=0/1 compile=22+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"8728a7f73e2afe7caebd6c69"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_free-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_free-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_free-a","status":"committed"}
+  after commit a: plan=free seats=1/1 machines=0/1 compile=23+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-free'}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t83639_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: cap=200
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  [seed usage org_c6t83639_starter 197] -> usage set org_c6t83639_starter:2026-11 197
+  after 197 committed: plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"69a07bfaec647d02e0428dd3"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_starter-b","status":"released"}
+  after release b: plan=starter seats=1/3 machines=0/3 compile=197+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"c3f00aa3be6a2d1bb63e3b82"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_starter-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_starter-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_starter-a","status":"committed"}
+  after commit a: plan=starter seats=1/3 machines=0/3 compile=198+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-starter'}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t83639_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: cap=500
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [seed usage org_c6t83639_pro 497] -> usage set org_c6t83639_pro:2026-11 497
+  after 497 committed: plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-a","status":"reserved","remaining_compile_credits":2}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-b","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-c","status":"reserved","remaining_compile_credits":0}
+  3 reserved (a twice): plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"83d529692b1da32e691fe219"}
+  [release b] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_pro-b","status":"released"}
+  after release b: plan=pro seats=1/10 machines=0/10 compile=497+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-d","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"9c580c73463269917dd44b97"}
+  [commit a] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_pro-a","status":"committed","remaining_compile_credits":0}
+  [commit a again] POST /api/v1/usage/compile/commit -> 200 {"reservation_id":"org_c6t83639_pro-a","status":"committed"}
+  [release a after commit] POST /api/v1/usage/compile/release -> 200 {"reservation_id":"org_c6t83639_pro-a","status":"committed"}
+  after commit a: plan=pro seats=1/10 machines=0/10 compile=498+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  human_edit proxy call with compile credits exhausted -> 200 {'ok': True, 'pool_key': 'key-pro'}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c6t83639_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+
+-- enterprise: cap=None
+  before: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  30 reserve+commit on Enterprise (unlimited): 30/30 ok
+  after: plan=enterprise seats=1/0 machines=0/0 compile=30+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+
+-- reservation expiry: server TTL is max(60s, setting) -> waiting 63s once for all plans (c and d reservations above were never committed) --
+  free after TTL: plan=free seats=1/1 machines=0/1 compile=23+0res/25 pool=520/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_free-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"bfa0962c220bb1d05a6cc936"}
+  starter after TTL: plan=starter seats=1/3 machines=0/3 compile=198+0res/200 pool=520/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_starter-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"d500968e5f73ff6ca78186d9"}
+  pro after TTL: plan=pro seats=1/10 machines=0/10 compile=498+0res/500 pool=519/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-e1","status":"reserved","remaining_compile_credits":1}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c6t83639_pro-e2","status":"reserved","remaining_compile_credits":0}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"compile_credit_limit_exceeded","message":"You're out of compile credits for this billing period. They reset next period, or you can add more.","request_id":"42946e7043f9603d1ce9d3bb"}
+  >>> RESULT 20.6: PASS  - Free 25 / Starter 200 / Pro 500 caps -> 402 compile_credit_limit_exceeded at cap+1; same id twice counts once; release returns; reservation expired after TTL; Enterprise unlimited

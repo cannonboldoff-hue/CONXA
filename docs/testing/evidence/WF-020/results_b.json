@@ -1,0 +1,9 @@
+{
+ "20.2": [
+  {
+   "result": "FAIL",
+   "sev": "S0",
+   "note": "data leak via GET: [('/jobs', 200, ['org_b', 'SECRET screen text']), ('/jobs/job_41935452ceae453f96a6c85a6be6e911', 200, ['org_b', 'SECRET screen text']), ('/jobs/job_41935452ceae453f96a6c85a6be6e911/events', 200, ['SECRET screen text'])] | A overwrote B's governance policy (PUT /tracking/{B}/policy -> 200) | A replaced B's installer (POST /workflows/{B slug}/installer/upload -> 200; GET /installers/{B slug} serves A's bytes)"
+  }
+ ]
+}

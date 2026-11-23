@@ -1,0 +1,110 @@
+== WF-20 C rows ['7', '8', '9'] tag=t83734 ==
+
+#### 20.7 human-edit token pool (402 human_edit_pool_exceeded for the legacy class, ai_credits_exceeded for the new name)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t83734_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: pool=500000
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  4 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=675060/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"2f1e152891595d129e8ff119"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t83734_free-after-pool","status":"reserved","remaining_compile_credits":24}
+  after compile call: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=675060/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t83734_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: pool=2500000
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  3 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=3750040/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"3e4b2ae122b0e6821c271895"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-starter"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t83734_starter-after-pool","status":"reserved","remaining_compile_credits":199}
+  after compile call: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=3750040/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t83734_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: pool=10000000
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  7 calls until refusal -> 402 human_edit_pool_exceeded
+  pool state: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=11250114/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"feb2d704170e5b0d0b89464b"}
+  POST /api/v1/llm/proxy/text -> 429 {"detail":"quota_exceeded","message":"The monthly usage limit for this workspace has been reached.","request_id":"d106fa7ba5c847029a345615"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c7t83734_pro-after-pool","status":"reserved","remaining_compile_credits":499}
+  after compile call: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=11250114/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c7t83734_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+
+-- enterprise: pool=0
+  before: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"human_edit_pool_exceeded","message":"You're out of AI credits for this billing period.","request_id":"24f23cc1f4ddd9ccc14a4d72"}
+  POST /api/v1/llm/proxy/text -> 402 {"detail":"ai_credits_exceeded","message":"You're out of AI credits for this billing period.","request_id":"1e28c5a3a816fc9c7736c7a5"}
+  POST /api/v1/llm/proxy/text -> 200 {"ok":true,"pool_key":"key-free"}
+  enterprise after: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  note: free: pool used 675060 of 500000 (overshoot 175060 tokens: one call may cross the cap)
+  note: starter: pool used 3750040 of 2500000 (overshoot 1250040 tokens: one call may cross the cap)
+  note: pro: pool used 11250114 of 10000000 (overshoot 1250114 tokens: one call may cross the cap)
+  note: enterprise(no overrides) first human_edit call -> 402 human_edit_pool_exceeded
+  >>> RESULT 20.7: FAIL S2 - pro: COMPILE-class proxy call refused (429 quota_exceeded) although only the human-edit pool is exhausted
+
+#### 20.8 machines (X-Conxa-Machine header on compile reserve / LLM proxy; revoke frees a slot)
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83734_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+
+-- free: machines=1
+  before: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  1/1 machines registered
+  at cap: plan=free seats=1/1 machines=1/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"5ccde701293c1422586b7b86"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_free-mk","status":"reserved","remaining_compile_credits":23}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"f921c5a5930bc940a0e768b4"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=free seats=1/1 machines=0/1 compile=0+0res/25 pool=0/500000 wallet=0/0 caps=internal,wl=False,ops=none,pool=free,byok=False wf_lock=0act/0lock/limit=25 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_free-mn","status":"reserved","remaining_compile_credits":22}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"1664019b541ed55d2fcad73d"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83734_free","machine_hash":"mach-0","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:18Z","last_seen":"2026-11-22T21:42:18Z","revoked":true},{"workspace_id":"org_c8t83734_free","machine_hash":"mach-new","last_ip":"127.0...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"1436182a33ce08889c8dbdd0"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83734_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+
+-- starter: machines=3
+  before: plan=starter seats=1/3 machines=0/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  3/3 machines registered
+  at cap: plan=starter seats=1/3 machines=3/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"a6b728f17d230e56448b2316"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_starter-mk","status":"reserved","remaining_compile_credits":196}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"c3a8fbb63f032fab1060283b"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=starter seats=1/3 machines=2/3 compile=0+0res/200 pool=0/2500000 wallet=0/0 caps=external,wl=False,ops=basic,pool=starter,byok=False wf_lock=0act/0lock/limit=200 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_starter-mn","status":"reserved","remaining_compile_credits":195}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"be78a824b8cbbd217ed51c3e"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83734_starter","machine_hash":"mach-1","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:19Z","last_seen":"2026-11-22T21:42:19Z"},{"workspace_id":"org_c8t83734_starter","machine_hash":"mach-2","last_ip":"127.0.0.1","firs...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"e888c38cc30b329b04ca1b69"}
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83734_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+
+-- pro: machines=10
+  before: plan=pro seats=1/10 machines=0/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  10/10 machines registered
+  at cap: plan=pro seats=1/10 machines=10/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"e50d4c998351bd826a36453c"}
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_pro-mk","status":"reserved","remaining_compile_credits":489}
+  [proxy with new machine at cap] POST /api/v1/llm/proxy/text -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"53883419879161f4de93cc83"}
+  [revoke mach-0] POST /api/v1/entitlements/machines/revoke -> 200 {"machine_hash":"mach-0","revoked":true}
+  after revoke: plan=pro seats=1/10 machines=9/10 compile=0+0res/500 pool=0/10000000 wallet=0/0 caps=external,wl=False,ops=full,pool=pro,byok=False wf_lock=0act/0lock/limit=500 trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 200 {"reservation_id":"org_c8t83734_pro-mn","status":"reserved","remaining_compile_credits":488}
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"e9d5a90accf1aa067520aa66"}
+  [machine list] GET /api/v1/entitlements/machines -> 200 {"machines":[{"workspace_id":"org_c8t83734_pro","machine_hash":"mach-9","last_ip":"127.0.0.1","first_seen":"2026-11-22T21:42:21Z","last_seen":"2026-11-22T21:42:21Z"},{"workspace_id":"org_c8t83734_pro","machine_hash":"mach-0","last_ip":"127.0.0.1","first_seen":...
+  [member revoke] POST /api/v1/entitlements/machines/revoke -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"10cdff8d8208926ef38170da"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c8t83734_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+
+-- enterprise: machines=0
+  before: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  POST /api/v1/usage/compile/reserve -> 402 {"detail":"machine_limit_exceeded","message":"This workspace has reached its device limit. Revoke an old device or upgrade your plan.","request_id":"97162294a2eca2350abb2256"}
+  >>> RESULT 20.8: FAIL S1 - enterprise(no overrides): first machine -> 402 machine_limit_exceeded
+
+#### 20.9 seats (Clerk member count from the local mock; gate is count > limit at a NEW member's first request)
+
+-- free: seats=1
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83734_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83734_free"}
+  [new member, count=1 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83734_free"}
+  [new member, count=2 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"c4dc5fe856f6a601cccda8cf"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"f0282a52999f8567b90cecf4"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83734_free"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}

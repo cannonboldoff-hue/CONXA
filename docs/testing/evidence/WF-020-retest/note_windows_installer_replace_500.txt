@@ -1,0 +1,8 @@
+3273-  File "C:\Users\kiran\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1376, in replace
+3274-    os.replace(self, target)
+3275:PermissionError: [WinError 5] Access is denied: 'C:\\Users\\kiran\\AppData\\Local\\Temp\\wf20\\cloud-data\\installers\\org_a\\installer.exe.tmp' -> 'C:\\Users\\kiran\\AppData\\Local\\Temp\\wf20\\cloud-data\\installers\\org_a\\installer.exe'
+--
+3347-    tmp_latest.replace(latest_exe_path)
+3348-  File "C:\Users\kiran\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1376, in replace
+3349-    os.replace(self, target)
+3350:PermissionError: [WinError 5] Access is denied: 'C:\\Users\\kiran\\AppData\\Local\\Temp\\wf20\\cloud-data\\installers\\org_a\\installer.exe.tmp' -> 'C:\\Users\\kiran\\AppData\\Local\\Temp\\wf20\\cloud-data\\installers\\org_a\\installer.exe'

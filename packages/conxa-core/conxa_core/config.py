@@ -290,7 +290,8 @@ class Settings(BaseSettings):
     api_proxy_signing_window: int = 60  # max age in seconds for HMAC proxy timestamps
 
     # Metered LLM proxy used by Build Studio. Quota is per org per calendar month
-    # (input + output tokens). 0 disables enforcement. The proxy only accepts
+    # (input + output tokens of compile calls only; AI-credit and Execute use have their
+    # own pools and never count here). 0 disables enforcement. The proxy only accepts
     # requests carrying the X-Conxa-Client header below.
     llm_proxy_monthly_token_quota: int = 5_000_000
     llm_proxy_client_header: str = "build-studio"

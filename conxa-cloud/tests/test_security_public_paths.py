@@ -60,3 +60,17 @@ def test_skill_pack_upload_gets_build_artifact_body_limit():
     path = "/api/v1/workflows/v2/render/skill-packs/upload"
     assert _body_limit_for_path(path) == settings.build_artifact_upload_max_bytes
     assert _body_limit_for_path(path) != settings.max_json_body_bytes
+
+
+def test_governance_policy_read_is_public_but_write_is_not():
+    # The runtime fetches its policy with only X-Tracking-Token (the handler checks it).
+    assert _is_public_path("/api/v1/tracking/some_ws/policy", "GET")
+    assert not _is_public_path("/api/v1/tracking/some_ws/policy", "PUT")
+    assert not _is_public_path("/api/v1/tracking/some_ws/runs", "GET")
+
+
+def test_cashfree_webhooks_are_public_post_paths():
+    # Cashfree cannot send a Clerk token; the handlers verify the signature themselves.
+    assert _is_public_path("/api/v1/subscriptions/webhooks/cashfree", "POST")
+    assert _is_public_path("/api/v1/subscriptions/webhooks/cashfree-orders", "POST")
+    assert not _is_public_path("/api/v1/subscriptions/verify", "POST")

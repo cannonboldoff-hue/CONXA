@@ -1,0 +1,146 @@
+== WF-20 E rows ['15', '16'] tag=e84788 ==
+
+#### 20.15 kill switches. Backend A = fresh start with NO entitlement env vars at all (the production default). Backends B1..B6 each set ONE SKILL_ENTITLEMENTS_ENFORCE_<X>=false. Backend C sets the bare name from the spec (ENTITLEMENTS_ENFORCE_COMPILE=false, no SKILL_ prefix).
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_none","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_ret...
+  [seed billing org_ke84788_none {"entitlement_overrides": {"compile_credits": 1, "human_edit_toke] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384788.619958, 
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_none","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_none/delta","sync_token":"L3hv_tiqMbdcrOC7FyMElmaA77-Ri7Hu1AWYG55bB40","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"283c64905bbefa07ae9c61ef"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_compile","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_...
+  [seed billing org_ke84788_compile {"entitlement_overrides": {"compile_credits": 1, "human_edit_t] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384818.6180887,
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_compile","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_compile/delta","sync_token":"Xi-2InlGfvdUZrJtPKPWFCKd_HpczM1XC0TBdDCTOUo","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/trackin...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_compile","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_compile/delta","sync_token":"Xi-2InlGfvdUZrJtPKPWFCKd_HpczM1XC0TBdDCTOUo","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/trackin...
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_human_edit","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analyti...
+  [seed billing org_ke84788_human_edit {"entitlement_overrides": {"compile_credits": 1, "human_edi] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384831.42687, "
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_human_edit","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_human_edit/delta","sync_token":"bQLrX_O1tX066rZSGgELwiciEDD_cHm3aHDe5phA5m8","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/t...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"497f083e75199c4b47c6cedc"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_distribution","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analy...
+  [seed billing org_ke84788_distribution {"entitlement_overrides": {"compile_credits": 1, "human_e] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384843.3933575,
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_distribution","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_distribution/delta","sync_token":"amgfgAh6gmtfmlwzpXJZn_ZPH-lHLNjRVxHx107i1yQ","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/a...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"3c24ae943c349102d2bcdc32"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_machines","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics...
+  [seed billing org_ke84788_machines {"entitlement_overrides": {"compile_credits": 1, "human_edit_] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384856.549985, 
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_machines","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_machines/delta","sync_token":"bkBiOnIWaORazTY6tOEpT_SzylK-bctuaYlnBy6RrfM","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/track...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"0cc3e42d93ac02b0b7d2b3e1"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_seats","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  [seed billing org_ke84788_seats {"entitlement_overrides": {"compile_credits": 1, "human_edit_tok] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384869.589681, 
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_seats","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_seats/delta","sync_token":"7rFZacPgXHv30_HrDDETZQPqazW37YfqoZryWWmKvbQ","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/or...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"153091eb44018b608a72606d"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_execute_seats","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","anal...
+  [seed billing org_ke84788_execute_seats {"entitlement_overrides": {"compile_credits": 1, "human_] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384882.1315296,
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_execute_seats","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_execute_seats/delta","sync_token":"WlEnmstySIva5rHQynTfgJjqVlPR02kmIacsI9sC2nQ","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"6101e70744caa3b0cbc731ef"}
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_ke84788_bare","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_ret...
+  [seed billing org_ke84788_bare {"entitlement_overrides": {"compile_credits": 1, "human_edit_toke] -> {"plan": "free", "status": "active", "customer_id": null, "subscription_id": null, "current_period_end": null, "trial_started_at": 1795384893.9218678,
+  [publish wk1@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_ke84788_bare","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_ke84788_bare/delta","sync_token":"jKauySzO97R5I0MT6KQWggefzB2-5TI7r53rjj7fjtk","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_...
+  [publish wk2@1.0.0] POST /api/v1/workflows/publish -> 402 {"detail":"workflow_limit_exceeded","message":"workflow_limit_exceeded","request_id":"13b686b0f7b42595f1381f38"}
+
+matrix (status of each gate; 402/403 = enforced, 200 = off/allowed):
+
+  NONE off (fresh start, port 8140)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  SKILL_ENTITLEMENTS_ENFORCE_COMPILE=false (port 8143)
+     compile (reserve 2nd of 1)                 200
+     compile (publish 2nd workflow of 1)        200
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  SKILL_ENTITLEMENTS_ENFORCE_HUMAN_EDIT=false (port 8144)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           200
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  SKILL_ENTITLEMENTS_ENFORCE_DISTRIBUTION=false (port 8145)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            200
+     distribution (white-label on Free)         200
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  SKILL_ENTITLEMENTS_ENFORCE_MACHINES=false (port 8146)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            200
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  SKILL_ENTITLEMENTS_ENFORCE_SEATS=false (port 8147)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  200
+
+  SKILL_ENTITLEMENTS_ENFORCE_EXECUTE_SEATS=false (port 8148)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         200
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+  bare ENTITLEMENTS_ENFORCE_COMPILE=false (port 8150, no SKILL_ prefix)
+     compile (reserve 2nd of 1)                 402 compile_credit_limit_exceeded
+     compile (publish 2nd workflow of 1)        402 workflow_limit_exceeded
+     human_edit (2nd call, pool of 1)           402 human_edit_pool_exceeded
+     distribution (external on Free)            402 distribution_not_permitted
+     distribution (white-label on Free)         402 white_label_not_permitted
+     machines (2nd machine, limit 1)            402 machine_limit_exceeded
+     execute_seats (2nd grant, limit 1)         402 execute_seat_limit_exceeded
+     seats (new member, 5 > 1)                  402 seat_limit_exceeded
+
+bare unprefixed ENTITLEMENTS_ENFORCE_COMPILE=false switches compile off? False (the real variable is SKILL_ENTITLEMENTS_ENFORCE_COMPILE; the spec/docs name without the prefix does nothing)
+  >>> RESULT 20.15: PASS  - fresh start (no entitlement env) enforces all 6 gates; each SKILL_ENTITLEMENTS_ENFORCE_<X>=false switches off only its own gate (compile also covers the workflow cap; distribution also covers white-label). Note: the variable needs the SKILL_ prefix; the bare spec name is ignored
+
+#### 20.16 Enterprise with no overrides (plan applied through the admin route, which has no way to pass overrides)
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e16e84788","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","analytics_re...
+  [1st member signs in] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"31f414c3c75df6559ee22536"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e16be84788","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","analytics_r...
+  enterprise, owner already known: plan=enterprise seats=1/0 machines=0/0 compile=0+0res/None pool=0/0 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  [publish ent_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_e16be84788","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_e16be84788/delta","sync_token":"MI3qs_-rh-gDzKq_2kvE6IjVqSJUiRKJpdCgFuau6R0","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_e16b...
+  OK      compile reserve -> 200
+  OK      compile commit -> 200
+  OK      publish -> 200
+  OK      LLM compile call -> 200
+  OK      external + white-label installer -> 200
+  OK      ops: drift (full tier) -> 200
+  OK      BYOK key -> 200
+  BLOCKED first member sign-in -> 402 seat_limit_exceeded
+  BLOCKED LLM human-edit call (AI credits) -> 402 human_edit_pool_exceeded
+  BLOCKED LLM ai_credits call -> 402 ai_credits_exceeded
+  BLOCKED first machine registers -> 402 machine_limit_exceeded
+  BLOCKED first Execute grant -> 402 execute_seat_limit_exceeded
+  BLOCKED second member joins -> 402 seat_limit_exceeded
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_e16ce84788","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","analytics_r...
+  [seed billing org_e16ce84788 {"entitlement_overrides": {"seats": 25, "machines": 25, "execute_se] -> {"plan": "enterprise", "status": "active", "plan_expires_at": null, "updated_at": 1795384910.8517632, "entitlement_overrides": {"seats": 25, "machines
+  positive control (same plan + explicit overrides in the store): first member 200, human-edit 200, machine 200
+  after trying to pass overrides through the admin route: plan=enterprise seats=1/25 machines=1/25 compile=0+0res/None pool=144/50000000 wallet=0/0 caps=external,wl=True,ops=full,pool=premium,byok=True wf_lock=0act/0lock/limit=None trial_expired=False
+  admin route accepts overrides? False (status 200; the AssignPlanBody has no such field, so the extra key is ignored)
+  >>> RESULT 20.16: FAIL S1 - Enterprise with no overrides (seats=0, machines=0, execute_seats=0, human_edit pool=0): first member sign-in -> 402 seat_limit_exceeded; LLM human-edit call (AI credits) -> 402 human_edit_pool_exceeded; LLM ai_credits call -> 402 ai_credits_exceeded; first machine registers -> 402 machine_limit_exceeded; first Execute grant -> 402 execute_seat_limit_exceeded; second member joins -> 402 seat_limit_exceeded. Works once overrides exist (200,200,200) but POST /entitlements/admin/billing cannot set them (ignored key) so a support person cannot configure a fresh Enterprise workspace without editing the database. Ok: compile reserve -> 200; compile commit -> 200; publish -> 200; LLM compile call -> 200; external + white-label installer -> 200; ops: drift (full tier) -> 200; BYOK key -> 200

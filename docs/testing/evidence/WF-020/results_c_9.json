@@ -1,0 +1,9 @@
+{
+ "20.9": [
+  {
+   "result": "FAIL",
+   "sev": "S1",
+   "note": "free: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); starter: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); pro: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503)"
+  }
+ ]
+}

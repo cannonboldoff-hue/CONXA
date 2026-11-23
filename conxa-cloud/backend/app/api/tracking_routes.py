@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from conxa_core.db import db_append, db_get, db_list_kv
-from app.api.deps import current_principal, entitlement_http_error
+from app.api.deps import current_principal, entitlement_http_error, own_workspace_slug
 from app.api.product_ownership import validate_installer_version
 from app.services.entitlements import ensure_ops_tier
 from app.services.rbac import require_admin
@@ -232,12 +232,14 @@ def put_governance_policy(
     the policy audit-only: the runtime records what it would have blocked without
     actually blocking, the recommended rollout before flipping enforcement on."""
     require_admin(principal)
+    # The runtime reads the policy by slug, so it is always stored under the slug.
+    slug = own_workspace_slug(principal, workspace_id)
     try:
         ensure_ops_tier(principal, "full")
     except Exception as exc:  # noqa: BLE001
         raise entitlement_http_error(exc) from exc
     try:
-        return write_governance_policy(workspace_id, payload)
+        return write_governance_policy(slug, payload)
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

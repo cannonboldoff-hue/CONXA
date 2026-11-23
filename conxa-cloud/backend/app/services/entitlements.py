@@ -122,14 +122,15 @@ PLAN_LIMITS: dict[str, dict[str, Any]] = {
         "byok": False,
         "vision_fallback_on_exhaustion": False,
     },
-    # Enterprise workspaces must carry explicit overrides in billing metadata
-    # for the numeric limits; the capability flags below are Enterprise's floor.
+    # Enterprise numeric limits start at Pro's numbers (a floor, so a fresh Enterprise
+    # workspace is usable); a contract number is set with entitlement_overrides on the
+    # admin billing route. The capability flags below are Enterprise's own.
     "enterprise": {
-        "seats": 0,
-        "machines": 0,
-        "execute_seats": 0,
+        "seats": 10,
+        "machines": 10,
+        "execute_seats": 100,
         "compile_credits": None,
-        "human_edit_tokens": 0,
+        "human_edit_tokens": 10_000_000,
         "trial_days": None,
         "distribution": "external",
         "white_label": True,

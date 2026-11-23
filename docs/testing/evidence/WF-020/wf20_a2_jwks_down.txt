@@ -1,0 +1,4 @@
+control (mock up): 200
+valid token, identity provider (JWKS) unreachable: HTTP 401 {"detail": "invalid_clerk_token", "message": "Your session has expired. Please sign in again.", "request_id": "aad2fabe241255f4a80bf95b"}
+garbage token, JWKS unreachable: HTTP 401 {"detail": "invalid_clerk_token", "message": "Your session has expired. Please sign in again.", "request_id": "fced61ccd5eba0e547614758"}
+no token: HTTP 401 {"detail": "missing_bearer_token", "message": "You need to be signed in to do that.", "request_id": "4493facf226db9bdb65f6bbc"}

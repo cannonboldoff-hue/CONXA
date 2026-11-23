@@ -1,0 +1,16 @@
+{
+ "20.15": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "fresh start (no entitlement env) enforces all 6 gates; each SKILL_ENTITLEMENTS_ENFORCE_<X>=false switches off only its own gate (compile also covers the workflow cap; distribution also covers white-label). Note: the variable needs the SKILL_ prefix; the bare spec name is ignored"
+  }
+ ],
+ "20.16": [
+  {
+   "result": "FAIL",
+   "sev": "S1",
+   "note": "Enterprise with no overrides (seats=0, machines=0, execute_seats=0, human_edit pool=0): first member sign-in -> 402 seat_limit_exceeded; LLM human-edit call (AI credits) -> 402 human_edit_pool_exceeded; LLM ai_credits call -> 402 ai_credits_exceeded; first machine registers -> 402 machine_limit_exceeded; first Execute grant -> 402 execute_seat_limit_exceeded; second member joins -> 402 seat_limit_exceeded. Works once overrides exist (200,200,200) but POST /entitlements/admin/billing cannot set them (ignored key) so a support person cannot configure a fresh Enterprise workspace without editing the database. Ok: compile reserve -> 200; compile commit -> 200; publish -> 200; LLM compile call -> 200; external + white-label installer -> 200; ops: drift (full tier) -> 200; BYOK key -> 200"
+  }
+ ]
+}

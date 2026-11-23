@@ -827,19 +827,19 @@ def test_publish_rejects_path_traversal():
 def test_installer_upload_and_public_download():
     payload = b"MZ\x90\x00fake-exe-bytes"
     up = client.post(
-        "/api/v1/workflows/dl-test/installer/upload?filename=Acme-Setup.exe&version=1.2.0&release_notes=Initial%20release",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Acme-Setup.exe&version=1.2.0&release_notes=Initial%20release",
         content=payload,
     )
     assert up.status_code == 200, up.text
     sha = up.json()["sha256"]
-    assert up.json()["version_download_url"] == "/api/v1/installers/dl-test/versions/1.2.0"
+    assert up.json()["version_download_url"] == "/api/v1/installers/wrk_local/versions/1.2.0"
 
-    dl = client.get("/api/v1/installers/dl-test")
+    dl = client.get("/api/v1/installers/wrk_local")
     assert dl.status_code == 200
     assert dl.content == payload
     assert dl.headers["X-Conxa-SHA256"] == sha
 
-    exact = client.get("/api/v1/installers/dl-test/versions/1.2.0")
+    exact = client.get("/api/v1/installers/wrk_local/versions/1.2.0")
     assert exact.status_code == 200
     assert exact.content == payload
 
@@ -847,7 +847,7 @@ def test_installer_upload_and_public_download():
 def test_installer_upload_allows_build_artifact_larger_than_json_cap():
     payload = b"MZ" + (b"x" * (settings.max_json_body_bytes + 1024))
     up = client.post(
-        "/api/v1/workflows/big-dl-test/installer/upload?filename=Big-Setup.exe&version=1.2.0&release_notes=Large%20installer",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Big-Setup.exe&version=1.2.0&release_notes=Large%20installer",
         content=payload,
     )
     assert up.status_code == 200, up.text
@@ -857,7 +857,7 @@ def test_installer_upload_allows_build_artifact_larger_than_json_cap():
 def test_installer_upload_rejects_duplicate_version_and_preserves_history():
     first = b"MZfirst"
     second = b"MZsecond"
-    slug = "versioned-dl-test"
+    slug = "wrk_local"  # the caller's own slug: installer routes accept no other
 
     up1 = client.post(
         f"/api/v1/workflows/{slug}/installer/upload?filename=Versioned-Setup.exe&version=1.2.0&release_notes=First%20release",
@@ -936,7 +936,7 @@ def test_installer_history_survives_disk_wipe_but_binary_does_not(monkeypatch, t
     base64 blob does not belong in a JSONB field — so a wiped binary is a clean 404
     until the vendor re-uploads. Object storage is the real fix; see TODO.md CLOUD-2."""
     monkeypatch.setattr("app.api.publish_routes.using_database", lambda: True)
-    slug = "wipe-installer-test"
+    slug = "wrk_local"  # the caller's own slug: installer routes accept no other
     first = b"MZfirst-wipe"
     second = b"MZsecond-wipe"
 
@@ -981,7 +981,7 @@ def test_installer_history_survives_disk_wipe_but_binary_does_not(monkeypatch, t
 
 
 def test_installer_upload_updates_skill_pack_latest_metadata():
-    slug = "skill-pack-meta-installer"
+    slug = "wrk_local"  # the caller's own slug: installer routes accept no other
     pub = client.post(
         "/api/v1/workflows/publish",
         json={
@@ -1106,30 +1106,30 @@ def test_installer_download_requires_signature_when_configured(monkeypatch):
     monkeypatch.setattr(settings, "installer_signing_key", "installer-secret")
     payload = b"MZ\x90\x00signed-exe-bytes"
     up = client.post(
-        "/api/v1/workflows/signed-dl-test/installer/upload?filename=Signed-Setup.exe&version=1.0.0&release_notes=v1",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Signed-Setup.exe&version=1.0.0&release_notes=v1",
         content=payload,
     )
     assert up.status_code == 200, up.text
 
     # No ts/sig at all -> rejected.
-    bare = client.get("/api/v1/installers/signed-dl-test")
+    bare = client.get("/api/v1/installers/wrk_local")
     assert bare.status_code == 401
 
     # Tampered signature -> rejected.
     ts = int(time.time())
-    tampered = client.get(f"/api/v1/installers/signed-dl-test?ts={ts}&sig=deadbeef")
+    tampered = client.get(f"/api/v1/installers/wrk_local?ts={ts}&sig=deadbeef")
     assert tampered.status_code == 401
 
     # Expired timestamp -> rejected.
     old_ts = ts - settings.installer_signing_window - 60
     from app.api.installer_storage import sign_installer
-    expired_sig = sign_installer("signed-dl-test", None, old_ts)
-    expired = client.get(f"/api/v1/installers/signed-dl-test?ts={old_ts}&sig={expired_sig}")
+    expired_sig = sign_installer("wrk_local", None, old_ts)
+    expired = client.get(f"/api/v1/installers/wrk_local?ts={old_ts}&sig={expired_sig}")
     assert expired.status_code == 401
 
     # Valid ts/sig -> succeeds.
-    valid_sig = sign_installer("signed-dl-test", None, ts)
-    valid = client.get(f"/api/v1/installers/signed-dl-test?ts={ts}&sig={valid_sig}")
+    valid_sig = sign_installer("wrk_local", None, ts)
+    valid = client.get(f"/api/v1/installers/wrk_local?ts={ts}&sig={valid_sig}")
     assert valid.status_code == 200
     assert valid.content == payload
 
@@ -1137,7 +1137,7 @@ def test_installer_download_requires_signature_when_configured(monkeypatch):
 def test_installer_versions_endpoint_mints_signed_download_urls(monkeypatch):
     monkeypatch.setattr(settings, "installer_signing_key", "installer-secret")
     payload = b"MZversioned"
-    slug = "signed-versions-test"
+    slug = "wrk_local"  # the caller's own slug: installer routes accept no other
     up = client.post(
         f"/api/v1/workflows/{slug}/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=v1",
         content=payload,
@@ -1158,10 +1158,10 @@ def test_installer_download_stays_public_when_signing_key_unset():
     """Dev-mode fallback: SKILL_INSTALLER_SIGNING_KEY unset -> unsigned downloads still work."""
     payload = b"MZunsigned"
     up = client.post(
-        "/api/v1/workflows/unsigned-dl-test/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=v1",
+        "/api/v1/workflows/wrk_local/installer/upload?filename=Setup.exe&version=1.0.0&release_notes=v1",
         content=payload,
     )
     assert up.status_code == 200, up.text
-    dl = client.get("/api/v1/installers/unsigned-dl-test")
+    dl = client.get("/api/v1/installers/wrk_local")
     assert dl.status_code == 200
     assert dl.content == payload

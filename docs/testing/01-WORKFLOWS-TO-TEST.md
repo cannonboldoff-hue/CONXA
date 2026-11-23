@@ -40,7 +40,7 @@ patch), and sends the workflow back to be tested from the start.
 | WF-17 | Sign-in everywhere: Studio login, target-site sessions | ✅ passed 2026-11-22 (P-49; real Clerk sign-in blocked, 17.1–17.3/17.5 on a mock; 17.4 limitation 11) | Partly |
 | WF-18 | Hand-over step (a person solves a CAPTCHA) | ✅ passed 2026-11-22 (P-50; on a local stand-in, real CAPTCHA blocked) | Needs a person |
 | WF-19 | Conxa Execute desktop app | ✅ passed 2026-11-23 (P-51; mock sign-in and model, real Clerk/model/second PC blocked) | Separate app |
-| WF-20 | Cloud API: bad tokens, plan limits, cross-company | ⏳ | Yes (API only, local backend) |
+| WF-20 | Cloud API: bad tokens, plan limits, cross-company | ✅ passed 2026-11-23 (P-52; real Clerk and Cashfree blocked; 3 S0 holes fixed) | Yes (API only, local backend) |
 | WF-21 | Go / no-go gate before real customers | ⏳ last | Partly (clean PC, billing, updates blocked) |
 
 Also passed before the strict campaign, and **not re-run**: the recovery-cascade drill + live
@@ -554,7 +554,9 @@ Separate app; sign in the same way as Studio (browser PKCE).
 
 ---
 
-## WF-20 — Cloud API: bad tokens, plan limits, cross-company
+## ✅ WF-20 — Cloud API: bad tokens, plan limits, cross-company — passed 2026-11-23 (P-52)
+
+**Result:** see `workflow-handoffs/WF-020.md`.
 
 **No browser.** Local backend: `cd conxa-cloud/backend && uvicorn app.main:app --reload --port 8000`.
 Use a **test workspace**, never a real customer's. Check

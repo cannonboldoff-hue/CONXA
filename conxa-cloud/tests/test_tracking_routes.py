@@ -13,7 +13,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from conxa_core.workspace import LOCAL_WORKSPACE_ID, workspace_dir_slug
 from fastapi.testclient import TestClient
+
+_OWN_SLUG = workspace_dir_slug(LOCAL_WORKSPACE_ID)  # a policy may only be written for the caller's own workspace
 
 
 class TrackingRoutesTests(unittest.TestCase):
@@ -249,7 +252,7 @@ class TrackingRoutesTests(unittest.TestCase):
     def test_governance_policy_put_then_get_round_trip(self) -> None:
         client = self._client()
         put = client.put(
-            "/api/v1/tracking/acme/policy",
+            f"/api/v1/tracking/{_OWN_SLUG}/policy",
             json={
                 "windows": [{"skills": ["payroll-*"], "tz": "Asia/Kolkata",
                              "days": [1, 2, 3, 4, 5], "start": "09:00", "end": "17:00"}],
@@ -263,9 +266,14 @@ class TrackingRoutesTests(unittest.TestCase):
         self.assertEqual(doc["denied_hosts"], ["payroll-legacy.acme.com"])  # lowercased
         self.assertIn("signature", doc)
 
-        got = client.get("/api/v1/tracking/acme/policy")
+        got = client.get(f"/api/v1/tracking/{_OWN_SLUG}/policy")
         self.assertEqual(got.status_code, 200)
         self.assertEqual(got.json()["windows"][0]["tz"], "Asia/Kolkata")
+
+    def test_governance_policy_put_for_another_workspace_is_forbidden(self) -> None:
+        res = self._client().put("/api/v1/tracking/acme/policy", json={"windows": []})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["detail"], "workspace_forbidden")
 
     def test_governance_policy_get_404_when_none_written(self) -> None:
         res = self._client().get("/api/v1/tracking/never-governed/policy")
@@ -273,15 +281,15 @@ class TrackingRoutesTests(unittest.TestCase):
 
     def test_governance_policy_rejects_an_unknown_timezone(self) -> None:
         res = self._client().put(
-            "/api/v1/tracking/acme/policy",
+            f"/api/v1/tracking/{_OWN_SLUG}/policy",
             json={"windows": [{"tz": "Not/A_Zone", "start": "09:00", "end": "17:00"}]},
         )
         self.assertEqual(res.status_code, 422)
 
     def test_governance_policy_version_increments_across_writes(self) -> None:
         client = self._client()
-        first = client.put("/api/v1/tracking/acme/policy", json={"windows": []}).json()
-        second = client.put("/api/v1/tracking/acme/policy", json={"windows": []}).json()
+        first = client.put(f"/api/v1/tracking/{_OWN_SLUG}/policy", json={"windows": []}).json()
+        second = client.put(f"/api/v1/tracking/{_OWN_SLUG}/policy", json={"windows": []}).json()
         self.assertEqual(first["policy_version"], 1)
         self.assertEqual(second["policy_version"], 2)
 

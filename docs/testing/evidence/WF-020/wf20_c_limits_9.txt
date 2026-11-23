@@ -1,0 +1,55 @@
+== WF-20 C rows ['9'] tag=t83779 ==
+
+#### 20.9 seats (Clerk member count from the local mock; gate is count > limit at a NEW member's first request)
+
+-- free: seats=1
+  [admin->free] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_free","plan":"free","expires_at":null,"limits":{"seats":1,"machines":1,"execute_seats":1,"compile_credits":25,"human_edit_tokens":500000,"trial_days":30,"distribution":"internal","white_label":false,"ops_tier":"none","analytics_re...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_free"}
+  [new member, count=1 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_free"}
+  [new member, count=2 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"91efc56e5fbc31d4120ff658"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"f6b3ee45fd7967a640130766"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_free"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 2, 'limit': 1, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_free"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_free"}
+
+-- starter: seats=3
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_starter","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_starter"}
+  [new member, count=3 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_starter"}
+  [new member, count=4 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"18963980fbfcb373cec60a13"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"87f15d3469058acb804d9989"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_starter"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 4, 'limit': 3, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_starter"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_starter"}
+
+-- pro: seats=10
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_pro","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analy...
+  [first member, count=1] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [new member, count=10 == limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [new member, count=11 > limit] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"dc51ced547efd3446ad4070c"}
+  [same refused member on /entitlements/current: the dashboard's plan call] GET /api/v1/entitlements/current -> 503 {"detail":"entitlements_unavailable","message":"We couldn't check your plan limits just now. Try again in a moment.","request_id":"d0e5dfe575571da9e8f88b50"}
+  [existing owner while count>limit] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [existing owner list workflows] GET /api/v1/workflows -> 200 {"workflows":[]}
+  seats meter now: {'used': 11, 'limit': 10, 'remaining': 0, 'unlimited': False}
+  [new member, Clerk API down500] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [new member, Clerk API drop] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [admin->starter] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_pro","plan":"starter","expires_at":null,"limits":{"seats":3,"machines":3,"execute_seats":25,"compile_credits":200,"human_edit_tokens":2500000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"basic","anal...
+  [existing owner after downgrade to starter with 6 members] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_pro"}
+  [new member after downgrade] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"44ad0892da84b6e2434086ba"}
+
+-- enterprise: seats=0
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_enterprise","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full","an...
+  [first member, count=1] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"aa151f899cf7083beda6951a"}
+  enterprise FIRST member (billing set before anyone signed in) -> 402 seat_limit_exceeded
+  NOTE (judged under 20.16): the very first member of a new Enterprise workspace (no overrides, seat limit 0) gets 402 seat_limit_exceeded
+  [ent2 owner first sight as free] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_enterprise_late"}
+  [admin->enterprise] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c9t83779_enterprise_late","plan":"enterprise","expires_at":null,"limits":{"seats":0,"machines":0,"execute_seats":0,"compile_credits":null,"human_edit_tokens":0,"trial_days":null,"distribution":"external","white_label":true,"ops_tier":"full...
+  [ent2 owner after upgrade] GET /api/v1/tracking/companies -> 200 {"companies":[],"total":0,"workspace_id":"org_c9t83779_enterprise_late"}
+  [ent2 NEW member, count=2] GET /api/v1/tracking/companies -> 402 {"detail":"seat_limit_exceeded","message":"This workspace is at its seat limit. Free up a seat or upgrade your plan to add another person.","request_id":"d9e1aa70436b77acafbee7a9"}
+  enterprise existing owner after upgrade -> 200; new member -> 402 seat_limit_exceeded
+  NOTE (judged under 20.16): a NEW member of an Enterprise workspace with no overrides gets 402
+  >>> RESULT 20.9: FAIL S1 - free: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); starter: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503); pro: over-limit member on GET /entitlements/current gets 503 entitlements_unavailable instead of 402 seat_limit_exceeded (the route wraps current_principal's 402 and re-maps it to 503)

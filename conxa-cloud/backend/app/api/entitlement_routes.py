@@ -13,7 +13,7 @@ from app.api.deps import current_principal, entitlement_http_error
 from app.api.machine_binding import register_request_machine
 from app.api.updates_routes import _require_admin
 from app.services.entitlements import (
-    PLAN_LIMITS,
+    _limits_from_billing,
     auto_claim_pending_grants_for,
     claim_execute_grant,
     commit_compile_credit,
@@ -80,6 +80,9 @@ class AssignPlanBody(BaseModel):
     email: str | None = Field(default=None, min_length=1, max_length=320)
     plan: str = Field(..., min_length=1, max_length=32)
     duration_days: int | None = Field(default=None, gt=0, le=3650)
+    # Per-customer limits (e.g. {"seats": 99}), stored as-is and validated per key when
+    # read. Replaces any earlier overrides; {} clears them; omitted leaves them alone.
+    entitlement_overrides: dict[str, Any] | None = None
 
 
 @router.get("/entitlements/current")
@@ -312,14 +315,14 @@ def post_assign_plan(body: AssignPlanBody, authorization: str = Header(default="
         workspace_id = matches[0]
 
     expires_at = int(time.time() + body.duration_days * 86400) if body.duration_days else None
-    billing = upsert_billing(
-        workspace_id,
-        {"plan": plan, "status": "active", "plan_expires_at": expires_at},
-    )
+    patch: dict[str, Any] = {"plan": plan, "status": "active", "plan_expires_at": expires_at}
+    if body.entitlement_overrides is not None:
+        patch["entitlement_overrides"] = body.entitlement_overrides
+    billing = upsert_billing(workspace_id, patch)
     return {
         "workspace_id": workspace_id,
         "plan": plan,
         "expires_at": expires_at,
-        "limits": PLAN_LIMITS[plan],
+        "limits": _limits_from_billing(billing),
         "billing": billing,
     }

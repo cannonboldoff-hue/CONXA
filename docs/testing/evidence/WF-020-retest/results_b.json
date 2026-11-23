@@ -1,0 +1,9 @@
+{
+ "20.2": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "no B data in any A response; no write reached B"
+  }
+ ]
+}

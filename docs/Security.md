@@ -49,6 +49,7 @@ This document is the detailed reference for known security gaps across all three
 | [SG-22](#sg-22-clipboard-steps-and-the-data-an-agent-span-is-shown) | Clipboard steps and the data an agent span is shown | Runtime | Low (mitigated) | `runtime/app/handlers.js`, `runtime/app/agent_span.js` |
 | [SG-21](#sg-21-recording-video-is-sent-to-twelvelabs-through-the-conxa-cloud) | Recording video is sent to TwelveLabs through the Conxa Cloud | Studio / Cloud API | Medium (mitigated) | `conxa_compile/video/prepare.py`, `app/api/video_routes.py`, `app/services/twelvelabs.py` |
 | [SG-20](#sg-20-popup-shape-telemetry-app_obs-leaves-the-customer-machine) | Popup-shape telemetry (`app_obs`) leaves the customer machine | Runtime / Cloud API | Low (mitigated) | `runtime/app/scrub.js`, `runtime/app/app_knowledge.js`, `app/api/app_graph_routes.py` |
+| [SG-28](#sg-28-a-company-id-in-the-url-or-body-was-trusted-for-writes) | A company id in the URL or body was trusted for writes | Cloud API | Critical ✅ Fixed | `app/api/deps.py`, `app/api/publish_routes.py`, `app/api/tracking_routes.py`, `app/api/cashfree_routes.py`, `app/api/security.py` |
 | [SG-27](#sg-27-studios-saved-sign-ins-were-plain-files) | Studio's saved sign-ins were plain files | Studio | Medium ✅ Fixed | `conxa_compile/saved_session.py`, `backend.py` |
 
 ---
@@ -861,3 +862,46 @@ The following gaps from `TRD.md §17` overlap with security concerns and are tra
 | Installer download fully public | Covered by SG-07 above |
 | No device/runtime registration | Resolved — `runtime_registrations` KV + `GET /api/v1/telemetry/runtimes` (TRD §3.2, Sales-Blockers.md 2.1); residual per-user gap is SG-13 |
 | `SKILL_TRACKING_HMAC_SECRET` optional | Covered by SG-05 above |
+
+## SG-28 — A Company Id In The URL Or Body Was Trusted For Writes
+
+**Severity:** Critical ✅ Fixed (2026-11-23)
+**Component:** Cloud API — `app/api/deps.py` (`own_workspace_slug`), `publish_routes.py`, `tracking_routes.py`, `cashfree_routes.py`, `security.py`, the deleted `job_routes.py`
+
+### Description
+
+Found by test WF-20 (two companies, two sign-in tokens). Several routes took a company id from the URL or body and
+never compared it with the caller's own workspace, so any signed-in user of company A could act on company B:
+
+- **Jobs:** list, read, cancel and event-stream routes over one process-wide job store, so A read B's video-analysis
+  results and could cancel B's work.
+- **Installer upload:** the legacy `POST /workflows/{slug}/installer/upload` used the path slug as given, so A could
+  replace B's installer. Shipped Studios send a generation value (`v2`) in that spot, so every company's
+  auto-uploaded installer landed in one shared `v2` slot, served to whoever asked.
+- **Governance policy:** `PUT /tracking/{workspace_id}/policy` wrote under the path id, so A could set B's host
+  deny-list and `enforce` flag. It was also stored under the raw id although the runtime reads it by slug.
+- **Subscription verify:** `POST /subscriptions/verify` took any subscription id and upgraded the caller whatever its
+  status, so A could upgrade itself with B's id or with its own never-paid one.
+- **Webhooks:** the Cashfree webhooks were missing from the public list (so real deliveries were refused 401), and
+  once public would have accepted a missing signature, or any request when no secret was set.
+
+### Fix Applied
+
+- One helper, `deps.own_workspace_slug(principal, path_value)`: the value must equal the caller's workspace id or its
+  slug, else 403 `workspace_forbidden`. It returns the slug, which is what every write stores under.
+- Generic job routes deleted (nothing called them; Studio polls the owner-checked `GET /video/analyze/{id}`).
+- Installer upload and its legacy version list use the helper; `v1`/`v2` mean "my own slug" so shipped Studios keep
+  working. Admin of the owning workspace only.
+- Policy PUT uses the helper and stores under the slug. The runtime's policy GET is public at the gate (it sends only
+  `X-Tracking-Token`, which its handler checks); PUT stays behind sign-in.
+- Subscription verify checks the stored owner (403 `subscription_forbidden`, before Cashfree is called) and upgrades
+  only on `ACTIVE` (400 `subscription_not_active`).
+- Both webhooks are public and fail closed: no secret configured, 503 `webhook_not_configured`; missing or wrong
+  signature, 400 `invalid_signature`.
+- Tested in `conxa-cloud/tests/test_cross_company_isolation.py` (two principals, B's data unchanged after each refusal).
+
+### Residual risk
+
+- An installer may already sit in the shared `v2`/`v1` slot on a deployed server, and customers sent a
+  `/installers/v2` link may have received another company's file. Ops must check and remove it (TODO).
+- SG-21's statement stays true: a video job result is readable only by the workspace that started it.

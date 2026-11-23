@@ -1,0 +1,207 @@
+== WF-20 F retest: fixes + OpenAPI sweep (A = org_a, B = org_b, C = org_c, all Pro) ==
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_a","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_retent...
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_b","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_retent...
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"org_c","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_retent...
+
+-- seed B --
+  [publish b_secret_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_b","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_b/delta","sync_token":"HoNH2eo2_x2Jk9Eia1c89E9NzfoS4TS8WLhkmUYdm4s","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_b/events","tracking_to...
+  [publish a_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_a","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_a/delta","sync_token":"VEVgNuo7JVvqwRBZwmJJWeKQfLyRcrMfgIv3G3Zy7BM","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_a/events","tracking_to...
+  [B create workflow] POST /api/v1/workflows -> 200 {"workflow":{"id":"80df6720-b629-40e8-b9c4-5e22f3a8f501","slug":"b-secret-wf-80df6720","name":"B-SECRET-WF","owner_user_id":"user_b","workspace_id":"org_b","group_id":"47b3eb20-5ec3-445f-9973-10eb92d86360","target_url":"https://b.example","protected_url":"","p...
+  [B app-graph] PUT /api/v1/app-graphs/b.example/contributions/skill:b_secret_skill -> 200 {"ok":true}
+  [B own policy] PUT /api/v1/tracking/org_b/policy -> 200 {"policy_version":1,"workspace_id":"org_b","key_id":"conxa-manifest-1","issued_at":1795391614,"expires_at":1795996414,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":["b-original.example"],"signature":""}
+  [ok ] 20.2 B can write its own policy by slug 
+  [installer upload] POST /api/v1/workflows/installer/upload?version=1.0.0&release_notes=x&distribution=internal -> 200 {"slug":"org_b","version":"1.0.0","sha256":"bca27cd50cd998e4b7c19c77d87e0817699499f90ac1fa38ee69110c00f029c5","size":23,"download_url":"/api/v1/installers/org_b","version_download_url":"/api/v1/installers/org_b/versions/1.0.0"}
+  [B telemetry] POST /api/v1/tracking/org_b/events -> 202 {"ok":true}
+  [B video job] POST /api/v1/video/analyze?duration_s=5 -> 200 {"job_id":"job_7aba2227665d4868898d4219aa047f28"}
+  B snapshot taken: installer='MZ-B-ORIGINAL-INSTALLER' policy_version=1 job=succeeded
+
+==== 20.2 repro 1: generic jobs routes are gone ====
+  [A] GET /api/v1/jobs -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 A GET /api/v1/jobs.. gone 
+  [A] GET /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28 -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 A GET /api/v1/jobs/.. gone 
+  [A] GET /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28/events -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 A GET /api/v1/jobs/.. gone 
+  [A] POST /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28/cancel -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 A POST /api/v1/jobs/.. gone 
+  [B] GET /api/v1/jobs -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 B GET /api/v1/jobs.. gone 
+  [B] GET /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28 -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 B GET /api/v1/jobs/.. gone 
+  [B] GET /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28/events -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 B GET /api/v1/jobs/.. gone 
+  [B] POST /api/v1/jobs/job_7aba2227665d4868898d4219aa047f28/cancel -> 404 {"detail":"Not Found"}
+  [ok ] 20.2 B POST /api/v1/jobs/.. gone 
+  [B own job] GET /api/v1/video/analyze/job_7aba2227665d4868898d4219aa047f28 -> 200 {"job_id":"job_7aba2227665d4868898d4219aa047f28","status":"succeeded","error":null,"result":{"segments":[{"action_kind":"click","visible_target":"SECRET screen text: Quarterly salary sheet","intent":"open","purpose":"p","screen_before":"a","screen_after":"b","...
+  [ok ] 20.2 B still reads own video-analysis job 
+  [A reading B's video job via owner-checked route] GET /api/v1/video/analyze/job_7aba2227665d4868898d4219aa047f28 -> 404 {"detail":"unknown_job_id","message":"We couldn't find that job. It may have already finished or been removed.","request_id":"af99d116305f7aa362dd87c5"}
+  [ok ] 20.2 A cannot read B's video job via the owner-checked route 
+
+==== 20.2 repro 2: installer ====
+  [installer upload] POST /api/v1/workflows/org_b/installer/upload?version=9.9.9&release_notes=x&distribution=internal -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"ede0088a4a10a8c0eab23d22"}
+  [ok ] 20.2 A -> POST /workflows/org_b/installer/upload (403 workspace_forbidden)
+  [installer upload] POST /api/v1/workflows/ORG_B/installer/upload?version=9.9.8&release_notes=x&distribution=internal -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"d4779a74dc8c5699b46664b3"}
+  [ok ] 20.2 A -> POST /workflows/ORG_B/... (case variant) (403 workspace_forbidden)
+  [ok ] 20.2 B public download unchanged (200 'MZ-B-ORIGINAL-INSTALLER')
+  [A legacy versions for org_b] GET /api/v1/workflows/org_b/installer/versions -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"ed0088478f9a8d5eb1f53b25"}
+  [ok ] 20.2 A -> GET /workflows/org_b/installer/versions (403)
+  [A legacy versions own slug] GET /api/v1/workflows/org_a/installer/versions -> 200 {"slug":"org_a","versions":[]}
+  [ok ] 20.2 A own legacy versions list works (200)
+  [A legacy versions v2 = own] GET /api/v1/workflows/v2/installer/versions -> 200 {"slug":"org_a","versions":[]}
+  [ok ] 20.2 A GET /workflows/v2/installer/versions means own slug (200)
+  [installer upload] POST /api/v1/workflows/v2/installer/upload?version=7.0.0&release_notes=x&distribution=internal -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"c2b69156a1b80c3ceb0369d6"}
+  [ok ] 20.2 member (non-admin) upload via v2 (Studio legacy path) (403 admin_role_required)
+  [installer upload] POST /api/v1/workflows/org_a/installer/upload?version=7.0.0&release_notes=x&distribution=internal -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"4308f24c9564f962761a127b"}
+  [ok ] 20.2 member (non-admin) upload via own slug legacy (403 admin_role_required)
+  [installer upload] POST /api/v1/workflows/installer/upload?version=7.0.0&release_notes=x&distribution=internal -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"d9851fc41789588095e5418f"}
+  [ok ] 20.2 member (non-admin) upload via versioned /workflows/installer/upload (403 admin_role_required)
+  [member versions] GET /api/v1/workflows/v2/installer/versions -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"068bda930aa37bca706b8a96"}
+  [ok ] 20.2 member cannot list installer versions (403)
+  [installer upload] POST /api/v1/workflows/v2/installer/upload?version=2.0.0&release_notes=x&distribution=internal -> 200 {"slug":"org_a","version":"2.0.0","sha256":"0d37612324e3341de67c0108647222154843e5e1e87f750f24c292aa05b3b53a","size":11,"download_url":"/api/v1/installers/org_a","version_download_url":"/api/v1/installers/org_a/versions/2.0.0"}
+  [ok ] 20.2 A admin legacy /workflows/v2/installer/upload works (200 slug=org_a)
+  [ok ] 20.2 A's bytes in A's own slot (200 'MZ-A-V2-OWN')
+  [public download of the old shared v2 slot] GET /api/v1/installers/v2 -> 404 {"detail":"installer_not_published","message":"No installer has been uploaded for this yet.","request_id":"749ad3cd4772e00d6ccdc49f"}
+  [ok ] 20.2 no shared v2 slot (GET /installers/v2 404) (404)
+  [installer upload] POST /api/v1/workflows/v2/installer/upload?version=2.0.0&release_notes=x&distribution=internal -> 200 {"slug":"org_c","version":"2.0.0","sha256":"ba2c9f5b7b595c5da519c2e60ce5f4ae5faa3f08860d33ba7b0235a9680f24c9","size":11,"download_url":"/api/v1/installers/org_c","version_download_url":"/api/v1/installers/org_c/versions/2.0.0"}
+  [ok ] 20.2 C's legacy v2 upload lands in C's slot (not shared, same version number not a 409) (200 org_c)
+  [ok ] 20.2 A's installer unchanged after C's upload 
+  [ok ] 20.2 C's slot holds C's bytes 
+  [installer upload] POST /api/v1/workflows/v1/installer/upload?version=2.0.1&release_notes=x&distribution=internal -> 200 {"slug":"org_a","version":"2.0.1","sha256":"1694cf54e99dcdaa8015168c2d3f0c4188478ad025aa7622691b552b656927bb","size":7,"download_url":"/api/v1/installers/org_a","version_download_url":"/api/v1/installers/org_a/versions/2.0.1"}
+  [ok ] 20.2 v1 means own slug too 
+
+==== 20.2 repro 3: governance policy ====
+  [A PUT B's policy] PUT /api/v1/tracking/org_b/policy -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"bda75a24aa6666acdcba7293"}
+  [ok ] 20.2 A PUT /tracking/org_b/policy (403 workspace_forbidden)
+  [A PUT ORG_B policy] PUT /api/v1/tracking/ORG_B/policy -> 403 {"detail":"workspace_forbidden","message":"That belongs to a different workspace.","request_id":"c2374c99fbd1801c08f40d51"}
+  [ok ] 20.2 A PUT /tracking/ORG_B/policy (403)
+  [ok ] 20.2 B's policy unchanged (version 1)
+  [B member PUT own policy] PUT /api/v1/tracking/org_b/policy -> 403 {"detail":"admin_role_required","message":"You need admin access in this workspace to do that.","request_id":"2a56d1cd0358707267055d85"}
+  [ok ] 20.2 member (non-admin) cannot PUT policy (403)
+  [admin->pro] POST /api/v1/entitlements/admin/billing -> 200 {"workspace_id":"Org_Mix","plan":"pro","expires_at":null,"limits":{"seats":10,"machines":10,"execute_seats":100,"compile_credits":500,"human_edit_tokens":10000000,"trial_days":null,"distribution":"external","white_label":false,"ops_tier":"full","analytics_rete...
+  [publish mix_skill@1.0.0] POST /api/v1/workflows/publish -> 200 {"slug":"org_mix","version":"1.0.0","files_written":1,"sync_url":"/api/v1/skill-packs/org_mix/delta","sync_token":"9r6tw2-rxAI6Yg_TShXMkvxYZAJQDXBHP6nuibXFPOg","tracking":{"enabled":true,"tracking_url":"http://127.0.0.1:8140/api/tracking/org_mix/events","track...
+  [mixed-case own id PUT] PUT /api/v1/tracking/Org_Mix/policy -> 200 {"policy_version":1,"workspace_id":"org_mix","key_id":"conxa-manifest-1","issued_at":1795391638,"expires_at":1795996438,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":["mix.example"],"signature":""}
+  [runtime fetch by slug] GET /api/v1/tracking/org_mix/policy -> 200 {"policy_version":1,"workspace_id":"org_mix","key_id":"conxa-manifest-1","issued_at":1795391638,"expires_at":1795996438,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":["mix.example"],"signature":""}
+  [ok ] 20.2 mixed-case own id stored under slug, readable by runtime (slug=org_mix 200 200)
+
+-- runtime policy fetch (X-Tracking-Token only, no sign-in) --
+  [token only, right token] GET /api/v1/tracking/org_b/policy -> 200 {"policy_version":1,"workspace_id":"org_b","key_id":"conxa-manifest-1","issued_at":1795391614,"expires_at":1795996414,"enforce":false,"require_receipt":false,"windows":[],"denied_hosts":["b-original.example"],"signature":""}
+  [ok ] 20.2/f policy GET token-only 200 
+  [wrong token] GET /api/v1/tracking/org_b/policy -> 401 {"detail":"invalid_tracking_token","message":"invalid_tracking_token","request_id":"3b359757c52c061c4184faa5"}
+  [ok ] 20.2/f wrong token 401 invalid_tracking_token (401 invalid_tracking_token)
+  [no token, no bearer] GET /api/v1/tracking/org_b/policy -> 401 {"detail":"invalid_tracking_token","message":"invalid_tracking_token","request_id":"7d9253a4d501a4c049aa4916"}
+  [ok ] 20.2/f no token 401 (401 invalid_tracking_token)
+  [A's tracking token on B's policy] GET /api/v1/tracking/org_b/policy -> 401 {"detail":"invalid_tracking_token","message":"invalid_tracking_token","request_id":"221457ced3898c07a34a3b42"}
+  [ok ] 20.2/f A's tracking token cannot read B's policy (401 invalid_tracking_token)
+  [A bearer only, B's policy] GET /api/v1/tracking/org_b/policy -> 401 {"detail":"invalid_tracking_token","message":"invalid_tracking_token","request_id":"1af37650d5f04b343558c5da"}
+  [ok ] 20.2/f A's bearer alone cannot read B's policy (401 invalid_tracking_token)
+  [PUT with tracking token only (PUT must stay behind sign-in)] PUT /api/v1/tracking/org_b/policy -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"d8907c07651cf0682963ad07"}
+  [ok ] 20.2/f policy PUT with tracking token only is 401 (401)
+  A plan before verify phase: pro
+
+==== subscription verify cross-company ====
+  [seed kv cashfree_sub_workspace subref_b {"workspace_id": "org_b", "tier": "starter"}] -> kv set cashfree_sub_workspace subref_b
+  [seed kv cashfree_sub_workspace subref_a {"workspace_id": "org_a", "tier": "starter"}] -> kv set cashfree_sub_workspace subref_a
+  [A verifies B's subscription id] POST /api/v1/subscriptions/verify -> 403 {"detail":"subscription_forbidden","message":"That subscription belongs to a different workspace.","request_id":"2a908a5e2dbb2ee393084fcc"}
+  [ok ] 20.2 A verify B's subscription -> 403 subscription_forbidden (403 subscription_forbidden)
+  [A verifies unknown id] POST /api/v1/subscriptions/verify -> 403 {"detail":"subscription_forbidden","message":"That subscription belongs to a different workspace.","request_id":"04cbf63fd17a878b18b89b12"}
+  [ok ] 20.2 unknown subscription id -> 403 (403 subscription_forbidden)
+  [A verifies own mapped id, no Cashfree creds in test env] POST /api/v1/subscriptions/verify -> 500 {"detail":"Cashfree credentials not configured","message":"Cashfree credentials not configured","request_id":"db040248df7a7020a3b9f529"}
+  own mapped id with no Cashfree credentials -> 500 Cashfree credentials not configured (ACTIVE-only logic needs Cashfree: covered by unit test, BLOCKED here)
+  [ok ] 20.2 own id passes the owner check (fails later on missing Cashfree creds, never upgrades) (500)
+  [ok ] 20.2 A's plan unchanged by verify calls (pro->pro)
+  [no token] POST /api/v1/subscriptions/verify -> 401 {"detail":"missing_bearer_token","message":"You need to be signed in to do that.","request_id":"c5965250a56be51d8dfd0b48"}
+  [ok ] 20.1 verify without token 401 
+
+==== webhooks (no bearer) ====
+  [no secret configured, no bearer] POST /api/v1/subscriptions/webhooks/cashfree -> 503 {"detail":"webhook_not_configured","message":"Payment notifications aren't set up on this server.","request_id":"f2af7cd9328c12d50396be0c"}
+  [ok ] webhook cashfree no secret -> 503 webhook_not_configured (not 401 by the gate) (503 webhook_not_configured)
+  [GET] GET /api/v1/subscriptions/webhooks/cashfree -> 405 {"detail":"Method Not Allowed"}
+  [ok ] webhook cashfree GET not served (405)
+  [no secret configured, no bearer] POST /api/v1/subscriptions/webhooks/cashfree-orders -> 503 {"detail":"webhook_not_configured","message":"Payment notifications aren't set up on this server.","request_id":"448afb3107cd0b54a5a29903"}
+  [ok ] webhook cashfree-orders no secret -> 503 webhook_not_configured (not 401 by the gate) (503 webhook_not_configured)
+  [GET] GET /api/v1/subscriptions/webhooks/cashfree-orders -> 405 {"detail":"Method Not Allowed"}
+  [ok ] webhook cashfree-orders GET not served (405)
+  [secret set, unsigned] POST /api/v1/subscriptions/webhooks/cashfree -> 400 {"detail":"invalid_signature","message":"That payment notification couldn't be verified.","request_id":"c2c6274ce9ae663cc16c922b"}
+  [ok ] webhook subscription webhook unsigned -> 400 invalid_signature (400 invalid_signature)
+  [secret set, wrong signature] POST /api/v1/subscriptions/webhooks/cashfree -> 400 {"detail":"invalid_signature","message":"That payment notification couldn't be verified.","request_id":"87a5e9305aad6a9aa025503e"}
+  [ok ] webhook subscription webhook wrong signature -> 400 (400 invalid_signature)
+  [seed kv cashfree_sub_workspace subref_w {"workspace_id": "org_w", "tier": "starter"}] -> kv set cashfree_sub_workspace subref_w
+  [secret set, correctly signed] POST /api/v1/subscriptions/webhooks/cashfree -> 200 {"received":true}
+  [ok ] webhook subscription webhook signed -> 200 (200 None)
+  [ok ] webhook signed webhook upgraded the mapped workspace only (org_w plan=starter)
+  [orders, unsigned] POST /api/v1/subscriptions/webhooks/cashfree-orders -> 400 {"detail":"invalid_signature","message":"That payment notification couldn't be verified.","request_id":"8e8732fc7a4a606b3b92587d"}
+  [ok ] webhook orders webhook unsigned -> 400 invalid_signature (400 invalid_signature)
+  [orders, wrong sig] POST /api/v1/subscriptions/webhooks/cashfree-orders -> 400 {"detail":"invalid_signature","message":"That payment notification couldn't be verified.","request_id":"86ca746ecc170c727e0bac6f"}
+  [ok ] webhook orders webhook wrong signature -> 400 (400 invalid_signature)
+  [orders, correctly signed, ignored event] POST /api/v1/subscriptions/webhooks/cashfree-orders -> 200 {"received":true}
+  [ok ] webhook orders webhook signed -> 200 (200 None)
+  A plan after webhook phase: pro
+  A plan before sweep: pro; B plan: pro
+
+==== OpenAPI sweep: every route taking an id, A's token against B's ids ====
+  [ok ] sweep OpenAPI has no /jobs routes 
+  5xx: POST /api/v1/subscriptions/webhooks/cashfree -> 503 {"detail": "webhook_not_configured", "message": "Payment notifications aren't set up on this server.
+  5xx: POST /api/v1/subscriptions/webhooks/cashfree-orders -> 503 {"detail": "webhook_not_configured", "message": "Payment notifications aren't set up on this server.
+  5xx: GET /readyz -> 503 {"status": "unavailable", "database": "filesystem", "error": "auth_required but no database configur
+  plan flips during sweep: []; A plan after: pro
+  115 calls over 86 OpenAPI paths
+  status histogram: {200: 51, 400: 17, 401: 8, 403: 4, 404: 18, 422: 14, 503: 3}
+  every 2xx (A's token, B's ids) listed for review:
+    GET / -> 200 {"service": "conxa_cloud"}
+    GET /api/v1/app-graphs -> 200 {"apps": []}
+    GET /api/v1/app-graphs/b.example/contributions -> 200 {"app_key": "b.example", "contributions": []}
+    DELETE /api/v1/app-graphs/b.example/contributions/skill:b_secret_skill -> 200 {"ok": true}
+    GET /api/v1/app-graphs/b.example/field -> 200 {"app_key": "b.example", "popups": []}
+    GET /api/v1/audit-events -> 200 {"audit_events": [{"id": "evt_1795391634138", "workspace_id": "org_a", "user_id": "user_a", "action": "installer_upload", "resource_type": "
+    GET /api/v1/billing/subscription -> 200 {"subscription": {"plan": "pro", "status": "active", "plan_expires_at": null, "updated_at": 1795391607.3108735, "trial_started_at": 17953916
+    GET /api/v1/dashboard -> 200 {"workspace": {"id": "org_a", "slug": "org-a", "name": "Workspace", "role": "admin"}, "stats": {"skills": 0, "packages": 0, "workflows": 0, 
+    GET /api/v1/entitlements/current -> 200 {"workspace_id": "org_a", "plan": "pro", "period": "2026-11", "reset_at": "2026-12-01T00:00:00Z", "trial_ends_at": null, "trial_expired": fa
+    GET /api/v1/entitlements/execute-grants -> 200 {"grants": []}
+    POST /api/v1/entitlements/execute-grants -> 200 {"grant_id": "VUSAnMtdmjWmOg7gVKPRp5oSwHtLNEvCa-WMU7lHGMA", "workspace_id": "org_a", "email": "b@t.test", "status": "pending", "granted_at":
+    POST /api/v1/entitlements/execute-grants/revoke -> 200 {"grant_id": "b-grant", "revoked": true}
+    GET /api/v1/entitlements/installer-domain -> 200 {"domain": ""}
+    GET /api/v1/entitlements/machines -> 200 {"machines": []}
+    GET /api/v1/execute/contexts -> 200 {"contexts": [{"workspace_id": "org_a", "workspace_name": "org_a", "kind": "member", "credits_remaining": 10000000}], "active_workspace_id":
+    GET /api/v1/installers/org_b -> 200 MZ-B-ORIGINAL-INSTALLER
+    GET /api/v1/installers/org_b/versions/1.0.0 -> 200 MZ-B-ORIGINAL-INSTALLER
+    GET /api/v1/legal/acceptance -> 200 {"version": "2026-08-29", "accepted": false, "accepted_at": null, "record_id": null}
+    GET /api/v1/legal/acceptances -> 200 {"version": "2026-08-29", "acceptances": []}
+    GET /api/v1/legal/current -> 200 {"version": "2026-08-29", "documents": [{"id": "terms", "title": "Terms And Conditions", "url": "https://www.conxa.in/docs/terms", "sha256":
+    GET /api/v1/me -> 200 {"user": {"id": "user_a", "email": "a@t.test", "name": null, "auth_provider": "clerk"}, "workspace": {"id": "org_a", "slug": "org-a", "name"
+    GET /api/v1/subscriptions/addons -> 200 {"addons": [{"tier": "credits_addon_20", "name": "+20 compiles", "amount": 3999, "currency": "INR", "period": "one-time", "features": ["+20 
+    GET /api/v1/subscriptions/plans -> 200 {"plans": [{"tier": "free", "name": "Free", "amount": 0, "currency": "INR", "period": null, "features": ["1 seat", "1 machine", "25 compile 
+    POST /api/v1/telemetry/runtime-start -> 200 {"ok": true}
+    GET /api/v1/telemetry/runtimes -> 200 {"registrations": [], "stale_count": 0, "version_distribution": {}, "total": 0, "limit": 100, "offset": 0}
+    GET /api/v1/tracking/activity -> 200 {"runs": [], "next_cursor": null, "generated_at": 1795391742814}
+    GET /api/v1/tracking/companies -> 200 {"companies": [{"company": "org_a", "display_name": "org_a", "workspace_id": "org_a", "run_count": 0, "last_seen": 1795391612.5288815}], "to
+    GET /api/v1/tracking/dashboard -> 200 {"range": "7d", "metrics": {"total_installs": 0, "active_users": 0, "active_companies": 0, "total_executions": 0, "executions_last_24h": 0, 
+    GET /api/v1/tracking/diagnostics -> 200 {"workspace_id": "org_a", "user_id": "user_a", "personal_workspace_id": "personal_user_a", "identity_source": "clerk_jwt", "proxy_identity_t
+    GET /api/v1/tracking/drift -> 200 {"queue": [], "total": 0, "pre_exec": [], "pre_exec_total": 0}
+    GET /api/v1/tracking/roi-assumptions -> 200 {"default_minutes": 8, "hourly_rate": 65, "currency": "USD", "per_workflow": {}}
+    PUT /api/v1/tracking/roi-assumptions -> 200 {"default_minutes": 8, "hourly_rate": 65, "currency": "USD", "per_workflow": {}, "updated_at": 1795391745.240288, "updated_by": "user_a"}
+    GET /api/v1/tracking/workflows/org_b/b_secret_skill -> 200 {"company": "org_b", "workflow": "b_secret_skill", "range": "7d", "granularity": "day", "generated_at": 1795391745588, "summary": null, "ser
+    GET /api/v1/tracking/org_b/reconcile -> 200 {"range": "30d", "workspace_id": "org_b", "runs_started": 0, "runs_completed": 0, "runs_abandoned": 0, "runs_in_flight": 0, "abandoned_runs"
+    GET /api/v1/tracking/org_b/runs -> 200 {"runs": [], "total": 0, "workspace_id": "org_a", "total_all_workspaces": 1, "hidden_workspace_runs": 1}
+    GET /api/v1/usage -> 200 {"workspace_id": "org_a", "skills": 0, "packages": 0, "workflows": 0, "jobs": 1, "active_jobs": 0, "metrics": {"recordings_started": 0, "rec
+    POST /api/v1/usage/compile/reserve -> 200 {"reservation_id": "b-res", "status": "reserved", "remaining_compile_credits": 499}
+    GET /api/v1/workflows -> 200 {"workflows": []}
+    GET /api/v1/workflows/installer/versions -> 200 {"slug": "org_a", "versions": [{"slug": "org_a", "version": "2.0.1", "release_notes": "x", "filename": "org_a-Setup.exe", "sha256": "1694cf5
+    GET /api/v1/workflows/skill-packs -> 200 {"skill_packs": [{"workspace_id": "org_a", "display_name": "org_a", "status": "idle", "build": {"last_built_at": 1795391612.8016608, "output
+    GET /api/v1/workflows/skill-packs/current -> 200 {"skill_pack": {"workspace_id": "org_a", "display_name": "org_a", "status": "idle", "build": {"last_built_at": 1795391612.8016608, "output_p
+    GET /api/v1/workflows/v1/deployments -> 200 {"slug": "org_a", "skill_slug": "b_secret_skill", "desired_version": null, "machines": [], "summary": {"total": 0, "up_to_date": 0, "pending
+    GET /api/v1/workflows/v1/groups -> 200 {"slug": "org_a", "groups": [{"group_id": "", "group_name": "", "workflows": [{"skill_slug": "a_skill", "workflow_name": "a_skill", "current
+    GET /api/v1/workflows/v1/releases/events -> 200 {"slug": "org_a", "skill_slug": "b_secret_skill", "events": []}
+    POST /api/v1/workflows/v1/releases/preview -> 200 {"slug": "org_a", "skill_slug": "b_secret_skill", "previous_version": null, "proposed_version": null, "version_valid": false, "version_avail
+    GET /api/v1/workflows/v1/skill-packs/versions -> 200 {"slug": "org_a", "skill_slug": "b_secret_skill", "versions": [], "current_stable": null}
+    GET /api/v1/workflows/org_b/skill-packs/versions -> 200 {"slug": "org_a", "skill_slug": "b_secret_skill", "versions": [], "current_stable": null}
+    GET /api/v1/workspace/llm-key -> 200 {"configured": false}
+    DELETE /api/v1/workspace/llm-key -> 200 {"deleted": true}
+    GET /api/v1/workspaces/current -> 200 {"workspace": {"id": "org_a", "slug": "org-a", "name": "Workspace", "role": "admin"}}
+    GET /healthz -> 200 {"status": "ok"}
+  [ok ] sweep no 2xx response carries B's data []
+  [ok ] sweep B's state identical before/after the sweep (changed: [])
+  [CONTROL B's own sync token] GET /api/v1/skill-packs/org_b/delta -> 200 {"skills":[]}
+  [ok ] sweep control: B's own sync token still works 
+
+FAILS: []
+  >>> RESULT 20.2: PASS  - jobs routes gone; installer/policy/verify cross-company refused; B unchanged; sweep clean

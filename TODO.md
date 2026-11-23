@@ -28,18 +28,18 @@ Counts are still-open items only.
 
 | Tier | When | Remaining |
 |---|---|---|
-| PILOT — P0 · Must fix | Before pilot | 12 |
+| PILOT — P0 · Must fix | Before pilot | 13 |
 | PILOT — P1 · Should fix | Before pilot | 38 |
 | PILOT — P2 · Verify live & polish | Before pilot | 37 |
 | LAUNCH — P1 · Required | Before launch | 12 |
 | LAUNCH — P2 · Should have | Before launch | 53 |
 | AFTER LAUNCH | After launch | 35 |
 | PARKED | Only if it starts to hurt | 18 |
-| **Total** | | **205** |
+| **Total** | | **206** |
 
 ---
 
-## PILOT — P0: Must fix before any pilot customer touches it (12 remaining)
+## PILOT — P0: Must fix before any pilot customer touches it (13 remaining)
 
 Things that corrupt a workflow without telling anyone, stop releases and updates from reaching customers, mix up accounts, or break the Record → Compile → Test → Publish → Install → Run loop. Fixes first, then the full test passes that prove them.
 
@@ -50,6 +50,13 @@ Things that corrupt a workflow without telling anyone, stop releases and updates
 - **Fix (~20 lines, not done):** have `deps_manifest()` read `_component("conxa_app")` / `_component("conxa_runtime")` through the existing `_component()` / `_file_url()` / `_file_sha256()` helpers that `runtime_app_manifest()` (`updates_routes.py:371`) already uses, falling back to the env vars only when KV is empty. Then publishing a release updates Studio automatically, the same way it already updates the runtime self-updater.
 - **Also:** `SHIP-GUIDE.md:356` reads "Nothing promotes automatically the way conxa-app/conxa-runtime do" — true for the runtime self-updater, false for Build Studio. Correct it in the same pass.
 - **Partially mitigated 2026-09-20:** the Studio no longer hides the failure (`App.tsx` renders the dep error instead of dismissing the banner), so a future mismatch is at least visible. The drift itself is untouched.
+
+### OPS-1 — Purge installers that landed in the shared `v1`/`v2` slot on the deployed server (SG-28)
+- **Category:** Ops (not code; do by hand after the SG-28 fix is deployed)
+- **Description:** Before the SG-28 fix, Studio's auto-upload sent a generation value (`v2`) where the legacy route expects a company slug, so every company's uploaded installer landed in one shared slot and `GET /api/v1/installers/v2` served whoever uploaded last. After deploy, check production storage for `data/installers/v1/` and `data/installers/v2/` and for `installer_versions__v1` / `installer_versions__v2` KV rows, and remove them. Customers who were sent an `/installers/v2` link may have received another company's installer: tell those vendors.
+- **Why required:** the leftover file is still downloadable and may belong to a different company than the person downloading it.
+- **Dependencies:** the SG-28 fix is deployed (otherwise the slot refills). Do not touch data from this repo or from tests.
+- **Success criteria:** `GET /api/v1/installers/v2` and `/installers/v1` return 404 in production; each company's own installer is served from its own slug.
 
 ### UPD-5 — Set `CLOUD_API_URL`/`CLOUD_ADMIN_TOKEN` repo config so runtime releases actually publish
 - **Category:** Auto Updates
@@ -1348,7 +1355,7 @@ Scale, hygiene, test coverage, documentation and the second wave of reliability 
 
 ### CLOUD-16 — Untested cloud-backend routers
 - **Category:** Cloud
-- **Description:** Discovered during the 2026-09-17 conxa-cloud streamlining pass. Four routers/modules have zero test coverage: `app/api/job_routes.py` (4 endpoints), `app/services/jobs.py` (149 lines, never imported by a test), `app/api/workflow_routes.py` (6 endpoints — list/create/delete workflows, SkillPack list/detail), `app/api/machine_binding.py`, `app/api/product_ownership.py`, and the `POST /entitlements/admin/plan` branch of `entitlement_routes.py`.
+- **Description:** Discovered during the 2026-09-17 conxa-cloud streamlining pass. Five routers/modules have zero test coverage (`app/api/job_routes.py` was deleted 2026-11-23, SG-28): `app/services/jobs.py` (149 lines, never imported by a test), `app/api/workflow_routes.py` (6 endpoints — list/create/delete workflows, SkillPack list/detail), `app/api/machine_binding.py`, `app/api/product_ownership.py`, and the `POST /entitlements/admin/plan` branch of `entitlement_routes.py`.
 - **Why required:** these are real, reachable routes with no regression net — a change to any of them (including an unrelated refactor that happens to import through the same module) can silently break behavior with no test to catch it, unlike almost everything else in the 1550+-test suite.
 - **Technical value:** closing this gap is mechanical (the existing `TestClient(app)` pattern used throughout `tests/test_*.py` covers all of these), not a design question.
 - **Dependencies:** none.

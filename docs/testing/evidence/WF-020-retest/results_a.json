@@ -1,0 +1,30 @@
+{
+ "20.1": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "11 bad-token kinds x 114 routes: all 401 except 19 public-by-design routes; 0 5xx, 0 stack traces"
+  }
+ ],
+ "20.3": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "org-admin JWT, member JWT, no/garbage/wrong/empty token refused (401) on all 3 admin routes; real admin token works; plan unchanged"
+  }
+ ],
+ "20.4": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "6 LLM proxy routes x (no/garbage/expired token) -> 401 even with the X-Conxa-Client header; no provider call made"
+  }
+ ],
+ "20.5": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "outside /api/v1: ['/', '/api/tracking/{workspace_id}/events', '/healthz', '/readyz']"
+  }
+ ]
+}

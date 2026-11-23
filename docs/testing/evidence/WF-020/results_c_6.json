@@ -1,0 +1,9 @@
+{
+ "20.6": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free 25 / Starter 200 / Pro 500 caps -> 402 compile_credit_limit_exceeded at cap+1; same id twice counts once; release returns; reservation expired after TTL; Enterprise unlimited"
+  }
+ ]
+}

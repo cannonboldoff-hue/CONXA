@@ -394,6 +394,11 @@ async def verify_subscription(
     subscription_id = body.get("subscription_id", "")
     if not subscription_id:
         raise HTTPException(status_code=400, detail="missing_fields")
+    # Same owner check as add-on verify: a subscription id from the body is only
+    # honoured if checkout stored it for this caller's workspace.
+    mapping = db_get("cashfree_sub_workspace", subscription_id) or {}
+    if str(mapping.get("workspace_id") or "") != principal.workspace_id:
+        raise HTTPException(status_code=403, detail="subscription_forbidden")
     if not settings.cashfree_app_id:
         raise HTTPException(status_code=500, detail="Cashfree credentials not configured")
     try:
@@ -413,6 +418,8 @@ async def verify_subscription(
         tier = _tier_for_plan_id(plan_id)
         if not tier or tier == "free":
             raise HTTPException(status_code=400, detail="unknown_plan")
+        if status != "ACTIVE":
+            raise HTTPException(status_code=400, detail="subscription_not_active")
         upsert_billing(principal.workspace_id, {
             "plan": tier,
             "status": "active",
@@ -616,11 +623,13 @@ async def handle_cashfree_webhook(request: Request) -> dict[str, bool]:
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json") from None
 
-    if settings.cashfree_webhook_secret:
-        expected = _cf_webhook_signature(payload, settings.cashfree_webhook_secret)
-        received_sig = payload.get("signature", "")
-        if received_sig and not hmac.compare_digest(expected, received_sig):
-            raise HTTPException(status_code=400, detail="invalid_signature")
+    # Public route (Cashfree sends no Clerk token), so the signature is the only gate: fail closed.
+    if not settings.cashfree_webhook_secret:
+        raise HTTPException(status_code=503, detail="webhook_not_configured")
+    expected = _cf_webhook_signature(payload, settings.cashfree_webhook_secret)
+    received_sig = payload.get("signature", "")
+    if not received_sig or not hmac.compare_digest(expected, received_sig):
+        raise HTTPException(status_code=400, detail="invalid_signature")
 
     event_type = payload.get("cf_event", "")
     sub_reference_id = str(payload.get("cf_subReferenceId") or "")
@@ -709,14 +718,15 @@ async def handle_cashfree_order_webhook(request: Request) -> dict[str, bool]:
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json") from None
 
-    if settings.cashfree_webhook_secret:
-        timestamp = request.headers.get("x-webhook-timestamp", "")
-        received_sig = request.headers.get("x-webhook-signature", "")
-        expected = _cf_order_webhook_signature(
-            timestamp, raw_body, settings.cashfree_webhook_secret
-        )
-        if not received_sig or not hmac.compare_digest(expected, received_sig):
-            raise HTTPException(status_code=400, detail="invalid_signature")
+    if not settings.cashfree_webhook_secret:
+        raise HTTPException(status_code=503, detail="webhook_not_configured")
+    timestamp = request.headers.get("x-webhook-timestamp", "")
+    received_sig = request.headers.get("x-webhook-signature", "")
+    expected = _cf_order_webhook_signature(
+        timestamp, raw_body, settings.cashfree_webhook_secret
+    )
+    if not received_sig or not hmac.compare_digest(expected, received_sig):
+        raise HTTPException(status_code=400, detail="invalid_signature")
 
     event_type = str(payload.get("type") or "")
     data = payload.get("data") or {}

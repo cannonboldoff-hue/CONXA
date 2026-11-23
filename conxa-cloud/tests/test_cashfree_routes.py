@@ -81,6 +81,9 @@ class CashfreeRoutesTests(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
 
     def test_verify_subscription_activates_billing(self) -> None:
+        from conxa_core.db import db_set
+
+        db_set("cashfree_sub_workspace", "subref123", {"workspace_id": "wrk_local", "tier": "starter"})
         fake = FakeResponse(200, {"subscription": {"status": "ACTIVE", "planId": "plan_starter"}})
         with patch("app.api.cashfree_routes._cf_request", return_value=fake):
             res = self._client().post(
@@ -92,6 +95,9 @@ class CashfreeRoutesTests(unittest.TestCase):
         self.assertEqual(sub.json()["subscription"]["plan"], "starter")
 
     def test_verify_subscription_rejects_unknown_plan(self) -> None:
+        from conxa_core.db import db_set
+
+        db_set("cashfree_sub_workspace", "subref123", {"workspace_id": "wrk_local", "tier": "starter"})
         fake = FakeResponse(200, {"subscription": {"status": "ACTIVE", "planId": "plan_unknown"}})
         with patch("app.api.cashfree_routes._cf_request", return_value=fake):
             res = self._client().post(
@@ -133,6 +139,31 @@ class CashfreeRoutesTests(unittest.TestCase):
             res = self._client().post("/api/v1/subscriptions/webhooks/cashfree", json=payload)
             self.assertEqual(res.status_code, 400)
 
+    def test_verify_subscription_only_upgrades_when_active(self) -> None:
+        from conxa_core.db import db_set
+
+        db_set("cashfree_sub_workspace", "subref123", {"workspace_id": "wrk_local", "tier": "starter"})
+        fake = FakeResponse(200, {"subscription": {"status": "INITIALIZED", "planId": "plan_starter"}})
+        with patch("app.api.cashfree_routes._cf_request", return_value=fake):
+            res = self._client().post("/api/v1/subscriptions/verify", json={"subscription_id": "subref123"})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["detail"], "subscription_not_active")
+        sub = self._client().get("/api/v1/billing/subscription")
+        self.assertNotEqual(sub.json()["subscription"]["plan"], "starter")
+
+    def test_unsigned_subscription_webhook_rejected_when_secret_set(self) -> None:
+        with patch("conxa_core.config.settings.cashfree_webhook_secret", "whsec"):
+            payload = {"cf_event": "SUBSCRIPTION_NEW_PAYMENT", "cf_subReferenceId": "subref123", "cf_status": "ACTIVE"}
+            res = self._client().post("/api/v1/subscriptions/webhooks/cashfree", json=payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["detail"], "invalid_signature")
+
+    def test_webhooks_refuse_when_no_secret_configured(self) -> None:
+        for path in ("webhooks/cashfree", "webhooks/cashfree-orders"):
+            res = self._client().post(f"/api/v1/subscriptions/{path}", json={"cf_event": "x"})
+            self.assertEqual(res.status_code, 503, path)
+            self.assertEqual(res.json()["detail"], "webhook_not_configured")
+
     def test_webhook_billing_update_failure_returns_non_2xx_not_200(self) -> None:
         """Regression: the handler used to catch the billing-update exception, log
         it, and still return 200 — Cashfree never retries a 2xx, so a payment
@@ -147,7 +178,12 @@ class CashfreeRoutesTests(unittest.TestCase):
             "cf_planId": "plan_starter",
             "cf_status": "ACTIVE",
         }
-        with patch("app.api.cashfree_routes.upsert_billing", side_effect=RuntimeError("db down")):
+        from app.api.cashfree_routes import _cf_webhook_signature
+
+        payload["signature"] = _cf_webhook_signature(payload, "whsec")
+        with patch("conxa_core.config.settings.cashfree_webhook_secret", "whsec"), patch(
+            "app.api.cashfree_routes.upsert_billing", side_effect=RuntimeError("db down")
+        ):
             res = self._client().post("/api/v1/subscriptions/webhooks/cashfree", json=payload)
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.json()["detail"], "webhook_billing_update_failed")

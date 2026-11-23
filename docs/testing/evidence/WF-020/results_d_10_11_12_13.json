@@ -1,0 +1,30 @@
+{
+ "20.10": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "caps 25/200/500 -> 402 workflow_limit_exceeded; republish at cap OK; Pro->Starter locks the 300 oldest (workflow_locked), newest still republishes; upgrade unlocks; Enterprise unlimited"
+  }
+ ],
+ "20.11": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "day 29 ok; day 31: reserve/LLM(compile+human-edit)/publish/installer/video -> 402 trial_expired; sync (200), tracking (202, both URLs), dashboard reads keep working; paid plans never expire; upgrade clears it. (Backdated through the test store: a 30-day wait is not possible.)"
+  }
+ ],
+ "20.12": [
+  {
+   "result": "FAIL",
+   "sev": "S1",
+   "note": "enterprise: member upload -> 402"
+  }
+ ],
+ "20.13": [
+  {
+   "result": "PASS",
+   "sev": "",
+   "note": "Free: all 403 ops_tier_required; Starter: basic 200, full (drift/reconcile/policy/field) 403; Pro+Enterprise: all 200"
+  }
+ ]
+}
