@@ -1,0 +1,6 @@
+{
+  "inputs": [
+    { "name": "base_url", "type": "string", "description": "Origin of the start site (injected by the gate runner)" },
+    { "name": "other_url", "type": "string", "description": "Origin of the second site, a different host (injected by the gate runner)" }
+  ]
+}

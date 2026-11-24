@@ -86,11 +86,17 @@ function contradicts(node, fingerprint) {
 // A keyboard-shortcut tail on the live side is dropped first, so that case is an exact match here. Contained-in alone
 // stays under the confidence threshold: a look-alike with only a longer name is never clicked on text alone.
 const CONTAINED_CREDIT = 0.4;
+// A count shown and then repeated in brackets for screen readers ("Pull requests 58 (58)", "Issues 1.1k (1.1k)") is a
+// live count, never part of the name: dropped on both sides, the recorded tab is still the same words (EXEC-67).
+// Only the echoed form: a lone trailing number ("Page 2") may be what tells two links apart.
+const COUNT_ECHO_RE = /\s+(\d[\d.,]*[km]?\+?)\s+\(\1\)$/i;
 function textCredit(recorded, live) {
   const r = norm(recorded);
   const l = norm(stripKeyboardShortcutTail(str(live)));
   if (!r || !l) return 0;
   if (l === r) return 1;
+  const rBare = r.replace(COUNT_ECHO_RE, "");
+  if (rBare !== r && rBare && rBare === l.replace(COUNT_ECHO_RE, "")) return 1;
   return l.includes(r) || r.includes(l) ? CONTAINED_CREDIT : 0;
 }
 

@@ -163,7 +163,7 @@ def collapse_choice_group_runs(
         }
         out.append(base)
         if absorbed is not None:
-            absorbed.extend(events[i + 1:run_end + 1])
+            absorbed.extend({**e, "merged_into": base.source_event} for e in events[i + 1:run_end + 1])
         i = run_end + 1
 
     return out

@@ -11,6 +11,7 @@
 //   /submit                 an irreversible "Send" that renders a confirmation (#done)
 //   /drive                  a Drive-shaped upload page: <input type=file>, #status lists what arrived
 //   /decision               a "file already exists" dialog: Replace / Keep both
+//   /tabs?other=<origin>    a download, a new-tab link to <origin>/drive, a new-tab help link, a Finish button
 //
 // start() resolves to { url, close }.
 
@@ -58,6 +59,18 @@ function route(req, res) {
         status.textContent = 'Uploading...';
         fetch('/upload', { method: 'POST', body: names }).then(function () { status.textContent = 'Uploaded: ' + names; });
       });</script>`, "Drive");
+  }
+  if (parts[0] === "tabs") {
+    // Multi-tab start page (EXEC-10 gate): a download, a link that opens Drive in a new tab on
+    // another site (`other`), a link that opens a tab nobody uses, and a button for the return leg.
+    const other = url.searchParams.get("other") || "";
+    if (!/^http:\/\/[\w.-]+:\d+$/.test(other)) return send(400, "text/plain", "bad other");
+    return html(`<h1>Reports</h1>
+      <a data-testid="download-report" href="/raw/report" download="report.gitignore">Download report</a>
+      <a data-testid="open-drive" href="${other}/drive" target="_blank">Open Drive</a>
+      <a data-testid="open-help" href="/repo/help" target="_blank">Open help</a>
+      <button data-testid="finish" id="finish">Finish</button><p id="out">idle</p>
+      <script>document.getElementById('finish').onclick = () => { document.getElementById('out').textContent = 'finished'; };</script>`, "Reports");
   }
   if (parts[0] === "decision") {
     return html(`<div role="alertdialog" id="exists"><p>A file with this name already exists.</p><button id="replace">Replace</button><button id="keep">Keep both</button></div>`, "Decision");

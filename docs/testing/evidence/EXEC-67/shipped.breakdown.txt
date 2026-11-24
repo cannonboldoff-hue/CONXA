@@ -1,0 +1,6 @@
+si | step_ms | gate_waited | mode | gate_status | rest_ms | settle | tier | proof | fail | other
+0 | 1356 |  |  |  | 1356 |  | tier1_compiled | proven |  | 
+1 | 2281 | 1454 | short | done | 827 |  | tier1_compiled | proven |  | 
+2 | 15468 |  |  |  | 15468 |  |  |  | entity_not_found | 
+
+steps=3 sum_step_ms=19105 mean=6368 gate_sum=1454 (8%) end={"e":"wf_fail","ts":1795541301628,"dur":5107,"fsi":null,"fc":"unknown"}

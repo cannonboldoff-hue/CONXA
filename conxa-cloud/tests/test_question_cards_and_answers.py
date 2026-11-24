@@ -142,17 +142,26 @@ def test_a_value_read_from_a_place_in_a_list_asks_always_that_place_and_only_yes
     assert not any(q["kind"] == "pick_match" for q in clarify.generate_questions(_place_doc(confirmed=True), limit=None))
 
 
-def test_build_117_the_yes_answer_passes_the_patch_gate_and_chat_still_cannot_send_it():
+def test_build_117_the_yes_answer_passes_the_patch_gate_and_chat_may_send_only_the_flag():
     import pytest
 
-    from conxa_compile.editor.capability_manifest import chat_may_write
+    from conxa_compile.editor.capability_manifest import ADDRESS_KEYS, chat_may_write, editable_fields
+    from conxa_compile.editor.copilot_proposals import gate_proposals
     from conxa_compile.editor.patch_gate import validate_editor_patch
 
     step = _place_doc()["skills"][0]["steps"][0]
     q = next(q for q in clarify.generate_questions(_place_doc(), limit=None) if q["kind"] == "pick_match")
     (op,), _ = clarify.plan_answer(q, {"choice": "yes"}, _place_doc())
     validate_editor_patch(step, op["patch"], {})          # was refused: "Only the target, the value's name and ..."
-    assert not chat_may_write("extract", op["patch"]), "chat never writes a row binding on a read-a-value step"
+    # Chat can say "yes, always the first one" too (BUILD-117 (2) residue): the same flag, and only the flag.
+    assert chat_may_write("extract", op["patch"])
+    assert not editable_fields("extract") & ADDRESS_KEYS
+    for patch in ({"entity_binding": {"confirmed": True, "container_selector": "table tr"}},
+                  {"entity_binding": {"position": 2}}, {"target": {"primary_selector": "li"}}):
+        assert not chat_may_write("extract", patch), patch
+    key = step_keys(_place_doc()["skills"][0]["steps"])[0]
+    (prop,) = gate_proposals(_place_doc(), [{"step_key": key, "field": "entity_binding.confirmed", "patch": True}])
+    assert prop["patch"] == {"entity_binding": {"confirmed": True}}
     for patch in ({"entity_binding": {"confirmed": True, "container_selector": "table tr"}},
                   {"entity_binding": {"position": 2}}):
         with pytest.raises(ValueError, match="extract_step_allows_only"):
@@ -166,3 +175,11 @@ def test_a_place_binding_is_shipped_to_the_runtime():
 
     out = _copy_saved_common(_place_doc()["skills"][0]["steps"][0], {})
     assert out["entity_binding"]["position"] == 1
+
+
+def test_build_117_a_message_s_close_button_is_not_part_of_its_words():
+    from conxa_compile.compiler.state_validation import merge_dom_diff_evidence
+
+    ev = {"state_change": {"result_diff": {"added": ["You logged out of the secure area! ×", "Saved ✕", "×"]}}}
+    merged = merge_dom_diff_evidence(ev, {"new_elements": [], "removed_elements": [], "text_change": []})
+    assert merged["text_change"] == ["You logged out of the secure area!", "Saved"]

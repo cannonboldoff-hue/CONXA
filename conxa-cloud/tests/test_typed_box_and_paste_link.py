@@ -91,6 +91,17 @@ def test_build_117_the_walk_back_stops_at_a_step_that_left_its_page():
     assert steps[4].handler_hints.recheck_typed == ["new"]
 
 
+def test_build_117_a_plain_click_that_leaves_its_page_sends_what_was_typed_and_one_that_stays_does_not():
+    # site/results.html: a search box, then a reversible "Search" click with no effect that opens the results page.
+    p, results = "http://h/results.html", "http://h/results.html?s=lamp"
+    search = _on(_click("search"), p, results)
+    stays = _on(_click("filter"), p)
+    steps = [_on(_typed("q", "term"), p), stays, search]
+    mark_typed_rechecks(steps)
+    assert stays.handler_hints.recheck_typed == [], "a click that stayed on its page sends nothing"
+    assert search.handler_hints.recheck_typed == ["q"]
+
+
 # ─── BUILD-110 (2) ───────────────────────────────────────────────────────────────────────────
 
 def _ev(seq: int, value: str, ref: str, pasted_from: str = "", input_type: str = "text") -> dict:

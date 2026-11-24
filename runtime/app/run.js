@@ -1283,7 +1283,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     const io = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
     await executeStep(page, step, state.inputs, io);
     failOnUnexpectedAlert(ctx, state, step, i, nextStep, preShot);
-    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore);
+    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore, stateBaseline);
     // Phase 8: independent post-condition verification.
     const verdict = await verifyStep(page, step, state.inputs, stateBaseline, ctx.dialogQueue);
     // Fleet-visible audit: one event per step that actually carries assertions, pass or fail,
@@ -1312,7 +1312,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     if (err && err.completionGate) throw err; // the action already happened: never recover into a re-run
     primaryErr = err;
     // The action hung on the page's own OK/Cancel box: ask about it before any evidence is read off a blocked page.
-    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore);
+    await askAboutNativeQuestion(ctx, state, step, i, page, nextStep, queuedBefore, stateBaseline);
     primaryErr.earlyDomSnapshot = await captureEarlyDomSnapshot(page, step, state.inputs);
     primaryErr.failedPage = page;
   } finally {
@@ -1495,7 +1495,7 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     if (step.destructive === true) primaryErr.destructiveHalt = true;
     if (primaryErr.decisionDialog) {
       emitAppObs(ctx.tracker, i, safePageUrl(page), primaryErr.decisionDialog.title, primaryErr.decisionDialog.buttons, false);
-      await askAboutBlockingPopup(ctx, state, step, page, i, primaryErr);
+      await askAboutBlockingPopup(ctx, state, step, page, i, primaryErr, stateBaseline);
     }
     ctx.tracker.emit("step_fail", { si: i, fc: mapErrorToCode(primaryErr) });
     throw stepFailure(step, i, primaryErr, preShot, state.warnings);
@@ -1785,7 +1785,7 @@ async function observeDialog(page, ctx) {
 // is always put to the MCP client; the runtime never presses either button itself. Its words go to the client as they
 // are, never read for meaning. Never asked in a dry, loop, destructive or scheduled run, or when nobody can be asked:
 // those keep today's fail-closed path. The box opened from this step's action, so the action already ran (`acted`).
-async function askAboutNativeQuestion(ctx, state, step, i, page, owner, queuedBefore) {
+async function askAboutNativeQuestion(ctx, state, step, i, page, owner, queuedBefore, baseline = null) {
   // Only a box THIS step's action opened: one already open before it was left by a step that may not ask (a
   // destructive one), and asking here would get round that rule.
   if (queuedBefore > 0 || !ctx.answerPopups || ctx.scheduled || ctx.dryRun || step.destructive === true) return;
@@ -1794,7 +1794,7 @@ async function askAboutNativeQuestion(ctx, state, step, i, page, owner, queuedBe
   const type = d && typeof d.type === "function" ? d.type() : "";
   if (type !== "confirm" && type !== "prompt") return;
   try {
-    agentPopupPause(ctx, state, step, page, i, await observeDialog(page, ctx), { acted: true });
+    agentPopupPause(ctx, state, step, page, i, await observeDialog(page, ctx), { acted: true, baseline });
   } catch (e) {
     if (e && typeof e === "object") e.completionGate = true; // the action already ran: never recover into a re-run
     throw e;
@@ -1971,7 +1971,7 @@ async function runVariantBranchStep(ctx, state, step, page, i) {
 // one of the popup's own visible buttons, deciding from the user's goal and asking the user when unsure.
 // Never offered when any button looks irreversible (delete, pay, send, publish...), never inside a
 // loop or an option body (a pause there has no cursor to resume from), never in a dry run: those stop.
-function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, known = false } = {}) {
+function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, known = false, baseline = null } = {}) {
   const title = (probe && probe.title) || "a popup";
   const stop = (why) => {
     ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "stop", src: "agent_gate" });
@@ -1993,6 +1993,9 @@ function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, know
     stepIndex: i,
     step,
     page,
+    // The page as it was before the step's own action: the resume re-checks the step against it, as an unpaused
+    // step is (BUILD-117 (4)). Kept on the park only, never sent to the caller.
+    stateBaseline: acted ? baseline : null,
     info: {
       title,
       text: (probe && probe.text) || "",
@@ -2012,11 +2015,11 @@ function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, know
 // A step failed and a decision popup is what is in the way. Put the question to the caller, unless the
 // step can't be undone (that one fails closed) or this run has nobody to ask. Throws the pause; returns
 // when it should not ask, and the ordinary failure follows.
-async function askAboutBlockingPopup(ctx, state, step, page, i, primaryErr) {
+async function askAboutBlockingPopup(ctx, state, step, page, i, primaryErr, baseline = null) {
   if (!ctx.answerPopups || step.destructive === true) return;
   const blocking = await observeDialog(page, ctx);
   if (blocking && fork.isDecisionDialog(blocking)) {
-    agentPopupPause(ctx, state, step, page, i, blocking, { acted: !!(primaryErr.verifyFail || primaryErr.mayHaveActed) });
+    agentPopupPause(ctx, state, step, page, i, blocking, { acted: !!(primaryErr.verifyFail || primaryErr.mayHaveActed), baseline });
   }
 }
 
@@ -2028,13 +2031,17 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
   const choice = String(state.inputs[`__fork_choice_${i}`]);
   const acted = state.inputs[`__fork_acted_${i}`] === 1;
   const byAgent = state.inputs[`__fork_agent_${i}`] === 1;
-  for (const k of ["choice", "acted", "agent"]) delete state.inputs[`__fork_${k}_${i}`];
+  // Wording only: Studio's test put the popup to the person, not to a model (BUILD-117 (4)). Every rule stays the agent's.
+  const byPerson = state.inputs[`__fork_person_${i}`] === 1;
+  const baseline = state.inputs[`__fork_baseline_${i}`] || null; // the page before the step's own action (server.js)
+  for (const k of ["choice", "acted", "agent", "person", "baseline"]) delete state.inputs[`__fork_${k}_${i}`];
   const fail = (code, message, extra = {}) => {
     dismissNativeQuestions(ctx.dialogQueue); // the run ends here: an OK/Cancel box left open would hang its evidence
     ctx.tracker.emit("step_fail", { si: i, fc: code });
     throw stepFailure(step, i, Object.assign(new Error(message), extra), null, state.warnings);
   };
-  const who = byAgent ? "agent" : "human";
+  const who = byAgent && !byPerson ? "agent" : "human";
+  const byWhom = byAgent && !byPerson ? "by the assistant" : "by a person";
 
   if (choice === fork.STOP_CHOICE) {
     ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "stop", src: who });
@@ -2079,13 +2086,13 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
       await confirmForkDialogClosed(ctx, state, step, page, i, fork.surfaceSignature(probe), title, choice);
     }
     state.warnings.push(probe.native
-      ? `The page's OK/Cancel box was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`
-      : `The "${title}" popup was answered with "${choice}" ${byAgent ? "by the assistant" : "by a person"}.`);
+      ? `The page's OK/Cancel box was answered with "${choice}" ${byWhom}.`
+      : `The "${title}" popup was answered with "${choice}" ${byWhom}.`);
   }
 
   if (!acted) return false; // the step's own action never ran: let it run now that the way is clear
   // The action already ran and the popup was only in the way of seeing its result: check it, never redo it.
-  const verdict = await verifyStep(page, step, state.inputs, null, ctx.dialogQueue).catch(() => null);
+  const verdict = await verifyStep(page, step, state.inputs, baseline, ctx.dialogQueue).catch(() => null);
   if (verdict && verdict.pass) {
     emitVerifyResult(ctx, i, verdict);
     await proveStep(ctx, state, step, i, { verify: verdict });
@@ -2429,7 +2436,7 @@ async function runPlan(startPage, steps, inputs, startFrom, slug, { onStep, onPh
   // review park, runId is freshly generated per call (the caller-facing resume identity
   // runCtx above needs), but the browser view Execute is holding was registered under the
   // run's ORIGINAL id. They're the same value for every fresh (non-resumed) run.
-  const tabs = createTabRegistry(startPage, { hostOwned, runId: hostRunId ?? runId });
+  const tabs = createTabRegistry(startPage, { hostOwned, runId: hostRunId ?? runId, resume: isResume });
 
   // Settle the page before the first step so step 0 doesn't fire against a still-hydrating SPA.
   // Uses the same timeout constant as navigation waits; best-effort (catch swallowed).

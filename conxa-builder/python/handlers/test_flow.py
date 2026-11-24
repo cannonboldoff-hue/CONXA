@@ -530,7 +530,7 @@ class TestFlowMixin:
             push(state="waiting_fork", fork={"title": fork.get("title"), "message": fork.get("message"),
                                              "choices": fork.get("choices"), "suggested": fork.get("suggested"),
                                              "unknown": fork.get("unknown"), "step_index": fork.get("step_index"),
-                                             "reason": fork.get("reason")},
+                                             "reason": fork.get("reason"), "native": bool(fork.get("native"))},
                  actions=["fork_choose", "end_here"])
             harness.log_event(thread, "Paused — a popup needs your decision", glyph="warn", sink=sink,
                               subject=str(fork.get("title") or "a popup"))

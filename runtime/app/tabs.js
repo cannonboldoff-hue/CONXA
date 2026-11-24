@@ -16,6 +16,10 @@ const hostBrowser = require("./host_browser");
 
 const DEFAULT_TAB_OPEN_TIMEOUT_MS = 30000;
 
+// Page -> { run, id }: which run's tab a live page is. Outlives one runPlan call, so a resumed
+// call can find the tabs its run already opened (see createTabRegistry).
+const TAB_TAGS = new WeakMap();
+
 function tabOpenTimeoutMs() {
   const value = Number(process.env.CONXA_TAB_OPEN_TIMEOUT_MS);
   return Number.isFinite(value) && value >= 0 ? value : DEFAULT_TAB_OPEN_TIMEOUT_MS;
@@ -29,13 +33,30 @@ function tabOpenTimeoutMs() {
  */
 function createTabRegistry(initialPage, opts = {}) {
   const context = initialPage.context();
-  const pages = new Map([["tab_0", initialPage]]);
+  // A resumed run (a park: test guard, popup question, hand-over) starts again on the page it
+  // parked on, which may be any tab. Rebuild the run's own tab map from the tags its pages
+  // carry, so a resumed step finds the tab it was recorded on instead of binding the parked page
+  // as tab_0 and opening a fresh blank tab for its own (EXEC-10). A fresh run starts a new map.
+  const prior = opts.resume ? TAB_TAGS.get(initialPage) : null;
+  const run = prior ? prior.run : {};
+  const pages = new Map();
+  if (prior && typeof context.pages === "function") {
+    for (const p of context.pages()) {
+      const tag = TAB_TAGS.get(p);
+      let closed = true;
+      try { closed = p.isClosed(); } catch (_) { closed = true; }
+      if (tag && tag.run === run && !closed) pages.set(tag.id, p);
+    }
+  } else {
+    pages.set("tab_0", initialPage);
+  }
+  for (const [id, p] of pages) TAB_TAGS.set(p, { run, id });
   // Every page the registry has ever bound to a tab id — a drained popup, a waitForEvent
   // result, or a page the registry created itself via context.newPage(). Pages land in
   // pendingPages the instant Playwright reports them (a newPage() call fires the same "page"
   // event as a real popup), so without this set a page already bound to one tab id could be
   // handed out again as a different tab — see the pendingPages drain below.
-  const bound = new Set([initialPage]);
+  const bound = new Set([initialPage, ...pages.values()]);
   const pendingPages = [];
   // Chromium hands the foreground to every newly created tab. The runtime's own page switches
   // already reclaim it (see _settle), but a page the runtime never asked for — a site-opened
@@ -50,7 +71,7 @@ function createTabRegistry(initialPage, opts = {}) {
   // Site-opened popups need none of this: Execute's own window-open handler creates the
   // sibling view, and it arrives through the same context "page" event either way.
   const registry = {
-    context, pages, pendingPages, bound, foregroundStale: false,
+    context, pages, pendingPages, bound, foregroundStale: false, run,
     hostOwned: Boolean(opts.hostOwned), runId: opts.runId,
   };
   context.on("page", (page) => {
@@ -109,6 +130,10 @@ function stepInheritsPage(step) {
 async function resolveStepPage(registry, step, opts = {}) {
   if (!stepNamesTab(step)) {
     const initial = registry.pages.get("tab_0");
+    if (!initial) {
+      // Only reachable on a resumed run whose first tab has since closed: never act on another tab instead.
+      throw Object.assign(new Error("Tab not found: step recorded on tab_0, which has since closed"), { tabNotFound: true });
+    }
     return _settleIfSwitched(registry, initial, step, opts);
   }
 
@@ -175,6 +200,7 @@ async function resolveStepPage(registry, step, opts = {}) {
   }
 
   registry.pages.set(tabId, page);
+  TAB_TAGS.set(page, { run: registry.run, id: tabId });
   return _settleIfSwitched(registry, page, step, opts);
 }
 

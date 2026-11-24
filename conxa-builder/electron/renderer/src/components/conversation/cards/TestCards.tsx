@@ -308,12 +308,13 @@ export function TestRunCard({ threadId, item }: CardProps) {
   if (state === 'waiting_fork') {
     // A popup the workflow can't decide for itself (an unreviewed Replace/Delete, "ask me", or one it
     // was never taught). Only a person answers this; the choices are exactly what the page offered.
-    const fork = (item.fork ?? {}) as { title?: string; message?: string; suggested?: string | null; choices?: { id: string; label: string; role?: string }[] }
+    const fork = (item.fork ?? {}) as { title?: string; message?: string; suggested?: string | null; native?: boolean; choices?: { id: string; label: string; role?: string }[] }
     const choices = (fork.choices ?? []).filter((c) => c.id !== '__stop__')
+    // The page's own OK/Cancel box has no title of its own ("confirm"): say what it is, and show its words below.
     return (
       <CardShell
         glyph="warn"
-        title={`A popup needs your decision${fork.title ? `: “${fork.title}”` : ''}`}
+        title={fork.native ? 'The page is asking you: OK or Cancel?' : `A popup needs your decision${fork.title ? `: “${fork.title}”` : ''}`}
         meta={`${plural(rows.filter((r) => r.status === 'done').length, 'step')} passed`}
         footer={
           <>
@@ -332,8 +333,12 @@ export function TestRunCard({ threadId, item }: CardProps) {
           </>
         }
       >
-        {fork.message ? <p>{fork.message}</p> : null}
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">The test is paused on the page. Nothing has been changed yet.</p>
+        {fork.message ? <p>{fork.native ? `“${fork.message}”` : fork.message}</p> : null}
+        <p className="mt-2 text-xs text-[var(--text-secondary)]">
+          {fork.native
+            ? 'The test is paused while the page waits. Conxa never answers this for you: your choice is pressed on the page.'
+            : 'The test is paused on the page. Nothing has been changed yet.'}
+        </p>
         <div className="mt-3">{rowList}</div>
       </CardShell>
     )

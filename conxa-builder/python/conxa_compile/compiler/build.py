@@ -1904,8 +1904,8 @@ _SENDING_KINDS = frozenset({"send", "save", "delete", "upload", "long_job"})
 
 def _sends_form(steps: list[SkillStep], i: int) -> bool:
     """A step that sends what was typed: one the compiler already gave work to prove (its effect, from the same
-    commit and consequence rules), a press judged as one that can't be undone, or Enter pressed straight after typing.
-    No word list of its own."""
+    commit and consequence rules), a press judged as one that can't be undone, a click the recording saw leave its page,
+    or Enter pressed straight after typing. No word list of its own."""
     step = steps[i]
     effect = step.validation.effect
     if effect is not None:
@@ -1913,6 +1913,9 @@ def _sends_form(steps: list[SkillStep], i: int) -> bool:
     # The model's can't-be-undone judgement lands after effects are built (build.py's second-opinion pass), so a real
     # "Send order" can carry no effect: its consequence still says it sends (BUILD-117 (1)).
     if step.consequence == "irreversible" and _step_action_name(step) not in _TYPED_ACTIONS:
+        return True
+    # A plain click that the recording saw leave its page ("Search") takes what was typed with it (BUILD-117 (1)).
+    if _step_action_name(step) == "click" and _recorded_page(step) != _recorded_page(step, "after"):
         return True
     return (_step_action_name(step) == "keyboard_shortcut" and step.value == "Enter"
             and i > 0 and _step_action_name(steps[i - 1]) in _TYPED_ACTIONS)
@@ -2212,8 +2215,9 @@ def compile_skill_package(
             "second_opinion", second_opinion_ledger, applied=len(compile_report.get("second_opinion") or [])))
     # Which recorded actions did not become a step of their own, and why: 10 actions in and 9
     # steps out should never be a mystery. Choice and date-picker merges are listed too
-    # (`choice_collapsed` / `date_collapsed`); outcome forks and second-opinion removals are not
-    # (those live in the fork step itself and `archived_steps`).
+    # (`choice_collapsed` / `date_collapsed`, with `merged_into`); outcome forks and second-opinion removals are not
+    # (those live in the fork step itself and `archived_steps`). Anything else is listed as `unaccounted` (BUILD-23).
+    _record_unaccounted(drop_ledger, events, cleaned_events, steps, compile_report.get("archived_steps") or [])
     compile_report["events_total"] = len(events)
     if drop_ledger:
         compile_report["dropped"] = drop_ledger[:200]
@@ -2647,6 +2651,9 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
             entry["after_sequence"] = last_kept
         if next_kept is not None:
             entry["before_sequence"] = next_kept
+        # A merge pass (choice / date-picker collapse) names the step that now carries this action.
+        if e.get("merged_into") is not None:
+            entry["merged_into"] = e["merged_into"]
         tgt = e.get("target") if isinstance(e.get("target"), dict) else {}
         label_text = next((str(tgt[k]).strip() for k in ("aria_label", "label_text", "inner_text", "name", "title") if tgt.get(k)), "")
         label_text = scrub_email(label_text)
@@ -2661,6 +2668,57 @@ def _record_drops(ledger: list[dict[str, Any]], before: list[dict[str, Any]], af
         if val not in (None, "") and name in _TYPED_VALUE_ACTIONS:
             entry["value"] = str(val)[:200]
         ledger.append(entry)
+
+
+def _record_unaccounted(
+    ledger: list[dict[str, Any]], events: list[dict[str, Any]], cleaned_events: list[dict[str, Any]],
+    steps: list[SkillStep], archived: list[dict[str, Any]],
+) -> None:
+    """BUILD-23: every recorded action must end up somewhere the report can show. It is a step's own event, inside a
+    step (a popup decision's option, a click repeat count), archived by the second opinion, or on the ledger with the
+    pass that took it out. One that is none of these was lost by a pass that kept no record: it goes on the ledger as
+    ``unaccounted``, so a silent drop is named instead of vanishing (and the person is told, conversation/clarify.py)."""
+    seen: set[Any] = {r.get("sequence") for r in ledger}
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            seen.add(node.get("source_event"))
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    for e in cleaned_events:
+        seen.update((e.get("extras") or {}).get("repeat_sequences") or [])
+    for s in steps:
+        seen.add(s.source_event)
+        walk(s.outcome_fork)
+    walk([a.get("step") for a in archived])
+    _record_drops(ledger, events, [e for e in events if (e.get("extras") or {}).get("sequence") in seen], "unaccounted")
+
+
+def record_unbuildable(doc: dict[str, Any]) -> None:
+    """BUILD-24: name in the compile report what the build would leave out of this freshly compiled document, by the
+    build's own rules (skill_package_builder_saved_skill.unbuildable_parts): each step it cannot carry goes on the
+    ``dropped`` ledger as ``not_buildable``, and each input only those steps used goes in ``dropped_inputs``. Every
+    input the document keeps then has a step in execution.json that uses it, or is named here."""
+    from conxa_compile.skill_package_builder_saved_skill import _step_action_name as action_of  # noqa: PLC0415
+    from conxa_compile.skill_package_builder_saved_skill import unbuildable_parts  # noqa: PLC0415
+
+    lost, inputs = unbuildable_parts(doc)
+    if not lost and not inputs:
+        return
+    report = doc["compile_report"] = doc.get("compile_report") or {}
+    ledger = report["dropped"] = report.get("dropped") or []
+    for step in lost:
+        fp = (step.get("identity_bundle") or {}).get("fingerprint") or {}
+        label = scrub_email(next((str(fp[k]).strip() for k in ("aria_label", "label_text", "inner_text", "name", "title")
+                                  if str(fp.get(k) or "").strip()), ""))
+        ledger.append({"sequence": step.get("source_event"), "pass": "not_buildable", "action": action_of(step),
+                       **({"target": label[:60]} if label else {})})
+    if inputs:
+        report["dropped_inputs"] = inputs
 
 
 def _element_changing_sequences(events: list[dict[str, Any]]) -> set[Any]:

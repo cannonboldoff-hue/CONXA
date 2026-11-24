@@ -179,7 +179,15 @@ def deps_manifest() -> dict:
     dep only requires updating cloud env vars and the ``deps`` dict below —
     no Build Studio release needed as long as the dep's action is a known type
     ("copy" or "extract_zip").
+
+    conxa-runtime / conxa-app read the KV record CI publishes (same as the shims
+    below); the env vars are only the fallback before the first publish.
     """
+    host = _component("conxa_runtime") or {}
+    host_version = host.get("version", _HOST_VERSION)
+    app = _component("conxa_app") or {}
+    app_version = app.get("version", _APP_VERSION)
+    app_zip = f"conxa-app-{app_version}.zip"
     return {
         "manifest_version": 2,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -196,29 +204,29 @@ def deps_manifest() -> dict:
                 ],
             },
             "conxa-runtime": {
-                "version": _HOST_VERSION,
+                "version": host_version,
                 "files": [
                     {
                         "filename": "conxa-runtime.exe",
-                        "url": _release_url(_HOST_VERSION, "conxa-runtime.exe"),
-                        "sha256": _HOST_WIN_SHA256,
+                        "url": _file_url(host, "conxa-runtime.exe") or _release_url(host_version, "conxa-runtime.exe"),
+                        "sha256": _file_sha256(host, "conxa-runtime.exe") if host else _HOST_WIN_SHA256,
                         "action": "copy",
                     },
                     {
                         "filename": "keytar.node",
-                        "url": _release_url(_HOST_VERSION, "keytar.node"),
-                        "sha256": _RUNTIME_KEYTAR_SHA256,
+                        "url": _file_url(host, "keytar.node") or _release_url(host_version, "keytar.node"),
+                        "sha256": _file_sha256(host, "keytar.node") if host else _RUNTIME_KEYTAR_SHA256,
                         "action": "copy",
                     },
                 ],
             },
             "conxa-app": {
-                "version": _APP_VERSION,
+                "version": app_version,
                 "files": [
                     {
-                        "filename": f"conxa-app-{_APP_VERSION}.zip",
-                        "url": _release_url(_APP_VERSION, f"conxa-app-{_APP_VERSION}.zip"),
-                        "sha256": _APP_BUNDLE_SHA,
+                        "filename": app_zip,
+                        "url": _file_url(app, app_zip) or _release_url(app_version, app_zip),
+                        "sha256": _file_sha256(app, app_zip) if app else _APP_BUNDLE_SHA,
                         "action": "extract_zip",
                     }
                 ],

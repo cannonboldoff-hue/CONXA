@@ -315,7 +315,7 @@ class ConversationMixin:
             "workflow": {"id": workflow.id, "name": workflow.name, "task_description": workflow.task_description},
             "skill_id": skill_id,
             "lifecycle": lifecycle_for_workflow(workflow),
-            "lifecycle_now": lambda: lifecycle_for_workflow(get_workflow(ident) or workflow),
+            "lifecycle_now": lambda own_reply=False: lifecycle_for_workflow(get_workflow(ident) or workflow, own_reply=own_reply),
             "load_digest": load_digest,
             "load_clarify": lambda: clarify_store.load(workflow.id),
             "gate_proposals": gate,

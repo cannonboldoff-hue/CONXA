@@ -48,6 +48,10 @@ def test_manifest_never_claims_a_key_the_gate_rejects():
             probe = copy.deepcopy(scaffold)
             top = field.split(".")[0]  # a dotted field (validation.assertions) is patched through its top-level key
             value = probe.get(top, "x")
+            if kind == "extract" and field == "entity_binding.confirmed":
+                # Only a binding code already wrote can be confirmed, and only its flag (BUILD-117 (2)).
+                probe["entity_binding"] = {"container_selector": "li", "identifier": ""}
+                value = {"confirmed": True}
             try:
                 validate_editor_patch(probe, {top: value}, policy)
             except ValueError as exc:

@@ -1758,3 +1758,55 @@ def test_recovery_video_words_drop_what_the_person_typed(tmp_path, monkeypatch):
     assert _recorded_typed_values("no_such_session") == [] and _recorded_typed_values("") == []
     plain = _build_saved_skill_recovery([step], [1], None, _recorded_typed_values("no_such_session"))
     assert plain["steps"][0]["video_context"]["screen_before"] == "Card for Asha, park road"
+
+
+def test_recovery_json_carries_a_trimmed_ancestor_chain(tmp_path, monkeypatch):
+    """RECOV-2 phase 4: the recording's ancestor chain reaches recovery.json as at most 6 levels of
+    tag / id / classes / short text, never outer_html, with the same scrubs as the video words."""
+    from conxa_core.config import settings
+    from conxa_compile.skill_package_builder_saved_skill import (
+        _build_saved_skill_recovery, _recorded_ancestors, _recorded_typed_values,
+    )
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    sess = tmp_path / "sessions" / "sess_anc"
+    sess.mkdir(parents=True)
+    big = "<div>" + "x" * 3000 + "</div>"
+    chain = [
+        {"tag": "div", "id": "toolbar", "classes": ["actions", "css-1x9z", "bar"],
+         "outer_html": "<div id='toolbar'><script>secret()</script><button>Export</button> for Asha Verma a@b.com</div>"},
+        {"tag": "tr", "id": "row-12345", "classes": [], "outer_html": "<tr><td>Invoice &amp; Co</td></tr>"},
+    ] + [{"tag": f"div{i}", "id": "", "classes": [], "outer_html": big} for i in range(6)]
+    events = [
+        {"action": {"action": "type", "value": "Asha Verma"}, "extras": {"sequence": 1}},
+        {"action": {"action": "click"}, "extras": {"sequence": 2}, "ancestors": chain},
+    ]
+    (sess / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+
+    typed = _recorded_typed_values("sess_anc")
+    by_event = _recorded_ancestors("sess_anc", typed)
+    step = {"action": {"action": "click"}, "intent": "export", "source_event": 2,
+            "target": {"role": "button", "primary_selector": "#export"},
+            "signals": {"context": {"parent": "div#toolbar"}}}
+    ctx = _build_saved_skill_recovery([step], [1], None, typed, by_event)["steps"][0]["recorded_context"]
+    anc = ctx["ancestors"]
+    text = json.dumps(ctx)
+
+    assert ctx["parent"] == "div#toolbar"  # the existing fields are kept
+    assert len(anc) == 6 and "outer_html" not in text and "xxxxx" * 20 not in text
+    assert anc[0] == {"tag": "div", "id": "toolbar", "classes": ["actions", "bar"], "text": "Export for"}
+    assert "secret" not in text and "asha" not in text.lower() and "a@b.com" not in text
+    assert anc[1] == {"tag": "tr", "text": "Invoice & Co"}  # an id with a record number is dropped
+    assert all(len(a.get("text", "")) <= 60 for a in anc)
+    assert len(text) < 1500  # small enough to sit beside the 40k-char candidate digest
+
+    # A record-bound step keeps the structure, never the row's words.
+    bound = {**step, "entity_binding": {"identifier": "Invoice"}}
+    bound_anc = _build_saved_skill_recovery([bound], [1], None, typed, by_event)["steps"][0]["recorded_context"]["ancestors"]
+    assert bound_anc[0] == {"tag": "div", "id": "toolbar", "classes": ["actions", "bar"]}
+    assert not any("text" in a for a in bound_anc)
+
+    # No recording, or a step from no event: no ancestors, nothing else changes.
+    assert _recorded_ancestors("no_such_session", []) == {} and _recorded_ancestors("", []) == {}
+    plain = _build_saved_skill_recovery([{**step, "source_event": 99}], [1], None, typed, by_event)
+    assert plain["steps"][0]["recorded_context"] == {"parent": "div#toolbar"}

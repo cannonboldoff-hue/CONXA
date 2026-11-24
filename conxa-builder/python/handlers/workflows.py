@@ -465,14 +465,20 @@ def _drive_runtime_pauses(
                 raise RuntimeError(
                     f"A popup decision paused {pauses_seen} times in one test run — stopping instead of looping."
                 )
-            if fork.get("agent"):
-                # An unrecorded popup the runtime put to its caller. With "let AI answer" off there is
-                # no one to ask, so the test ends at the popup and the chat offers to teach it.
-                if answer_popup is None:
-                    return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
-                                    "remaining": 0, "run_id": "", "declined": True}
+            by_person = False
+            if fork.get("agent") and answer_popup is not None:
+                # An unrecorded popup the runtime put to its caller: Studio's model stands in ("let AI answer" on).
                 mark(f"Answering the “{fork['title'] or 'a popup'}” popup…")
                 choice = answer_popup(fork, result.get("content") or [])
+            elif fork.get("agent") and fork_hook is None:
+                # Nobody to ask: the test ends at the popup and the chat offers to teach it.
+                return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
+                                "remaining": 0, "run_id": "", "declined": True}
+            elif fork.get("agent"):
+                # "Let AI answer" off: the person watching the test answers it in a card, never a model (BUILD-117 (4)).
+                mark(f"Waiting for your answer on “{fork['title'] or 'a popup'}”…")
+                choice = fork_hook(fork)
+                by_person = True
             else:
                 mark(f"Waiting for your decision on “{fork['title'] or 'a popup'}”…")
                 choice = fork_hook(fork) if fork_hook is not None else _FORK_STOP
@@ -489,7 +495,7 @@ def _drive_runtime_pauses(
                 return result, {"step_index": fork["step_index"], "step_intent": fork["title"],
                                 "remaining": 0, "run_id": "", "declined": True}
             run_args = {**run_args, "resume_from": fork["step_index"],
-                        "review_results": {str(fork["step_index"]): {"choice": choice}}}
+                        "review_results": {str(fork["step_index"]): {"choice": choice, **({"by": "person"} if by_person else {})}}}
             result = call(run_args)
             continue
         return result, None
@@ -1370,10 +1376,12 @@ class WorkflowsMixin:
                     _mark("This engine predates the test guard — previewing instead: steps that can't be undone are checked but not run.")
             # EXEC-49 P5: "let AI answer" also lets Studio's model stand in for the MCP client on a popup the
             # workflow was never taught. An engine that doesn't know the argument would ignore it, so ask first.
+            # With it off (the default), a person watching the test is asked in a card instead, never a model (owner
+            # decision 2026-11-24, BUILD-117 (4)).
             popup_answerer = None
-            if use_ai and _app_layer_supports(conxa_dir, "answer_popups"):
+            if (use_ai or fork_hook is not None) and _app_layer_supports(conxa_dir, "answer_popups"):
                 run_args["answer_popups"] = True
-                popup_answerer = self._answer_popup_choice
+                popup_answerer = self._answer_popup_choice if use_ai else None
             result = call_runtime_tool(
                 runtime_dir, "execute_skill", run_args,
                 conxa_dir=conxa_dir,

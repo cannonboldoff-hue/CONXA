@@ -945,22 +945,29 @@ function countTextOccurrences(needle) {
   return count;
 }
 
-// The rows (indexes) that show `wanted` as a whole value: the row's own text, one element's text, or one field's
-// value, compared after collapsing whitespace and case. A row that says "Carol Ann" does not hold "Carol" (WF-7).
+// The rows (indexes) that show `wanted` as a whole value: the row's own text, one element's text, one run of text
+// beside other elements, or one field's value, compared after collapsing whitespace and case. A row that says
+// "Carol Ann" does not hold "Carol" (WF-7). The run of text is the compiler's unit too (entity_binding.py names a row by
+// one text run, e.g. "Logged in as" in "<p>Logged in as <span>tomsmith</span></p>", BUILD-117 (8)).
 // Run over every row at once (locator.evaluateAll): a field's value is not text, so no text filter may come first.
 function rowsHoldingWholeValue(rows, wanted) {
   var norm = function (v) { return String(v || "").replace(/\s+/g, " ").trim().toLowerCase(); };
   var want = norm(wanted);
   var out = [];
   if (!want) return out;
+  var ownRun = function (el) {
+    var kids = el.childNodes || [];
+    for (var k = 0; k < kids.length; k++) if (kids[k].nodeType === 3 && norm(kids[k].nodeValue) === want) return true;
+    return false;
+  };
   for (var r = 0; r < rows.length && r < 2000; r++) {
     var row = rows[r];
-    var hit = norm(row.innerText || row.textContent) === want;
+    var hit = norm(row.innerText || row.textContent) === want || ownRun(row);
     var els = !hit && typeof row.querySelectorAll === "function" ? row.querySelectorAll("*") : [];
     for (var i = 0; i < els.length && i < 500 && !hit; i++) {
       var el = els[i];
       var isField = /^(INPUT|TEXTAREA|SELECT)$/.test(String(el.tagName || ""));
-      hit = norm(isField ? el.value : (el.innerText || el.textContent)) === want;
+      hit = norm(isField ? el.value : (el.innerText || el.textContent)) === want || (!isField && ownRun(el));
     }
     if (hit) out.push(r);
   }

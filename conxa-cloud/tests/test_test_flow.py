@@ -881,10 +881,22 @@ def test_an_agent_popup_never_goes_to_the_person_hook_and_a_human_popup_never_to
     c.drive(_fork_result(), fork_hook=lambda f: "keep_both", answer_popup=lambda f, content: pytest.fail("model asked"))
 
 
-def test_with_let_ai_answer_off_the_test_ends_at_an_agent_popup():
+def test_with_let_ai_answer_off_the_person_answers_an_agent_popup_and_with_nobody_to_ask_the_test_ends():
+    # Owner decision 2026-11-24 (BUILD-117 (4)): with the AI helper off, the person watching is asked in a card.
+    c = Calls([DONE])
+    result, stopped = c.drive(_agent_fork_result(step=2), fork_hook=lambda f: "Open app", answer_popup=None)
+    assert result is DONE and stopped is None
+    assert c.args == [{"skill": "s", "inputs": {}, "resume_from": 2,
+                       "review_results": {"2": {"choice": "Open app", "by": "person"}}}]
     c = Calls([])
-    result, stopped = c.drive(_agent_fork_result(), fork_hook=lambda f: "Open app", answer_popup=None)
+    _, stopped = c.drive(_agent_fork_result(), fork_hook=None, answer_popup=None)
     assert stopped["declined"] is True and c.args == []
+    # Ending the test on the card presses Cancel on the page's own box now, as a declined stand-in answer does.
+    r = _agent_fork_result()
+    r["_meta"]["conxa/fork"]["native"] = True
+    c = Calls([DONE])
+    _, stopped = c.drive(r, fork_hook=lambda f: "__stop__", answer_popup=None)
+    assert stopped["declined"] is True and c.args[0]["review_results"] == {"2": {"choice": "__stop__"}}
 
 
 def test_the_standin_choosing_stop_or_an_unlisted_button_ends_the_test():

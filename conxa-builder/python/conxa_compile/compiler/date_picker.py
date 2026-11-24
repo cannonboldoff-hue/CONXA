@@ -434,14 +434,17 @@ def collapse_date_picker_runs(
             open_step = out.pop()
             open_event = events[prev_idx]
 
-        out.extend(_collapse_one(
+        made = _collapse_one(
             steps, events, day_idxs, time_idx, year_select_idx, month_select_idx,
             open_step, open_event, policy,
-        ))
+        )
+        out.extend(made)
         if absorbed is not None:
-            # nav clicks / year-month selects: the day (and time) pick lives on in the new step
-            kept = set(day_idxs) | ({time_idx} if time_idx is not None else set())
-            absorbed.extend(events[k] for k in run_range if k not in kept)
+            # Every action of the run that is not a new step's own event lives on inside the first new step: nav
+            # clicks, year/month selects, and the day (and time) pick itself when the field click became its base.
+            own = {s.source_event for s in made}
+            absorbed.extend({**events[k], "merged_into": made[0].source_event} for k in run_range
+                            if (events[k].get("extras") or {}).get("sequence") not in own)
         i = run_end + 1
 
     return out

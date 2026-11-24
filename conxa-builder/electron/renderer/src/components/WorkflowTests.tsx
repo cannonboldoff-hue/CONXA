@@ -241,7 +241,7 @@ function testStatusBadge(wf: Workflow) {
   }
   return (
     <Badge variant="outline" className="shrink-0 border-zinc-500/30 bg-zinc-500/10 text-[10px] text-zinc-400">
-      Never tested
+      Not tested yet
     </Badge>
   )
 }

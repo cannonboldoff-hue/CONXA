@@ -358,7 +358,13 @@ def _run_locked(*, thread_id: str, kind: str, message: str, sink: Sink | None, t
             return _perform_routed(routed, thread_id=thread_id, sink=sink, turn_id=turn_id, push=push,
                                    new_items=new_items, flow_executor=flow_executor)
 
-    # 2 ─ context under a budget.
+    # 2 ─ context under a budget. The model writes the reply the "replying" flag waits for, so it reads the lifecycle as
+    # it will be once that reply is in; routing above keeps the narrower one (BUILD-117 (9)).
+    if lifecycle_now is not None:
+        try:
+            lifecycle = lifecycle_now(own_reply=True) or lifecycle
+        except Exception:  # noqa: BLE001 — the copy read at the start of the turn is still better than failing it
+            pass
     digest = load_digest() if load_digest else None
     clarify = load_clarify() if load_clarify else None
     # After a "New conversation" divider the model reads only what came after it; open cards above it still count.

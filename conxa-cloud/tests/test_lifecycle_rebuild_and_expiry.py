@@ -45,3 +45,22 @@ def test_a_confirm_card_whose_action_is_no_longer_allowed_is_closed(tmp_path, mo
     lc = {"allowed_actions": ["test", "edit"]}
     assert expire_stale_cards("w1", lc, items) == 1
     assert revised[0][1] == "c1" and revised[0][2]["state"] == "expired"
+
+
+def test_build_117_the_chat_reply_reads_what_is_true_once_it_is_in(monkeypatch):
+    """LIVE-PASS 2026-11-22: a reply said "Testing isn't open right now — only editing is" while Test it worked: the
+    reply read the lifecycle narrowed by its own "replying" flag. The screen and its cards keep the narrowed one."""
+    from types import SimpleNamespace
+
+    from conxa_compile.conversation import lifecycle, runtime_state
+
+    wf = SimpleNamespace(**{**COMPILED, "id": "w117", "last_test_status": "never", "signed_off": False, "group_id": None})
+    expired: list = []
+    monkeypatch.setattr(lifecycle, "expire_stale_cards", lambda *a: expired.append(a))
+    runtime_state.set_flags("w117", replying=True)
+    try:
+        assert "test" not in lifecycle.lifecycle_for_workflow(wf)["allowed_actions"]
+        assert "test" in lifecycle.lifecycle_for_workflow(wf, own_reply=True)["allowed_actions"]
+        assert len(expired) == 1, "only the screen's read closes cards"
+    finally:
+        runtime_state.set_flags("w117", replying=False)

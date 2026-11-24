@@ -221,6 +221,41 @@ test("resume with Cancel dismisses the box; Stop presses Cancel and ends the run
   assert.strictEqual(q.length, 0);
 });
 
+// BUILD-117 (4): after OK the step's own check could never count, because the resume re-checked it with no "before".
+test("the pause keeps the page as it was before the step, and the resume re-checks the step against it", async () => {
+  const checked = () => [nav("https://x.test/a", { validation: { assertions: [{ type: "state_changed", required: true }] } }), nav("https://x.test/b")];
+  const sigPage = (q, d, sig) => {
+    const page = nativePage(q, d);
+    page.evaluate = async (fn) => (fn === pageScripts.preStepSignature ? sig : null);
+    return page;
+  };
+  const q = [];
+  const before = { textLen: 10, interactiveCount: 2 };
+  await assert.rejects(
+    runPlan(sigPage(q, fakeDialog("confirm", "Open the details?"), before), checked(), {}, 0, "native-box",
+      { tracker: { emit: () => {} }, dialogQueue: q, answerPopups: true }),
+    (err) => err.forkPause === true && err.stateBaseline && err.stateBaseline.textLen === 10 && !("stateBaseline" in err.info),
+  );
+  const cantTell = async (extra) => {
+    const d = fakeDialog("confirm", "Open the details?");
+    const events = [];
+    await runPlan(sigPage([d], fakeDialog("confirm", "x"), { textLen: 80, interactiveCount: 3 }), checked(),
+      { __fork_choice_0: "OK", __fork_agent_0: 1, __fork_acted_0: 1, ...extra }, 0, "native-box",
+      { tracker: { emit: (e, p) => events.push([e, p]) }, dialogQueue: [d], answerPopups: true });
+    return events.find(([e, p]) => e === "verify_result" && p.si === 0)[1].ct;
+  };
+  assert.strictEqual(await cantTell({ __fork_baseline_0: { url: "https://x.test", ...before } }), 0, "measured against the page before");
+  assert.strictEqual(await cantTell({}), 1, "no before: can't tell, as it was");
+});
+
+test("a popup Studio put to the person is reported as answered by a person, under the same rules", async () => {
+  const d = fakeDialog("confirm", "Sure?");
+  const { result } = await run(PLAN(), { __fork_choice_0: "OK", __fork_agent_0: 1, __fork_acted_0: 1, __fork_person_0: 1 },
+    { answerPopups: true }, [d], fakeDialog("confirm", "x"));
+  assert.strictEqual(d.accepted, 1);
+  assert.ok(result.warnings.some((w) => /answered with "OK" by a person/.test(w)));
+});
+
 test("dismissNativeQuestions presses Cancel on open OK/Cancel boxes only, never an alert, never OK", async () => {
   const c = fakeDialog("confirm", "a");
   const p = fakeDialog("prompt", "b");

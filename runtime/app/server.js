@@ -483,7 +483,8 @@ function _readDeclaredInputs(entry) {
   return [];
 }
 
-// What a paused run has produced so far: every extract / agent-span answer output that holds a value.
+// What a paused run has produced so far: every extract / agent-span answer output that holds a value,
+// and every file it downloaded.
 function _producedInputs(primary) {
   const out = {};
   for (const n of declaredOutputNames(primary.steps || [], true)) {
@@ -491,6 +492,10 @@ function _producedInputs(primary) {
       out[n] = primary.inputs[n];
       Object.assign(out, flattenAnswer(n, primary.inputs[n]));
     }
+  }
+  // Files downloaded before the pause: a later upload step reads them (handlers.js download_observed).
+  for (const [k, v] of Object.entries(primary.inputs || {})) {
+    if (/^downloaded_file(_\d+)?(_dir)?$/.test(k) || k === "__downloadCount") out[k] = v;
   }
   return out;
 }
@@ -1643,6 +1648,10 @@ async function _handleToolCall(name, args, extra) {
       if (forkPark.forkInfo && forkPark.forkInfo.agent) {
         primary.inputs[`__fork_agent_${primary.resumeFrom}`] = 1;
         if (forkPark.forkInfo.acted) primary.inputs[`__fork_acted_${primary.resumeFrom}`] = 1;
+        // The step's own pre-action page, so its result is re-checked as an unpaused step's is (BUILD-117 (4)).
+        if (forkPark.forkInfo.acted && forkPark.stateBaseline) primary.inputs[`__fork_baseline_${primary.resumeFrom}`] = forkPark.stateBaseline;
+        // Studio's test put the popup to the person (BUILD-117 (4)): wording only, the agent's rules still apply.
+        if ((primary.reviewResults[_forkAnswerKey] || {}).by === "person") primary.inputs[`__fork_person_${primary.resumeFrom}`] = 1;
       }
       appendRecoveryEvent({ event: "fork_answered", slug: primary.entry.slug, step_index: primary.resumeFrom, choice: validation.choice });
       _runTracker.emit("fork_answered", { si: primary.resumeFrom });
@@ -2486,7 +2495,7 @@ async function _handleToolCall(name, args, extra) {
         if (timer.unref) timer.unref();
         _setParkedRecovery(_parkKey, { slug: primary.entry.slug, workspace_id: primary.entry.workspace_id,
           page: _forkPage, context: _context, browser: _browser, hostOwned: _hostOwned, runId: _hostRunId, watch, forkStepIndex: runErr.stepIndex, timer, producedInputs: _producedInputs(primary),
-          forkChoices: (runErr.info.choices || []).map((c) => c.id), forkInfo: runErr.info,
+          forkChoices: (runErr.info.choices || []).map((c) => c.id), forkInfo: runErr.info, stateBaseline: runErr.stateBaseline || null,
           ...(_nativeBox ? { dialogQueue: _dialogQueue } : {}),
           // A page behind an open OK/Cancel box cannot answer: nothing is read off it (the fork resume never compares it).
           pageFingerprint: _nativeBox ? null : await capturePageFingerprint(_forkPage),

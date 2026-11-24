@@ -1,0 +1,44 @@
+si | step_ms | gate_waited | mode | gate_status | rest_ms | settle | tier | proof | fail | other
+0 | 1693 |  |  |  | 1693 |  | tier1_compiled | proven |  | 
+1 | 2750 | 2095 | short | done | 655 |  | tier1_compiled | proven |  | 
+2 | 2391 | 586 | short | done | 1805 |  | tier1_compiled | proven |  | 
+3 | 1337 | 527 | short | done | 810 |  | tier1_compiled | proven |  | 
+4 | 4912 | 4627 | short | done/still(span[progressbar]) | 285 |  | tier1_compiled | proven |  | 
+5 | 1366 | 1098 | short | done | 268 |  | tier1_compiled | proven |  | 
+6 | 18041 | 3727 | short | done/still(span[progressbar]) | 14314 | 265 | tier2_a11y | proven |  | 
+7 | 1128 | 609 | short | done | 519 |  | tier1_compiled | proven |  | 
+8 | 1091 | 601 | short | done | 490 |  | tier1_compiled | proven |  | 
+9 | 1044 | 536 | short | done | 508 |  | tier1_compiled | proven |  | 
+10 | 4457 | 4184 | short | done/still(span[progressbar]) | 273 |  | tier1_compiled | proven |  | 
+11 | 1018 | 832 | short | done | 186 |  | tier1_compiled | proven |  | 
+12 | 1333 | 909 | short | done | 424 |  | tier1_compiled | proven |  | 
+13 | 999 | 534 | short | done | 465 |  | tier1_compiled | proven |  | 
+14 | 4285 | 4078 | short | done/still(span[progressbar]) | 207 |  | tier1_compiled | proven |  | 
+15 | 1044 | 794 | short | done | 250 |  | tier1_compiled | proven |  | 
+16 | 17671 | 3745 | short | done/still(span[progressbar]) | 13926 | 264 | tier2_a11y | proven |  | 
+17 | 1061 | 569 | short | done | 492 |  | tier1_compiled | proven |  | 
+18 | 988 | 541 | short | done | 447 |  | tier1_compiled | proven |  | 
+19 | 1012 | 531 | short | done | 481 |  | tier1_compiled | proven |  | 
+20 | 4567 | 4285 | short | done/still(span[progressbar]) | 282 |  | tier1_compiled | proven |  | 
+21 | 1111 | 840 | short | done | 271 |  | tier1_compiled | proven |  | 
+22 | 1067 | 568 | short | done | 499 |  | tier1_compiled | proven |  | 
+23 | 1052 | 535 | short | done | 517 |  | tier1_compiled | proven |  | 
+24 | 4252 | 4034 | short | done/still(span[progressbar]) | 218 |  | tier1_compiled | proven |  | 
+25 | 1014 | 788 | short | done | 226 |  | tier1_compiled | proven |  | 
+26 | 17615 | 3740 | short | done/still(span[progressbar]) | 13875 | 262 | tier2_a11y | proven |  | 
+27 | 1064 | 538 | short | done | 526 |  | tier1_compiled | proven |  | 
+28 | 1057 | 602 | short | done | 455 |  | tier1_compiled | proven |  | 
+29 | 779 | 524 | short | done | 255 |  | tier1_compiled | proven |  | 
+30 | 4450 | 4130 | short | done/still(span[progressbar]) | 320 |  | tier1_compiled | proven |  | 
+31 | 1373 | 1170 | short | cant_tell | 203 |  | tier1_compiled | proven |  | 
+32 | 2894 | 637 | short | done | 2257 |  | tier1_compiled | proven |  | 
+33 | 1265 | 520 | short | done | 745 |  | tier1_compiled | proven |  | 
+34 | 886 | 716 | short | cant_tell | 170 |  | tier1_compiled | proven |  | 
+35 | 1782 | 1083 | short | done | 699 |  | tier1_compiled | proven |  | 
+36 | 18196 | 3736 | short | done/still(span[progressbar]) | 14460 | 264 | tier2_a11y | proven |  | 
+37 | 1023 | 587 | short | done | 436 |  | tier1_compiled | proven |  | 
+38 | 1197 | 581 | short | done | 616 |  | tier1_compiled | proven |  | 
+39 | 1083 | 539 | short | done | 544 |  | tier1_compiled | proven |  | 
+40 | 21559 | 21358 | full | done/still(span[progressbar]) | 201 |  | tier1_compiled | couldnt_confirm |  | 
+
+steps=41 sum_step_ms=158907 mean=3876 gate_sum=82634 (52%) end={"e":"wf_ok","ts":1795541746935,"dur":164377,"tot":41,"rec":4,"oc":"done_please_check"}

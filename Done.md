@@ -6,8 +6,8 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 78 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7) |
-| EXEC — Execution & Recovery | 33 | EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
+| BUILD — Build Studio | 80 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7; 2026-11-25: 1, 2, 4.2, 4.3, 5, 9, 10, 11) |
+| EXEC — Execution & Recovery | 34 | RECOV-2, EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
 | CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 15 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line, per-attempt), 18 |
 | PROD — Product | 5 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups), 18 (piece 1, piece 2 windows/deny-lists, piece 3) |
@@ -18,11 +18,11 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | AUTH — Authentication | 23 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **175** | |
+| **Total** | **178** | |
 
 ---
 
-## BUILD — Build Studio (78 done)
+## BUILD — Build Studio (80 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -923,7 +923,54 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 **Resolved:** 2026-11-22 (unit-proven; not yet seen working live)
 (1) A form send re-checks only the boxes typed on its own page since the last send: the page is told apart by tab and the recorded before/after address, not the compiled step's address (empty except on navigate steps), and an irreversible click now counts as a send (`build.py::_recorded_page`, `_sends_form`). (2) Answering "Yes, always the first one" works: on a read-a-value step the edit rules accept `entity_binding` only as exactly `{"confirmed": …}` on a step that already has a binding (`patch_gate.py`); chat still cannot send it. (3) Inside the one bound row, an absolute XPath is cut at the row's own depth and read from the row (`resolution.js::rowRelativeSignals`, `page_scripts.js::elementDepth`), so the right cell is read for any customer in tens of milliseconds, not after the 31 s fallback; when the bound row was found the failure card no longer asks "Did you type the right thing?" (`run.js`, `failure_response.js`). (4) At the end of a run (any end other than the pause asking about the box) the runtime presses Cancel on every open confirm/prompt, never OK (`run.js::dismissNativeQuestions`); a step stuck behind such a box reads "The page asked … in its own OK/Cancel box. Nobody could answer it during this run, so Cancel was pressed and the run stopped." (`errors.js::plainCause`); when Studio's stand-in model declines a box it resumes once with Stop (`workflows.py`). (6) A web-address check from the second opinion is applied only to a navigate step or a step whose recorded before and after addresses differ (`second_opinion.py`). (7) An empty typing event is kept only if the box held text just before (marked `cleared`) or earlier typing in the same box put text in it; the live list no longer skips a number (`bridge.js`, `session.py`, `build.py::_drop_empty_typing`). Tests: `test_typed_box_and_paste_link.py`, `test_question_cards_and_answers.py`, `test_second_opinion.py`, `test_recorder_bridge_js.py`, `test_recorder_session.py`, `test_test_flow.py`, `runtime/test/unit/test_bound_row_xpath.js`, `test_native_box_run_end.js`. Leftovers stay in `TODO.md` under BUILD-117.
 
-## EXEC — Execution & Recovery (33 done)
+### BUILD-23 — A failed compile drops steps silently and reports no warning naming them
+- **Category:** Builder
+- **Description:** The same 2026-09-02 compile finished with `compile_status: "failed"`, `compile_min_confidence: 0.007`, and `compile_steps_with_warnings: 9` — yet it still produced and published a runnable 108-step pack from a `compile_report.steps_total` of **113**. Five steps were dropped with nothing naming which, and all nine warnings are `low_selector_confidence` on unrelated `demoqa` steps; none of them mention the dropped steps, the mangled step-35 selector (BUILD-22), or the lost popup tab (EXEC-10's 2026-09-02 update). A compile that reports `failed` should not silently yield an artifact the runtime happily executes.
+- **Why required:** the compile report is the only place a Build Studio user can see that their recording did not survive compilation. Right now `failed` is indistinguishable from `succeeded` in every way that matters — the pack builds, publishes and runs — so the signal is dead.
+- **Business value:** the customer records a workflow, sees it compile, ships it, and finds out at replay that five steps are missing. Surfacing this at compile time is the difference between a 2-minute re-record and a failed demo.
+- **Technical value:** forces the compile report to account for every input event — emitted, merged, or dropped-with-a-reason — which is also the data needed to make `compile_status` mean something.
+- **Dependencies:** none, though it pairs naturally with BUILD-22 (the invariant there is one of the warnings this item should surface). **Update 2026-09-02 (unconfirmed):** "five steps dropped" matches exactly the count this recording's user-opened tabs would have shifted by under the desync bug just fixed (see BUILD-22's update note) — `collapse_choice_group_runs`/`collapse_date_picker_runs` used to silently truncate `steps` to `min(len(steps), len(events))`, which is precisely a tail-drop of N steps where N is the extra step count the splice introduced. The desync fix also replaces that silent truncation with a hard failure, so even if some other cause remains, a future occurrence would now surface as a compile error instead of a silent drop. Re-verify against session `9d19890f` before closing.
+- **Suggested order:** alongside BUILD-22 — same compile, same report. Re-check both together once BUILD-22 is re-verified.
+- **Complexity:** M — likely much smaller if the desync fix already accounts for the dropped steps; the compile-report accounting behavior (naming what was dropped/merged) is still a separate piece of work regardless.
+- **Success criteria:** every input event is accounted for in the compile report (emitted / merged into step N / dropped because X); `compile_status: "failed"` either blocks the publish path or surfaces an explicit, dismissable warning in Build Studio naming exactly what was lost.
+
+**Resolved:** 2026-11-25
+**Fix:** every recorded action is now checked at compile time (`build.py::_record_unaccounted`); merged actions carry `merged_into`; steps the build cannot ship are listed as `not_buildable`. Lost actions are named in plain words in the "Part of this can't be repeated" question, which must be answered before test, approve or publish. Tests in `test_compile_ledger.py`; TRD and Backend-Schema updated. Unverified: no live Studio look; sessions `9d19890f` is gone.
+
+### BUILD-24 — react-select `select_option` dropped silently while its input stays required
+- **Partly done (2026-10-24):** the packager now removes a declared input that no kept step mentions and names it as a build warning (`skill_package_builder_saved_skill.py::_drop_unreferenced_inputs`). Still open: the react-select step itself is dropped, and the removal is a build warning, not an entry in `compile_report`.
+- **Category:** Builder
+- **Description:** Found while investigating BUILD-22 on the WF-2-S-F recording (demoqa.com
+  `/select-menu`): the raw recording picks "Group 1, option 1" from the `react-select-2` widget
+  (`select_option` on `#react-select-2-option-0-0`), and the compiler still declares
+  `react_select_2_listbox` as a required input in `manifest.json` / `input.json` — but the
+  compiled `execution.json` never contains a step that acts on it. The input exists with nothing
+  to bind it to; the action it describes silently never runs.
+- **Why required:** same family as BUILD-23 (a compile that drops steps with no warning naming
+  them) — the customer sees a required input asking for a value that the compiled skill will
+  never use.
+- **Dependencies:** none. Reproduces from session `3651c833-918d-4e54-97bc-514a6356503d`
+  (`WF-2-S-F`).
+- **Complexity:** S–M to find which pass drops it; likely needs the same fix as BUILD-23's dropped
+  steps.
+- **Success criteria:** every `inputs_required` entry a compiled skill declares has at least one
+  step in `execution.json` that consumes it, or the compile report names the input it dropped.
+
+**Resolved:** 2026-11-25
+**Fix:** no longer reproduces (likely the old step-cut desync). A react-select fixture now keeps its `select_option` step and uses its input; inputs used only by unbuildable steps are listed in `compile_report["dropped_inputs"]`. Session `3651c833` is gone, so the cause is inferred, not reproduced.
+
+### BUILD-117 — fixed parts, 2026-11-25 (P0-5 session; the open parts stay in `TODO.md`)
+**Resolved:** 2026-11-25
+- (1) A plain "Search" click the recording saw leave its page now gets a re-check list (`build.py::_sends_form`); Studio no longer offers the wrong "web address changes" check on a step that stayed on its address (`clarify.py::_offerable`).
+- (2) Chat can confirm a place binding on a read-a-value step: `entity_binding.confirmed` is editable in `capability_manifest.py`; chat still cannot write the container, position, target or any address key.
+- (4).2 With the AI helper off and a person watching, Studio now asks the person in the popup card ("The page is asking you: OK or Cancel?"); no model answers it; never in dry, loop, destructive or scheduled runs. (4).3 The pause keeps the page as it was before the step, so the step is re-checked after the answer (`run.js`, `server.js`); no witness rule loosened. TRD updated.
+- (5) Fixed "worked" words are offered only if a saved page showed them after the step and not before; the message for typed words never seen now starts "Added: …".
+- (9) Chat reads the lifecycle as it will be once the reply is in, so it no longer says testing is closed while Test it works (`lifecycle.py`, `harness.py`).
+- (10) The real cause was an unticked landing check being deleted, which made a recorded Log out look like an expired sign-in; the unticked check is now kept (it can never fail a run).
+- (11) "1 question needs you" wording; the close "×" is no longer in check text; the "could not confirm this computer's access" line no longer shows on Studio test cards; the Publish row says "Not tested yet".
+- Tests: `test_typed_box_and_paste_link.py`, `test_compile_clarify.py`, `test_capability_manifest.py`, `test_test_flow.py`, `test_lifecycle_rebuild_and_expiry.py`, `test_typed_box_and_native_box.js`, `test_evidence_chain.js`. Not driven in the live Studio.
+
+## EXEC — Execution & Recovery (34 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -1335,6 +1382,38 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - **Deviation:** no new lifecycle action; chat step changes already go through the change card, not `lifecycle.allowed_actions` / `lib/actions.ts`, which were left unchanged.
 - **Verified:** new `conxa-cloud/tests/test_chat_table_loop.py` (6 tests, incl. Apply plus one Undo through a real Backend), re-run by the main session: 6 passed. The session's full `pytest -q tests` was 3793 passed, 1 skipped (before a one-line tweak; focused files re-run after: 31 passed). Renderer typecheck and eslint on changed files clean. Not tried live (see EXEC-66).
 - **Files:** `editor/workflow_mutations.py`, `editor/copilot_proposals.py`, `handlers/copilot.py`, `conversation/harness.py`, `packages/conxa-core/conxa_core/llm/client.py` (prompt op list), `ReviewQuestionsDialog.tsx`, `HumanEditPage.tsx`, `docs/TRD.md` §11.2, `docs/UI-UX-Brief.md`.
+
+### RECOV-2 — Deliver recovery artifacts to customer machines (phases 4–6 of the recovery redesign)
+
+Phases 1–3 shipped 2026-09-02 (see `FIX.md`, `docs/TRD.md` §10.1): the two ungated guessing stages
+are deleted, the agent tier is armed from round one, and the prompt no longer describes a reference
+image that isn't attached. What remains is making the artifacts actually arrive, so Tier B has a
+real before-picture instead of a suppressed sentence.
+
+- **Phase 4 — recorded page structure.** The recorder already captures a 24-level ancestor chain
+  (`bridge.js::captureAncestors`, carried through `session.py`), and `recovery.json` already syncs.
+  Emit a trimmed `recorded_context` per step at build time (~6 ancestors: tag / id / classes / a
+  short text excerpt — **drop `outer_html`**, it is 2000 chars each and would blow the 40k-char
+  digest budget) and add it to the Tier B payload. No recorder work, no re-recording, no sync-list
+  change.
+- **Phase 5 — artifact archive endpoint.** Publish already uploads `visuals/` (`backend.py`'s
+  `rglob("*")`) and the cloud already stores it; only the delta route's hardcoded five-JSON
+  allow-list (`skillpack_update_routes.py`) filters it out. List artifacts as `{path, sha256}`
+  metadata in the delta response, and add an authenticated route where the machine sends the
+  hashes it is missing and receives one archive of exactly those, per skill. Read from the live
+  mirror so artifacts match the code files just downloaded.
+- **Phase 6 — two-pass sync + hash store.** Code files stay on the blocking path; once they
+  activate the gate opens and workflows run. The artifact pass then runs unwaited, one skill at a
+  time. Store by content hash **outside** the per-version directories so the three retained
+  versions share one copy and identical screenshots across skills are stored once. `sync.js`
+  already has an unused fetch-by-link branch (`content_url` → `_downloadBuffer`) and an
+  `atomicWrite` with SHA-256 verification — both reusable as-is.
+
+Blocked on nothing. Full plan: `~/.claude/plans/create-a-end-to-merry-parrot.md`; design note:
+https://claude.ai/code/artifact/eb3fdd7c-d73e-46fa-b146-18c8e491829c
+
+**Resolved:** 2026-11-24
+**Fix:** phases 5 and 6 were already shipped in `e470c6af`; phase 4 was missing the trimmed ancestor chain, now added to each step's `recorded_context` at build time (6 nearest ancestors, no `outer_html`, personal data scrubbed, no text on record-bound steps). Tests added in `test_skill_package_builder.py` and `test_recovery_embed.js`; TRD §10 and Backend-Schema updated. Unverified live: older workflows get ancestors only after a rebuild.
 
 ## CLOUD — Cloud (12 done)
 
@@ -1996,6 +2075,13 @@ recorded State's cities). None of these block a run; all deserve their own item.
 ---
 
 ## Backlog organisation log
+
+### 2026-11-24 PILOT — P0 backlogs — organised and delegated
+**Resolved:** 2026-11-24 (organisation only; none of the 13 items is implemented yet, so none moves out of `TODO.md`)
+- **What was done:** the 13 open P0 items (SHIP-1, OPS-1, UPD-5, AUTH-26, BUILD-23, BUILD-24, BUILD-22, EXEC-67, RECOV-2, BUILD-117, TEST-11, TEST-12, EXEC-10) were regrouped into eight session backlogs `P0-1`..`P0-8` plus three person-only tasks `P0-H1`..`P0-H3` (UPD-5, OPS-1, AUTH-26) in a table at the top of the P0 section of `TODO.md`, with owned code, kind, wave and dependency. Items that had no "done when" line got one. Every original item text is unchanged.
+- **Delegation:** wave 1 (P0-1 SHIP-1, P0-2 BUILD-22, P0-4 EXEC-67 + BUILD-117 (8), P0-6 RECOV-2) handed to four parallel Opus sessions on 2026-11-24. Wave 1 reported the same day (P0-1, 2, 4, 6); wave 2 (P0-3 BUILD-23+24, P0-5 BUILD-117 rest, P0-7 EXEC-10) handed to three Opus sessions on 2026-11-24. Wave 3 (P0-8 TEST-11 + TEST-12) waits on all fixes and re-configured LLM keys.
+- **BUILD-22 closed 2026-11-24:** it no longer reproduces (fixed 2026-09-04, entry above). A build warning now flags a step whose selector uses a value its recorded element never showed (4 tests in `test_saved_skill_selector_integrity.py`). Session `9d19890f` is gone; the owner accepted a rebuilt look-alike recording as proof.
+- **Rule for the sessions:** plan first, edit only owned files, no commits, no edits to `TODO.md` / `Done.md` / `FIX.md`; the main session records results and moves finished items here.
 
 ### 2026-11-15 dev test run follow-ups — organised and delegated
 **Resolved:** 2026-11-21 (organisation only; none of the 7 items is implemented yet, so none moves out of `TODO.md`)

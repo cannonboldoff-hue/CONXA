@@ -88,7 +88,12 @@ def _build_container_selector(parent: dict[str, Any], row_tag: str, row_class_su
     return row_part
 
 
-def _row_text_segments(row_outer_html: str) -> list[str]:
+# Text a row keeps out of sight: a tooltip, a popover, a part hidden from screen readers. GitHub's breadcrumb was bound
+# to its tooltip "Switch repository", which only a signed-in page has (EXEC-67).
+_UNSHOWN = '[aria-hidden="true"], [popover], [role="tooltip"]'
+
+
+def _row_text_segments(row_outer_html: str, *, shown_only: bool = False) -> list[str]:
     if not row_outer_html:
         return []
     try:
@@ -98,6 +103,9 @@ def _row_text_segments(row_outer_html: str) -> list[str]:
     root = soup.find(True)
     if root is None:
         return []
+    if shown_only:
+        for hidden in root.select(_UNSHOWN):
+            hidden.decompose()
     raw = root.get_text(separator="␟", strip=True)
     return [s.strip() for s in raw.split("␟") if s.strip()]
 
@@ -151,11 +159,23 @@ def _same_row(others: list[set[str]], mine: set[str], own: frozenset[str] | set[
     return best if best is not None and ident & others[best] else None
 
 
+# A count at the end of a control's label ("Pull requests 58 (58)", "Issues 1.1k (1.1k)"): it changes between runs.
+_COUNT_TAIL = re.compile(r"(?:\s+\(?\d[\d.,]*[km]?\+?\)?)+$", re.IGNORECASE)
+
+
 def _own_texts(ev: Step) -> set[str]:
-    """What the clicked control says about itself. It repeats on every row, so it never says which row."""
+    """What the clicked control says about itself. It repeats on every row, so it never says which row.
+    A live count in its label is split off: the label without it and the count are its own words too, so a tab
+    link is never bound to "58" or to its label read without the count (EXEC-67)."""
     target = ev.get("target") if isinstance(ev.get("target"), dict) else {}
     keys = ("inner_text", "aria_label", "label_text", "title", "value", "alt", "placeholder")
-    return {str(target.get(k)).strip().lower() for k in keys if str(target.get(k) or "").strip()}
+    out = {" ".join(str(target.get(k)).split()).lower() for k in keys if str(target.get(k) or "").strip()}
+    for text in list(out):
+        tail = _COUNT_TAIL.search(text)
+        if tail and tail.start() > 0:
+            out.add(text[:tail.start()].strip())
+            out.update(tail.group(0).split())
+    return out
 
 
 def _pick_identifier(row: dict[str, Any], *, own: frozenset[str] | set[str] = frozenset(),
@@ -164,7 +184,7 @@ def _pick_identifier(row: dict[str, Any], *, own: frozenset[str] | set[str] = fr
     must appear in no other row (two products can cost the same; two rows can share a status word). Words win over bare
     numbers and prices; a code that mixes both (an invoice or order number) is the best of all."""
     candidates = []
-    for seg in _row_text_segments(str(row.get("outer_html") or "")):
+    for seg in _row_text_segments(str(row.get("outer_html") or ""), shown_only=True):  # unseen text never names a row
         if not seg or len(seg) > _MAX_IDENTIFIER_LEN:
             continue
         if seg.lower() in _NON_IDENTIFYING_TOKENS or seg.lower() in own:

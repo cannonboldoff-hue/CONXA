@@ -466,8 +466,10 @@ class CompileFlowMixin:
         # Drawing the recording could not keep is said first by code, and the recap gets no goal to restate (given the
         # person's goal it once said the workflow "draws a rectangle" when it drew nothing, WF-8 8.12).
         cant = " ".join(filter(None, (clarify.unsupported_sentence(report.get("dropped")),
+                                      clarify.lost_sentence(report.get("dropped")),
                                       clarify.human_check_sentence(report.get("dropped")))))
-        dropped = [d for d in report.get("dropped") or [] if d.get("pass") not in ("unsupported", "human_check")]
+        dropped = [d for d in report.get("dropped") or []
+                   if d.get("pass") not in ("unsupported", "human_check", *clarify.LOST_PASSES)]
         # Facts for the model's recap: kinds and counts only, never the recorded target text (page noise).
         kind_words = {"click": "click", "scroll": "scroll", "navigate": "page visit", "type": "typing step", "fill": "typing step"}
         counts: dict[str, int] = {}
@@ -482,10 +484,12 @@ class CompileFlowMixin:
         left_out = [{"kind": k, "count": n, "reason": why} for k, n in counts.items()]
         # Said in its own words, never folded into "nothing was left out" (the recap once said exactly that right
         # after the drawing line, WF-8 8.12).
-        from conxa_compile.llm.compile_recap import DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT, write_recap
+        from conxa_compile.llm.compile_recap import DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT, LOST_LEFT_OUT, write_recap
 
-        for wall, kind, reason in (("unsupported", "drawing action", DRAWING_LEFT_OUT), ("human_check", "robot check", HUMAN_CHECK_LEFT_OUT)):
-            if (n := sum(1 for d in report.get("dropped") or [] if d.get("pass") == wall)):
+        for walls, kind, reason in ((("unsupported",), "drawing action", DRAWING_LEFT_OUT),
+                                    (("human_check",), "robot check", HUMAN_CHECK_LEFT_OUT),
+                                    (clarify.LOST_PASSES, "action", LOST_LEFT_OUT)):
+            if (n := sum(1 for d in report.get("dropped") or [] if d.get("pass") in walls)):
                 left_out.append({"kind": kind, "count": n, "reason": reason})
         # The message is written by one model call over these facts (llm/compile_recap.py), before `understanding`
         # clears so the UI stays busy and nothing can be tested meanwhile. No template stands in for it.

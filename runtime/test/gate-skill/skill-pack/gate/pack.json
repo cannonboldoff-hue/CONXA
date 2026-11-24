@@ -5,7 +5,7 @@
   "required_runtime": ">=1.0.0",
   "target_url": "",
   "protected_url": "",
-  "skills": ["gate-skill"],
+  "skills": ["gate-skill", "gate-tabs"],
   "groups": [{ "id": "gate_group", "name": "Hermetic fixture", "apps": [] }],
   "tracking": { "enabled": false }
 }

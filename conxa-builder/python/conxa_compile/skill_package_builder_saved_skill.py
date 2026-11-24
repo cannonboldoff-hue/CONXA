@@ -1121,6 +1121,35 @@ def _drop_unreferenced_inputs(
     return kept
 
 
+def unbuildable_parts(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    """What a build of this skill document would leave out (BUILD-23/24), by the build's own rules: the steps it
+    cannot carry (``_saved_step_to_execution_step`` gives nothing) and the declared inputs no carried step uses. The
+    compile names both in its report, so they are known when the workflow is made, not only in the build log."""
+    steps = [s for s in (((doc.get("skills") or [{}])[0] or {}).get("steps") or []) if isinstance(s, dict)]
+    converted = [(s, _saved_step_to_execution_step(s)) for s in steps]
+    lost = [s for s, c in converted if c is None]
+    carried = [c for _, c in converted if c is not None]
+    inputs = _merge_saved_inputs_with_execution_placeholders(list(doc.get("inputs") or []), carried)
+    used = {str(i.get("name")) for i in _drop_unreferenced_inputs(inputs, carried)}
+    return lost, [str(i.get("name")) for i in inputs if str(i.get("name")) not in used]
+
+
+def _selector_input_without_identity_trace(execution_step: dict[str, Any]) -> str:
+    """BUILD-22 invariant: the first ``{{input}}`` a step's top-level selector names that its own
+    identity_bundle never mentions, or "". Every honest way a selector gets a placeholder (the 1-click
+    click-text rewrite, a Human Edit re-point) writes it into the bundle too, so a selector naming an input
+    the bundle has no trace of was copied in from somewhere else (once, a password into a Login click).
+    A step with no bundle has nothing to compare against and is not judged."""
+    bundle = execution_step.get("identity_bundle")
+    if not isinstance(bundle, dict) or not bundle:
+        return ""
+    traced = set(_PLACEHOLDER_NAME_RE.findall(json.dumps(bundle, ensure_ascii=False)))
+    for name in _PLACEHOLDER_NAME_RE.findall(str(execution_step.get("selector") or "")):
+        if name not in traced:
+            return name
+    return ""
+
+
 def _render_saved_skill_markdown(title: str, inputs: list[dict[str, Any]], execution_steps: list[dict[str, Any]]) -> str:
     lines = [f"# {title}", "", "## Inputs"]
     if inputs:
@@ -1216,9 +1245,59 @@ def _saved_recovery_anchor_sentence(step: dict[str, Any]) -> str:
 # digest without eating into its 40k-char budget (candidate_digest.js).
 _RECORDED_CONTEXT_SIBLING_MAX = 8
 
+# The recorder keeps 24 ancestors with up to 2000 chars of outer_html each (bridge.js
+# captureAncestors). Six levels of tag/id/classes plus a short text excerpt say "it sat in the
+# toolbar inside the header" in well under 1 KB per step; outer_html would blow the payload.
+_RECORDED_ANCESTOR_MAX = 6
+_RECORDED_ANCESTOR_CLASS_MAX = 6
+_RECORDED_ANCESTOR_TEXT_MAX = 60
+_HTML_SKIP_RE = re.compile(r"<(script|style)\b.*?(</\1>|$)", re.IGNORECASE | re.DOTALL)
+_HTML_TAG_RE = re.compile(r"<[^>]*>?")
+
+
+def _trimmed_ancestor(raw: Any, typed: list[str]) -> dict[str, Any]:
+    """One recorded ancestor as tag / id / classes / short text, never its outer_html. An id or class carrying a digit
+    is dropped like any other word with one (generated, or a record number); the text goes through the same scrubs as
+    the video words (typed values first, then URLs, emails, quotes and digit words)."""
+    import html  # noqa: PLC0415
+
+    a = raw if isinstance(raw, dict) else {}
+    out: dict[str, Any] = {"tag": str(a.get("tag") or "")[:20]}
+    el_id = _scrub_words(a.get("id"), 60)
+    if el_id and " " not in el_id:
+        out["id"] = el_id
+    classes = [c for c in (_scrub_words(c, 40) for c in (a.get("classes") or []) if isinstance(c, str)) if c and " " not in c]
+    if classes:
+        out["classes"] = classes[:_RECORDED_ANCESTOR_CLASS_MAX]
+    text = html.unescape(_HTML_TAG_RE.sub(" ", _HTML_SKIP_RE.sub(" ", str(a.get("outer_html") or ""))))
+    text = _scrub_words(_without_typed(text, typed), _RECORDED_ANCESTOR_TEXT_MAX)
+    if text:
+        out["text"] = text
+    return out
+
+
+def _recorded_ancestors(session_id: str, typed: list[str]) -> dict[Any, list[dict[str, Any]]]:
+    """{event sequence: the nearest ancestors, trimmed}, from the recording itself. Empty when the recording is gone."""
+    if not session_id:
+        return {}
+    try:
+        from conxa_core.storage.session_events import read_session_events  # noqa: PLC0415
+
+        events = read_session_events(session_id)
+    except Exception:  # noqa: BLE001 -- no recording: recovery.json keeps parent/siblings only
+        return {}
+    out: dict[Any, list[dict[str, Any]]] = {}
+    for ev in events:
+        seq = (ev.get("extras") or {}).get("sequence") if isinstance(ev, dict) else None
+        chain = ev.get("ancestors") if isinstance(ev, dict) else None
+        if seq is not None and isinstance(chain, list) and chain:
+            out[seq] = [_trimmed_ancestor(a, typed) for a in chain[:_RECORDED_ANCESTOR_MAX]]
+    return out
+
 
 def _recorded_context_for_saved_step(
     step: dict[str, Any], names: list[tuple[str, frozenset[str]]] | None = None,
+    ancestors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Where this element sat on the page AT RECORDING TIME — the structural before-picture.
 
@@ -1230,11 +1309,15 @@ def _recorded_context_for_saved_step(
     survives into the saved skill (build.py's `signals["context"]`) — this only selects the
     structural fields and drops the rest. `page_url`/`page_title`/`timing` are merged into the
     same dict by the compiler and are deliberately excluded: they describe the visit, not the
-    element's position in the page.
+    element's position in the page. `ancestors` (from `_recorded_ancestors`, the recording's own
+    ancestor chain) adds the containers above the parent: "inside the header's toolbar".
     """
     signals = step.get("signals") if isinstance(step.get("signals"), dict) else {}
     context = signals.get("context") if isinstance(signals.get("context"), dict) else {}
-    if not context:
+    if step.get("entity_binding"):
+        # A step bound to a record: its row's text IS the record, so only the structure ships.
+        ancestors = [{k: v for k, v in a.items() if k != "text"} for a in ancestors or []]
+    if not context and not ancestors:
         return {}
     if names:
         # A workflow compiled before the compile-time scrub (selector_filters.drop_personal_target_text) knew the
@@ -1242,8 +1325,11 @@ def _recorded_context_for_saved_step(
         from conxa_compile.compiler.selector_filters import without_sign_in_names  # noqa: PLC0415
 
         context = without_sign_in_names(context, names)
+        ancestors = [{k: v for k, v in a.items() if v} for a in without_sign_in_names(ancestors or [], names)]
 
     out: dict[str, Any] = {}
+    if ancestors:
+        out["ancestors"] = ancestors
     parent = str(context.get("parent") or "").strip()
     if parent:
         out["parent"] = parent
@@ -1372,6 +1458,7 @@ def _build_saved_skill_recovery(
     step_ids: list[int],
     visuals_dir: Path | None = None,
     typed: list[str] | None = None,
+    ancestors_by_event: dict[Any, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     from conxa_compile import signin_names  # noqa: PLC0415
     from conxa_core.config import settings  # noqa: PLC0415
@@ -1411,7 +1498,8 @@ def _build_saved_skill_recovery(
             "fallback": {"role": target_role},
             "selector_context": {"primary": selector},
         }
-        recorded_context = _recorded_context_for_saved_step(step, names)
+        recorded_context = _recorded_context_for_saved_step(
+            step, names, (ancestors_by_event or {}).get(step.get("source_event")))
         if recorded_context:
             entry["recorded_context"] = recorded_context
         visual_ref = _saved_step_visual_ref(step_id, visuals_dir)
@@ -1497,6 +1585,13 @@ def _build_workflow_from_saved_skill(
             converted["source_step_key"] = doc_keys[raw_index - 1]
             _mark_unclassified_click(raw, converted)
             _mark_repeat_click(raw, converted)
+            stray = _selector_input_without_identity_trace(converted)
+            if stray and on_warning:
+                on_warning(
+                    f"Step {raw_index}: this step looks for its target by the value “{stray}”, but the item "
+                    "it was recorded on never showed that value, so it may never be found. Pick its target again "
+                    "in Human Edit, then rebuild."
+                )
         if converted is None:
             action = _step_action_name(raw) or "unknown"
             if normalize_action_kind(action) == "drag_drop":
@@ -1566,7 +1661,9 @@ def _build_workflow_from_saved_skill(
         skill_dir=skill_dir,
         source_session_id=source_session_id,
     )
-    recovery = _build_saved_skill_recovery(source_steps, step_ids, visuals_dir, _recorded_typed_values(source_session_id))
+    typed = _recorded_typed_values(source_session_id)
+    recovery = _build_saved_skill_recovery(
+        source_steps, step_ids, visuals_dir, typed, _recorded_ancestors(source_session_id, typed))
     (skill_dir / "execution.json").write_text(dumps_safe(execution_steps, indent=2, ensure_ascii=False), encoding="utf-8")
     (skill_dir / "recovery.json").write_text(dumps_safe(recovery, indent=2, ensure_ascii=False), encoding="utf-8")
     (skill_dir / "input.json").write_text(dumps_safe({"inputs": inputs}, indent=2, ensure_ascii=False), encoding="utf-8")

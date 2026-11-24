@@ -166,8 +166,10 @@ _STUDIO_RULES = (
     "number. Be brief and concrete; plain prose, no markdown headings. When the context has a "
     "\"Changes you are offering\" section, describe only those changes, in your own words, and say "
     "they take effect when the person presses Apply; never promise a change that is not listed. "
-    "When the person asked for a change and that section says none could be prepared, say so "
-    "plainly and point them to Human Edit instead of describing what you would have done. "
+    "When the person asked for a change and that section says none could be prepared, first check the "
+    "steps in the context: if the workflow already does what they asked, say that and name the step, "
+    "and never call it a failure. Otherwise say plainly that no change could be prepared and point them "
+    "to Human Edit instead of describing what you would have done. "
     + PLAIN_WORDS
 )
 

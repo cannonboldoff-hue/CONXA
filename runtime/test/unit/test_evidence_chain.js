@@ -261,6 +261,19 @@ test("a 401/403 tracking flush marks the workspace refused; a 2xx clears it; a 5
       assert.strictEqual(accessRefused.isRefused("ws-x"), expectRefused, `after HTTP ${status}`);
     }
     accessRefused._reset();
+    // BUILD-117 (11): no key was sent (a Build Studio test run), so a 401 says nothing about an installed key.
+    const s = await startRejectingServer(401);
+    try {
+      const tracker = createTracker(
+        { enabled: true, tracking_url: `http://127.0.0.1:${s.port}/events`, tracking_token: "" },
+        { runtime_version: "1.0.0", workflow_id: "wf1", company_id: "ws-x" }
+      );
+      tracker.forRun("run-y", {}).emit("wf_start", {});
+      await tracker.flush();
+      tracker.destroy();
+    } finally { s.server.close(); }
+    assert.strictEqual(accessRefused.isRefused("ws-x"), false);
+    accessRefused._reset();
   });
 });
 

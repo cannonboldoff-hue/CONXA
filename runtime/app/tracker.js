@@ -252,7 +252,9 @@ function createTracker(trackingConfig, runtimeContext) {
     } finally {
       _flushing = false;
     }
-    noteAccess(ctx.company_id || cfg.workspace_id || ctx.workspace_id, "tracking", result.status);
+    // A refusal says the installed key is wrong only when a key was sent: Build Studio's test runs send none, and every
+    // test card then said "Conxa could not confirm this computer's access" (BUILD-117 (11)).
+    if (cfg.tracking_token) noteAccess(ctx.company_id || cfg.workspace_id || ctx.workspace_id, "tracking", result.status);
     // A 4xx here would never succeed on a later drain either — same reasoning as drainSpill's
     // own drop-on-permanent-rejection.
     if (!result.ok && !_isPermanentRejection(result.status)) {

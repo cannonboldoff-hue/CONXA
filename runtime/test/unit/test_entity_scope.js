@@ -153,6 +153,32 @@ test("a longer look-alike is not the bound row: Carol Ann never stands in for Ca
   assert.strictEqual(whole.length, 1);                                 // a for_each row: its own whole text
 });
 
+// BUILD-117 (8): "WF1 B secure area logout r4" (compiled 2026-11-16) binds Logout to `body > div.row` "Logged in as".
+// The compiler names a row by one run of text, and here that run sits beside an element:
+// <p>Logged in as <span id="username">tomsmith</span></p>. Matching whole elements only (WF-7) never found it.
+const text = (v) => ({ nodeType: 3, nodeValue: v });
+const el = (tagName, kids) => ({
+  tagName, childNodes: kids,
+  innerText: kids.map(k => k.nodeType === 3 ? k.nodeValue : k.innerText).join(""),
+  querySelectorAll: () => kids.filter(k => k.nodeType !== 3).flatMap(k => [k, ...k.querySelectorAll()]),
+});
+const logoutRows = (who) => [
+  el("DIV", [el("DIV", [])]),                                            // the flash-messages row
+  el("DIV", [el("DIV", [el("H2", [text("Secure Area")]),
+    el("P", [text("Logged in as "), el("SPAN", [text(who)])]), el("A", [text(" Logout")])])]),
+];
+const rowsRoot = (rows) => ({ locator: () => ({ count: async () => rows.length, evaluateAll: async (fn, a) => fn(rows, a), nth: (i) => ({ _row: i }) }) });
+
+test("a run of text beside an element names its row: the old logout workflow finds its row (BUILD-117 (8))", async () => {
+  const step = { entity_binding: { container_selector: "body > div.row", identifier: "Logged in as", source: "literal", confirmed: false } };
+  const out = await entityRoots([rowsRoot(logoutRows("tomsmith"))], step, {});
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0]._row, 1);
+  // still a whole value: part of a run is not the run
+  const part = await entityRoots([rowsRoot(logoutRows("tomsmith"))], { entity_binding: { ...step.entity_binding, identifier: "Logged in" } }, {});
+  assert.deepStrictEqual(part, []);
+});
+
 // ── "the suggestion that shows what was typed" (entity_binding.match "contains", BUILD-102 (6)) ─────────────────────
 const PICK = (extra = {}) => ({
   entity_binding: { container_selector: "[role=option]", identifier: "{{name}}", source: "input", match: "contains", self_target: true, ...extra },

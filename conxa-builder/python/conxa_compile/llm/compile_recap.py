@@ -26,9 +26,10 @@ _ATTEMPTS = 3
 # The reason given for drawing the recording could not keep (handlers/compile_flow.py puts it in ``left_out``).
 DRAWING_LEFT_OUT = "drawing, or clicking in a drawing area, can't be recorded yet"
 HUMAN_CHECK_LEFT_OUT = "a robot check can't be done automatically; only a person may do it"
+LOST_LEFT_OUT = "they could not be kept in the workflow; the person is asked about them"   # BUILD-23/24
 # A message must not claim the workflow does what the person did, or gets past a robot check, when one of these
 # walls left part of it out (WF-8 8.12, 8.13).
-_WALLS = (DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT)
+_WALLS = (DRAWING_LEFT_OUT, HUMAN_CHECK_LEFT_OUT, LOST_LEFT_OUT)
 _GETS_PAST = re.compile(r"\b(?:gets?|getting|goes|going) (?:past|through|around)\b|\b(?:solves?|passes|beats?) the robot", re.IGNORECASE)
 # Claims a message must not make when something was left out: the facts say otherwise (WF-8 8.12).
 _NOTHING_LEFT_OUT = re.compile(r"\bnothing (?:was |is |has been )?(?:left out|missed|dropped)", re.IGNORECASE)

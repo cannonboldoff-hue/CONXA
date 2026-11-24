@@ -189,6 +189,9 @@ class CompileMixin:
         doc = read_skill(skill_id) or package.model_dump(mode="json")
         doc, _ = reconcile_inputs_with_step_values(doc)
         doc["inputs"] = filter_runtime_only_inputs(list(doc.get("inputs") or []))
+        from conxa_compile.compiler.build import record_unbuildable
+
+        record_unbuildable(doc)
         write_skill(skill_id, doc)
         step_count = len(package.skills[0].steps)
         sink({"phase": "compiler_done", "step_count": step_count})

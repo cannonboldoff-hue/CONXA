@@ -1,0 +1,12 @@
+{
+  "slug": "gate-tabs",
+  "name": "CI Gate Tabs",
+  "description": "Hermetic multi-tab round trip (EXEC-10): download on one site, upload in a site-opened tab on another host, a user-opened tab, a never-used popup, and switches back to earlier tabs.",
+  "version": "0.0.1",
+  "required_runtime": ">=1.0.0",
+  "company": "gate",
+  "target_url": "",
+  "inputs_required": ["base_url", "other_url"],
+  "structural_fingerprint": { "landmarks": [], "landmark_count": 0 },
+  "checksum": {}
+}

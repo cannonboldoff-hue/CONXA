@@ -163,6 +163,28 @@ def unsupported_sentence(dropped: list[dict[str, Any]] | None) -> str:
             f"{'this action was' if n == 1 else f'these {n} actions were'} left out. The workflow won’t do them.")
 
 
+# Ledger passes for actions the build lost: one no compile pass kept a record of (compiler/build.py::_record_unaccounted)
+# or a step the package cannot carry (build.py::record_unbuildable). Never silent: named to the person, who must answer.
+LOST_PASSES = frozenset({"unaccounted", "not_buildable"})
+
+
+def lost_sentence(dropped: list[dict[str, Any]] | None) -> str:
+    """The plain line naming each recorded action the workflow lost ('' when there was none), BUILD-23/24. Built in code
+    from what was recorded (the action and the label the item showed), never a selector or a step number."""
+    lost = [d for d in dropped or [] if isinstance(d, dict) and d.get("pass") in LOST_PASSES]
+    if not lost:
+        return ""
+    names = []
+    for d in lost[:5]:
+        act, label = str(d.get("action") or ""), str(d.get("target") or "").strip()
+        verb = _LABELLED_VERBS.get(act, "")
+        name = f"{verb} {_quoted(label)}" if verb and label else _PLAIN_ACTIONS.get(act) or verb or "one more action"
+        names.append(name[:1].lower() + name[1:])
+    more = f", and {len(lost) - 5} more" if len(lost) > 5 else ""
+    return (f"Something you did while recording could not be kept, so the workflow won’t do it: "
+            f"{'; '.join(names)}{more}.")
+
+
 def human_check_sentence(dropped: list[dict[str, Any]] | None) -> str:
     """The plain line for a robot check ("I'm not a robot") the recording could not keep ('' when there was none).
     Code-written, so no summary can say the workflow gets past it (WF-8 8.13)."""
@@ -467,6 +489,23 @@ def _unproven_end(doc: dict[str, Any]) -> str | None:
     return None
 
 
+def _offerable(doc: dict[str, Any], step: dict[str, Any], a: dict[str, Any], memo: dict[str, Any]) -> bool:
+    """Whether a check the compiler wrote may be offered as "it worked". A web-address check on a step the recording saw
+    stay on its address can only fail (BUILD-117 (1), the rule second_opinion.py now builds by; a workflow built before
+    it still carries one). Fixed words are offered only when a saved page showed them after a step and not already
+    before it (BUILD-117 (5): "delete", "remove", "permanently" were offered for a Delete step from a word list, never
+    seen on the page). No recording to read keeps the offer."""
+    if a.get("type") in ("url_changed", "url_pattern") and _action_name(step) != "navigate":
+        before, after = (str(((step.get("state") or {}).get(k) or {}).get("url") or "").split("#", 1)[0] for k in ("before", "after"))
+        if before and after and before == after:
+            return False
+    if a.get("type") == "text_present":
+        words = str(a.get("target") or a.get("text") or a.get("value") or "")
+        if words and "{{" not in words and step_where_words_appear(doc, words, memo=memo) in ("", ALREADY_SHOWN):
+            return False
+    return True
+
+
 def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[str]]:
     """The tickable "it worked" checks for the doc as it stands now: assertions the compiler already
     wrote (not yet required) plus one "this input shows up" check per run input. Text comes from
@@ -476,6 +515,7 @@ def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = No
     steps = _steps(doc)
     keys = step_keys(steps)
     checks: list[dict[str, Any]] = []
+    memo: dict[str, Any] = {}  # the recording and its pages, read once for every check and input (BUILD-111 (7))
     for i in range(max(0, len(steps) - 3), len(steps)):
         assertions = (steps[i].get("validation") or {}).get("assertions") or []
         # A step that landed on another page (its landing is a url_pattern) was last seen on the page it left: words
@@ -483,7 +523,7 @@ def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = No
         # person (WF-4 Leg C: ticked, they failed every run). An unticked check cannot fail a run.
         landed = any(isinstance(a, dict) and a.get("type") == "url_pattern" for a in assertions)
         for j, a in enumerate(assertions):
-            if isinstance(a, dict) and a.get("type") in _ASSERTION_TYPES and not a.get("required"):
+            if isinstance(a, dict) and a.get("type") in _ASSERTION_TYPES and not a.get("required") and _offerable(doc, steps[i], a, memo):
                 checks.append({"id": f"{keys[i]}#{j}", "step_key": keys[i], "assertion": a, "landed": landed})
 
     def describe(a: dict[str, Any]) -> str:
@@ -507,7 +547,6 @@ def _done_when_choices(doc: dict[str, Any], recorded: dict[str, Any] | None = No
     if choices or effect_choices:
         referenced = " ".join(str(a.get("target") or "") for s in steps
                               for a in (s.get("validation") or {}).get("assertions") or [] if isinstance(a, dict))
-        memo: dict[str, Any] = {}  # the recording and its pages, read once for every input (BUILD-111 (7))
         for inp in doc.get("inputs") or []:
             iid = str(inp.get("id") or "") if isinstance(inp, dict) else ""
             if iid and iid != "file_path" and "{{" + iid + "}}" not in referenced and not any(
@@ -701,13 +740,18 @@ def generate_questions(
 
     # 0a ─ drawing on a canvas, left out because nothing can repeat it: said plainly, and the person acknowledges it
     # before anything can be tested or approved (a workflow that "draws a rectangle" and draws nothing must not pass
-    # as working). A safety-floor kind: never pre-answered, never dropped.
-    cant = unsupported_sentence(dropped)
-    if cant:
+    # as working). A safety-floor kind: never pre-answered, never dropped. An action the build lost (BUILD-23/24) is
+    # named in the same question, so a failed or partial build is never published without the person knowing.
+    cant, lost = unsupported_sentence(dropped), lost_sentence(dropped)
+    if cant or lost:
+        tail = ("If drawing was the point of the task, this workflow can’t do it yet." if cant
+                else "If it matters, record that part again or add it in the editor.")
         out.append(_question(
             "unsupported", "unsupported", "Part of this can’t be repeated",
-            f"{cant} If drawing was the point of the task, this workflow can’t do it yet.",
-            [{"id": "ok", "label": "I understand", "detail": "Keep the other steps, without the drawing."}],
+            " ".join(filter(None, (cant, lost, tail))),
+            [{"id": "ok", "label": "I understand",
+              "detail": "Keep the other steps, without the drawing." if cant else "Keep the other steps, without it."}],
+            drawing=bool(cant),
         ))
 
     # 0a' ─ a robot check, left out because only a person may do it: a hand-over step lets someone do it on each run,
@@ -742,7 +786,7 @@ def generate_questions(
     still_used |= {str(((look(s) or {}).get("action") or {}).get("value")) for s in steps
                    if ((look(s) or {}).get("action") or {}).get("value")}  # what each kept step was recorded typing
     lost = [d for d in dropped or []
-            if isinstance(d, dict) and d.get("value") and d.get("pass") not in _MERGE_PASSES
+            if isinstance(d, dict) and d.get("value") and d.get("pass") not in _MERGE_PASSES | LOST_PASSES
             and str(d.get("value")) not in still_used]
     if lost:
         shown = ", ".join(f"“{str(d['value'])[:40]}”" for d in lost[:3])
@@ -1633,7 +1677,7 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
         return ops, "Left out"
 
     if kind == "unsupported":
-        return ops, "Kept without the drawing"
+        return ops, "Kept without the drawing" if question.get("drawing", True) else "Kept without it"
 
     if kind == "human_check":
         if answer.get("choice") == "handover" and keys:
@@ -1848,7 +1892,10 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             for j in idxs:
                 if j < len(assertions):
                     assertions[j]["required"] = True
-            retired = {j for j in offered.get(key, set()) if j < len(assertions) and not assertions[j].get("required")}
+            # Where the step landed is kept, still unticked (it can never fail a run): the runtime reads it to tell a
+            # recorded "Log out" from a sign-in that expired (run.js::landedAsRecorded, BUILD-117 (10)).
+            retired = {j for j in offered.get(key, set()) if j < len(assertions) and not assertions[j].get("required")
+                       and assertions[j].get("type") != "url_pattern"}
             assertions = [a for j, a in enumerate(assertions) if j not in retired]
             assertions += extra_by_step.get(key, [])
             if custom and key == custom_key:
@@ -1862,8 +1909,9 @@ def plan_answer(question: dict[str, Any], answer: dict[str, Any], doc: dict[str,
             labels.append(f"I can’t check “{custom}” yet: it shows after the answer to the popup at the end, and a "
                           "check can’t go there. A test will show whether it appears")
         elif custom and custom_unseen:
-            labels.append(f"You see “{custom}” on the screen at the very end. I didn’t see these words while you "
-                          "recorded: if they show up earlier, tell me after which step")
+            labels.append(f"Added: you see “{custom}” on the screen at the very end. I didn’t see these words while you "
+                          "recorded (the recording may have stopped before they showed), so the first test will tell. "
+                          "If they show up earlier, tell me after which step")
         elif custom:
             where = step_name(keyed[custom_key]) if custom_key and custom_key != end_key else ""
             labels.append(f"You see “{custom}” on the screen" + (f" after “{where}”" if where else ""))

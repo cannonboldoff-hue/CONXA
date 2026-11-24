@@ -650,8 +650,8 @@ def validate_editor_patch(
             raise ValueError("check_step_allows_only_check_fields")
     if act == "extract":
         # "Always the first result?" answered yes (clarify.py pick_match) turns on the place binding code already wrote:
-        # only its `confirmed` flag, never where it points (BUILD-117 (2)). Chat cannot send it: editable_fields("extract")
-        # does not list it.
+        # only its `confirmed` flag, never where it points (BUILD-117 (2)). Chat may send the same flag and nothing more:
+        # editable_fields("extract") lists only entity_binding.confirmed.
         eb = patch.get("entity_binding")
         confirm_only = isinstance(eb, dict) and set(eb) == {"confirmed"} and isinstance(step.get("entity_binding"), dict)
         invalid_keys = sorted(set(patch) - EXTRACT_ALLOWED_KEYS - ({"entity_binding"} if confirm_only else set()))

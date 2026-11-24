@@ -34,3 +34,20 @@ test("enrichStepsWithRecovery: non-array steps pass through untouched", () => {
   assert.strictEqual(enrichStepsWithRecovery(null, {}), null);
   assert.strictEqual(enrichStepsWithRecovery(undefined, {}), undefined);
 });
+
+test("enrichStepsWithRecovery: the recorded ancestor chain reaches the Tier B prompt (RECOV-2 phase 4)", () => {
+  const { recordedContextBlock } = require("../../app/failure_response");
+  const ancestors = [
+    { tag: "div", id: "toolbar", classes: ["actions"], text: "Export Print" },
+    { tag: "header", classes: ["top"] },
+  ];
+  const [step] = enrichStepsWithRecovery([{}], {
+    steps: [{ step_id: 1, recorded_context: { parent: "div#toolbar", ancestors } }],
+  });
+
+  assert.deepStrictEqual(step._recorded_context.ancestors, ancestors);
+  const block = recordedContextBlock({ failedStep: step });
+  assert.match(block, /AT RECORDING TIME/);
+  assert.match(block, /"tag":"header"/);
+  assert.match(block, /Export Print/);
+});

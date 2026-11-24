@@ -356,7 +356,11 @@ There is no dev/stable manifest system for Build Studio. It ships differently:
    `CONXA_STUDIO_VERSION`, `CONXA_STUDIO_WIN_URL`, `CONXA_STUDIO_WIN_SHA256`, and
    `CONXA_STUDIO_WIN_SHA512`. The `/api/v1/updates/studio-manifest` endpoint — the one the
    dashboard and the Studio's own self-updater read from — is driven entirely by these env
-   vars. Nothing promotes automatically the way conxa-app/conxa-runtime do.
+   vars. The Studio installer itself never promotes automatically. The conxa-app and
+   conxa-runtime copies the Studio downloads at startup (`/api/v1/updates/deps-manifest`)
+   do: they read the same record CI posts for the runtime self-updater, so a published
+   app/host release reaches the Studio with no env-var change. Their `CONXA_APP_*` /
+   `CONXA_HOST_*` env vars are only the fallback before anything has been published.
 
 **Order matters when the compile prompt changes.** The prompt Studio sends at compile time (the "can this be
 undone?" definition, `_EFFECTS_RULE`) lives in the shared core that the **cloud** also runs. Deploy the cloud first,

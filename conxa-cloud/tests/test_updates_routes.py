@@ -79,6 +79,49 @@ def test_deps_manifest_env_override(monkeypatch):
     assert m._NSIS_URL == "https://example.com/nsis-3.99.zip"
 
 
+def test_deps_manifest_follows_published_kv_record(monkeypatch, tmp_path):
+    """SHIP-1: Studio's deps come from what CI last published, not hand-set env vars."""
+    from conxa_core.config import settings
+    from conxa_core.db import db_set
+    import app.api.updates_routes as m
+
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+
+    def deps():
+        return client.get("/api/v1/updates/deps-manifest").json()["deps"]
+
+    # Nothing published yet: env-var defaults.
+    assert deps()["conxa-app"]["version"] == m._APP_VERSION
+    assert deps()["conxa-runtime"]["version"] == m._HOST_VERSION
+
+    def publish_app(version, sha):
+        zip_name = f"conxa-app-{version}.zip"
+        db_set("component_versions", "conxa_app", {"version": version, "files": [
+            {"filename": zip_name, "url": f"https://x/{zip_name}", "sha256": sha}]})
+
+    publish_app("app-v9.0.0", "a" * 64)
+    db_set("component_versions", "conxa_runtime", {"version": "host-v9.0.0", "files": [
+        {"filename": "conxa-runtime.exe", "url": "https://x/rt.exe", "sha256": "c" * 64},
+        {"filename": "keytar.node", "url": "https://x/k.node", "sha256": "d" * 64}]})
+    d = deps()
+    assert d["conxa-app"]["version"] == "app-v9.0.0"
+    assert d["conxa-app"]["files"][0] == {"filename": "conxa-app-app-v9.0.0.zip",
+                                         "url": "https://x/conxa-app-app-v9.0.0.zip",
+                                         "sha256": "a" * 64, "action": "extract_zip"}
+    rt = {f["filename"]: f for f in d["conxa-runtime"]["files"]}
+    assert d["conxa-runtime"]["version"] == "host-v9.0.0"
+    assert rt["conxa-runtime.exe"]["sha256"] == "c" * 64 and rt["conxa-runtime.exe"]["url"] == "https://x/rt.exe"
+    assert rt["keytar.node"]["sha256"] == "d" * 64
+
+    # A re-publish (new version, or same tag clobbered with a new digest) changes the answer.
+    publish_app("app-v9.0.1", "b" * 64)
+    f = deps()["conxa-app"]["files"][0]
+    assert deps()["conxa-app"]["version"] == "app-v9.0.1"
+    assert f["filename"] == "conxa-app-app-v9.0.1.zip" and f["sha256"] == "b" * 64
+    publish_app("app-v9.0.1", "e" * 64)
+    assert deps()["conxa-app"]["files"][0]["sha256"] == "e" * 64
+
+
 def test_malformed_digest_env_var_refuses_to_import(monkeypatch):
     """The exact bug found live: a release-notes "<filename>  <hash>" line pasted whole into a
     *_SHA256 env var must fail fast at import time, not silently serve a manifest every client

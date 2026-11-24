@@ -465,3 +465,56 @@ test("with only the hands-off page pending, a site-opened tab is not found (neve
   ctx.fireNewPage(fakePage("shield2", { url: "about:blank?conxa_shield=1" }));
   await assert.rejects(resolveStepPage(registry, { tab: { id: "tab_1", opened_by: "site" } }), (e) => e.tabNotFound === true);
 });
+
+// EXEC-10, found by a real recorded 3-tab run: the Studio test paused before a step on the second tab, and the
+// resumed call started on the parked page with a fresh registry. It bound that page as tab_0 and opened a blank
+// tab for tab_1, so "Click Delete" ran on an empty page. A resume must find the run's own tabs again.
+test("a resumed run finds the tabs it already opened, starting from whichever tab it parked on", async () => {
+  const ctx = fakeContext({ waitForEventPage: null });
+  const all = [];
+  ctx.pages = () => all.filter((p) => !p.isClosed());
+  const first = registryWith(ctx);
+  const tab0 = first.pages.get("tab_0");
+  all.push(tab0);
+  const tab1 = await resolveStepPage(first, { tab: { id: "tab_1", opened_by: "user" } });
+  all.push(tab1);
+  const popup = fakePage("popup", { url: "https://app.test/new" });
+  ctx.fireNewPage(popup); all.push(popup);
+  await resolveStepPage(first, { tab: { id: "tab_2", opened_by: "site" } });
+
+  // Park on tab_1, then resume: the new call's start page is tab_1, not the first tab.
+  tab1.context = () => ctx;
+  const resumed = createTabRegistry(tab1, { resume: true });
+  assert.strictEqual(await resolveStepPage(resumed, { tab: { id: "tab_1", opened_by: "user" } }), tab1);
+  assert.strictEqual(ctx.newPageCalls, 1, "no new blank tab is opened for a tab the run already has");
+  assert.strictEqual(await resolveStepPage(resumed, { tab: { id: "tab_0" } }), tab0);
+  assert.strictEqual(await resolveStepPage(resumed, { tab: { id: "tab_2", opened_by: "site" } }), popup);
+});
+
+test("a fresh run never adopts tabs left over from an earlier run in the same browser", async () => {
+  const ctx = fakeContext();
+  const all = [];
+  ctx.pages = () => all;
+  const first = registryWith(ctx);
+  all.push(first.pages.get("tab_0"), await resolveStepPage(first, { tab: { id: "tab_1", opened_by: "user" } }));
+  const next = fakePage("fresh");
+  next.context = () => ctx;
+  const fresh = createTabRegistry(next);
+  assert.strictEqual(await resolveStepPage(fresh, { tab: { id: "tab_0" } }), next);
+  const t1 = await resolveStepPage(fresh, { tab: { id: "tab_1", opened_by: "user" } });
+  assert.notStrictEqual(t1, all[1], "the earlier run's tab_1 is not this run's tab_1");
+});
+
+test("a resumed step on a first tab that has since closed fails as tab-not-found, never runs on another tab", async () => {
+  const ctx = fakeContext();
+  const all = [];
+  ctx.pages = () => all.filter((p) => !p.isClosed());
+  const first = registryWith(ctx);
+  const tab0 = first.pages.get("tab_0");
+  const tab1 = await resolveStepPage(first, { tab: { id: "tab_1", opened_by: "user" } });
+  all.push(tab0, tab1);
+  tab0.close();
+  tab1.context = () => ctx;
+  const resumed = createTabRegistry(tab1, { resume: true });
+  await assert.rejects(resolveStepPage(resumed, { tab: { id: "tab_0" } }), (e) => e.tabNotFound === true);
+});

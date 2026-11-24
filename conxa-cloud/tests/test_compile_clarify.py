@@ -976,6 +976,59 @@ def test_an_input_whose_typed_words_are_unknown_is_not_offered_as_a_check_on_the
     assert "input:date_of_birth" in {c["id"] for c in _done_when_choices(doc)[0]}  # no recording given: as before
 
 
+def test_build_117_offered_checks_quote_only_words_a_page_showed_after_a_step(monkeypatch):
+    """LIVE-PASS 2026-11-22: the Delete step offered "delete", "remove" and "permanently" (a word list), never seen on the
+    page as a result; "delete" was only the button's own label."""
+    import conxa_core.storage.session_events as se
+    import conxa_core.storage.snapshots as sn
+    from conxa_compile.conversation.clarify import _done_when_choices
+
+    def ev(seq, snap, **kw):
+        return {"action": {"action": "click"}, "page": {"url": "http://h/list"}, "extras": {"sequence": seq},
+                "snapshot": {"dom_hash": snap}, **kw}
+
+    events = [ev(1, "list", surrounding_text="Grace Hopper | Delete"), ev(2, "gone")]
+    pages = {"list": "<td>Grace Hopper</td><button>Delete</button>", "gone": "<p>Removed: Grace Hopper</p>"}
+    monkeypatch.setattr(se, "read_session_events", lambda _s: events)
+    monkeypatch.setattr(sn, "read_dom_snapshot", lambda _s, h: pages.get(h))
+    words = [{"type": "text_present", "target": w, "required": False} for w in ("permanently", "delete", "Removed: Grace")]
+    doc = _doc([_step("click", "open_row", source_event=1),
+                _step("click", "delete_row", source_event=2, validation={"assertions": words})])
+    doc["meta"]["source_session_id"] = "s1"
+    assert [c["label"] for c in _done_when_choices(doc)[0]] == ["You see the words “Removed: Grace” on the screen"]
+    doc["meta"]["source_session_id"] = ""  # no recording to read: the compiler's checks are offered as before
+    assert len(_done_when_choices(doc)[0]) == 3
+
+
+def test_build_117_an_address_check_is_offered_only_on_a_step_that_left_its_address():
+    """A workflow built before BUILD-117 (6) still carries "the web address changes" on the typing before Enter."""
+    from conxa_compile.conversation.clarify import _done_when_choices
+
+    url = [{"type": "url_changed", "target": "http://h/a", "required": False}]
+    stayed = _step("type", "type_name", validation={"assertions": url},
+                   state={"before": {"url": "http://h/a"}, "after": {"url": "http://h/a#top"}})
+    left = _step("keyboard_shortcut", "press_enter", validation={"assertions": list(url)},
+                 state={"before": {"url": "http://h/a"}, "after": {"url": "http://h/a?q=1"}})
+    keys = step_keys([stayed, left])
+    assert [c["id"] for c in _done_when_choices(_doc([stayed, left]))[0]] == [f"{keys[1]}#0"]
+
+
+def test_build_117_an_unticked_landing_stays_as_evidence_for_a_logout():
+    """LP secure logout: the unticked "The web address looks like …/login" was removed, so the runtime read the
+    workflow's own Log out as a sign-in that expired. An unticked landing stays, unticked; other checks are retired."""
+    checks = [{"type": "url_changed", "target": "https://h/secure", "required": False},
+              {"type": "url_pattern", "target": "^https://h/login", "required": False},
+              {"type": "text_present", "target": "You logged out", "required": False}]
+    doc = _doc([_step("click", "logout", validation={"assertions": checks},
+                      state={"before": {"url": "https://h/secure"}, "after": {"url": "https://h/login"}})])
+    q = next(q for q in generate_questions(doc) if q["kind"] == "done_when")
+    key = step_keys(doc["skills"][0]["steps"])[0]
+    (op,), _ = plan_answer(q, {"selected": [f"{key}#2"]}, doc)
+    assert op["patch"]["validation"]["assertions"] == [
+        {"type": "url_pattern", "target": "^https://h/login", "required": False},
+        {"type": "text_present", "target": "You logged out", "required": True}]
+
+
 # ── a pick from a suggestion list: fixed text, or "the one that shows what was typed" (BUILD-102 (6)) ─────────────
 
 

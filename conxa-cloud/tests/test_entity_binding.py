@@ -105,6 +105,63 @@ class TestDetectEntityBinding:
         ev = {"action": {"action": "click"}, "semantic": {"final_intent": "click_login_button"}, "ancestors": ancestors}
         assert detect_entity_binding(ev) is None
 
+    def test_logout_beside_logged_in_as_is_not_a_row(self):
+        # BUILD-117 (8): "WF1 B secure area logout r4" was compiled on 2026-11-16 with `body > div.row` "Logged in as".
+        # The recorded chain of that Logout click: a bare layout ".row" is not a data row, so a rebuild binds nothing.
+        content = ('<div class="example"><h2>Secure Area</h2><p>Logged in as <span id="username">tomsmith</span></p>'
+                   '<a class="button secondary radius" href="/logout"><i> Logout</i></a></div>')
+        ancestors = [
+            {"tag": "div", "id": "", "classes": ["example"], "outer_html": content},
+            {"tag": "div", "id": "content", "classes": ["large-12", "columns"], "outer_html": f'<div id="content">{content}</div>'},
+            {"tag": "div", "id": "", "classes": ["row"], "outer_html": f'<div class="row"><div id="content">{content}</div></div>'},
+            {"tag": "body", "id": "", "classes": [], "outer_html": (
+                '<body><div class="row"><div id="flash-messages"></div></div>'
+                f'<div class="row"><div id="content">{content}</div></div></body>')},
+        ]
+        ev = {"action": {"action": "click"}, "target": {"tag": "a", "role": "link", "inner_text": "Logout"},
+              "semantic": {"role": "link"}, "ancestors": ancestors}
+        assert detect_entity_binding(ev) is None
+        assert detect_entity_binding(ev, destructive=True) is None
+
+    def test_tab_link_is_never_bound_to_its_live_count(self):
+        # EXEC-67: GitHub's repository tabs are `li`s of one list; every tab link was bound to its count ("58", "1.1k"),
+        # which changes, so the shipped tour failed at step 3. The count and the label without it are the link's own
+        # words: the link's own words already pick its tab, so nothing is bound.
+        def tab(name: str, count: str = "") -> str:
+            badge = f'<span class="Counter">{count}</span><span class="sr-only">({count})</span>' if count else ""
+            return (f'<li class="UnderlineNavItem"><a href="/cli/cli/{name.split()[0].lower()}">'
+                    f'<span data-content="{name}">{name}</span>{badge}</a></li>')
+        tabs = [tab("Code"), tab("Issues", "1.1k"), tab("Pull requests", "58"), tab("Actions"), tab("Security and quality", "17")]
+        ul = f'<ul class="UnderlineNav-ItemsList" role="list">{"".join(tabs)}</ul>'
+        ev = {"action": {"action": "click"},
+              "target": {"tag": "a", "role": "link", "inner_text": "Pull requests 58 (58)", "label_text": "Issues 1.1k (1.1k)"},
+              "semantic": {"role": "link"},
+              "ancestors": [{"tag": "li", "id": "", "classes": ["UnderlineNavItem"], "outer_html": tabs[2]},
+                            {"tag": "ul", "id": "", "classes": ["UnderlineNav-ItemsList"], "outer_html": ul},
+                            {"tag": "nav", "id": "", "classes": [], "outer_html": f"<nav>{ul}</nav>"}]}
+        assert detect_entity_binding(ev) is None
+        assert detect_entity_binding(ev, dom_html=f"<html><body><nav>{ul}</nav></body></html>") is None
+        found = detect_entity_binding(ev, destructive=True)
+        assert found is None or found.identifier.lower() not in {"58", "(58)", "1.1k", "17", "pull requests"}
+
+    def test_tooltip_text_never_names_a_row(self):
+        # EXEC-67: GitHub's repo breadcrumb was bound to its picker's tooltip "Switch repository", which a signed-out
+        # page does not have, so the tour failed at step 5. Text kept out of sight is not what the row shows.
+        tip = ('<button aria-labelledby="t1"></button><span data-component="Tooltip" aria-hidden="true" popover="auto">'
+               '<span id="t1">Switch repository</span></span>')
+        crumbs = ['<li class="Crumb"><a href="/cli">cli</a></li>', f'<li class="Crumb"><a href="/cli/cli">cli</a>{tip}</li>']
+        ol = f'<ol class="Crumbs">{"".join(crumbs)}</ol>'
+        ev = {"action": {"action": "click"}, "target": {"tag": "a", "role": "link", "inner_text": "cli"},
+              "semantic": {"role": "link"},
+              "ancestors": [{"tag": "li", "id": "", "classes": ["Crumb"], "outer_html": crumbs[1]},
+                            {"tag": "ol", "id": "", "classes": ["Crumbs"], "outer_html": ol}]}
+        assert detect_entity_binding(ev) is None
+        # a row's own words still name it when they are on show
+        shown = [c.replace('aria-hidden="true" popover="auto"', "") for c in crumbs]
+        ev["ancestors"] = [{"tag": "li", "id": "", "classes": ["Crumb"], "outer_html": shown[1]},
+                           {"tag": "ol", "id": "", "classes": ["Crumbs"], "outer_html": f'<ol class="Crumbs">{"".join(shown)}</ol>'}]
+        assert detect_entity_binding(ev).identifier == "Switch repository"
+
 
 class TestIdentifierUpgrade:
     def test_prefers_declared_input_over_literal(self):

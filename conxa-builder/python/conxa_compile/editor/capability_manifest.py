@@ -184,6 +184,9 @@ def editable_fields(kind: str) -> frozenset[str]:
         out.update(_LOOP_FIELDS)
     if keys is DEFAULT_ALLOWED_KEYS:
         out.update(_DEFAULT_DOTTED)
+    if kind == "extract":
+        # "Always the first result?" can be said in chat too; only the flag, never where the binding points (BUILD-117 (2)).
+        out.add("entity_binding.confirmed")
     if kind in VALUE_IS_ADDRESS_KINDS:
         out.discard("value")
     return frozenset(out)

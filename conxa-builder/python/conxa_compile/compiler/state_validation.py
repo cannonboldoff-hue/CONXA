@@ -182,7 +182,9 @@ def merge_dom_diff_evidence(ev: Step, state_diff: dict[str, Any]) -> dict[str, A
         return state_diff
     added_lines = [] if left else [str(x) for x in (dom_diff.get("added") or [])][:20]
     # Words the page showed after the action (bridge.js resultSignature, never a control's label): the real results.
-    result_words = [w.strip() for w in (result_diff.get("added") or []) if isinstance(w, str) and len(w.strip()) >= 3][:6]
+    # A message's own close button ("You logged out of the secure area! ×") is not part of its words (BUILD-117 (11)).
+    result_words = [w for w in (str(x).strip().rstrip("×✕✖").rstrip() for x in (result_diff.get("added") or []) if isinstance(x, str))
+                    if len(w) >= 3][:6]
     if not added_lines and not result_words:
         return state_diff
 

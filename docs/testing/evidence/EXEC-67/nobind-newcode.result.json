@@ -1,0 +1,1202 @@
+{
+ "wall_ms": 164417,
+ "env": {},
+ "result": {
+  "result": {
+   "content": [
+    {
+     "type": "text",
+     "text": "Done, please check. URL: https://github.com/cli/cli\n\nPlease check:\n  - I couldn't confirm that step 41 finished.\n\nWarning:\n  This app may have been redesigned since this workflow was recorded — 2/2 expected landmarks are missing on the live page.\n(run_id: r_mwuz3jyn_ujfo9)"
+    }
+   ],
+   "structuredContent": {
+    "outcome": "done_please_check",
+    "steps": [
+     {
+      "index": 0,
+      "source_step_key": "e74cf267d7017f09#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "performed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 1,
+      "source_step_key": "294f7f299432feb2c8831c223518e607ed405509412daf651230781cb95e01a5#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 2,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 3,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 4,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 5,
+      "source_step_key": "66c5baff5a9a1c11b254fd2190fae4501c732c0d533c5138dfdafd1cd4834fb3#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 6,
+      "source_step_key": "1931c7b7bfeb7d41522055089b11a1ce5523fedab9ae96665d808cb8b45453c1#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "no"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 7,
+      "source_step_key": "8dec73ab9f4445e8aca8db8174f7267bca4fe9ae144de0f6bd2c7e753049d2f4#1",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 8,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 9,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 10,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 11,
+      "source_step_key": "294f7f299432feb2c8831c223518e607ed405509412daf651230781cb95e01a5#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 12,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 13,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 14,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 15,
+      "source_step_key": "66c5baff5a9a1c11b254fd2190fae4501c732c0d533c5138dfdafd1cd4834fb3#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 16,
+      "source_step_key": "1931c7b7bfeb7d41522055089b11a1ce5523fedab9ae96665d808cb8b45453c1#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "no"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 17,
+      "source_step_key": "8dec73ab9f4445e8aca8db8174f7267bca4fe9ae144de0f6bd2c7e753049d2f4#2",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 18,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 19,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 20,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 21,
+      "source_step_key": "294f7f299432feb2c8831c223518e607ed405509412daf651230781cb95e01a5#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 22,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#5",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 23,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#5",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 24,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#5",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 25,
+      "source_step_key": "66c5baff5a9a1c11b254fd2190fae4501c732c0d533c5138dfdafd1cd4834fb3#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 26,
+      "source_step_key": "1931c7b7bfeb7d41522055089b11a1ce5523fedab9ae96665d808cb8b45453c1#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "no"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 27,
+      "source_step_key": "8dec73ab9f4445e8aca8db8174f7267bca4fe9ae144de0f6bd2c7e753049d2f4#3",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 28,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#6",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 29,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#6",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 30,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#6",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 31,
+      "source_step_key": "294f7f299432feb2c8831c223518e607ed405509412daf651230781cb95e01a5#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "performed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 32,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#7",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 33,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#7",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 34,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#7",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 35,
+      "source_step_key": "66c5baff5a9a1c11b254fd2190fae4501c732c0d533c5138dfdafd1cd4834fb3#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "performed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 36,
+      "source_step_key": "1931c7b7bfeb7d41522055089b11a1ce5523fedab9ae96665d808cb8b45453c1#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "accepted",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "no"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 37,
+      "source_step_key": "8dec73ab9f4445e8aca8db8174f7267bca4fe9ae144de0f6bd2c7e753049d2f4#4",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 38,
+      "source_step_key": "f0840f5348f77e3c6e91f305b819fba694cdf0c60a64690f79cd492639f97e61#8",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 39,
+      "source_step_key": "1e9a88826e0ff48faab4770259f5ca2b66a34c7925b471c7bfc604d6ce7f30d3#8",
+      "intent": null,
+      "verdict": "proven",
+      "rung": "completed",
+      "required": "accepted",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "yes"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     },
+     {
+      "index": 40,
+      "source_step_key": "4126d832588189be306d977b6c043ff0c24eb0e5ce97c178227a0b02f4dea5f1#8",
+      "intent": null,
+      "verdict": "couldnt_confirm",
+      "rung": "accepted",
+      "required": "completed",
+      "checks": [
+       {
+        "rung": "performed",
+        "witness": "target",
+        "answer": "yes"
+       },
+       {
+        "rung": "accepted",
+        "witness": "renderer",
+        "answer": "yes"
+       },
+       {
+        "rung": "completed",
+        "witness": "renderer",
+        "answer": "cant_tell"
+       }
+      ],
+      "skill": "wf3-github-tour-40-3770ced3"
+     }
+    ]
+   }
+  },
+  "jsonrpc": "2.0",
+  "id": 2
+ }
+}

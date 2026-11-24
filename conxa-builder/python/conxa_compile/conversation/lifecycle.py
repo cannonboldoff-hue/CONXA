@@ -79,7 +79,7 @@ def derive_lifecycle(
             substate, glyph, actions = "open", WARN, ["answer_clarify", "re_record"]
             if cl.get("fallback"):
                 actions = ["answer_clarify", "retry_video", "re_record"]
-            note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
+            note = f"{open_q} question{'s' if open_q != 1 else ''} need{'' if open_q != 1 else 's'} you"
         else:
             substate, glyph, note, actions = "ready", RUN, "Getting ready to build", []
     elif not recorded:
@@ -118,7 +118,7 @@ def derive_lifecycle(
             stage, substate, glyph, note, actions = "test", "sign_in_expired", WARN, "Sign-in expired", ["sign_in", "test"]
         elif open_q > 0:
             stage, substate, glyph = "clarify", "open", WARN
-            note = f"{open_q} question{'s' if open_q != 1 else ''} need you"
+            note = f"{open_q} question{'s' if open_q != 1 else ''} need{'' if open_q != 1 else 's'} you"
             # Every question that was asked is answered before any test, approval or publish.
             actions = ["answer_clarify", "edit"]
         elif pending_changes > 0:
@@ -266,9 +266,13 @@ def _auth_missing(workflow: Any) -> bool:
     return any(not a.captured_at for a in required)
 
 
-def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
+def lifecycle_for_workflow(workflow: Any, *, own_reply: bool = False) -> dict[str, Any]:
     """Derive the lifecycle for a stored workflow, reading the clarify answers and in-memory
-    runtime flags. Never raises: a read that fails degrades to a missing optional input."""
+    runtime flags. Never raises: a read that fails degrades to a missing optional input.
+
+    ``own_reply``: read for the chat reply being written now. The ``replying`` flag waits for that very reply, so
+    the reply is told what is true once it is in: it said "Testing isn't open right now" while Test it worked
+    (BUILD-117 (9))."""
     from conxa_compile.conversation import clarify_store, runtime_state
 
     try:
@@ -282,14 +286,16 @@ def lifecycle_for_workflow(workflow: Any) -> dict[str, Any]:
     # The thread file is read and folded once: the screen asks for the lifecycle after every new
     # chat item, so reading it per helper made the cost grow with the length of the chat.
     items = _thread_items(workflow.id)
+    flags = runtime_state.get_flags(workflow.id)
     lc = derive_lifecycle(
         workflow,
         auth_missing=auth_missing,
         clarify=clarify,
-        runtime=runtime_state.get_flags(workflow.id),
+        runtime={**flags, "replying": False} if own_reply else flags,
         pending_changes=_pending_changes(items),
     )
-    expire_stale_cards(workflow.id, lc, items)
+    if not own_reply:  # cards are closed only by what the screen is allowed to offer now
+        expire_stale_cards(workflow.id, lc, items)
     return lc
 
 
