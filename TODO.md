@@ -39,7 +39,7 @@ Counts are still-open items only.
 
 ---
 
-## PILOT — P0: Must fix before any pilot customer touches it (6 remaining)
+## PILOT — P0: Must fix before any pilot customer touches it (5 remaining)
 
 Things that corrupt a workflow without telling anyone, stop releases and updates from reaching customers, mix up accounts, or break the Record → Compile → Test → Publish → Install → Run loop. Fixes first, then the full test passes that prove them.
 
@@ -50,19 +50,15 @@ All 13 original items below are kept word for word; this block only groups them,
 | Backlog | Original item | Area / code it owns | Kind | Wave | Waits for | Status |
 |---|---|---|---|---|---|---|
 | P0-1 | SHIP-1 | `conxa-cloud/backend/app/api/updates_routes.py::deps_manifest`, `SHIP-GUIDE.md` line ~356, its tests | Fix + doc line | 1 | none | code + test done 2026-11-24 (17 related tests pass); stays open until the live `curl .../manifest.json` check |
-| P0-4 | EXEC-67 | compiler entity binding (live counts in names), resolver misses on stale names, `run.js` full-wait window; also owns BUILD-117 (8) (same "Bound record could not be uniquely located" family) | Fix + measure | 1 | none | code + tests done 2026-11-24 (66 Python + 33 runtime tests re-run, pass); items (1), (2), (4)–(6) and BUILD-117 (8) handled. Stays open for owner actions: rebuild + republish `wf3-github-tour-40` (still carries the old binding), re-point its Pulse step in Human Edit (drift (3)), tune the 20 s window on a real slow export. Evidence: `docs/testing/evidence/EXEC-67/`. Unblocks P0-5. **2026-11-25 live rebuild of `WF3 github tour 40` (dev Studio, v48) did NOT pass:** test failed at step 2 "Click Issues" (resolve miss). The rebuild kept the old "different every time" answers, so the Issues link became input `{{code_tab}}` with the recorded value "Issues 1.1k (1.1k)"; the live link reads "Issues
-1.1k
- (1.1k)" and the substituted-value path does not match it (count-echo strip in `resolver.js::textCredit` evidently not used there, or whitespace/nbsp differs). Input names are also shifted by one ("Discussions tab" holds "Actions"). Also: no visible "Build again" button in the failed-test strip, and chat says "press Rebuild in the workflow controls" which does not exist. Run `r_mwwb6vsu_k5tmk`. |
 | P0-5 | BUILD-117 (all parts except (8)) | `capability_manifest.py`, compile checks and re-check lists, chat follow-ups, `run.js`/`server.js` popup resume, recorder saved sign-in | Fix; owner decisions in (4) are asked, never guessed | 2 | P0-4 (shares `run.js` and binding code) | fixed parts done 2026-11-25 and filed in `Done.md` (156 Python + 26 runtime tests re-run, pass); item stays open for the old-workflow rebuilds and the (4).1 leftovers |
 | P0-7 | EXEC-10 | `runtime/test/gate-skill/` fixture, `gate_replay.js`, runtime multi-tab fixes the recording surfaces | Build fixture + live record, fix what breaks | 2 | P0-4 (`run.js`); a real browser/host exe | gate fixture + two runtime fixes done 2026-11-25 (34 `test_tabs.js` and the full runtime suite pass per the agent); item stays open: the recorded workflow passes 33 of 34 steps |
 | P0-8 | TEST-11 + TEST-12 | `docs/testing/` suites, WF-9 gauntlet | Full manual passes; file each failure as its own item | 3 | every wave 1–2 fix; LLM keys re-configured first | not started |
 
 **"Done when" lines for the items that had none:**
 - **SHIP-1:** `deps_manifest()` returns the version and SHA-256 CI last published (KV first, env vars only when KV is empty); a test proves a changed KV record changes the answer; the `SHIP-GUIDE.md` line is corrected.
-- **EXEC-67:** a GitHub tab link binds without its live count and the shipped `wf3-github-tour-40` pack passes step 3; stale-name resolver misses and the Pulse selector drift are fixed or filed as their own items; (4)–(6) are measured and the result written down.
 - **BUILD-117:** each of (1), (2), (3), (5), (9), (10), (11) is fixed or filed as its own item with a repro; (4) and (8)'s owner decisions are put to the owner, not decided.
 
-**Order:** still open: P0-1, 4, 5, 7, then P0-8 (wave 3) last.
+**Order:** still open: P0-1, 5, 7, then P0-8 (wave 3) last.
 
 ### SHIP-1 — Build Studio's dependency manifest is hand-maintained and can silently disagree with what CI actually published
 
@@ -76,7 +72,6 @@ All 13 original items below are kept word for word; this block only groups them,
 
 </details>
 
-- [ ] **EXEC-67 — left open from EXEC-61 (DT15-3, 2026-11-21).** (1) The compiler binds every GitHub tab link to its live count (`entity_binding.identifier` "58", "1.1k", "17"), so the shipped `wf3-github-tour-40` pack fails at step 3 ("Bound record could not be uniquely located"); counts should be stripped from names and bindings. (2) The Pull requests steps lose ~8 s each to resolver misses on the stale recorded name "Pull requests 58 (58)". (3) The hand-fixed Pulse selector `a[href="/cli/cli/pulse"]` has drifted (the tab lands on `/insights`). (4) The report-05 numbers (28 s per step, 118 s failure at step 3) were not reproduced: that run was signed in on the 14-Nov app layer, and the un-fixed pack is no longer on disk. (5) Step 41 still ends "couldn't confirm", which is honest: a static bar never goes away, so nothing proves the work finished. (6) The 20 s full-wait window is borrowed from the compiler's stall default, not tuned against a real slow export.
 
 - [ ] **BUILD-117 — what is still open after the live Studio pass of 2026-11-22 and the 2026-11-25 fix session (the fixed parts are in `Done.md`; evidence in `docs/testing/evidence/LIVE-PASS-2026-11-22/`).** (1) Workflows made before the fix keep the wrong re-check list until rebuilt; a recording that cleared a pre-filled box without typing first lost that clear when recorded and must be re-recorded. (3) Rows inside iframes, or a matching row in several frames, keep the old XPath behaviour (`resolution.js::rowRelativeSignals`); it only costs speed (31 s fallback), not correctness. Repro: a read-a-value step bound to a row inside an iframe. (4).1 Built 2026-11-25 (option b, filed in `Done.md`). Left open: the shim sits in the page only until it navigates (the next step arms it again), so a box raised by the page load itself, or inside a page the shim could not reach, still shows Electron's own box; not yet tried on a prompt() (Electron never shows one) or inside an iframe live. (9) New: in General Chat a reply said "I can't create the workflow from here" while a "create workflow" card showed under it (`data/chats/chat_b384fb33f730.jsonl`, `chat_f6883010e04d.jsonl`). (10) Existing workflows such as "LP secure logout" must be rebuilt and the question answered again (the unticked landing check is now kept). (11) Still open: the first message in a new chat only shows after a reload (renderer store; the owner cannot repeat it, 2026-11-25: reopen only if someone sees it again, with the steps); the login page's sentence naming the test user and password is kept in Studio's workflow file and offered as a check (filter it out of the offers). Still to do for a person: rebuild LP paste form, LP delete customer and LP secure logout. Not verified live: none of the 2026-11-25 changes were driven in the live Studio; the server-side resume (before-page and "by a person" handoff) is unit-tested through `run.js` only.
 

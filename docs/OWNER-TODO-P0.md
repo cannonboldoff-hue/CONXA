@@ -2,22 +2,7 @@
 
 This list comes from the P0 section of `TODO.md`. Code work is done or needs a session. These items need a person: you.
 
-Tasks 1, 2, 3, 6, 7 and 8 are done and filed in `Done.md`; their numbers are not reused.
-
----
-
-## Task 4 — Rebuild and republish the GitHub tour workflow (P0-4, item EXEC-67)
-
-**Why:** The shipped pack `wf3-github-tour-40` still has the old wrong link in it. It fails at step 3 ("Bound record could not be uniquely located"). The code fix is done. The old pack must be rebuilt.
-
-**Steps:**
-
-1. Open Build Studio. Open workflow `wf3-github-tour-40`.
-2. Rebuild it (the rebuild action).
-3. Run a test. Step 3 must now pass.
-4. **Pulse step:** the saved Pulse link now lands on the wrong page (`/insights`). Open **Human Edit**, find the Pulse step, and point it at the real Pulse tab again. (Chat cannot do this. Only a person can re-point a step.)
-5. Publish it again.
-6. On a real, slow export, watch how long the run waits. The wait is 20 seconds now and was never tuned on real data. Tell me if it is too short or too long.
+Tasks 1, 2, 3, 4, 6, 7 and 8 are done and filed in `Done.md`; their numbers are not reused.
 
 ---
 
@@ -71,7 +56,6 @@ The 35-action, 3-tab recording ("EXEC10 tabs r3") passes 33 of 34 steps. The las
 
 | # | Task | Time | Blocks |
 |---|---|---|---|
-| 4 | Rebuild GitHub tour + Pulse fix | 30 min | P0-4 close |
 | 5 | Rebuild 3 LP workflows | 30 min | P0-5 close |
 | 9 | Real-exe tab test | 1 hr | P0-7 close |
 | 10 | Keys, then two big test passes | days | P0 close |

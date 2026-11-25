@@ -7,7 +7,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | Area | Done | Items |
 |---|---|---|
 | BUILD — Build Studio | 80 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7; 2026-11-25: 1, 2, 4.2, 4.3, 5, 9, 10, 11) |
-| EXEC — Execution & Recovery | 34 | RECOV-2, EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63 |
+| EXEC — Execution & Recovery | 35 | RECOV-2, EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63, 67 |
 | CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 15 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line, per-attempt), 18 |
 | PROD — Product | 5 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups), 18 (piece 1, piece 2 windows/deny-lists, piece 3) |
@@ -20,7 +20,7 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
 | UPD — Auto Updates | 1 | UPD-5 |
 | OPS — Operations | 1 | OPS-1 |
-| **Total** | **181** | |
+| **Total** | **182** | |
 
 ---
 
@@ -975,7 +975,7 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - (9) Live check and housekeeping done by the owner 2026-11-25: chat "already does it" check run in Studio (result not recorded), empty `C:\c` folder and the throwaway chats "LP price check" and "Export a recurring report" removed.
 - Tests: `test_typed_box_and_paste_link.py`, `test_compile_clarify.py`, `test_capability_manifest.py`, `test_test_flow.py`, `test_lifecycle_rebuild_and_expiry.py`, `test_typed_box_and_native_box.js`, `test_evidence_chain.js`. Not driven in the live Studio.
 
-## EXEC — Execution & Recovery (34 done)
+## EXEC — Execution & Recovery (35 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -1387,6 +1387,15 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - **Deviation:** no new lifecycle action; chat step changes already go through the change card, not `lifecycle.allowed_actions` / `lib/actions.ts`, which were left unchanged.
 - **Verified:** new `conxa-cloud/tests/test_chat_table_loop.py` (6 tests, incl. Apply plus one Undo through a real Backend), re-run by the main session: 6 passed. The session's full `pytest -q tests` was 3793 passed, 1 skipped (before a one-line tweak; focused files re-run after: 31 passed). Renderer typecheck and eslint on changed files clean. Not tried live (see EXEC-66).
 - **Files:** `editor/workflow_mutations.py`, `editor/copilot_proposals.py`, `handlers/copilot.py`, `conversation/harness.py`, `packages/conxa-core/conxa_core/llm/client.py` (prompt op list), `ReviewQuestionsDialog.tsx`, `HumanEditPage.tsx`, `docs/TRD.md` §11.2, `docs/UI-UX-Brief.md`.
+
+### EXEC-67 — GitHub tab links bound to their live count (left open from EXEC-61)
+**Original text:** (1) The compiler binds every GitHub tab link to its live count (`entity_binding.identifier` "58", "1.1k", "17"), so the shipped `wf3-github-tour-40` pack fails at step 3 ("Bound record could not be uniquely located"); counts should be stripped from names and bindings. (2) The Pull requests steps lose ~8 s each to resolver misses on the stale recorded name "Pull requests 58 (58)". (3) The hand-fixed Pulse selector `a[href="/cli/cli/pulse"]` has drifted (the tab lands on `/insights`). (4) The report-05 numbers (28 s per step, 118 s failure at step 3) were not reproduced: that run was signed in on the 14-Nov app layer, and the un-fixed pack is no longer on disk. (5) Step 41 still ends "couldn't confirm", which is honest: a static bar never goes away, so nothing proves the work finished. (6) The 20 s full-wait window is borrowed from the compiler's stall default, not tuned against a real slow export.
+**Resolved:** 2026-11-25
+- **Resolution:** (1) bound tab names no longer carry the live count: the compiler fix (2026-11-24) plus, found in the live rebuild, `resolve_adapter.js::roleLocator`/`textLocator` now drop the echoed count (the page's text is "Issues1.1k (1.1k)", so a locator built from "Issues 1.1k (1.1k)" matched nothing). (2) the stale-name misses are covered by the same fix and `resolver.js::textCredit`. (3) The rebuilt pack ends on the Insights tab, which passed; there is no Pulse step left to re-point. (4)-(5) as noted at the time. Also: `Build again` is now a button on the action strip (`renderer/src/lib/actions.ts`).
+- **Verified live (dev Studio, 2026-11-25):** rebuilt `WF3 github tour 40`; with the tab answers kept fixed, the test passed all 41 steps in 3 min 49 s, step 3 included. The "cli" breadcrumb step (two links named "cli") was re-pointed like Human Edit does (`nav[aria-label="Breadcrumbs"] a[href="/cli/cli"]`, steps 5, 11, 15, 21, 25, 31, 35). New test in `runtime/test/unit/test_resolve_adapter.js`; full runtime suite 1582 pass, 0 fail, 1 skipped.
+- **Not done (owner closed the item anyway):** republish of the pack (the Publish page would also ship every other approved workflow in this dev data); the 20 s full-wait window (6) was not measured on a real slow export (no slow export in this fixture).
+- **Open follow-up, not yet its own ID:** the video pass labels clicks one off ("Code" for the Issues click), so a rebuild that replays old "different every time" answers makes mis-named inputs. For this run the six tab answers in the session's `decisions.json` were set to fixed (backup `decisions.json.bak-2026-11-25`).
+- **Files:** `runtime/app/resolve_adapter.js`, `runtime/app/resolver.js`, `runtime/test/unit/test_resolve_adapter.js`, `conxa-builder/electron/renderer/src/lib/actions.ts`. Evidence: `docs/testing/evidence/EXEC-67/`.
 
 ### RECOV-2 — Deliver recovery artifacts to customer machines (phases 4–6 of the recovery redesign)
 

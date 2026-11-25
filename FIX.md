@@ -2,8 +2,8 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**Rebuilding the GitHub tour workflow still fails its test — 2026-11-25**
-We rebuilt the GitHub tour workflow in Build Studio to check the earlier fix. The test still stops early: it cannot find the Issues tab, because the rebuild turned the tab names into answers to fill in and they no longer match what GitHub shows. Nothing was published and nothing was moved to the finished list. This is now written down as open work. Separately, the "Build again" button is missing from the failed-test screen, so rebuilding needed a back-door command.
+**The GitHub tour workflow now passes its whole test — 2026-11-25**
+The workflow could not click tabs like "Issues 1.1k (1.1k)" because the page writes the number with no space before it, so the saved name never matched. Now the number is left out when looking for the tab. The "cli" link appears twice on the page, so it was pointed at the right one, and the full 41-step test then passed. A "Build again" button also shows on the screen where you test. It has not been published yet.
 — 2026-11-25
 
 **Each account now keeps its own work on the computer — 2026-11-25**
