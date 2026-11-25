@@ -251,4 +251,4 @@ function resolve(signals, fingerprint, root, opts) {
 
 // Exported (read-only) so tests can pin the exact gate values — a silent drift
 // here would loosen the "never pick candidate[0]" invariant everywhere at once.
-module.exports = { resolve, scoreCandidate, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_UNIQUE_MARGIN };
+module.exports = { resolve, scoreCandidate, COUNT_ECHO_RE, DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_UNIQUE_MARGIN };

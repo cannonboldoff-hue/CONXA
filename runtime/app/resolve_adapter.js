@@ -7,6 +7,11 @@
 const crypto = require("crypto");
 const { extractDescriptor: _extractDescriptor } = require("./page_scripts");
 const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
+const { COUNT_ECHO_RE } = require("./resolver");
+
+// A live count echoed for screen readers ("Issues 1.1k (1.1k)") is no part of a link's name, and in the page's text
+// it is glued on with no space ("Issues1.1k (1.1k)"), so a locator built from it matches nothing (EXEC-67).
+const withoutCount = (name) => String(name).replace(COUNT_ECHO_RE, "");
 
 // Build a getByRole locator from a `role=<role>[name="<name>"]` grammar string — the
 // `internal:` prefix is optional so this also handles the display-form string
@@ -20,7 +25,7 @@ const { evalOn, EVAL_TIMED_OUT } = require("./page_eval");
 function roleLocator(root, raw) {
   const rm = String(raw).match(/(?:internal:)?role=([a-zA-Z]+)(?:\[name="([^"]*)"\])?/);
   if (!rm) return null;
-  return rm[2] ? root.getByRole(rm[1], { name: rm[2] }) : root.getByRole(rm[1]);
+  return rm[2] ? root.getByRole(rm[1], { name: withoutCount(rm[2]) }) : root.getByRole(rm[1]);
 }
 
 // Build a getByText locator from an `internal:text="…"` / `text="…"` grammar string —
@@ -30,7 +35,7 @@ function textLocator(root, raw) {
   const s = String(raw);
   let tm = s.match(/internal:text="([^"]*)"/);
   if (!tm) tm = s.match(/^text=["']?(.+?)["']?$/);
-  return tm ? root.getByText(tm[1]) : null;
+  return tm ? root.getByText(withoutCount(tm[1])) : null;
 }
 
 // Engine-agnostic: resolve any selector string (compiled `internal:` grammar, or its

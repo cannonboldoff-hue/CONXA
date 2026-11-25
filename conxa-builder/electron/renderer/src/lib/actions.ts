@@ -8,7 +8,7 @@ export const ACTION_INFO: Record<string, ActionInfo> = {
   re_record: { label: 'Record again', kind: 'flow', strip: true },
   retry_video: { label: 'Try again', kind: 'flow', strip: true, primary: true },
   compile: { label: 'Compile', kind: 'flow', strip: true, primary: true },
-  rebuild: { label: 'Build again', kind: 'flow' }, // a compiled workflow can always be built again from its recording
+  rebuild: { label: 'Build again', kind: 'flow', strip: true }, // a compiled workflow can always be built again from its recording
   answer_clarify: { label: 'Answer questions', kind: 'flow', strip: true, primary: true },
   test: { label: 'Test it', kind: 'flow', strip: true, primary: true },
   investigate: { label: 'Find the cause', kind: 'flow', strip: true },

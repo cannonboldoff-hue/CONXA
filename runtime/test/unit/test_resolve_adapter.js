@@ -279,3 +279,13 @@ test("a templated item resolves to this run's label, and the uniqueness margin s
   const both = { queryAll: () => [textNode("LICENSE"), textNode("LICENSE")] };
   assert.strictEqual(resolve(templatedBundle.signals, fp, both, {}).ambiguous, true);
 });
+
+test("a live count echoed in a bound tab name is left out of the locator (EXEC-67: page text is 'Issues1.1k (1.1k)')", () => {
+  const root = mockRoot();
+  textLocator(root, 'internal:text="Issues 1.1k (1.1k)"');
+  roleLocator(root, 'role=link[name="Pull requests 58 (58)"]');
+  textLocator(root, 'internal:text="Page 2"');  // a lone trailing number is a name, kept
+  assert.strictEqual(root.calls[0].arg, "Issues");
+  assert.strictEqual(root.calls[1].opts.name, "Pull requests");
+  assert.strictEqual(root.calls[2].arg, "Page 2");
+});
