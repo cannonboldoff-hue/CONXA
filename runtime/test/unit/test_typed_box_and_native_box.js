@@ -279,3 +279,58 @@ test("the request for an OK/Cancel box shows its words plainly, takes no picture
   assert.strictEqual(resp.content.length, 1);
   assert.strictEqual(resp._meta["conxa/fork"].native, true);
 });
+
+// ─── BUILD-117 (4).1: in a host-owned browser the page's confirm() is refused in the page, no native box ever opens ───
+
+// Opening "https://x.test/a" makes the page's shim refuse a confirm() ("Delete order 42?"); frame.evaluate runs the page scripts.
+function shimPage() {
+  const seen = { armed: [], boxes: [], answers: [] };
+  const frame = {
+    evaluate: async (fn, arg) => {
+      if (fn === pageScripts.armBoxShim) { seen.armed.push(true); if (arg !== undefined) seen.answers.push(arg); return true; }
+      if (fn === pageScripts.disarmBoxShim) { seen.armed.push(false); return true; }
+      if (fn === pageScripts.takeBoxes) return seen.boxes.splice(0);
+      return null;
+    },
+  };
+  const page = nativePage([], null);
+  page.frames = () => [frame];
+  page.goto = async (url) => { page.gotos.push(url); if (url.endsWith("/a") && !seen.answers.length) seen.boxes.push("Delete order 42?"); };
+  return { page, seen };
+}
+const runShim = (page, inputs, extra) => runPlan(page, PLAN(), inputs, 0, "native-box", { tracker: { emit: () => {} }, dialogQueue: [], hostOwned: true, answerPopups: true, ...extra });
+
+test("host-owned: a confirm() refused in the page is put to the MCP client with its own words", async () => {
+  const { page } = shimPage();
+  await assert.rejects(runShim(page, {}), (err) => {
+    assert.strictEqual(err.forkPause, true);
+    assert.strictEqual(err.info.shim, true);
+    assert.strictEqual(err.info.native, true);
+    assert.strictEqual(err.info.text, "Delete order 42?");
+    assert.deepStrictEqual(err.info.choices.map((c) => c.id), ["OK", "Cancel", "__stop__"]);
+    return true;
+  });
+});
+
+test("host-owned: resume with OK runs the step again with OK armed; Cancel re-checks it and never runs it again", async () => {
+  const ok = shimPage();
+  await runShim(ok.page, { __fork_choice_0: "OK", __fork_agent_0: 1, __fork_acted_0: 1, __fork_shim_0: 1 });
+  assert.deepStrictEqual(ok.seen.answers, [true], "OK armed once");
+  assert.deepStrictEqual(ok.page.gotos, ["https://x.test/a", "https://x.test/b"], "the step ran again, with the answer in place");
+
+  const no = shimPage();
+  await runShim(no.page, { __fork_choice_0: "Cancel", __fork_agent_0: 1, __fork_acted_0: 1, __fork_shim_0: 1 }).catch(() => {});
+  assert.deepStrictEqual(no.seen.answers, [], "no answer armed");
+  assert.ok(!no.page.gotos.includes("https://x.test/a"), "the step was not run again");
+});
+
+test("host-owned: no shim where nobody may be asked, or where the recording answers the box", async () => {
+  const dry = shimPage();
+  await runShim(dry.page, {}, { dryRun: true }).catch(() => {});
+  assert.deepStrictEqual(dry.seen.armed.filter(Boolean), [], "a dry run keeps the browser's own box");
+  const rec = shimPage();
+  const steps = [nav("https://x.test/a"), { type: "dialog_accept", value: JSON.stringify({ type: "confirm", message: "Sure?" }) }];
+  const q = [fakeDialog("confirm", "Sure?")]; // the box is already open: the recorded step answers it at once
+  await runPlan(rec.page, steps, {}, 0, "native-box", { tracker: { emit: () => {} }, dialogQueue: q, hostOwned: true, answerPopups: true }).catch(() => {});
+  assert.deepStrictEqual(rec.seen.armed.filter(Boolean), [], "a recorded box is answered by the browser, not the shim");
+});

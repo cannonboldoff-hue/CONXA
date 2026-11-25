@@ -914,6 +914,46 @@ function armPrompt(answer) {
   return true;
 }
 
+// Electron's own OK/Cancel box stays on screen after a late answer and disables Studio's window (BUILD-117 (4).1, spike
+// 2026-11-25). So in a host-owned browser the page's confirm() is replaced for the step: with no answer armed it
+// returns Cancel at once and notes the box's words (takeBoxes), so the run can ask the person and run the step again
+// with their answer armed (`answer` true/false, used once). Closes over nothing (re-parsed in the page).
+function armBoxShim(answer) {
+  var w = window;
+  if (!w.__conxaOwnConfirm) {
+    w.__conxaOwnConfirm = w.confirm;
+    w.__conxaBoxes = [];
+    w.confirm = function (message) {
+      if (w.__conxaBoxAnswer === true || w.__conxaBoxAnswer === false) {
+        var armed = w.__conxaBoxAnswer;
+        w.__conxaBoxAnswer = undefined;
+        return armed;
+      }
+      w.__conxaBoxes.push(String(message == null ? "" : message));
+      return false;
+    };
+  }
+  if (answer === true || answer === false) w.__conxaBoxAnswer = answer;
+  return true;
+}
+
+// The words of every box the shim refused since the last look (and clears them).
+function takeBoxes() {
+  var seen = window.__conxaBoxes || [];
+  window.__conxaBoxes = [];
+  return seen;
+}
+
+// Puts the page's own confirm() back (a recorded box is answered by the browser's own dialog, never the shim).
+function disarmBoxShim() {
+  if (window.__conxaOwnConfirm) {
+    window.confirm = window.__conxaOwnConfirm;
+    window.__conxaOwnConfirm = null;
+  }
+  window.__conxaBoxAnswer = undefined;
+  return true;
+}
+
 // Whether an armed prompt() was answered since the last look (and resets the count).
 function takePromptAnswered() {
   var n = window.__conxaPromptAnswered || 0;
@@ -1187,6 +1227,9 @@ module.exports = {
   countPageText,
   screenTexts,
   armPrompt,
+  armBoxShim,
+  takeBoxes,
+  disarmBoxShim,
   takePromptAnswered,
   extractDescriptor,
   rafStable,

@@ -1648,6 +1648,7 @@ async function _handleToolCall(name, args, extra) {
       if (forkPark.forkInfo && forkPark.forkInfo.agent) {
         primary.inputs[`__fork_agent_${primary.resumeFrom}`] = 1;
         if (forkPark.forkInfo.acted) primary.inputs[`__fork_acted_${primary.resumeFrom}`] = 1;
+        if (forkPark.forkInfo.shim) primary.inputs[`__fork_shim_${primary.resumeFrom}`] = 1; // the box was refused in the page (BUILD-117 (4).1)
         // The step's own pre-action page, so its result is re-checked as an unpaused step's is (BUILD-117 (4)).
         if (forkPark.forkInfo.acted && forkPark.stateBaseline) primary.inputs[`__fork_baseline_${primary.resumeFrom}`] = forkPark.stateBaseline;
         // Studio's test put the popup to the person (BUILD-117 (4)): wording only, the agent's rules still apply.

@@ -1277,8 +1277,12 @@ async function runStepFrame(ctx, state, steps, i, frame) {
     }
   }
 
+  // A host-owned browser never shows the page's own OK/Cancel box to a person (BUILD-117 (4).1): where a person may be
+  // asked about it, the page's confirm() is swapped for one that refuses at once and tells the run (askAboutNativeQuestion).
+  if (ctx.hostOwned) await setBoxShim(page, mayAskAboutBox(ctx, state, step, nextStep) && !POPUP_OWNERS.has(step.type), state);
+
   let primaryErr = null;
-  const queuedBefore = Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue.length : 0; // boxes already open (BUILD-106 (1))
+  const queuedBefore =Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue.length : 0; // boxes already open (BUILD-106 (1))
   try {
     const io = { downloadQueue: ctx.downloadQueue, dialogQueue: ctx.dialogQueue };
     await executeStep(page, step, state.inputs, io);
@@ -1785,11 +1789,41 @@ async function observeDialog(page, ctx) {
 // is always put to the MCP client; the runtime never presses either button itself. Its words go to the client as they
 // are, never read for meaning. Never asked in a dry, loop, destructive or scheduled run, or when nobody can be asked:
 // those keep today's fail-closed path. The box opened from this step's action, so the action already ran (`acted`).
+function mayAskAboutBox(ctx, state, step, owner) {
+  return !!ctx.answerPopups && !ctx.scheduled && !ctx.dryRun && step.destructive !== true
+    && !(state.loopDepth > 0 || state.forkDepth > 0 || (owner && POPUP_OWNERS.has(owner.type)));
+}
+
+// Swaps the page's confirm() for the refusing one (page_scripts.armBoxShim) in every frame, or puts it back. A page that
+// navigated lost it, so it is set again on every step; one that cannot be reached keeps the browser's own box.
+async function setBoxShim(page, on, state, answer) {
+  if (!on && !state.boxShim) return;
+  state.boxShim = on;
+  const fn = on ? pageScripts.armBoxShim : pageScripts.disarmBoxShim;
+  await Promise.all(page.frames().map((f) => evalOn(f, fn, answer, 1500).catch(() => null)));
+}
+
+async function takeShimBoxes(page) {
+  const all = await Promise.all(page.frames().map((f) => evalOn(f, pageScripts.takeBoxes, undefined, 1500).catch(() => null)));
+  return all.flatMap((b) => (Array.isArray(b) ? b : []));
+}
+
 async function askAboutNativeQuestion(ctx, state, step, i, page, owner, queuedBefore, baseline = null) {
   // Only a box THIS step's action opened: one already open before it was left by a step that may not ask (a
   // destructive one), and asking here would get round that rule.
-  if (queuedBefore > 0 || !ctx.answerPopups || ctx.scheduled || ctx.dryRun || step.destructive === true) return;
-  if (state.loopDepth > 0 || state.forkDepth > 0 || (owner && POPUP_OWNERS.has(owner.type))) return;
+  if (queuedBefore > 0 || !mayAskAboutBox(ctx, state, step, owner)) return;
+  if (ctx.hostOwned) {
+    const boxes = await takeShimBoxes(page);
+    if (boxes.length) {
+      const probe = { native: true, shim: true, title: "confirm", text: String(boxes[0]), controls: [{ tag: "button", role: "button", name: "OK", text: "OK" }, { tag: "button", role: "button", name: "Cancel", text: "Cancel" }] };
+      try {
+        agentPopupPause(ctx, state, step, page, i, probe, { acted: true, baseline });
+      } catch (e) {
+        if (e && typeof e === "object") e.completionGate = true; // the action already ran: never recover into a re-run
+        throw e;
+      }
+    }
+  }
   const d = Array.isArray(ctx.dialogQueue) ? ctx.dialogQueue[0] : null;
   const type = d && typeof d.type === "function" ? d.type() : "";
   if (type !== "confirm" && type !== "prompt") return;
@@ -2006,6 +2040,7 @@ function agentPopupPause(ctx, state, step, page, i, probe, { acted = false, know
       agent: true,
       acted: !!acted,
       ...(probe && probe.native ? { native: true } : {}), // the page's own OK/Cancel box: answered by run.js, not clicked
+      ...(probe && probe.shim ? { shim: true } : {}), // refused in the page (armBoxShim): OK runs the step again with OK armed
       stepIntent: step.intent || step.type || "",
       choices,
     },
@@ -2034,7 +2069,8 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
   // Wording only: Studio's test put the popup to the person, not to a model (BUILD-117 (4)). Every rule stays the agent's.
   const byPerson = state.inputs[`__fork_person_${i}`] === 1;
   const baseline = state.inputs[`__fork_baseline_${i}`] || null; // the page before the step's own action (server.js)
-  for (const k of ["choice", "acted", "agent", "person", "baseline"]) delete state.inputs[`__fork_${k}_${i}`];
+  const shim = state.inputs[`__fork_shim_${i}`] === 1; // the box was refused in the page, none is open (armBoxShim)
+  for (const k of ["choice", "acted", "agent", "person", "baseline", "shim"]) delete state.inputs[`__fork_${k}_${i}`];
   const fail = (code, message, extra = {}) => {
     dismissNativeQuestions(ctx.dialogQueue); // the run ends here: an OK/Cancel box left open would hang its evidence
     ctx.tracker.emit("step_fail", { si: i, fc: code });
@@ -2049,10 +2085,23 @@ async function answerBlockingPopup(ctx, state, step, page, i) {
     fail("fork_stopped_by_user", "Stopped at the popup, as you chose.", { forkDecisionNeeded: true });
   }
 
-  const probe = await observeDialog(page, ctx);
+  if (shim) {
+    // The page already got Cancel when the step ran. OK: run the step again with OK armed for its next confirm().
+    // Cancel: nothing more to press, the step's result is only re-checked below.
+    const ok = fork.norm(choice) === "ok";
+    countSurface(ctx, state, step, i, "unknown", "confirm");
+    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", opt: choice, mode: "run", src: who });
+    appendRecoveryEvent({ event: "fork_decision", slug: ctx.slug, step_index: i, state: "unknown", option: choice, mode: "run", source: who, title: "confirm" });
+    state.warnings.push(`The page's OK/Cancel box was answered with "${choice}" ${byWhom}.`);
+    if (ok) {
+      await setBoxShim(page, true, state, true);
+      return false;
+    }
+  }
+  const probe = shim ? null : await observeDialog(page, ctx);
   if (!probe) {
     // Whoever answered (or the person, in the page) already closed it.
-    ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "handled_in_page", src: who });
+    if (!shim) ctx.tracker.emit("fork_decided", { si: i, st: "unknown", mode: "handled_in_page", src: who });
   } else {
     const labels = new Set(fork.probeLabelsRaw(probe).map((l) => fork.norm(l)));
     const title = probe.title || "a popup";
