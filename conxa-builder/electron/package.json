@@ -14,7 +14,7 @@
     "build": "npm run build:renderer && electron-builder --config electron-builder.yml",
     "typecheck": "tsc --noEmit -p renderer/tsconfig.json",
     "lint": "eslint .",
-    "test:bridge": "node test/bridge.test.js",
+    "test:bridge": "node test/bridge.test.js && node --test test/account.test.js",
     "test:panel": "node --test test/browser_panel.test.js",
     "test:release-state": "node --experimental-strip-types --test test/releaseState.test.mjs",
     "test:shell": "node --experimental-strip-types --test test/panels.test.mjs test/status.test.mjs test/thread.test.mjs",

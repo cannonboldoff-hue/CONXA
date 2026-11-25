@@ -13,7 +13,7 @@
     "build:renderer": "vite build --config renderer/vite.config.mts",
     "build": "npm run build:renderer && electron-builder --config electron-builder.yml",
     "typecheck": "tsc --noEmit -p renderer/tsconfig.json",
-    "test": "node --experimental-strip-types --test electron/test/loop.test.js electron/test/classify.test.js electron/test/execute_client.test.js electron/test/browser_panel.test.js electron/test/auth_cancel.test.js electron/test/run_follow.test.js electron/test/sessions_search.test.js electron/test/run_result.test.mjs"
+    "test": "node --experimental-strip-types --test electron/test/loop.test.js electron/test/classify.test.js electron/test/execute_client.test.js electron/test/browser_panel.test.js electron/test/auth_cancel.test.js electron/test/run_follow.test.js electron/test/sessions_search.test.js electron/test/run_result.test.mjs electron/test/account.test.js"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

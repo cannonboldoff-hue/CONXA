@@ -186,6 +186,8 @@ export const errorMessages: Record<string, string> = {
   auth_port_unavailable: "Sign-in couldn't start. Close other Conxa windows, then click Sign in to try again.",
   auth_not_configured: "Sign-in isn't set up on this computer. Reinstall Build Studio or contact support.",
 
+  work_running: "Finish or stop the recording first, then sign out.",
+
   // Transport / system
   unknown_command: "Something went wrong inside the app. Please try again.",
   internal_error: "Something went wrong inside the app. Please try again.",

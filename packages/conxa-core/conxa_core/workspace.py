@@ -12,6 +12,29 @@ import re
 LOCAL_WORKSPACE_ID = "wrk_local"
 
 
+SIGNED_OUT_KEY = "_signed_out"
+
+
+def account_key(identity: dict | None) -> str:
+    """Folder name for one signed-in account's local data (AUTH-26).
+
+    Same rule as the cloud's workspace_id: the Clerk org, else ``personal_<user_id>``.
+    Signed out (no identity) gets the empty holding folder. Long ids are cut and hashed
+    so deep recording paths stay under the Windows path limit.
+    """
+    import hashlib
+
+    if not identity:
+        return SIGNED_OUT_KEY
+    raw = identity.get("org_id") or (f"personal_{identity['user_id']}" if identity.get("user_id") else "")
+    if not raw:
+        return SIGNED_OUT_KEY
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "_", str(raw)).strip("_") or "acct"
+    if len(slug) > 40:
+        slug = f"{slug[:28]}_{hashlib.sha1(str(raw).encode()).hexdigest()[:10]}"
+    return slug
+
+
 def workspace_dir_slug(workspace_id: str) -> str:
     """Derive a filesystem/URL-safe slug for a workspace_id.
 

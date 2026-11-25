@@ -108,6 +108,18 @@ On HTTP 401, `LLMProxyClient` retries once after triggering token refresh. On HT
 
 ---
 
+### 1.1b Per-account local data (AUTH-26)
+
+Build Studio keeps each signed-in account's local work in its own folder: `<studio home>/accounts/<account key>/` holds `data/` (workflows, groups, chats, saved sign-ins), `sandbox/` (test runs) and `output/` (built bundles). The key is the cloud's own workspace rule: the Clerk `org_id`, else `personal_<user_id>` (`conxa_core.workspace.account_key`). Signed out uses an empty `accounts/_signed_out/` folder, so nothing shows at the sign-in screen.
+
+The Python backend cannot move itself. On `login`, `logout` and `whoami` it writes `<studio home>/active_account.json` (`services/account_switch.py`); the Electron main process (`electron/account.js`, `main.js::switchAccountIfNeeded`) sees the change, restarts the backend with `SKILL_DATA_DIR` and `CONXA_ACCOUNT_HOME` pointing at that folder, and reloads the window. `whoami` treats "no identity" as signed out only when no saved session exists, so a bad network never hides a person's work. Sign-out is refused (`work_running`) while a recording is running, because the restart would cut it off. If the shell already sets `SKILL_DATA_DIR`, switching is off.
+
+First sign-in after the update: the old shared `data/`, `sandbox/` and `output/` are moved (never deleted) to that account's folder, once (`.legacy_migrated.json`). If that account already has its own work, nothing moves.
+
+Conxa Execute does the same per person (`conxa-execute/app/electron/account.js`): chats, run history and settings live in `userData/accounts/<user_id>/`; `clerk-session.bin` stays at the top. Its key is the person, not the workspace they act for.
+
+---
+
 ### 1.1a Conxa Execute Authentication (Clerk PKCE, same Clerk app as Build Studio)
 
 `conxa-execute/app/electron/auth_service.js` runs the same PKCE shape as §1.1 above (S256, token refresh with 60s leeway, tokens encrypted via Electron `safeStorage` to `userData/clerk-session.bin`) against the **same** `clerk.conxa.in` instance — not a separate Clerk application. It uses its own OAuth client (`CONXA_EXECUTE_CLERK_CLIENT_ID`, distinct from Build Studio's) so the two apps' local callback servers never collide: Execute listens on `127.0.0.1:52841-52850` (path `/cb`), Build Studio on `52741-52750`. Scope is `profile email offline_access user:org:read` — the extra scope is needed so the token carries `org_id`, though the personal/team context switcher (below) resolves this server-side via the Clerk Backend API rather than trusting the token's own claim.

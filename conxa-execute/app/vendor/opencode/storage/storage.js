@@ -40,8 +40,8 @@ function dataDir() {
   // run under plain `node`, where `electron`'s app module doesn't resolve —
   // it's only ever a real module inside Electron's own main-process runtime.
   if (process.env.CONXA_EXECUTE_STORAGE_DIR) return process.env.CONXA_EXECUTE_STORAGE_DIR;
-  const { app } = require("electron");
-  return path.join(app.getPath("userData"), "storage");
+  // Per person (AUTH-26): chats live in the signed-in person's own folder.
+  return path.join(require("../../../electron/account").dir(), "storage");
 }
 
 function keyToFile(key) {

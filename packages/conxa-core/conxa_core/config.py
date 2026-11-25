@@ -83,6 +83,17 @@ def state_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def account_root() -> Path:
+    """Folder holding the signed-in account's local state (AUTH-26): its ``data/``, ``sandbox/``, ``output/``.
+
+    Build Studio's launcher sets ``CONXA_ACCOUNT_HOME`` to ``<studio home>/accounts/<account key>``
+    for the backend it starts. Without it (tests, scripts) everything stays directly under
+    ``state_base_dir()``, the layout before per-account folders.
+    """
+    override = os.environ.get("CONXA_ACCOUNT_HOME", "").strip()
+    return Path(os.path.expanduser(override)) if override else state_base_dir()
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     """Single LLM provider configuration (one key per instance)."""

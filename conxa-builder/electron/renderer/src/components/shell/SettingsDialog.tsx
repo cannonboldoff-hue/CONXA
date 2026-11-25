@@ -1,5 +1,5 @@
 import { useTourStore } from '@/store/tourStore'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LogOut, RefreshCw } from 'lucide-react'
 import { getStudioSettings, setStudioSettings } from '@/api/conversationApi'
@@ -37,9 +37,11 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 function AccountTab() {
   const { identity, setIdentity } = useAuth()
+  const [signOutNote, setSignOutNote] = useState<string | null>(null)
   const name = identity?.name || identity?.email || ''
   if (!identity) return <p className="text-sm text-[var(--text-meta)]">Not signed in.</p>
   return (
+    <>
     <div className={cn(BOX, 'flex items-center gap-4 p-4')}>
       <div
         aria-hidden="true"
@@ -52,11 +54,13 @@ function AccountTab() {
         {identity.name && identity.email && <p className="truncate text-sm text-[var(--text-secondary)]">{identity.email}</p>}
         {identity.org_name && <p className="truncate text-sm text-[var(--text-meta)]">{identity.org_name}</p>}
       </div>
-      <Button variant="outline" size="sm" className="gap-2" onClick={() => performLogout(setIdentity)}>
+      <Button variant="outline" size="sm" className="gap-2" onClick={async () => setSignOutNote(await performLogout(setIdentity))}>
         <LogOut className="size-4" />
         Sign out
       </Button>
     </div>
+    {signOutNote && <p className="mt-2 text-sm text-[var(--text-meta)]">{signOutNote}</p>}
+    </>
   )
 }
 

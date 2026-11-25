@@ -15,6 +15,7 @@ const { classifyRunResult, extractRunId } = require("./classify");
 const { waitForRunEnd, TERMINAL, FOLLOW_UP_PREFIX } = require("./run_follow");
 const settings = require("./settings");
 const history = require("./history");
+const account = require("./account");
 const sessionsStore = require("./sessions");
 const authService = require("./auth_service");
 const executeClient = require("./execute_client");
@@ -230,16 +231,28 @@ handle("sessions:rename", async (_e, payload) => ({ ok: true, title: await sessi
 
 handle("sessions:search", async (_e, payload) => ({ ok: true, results: await sessionsStore.searchSessions(payload && payload.query) }));
 
-handle("auth:login", async () => ({ ok: true, identity: await authService.login() }));
+// AUTH-26: chats, history and settings follow the signed-in person. When the person changes, reload the window
+// so nothing from the previous one stays on screen.
+function followAccount(identity) {
+  if (account.apply(identity) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+}
+
+handle("auth:login", async () => {
+  const identity = await authService.login();
+  followAccount(identity);
+  return { ok: true, identity };
+});
 handle("auth:cancel", () => { authService.cancelLogin(); return { ok: true }; });
 
 ipcMain.handle("auth:logout", () => {
   authService.logout();
+  followAccount(null);
   return { ok: true };
 });
 
 ipcMain.handle("auth:status", async () => {
   const identity = await authService.currentIdentity();
+  followAccount(identity);
   return { ok: true, signedIn: Boolean(identity), identity };
 });
 

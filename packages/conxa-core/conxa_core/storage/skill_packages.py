@@ -31,7 +31,7 @@ import re
 import shutil
 from pathlib import Path
 
-from conxa_core.config import state_base_dir
+from conxa_core.config import account_root
 
 WORKFLOW_FILENAMES = ("execution.json", "recovery.json")
 
@@ -153,7 +153,7 @@ def skill_package_root_dir() -> Path:
     in-repo source dir in development) so generated bundles never target the
     read-only install tree.
     """
-    path = state_base_dir() / FIXED_PACKAGE_ROOT
+    path = account_root() / FIXED_PACKAGE_ROOT  # per account (AUTH-26)
     path.mkdir(parents=True, exist_ok=True)
     maybe_migrate_legacy_container_layout(path)
     return path

@@ -1,10 +1,9 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { app } = require("electron");
 
 function historyPath() {
-  return path.join(app.getPath("userData"), "run-history.json");
+  return path.join(require("./account").dir(), "run-history.json");
 }
 
 function loadHistory() {

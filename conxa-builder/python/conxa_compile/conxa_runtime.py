@@ -309,8 +309,9 @@ def _app_copy_complete(version_dest: Path) -> bool:
 
 
 def resolve_test_sandbox_dir() -> Path:
-    """Return the path for the Studio test sandbox (~/.conxa-build-studio/sandbox)."""
-    return _studio_base() / "sandbox"
+    """Return the path for the Studio test sandbox (<account folder>/sandbox; AUTH-26)."""
+    account = os.environ.get("CONXA_ACCOUNT_HOME", "").strip()
+    return (Path(os.path.expanduser(account)) if account else _studio_base()) / "sandbox"
 
 
 def ensure_test_sandbox(

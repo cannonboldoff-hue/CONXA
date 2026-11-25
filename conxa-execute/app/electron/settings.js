@@ -1,10 +1,10 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { app, safeStorage } = require("electron");
+const { safeStorage } = require("electron");
 
 function settingsPath() {
-  return path.join(app.getPath("userData"), "byo-settings.bin");
+  return path.join(require("./account").dir(), "byo-settings.bin");
 }
 
 function loadSettings() {

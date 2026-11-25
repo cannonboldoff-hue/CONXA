@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from services import account_switch as _account_switch
 from services import bootstrap as _bootstrap_pkg
 from conxa_compile.recorder.session import registry as _recorder_registry
 from conxa_core.storage.workflow_store import get_workflow as _get_workflow
@@ -300,7 +301,9 @@ class SessionMixin:
 
     def cmd_login(self, _payload: dict[str, Any], rid: str) -> dict[str, Any]:
         try:
-            return {"identity": self._auth_service().login(on_event=_event_sink(rid))}
+            identity = self._auth_service().login(on_event=_event_sink(rid))
+            _account_switch.sync_account(identity)  # the Studio window restarts the engine on this account's folder
+            return {"identity": identity}
         except RuntimeError as exc:
             text = str(exc)
             # Clerk's own "error: description" text is not a code; keep it as the message only.
@@ -311,11 +314,21 @@ class SessionMixin:
         return {"ok": True}
 
     def cmd_logout(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
+        # Switching folders restarts the engine, which would cut a recording off mid-way.
+        if _account_switch.enabled() and _recorder_registry.all():
+            raise _CommandError("work_running", "A recording is still running.")
         self._auth_service().logout()
+        _account_switch.sync_account(None)
         return {"ok": True}
 
     def cmd_whoami(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
-        return {"identity": self._auth_service().current_identity()}
+        auth = self._auth_service()
+        identity = auth.current_identity()
+        # No identity can also mean "offline right now, token not refreshed": only a missing
+        # saved session counts as signed out, so a bad network never hides the person's work.
+        if identity or not auth._load():
+            _account_switch.sync_account(identity)
+        return {"identity": identity}
 
     def cmd_cloud_ping(self, _payload: dict[str, Any], _rid: str) -> dict[str, Any]:
         """Is Conxa Cloud reachable right now? Drives the offline banner and the sidebar connection dot.

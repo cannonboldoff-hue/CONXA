@@ -17,6 +17,7 @@ const readline = require("readline");
 const { pathToFileURL } = require("url");
 const { Bridge } = require("./bridge");
 const conxaEnv = require("./env");
+const accountMod = require("./account");
 const nodeNet = require("net");
 const browserPanel = require("./browser_panel");
 const browserControl = require("./browser_control");
@@ -169,8 +170,14 @@ function backendCommand() {
   return { cmd: path.join(process.resourcesPath, "backend", exe), args: [] };
 }
 
+// AUTH-26: the account whose folder the running backend was started on, and a waiter for a deliberate restart.
+let backendAccountKey = null;
+let switchWaiter = null;
+
 function startBackend() {
   const { cmd, args } = backendCommand();
+  const studioHome = conxaEnv.resolve().studioHome;
+  backendAccountKey = accountMod.readAccountKey(studioHome);
   backend = spawn(cmd, args, {
     stdio: ["pipe", "pipe", "pipe"], // all pipes; windowsHide suppresses the console window
     windowsHide: true,
@@ -189,6 +196,7 @@ function startBackend() {
       // CONXA_ENV=dev (from the launcher) selects the isolated dev lane. Any single
       // value can still be overridden by setting its env var in the shell.
       ...conxaEnv.backendEnv(),
+      ...accountMod.accountEnv(studioHome, backendAccountKey),
       // CONXA_CLERK_CLIENT_SECRET is optional: auth_service uses PKCE (public client)
       // so the secret is not required for the token exchange. If Clerk is configured
       // as a confidential client, set this env var in the shell before `npm run dev`,
@@ -237,6 +245,15 @@ function startBackend() {
     clearTimeout(healthy);
     if (bridge) bridge.rejectAll(`backend exited (code ${code})`);
 
+    if (switchWaiter) {
+      // A deliberate restart onto another account's folder: not a crash, so it does not use up the restart budget.
+      const done = switchWaiter;
+      switchWaiter = null;
+      startBackend();
+      done();
+      return;
+    }
+
     if (backendRestarts < MAX_BACKEND_RESTARTS && !app.isQuitting) {
       backendRestarts += 1;
       setEngineState("restarting");
@@ -263,9 +280,23 @@ function callBackend(type, payload) {
 
 // ─── IPC surface for the renderer ──────────────────────────────────────────────
 
+// AUTH-26: after the backend records a different account, restart it on that account's folder and reload the
+// window so nothing from the previous account stays on screen. A no-op when the account did not change.
+async function switchAccountIfNeeded() {
+  if (!backend || backend.killed || switchWaiter) return;
+  const key = accountMod.readAccountKey(conxaEnv.resolve().studioHome);
+  if (key === backendAccountKey) return;
+  await new Promise((resolve) => {
+    switchWaiter = resolve;
+    backend.kill();
+  });
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+}
+
 ipcMain.handle("python:cmd", async (_e, { type, payload }) => {
   try {
     const result = await callBackend(type, payload);
+    if (type === "login" || type === "logout" || type === "whoami") await switchAccountIfNeeded();
     return { ok: true, result };
   } catch (err) {
     return { ok: false, code: err.code || "error", message: err.message, trace: err.trace };
