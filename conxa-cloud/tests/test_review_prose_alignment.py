@@ -66,7 +66,8 @@ def test_a_captured_value_is_named_by_its_label_not_by_the_value():
     from conxa_compile.compiler.build import _extract_label
 
     ev = {"extras": {"section_heading": "Order summary"}, "anchors": [{"element": "Total"}]}
-    assert _extract_label(ev, {"inner_text": "Rs. 400"}) == "Order summary"
+    assert _extract_label(ev, {"inner_text": "Rs. 400"}) == "Total", "the value's nearest label beats the page heading"
+    assert _extract_label({"extras": ev["extras"]}, {"inner_text": "Rs. 400"}) == "Order summary", "the heading is the last resort"
     assert _extract_label(ev, {"inner_text": "Order total"}) == "Order total"
     assert _extract_label({"anchors": [{"element": "Total"}]}, {"inner_text": "rs_400 9"}) == "Total"
     assert _extract_label(ev, {"aria_label": "Price"}) == "Price"

@@ -2566,23 +2566,20 @@ def _sibling_bindings(visited_hosts: list[str], exclude_skill_id: str) -> dict[s
 
 
 def _extract_label(ev: dict[str, Any], target: dict[str, Any]) -> str:
-    """What a captured value is called: the element's label, then the heading of its section, then the nearest words.
-    Its own text is the value itself when it holds a digit ("Rs. 400"), so that never names it; a label-like text
-    ("Order total") may."""
+    """What a captured value is called: the element's label, then the nearest words ("Total"), then the heading of its
+    section as a last resort (a heading names the page, not the value: BUILD-117 (11)). Its own text is the value
+    itself when it holds a digit ("Rs. 400"), so that never names it; a label-like text ("Order total") may."""
     for field in ("aria_label", "label_text", "placeholder", "name"):
         if str(target.get(field) or "").strip():
             return str(target[field])
     own = str(target.get("inner_text") or "").strip()
     if own and not re.search(r"\d", own):
         return own
-    heading = str(((ev.get("extras") or {}).get("section_heading")) or "").strip()
-    if heading:
-        return heading
     for anchor in ev.get("anchors") or []:
         text = str((anchor or {}).get("element") or "").strip() if isinstance(anchor, dict) else ""
         if text and not re.search(r"\d", text):
             return text
-    return ""
+    return str(((ev.get("extras") or {}).get("section_heading")) or "").strip()
 
 
 def _finish_extract_steps(steps: list[SkillStep], events: list[dict[str, Any]]) -> None:

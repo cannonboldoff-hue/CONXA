@@ -197,7 +197,7 @@ function ClarifyQuestionBody({ threadId, item }: CardProps) {
   }
 
   if (state === 'reverted') {
-    return <p className="text-xs text-[var(--text-meta)]">{title} — went back, asked again below</p>
+    return null // history only: the question is asked again below, the thread says nothing more (BUILD-117 (11))
   }
   if (state === 'applying') {
     return <div className="flex items-center gap-2.5 text-sm"><StatusGlyph kind="run" /><span className="text-[var(--text-primary)]">{title}</span><span className="text-[var(--text-meta)]">— applying…</span></div>
