@@ -629,8 +629,8 @@ broken update rollback. Sign GO / NO-GO with date, tester and versions at the en
 8. The host exe stays `--no-bytecode`; a Playwright crash in any runtime test → suspect this first.
 9. The margin gate may refuse a click that looks fine — refusing safely is the design, not a bug.
 10. Hand-over inside a loop loses its place; a pause doesn't survive a runtime restart (EXEC-22).
-11. Studio's local work (workflows, groups, chats, saved sign-ins) belongs to the machine, not the signed-in account. After sign-out and a different sign-in, the first account's work still shows and can be published into the new account's company. Owner decision 2026-11-22: leave as designed (WF-17 17.4, AUTH-26).
-12. Conxa Execute's chats and run history also belong to the machine, not the signed-in account: after sign-out and a different sign-in, the first account's chat titles, replies and run rows still show. Skills and saved site sign-ins are machine-wide too, so hiding chats would isolate nothing. Owner decision 2026-11-23: leave as designed (WF-19 F3, AUTH-26).
+11. (Closed 2026-11-25, AUTH-26) Studio keeps each account's local work in its own folder; see `docs/Auth-and-Updater.md` §1.1b. Checked live 2026-11-25 against a mock sign-in.
+12. (Closed 2026-11-25, AUTH-26) Conxa Execute keeps each person's chats, run history and settings in their own folder. Checked live 2026-11-25 against a mock sign-in.
 
 New limitations → `TODO.md`. Doc contradictions → `docs/TRD.md` / `docs/App-Flow.md`. Every fix →
 an entry in `FIX.md`. A WF passes → its section moves to `02-WORKFLOWS-PASSED.md` (next P number)

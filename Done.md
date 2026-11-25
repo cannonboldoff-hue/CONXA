@@ -15,10 +15,12 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 | MCP — MCP | 1 | MCP-4 |
 | TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
-| AUTH — Authentication | 23 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25 |
+| AUTH — Authentication | 24 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25, 26 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
-| **Total** | **178** | |
+| UPD — Auto Updates | 1 | UPD-5 |
+| OPS — Operations | 1 | OPS-1 |
+| **Total** | **181** | |
 
 ---
 
@@ -964,10 +966,13 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - (1) A plain "Search" click the recording saw leave its page now gets a re-check list (`build.py::_sends_form`); Studio no longer offers the wrong "web address changes" check on a step that stayed on its address (`clarify.py::_offerable`).
 - (2) Chat can confirm a place binding on a read-a-value step: `entity_binding.confirmed` is editable in `capability_manifest.py`; chat still cannot write the container, position, target or any address key.
 - (4).2 With the AI helper off and a person watching, Studio now asks the person in the popup card ("The page is asking you: OK or Cancel?"); no model answers it; never in dry, loop, destructive or scheduled runs. (4).3 The pause keeps the page as it was before the step, so the step is re-checked after the answer (`run.js`, `server.js`); no witness rule loosened. TRD updated.
+- (11) Owner decisions 2026-11-25 (Task 8): hide the "went back, asked again below" line once the question is asked again (`CompileClarifyCards.tsx`, reverted card renders nothing); name a captured value from its nearest label ("Total", "Price") and use the section heading only as a last resort (`build.py::_extract_label`, test `test_review_prose_alignment.py`); the "first message in a new chat shows only after a reload" report could not be repeated and stays closed unless seen again. 176 Python tests pass.
+- (4).1 Electron's own OK/Cancel box no longer stays on screen or blocks Studio's window. In a host-owned run, where a person may be asked, the page's `confirm()` is replaced for the step (`page_scripts.js::armBoxShim`): it answers Cancel at once and notes the words; `run.js::askAboutNativeQuestion` then puts them to the person, and on OK the step runs again with OK armed (`answerBlockingPopup`, flag `__fork_shim_<i>` bound in `server.js`); Cancel only re-checks the step. Recorded boxes and dry, loop, destructive and scheduled runs keep the browser's own dialog path. Checked live in Build Studio (fixture `docs/testing/tools/box_fixture_srv.py`): card shown, Studio window stayed enabled, OK and Cancel both ran to a pass. Owner Task 3 (docs/OWNER-TODO-P0.md) filed here: decision A built as option (b); its by-hand checks (card shows, no leftover box, Studio window not blocked) were driven live in Studio. Tests: `test_confirm_shim_in_host_browser.js`, 3 new in `test_typed_box_and_native_box.js`.
 - (5) Fixed "worked" words are offered only if a saved page showed them after the step and not before; the message for typed words never seen now starts "Added: …".
 - (9) Chat reads the lifecycle as it will be once the reply is in, so it no longer says testing is closed while Test it works (`lifecycle.py`, `harness.py`).
 - (10) The real cause was an unticked landing check being deleted, which made a recorded Log out look like an expired sign-in; the unticked check is now kept (it can never fail a run).
 - (11) "1 question needs you" wording; the close "×" is no longer in check text; the "could not confirm this computer's access" line no longer shows on Studio test cards; the Publish row says "Not tested yet".
+- (9) Live check and housekeeping done by the owner 2026-11-25: chat "already does it" check run in Studio (result not recorded), empty `C:\c` folder and the throwaway chats "LP price check" and "Export a recurring report" removed.
 - Tests: `test_typed_box_and_paste_link.py`, `test_compile_clarify.py`, `test_capability_manifest.py`, `test_test_flow.py`, `test_lifecycle_rebuild_and_expiry.py`, `test_typed_box_and_native_box.js`, `test_evidence_chain.js`. Not driven in the live Studio.
 
 ## EXEC — Execution & Recovery (34 done)
@@ -1893,7 +1898,7 @@ question — that compile produced inputs named `sports` and `react_select_3_lis
 dropdown's enum is also frozen from the recording (picking a different State still offers the
 recorded State's cities). None of these block a run; all deserve their own item.
 
-## AUTH — Authentication (23 done)
+## AUTH — Authentication (24 done)
 
 ### AUTH-1 — Warn at pre-flight when a workflow visits a host that has no sign-in app configured
 **Resolved:** 2026-09-21
@@ -2048,6 +2053,14 @@ recorded State's cities). None of these block a run; all deserve their own item.
 **Resolved:** 2026-11-21 (E2E16-7b)
 (1) The Studio host-panel signed-in look learned and confirmed on the-internet and saucedemo with the same rule as the headless run. (2) Closing a headless browser now takes about 0.7 s (the 11–61 s was machine load); one Done is about 9 s for one address and 35–46 s when two are tried. (3) The stale `probe_url` comment in `runtime/app/browser.js` is corrected.
 
+### AUTH-26 — Studio and Execute local work is per account, not per machine
+
+- **Resolved:** 2026-11-25
+- **Problem:** after Sign out and a sign-in as a different account, the first account's workflows, groups, chats, saved sign-ins, run history and built bundles still showed, and Publish / Build Installer sent them to the new account's company (WF-17 17.4, WF-19 F3). Owner first left it as designed (2026-11-22/23), then chose per-account folders on 2026-11-25.
+- **Fix:** Studio keeps each account's `data/`, `sandbox/` and `output/` in `<studio home>/accounts/<account key>/` (key = Clerk `org_id`, else `personal_<user_id>`); signed out uses an empty `_signed_out` folder. The backend records the account in `active_account.json` on login, logout and whoami, and the Electron main process restarts it on that folder and reloads the window (`electron/account.js`, `services/account_switch.py`, `conxa_core.config.account_root`). Sign-out is refused while a recording runs. Execute keeps chats, history and settings in `userData/accounts/<user_id>/` (`electron/account.js`). The first account to sign in after the update takes the old shared folders (moved, never deleted). Design: `docs/Auth-and-Updater.md` §1.1b.
+- **Verified:** `conxa-cloud/tests/test_account_folders.py` and the full `pytest -q tests`; Studio `electron/test/account.test.js` and typecheck; Execute `electron/test/account.test.js` and `npm test`. **Live, 2026-11-25** (isolated Studio instance and isolated Execute profile, mock identity provider, not real Clerk): Studio — an old-layout group moved to account 1 on first sign-in and showed; sign-out showed nothing; account 2 showed no groups; account 1 again showed the group; folders `accounts/org_mock1`, `org_mock2`, `_signed_out`. Execute — account 1's run history showed 1 row; signed out 0; account 2 0; account 1 again 1; chat files sit in separate per-person folders.
+- **Not covered:** real Clerk sign-in (blocked, no account); a real packaged upgrade from an old install; Execute's blank auto-created chats collect in its `_signed_out` folder (hidden, never listed).
+
 ## DEAD — Tech debt (1 done)
 
 ### DEAD-1 — `{company}_groups.json` is written by Build Studio but read by nothing in the runtime
@@ -2073,6 +2086,18 @@ recorded State's cities). None of these block a run; all deserve their own item.
 - **Open follow-up:** no question asks "always 50, or a number you choose?"; the count is fixed at what was recorded (edit it in Human Edit is not wired).
 
 ---
+
+## UPD — Auto Updates (1 done)
+
+### UPD-5 — Set `CLOUD_API_URL`/`CLOUD_ADMIN_TOKEN` repo config so runtime releases actually publish
+**Resolved:** 2026-11-25
+Owner set the repo variable `CLOUD_API_URL` (`https://apis.conxa.in`) and the secret `CLOUD_ADMIN_TOKEN` and seeded the already-built releases (P0-H1). Pure configuration, no code. The live `curl https://apis.conxa.in/api/v1/manifest.json` check has not been run from this session (no network); it is the closing check for P0-1 (SHIP-1), which stays open in `TODO.md`.
+
+## OPS — Operations (1 done)
+
+### OPS-1 — Purge installers that landed in the shared `v1`/`v2` slot on the deployed server (SG-28)
+**Resolved:** 2026-11-25
+Owner purged `data/installers/v1/`, `data/installers/v2/` and the `installer_versions__v1`/`__v2` rows on production after the SG-28 fix was deployed (P0-H2). Not checked from this session: `GET /api/v1/installers/v1` and `/v2` returning 404 (no network here), and vendor notification, which the owner handles.
 
 ## Backlog organisation log
 

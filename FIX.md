@@ -2,24 +2,24 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**The to-do list's "must fix before pilot" section now has a work plan — 2026-11-24**
-The most urgent list had thirteen items, some of them huge, and it was not clear which could be worked on at the same time, which had to wait for another, and which only a person can do. Each item now has an owner, a clear "done when" line, and a place in one of three waves, and the work that needs a human (setting secrets, cleaning the live server, running the long test passes) is marked as such. Nothing was fixed yet; the plan only makes it possible to work on several items safely at once.
-— 2026-11-24
+**Rebuilding the GitHub tour workflow still fails its test — 2026-11-25**
+We rebuilt the GitHub tour workflow in Build Studio to check the earlier fix. The test still stops early: it cannot find the Issues tab, because the rebuild turned the tab names into answers to fill in and they no longer match what GitHub shows. Nothing was published and nothing was moved to the finished list. This is now written down as open work. Separately, the "Build again" button is missing from the failed-test screen, so rebuilding needed a back-door command.
+— 2026-11-25
 
-**Recovery now knows where a button used to sit — 2026-11-24**
-When a workflow can't find a button because the website changed, the helper that fixes it now gets a short description of where that button sat when it was recorded: which sections of the page it was inside, a few words of nearby text, and so on. Personal details, typed values and record numbers are removed first. This helps the helper find a button that moved instead of guessing. Workflows get this the next time they are rebuilt.
-— 2026-11-24
-
-**A login button can no longer quietly pick up a password — 2026-11-24**
-Months ago a bug let a saved workflow look for the Login button by the password typed just before it, so the button was never found. A rebuilt login recording shows it no longer happens. Building an installer now also warns you, in plain words, if any step looks for something by a value the recording never showed, so a broken step is caught at build time and not when a customer runs it.
-— 2026-11-24
-
-**GitHub tab clicks and an old logout workflow work again — 2026-11-24**
-Workflows that clicked a GitHub tab such as "Pull requests" stopped when the number next to the tab changed, because the workflow had remembered the number as part of the tab. Workflows now ignore those changing numbers, so the tab is found right away (about 1.5 seconds per click instead of about 9.5). An older approved logout workflow that stopped at the Logout button finds it again without being rebuilt.
-— 2026-11-24
+**Each account now keeps its own work on the computer — 2026-11-25**
+Before, if you signed out and someone else signed in on the same computer, they saw your workflows, chats and saved sign-ins, and could publish them to their own company. Now every account has its own private space on the computer, and the sign-in screen shows nothing at all. The first account to sign in after this update takes over the work that was already there, and nothing is deleted. You can't sign out while a recording is running, so a recording is never cut off.
+— 2026-11-25
 
 **Nothing you record goes missing without a word — 2026-11-25**
 Before, a recording could lose a step while being turned into a workflow, and nobody was told until the workflow failed for a customer. Now every action you recorded is checked. If any could not be kept, Build Studio names it in plain words and asks you to confirm before you can test, approve or publish. A choice you made from a dropdown list is now always kept, together with the value it asks for.
+— 2026-11-25
+
+**Cleaner chat and better names for captured values — 2026-11-25**
+When you went back to an earlier question, a small note kept saying it had been asked again below. That note is gone, so the chat reads cleaner. A value you capture, such as a price, is now named after the label next to it ("Total", "Price") and not after the page's heading, so its name makes sense when you see it later.
+— 2026-11-25
+
+**A page's OK/Cancel question no longer leaves a stuck box behind — 2026-11-25**
+When a page asked an OK/Cancel question during a test, Studio showed its own card, but the browser's own box could stay on screen and freeze Studio's window. Now the page is told "Cancel" at once, Studio asks you in the card, and if you pick OK the step is simply tried again with your answer. Nothing is left on screen and Studio stays usable.
 — 2026-11-25
 
 **Fewer false alarms and wrong checks while testing — 2026-11-25**
@@ -32,4 +32,8 @@ When a test paused before a step that can't be undone and then carried on, it lo
 
 **A plain to-do list for the work only you can do — 2026-11-25**
 The most urgent items on the backlog need a person, not more code: setting up update publishing, cleaning old installers off the live server, a few choices, and the big test passes. There was no single place that listed them. A new step-by-step guide now explains each one in plain words, with the order to do them in.
+— 2026-11-25
+
+**Update publishing and the old installer slot are cleaned up — 2026-11-25**
+Two chores that only a person could do are finished: new releases now reach the cloud so customers can get updates, and the old shared spot where one company's installer could be handed to another was emptied. We also tried the planned fix for the grey OK/Cancel box that stays on screen after a test answers a website's popup. It does not work the simple way, because the box would then answer itself before a person could choose, so that fix is waiting for a design choice.
 — 2026-11-25
