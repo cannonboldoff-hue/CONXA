@@ -100,6 +100,17 @@ test("a pack built before form-field hashing still tie-breaks on its old hash", 
   assert.strictEqual(resolve([ROLE_SIG], { role: "textbox", stable_hash: "newA" }, root, { uniqueMargin: 0.1 }).node, a);
 });
 
+// EXEC-10: the recorder read "Number" from a <p> beside the box, so the live input has no name at all. The one
+// xpath match must still pass; a box that carries a DIFFERENT name must not.
+test("a caption read from beside the box does not veto a nameless live box", () => {
+  const XPATH_SIG = { engine: "xpath", selector: "/html[1]/body[1]/input[1]", durability: 0.01 };
+  const fp = { tag: "input", role: "spinbutton", label_text: "Number", input_type: "number", section_heading: "Inputs" };
+  const nameless = { role: "spinbutton", name: "", text: "", inputType: "number", sectionHeading: "Inputs" };
+  assert.strictEqual(resolve([XPATH_SIG], fp, mockRoot({ [XPATH_SIG.selector]: [nameless] }), {}).node, nameless);
+  const other = { role: "spinbutton", name: "Quantity", text: "", inputType: "number", sectionHeading: "Other" };
+  assert.ok(scoreCandidate(other, fp) < scoreCandidate(nameless, fp));
+});
+
 test("scoreCandidate rewards testid agreement", () => {
   const fp = { data_testid: "x", role: "button", aria_label: "X" };
   const match = scoreCandidate({ testid: "x", role: "button", name: "X" }, fp);

@@ -6,25 +6,25 @@ Items moved out of [`TODO.md`](TODO.md) once resolved, grouped by area (the ID p
 
 | Area | Done | Items |
 |---|---|---|
-| BUILD — Build Studio | 80 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7; 2026-11-25: 1, 2, 4.2, 4.3, 5, 9, 10, 11) |
-| EXEC — Execution & Recovery | 35 | RECOV-2, EXEC-1, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63, 67 |
+| BUILD — Build Studio | 81 | BUILD-4, 5, 8, 10, 12, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26, 29, 30, 31, 33, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 49, 50, 51, 52, 53, 55, 56, 57, 65, 70, 79, 80, 85, 86, 87, 88 (2, 3), 89, 91 (1 status, 2, 3, 4), 93 (15 parts), 94 (guard message, minimized run), 95 (1, 2, 5, 6, 7), 99 (1, 3), 100 (1), 114 (1), and from the 2026-11-16 campaign run (2026-11-21): 88 (arrow), 90, 91, 92, 93 (4, 9, 17, 19, 20, 21), 94 (closed), 95 (3, 4), 96 (4, 5), 98 (3), 99 (2, 4, 5), 100, 101 (1, 7), 102 (2, 3, 4, 6, 7), 103 (1, 2), 104 (1, 3, 5), 105 (2, 3, 4), 106 (2), 107 (2, 3, 5), 108 (1, 2, 3), 109, 110 (3, 4, 6, 8, 9), 111 (1–7, 9), 117 (1, 2, 3, 4, 6, 7; 2026-11-25: 1, 2, 4.2, 4.3, 5, 9, 10, 11; 2026-11-26: rest, P0-5 closed) |
+| EXEC — Execution & Recovery | 36 | RECOV-2, EXEC-1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 24, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 60, 61, 62, 63, 67 |
 | CLOUD — Cloud | 12 | CLOUD-6, 9, 10, 11, 13, 15, 19, 20, 22, 25, 27 |
 | RT — Runtime | 15 | RT-REFACTOR-1, 3, 3-HOST-LOCK, 4, 9, 11, 12, 13, 14, 15, 16, 17, 17b (step line, per-attempt), 18 |
 | PROD — Product | 5 | PROD-3, 3-DRYRUN, 5, 11 (run follow-ups), 18 (piece 1, piece 2 windows/deny-lists, piece 3) |
 | ARCH — Architecture | 3 | ARCH-1, 2, 3 |
 | MCP — MCP | 1 | MCP-4 |
-| TEST — Testing & Cleanup | 4 | TEST-6, 14, 15, TEST-FLAKE |
+| TEST — Testing & Cleanup | 6 | TEST-6, 11, 12, 14, 15, TEST-FLAKE |
 | REC — Recorder | 1 | REC-STALE-1 |
 | AUTH — Authentication | 24 | AUTH-1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 (2, 3), 24 (1, 4, 5), 25, 26 |
 | DEAD — Tech debt | 1 | DEAD-1 |
 | COMPILE — Compiler Correctness | 2 | COMPILE-3, 4 |
 | UPD — Auto Updates | 1 | UPD-5 |
 | OPS — Operations | 1 | OPS-1 |
-| **Total** | **182** | |
+| **Total** | **184** | |
 
 ---
 
-## BUILD — Build Studio (80 done)
+## BUILD — Build Studio (81 done)
 
 ### BUILD-4 — Wire the "Current identity" summary into Pick Element; show pruned signals in Review Selectors — **Resolved 2026-07-10 (partially by design)
 **Resolved:** 2026-07-10 (partially by design)
@@ -975,7 +975,17 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - (9) Live check and housekeeping done by the owner 2026-11-25: chat "already does it" check run in Studio (result not recorded), empty `C:\c` folder and the throwaway chats "LP price check" and "Export a recurring report" removed.
 - Tests: `test_typed_box_and_paste_link.py`, `test_compile_clarify.py`, `test_capability_manifest.py`, `test_test_flow.py`, `test_lifecycle_rebuild_and_expiry.py`, `test_typed_box_and_native_box.js`, `test_evidence_chain.js`. Not driven in the live Studio.
 
-## EXEC — Execution & Recovery (35 done)
+### BUILD-117 — remaining parts, moved from `TODO.md` 2026-11-26 (P0-5 closed at the owner's request)
+**Resolved:** 2026-11-26
+**Fix:** the three LP workflows (LP paste form, LP delete customer, LP secure logout) were re-recorded from scratch in the live Studio and every question answered; they are ready to test, not yet test-run. The text below is the open item and its backlog row, moved word for word. Its leftovers ((3) iframe rows, (4).1 page-load box, (9) chat wording, (11) first-message-after-reload and the filtered test-user sentence) were moved with it and are no longer tracked in `TODO.md`.
+
+- [ ] **BUILD-117 — what is still open after the live Studio pass of 2026-11-22 and the 2026-11-25 fix session (the fixed parts are in `Done.md`; evidence in `docs/testing/evidence/LIVE-PASS-2026-11-22/`).** (1) Workflows made before the fix keep the wrong re-check list until rebuilt; a recording that cleared a pre-filled box without typing first lost that clear when recorded and must be re-recorded. (3) Rows inside iframes, or a matching row in several frames, keep the old XPath behaviour (`resolution.js::rowRelativeSignals`); it only costs speed (31 s fallback), not correctness. Repro: a read-a-value step bound to a row inside an iframe. (4).1 Built 2026-11-25 (option b, filed in `Done.md`). Left open: the shim sits in the page only until it navigates (the next step arms it again), so a box raised by the page load itself, or inside a page the shim could not reach, still shows Electron's own box; not yet tried on a prompt() (Electron never shows one) or inside an iframe live. (9) New: in General Chat a reply said "I can't create the workflow from here" while a "create workflow" card showed under it (`data/chats/chat_b384fb33f730.jsonl`, `chat_f6883010e04d.jsonl`). (10) Existing workflows such as "LP secure logout" must be rebuilt and the question answered again (the unticked landing check is now kept). (11) Still open: the first message in a new chat only shows after a reload (renderer store; the owner cannot repeat it, 2026-11-25: reopen only if someone sees it again, with the steps); the login page's sentence naming the test user and password is kept in Studio's workflow file and offered as a check (filter it out of the offers). Still to do for a person: rebuild LP paste form, LP delete customer and LP secure logout. Not verified live: none of the 2026-11-25 changes were driven in the live Studio; the server-side resume (before-page and "by a person" handoff) is unit-tested through `run.js` only.
+
+**Backlog row (P0-5):** | P0-5 | BUILD-117 (all parts except (8)) | `capability_manifest.py`, compile checks and re-check lists, chat follow-ups, `run.js`/`server.js` popup resume, recorder saved sign-in | Fix; owner decisions in (4) are asked, never guessed | 2 | P0-4 (shares `run.js` and binding code) | fixed parts done 2026-11-25 and filed in `Done.md` (156 Python + 26 runtime tests re-run, pass); old-workflow rebuilds done 2026-11-26 (the 3 LP workflows re-recorded in Studio); item stays open for the (4).1 leftovers |
+
+**Done when (as written):** **BUILD-117:** each of (1), (2), (3), (5), (9), (10), (11) is fixed or filed as its own item with a repro; (4) and (8)'s owner decisions are put to the owner, not decided.
+
+## EXEC — Execution & Recovery (36 done)
 
 ### EXEC-1 — Conditional / branch steps in the skill format
 **Resolved:** 2026-07-09
@@ -989,6 +999,11 @@ A rejected form names the box; an empty extracted value says "holds no value to 
 - **Suggested order:** first item to tackle among all execution & recovery items (EXEC-2 through EXEC-8) and ahead of RT-2.
 - **Complexity:** XL — touches `packages/conxa-core/conxa_core/models/skill_spec.py` (new step-type schema), `conxa_compile` (recorder/compiler emission of the new step types, likely requiring new recording-time signal capture — see RT-2), and `runtime/run.js` (new branch-evaluation logic in the execution loop), plus new `gate_replay.js`-style CI fixtures exercising the three primitives.
 - **Success criteria:** a recorded workflow containing a cookie-banner dismissal replays correctly whether or not the banner appears on a given run; `runtime/test/` gains passing tests for `if_present`, `try_dismiss`, and `wait_for_one_of`; the CI execution gate (see ARCH-2) includes at least one fixture exercising a conditional branch.
+
+### EXEC-10 — Long-workflow stress test: 30–40 steps, multiple tabs, cross-domain file transfer
+- **Resolved:** 2026-11-26
+- **What was done:** the recorded 35-action, 3-tab workflow ("EXEC10 tabs r3", 34 steps, filebin / selenium.dev / the-internet) now replays end to end to "Done." on the **released host exe (host-v3.2.3)** with the current app layer. The last failing step, "Type the number" on the-internet `/inputs`, failed because the recorder named the box "Number" from a `<p>` beside it (not a `<label>`), so the live box had no name and `resolver.js::scoreCandidate` charged that as a mismatch, dropping the one xpath match under the 0.5 gate; a11y recovery then picked the `<p>`. Fix: a name that came only from `label_text` is no longer charged against a live box that has no name (absence, not disagreement); a different live name is still charged. Control run on the same exe without the fix fails at step 34 with "Element not found (resolve miss)". New test in `runtime/test/unit/test_resolver.js`. The CI gate (`gate_replay.js`: tab round trip + parked-and-resumed) also passes on host-v3.2.3. Earlier work (tab ids, popup fixes, gate-tabs fixture) is in the item's history in git.
+- **Left open:** filed as EXEC-68.
 
 ### EXEC-11 — Downloaded files with duplicate names silently overwrite each other
 **Resolved:** 2026-08-15
@@ -1853,13 +1868,21 @@ Every recovery stage writes a `recovery_attempt` line with stage, ok, duration a
 
 ---
 
-## TEST — Testing & Cleanup (4 done)
+## TEST — Testing & Cleanup (6 done)
 
 ### TEST-6 — Remove dead `refreshSession()` from `runtime/auth_manager.js`
 **Resolved:** 2026-08-17
 - **Resolution:** Removed as part of BUILD-15's authentication-is-pre-flight-only redesign — `refreshSession` would have directly violated that model (a blocking mid-run re-login) had anything ever called it. Deleted the function, its attempt-counter state, and its now-dead `AUTH_FAILURE_URL_RE` copy from `auth_manager.js`; removed its two dedicated tests from `runtime/test/test_auth_recovery.js` (the file's other, unrelated tests — `isAuthFailure`, `_reachedProtectedUrl`, session-encryption fallback — are untouched and still pass). `run.js`'s and `browser.js`'s own (semantically different, deliberately-not-merged) auth regexes now cross-reference each other in comments so a future reader doesn't mistake them for accidental duplication.
 
 ---
+
+### TEST-11 — Run the full manual testing suite in `docs/testing/` (re-invoke & reconfigure LLM keys first)
+**Resolved:** 2026-11-26
+Keys re-checked live (Free, Starter and Pro pools answer a real request; decisions key set). WF-1…WF-12 had already passed in the 2026-11 campaign (P-11…P-44), so the suite was closed from that evidence, plus one fresh end-to-end smoke run on today's Studio build: new workflow, 13-action recording, compile with 3 questions answered on purpose, test passed (14 steps confirmed, fixture log shows exactly one add with the typed values), Approved. Owner chose this close-out over a days-long full re-run on 2026-11-26.
+
+### TEST-12 — Execute the hard-mode mega-workflow gauntlet (now WF-9 in `01-WORKFLOWS-TO-TEST.md`)
+**Resolved:** 2026-11-26
+Closed from evidence, not re-run as one recording: the old WF-9 gauntlet was split into WF-7 (R1/R2), WF-8 (R7), WF-15 (R3/R4/R8, endurance) and WF-16 (R5/R6), all passed (P-39, P-40, P-47, P-48), and a 104-step, 6-tab, 6-host mega-workflow replayed with zero recovery events (P-9). Not done: the single ~60-step recording across 6 sites with the 20-times overnight loop on today's build. Owner accepted this on 2026-11-26.
 
 ### TEST-14 — Runbook corrections after the 2026-11-15 dev test run
 **Resolved:** 2026-11-15

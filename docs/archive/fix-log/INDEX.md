@@ -122,7 +122,8 @@ This index lists every rotated file plus the live one.
 | [`FIX-2026-11-22.md`](FIX-2026-11-22.md) | 8 | When a workflow hands the page to a person, it now waits properly and stops in plain words; The to-do list is now in the order the work has to be done; The to-do list only shows work that is still open; Signing in can be cancelled, and sign-in messages are in plain words; Fixes for what the real-app test found; The new fixes were tried in the real app, and most work; Forms check their boxes, pasted boxes follow the original, and the page's own OK/Cancel boxes are asked about; Signing in as a different person on the same computer |
 | [`FIX-2026-11-23.md`](FIX-2026-11-23.md) | 2 | Conxa Execute runs at its normal window size and replies are no longer doubled; One company can no longer touch another company's installer, policy or plan |
 | [`FIX-2026-11-24.md`](FIX-2026-11-24.md) | 4 | The to-do list's "must fix before pilot" section now has a work plan; Recovery now knows where a button used to sit; A login button can no longer quietly pick up a password; GitHub tab clicks and an old logout workflow work again |
-| `FIX.md` (live) | — | today's (2026-11-25) entries |
+| [`FIX-2026-11-25.md`](FIX-2026-11-25.md) | 9 | The GitHub tour workflow now passes its whole test; Each account now keeps its own work on the computer; Nothing you record goes missing without a word; Cleaner chat and better names for captured values; A page's OK/Cancel question no longer leaves a stuck box behind; Fewer false alarms and wrong checks while testing; Multi-tab workflows keep their place after a pause; A plain to-do list for the work only you can do; Update publishing and the old installer slot are cleaned up |
+| `FIX.md` (live) | — | today's (2026-11-26) entries |
 
 **Rotation rule:** at the end of each day (or sooner if `FIX.md` exceeds ~800 lines), split by
 each entry's own trailing `— YYYY-MM-DD` date — not a blind line-number cut, since entries are

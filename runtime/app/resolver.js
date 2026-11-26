@@ -128,7 +128,10 @@ function scoreCandidate(node, fingerprint) {
   // The recorded element's accessible name, by the one function the compiler's rule is mirrored in
   // (accessible_name.js; Python twin identity_bundle.py::_accessible_name).
   const fpName = norm(fingerprintName(fp));
-  if (fpName) add(0.25, textCredit(fpName, node.name || node.text));
+  // A name taken only from label_text may have been read from text beside the box (a <p>, not a <label>); the live
+  // box then has no name at all, which is absence, not disagreement (EXEC-10: "Number" on the-internet /inputs).
+  const nameFromCaptionOnly = fpName === norm(fp.label_text) && !norm(node.name || node.text);
+  if (fpName && !nameFromCaptionOnly) add(0.25, textCredit(fpName, node.name || node.text));
 
   const isOptionContent = OPTION_CONTENT_TAGS.has(norm(fp.tag)) || OPTION_CONTENT_TAGS.has(norm(fp.role));
   const fpText = norm(isOptionContent ? "" : fp.inner_text);
