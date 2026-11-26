@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The cloud settings file is now tidy, with one main AI model per plan — 2026-11-26**
+The settings file for the live cloud was a long, jumbled list of AI model names. It is now split into clear sections: Free, Starter, Pro, and video. Each plan keeps just one main model for text and pictures and one backup, and video has its own model and backup. If the main video model fails, the backup now takes over, so recording does not stop.
+— 2026-11-26
+
 **The Build Studio version 1.0.0 now builds and publishes — 2026-11-26**
 The automatic checks that run before a Studio release were failing for small reasons: an old kind of test computer, a few unused bits of code, a test written only for Windows, and a video tool that some computers reject. All were fixed without switching any check off. The Studio, Execute, Runtime host and Runtime app are now all published as version 1.0.0.
 — 2026-11-26
