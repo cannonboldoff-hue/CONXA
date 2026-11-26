@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The Build Studio version 1.0.0 now builds and publishes — 2026-11-26**
+The automatic checks that run before a Studio release were failing for small reasons: an old kind of test computer, a few unused bits of code, a test written only for Windows, and a video tool that some computers reject. All were fixed without switching any check off. The Studio, Execute, Runtime host and Runtime app are now all published as version 1.0.0.
+— 2026-11-26
+
 **Every old version label was cleared and all four apps restarted at version 1.0.0 — 2026-11-26**
 GitHub held nearly 190 old version labels (tags) from past builds, which made it hard to see what was current. They were removed, today's work was merged into the main line, and the Studio, Execute, Runtime host and Runtime app were each published fresh as version 1.0.0. The Runtime app now only needs the 1.0.0 host, so the new pair works together. Two history labels were kept on purpose.
 — 2026-11-26
