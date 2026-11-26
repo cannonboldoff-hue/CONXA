@@ -27,6 +27,6 @@ test("a recorded account points the backend at its own folder", () => {
 });
 
 test("a developer-chosen data folder turns switching off", () => {
-  process.env.SKILL_DATA_DIR = "C:\somewhere";
+  process.env.SKILL_DATA_DIR = "C:\\somewhere";
   try { assert.deepEqual(accountEnv(home, "org_abc"), {}); } finally { delete process.env.SKILL_DATA_DIR; }
 });
