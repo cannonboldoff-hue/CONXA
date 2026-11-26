@@ -65,7 +65,7 @@ type UsageMeterConfig = {
   icon: ComponentType<{ className?: string }>
 }
 
-const SALES_EMAIL = 'noreplay@conxa.in'
+const SALES_EMAIL = 'founder@conxa.in'
 const SALES_PHONE_DISPLAY = process.env.NEXT_PUBLIC_SALES_PHONE_DISPLAY ?? '+91 9970257247'
 const SALES_PHONE_TEL =
   process.env.NEXT_PUBLIC_SALES_PHONE_TEL ?? SALES_PHONE_DISPLAY.replace(/[^\d+]/g, '')

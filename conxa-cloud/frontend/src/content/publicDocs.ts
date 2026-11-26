@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL } from '@/lib/contact'
+
 export type PublicDocCategoryId = 'product' | 'trust' | 'legal' | 'billing' | 'support'
 
 export type PublicDocBlock =
@@ -59,7 +61,7 @@ export type PublicDocCategory = {
   slugs: readonly string[]
 }
 
-export const SUPPORT_EMAIL = 'noreplay@conxa.in'
+export { SUPPORT_EMAIL }
 export const SUPPORT_PHONE_DISPLAY =
   process.env.NEXT_PUBLIC_SALES_PHONE_DISPLAY ?? '+91 9970257247'
 export const SUPPORT_PHONE_TEL =
