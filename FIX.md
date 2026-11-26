@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**The "Pause motion" button is gone from the home page — 2026-11-27**
+A small button in the corner of the home page let visitors stop the moving pictures. It looked out of place and added clutter. We removed it, so the page now just plays on its own.
+— 2026-11-27
+
 **The top of the home page now shows the headline and the moving picture together — 2026-11-27**
 On a laptop screen the two buttons sat under the headline and pushed the moving picture mostly out of view. The "Book a walkthrough" and "Start free" buttons now sit to the right of the headline, and the picture starts higher up. Visitors now see the headline and the start of the animation straight away.
 — 2026-11-27
