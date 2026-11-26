@@ -24,6 +24,7 @@ that event falls back to DOM-only anchors at compile.
 from __future__ import annotations
 
 import json
+import shutil  # noqa: F401 — tests patch frame_extractor.shutil.which
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
