@@ -19,7 +19,7 @@ jobs:
   # before the (slow, Windows-only) packaging job. Closes the historical gap where
   # CI only packaged the app and never tested it.
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
