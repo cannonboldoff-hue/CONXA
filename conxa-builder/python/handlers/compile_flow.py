@@ -280,7 +280,6 @@ class CompileFlowMixin:
             else:
                 harness.update_card(thread, card_id, sink=sink, state="done", rows=progress.rows(),
                                     credits_left=progress.credits_left, step_count=result.get("step_count"), actions=[])
-            warnings = int(result.get("compile_steps_with_warnings") or 0)
             self._flow_after_compile(workflow_id, result, sink)
         except Exception:  # noqa: BLE001 — the compile itself succeeded; only the questions failed
             import traceback

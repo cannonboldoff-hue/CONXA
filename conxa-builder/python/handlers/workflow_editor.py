@@ -506,7 +506,6 @@ class WorkflowEditorMixin:
         from conxa_compile.editor.copilot_proposals import ProposalError, resolve_step_index
         from conxa_compile.editor.workflow_mutations import replace_step_range
         from conxa_core.storage.json_store import read_skill, write_skill
-        from conxa_core.storage.workflow_store import get_workflow
 
         skill_id = _safe_id(payload.get("skill_id"), "skill_id")
         segment_id = _safe_id(payload.get("segment_skill_id"), "segment_skill_id")

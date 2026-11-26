@@ -6,7 +6,6 @@ import asyncio
 import copy
 import json
 import os
-import re
 import threading
 import time
 import uuid

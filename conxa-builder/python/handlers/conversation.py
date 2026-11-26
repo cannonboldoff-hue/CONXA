@@ -221,7 +221,7 @@ class ConversationMixin:
     # ── per-thread context ──────────────────────────────────────────────────────────────────
 
     def _llm_error(self, exc: Exception) -> tuple[str, str]:
-        from services.llm_proxy_client import CloudUnreachable, EntitlementBlocked, ProxyUnavailable, QuotaExceeded
+        from services.llm_proxy_client import EntitlementBlocked, ProxyUnavailable, QuotaExceeded
 
         if isinstance(exc, EntitlementBlocked):
             return exc.code, self._entitlement_error_message(exc.code)
@@ -570,8 +570,6 @@ class ConversationMixin:
         if not proposals and isinstance(card.get("proposal"), dict):
             proposals = [card["proposal"]]
         proposal = proposals[0] if proposals else {}
-        title = card.get("title") or "the change"
-
         if action == "dismiss":
             if card.get("state") != "open":
                 return {"ok": False, "code": "not_open"}

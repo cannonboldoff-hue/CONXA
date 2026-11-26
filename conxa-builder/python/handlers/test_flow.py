@@ -634,7 +634,6 @@ class TestFlowMixin:
                            reason=pause.get("reason") or "")
             return "ended"
         if status == "stopped_at_guard":
-            ran = [r["name"] for r in rows if r["status"] == "done"]
             push(state="ended_before_irreversible", cause=pause.get("kind") or "guard", stopped_before=name_at(result.get("stopped_at"), result.get("stopped_intent")),
                  declined=bool(result.get("declined")), after_confirmed=bool(result.get("after_confirmed")),
                  steps_ran=len(rows), actions=["test_again"])

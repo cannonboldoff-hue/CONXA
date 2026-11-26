@@ -96,7 +96,7 @@ class VideoAnalysisClient:
             if job_id is None:
                 if data is None:
                     data = Path(video_path).read_bytes()
-                job_id = self._retrying(lambda: self._submit(data, duration_s), started)
+                job_id = self._retrying(lambda d=data: self._submit(d, duration_s), started)
                 if on_job_id:
                     on_job_id(job_id)
             try:

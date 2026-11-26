@@ -126,7 +126,7 @@ def summarize(message: str, failure_kind: str | None = None, candidates: list[st
         # The app's own refusal. The runtime wrote a plain sentence for it ("This step didn't finish: ..."): keep it.
         sentence = _after_failed_prefix(text) or "The app reported a problem, so the test stopped."
     else:
-        for pattern, sentence in _PATTERNS:
+        for pattern, sentence in _PATTERNS:  # noqa: B007 — `sentence` is read after the loop breaks
             if pattern.search(text):
                 break
         else:

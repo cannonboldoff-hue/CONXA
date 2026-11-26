@@ -24,8 +24,6 @@ that event falls back to DOM-only anchors at compile.
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
