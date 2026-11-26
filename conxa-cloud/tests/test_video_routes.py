@@ -158,3 +158,35 @@ def test_analyze_video_deletes_asset_when_task_fails(monkeypatch):
         asyncio.run(twelvelabs.analyze_video(b"v"))
     assert exc.value.code == "twelvelabs_task_failed"
     assert ("DELETE", "/v1.3/assets/asset1") in calls
+
+
+def test_analyze_video_uses_fallback_model_when_primary_fails(monkeypatch):
+    monkeypatch.setattr(settings, "video_model", "primary")
+    monkeypatch.setattr(settings, "video_fallback_model", "backup")
+    models: list = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/analyze/tasks"):
+            model = json.loads(request.content)["model_name"]
+            models.append(model)
+            return httpx.Response(202 if model == "backup" else 500, json={"task_id": "t1"})
+        return _handler([])(request)
+
+    _mock_twelvelabs(monkeypatch, handle)
+    out = asyncio.run(twelvelabs.analyze_video(b"v"))
+    assert models == ["primary", "backup"]
+    assert out["segments"] == SEGMENTS
+
+
+def test_tier_has_one_multimodal_model_and_video_env_aliases(monkeypatch):
+    from conxa_core.config import Settings
+
+    monkeypatch.setenv("LLM_PRO_API_KEYS", "k1")
+    monkeypatch.setenv("SKILL_TWELVELABS_API_KEY", "old-name-key")
+    monkeypatch.setenv("LLM_VIDEO_FALLBACK_MODEL", "pegasus-b")
+    s = Settings(_env_file=None)
+    pro = [p for p in s.enabled_llm_providers() if p.pool == "pro"]
+    assert [(p.text_model, p.vision_model, p.fallback_vision_model) for p in pro] == [
+        ("claude-sonnet-5", "claude-sonnet-5", "claude-opus-5-5")
+    ]
+    assert (s.twelvelabs_api_key, s.video_fallback_model) == ("old-name-key", "pegasus-b")

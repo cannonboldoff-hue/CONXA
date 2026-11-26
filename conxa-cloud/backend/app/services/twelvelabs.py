@@ -74,6 +74,38 @@ async def _wait(deadline: float, code: str) -> None:
     await asyncio.sleep(POLL_INTERVAL_S)
 
 
+async def _run_task(client: httpx.AsyncClient, asset_id: str, model: str) -> dict[str, Any]:
+    create = await client.post(
+        _url("/analyze/tasks"),
+        headers=_headers(),
+        json={
+            "model_name": model,
+            "video": {"type": "asset_id", "asset_id": asset_id},
+            "analysis_mode": "time_based_metadata",
+            "max_tokens": 32768,
+            "response_format": {
+                "type": "segment_definitions",
+                "segment_definitions": [SEGMENT_DEFINITION],
+                "segment_time_format": "seconds",
+            },
+        },
+    )
+    task_id = str(_check(create, "task").get("task_id") or "")
+    if not task_id:
+        raise VideoAnalysisError("twelvelabs_task_bad_response")
+
+    deadline = time.monotonic() + TASK_TIMEOUT_S
+    while True:
+        task = _check(await client.get(_url(f"/analyze/tasks/{task_id}"), headers=_headers()), "task_poll")
+        status = task.get("status")
+        if status == "ready":
+            break
+        if status in ("failed", "canceled"):
+            raise VideoAnalysisError("twelvelabs_task_failed")
+        await _wait(deadline, "twelvelabs_task_timeout")
+    return task
+
+
 async def analyze_video(data: bytes, filename: str = "recording.mp4") -> dict[str, Any]:
     """Returns ``{"segments": [{start_time, end_time, metadata}], "duration_s": float | None}``."""
     if not settings.twelvelabs_api_key:
@@ -102,34 +134,17 @@ async def analyze_video(data: bytes, filename: str = "recording.mp4") -> dict[st
                     raise VideoAnalysisError("twelvelabs_asset_failed")
                 await _wait(deadline, "twelvelabs_asset_timeout")
 
-            create = await client.post(
-                _url("/analyze/tasks"),
-                headers=_headers(),
-                json={
-                    "model_name": "pegasus1.6",
-                    "video": {"type": "asset_id", "asset_id": asset_id},
-                    "analysis_mode": "time_based_metadata",
-                    "max_tokens": 32768,
-                    "response_format": {
-                        "type": "segment_definitions",
-                        "segment_definitions": [SEGMENT_DEFINITION],
-                        "segment_time_format": "seconds",
-                    },
-                },
-            )
-            task_id = str(_check(create, "task").get("task_id") or "")
-            if not task_id:
-                raise VideoAnalysisError("twelvelabs_task_bad_response")
-
-            deadline = time.monotonic() + TASK_TIMEOUT_S
-            while True:
-                task = _check(await client.get(_url(f"/analyze/tasks/{task_id}"), headers=_headers()), "task_poll")
-                status = task.get("status")
-                if status == "ready":
+            models = [m for m in (settings.video_model, settings.video_fallback_model) if m]
+            for i, model in enumerate(models):
+                try:
+                    task = await _run_task(client, asset_id, model)
                     break
-                if status in ("failed", "canceled"):
-                    raise VideoAnalysisError("twelvelabs_task_failed")
-                await _wait(deadline, "twelvelabs_task_timeout")
+                except VideoAnalysisError as exc:
+                    if i == len(models) - 1 or exc.status_code == 504:
+                        raise
+                    logger.warning("video_model_failed model=%s code=%s; trying fallback", model, exc.code)
+            else:
+                raise VideoAnalysisError("video_unavailable", 503)
 
             return _parse_task(task)
         finally:

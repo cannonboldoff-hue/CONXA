@@ -84,7 +84,7 @@ def _validate_production_config() -> None:
     if not os.environ.get("CONXA_MANIFEST_SIGNING_KEY"):
         missing.append("CONXA_MANIFEST_SIGNING_KEY (required so self-update manifests are verifiable)")
     if not settings.twelvelabs_api_key:
-        missing.append("SKILL_TWELVELABS_API_KEY (Pegasus video analysis is a hard dependency of the recording flow)")
+        missing.append("LLM_VIDEO_API_KEY (Pegasus video analysis is a hard dependency of the recording flow)")
     if missing:
         raise RuntimeError(
             "Refusing to start: SKILL_AUTH_REQUIRED=true but these are unset: "

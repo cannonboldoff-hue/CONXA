@@ -276,8 +276,22 @@ class Settings(BaseSettings):
     # Recording-video analysis (Pegasus via TwelveLabs, POST /api/v1/video/analyze).
     # The Studio sends a prepared 720p/10fps video; TwelveLabs caps local uploads at 200MB.
     # Empty key makes the endpoint return 503 video_unavailable (required in prod).
-    twelvelabs_api_key: str = ""
-    twelvelabs_base_url: str = "https://api.twelvelabs.io/v1.3"
+    # Old SKILL_TWELVELABS_* names still work (deployed hosts, test tools).
+    twelvelabs_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "SKILL_LLM_VIDEO_API_KEY", "LLM_VIDEO_API_KEY", "SKILL_TWELVELABS_API_KEY", "TWELVELABS_API_KEY"
+        ),
+    )
+    twelvelabs_base_url: str = Field(
+        default="https://api.twelvelabs.io/v1.3",
+        validation_alias=AliasChoices(
+            "SKILL_LLM_VIDEO_ENDPOINT", "LLM_VIDEO_ENDPOINT", "SKILL_TWELVELABS_BASE_URL", "TWELVELABS_BASE_URL"
+        ),
+    )
+    # One video model for every plan; the fallback is tried if the primary's analysis fails.
+    video_model: str = Field(default="pegasus1.6", validation_alias=_provider_env("LLM_VIDEO_MODEL"))
+    video_fallback_model: str = Field(default="", validation_alias=_provider_env("LLM_VIDEO_FALLBACK_MODEL"))
     video_analyze_max_bytes: int = 200 * 1024 * 1024
     # Seconds of recording video one workspace may analyze per month. 0 disables.
     video_monthly_quota_seconds: int = 7200
@@ -366,16 +380,12 @@ class Settings(BaseSettings):
     bug_report_from_email: str = "Conxa Bug Reports <onboarding@resend.dev>"
     bug_report_max_bytes: int = 25 * 1024 * 1024
 
-    # LLM key pool: three symmetric, single-deployment tiers (Free/Starter/Pro — each
-    # its own provider label, endpoint, keys, text/vision models, fallback models), no
-    # separate multi-provider rotation block any more. The old Groq/Google AI Studio/
-    # NVIDIA NIM/Cerebras/Together/Mistral/FreeLLMAPI pool was retired 2026-09-23 — see
-    # docs/cost_model.md "LLM Provider Strategy". Free/Starter run on OpenRouter; Pro
-    # routes direct to Anthropic (llm_pro_* below).
-    #
-    # Free's models: GLM 5.3 Flash text + Qwen3 VL 235B A22B Instruct vision, via
-    # OpenRouter (+5.5% OpenRouter platform fee on top of list price). LLM_FREE_API_KEYS
-    # stays empty until set: no key configured = no Free pool entries.
+    # LLM key pool: three symmetric, single-deployment tiers (Free/Starter/Pro). Each tier has
+    # its own provider label, endpoint, keys, ONE multimodal model (serves text and screenshot
+    # calls alike) and ONE fallback multimodal model, tried on the same key if the primary
+    # fails. Video analysis has its own model + fallback below (video_model). See
+    # docs/cost_model.md "LLM Provider Strategy". A tier with no keys contributes no pool
+    # entries, so its compiles fall back to Free.
     llm_free_provider: str = Field(
         default="openrouter", validation_alias=_provider_env("LLM_FREE_PROVIDER")
     )
@@ -383,24 +393,11 @@ class Settings(BaseSettings):
         default="https://openrouter.ai/api/v1", validation_alias=_provider_env("LLM_FREE_ENDPOINT")
     )
     llm_free_api_keys: str = Field(default="", validation_alias=_provider_env("LLM_FREE_API_KEYS"))
-    llm_free_text_model: str = Field(
-        default="z-ai/glm-5.3-flash", validation_alias=_provider_env("LLM_FREE_TEXT_MODEL")
-    )
-    llm_free_vision_model: str = Field(
-        default="qwen/qwen3-vl-235b-a22b-instruct",
-        validation_alias=_provider_env("LLM_FREE_VISION_MODEL"),
-    )
-    llm_free_fallback_text_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_FREE_FALLBACK_TEXT_MODEL")
-    )
-    llm_free_fallback_vision_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_FREE_FALLBACK_VISION_MODEL")
-    )
     llm_free_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_FREE_MULTIMODAL_MODEL")
+        default="qwen/qwen3-vl-235b-a22b-instruct", validation_alias=_provider_env("LLM_FREE_MULTIMODAL_MODEL")
     )
-    llm_free_fallback_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_FREE_FALLBACK_MULTIMODAL_MODEL")
+    llm_free_multimodal_fallback_model: str = Field(
+        default="", validation_alias=_provider_env("LLM_FREE_MULTIMODAL_FALLBACK_MODEL")
     )
 
     # Proof-of-Done picker: a decision model that answers yes/no questions with a probability and writes
@@ -428,14 +425,7 @@ class Settings(BaseSettings):
     # a degraded pool returns a real 502 with error_detail instead of Render's edge
     # dropping the connection first. See docs/TRD.md §13.3.
     llm_router_total_budget_secs: float = 75.0
-    # Starter and Pro each get a fully independent, single-deployment provider
-    # block — own endpoint, own keys, own text/vision models, own fallback
-    # models — rather than pointing at one of the Free-pool providers above.
-    # A tier with no llm_{tier}_endpoint/api_keys configured contributes no
-    # pool entry, so that plan's compiles fall back to the Free pool.
-    # Starter's models (docs/cost_model.md "LLM Provider Strategy") — Kimi K3 text +
-    # Qwen3 VL vision, via OpenRouter. LLM_STARTER_API_KEYS stays empty until set: no
-    # key configured = no Starter pool entries, so Starter compiles fall back to Free.
+    # Starter and Pro are fully independent deployments, same shape as Free above.
     llm_starter_provider: str = Field(
         default="openrouter", validation_alias=_provider_env("LLM_STARTER_PROVIDER")
     )
@@ -443,33 +433,15 @@ class Settings(BaseSettings):
         default="https://openrouter.ai/api/v1", validation_alias=_provider_env("LLM_STARTER_ENDPOINT")
     )
     llm_starter_api_keys: str = Field(default="", validation_alias=_provider_env("LLM_STARTER_API_KEYS"))
-    llm_starter_text_model: str = Field(
-        default="moonshotai/kimi-k3", validation_alias=_provider_env("LLM_STARTER_TEXT_MODEL")
-    )
-    llm_starter_vision_model: str = Field(
-        default="qwen/qwen3-vl-235b-a22b-instruct",
-        validation_alias=_provider_env("LLM_STARTER_VISION_MODEL"),
-    )
-    llm_starter_fallback_text_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_STARTER_FALLBACK_TEXT_MODEL")
-    )
-    llm_starter_fallback_vision_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_STARTER_FALLBACK_VISION_MODEL")
-    )
     llm_starter_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_STARTER_MULTIMODAL_MODEL")
+        default="qwen/qwen3-vl-235b-a22b-instruct", validation_alias=_provider_env("LLM_STARTER_MULTIMODAL_MODEL")
     )
-    llm_starter_fallback_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_STARTER_FALLBACK_MULTIMODAL_MODEL")
+    llm_starter_multimodal_fallback_model: str = Field(
+        default="", validation_alias=_provider_env("LLM_STARTER_MULTIMODAL_FALLBACK_MODEL")
     )
 
-    # Pro's models (docs/cost_model.md "LLM Provider Strategy") — Claude Sonnet 5 text +
-    # Claude Opus 5.5 vision, direct to Anthropic (no OpenRouter fee). Routed through the
-    # router's existing OpenAI-compatible path: Anthropic's own API exposes an
-    # OpenAI-compatible endpoint at this base URL (Bearer auth, same request/response
-    # shape as every other pooled provider) — no new auth style needed. Model-id strings
-    # are placeholders; verify against Anthropic's live model catalog before deploy.
-    # LLM_PRO_API_KEYS stays empty until set: no key = no Pro pool entries, falls back to Free.
+    # Pro runs direct against Anthropic's OpenAI-compatible endpoint (Bearer auth, no OpenRouter
+    # fee). Verify model-id strings against Anthropic's live catalog before deploy.
     llm_pro_provider: str = Field(
         default="anthropic", validation_alias=_provider_env("LLM_PRO_PROVIDER")
     )
@@ -477,23 +449,11 @@ class Settings(BaseSettings):
         default="https://api.anthropic.com/v1", validation_alias=_provider_env("LLM_PRO_ENDPOINT")
     )
     llm_pro_api_keys: str = Field(default="", validation_alias=_provider_env("LLM_PRO_API_KEYS"))
-    llm_pro_text_model: str = Field(
-        default="claude-sonnet-5", validation_alias=_provider_env("LLM_PRO_TEXT_MODEL")
-    )
-    llm_pro_vision_model: str = Field(
-        default="claude-opus-5-5", validation_alias=_provider_env("LLM_PRO_VISION_MODEL")
-    )
-    llm_pro_fallback_text_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_PRO_FALLBACK_TEXT_MODEL")
-    )
-    llm_pro_fallback_vision_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_PRO_FALLBACK_VISION_MODEL")
-    )
     llm_pro_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_PRO_MULTIMODAL_MODEL")
+        default="claude-sonnet-5", validation_alias=_provider_env("LLM_PRO_MULTIMODAL_MODEL")
     )
-    llm_pro_fallback_multimodal_model: str = Field(
-        default="", validation_alias=_provider_env("LLM_PRO_FALLBACK_MULTIMODAL_MODEL")
+    llm_pro_multimodal_fallback_model: str = Field(
+        default="claude-opus-5-5", validation_alias=_provider_env("LLM_PRO_MULTIMODAL_FALLBACK_MODEL")
     )
 
     # Cashfree payment gateway. These intentionally do not use the SKILL_ prefix.
@@ -605,24 +565,12 @@ class Settings(BaseSettings):
         compiles fall back to the Free pool. (docs/PRD.md §11's compile_pool capability;
         docs/cost_model.md "LLM Provider Strategy" for the current per-tier models.)"""
         result: list[ProviderConfig] = []
-        result.extend(self._tier_provider_configs(
-            "free", self.llm_free_provider, self.llm_free_endpoint,
-            self.llm_free_api_keys, self.llm_free_text_model, self.llm_free_vision_model,
-            self.llm_free_fallback_text_model, self.llm_free_fallback_vision_model,
-            self.llm_free_multimodal_model, self.llm_free_fallback_multimodal_model,
-        ))
-        result.extend(self._tier_provider_configs(
-            "starter", self.llm_starter_provider, self.llm_starter_endpoint,
-            self.llm_starter_api_keys, self.llm_starter_text_model, self.llm_starter_vision_model,
-            self.llm_starter_fallback_text_model, self.llm_starter_fallback_vision_model,
-            self.llm_starter_multimodal_model, self.llm_starter_fallback_multimodal_model,
-        ))
-        result.extend(self._tier_provider_configs(
-            "pro", self.llm_pro_provider, self.llm_pro_endpoint,
-            self.llm_pro_api_keys, self.llm_pro_text_model, self.llm_pro_vision_model,
-            self.llm_pro_fallback_text_model, self.llm_pro_fallback_vision_model,
-            self.llm_pro_multimodal_model, self.llm_pro_fallback_multimodal_model,
-        ))
+        for tier in ("free", "starter", "pro"):
+            result.extend(self._tier_provider_configs(
+                tier, getattr(self, f"llm_{tier}_provider"), getattr(self, f"llm_{tier}_endpoint"),
+                getattr(self, f"llm_{tier}_api_keys"), getattr(self, f"llm_{tier}_multimodal_model"),
+                getattr(self, f"llm_{tier}_multimodal_fallback_model"),
+            ))
         return result
 
     def _tier_provider_configs(
@@ -631,31 +579,28 @@ class Settings(BaseSettings):
         provider: str,
         endpoint: str,
         api_keys_str: str,
-        text_model: str,
-        vision_model: str,
-        fallback_text_model: str,
-        fallback_vision_model: str,
-        multimodal_model: str = "",
-        fallback_multimodal_model: str = "",
+        multimodal_model: str,
+        multimodal_fallback_model: str,
     ) -> list[ProviderConfig]:
         """Build the pool entries for a single-deployment tier (Free/Starter/Pro): its own
-        provider label, endpoint, keys, and text/vision/multimodal models, independent of
-        every other tier. No endpoint/keys configured = no entries, so that tier's
-        compiles fall back to the Free pool (or fail outright if Free itself is unconfigured)."""
-        if not endpoint or not provider:
+        provider label, endpoint, keys and ONE multimodal model (+ fallback). The router still
+        reads text/vision/multimodal slots, so all three are filled from the one model.
+        No endpoint/keys configured = no entries, so that tier's compiles fall back to the Free
+        pool (or fail outright if Free itself is unconfigured)."""
+        if not endpoint or not provider or not multimodal_model:
             return []
         return [
             ProviderConfig(
                 provider=provider,
                 endpoint=endpoint,
                 api_key=key,
-                text_model=text_model,
-                vision_model=vision_model,
+                text_model=multimodal_model,
+                vision_model=multimodal_model,
                 pool=pool,
-                fallback_text_model=fallback_text_model,
-                fallback_vision_model=fallback_vision_model,
+                fallback_text_model=multimodal_fallback_model,
+                fallback_vision_model=multimodal_fallback_model,
                 multimodal_model=multimodal_model,
-                fallback_multimodal_model=fallback_multimodal_model,
+                fallback_multimodal_model=multimodal_fallback_model,
             )
             for key in self._split_api_keys(api_keys_str)
         ]

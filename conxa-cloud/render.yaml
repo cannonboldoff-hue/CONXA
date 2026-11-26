@@ -77,6 +77,9 @@ services:
         sync: false
       - key: LLM_PRO_API_KEYS
         sync: false
+      # Recording-video analysis (TwelveLabs) — required in prod.
+      - key: LLM_VIDEO_API_KEY
+        sync: false
       - key: SKILL_DATABASE_URL
         fromDatabase:
           name: conxa-db

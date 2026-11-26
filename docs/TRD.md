@@ -2140,7 +2140,7 @@ Disabled by default: Cerebras, Together, OpenRouter, Mistral.
 
 ### 13.2 Tiered Compile Pools
 
-Starter and Pro each have an independent single-deployment block: `LLM_{TIER}_PROVIDER`, `_ENDPOINT`, `_API_KEYS`, `_TEXT_MODEL`, `_VISION_MODEL`, `_MULTIMODAL_MODEL`, `_FALLBACK_TEXT_MODEL`, `_FALLBACK_VISION_MODEL`. `Settings._tier_provider_configs()` builds entries tagged with the tier, appended after the Free list. An unset tier contributes nothing.
+Free, Starter and Pro each have an independent single-deployment block: `LLM_{TIER}_PROVIDER`, `_ENDPOINT`, `_API_KEYS`, `_MULTIMODAL_MODEL`, `_MULTIMODAL_FALLBACK_MODEL`. One multimodal model serves text and screenshot calls. Video analysis has one shared TwelveLabs model: `LLM_VIDEO_API_KEY`, `LLM_VIDEO_ENDPOINT`, `LLM_VIDEO_MODEL`, `LLM_VIDEO_FALLBACK_MODEL` (old `SKILL_TWELVELABS_*` names still read). `Settings._tier_provider_configs()` builds entries tagged with the tier. An unset tier contributes nothing.
 
 - `_meter_and_call` passes the workspace's `compile_pool` (`entitlements.compile_pool_for`) as `pool`; `_next_available_entry` filters on it.
 - **Fallback model:** from `attempt > 0`, `_call_provider` uses the entry's fallback model on the same key. It's attempt-indexed (a `ponytail:` cut: multi-key tiers may reach a fresh key's fallback first). Free entries have none.

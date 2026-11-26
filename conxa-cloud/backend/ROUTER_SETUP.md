@@ -28,15 +28,16 @@ any more. Three tiered pools:
 - Skips text-only providers for vision tasks
 
 ### 2. Configuration (`packages/conxa-core/conxa_core/config.py`)
-Three symmetric, single-deployment tiers — each its own provider label, endpoint, keys,
-text/vision models, and fallback models, independent of every other tier:
-- **Free pool** (`llm_free_*`): GLM 5.3 Flash text + Qwen3 VL 235B A22B Instruct vision, via
-  OpenRouter. +5.5% OpenRouter platform fee on top of list price.
-- **Starter pool** (`llm_starter_*`): Kimi K3 text + Qwen3 VL 235B A22B Instruct vision, also
-  via OpenRouter — its own independent endpoint/key block so it can be pointed at a different
-  key or provider without touching Free.
-- **Pro pool** (`llm_pro_*`): Claude Sonnet 5 text + Claude Opus 5.5 vision, direct to
+Three symmetric, single-deployment tiers — each its own provider label, endpoint, keys, ONE
+multimodal model (text and screenshots) and ONE fallback model, independent of every other tier:
+- **Free pool** (`llm_free_*`): Qwen3 VL 235B A22B Instruct via OpenRouter. +5.5% OpenRouter
+  platform fee on top of list price.
+- **Starter pool** (`llm_starter_*`): same shape via OpenRouter — its own endpoint/key block so
+  it can be pointed at a different key or provider without touching Free.
+- **Pro pool** (`llm_pro_*`): Claude Sonnet 5 (fallback Claude Opus 5.5), direct to
   Anthropic — see "Pro routes through Anthropic's OpenAI-compatible endpoint" below.
+- **Video** (`video_model`, `video_fallback_model`): one TwelveLabs model for all plans
+  (`LLM_VIDEO_API_KEY`, `LLM_VIDEO_MODEL`, `LLM_VIDEO_FALLBACK_MODEL`).
 - **Enterprise**: no fixed pool — BYOK (`app/services/byok.py`) or a negotiated deployment,
   priced per contract (see `docs/cost_model.md` "Planning Enterprise to the margin target").
 - Each tier supports comma-separated API keys: `LLM_{TIER}_API_KEYS=key1,key2,key3`
@@ -104,27 +105,28 @@ LLM_DECISIONS_API_KEY=sk-or-your-key
 # (falls back to Free).
 ```
 
-### Copilot's multimodal model (optional)
+### Model variables
 
-The Human Review Copilot's turns (`copilot_diagnose`/`copilot_reply`) route to `text_model`
-when the turn has no screenshot, and to a separate `*_MULTIMODAL_MODEL` slot — not
-`*_VISION_MODEL` — when it does, so Copilot's screenshot+conversation turns can use a different
-model than the compiler's other vision tasks (`anchor_vision`, ...) on the
-same tier. Every tier has its own `LLM_{TIER}_MULTIMODAL_MODEL`, e.g.:
+Every tier has exactly two model variables; the one multimodal model serves text,
+screenshot and Copilot turns alike:
 
 ```env
-LLM_FREE_MULTIMODAL_MODEL=            # optional — falls back to LLM_FREE_VISION_MODEL when unset
-LLM_STARTER_MULTIMODAL_MODEL=
-LLM_PRO_MULTIMODAL_MODEL=
+LLM_FREE_MULTIMODAL_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+LLM_FREE_MULTIMODAL_FALLBACK_MODEL=
+LLM_STARTER_MULTIMODAL_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+LLM_STARTER_MULTIMODAL_FALLBACK_MODEL=
+LLM_PRO_MULTIMODAL_MODEL=claude-sonnet-5
+LLM_PRO_MULTIMODAL_FALLBACK_MODEL=claude-opus-5-5
 ```
+
+The old `*_TEXT_MODEL`, `*_VISION_MODEL`, `*_FALLBACK_TEXT_MODEL`, `*_FALLBACK_VISION_MODEL` and
+`*_FALLBACK_MULTIMODAL_MODEL` variables are gone and ignored if still set.
 
 ### Conxa Execute's model
 
 Conxa Execute has no dedicated LLM deployment of its own. Its chat calls (`usage_class:
-"execute_chat"`) always draw from the caller's own workspace tier pool — GLM 5.3 Flash on
-Free, Kimi K3 on Starter, Claude Opus 5.5 on Pro — via each tier's `*_MULTIMODAL_MODEL` slot
-(falls back to `*_VISION_MODEL` when unset). Execute chat always takes the multimodal path,
-screenshot or not (`_copilot_modality("execute_chat", ...)` always returns `"multimodal"`).
+"execute_chat"`) always draw from the caller's own workspace tier pool, using that tier's
+multimodal model.
 
 ### 3. Router Behavior (Optional Tuning)
 
