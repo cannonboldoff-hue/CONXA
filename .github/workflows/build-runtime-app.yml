@@ -44,18 +44,12 @@ jobs:
       # gate below replays against exactly this version, so a wrong value fails the
       # build rather than shipping a false compatibility claim.
       #
-      # host-v2.0.0 (2026-07-30) is the oldest host that can run the current app layer:
-      #   - versioned component layout (conxa-app/<version>/ + `current` junction,
-      #     runtime/version_manager.js) — hosts before host-v1.2.0 look for a flat
-      #     conxa-app/server.js and abort with "no app layer found";
-      #   - jsonc-parser in _pkg_stubs.js (added 2026-07-21), which the app layer's
-      #     config_edit.js reaches through __hostRequire for MCP host registration —
-      #     first shipped in a host release with host-v2.0.0.
-        # Verified by running runtime/test/e2e/gate_replay.js against both: host-v1.1.2 fails
-      # to load the app layer at all, host-v2.0.0 replays to "Done." (2026-08-04).
-      # host-v3.2.3 (2026-11-15) is the first host whose version_manager.js recognises app-v.../host-v...
-      # folders when rolling back and keeping the last N, so older hosts must update before taking an app layer.
-      MIN_HOST:    "host-v3.2.3"
+      # host-v1.0.0 (2026-11-26) is the baseline: all earlier tags were deleted and every
+      # component was re-released as 1.0.0 from the same source, so host-v1.0.0 already
+      # carries the versioned component layout, jsonc-parser stubs and the app-v.../host-v...
+      # folder handling that this app layer needs. Raise this only when a later host adds
+      # something the app layer depends on.
+      MIN_HOST:    "host-v1.0.0"
 
     steps:
       - name: Checkout

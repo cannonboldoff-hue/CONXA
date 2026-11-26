@@ -2,6 +2,10 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
+**Every old version label was cleared and all four apps restarted at version 1.0.0 — 2026-11-26**
+GitHub held nearly 190 old version labels (tags) from past builds, which made it hard to see what was current. They were removed, today's work was merged into the main line, and the Studio, Execute, Runtime host and Runtime app were each published fresh as version 1.0.0. The Runtime app now only needs the 1.0.0 host, so the new pair works together. Two history labels were kept on purpose.
+— 2026-11-26
+
 **The two big test passes were closed out, with a fresh live check — 2026-11-26**
 The last big to-do item asked for two long rounds of manual testing. Almost all of that testing had already been done and passed in earlier weeks, so the item was closed using that record. To be sure today's app still works, the AI keys were tested again (all answered) and one new practice workflow was recorded, built, tested and approved in the Studio from start to finish. It passed.
 — 2026-11-26
