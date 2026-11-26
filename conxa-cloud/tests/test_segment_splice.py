@@ -182,7 +182,7 @@ def test_the_failure_picture_address_exposes_only_a_run_id_and_a_file_name(data_
     w = get_workflow(wf.id)
     w.skill_id, w.last_test_run_id = "skill_w", "r_abc123"
     save_workflow(w)
-    shot = r"C:\Users\someone\AppData\Local\Conxa\sandbox\data\runs\r_abc123\_evidence\failure.jpg"
+    shot = os.path.join("sandbox", "data", "runs", "r_abc123", "_evidence", "failure.jpg")  # os-native, so it splits the same on Linux CI
     monkeypatch.setattr("conxa_compile.editor.evidence.build_evidence_bundle",
                         lambda *a, **k: {"runtime_evidence": {"failure_screenshot_path": shot}})
     assert b._tf_failure_image(wf.id) == "conxa-asset://local/sandbox-evidence/r_abc123/_evidence/failure.jpg"

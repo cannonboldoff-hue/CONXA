@@ -389,14 +389,19 @@ def prepare_video(
     graph = build_filter_graph(kept, {t: i for i, t in enumerate(used)}, videos, blurs, rings, pad_ms)
     script = session_dir / "prepared.filter.txt"
     script.write_text(graph, encoding="utf-8")
-    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
-    for tab in used:
-        cmd += ["-i", str(session_dir / str(videos[tab]["file"]))]
-    cmd += ["-filter_complex_script", str(script), "-map", "[outv]", "-an",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart", str(prepared)]
-    # stdin=DEVNULL: ffmpeg would otherwise inherit the backend's JSON-RPC stdin pipe.
-    result = run(cmd, capture_output=True, timeout=900, stdin=subprocess.DEVNULL)
+    # Some ffmpeg builds (e.g. the Linux one imageio-ffmpeg ships) reject the older
+    # -filter_complex_script spelling; they take -/filter_complex <file> instead.
+    for graph_option in ("-filter_complex_script", "-/filter_complex"):
+        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
+        for tab in used:
+            cmd += ["-i", str(session_dir / str(videos[tab]["file"]))]
+        cmd += [graph_option, str(script), "-map", "[outv]", "-an",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart", str(prepared)]
+        # stdin=DEVNULL: ffmpeg would otherwise inherit the backend's JSON-RPC stdin pipe.
+        result = run(cmd, capture_output=True, timeout=900, stdin=subprocess.DEVNULL)
+        if b"Unrecognized option" not in (result.stderr or b""):
+            break
     if result.returncode != 0 or not prepared.is_file() or prepared.stat().st_size == 0:
         detail = (result.stderr or b"").decode("utf-8", errors="replace")[:500]
         raise RuntimeError(f"ffmpeg failed preparing the recording video: {detail}")
