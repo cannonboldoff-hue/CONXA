@@ -4,13 +4,15 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { GlowButton } from './primitives/GlowButton'
+import { BOOKING_HREF } from './home/ui'
 
 const links = [
-  { label: 'How it works', href: '/#how-it-works' },
-  { label: 'Examples', href: '/#examples' },
-  { label: 'Security', href: '/#security' },
+  { label: 'See it', href: '/#film' },
+  { label: 'Use cases', href: '/#work' },
+  { label: 'Trust', href: '/#trust' },
+  { label: 'Compare', href: '/#compare' },
+  { label: 'Security', href: '/#data' },
   { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQ', href: '/#faq' },
   { label: 'Docs', href: '/docs' },
 ]
 
@@ -99,7 +101,7 @@ export function MarketingNav() {
           >
             Sign in
           </Link>
-          <GlowButton href="/sign-up">Get started</GlowButton>
+          <GlowButton href={BOOKING_HREF}>Book a walkthrough</GlowButton>
         </div>
 
         {/* Mobile hamburger */}
@@ -142,7 +144,7 @@ export function MarketingNav() {
                 <Link href="/sign-in" className="py-2 text-sm text-[#9ba3af] hover:text-white">
                   Sign in
                 </Link>
-                <GlowButton href="/sign-up">Get started</GlowButton>
+                <GlowButton href={BOOKING_HREF}>Book a walkthrough</GlowButton>
               </div>
             </div>
           </motion.div>

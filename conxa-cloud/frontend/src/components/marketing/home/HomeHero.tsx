@@ -1,122 +1,81 @@
-import { GlowButton } from '../primitives/GlowButton'
-
-interface AppWindow {
-  x: number
-  y: number
-  w: number
-  title: string
-  btn: { x: number; y: number; label: string }
-  delay: number
-}
-
-const WINDOWS: AppWindow[] = [
-  { x: 0, y: 90, w: 340, title: 'hr.example.com', btn: { x: 210, y: 262, label: 'Add' }, delay: 0.15 },
-  { x: 430, y: 150, w: 340, title: 'mail.example.com', btn: { x: 640, y: 290, label: 'Send' }, delay: 2.4 },
-  { x: 860, y: 30, w: 340, title: 'pay.example.com', btn: { x: 1060, y: 210, label: 'Pay' }, delay: 4.9 },
-]
-
-const TRACE = 'M260 279 C 380 340 540 340 690 306 C 820 276 940 160 1110 227'
-
-function Window({ x, y, w, title, btn, delay }: AppWindow) {
-  const h = y === 90 ? 230 : y === 150 ? 190 : 230
-  const cx = btn.x + 50
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={14} fill="#0b0f14" stroke="rgba(255,255,255,0.16)" strokeWidth={1.5} />
-      <path d={`M${x} ${y + 34} H${x + w}`} stroke="rgba(255,255,255,0.1)" strokeWidth={1.5} fill="none" />
-      {[20, 36, 52].map((dx) => (
-        <circle key={dx} cx={x + dx} cy={y + 17} r={4} fill="rgba(255,255,255,0.22)" />
-      ))}
-      <text x={x + 72} y={y + 22} fill="#9ba3af" fontSize={13} fontFamily="ui-monospace, monospace">
-        {title}
-      </text>
-      {[0.52, 0.72, 0.4].map((f, i) => (
-        <rect key={f} x={x + 24} y={y + 62 + i * 26} width={Math.round(w * f)} height={10} rx={5} fill="rgba(255,255,255,0.08)" />
-      ))}
-      <rect
-        className="hm-hit"
-        x={btn.x}
-        y={btn.y}
-        width={100}
-        height={34}
-        rx={8}
-        fill="#0f1620"
-        stroke="rgba(255,255,255,0.3)"
-        strokeWidth={1.5}
-        style={{ animationDelay: `${delay}s` }}
-      />
-      <text x={cx} y={btn.y + 22} textAnchor="middle" fill="#f4f5f7" fontSize={14} fontWeight={600}>
-        {btn.label}
-      </text>
-      <circle
-        className="hm-rip"
-        cx={cx}
-        cy={btn.y + 17}
-        r={26}
-        fill="none"
-        stroke="#22d3ee"
-        strokeWidth={2}
-        style={{ animationDelay: `${delay}s` }}
-      />
-    </g>
-  )
-}
+import Link from 'next/link'
+import { BOOKING_HREF, ghostBtn, primaryBtn, WRAP } from './ui'
 
 export function HomeHero() {
   return (
-    <section className="relative overflow-hidden bg-[#06080b] px-6 pt-28 pb-20 sm:pt-36">
-      <div className="mx-auto max-w-[1200px]">
-        <h1 className="max-w-[1100px] text-[clamp(2.5rem,6.5vw,5.5rem)] font-semibold leading-none tracking-[-0.04em] text-[#f4f5f7] text-balance">
-          Show it once. <span className="text-cyan-400">Any agent</span> runs it.
+    <section aria-labelledby="hero-title" className={`${WRAP} pt-28 pb-14 sm:pt-32`}>
+      <div className="flex flex-col items-start gap-7">
+        <h1
+          id="hero-title"
+          className="m-0 text-[clamp(2.05rem,5.4vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.04em]"
+        >
+          Record a task once.
+          <br />
+          Your AI repeats it.
         </h1>
-
-        <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between lg:gap-20">
-          <p className="max-w-[700px] text-lg leading-relaxed text-[#9ba3af]">
-            Conxa records a task the way your team already does it, across any software, and hands it to any AI agent
-            as a skill. It runs on your own machines and keeps working after the screens change.
-          </p>
-          <div className="flex shrink-0 flex-wrap gap-3">
-            <GlowButton href="#demo">Book a demo</GlowButton>
-            <GlowButton href="/docs" variant="ghost">
-              Read the docs
-            </GlowButton>
-          </div>
-        </div>
-
-        <div className="mt-16 sm:mt-20">
-          <div className="relative w-full" style={{ aspectRatio: '1200 / 360' }}>
-            <svg viewBox="0 0 1200 360" className="absolute inset-0 h-full w-full" aria-hidden="true">
-              {WINDOWS.map((win) => (
-                <Window key={win.title} {...win} />
-              ))}
-              <path
-                className="hm-trace"
-                d={TRACE}
-                fill="none"
-                stroke="#22d3ee"
-                strokeWidth={3}
-                strokeLinecap="round"
-              />
-            </svg>
-            <svg
-              className="hm-cursor absolute top-0 left-0 h-[1.8%] w-[1.8%] min-h-[14px] min-w-[14px]"
-              viewBox="0 0 22 22"
-              aria-hidden="true"
-            >
-              <path
-                d="M2 2 L2 17 L6.2 13 L9 19.5 L11.6 18.4 L8.8 12 L14.5 12 Z"
-                fill="#f4f5f7"
-                stroke="#06080b"
-                strokeWidth={1.2}
-              />
-            </svg>
-          </div>
-          <div className="hm-chip mt-2 inline-flex items-center gap-3 rounded-[10px] border border-cyan-400/50 px-4 py-3 font-mono text-sm text-[#f4f5f7]">
-            <span className="size-2 rounded-full bg-cyan-400" />
-            onboard-employee · 3 apps · ready for any agent
-          </div>
+        <div className="flex flex-wrap gap-2.5">
+          <Link href={BOOKING_HREF} className={primaryBtn()}>
+            Book a walkthrough
+          </Link>
+          <Link href="/sign-up" className={ghostBtn()}>
+            Start free for 30 days
+          </Link>
         </div>
       </div>
+
+  <div role="img" aria-label="Animation: a person fills in a new bill once while Conxa records the five steps, then an AI assistant repeats the same steps for other bills; on the second run a moved Save button is found by its name" style={{ marginTop: "32px", position: "relative", display: "flex", flexWrap: "wrap", gap: "18px", padding: "20px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.14)", background: "radial-gradient(120% 100% at 50% 0%, #121a26 0%, #0b0f14 60%)" }}>
+
+    <div style={{ flex: "3 1 340px", minWidth: "0", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <span style={{ fontWeight: "600", fontSize: "15px" }}>You, once</span>
+      <div style={{ borderRadius: "12px", overflow: "hidden", background: "#1a1a1a", border: "1px solid #2f2f2f", fontFamily: "system-ui, sans-serif" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", fontSize: "12px", color: "#a3a3a3" }}>
+          <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#f87171", animation: "hx-pulse 1.2s ease-in-out infinite" }}></span>
+          <span style={{ position: "relative", width: "74px", height: "16px", color: "#e8e6e3" }}>
+            <span style={{ position: "absolute", left: "0", top: "0", opacity: "0", animation: "hx-recA 16s infinite" }}>Recording</span>
+            <span style={{ position: "absolute", left: "0", top: "0", color: "#4ade80", animation: "hx-recB 16s infinite" }}>Recorded</span>
+          </span>
+          <span style={{ marginLeft: "auto" }}>accounts.example</span>
+        </div>
+        <div style={{ position: "relative", background: "#ffffff", color: "#111827", padding: "14px 16px", height: "296px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
+          <strong style={{ fontSize: "16px" }}>New bill</strong>
+          <div style={{ color: "#4b5563" }}>Supplier</div>
+          <div style={{ marginTop: "-6px", height: "34px", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "7px 10px" }}><span style={{ display: "inline-block", overflow: "hidden", whiteSpace: "nowrap", verticalAlign: "top", animation: "hx-type1 16s infinite" }}>Kadam Freight</span></div>
+          <div style={{ color: "#4b5563" }}>Amount</div>
+          <div style={{ marginTop: "-6px", height: "34px", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "7px 10px" }}><span style={{ display: "inline-block", overflow: "hidden", whiteSpace: "nowrap", verticalAlign: "top", animation: "hx-type2 16s infinite" }}>8,250.00</span></div>
+          <div style={{ height: "34px", boxSizing: "border-box", border: "1px dashed #94a3b8", borderRadius: "6px", padding: "6px 10px" }}><span style={{ display: "inline-flex", alignItems: "center", gap: "6px", animation: "hx-in29 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#2563eb" strokeWidth="1.5"><path d="M4 2h5l3 3v9H4zM9 2v3h3"></path></svg>freight-0926.pdf</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ position: "relative", display: "inline-block" }}>
+              <span style={{ display: "inline-block", padding: "8px 16px", borderRadius: "6px", background: "#1f2937", color: "#ffffff", fontWeight: "600", animation: "hx-press 16s infinite" }}>Save bill</span>
+              <span style={{ position: "absolute", left: "22px", top: "2px", width: "34px", height: "34px", borderRadius: "50%", border: "2px solid #22d3ee", opacity: "0", animation: "hx-ripple 16s infinite" }}></span>
+            </span>
+            <span style={{ color: "#15803d", fontWeight: "600", animation: "hx-in36 16s infinite" }}>Saved</span>
+          </div>
+          <svg width="22" height="22" viewBox="0 0 22 22" style={{ position: "absolute", left: "12%", top: "234px", filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))", animation: "hx-cursor 16s ease-in-out infinite" }}><path d="M3 2v16l4.4-4.2 2.9 6.6 2.8-1.2-2.9-6.5H16z" fill="#111827" stroke="#ffffff" strokeWidth="1.4"></path></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style={{ flex: "1 1 180px", minWidth: "170px", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <span style={{ fontWeight: "600", fontSize: "15px" }}>The same 5 steps</span>
+      <div style={{ flex: "1", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "6px", padding: "8px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "10px", background: "#17202c", animation: "hx-in05 16s infinite" }}><span style={{ position: "relative", width: "24px", height: "24px", flex: "0 0 24px", borderRadius: "50%", border: "1.5px solid #64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>1<span style={{ position: "absolute", inset: "-1.5px", borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", animation: "hx-tick1 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#06080b" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>Open</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "10px", background: "#17202c", animation: "hx-in10 16s infinite" }}><span style={{ position: "relative", width: "24px", height: "24px", flex: "0 0 24px", borderRadius: "50%", border: "1.5px solid #64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>2<span style={{ position: "absolute", inset: "-1.5px", borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", animation: "hx-tick2 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#06080b" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>Fill</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "10px", background: "#17202c", animation: "hx-in29 16s infinite" }}><span style={{ position: "relative", width: "24px", height: "24px", flex: "0 0 24px", borderRadius: "50%", border: "1.5px solid #64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>3<span style={{ position: "absolute", inset: "-1.5px", borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", animation: "hx-tick3 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#06080b" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>Attach</div>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "10px", background: "#17202c", animation: "hx-in36 16s infinite" }}><span style={{ position: "relative", width: "24px", height: "24px", flex: "0 0 24px", borderRadius: "50%", border: "1.5px solid #64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>4<span style={{ position: "absolute", inset: "-1.5px", borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", animation: "hx-tick4 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#06080b" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>Save<span style={{ position: "absolute", right: "8px", padding: "2px 8px", borderRadius: "999px", background: "#fbbf24", color: "#06080b", fontSize: "12px", fontWeight: "700", opacity: "0", animation: "hx-moved 16s infinite" }}>moved</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "10px", background: "#17202c", animation: "hx-in39 16s infinite" }}><span style={{ position: "relative", width: "24px", height: "24px", flex: "0 0 24px", borderRadius: "50%", border: "1.5px solid #64748b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>5<span style={{ position: "absolute", inset: "-1.5px", borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", animation: "hx-tick5 16s infinite" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#06080b" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>Check</div>
+      </div>
+    </div>
+
+    <div style={{ flex: "3 1 340px", minWidth: "0", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <span style={{ fontWeight: "600", fontSize: "15px" }}>Your AI, every time after</span>
+      <div style={{ flex: "1", minHeight: "330px", boxSizing: "border-box", borderRadius: "12px", background: "#1a1a1a", border: "1px solid #2f2f2f", padding: "18px", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: "12px", fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#e8e6e3" }}>
+        <div style={{ alignSelf: "flex-end", background: "#2c2c2c", borderRadius: "14px", padding: "10px 14px", animation: "hx-in44 16s infinite" }}>Enter the Acme bill</div>
+        <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "12px", background: "#1e2a20", animation: "hx-in60 16s infinite" }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>Done. It's in the list.</div>
+        <div style={{ alignSelf: "flex-end", background: "#2c2c2c", borderRadius: "14px", padding: "10px 14px", animation: "hx-in65 16s infinite" }}>Now the Northline one</div>
+        <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "12px", background: "#1e2a20", animation: "hx-in81 16s infinite" }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>Done. Save had moved, found it by name.</div>
+      </div>
+    </div>
+  </div>
     </section>
   )
 }

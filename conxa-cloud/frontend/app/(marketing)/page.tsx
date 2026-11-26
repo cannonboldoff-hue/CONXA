@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
-import { DemoStory } from '@/components/marketing/sections/DemoStory'
+import { HomeMotion } from '@/components/marketing/home/HomeMotion'
 import { HomeHero } from '@/components/marketing/home/HomeHero'
-import { Problem } from '@/components/marketing/home/Problem'
-import { Steps } from '@/components/marketing/home/Steps'
-import { SelfRepair } from '@/components/marketing/home/SelfRepair'
-import { Processes } from '@/components/marketing/home/Processes'
-import { LocalFirst } from '@/components/marketing/home/LocalFirst'
+import { HomeFilm } from '@/components/marketing/home/HomeFilm'
+import { HomeWork } from '@/components/marketing/home/HomeWork'
+import { HomeTrust } from '@/components/marketing/home/HomeTrust'
+import { HomeCompare } from '@/components/marketing/home/HomeCompare'
+import { HomeData } from '@/components/marketing/home/HomeData'
+import { HomeShare } from '@/components/marketing/home/HomeShare'
+import { HomeFit } from '@/components/marketing/home/HomeFit'
 import { HomePricing } from '@/components/marketing/home/HomePricing'
 import { HomeFaq } from '@/components/marketing/home/HomeFaq'
 import { HomeCta } from '@/components/marketing/home/HomeCta'
@@ -14,23 +16,24 @@ import { createPublicPageMetadata } from '@/lib/siteMetadata'
 export const metadata: Metadata = createPublicPageMetadata({
   title: 'CONXA',
   description:
-    'Do the process once. Conxa turns a cross-system business process into a self-healing skill your AI agents run reliably — locally, on software nobody has to modify. Start free, run it across your team, then ship it to your own customers.',
+    'Record a task once and your AI repeats it, the same steps every time, checked, on your own computer. Share it with your team or your customers.',
   path: '/',
 })
 
 export default function MarketingPage() {
   return (
-    <>
+    <HomeMotion>
       <HomeHero />
-      <DemoStory />
-      <Problem />
-      <Steps />
-      <SelfRepair />
-      <Processes />
-      <LocalFirst />
+      <HomeFilm />
+      <HomeWork />
+      <HomeTrust />
+      <HomeCompare />
+      <HomeData />
+      <HomeShare />
+      <HomeFit />
       <HomePricing />
       <HomeFaq />
       <HomeCta />
-    </>
+    </HomeMotion>
   )
 }

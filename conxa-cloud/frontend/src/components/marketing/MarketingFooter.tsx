@@ -20,7 +20,7 @@ export function MarketingFooter() {
             </div>
             <div className="flex flex-col">
               <span className="text-xs uppercase tracking-[0.28em] text-[#6b7280]">Conxa</span>
-              <span className="text-sm text-[#9ba3af]">Show AI how to use your software once</span>
+              <span className="text-sm text-[#9ba3af]">Browser tasks your AI can do reliably</span>
             </div>
           </div>
 
@@ -28,9 +28,9 @@ export function MarketingFooter() {
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
             <div className="flex flex-col gap-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-[#6b7280]">Product</p>
-              <Link href="/#how-it-works" className="text-sm text-[#9ba3af] hover:text-white">How it works</Link>
-              <Link href="/#examples" className="text-sm text-[#9ba3af] hover:text-white">Examples</Link>
-              <Link href="/#security" className="text-sm text-[#9ba3af] hover:text-white">Security</Link>
+              <Link href="/#film" className="text-sm text-[#9ba3af] hover:text-white">See it</Link>
+              <Link href="/#work" className="text-sm text-[#9ba3af] hover:text-white">Use cases</Link>
+              <Link href="/#data" className="text-sm text-[#9ba3af] hover:text-white">Security</Link>
               <Link href="/#faq" className="text-sm text-[#9ba3af] hover:text-white">FAQ</Link>
               <Link href="/docs" className="text-sm text-[#9ba3af] hover:text-white">Docs</Link>
               <Link href="/sign-up" className="text-sm text-[#9ba3af] hover:text-white">Get started</Link>

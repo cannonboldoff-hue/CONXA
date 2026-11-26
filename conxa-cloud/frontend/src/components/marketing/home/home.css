@@ -1,0 +1,78 @@
+/* Anchor jumps stop below the fixed nav. */
+.hx section[id]{scroll-margin-top:84px}
+.hx.paused *, .hx.paused *::before, .hx.paused *::after{animation-play-state:paused !important}
+@media (prefers-reduced-motion: reduce){.hx *, .hx *::before, .hx *::after{animation:none !important}}
+
+/* hero stage, one 16 s story */
+@keyframes hx-recA{0%,41%{opacity:1}42%,97%{opacity:0}99%,100%{opacity:1}}
+@keyframes hx-recB{0%,41%{opacity:0}42%,97%{opacity:1}99%,100%{opacity:0}}
+@keyframes hx-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+@keyframes hx-cursor{0%,6%{left:78%;top:300px}9%,17.5%{left:52%;top:80px}19%,25%{left:42%;top:144px}28%,32%{left:48%;top:188px}34.5%,96.9%{left:12%;top:234px}100%{left:78%;top:300px}}
+@keyframes hx-type1{0%{max-width:0}9.4%{max-width:0;animation-timing-function:steps(13,end)}17.5%,96.9%{max-width:16ch}98.8%,100%{max-width:0}}
+@keyframes hx-type2{0%{max-width:0}19%{max-width:0;animation-timing-function:steps(8,end)}25%,96.9%{max-width:12ch}98.8%,100%{max-width:0}}
+@keyframes hx-press{0%,34.6%{transform:scale(1)}35.6%{transform:scale(.92)}37.5%,100%{transform:scale(1)}}
+@keyframes hx-ripple{0%,35%{opacity:0;transform:scale(.2)}36%{opacity:.9}40%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
+@keyframes hx-in05{0%,4%{opacity:0;transform:translateY(8px)}6%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in10{0%,9%{opacity:0;transform:translateY(8px)}11%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in29{0%,28%{opacity:0;transform:translateY(-14px)}30%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in36{0%,35.8%{opacity:0;transform:translateY(8px)}38%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in39{0%,38.8%{opacity:0;transform:translateY(8px)}41%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in44{0%,43%{opacity:0;transform:translateY(10px)}45%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in60{0%,59.4%{opacity:0;transform:translateY(10px)}61.5%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in65{0%,64.6%{opacity:0;transform:translateY(10px)}66.5%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-in81{0%,80.8%{opacity:0;transform:translateY(10px)}83%,96.9%{opacity:1;transform:none}98.8%,100%{opacity:0}}
+@keyframes hx-tick1{0%,47%{opacity:0;transform:scale(.4)}47.8%{opacity:1;transform:scale(1.2)}49.5%,64.5%{opacity:1;transform:scale(1)}65%,67.6%{opacity:0;transform:scale(.4)}68.4%{opacity:1;transform:scale(1.2)}70%,96.9%{opacity:1;transform:scale(1)}98.8%,100%{opacity:0}}
+@keyframes hx-tick2{0%,49.5%{opacity:0;transform:scale(.4)}50.3%{opacity:1;transform:scale(1.2)}52%,64.5%{opacity:1;transform:scale(1)}65%,70.2%{opacity:0;transform:scale(.4)}71%{opacity:1;transform:scale(1.2)}72.6%,96.9%{opacity:1;transform:scale(1)}98.8%,100%{opacity:0}}
+@keyframes hx-tick3{0%,52%{opacity:0;transform:scale(.4)}52.8%{opacity:1;transform:scale(1.2)}54.5%,64.5%{opacity:1;transform:scale(1)}65%,72.7%{opacity:0;transform:scale(.4)}73.5%{opacity:1;transform:scale(1.2)}75%,96.9%{opacity:1;transform:scale(1)}98.8%,100%{opacity:0}}
+@keyframes hx-tick4{0%,54.5%{opacity:0;transform:scale(.4)}55.3%{opacity:1;transform:scale(1.2)}57%,64.5%{opacity:1;transform:scale(1)}65%,77.7%{opacity:0;transform:scale(.4)}78.5%{opacity:1;transform:scale(1.2)}80%,96.9%{opacity:1;transform:scale(1)}98.8%,100%{opacity:0}}
+@keyframes hx-tick5{0%,57%{opacity:0;transform:scale(.4)}57.8%{opacity:1;transform:scale(1.2)}59.5%,64.5%{opacity:1;transform:scale(1)}65%,80.2%{opacity:0;transform:scale(.4)}81%{opacity:1;transform:scale(1.2)}82.5%,96.9%{opacity:1;transform:scale(1)}98.8%,100%{opacity:0}}
+@keyframes hx-moved{0%,73.6%{opacity:0;transform:translateX(0)}74.4%{opacity:1;transform:translateX(-6px)}75.4%{transform:translateX(6px)}76.4%,77.8%{opacity:1;transform:none}78.4%,100%{opacity:0}}
+
+/* app chain */
+@keyframes hx-travel{0%{left:0%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:calc(100% - 34px);opacity:0}}
+@keyframes hx-dash{to{background-position:24px 0}}
+
+/* repair scenes, 6 s */
+@keyframes hx-bannerGo{0%,28%{transform:translateY(0);opacity:1}40%,92%{transform:translateY(110px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes hx-clickAt50{0%,48%{transform:scale(1)}52%{transform:scale(.9)}58%,100%{transform:scale(1)}}
+@keyframes hx-pop60{0%,58%{opacity:0;transform:scale(.5)}64%{opacity:1;transform:scale(1.15)}70%,92%{opacity:1;transform:scale(1)}100%{opacity:0}}
+@keyframes hx-jump{0%,25%{left:60%;top:22px}33%,94%{left:8%;top:150px}100%{left:60%;top:22px}}
+@keyframes hx-scan{0%,36%{opacity:0}40%,46%{opacity:1;left:56%;top:96px}50%,56%{opacity:1;left:56%;top:150px}60%,92%{opacity:1;left:8%;top:150px}100%{opacity:0}}
+@keyframes hx-aiTag{0%,58%{opacity:0;transform:translateY(10px)}64%,92%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes hx-pop72{0%,70%{opacity:0;transform:scale(.5)}76%{opacity:1;transform:scale(1.15)}82%,92%{opacity:1;transform:scale(1)}100%{opacity:0}}
+@keyframes hx-ask{0%,30%{opacity:0;transform:scale(.4) rotate(-12deg)}38%,52%{opacity:1;transform:scale(1) rotate(0)}58%,100%{opacity:0}}
+@keyframes hx-stopIn{0%,55%{opacity:0;transform:scale(1.6)}62%,92%{opacity:1;transform:scale(1)}100%{opacity:0}}
+@keyframes hx-glowRow{0%,30%{box-shadow:0 0 0 0 rgba(248,113,113,0)}50%{box-shadow:0 0 0 4px rgba(248,113,113,.35)}70%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}}
+
+/* safety scenes, 6 s */
+@keyframes hx-sweep{0%{top:8px}18%{top:44px}30%{top:80px}42%,92%{top:116px}100%{top:8px}}
+@keyframes hx-rowOk{0%,46%{opacity:0}52%,92%{opacity:1}100%{opacity:0}}
+@keyframes hx-newRow{0%,25%{opacity:0;transform:translateX(-30px)}35%,94%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes hx-slideDown{0%,15%{transform:translateY(-64px);opacity:0}25%,92%{transform:none;opacity:1}100%{opacity:0}}
+@keyframes hx-tickBox{0%,45%{opacity:0;transform:scale(.3)}52%{opacity:1;transform:scale(1.2)}58%,92%{opacity:1;transform:scale(1)}100%{opacity:0}}
+@keyframes hx-pressResume{0%,66%{transform:scale(1)}70%{transform:scale(.92)}76%,100%{transform:scale(1)}}
+
+/* compare paths, 8 s */
+@keyframes hx-draw1{0%{stroke-dashoffset:100}25%,95%{stroke-dashoffset:0}100%{stroke-dashoffset:100}}
+@keyframes hx-draw2{0%,20%{stroke-dashoffset:100}45%,95%{stroke-dashoffset:0}100%{stroke-dashoffset:100}}
+@keyframes hx-draw3{0%,40%{stroke-dashoffset:100}65%,95%{stroke-dashoffset:0}100%{stroke-dashoffset:100}}
+@keyframes hx-runner{0%{transform:translateX(0);opacity:0}5%{opacity:1}28%{transform:translateX(420px);opacity:1}32%{opacity:0}33%{transform:translateX(0);opacity:0}38%{opacity:1}61%{transform:translateX(420px);opacity:1}65%{opacity:0}66%{transform:translateX(0);opacity:0}71%{opacity:1}94%{transform:translateX(420px);opacity:1}98%,100%{transform:translateX(420px);opacity:0}}
+
+/* data packets */
+@keyframes hx-packet{0%{left:0%;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:calc(100% - 28px);opacity:0}}
+
+/* share fan-out, 7 s */
+@keyframes hx-lit1{0%,14%{opacity:0}18%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-lit2{0%,22%{opacity:0}26%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-lit3{0%,30%{opacity:0}34%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-lit4{0%,38%{opacity:0}42%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-lit5{0%,46%{opacity:0}50%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-lit6{0%,54%{opacity:0}58%,94%{opacity:1}100%{opacity:0}}
+@keyframes hx-beam{0%,8%{transform:scaleX(0)}20%,94%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+
+/* closing step track, 5 s */
+@keyframes hx-c1{0%,8%{background:#17202c}14%,92%{background:#22d3ee}100%{background:#17202c}}
+@keyframes hx-c2{0%,22%{background:#17202c}28%,92%{background:#22d3ee}100%{background:#17202c}}
+@keyframes hx-c3{0%,36%{background:#17202c}42%,92%{background:#22d3ee}100%{background:#17202c}}
+@keyframes hx-c4{0%,50%{background:#17202c}56%,92%{background:#22d3ee}100%{background:#17202c}}
+@keyframes hx-c5{0%,64%{background:#17202c}70%,92%{background:#4ade80}100%{background:#17202c}}

@@ -1,23 +1,34 @@
-import { GlowButton } from '../primitives/GlowButton'
-import { LEAD, WRAP } from './ui'
+import Link from 'next/link'
+import { BOOKING_HREF, ghostBtn, primaryBtn, WRAP } from './ui'
+
+const STEPS = ['c1', 'c2', 'c3', 'c4', 'c5'] as const
 
 export function HomeCta() {
   return (
-    <section className="border-t border-white/10 bg-[#06080b] py-24">
-      <div className={`${WRAP} flex flex-col gap-8`}>
-        <h2 className="max-w-4xl text-[clamp(2.5rem,6.5vw,5.5rem)] font-semibold leading-none tracking-[-0.04em]">
-          Bring one process.
-          <br />
-          <span className="text-cyan-400">See it run.</span>
+    <section id="book" aria-labelledby="book-title" className="border-t border-white/10">
+      <div className={`${WRAP} flex flex-col items-start gap-6 py-16`}>
+        <h2
+          id="book-title"
+          className="m-0 text-[clamp(2.5rem,5.4vw,4.5rem)] font-semibold leading-[1.03] tracking-[-0.035em]"
+        >
+          Bring one task you repeat.
         </h2>
-        <p className={`${LEAD} max-w-xl`}>
-          Bring one process your team repeats. We will teach it to your AI agent with you.
-        </p>
+        <div role="img" aria-label="Five steps lighting up one after another" className="grid w-full max-w-[640px] grid-cols-5 gap-2">
+          {STEPS.map((s) => (
+            <span
+              key={s}
+              className="h-2.5 rounded-[5px] bg-cyan-400"
+              style={{ animation: `hx-${s} 5s infinite`, ...(s === 'c5' ? { backgroundColor: '#4ade80' } : null) }}
+            />
+          ))}
+        </div>
         <div className="flex flex-wrap gap-3">
-          <GlowButton href="#demo">Book a demo</GlowButton>
-          <GlowButton href="/docs" variant="ghost">
-            Read the docs
-          </GlowButton>
+          <Link href={BOOKING_HREF} className={primaryBtn('lg')}>
+            Book a walkthrough
+          </Link>
+          <Link href="/sign-up" className={ghostBtn('lg')}>
+            Start free for 30 days
+          </Link>
         </div>
       </div>
     </section>
