@@ -16,7 +16,7 @@ import { createPublicPageMetadata } from '@/lib/siteMetadata'
 export const metadata: Metadata = createPublicPageMetadata({
   title: 'CONXA',
   description:
-    'Record a task once and your AI repeats it, the same steps every time, checked, on your own computer. Share it with your team or your customers.',
+    'Record a task once and your AI assistant repeats it the same way every time, on your own computer. Share it with your team or your customers.',
   path: '/',
 })
 

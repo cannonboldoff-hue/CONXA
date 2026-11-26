@@ -1,32 +1,38 @@
 import { H2, WRAP } from './ui'
 
 const FAQ = [
-  ['Do I need to write code?', 'No. You do the task and answer questions. Technical users can open and edit any step.'],
   [
-    'How is this different from my AI using the browser?',
-    'A browsing agent works out each click while it runs. Conxa runs the steps you recorded, and only asks the AI when something moved.',
+    'Do I need to write code?',
+    'No. You do the task once and answer a few questions. If you are technical, you can open and change any step.',
   ],
   [
-    'Which AI assistants work?',
-    'Assistants that plug in tools on your computer through a standard called MCP, such as Claude Desktop. The installer also sets up others, including Cursor and VS Code. Without one, fill in a form in the Conxa Execute app (you sign in to Conxa).',
+    'How is this different from asking my AI to use the browser?',
+    'An AI using the browser on its own works out every click as it goes, so each time can turn out differently. Conxa repeats the steps you recorded, and only asks the AI for help when something on the page has moved.',
+  ],
+  [
+    'Which AI assistants work with it?',
+    'Assistants that can use tools on your computer, such as Claude Desktop. They connect through a standard called MCP. The installer also connects Conxa to others, such as Cursor and VS Code. No assistant? Fill in a simple form in the Conxa Execute app instead (you sign in to Conxa).',
   ],
   [
     'Can it do the wrong thing?',
-    "It is built to stop rather than guess, and to check important results. No automation is perfect, so test first and preview anything you can't undo.",
+    "It is built to stop rather than guess, and to check that important steps really worked. No tool is perfect, so try it out first. For anything that can't be undone, ask your AI for a preview: it does every step except that one.",
   ],
   [
     'What leaves my computer?',
-    'While you build: a copy of the recording video (password boxes blurred) goes through Conxa to a video-analysis service, and page details to AI models. While it runs: whether steps worked, plus computer and user name. Saved sign-ins never leave.',
+    'While you set it up: a copy of your recording (with password boxes blurred) goes through Conxa to an AI service that studies the video, and details of each page go to AI models. While it runs: whether each step worked, plus your computer name and user name. Your saved logins never leave.',
   ],
   [
-    'Two-factor codes and CAPTCHAs?',
-    'You sign in yourself, so two-factor at sign-in works. A code or CAPTCHA mid-task needs a pause for a person.',
+    'What about one-time codes and "I\'m not a robot" checks?',
+    'You log in yourself, so a code at login is fine. If a code or a robot check pops up in the middle of a task, a person has to step in.',
   ],
   [
-    'Why does my computer warn me on install?',
-    'Our installers are not code-signed today, so you may see an unknown-publisher warning.',
+    'Why does my computer warn me when I install it?',
+    "Our installer isn't digitally signed yet, so your computer may warn that the publisher is unknown.",
   ],
-  ['SOC 2, ISO 27001, single sign-on?', 'No certifications today, and no SAML single sign-on for the Conxa dashboard.'],
+  [
+    'Do you have security certifications or company sign-in?',
+    'Not yet. We have no certifications such as SOC 2 or ISO 27001 today, and you cannot sign in to the Conxa dashboard with your company login (SAML single sign-on).',
+  ],
 ]
 
 export function HomeFaq() {

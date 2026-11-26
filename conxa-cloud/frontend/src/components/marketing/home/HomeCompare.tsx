@@ -8,39 +8,39 @@ const LABEL: Record<V, string> = { y: 'Yes', p: 'Partly', n: 'No' }
 /** Columns after Conxa: RPA, Scripts, AI agents, Integrations. */
 const ROWS: { q: string; cells: Cell[] }[] = [
   { q: 'Set it up without code', cells: ['y', 'p', 'n', 'y', 'p'] },
-  { q: 'Skip needing an API', cells: ['y', 'y', 'y', 'y', 'n'] },
-  { q: 'Get the same steps every run', cells: ['y', 'y', 'y', 'n', 'y'] },
+  { q: "Work through the app's normal screens", cells: ['y', 'y', 'y', 'y', 'n'] },
+  { q: 'Do the same steps every time', cells: ['y', 'y', 'y', 'n', 'y'] },
   {
-    q: 'Keep running when screens change',
-    cells: ['y', ['p', 'Partly, some offer AI repair'], 'n', 'y', ['y', 'Yes, not affected by screens']],
+    q: 'Keep working when screens change',
+    cells: ['y', ['p', 'Partly, some can fix themselves with AI'], 'n', 'y', ['y', "Yes, they don't use screens"]],
   },
-  { q: 'Run without AI clicking', cells: ['y', 'y', 'y', 'n', 'y'] },
+  { q: 'Work without AI choosing every click', cells: ['y', 'y', 'y', 'n', 'y'] },
   {
-    q: 'Do the runs on your own computer',
-    cells: ['y', ['p', 'Partly, some bots run on servers'], 'y', ['p', 'Partly, the AI itself runs in the cloud'], 'n'],
+    q: 'Run on your own computer',
+    cells: ['y', ['p', 'Partly, some run on other machines'], 'y', ['p', 'Partly, the AI itself runs in the cloud'], 'n'],
   },
   {
-    q: 'Cost stays flat as runs grow',
+    q: 'Same price, however often it runs',
     cells: [
       ['y', 'Yes, no charge per run'],
-      ['p', 'Partly, licence per bot'],
+      ['p', 'Partly, you pay for each bot'],
       'y',
-      ['n', 'No, tokens every run'],
+      ['n', 'No, you pay for AI on every run'],
       ['p', 'Partly, some charge per task'],
     ],
   },
   {
-    q: 'Hand it to other computers',
+    q: 'Share it with other people',
     cells: [
       'y',
-      ['p', 'Partly, through the platform'],
-      ['p', 'Partly, do it yourself'],
+      ['p', 'Partly, through the bot platform'],
+      ['p', 'Partly, you set it up yourself'],
       ['p', 'Partly, share a prompt or shortcut'],
-      ['p', 'Partly, each person connects'],
+      ['p', 'Partly, each person connects their own apps'],
     ],
   },
 ]
-const HEADS = ['RPA', 'Scripts', 'AI agents', 'Integrations']
+const HEADS = ['Bot software (RPA)', 'Custom code', 'AI on its own', 'App connectors']
 
 function Mark({ cell, onDark }: { cell: Cell; onDark?: boolean }) {
   const [v, label] = typeof cell === 'string' ? [cell, LABEL[cell]] : cell
@@ -71,12 +71,12 @@ export function HomeCompare() {
     <section id="compare" aria-labelledby="compare-title" className="bg-[#f4f5f7] text-[#06080b]">
       <div className={`${WRAP} py-16`}>
         <h2 id="compare-title" className={H2}>
-          Same route, every run.
+          Same steps, every time.
         </h2>
     <div style={{ marginTop: "24px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(460px, 100%), 1fr))", gap: "20px" }}>
       <figure style={{ margin: "0", padding: "18px", borderRadius: "16px", background: "#ffffff", border: "1px solid #d6dae0" }}>
-        <figcaption style={{ fontWeight: "600" }}>AI browsing agent: works out the route each time</figcaption>
-        <svg role="img" aria-label="Three runs of a browsing agent take three different routes to the goal" viewBox="0 0 520 170" style={{ display: "block", width: "100%", height: "auto", marginTop: "10px" }}>
+        <figcaption style={{ fontWeight: "600" }}>AI on its own: finds a new way each time</figcaption>
+        <svg role="img" aria-label="Three tries by an AI working on its own take three different paths to the goal" viewBox="0 0 520 170" style={{ display: "block", width: "100%", height: "auto", marginTop: "10px" }}>
           <circle cx="40" cy="85" r="12" fill="#06080b"></circle>
           <circle cx="480" cy="85" r="14" fill="none" stroke="#06080b" strokeWidth="3"></circle><circle cx="480" cy="85" r="5" fill="#06080b"></circle>
           <path d="M52 85 C 120 10, 180 20, 230 70 S 340 140, 466 85" fill="none" stroke="#7c3aed" strokeWidth="3.5" strokeLinecap="round" pathLength="100" strokeDasharray="100" style={{ animation: "hx-draw1 8s ease-in-out infinite" }}></path>
@@ -86,7 +86,7 @@ export function HomeCompare() {
       </figure>
       <figure style={{ margin: "0", padding: "18px", borderRadius: "16px", background: "#06080b", color: "#f4f5f7" }}>
         <figcaption style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "8px", fontWeight: "600" }}>Conxa: follows the steps you recorded<span style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "6px 12px", borderRadius: "999px", background: "#163226", color: "#bbf7d0", fontSize: "14px", fontWeight: "500" }}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="1.8"><rect x="4" y="5" width="16" height="11" rx="1.5"></rect><path d="M2 19h20"></path></svg>Runs on your computer</span></figcaption>
-        <svg role="img" aria-label="Three runs of Conxa follow the same straight route through the same steps" viewBox="0 0 520 170" style={{ display: "block", width: "100%", height: "auto", marginTop: "10px" }}>
+        <svg role="img" aria-label="Three Conxa runs follow the same straight path through the same steps" viewBox="0 0 520 170" style={{ display: "block", width: "100%", height: "auto", marginTop: "10px" }}>
           <path d="M40 85H480" stroke="#22d3ee" strokeWidth="4"></path>
           <circle cx="40" cy="85" r="12" fill="#f4f5f7"></circle>
           <circle cx="150" cy="85" r="9" fill="#06080b" stroke="#22d3ee" strokeWidth="4"></circle>

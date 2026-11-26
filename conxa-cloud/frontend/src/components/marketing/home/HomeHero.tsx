@@ -3,17 +3,17 @@ import { BOOKING_HREF, ghostBtn, primaryBtn, WRAP } from './ui'
 
 export function HomeHero() {
   return (
-    <section aria-labelledby="hero-title" className={`${WRAP} pt-28 pb-14 sm:pt-32`}>
-      <div className="flex flex-col items-start gap-7">
+    <section aria-labelledby="hero-title" className={`${WRAP} pt-24 pb-10`}>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <h1
           id="hero-title"
-          className="m-0 text-[clamp(2.05rem,5.4vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.04em]"
+          className="m-0 text-[clamp(2.05rem,5vw,4.25rem)] font-semibold leading-[1.02] tracking-[-0.04em]"
         >
           Record a task once.
           <br />
           Your AI repeats it.
         </h1>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-wrap gap-2.5 lg:shrink-0 lg:pb-2">
           <Link href={BOOKING_HREF} className={primaryBtn()}>
             Book a walkthrough
           </Link>
@@ -23,7 +23,7 @@ export function HomeHero() {
         </div>
       </div>
 
-  <div role="img" aria-label="Animation: a person fills in a new bill once while Conxa records the five steps, then an AI assistant repeats the same steps for other bills; on the second run a moved Save button is found by its name" style={{ marginTop: "32px", position: "relative", display: "flex", flexWrap: "wrap", gap: "18px", padding: "20px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.14)", background: "radial-gradient(120% 100% at 50% 0%, #121a26 0%, #0b0f14 60%)" }}>
+  <div role="img" aria-label="Animation: you fill in a new bill once while Conxa records the five steps. Then an AI assistant repeats the same steps for other bills. On the second bill the Save button has moved, and it still finds it" style={{ marginTop: "20px", position: "relative", display: "flex", flexWrap: "wrap", gap: "18px", padding: "20px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.14)", background: "radial-gradient(120% 100% at 50% 0%, #121a26 0%, #0b0f14 60%)" }}>
 
     <div style={{ flex: "3 1 340px", minWidth: "0", display: "flex", flexDirection: "column", gap: "10px" }}>
       <span style={{ fontWeight: "600", fontSize: "15px" }}>You, once</span>
@@ -72,7 +72,7 @@ export function HomeHero() {
         <div style={{ alignSelf: "flex-end", background: "#2c2c2c", borderRadius: "14px", padding: "10px 14px", animation: "hx-in44 16s infinite" }}>Enter the Acme bill</div>
         <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "12px", background: "#1e2a20", animation: "hx-in60 16s infinite" }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>Done. It's in the list.</div>
         <div style={{ alignSelf: "flex-end", background: "#2c2c2c", borderRadius: "14px", padding: "10px 14px", animation: "hx-in65 16s infinite" }}>Now the Northline one</div>
-        <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "12px", background: "#1e2a20", animation: "hx-in81 16s infinite" }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>Done. Save had moved, found it by name.</div>
+        <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "12px", background: "#1e2a20", animation: "hx-in81 16s infinite" }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>Done. The Save button had moved. I still found it.</div>
       </div>
     </div>
   </div>

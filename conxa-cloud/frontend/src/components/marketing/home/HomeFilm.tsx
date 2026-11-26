@@ -11,10 +11,10 @@ const CHAPTER =
 
 const CHAPTERS = [
   { label: '1. Record', at: 0, shot: 'record', pos: 'left top', w: 1100, h: 545 },
-  { label: '2. Answer', at: 6, shot: 'question', pos: 'left top', w: 3360, h: 1975 },
-  { label: '3. Test', at: 11, shot: 'test', pos: 'left top', w: 3360, h: 1775 },
-  { label: '4. Run', at: 16 },
-  { label: '5. Or it stops', at: 21.5, shot: 'why-failed', pos: 'left center', w: 3300, h: 1050 },
+  { label: '2. Answer questions', at: 6, shot: 'question', pos: 'left top', w: 3360, h: 1975 },
+  { label: '3. Try it out', at: 11, shot: 'test', pos: 'left top', w: 3360, h: 1775 },
+  { label: '4. Your AI does it', at: 16 },
+  { label: '5. Stops if unsure', at: 21.5, shot: 'why-failed', pos: 'left center', w: 3300, h: 1050 },
 ]
 
 export function HomeFilm() {
@@ -53,7 +53,7 @@ export function HomeFilm() {
           loop
           playsInline
           preload="metadata"
-          aria-label="26-second film of Conxa Build Studio: record a task, answer questions, test it with a list, run it from an assistant, and a real message where it stops rather than guess"
+          aria-label="26-second film of the Conxa app: record a task, answer questions, try it on a short list, have an AI assistant do it, and a real message where it stops instead of guessing"
           className="block aspect-video h-auto w-full rounded-2xl border border-white/14 bg-[#06080b]"
         />
         <div
@@ -89,8 +89,8 @@ export function HomeFilm() {
           <ol className="m-0 pl-[18px]">
             <li>You do the task once in Conxa&apos;s browser while it records.</li>
             <li>It asks which details change each time.</li>
-            <li>You test it with a list of three rows.</li>
-            <li>Your AI runs the same five steps. A moved Save button is found by its name.</li>
+            <li>You try it out on a short list of three people.</li>
+            <li>Your AI does the same five steps. The Save button has moved, and it still finds it.</li>
             <li>When it is not sure, it stops and says why. Nothing is clicked.</li>
           </ol>
         </details>

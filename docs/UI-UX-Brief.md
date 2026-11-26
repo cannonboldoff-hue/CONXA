@@ -405,7 +405,7 @@ positioning and no price at all. Two changes: the hero now leads with the busine
 four rungs, and `PricingTable` is mounted on the page itself. Twelve sections became ten — `Problem` +
 `WhyAiNeedsIt` were one argument told twice, as were `OldVsNew` + `Outcomes`.
 
-**Homepage v3 (2026-11-27).** Rebuilt from the concept in `docs/artifacts/homepage-v3/`; the copy and claims come from `docs/Homepage-Strategy.md`. Visual first: each section is a short headline and one moving picture. Components live in `src/components/marketing/home/`; animation is CSS-only (`home.css`, `hx-*` keyframes), wrapped by `HomeMotion`, which adds a "Pause motion" button (it also pauses the film) and, via `prefers-reduced-motion`, switches animation off. The nav keeps the shared `MarketingNav`/`MarketingFooter`. "Book a walkthrough" goes to `a `mailto:` link that opens an email to `SUPPORT_EMAIL` (`src/lib/contact.ts`) with a draft message, since no booking tool exists. Prices and plan names are read from `STATIC_PLANS`. The film and chapter thumbnails are in `public/marketing/film|shots/` and show practice data; replace them with demo-workspace captures before a public launch (strategy §8, §11). The fit section also says Windows only, which the concept omitted but strategy §6.8 requires.
+**Homepage v3 (2026-11-27).** Rebuilt from the concept in `docs/artifacts/homepage-v3/`; the copy and claims come from `docs/Homepage-Strategy.md`. Visual first: each section is a short headline and one moving picture. Components live in `src/components/marketing/home/`; animation is CSS-only (`home.css`, `hx-*` keyframes), wrapped by `HomeMotion`, which adds a "Pause motion" button (it also pauses the film) and, via `prefers-reduced-motion`, switches animation off. The nav keeps the shared `MarketingNav`/`MarketingFooter`. "Book a walkthrough" goes to `a `mailto:` link that opens an email to `SUPPORT_EMAIL` (`src/lib/contact.ts`) with a draft message, since no booking tool exists. Prices and plan names are read from `STATIC_PLANS`. The film and chapter thumbnails are in `public/marketing/film|shots/` and show practice data; replace them with demo-workspace captures before a public launch (strategy §8, §11). The fit section no longer names computer types: the owner removed the Windows and Mac/Linux tiles on 2026-11-27. The same day, all page copy was rewritten in plain everyday words for non-technical readers, with the layout unchanged (strategy change log). The nav says "Examples" for `#work` and "Your data" for `#data`.
 
 **Section order (`app/(marketing)/page.tsx`):**
 
@@ -414,12 +414,12 @@ four rungs, and `PricingTable` is mounted on the page itself. Twelve sections be
 | 1 | — | Record a task once. Your AI repeats it. | `home/HomeHero.tsx` (16 s animation: record, five steps, AI repeats) |
 | 2 | `film` | See the real app. | `home/HomeFilm.tsx` (26 s film + five chapter buttons) |
 | 3 | `work` | What do you repeat? | `home/HomeWork.tsx` (four tabs, app-chain pictures) |
-| 4 | `trust` | Screens change. It doesn't guess. | `home/HomeTrust.tsx` (three repair scenes, a real quote, three safety scenes) |
-| 5 | `compare` | Same route, every run. | `home/HomeCompare.tsx` (two routes, icon table) |
+| 4 | `trust` | Websites change. Conxa doesn't guess. | `home/HomeTrust.tsx` (three repair scenes, a real quote, three safety scenes) |
+| 5 | `compare` | Same steps, every time. | `home/HomeCompare.tsx` (two routes, icon table) |
 | 6 | `data` | What leaves your computer. | `home/HomeData.tsx` (build / run switch, fine print folded) |
-| 7 | `share` | Publish once. Every computer updates. | `home/HomeShare.tsx` |
-| 8 | `fit` | Will it fit? | `home/HomeFit.tsx` |
-| 9 | `pricing` | Running is free. | `home/HomePricing.tsx` |
+| 7 | `share` | Update it once. Every computer gets it. | `home/HomeShare.tsx` |
+| 8 | `fit` | Will it work for you? | `home/HomeFit.tsx` |
+| 9 | `pricing` | Run it as often as you like. | `home/HomePricing.tsx` |
 | 10 | `faq` | Questions. | `home/HomeFaq.tsx` (native `<details>`) |
 | 11 | `book` | Bring one task you repeat. | `home/HomeCta.tsx` |
 

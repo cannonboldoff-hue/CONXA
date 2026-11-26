@@ -29,9 +29,9 @@ export function MarketingFooter() {
             <div className="flex flex-col gap-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-[#6b7280]">Product</p>
               <Link href="/#film" className="text-sm text-[#9ba3af] hover:text-white">See it</Link>
-              <Link href="/#work" className="text-sm text-[#9ba3af] hover:text-white">Use cases</Link>
-              <Link href="/#data" className="text-sm text-[#9ba3af] hover:text-white">Security</Link>
-              <Link href="/#faq" className="text-sm text-[#9ba3af] hover:text-white">FAQ</Link>
+              <Link href="/#work" className="text-sm text-[#9ba3af] hover:text-white">Examples</Link>
+              <Link href="/#data" className="text-sm text-[#9ba3af] hover:text-white">Your data</Link>
+              <Link href="/#faq" className="text-sm text-[#9ba3af] hover:text-white">Questions</Link>
               <Link href="/docs" className="text-sm text-[#9ba3af] hover:text-white">Docs</Link>
               <Link href="/sign-up" className="text-sm text-[#9ba3af] hover:text-white">Get started</Link>
             </div>

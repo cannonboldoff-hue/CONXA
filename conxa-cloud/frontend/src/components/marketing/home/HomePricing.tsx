@@ -8,7 +8,7 @@ import { BAND, BOOKING_HREF, H2, WRAP, ghostBtn, primaryBtn } from './ui'
 /** One line per plan, in plain words. The price and name come from STATIC_PLANS so they cannot drift. */
 const LINE: Record<string, string> = {
   free: '1 person · 25 builds a month',
-  starter: '3 builders · share outside',
+  starter: '3 builders · share outside your company',
   pro: '10 builders · full dashboard',
   enterprise: 'Your brand · your own AI account',
 }
@@ -18,7 +18,7 @@ export function HomePricing() {
     <section id="pricing" aria-labelledby="price-title" className={BAND}>
       <div className={`${WRAP} py-14`}>
         <h2 id="price-title" className={H2}>
-          Running is free.
+          Run it as often as you like.
         </h2>
         <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(250px,100%),1fr))] gap-3.5">
           {STATIC_PLANS.map((plan) => {
@@ -51,8 +51,8 @@ export function HomePricing() {
           })}
         </div>
         <p className="m-0 mt-3.5 text-sm text-[#9ba3af]">
-          Prices in rupees. A build turns a recording into a workflow; runs are never counted. After a trial, installed
-          workflows keep running.
+          Prices in rupees. A build is when Conxa turns your recording into a task. Runs are never counted. When a
+          trial ends, tasks you already installed keep working.
         </p>
       </div>
     </section>

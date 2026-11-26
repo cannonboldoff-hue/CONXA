@@ -8,10 +8,10 @@ import { BOOKING_HREF } from './home/ui'
 
 const links = [
   { label: 'See it', href: '/#film' },
-  { label: 'Use cases', href: '/#work' },
+  { label: 'Examples', href: '/#work' },
   { label: 'Trust', href: '/#trust' },
   { label: 'Compare', href: '/#compare' },
-  { label: 'Security', href: '/#data' },
+  { label: 'Your data', href: '/#data' },
   { label: 'Pricing', href: '/#pricing' },
   { label: 'Docs', href: '/docs' },
 ]

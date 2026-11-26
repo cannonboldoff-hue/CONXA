@@ -8,7 +8,7 @@ export function HomeTrust() {
           id="trust-title"
           className={`${H2} text-[clamp(2.25rem,4.6vw,4rem)] leading-[1.05] tracking-[-0.035em]`}
         >
-          Screens change. It doesn&apos;t guess.
+          Websites change. Conxa doesn&apos;t guess.
         </h2>
     <ol style={{ margin: "32px 0 0", padding: "0", listStyle: "none", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))", gap: "20px" }}>
       <li style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -20,7 +20,7 @@ export function HomeTrust() {
           <span style={{ position: "absolute", left: "0", right: "0", bottom: "0", height: "86px", boxSizing: "border-box", padding: "16px 20px", background: "#1f2937", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: "0", transform: "translateY(110px)", animation: "hx-bannerGo 6s ease-in-out infinite" }}>We use cookies<span style={{ padding: "7px 14px", borderRadius: "6px", background: "#fff", color: "#111827" }}>Close</span></span>
         </div>
         <h3 style={{ margin: "6px 0 0", fontSize: "20px" }}>1. Fixes small things itself</h3>
-        <p style={{ margin: "0", color: "#9ba3af" }}>Waits, banners, scrolling. No AI.</p>
+        <p style={{ margin: "0", color: "#9ba3af" }}>Slow pages, cookie banners, scrolling. No AI needed.</p>
       </li>
       <li style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div role="img" aria-label="Animation: the button moves, the AI picks it from what is on the page, and the pick is checked" style={{ position: "relative", height: "220px", overflow: "hidden", borderRadius: "14px", background: "#f8fafc", color: "#111827", fontFamily: "system-ui, sans-serif", fontSize: "13px" }}>
@@ -33,7 +33,7 @@ export function HomeTrust() {
           <span style={{ position: "absolute", left: "calc(8% + 122px)", top: "154px", animation: "hx-pop72 6s infinite" }}><svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="#16a34a" strokeWidth="2.4"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span>
         </div>
         <h3 style={{ margin: "6px 0 0", fontSize: "20px" }}>2. Asks your AI, then checks</h3>
-        <p style={{ margin: "0", color: "#9ba3af" }}>Not on scheduled or form runs.</p>
+        <p style={{ margin: "0", color: "#9ba3af" }}>For a moved button. Not when it runs on a schedule or from a form.</p>
       </li>
       <li style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div role="img" aria-label="Animation: two identical Delete buttons, so it stops and says why instead of choosing one" style={{ position: "relative", height: "220px", overflow: "hidden", borderRadius: "14px", background: "#f8fafc", color: "#111827", fontFamily: "system-ui, sans-serif", fontSize: "13px" }}>
@@ -42,7 +42,7 @@ export function HomeTrust() {
           <span style={{ position: "absolute", left: "calc(50% - 20px)", top: "140px", fontSize: "44px", fontWeight: "700", color: "#0891b2", opacity: "0", animation: "hx-ask 6s infinite" }}>?</span>
           <div style={{ position: "absolute", left: "20px", right: "20px", top: "146px", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "10px", background: "#1f2937", color: "#fff", animation: "hx-stopIn 6s infinite" }}><svg width="28" height="28" viewBox="0 0 24 24"><path d="M8 2h8l6 6v8l-6 6H8l-6-6V8z" fill="#dc2626"></path><path d="M7 12h10" stroke="#fff" strokeWidth="2.6"></path></svg>Stopped. Two look the same.</div>
         </div>
-        <h3 style={{ margin: "6px 0 0", fontSize: "20px" }}>3. Still unsure? Stops</h3>
+        <h3 style={{ margin: "6px 0 0", fontSize: "20px" }}>3. Still unsure? It stops</h3>
         <p style={{ margin: "0", color: "#9ba3af" }}>And says why, in plain words.</p>
       </li>
     </ol>
@@ -62,7 +62,7 @@ export function HomeTrust() {
           <span style={{ position: "absolute", left: "26px", top: "124px", fontWeight: "600" }}>Grace Hopper</span>
           <span style={{ position: "absolute", right: "24px", top: "121px", padding: "3px 10px", borderRadius: "6px", background: "#f87171", color: "#06080b", fontWeight: "700", fontSize: "13px", animation: "hx-rowOk 6s infinite" }}>Delete</span>
         </div>
-        <h3 style={{ margin: "0", fontSize: "18px" }}>Only the right row</h3>
+        <h3 style={{ margin: "0", fontSize: "18px" }}>Only the one you asked for</h3>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div role="img" aria-label="Animation: the saved bill appears in the list, so the result is confirmed" style={{ position: "relative", height: "170px", overflow: "hidden", borderRadius: "14px", background: "#17202c", fontSize: "14px" }}>
@@ -71,14 +71,14 @@ export function HomeTrust() {
           <span style={{ position: "absolute", left: "24px", right: "24px", top: "96px", height: "34px", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", borderRadius: "6px", background: "#163226", border: "1.5px solid #4ade80", animation: "hx-newRow 6s ease-out infinite" }}>Bill 1042<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#4ade80" strokeWidth="2.6" style={{ animation: "hx-pop60 6s infinite" }}><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span>
           <span style={{ position: "absolute", left: "24px", bottom: "12px", fontSize: "13px", color: "#bbf7d0" }}>Seen in the list. Only then "Done".</span>
         </div>
-        <h3 style={{ margin: "0", fontSize: "18px" }}>Proof, not hope</h3>
+        <h3 style={{ margin: "0", fontSize: "18px" }}>Checks before it says done</h3>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div role="img" aria-label="Animation: a banner asks the person to tick a box, they tick it and the run resumes" style={{ position: "relative", height: "170px", overflow: "hidden", borderRadius: "14px", background: "#f8fafc", color: "#111827", fontFamily: "system-ui, sans-serif", fontSize: "13px" }}>
+        <div role="img" aria-label="Animation: a banner asks the person to tick a box, they tick it and the task carries on" style={{ position: "relative", height: "170px", overflow: "hidden", borderRadius: "14px", background: "#f8fafc", color: "#111827", fontFamily: "system-ui, sans-serif", fontSize: "13px" }}>
           <div style={{ position: "absolute", left: "0", right: "0", top: "0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", padding: "12px 14px", background: "#1b1c33", color: "#fff", animation: "hx-slideDown 6s ease-out infinite" }}>Your turn: tick the box<span style={{ padding: "6px 12px", borderRadius: "6px", background: "#2f6fed", fontWeight: "600", whiteSpace: "nowrap", animation: "hx-pressResume 6s infinite" }}>Resume</span></div>
           <div style={{ position: "absolute", left: "24px", top: "86px", display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#fff" }}><span style={{ position: "relative", width: "20px", height: "20px", border: "2px solid #64748b", borderRadius: "4px" }}><span style={{ position: "absolute", left: "-1px", top: "-3px", animation: "hx-tickBox 6s infinite" }}><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#16a34a" strokeWidth="2.6"><path d="M3 8.5 6.5 12 13 4.5"></path></svg></span></span>I am a person</div>
         </div>
-        <h3 style={{ margin: "0", fontSize: "18px" }}>Hands you the browser</h3>
+        <h3 style={{ margin: "0", fontSize: "18px" }}>Hands over to you when needed</h3>
       </div>
     </div>
       </div>

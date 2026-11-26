@@ -1,6 +1,11 @@
 import { BAND, WRAP } from './ui'
 
-const CHIPS = ['Roll back', 'See runs and repairs', 'Audit log export (Pro)', 'Outside sharing from Starter']
+const CHIPS = [
+  'Undo an update',
+  'See what ran and what it fixed',
+  'Download a full activity record (Pro)',
+  'Share outside your company (Starter and up)',
+]
 
 export function HomeShare() {
   return (
@@ -11,7 +16,7 @@ export function HomeShare() {
             id="share-title"
             className="m-0 text-[clamp(2rem,3.4vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.03em]"
           >
-            Publish once. Every computer updates.
+            Update it once. Every computer gets it.
           </h2>
           <ul className="m-0 mt-5 flex list-none flex-wrap gap-2.5 p-0 text-sm">
             {CHIPS.map((c) => (
@@ -21,7 +26,7 @@ export function HomeShare() {
             ))}
           </ul>
         </div>
-    <div role="img" aria-label="Animation: version 1.3 is published and six computers update one after another" style={{ flex: "999 1 560px", minWidth: "0", position: "relative", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "24px", padding: "28px", borderRadius: "18px", background: "#06080b", border: "1px solid rgba(255,255,255,0.12)" }}>
+    <div role="img" aria-label="Animation: version 1.3 is published and six computers get it one after another" style={{ flex: "999 1 560px", minWidth: "0", position: "relative", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "24px", padding: "28px", borderRadius: "18px", background: "#06080b", border: "1px solid rgba(255,255,255,0.12)" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "18px 22px", borderRadius: "14px", border: "2px solid #22d3ee" }}>
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.4"><path d="M12 2 21 7v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"></path></svg>
         <strong>Version 1.3</strong>
