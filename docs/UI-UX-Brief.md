@@ -405,22 +405,25 @@ positioning and no price at all. Two changes: the hero now leads with the busine
 four rungs, and `PricingTable` is mounted on the page itself. Twelve sections became ten — `Problem` +
 `WhyAiNeedsIt` were one argument told twice, as were `OldVsNew` + `Outcomes`.
 
-**Homepage v2 (2026-09-29).** The homepage was rebuilt so each section has its own visual world instead of one repeated card template. Design source: `docs/artifacts/homepage-v2/`. Components live in `src/components/marketing/home/` (plus the untouched `sections/DemoStory.tsx`); animation is CSS-only (`.hm-*` keyframes in `src/index.css`) with one `prefers-reduced-motion` block that stops them.
+**Homepage v3 (2026-11-27).** Rebuilt from the concept in `docs/artifacts/homepage-v3/`; the copy and claims come from `docs/Homepage-Strategy.md`. Visual first: each section is a short headline and one moving picture. Components live in `src/components/marketing/home/`; animation is CSS-only (`home.css`, `hx-*` keyframes), wrapped by `HomeMotion`, which adds a "Pause motion" button (it also pauses the film) and, via `prefers-reduced-motion`, switches animation off. The nav keeps the shared `MarketingNav`/`MarketingFooter`. "Book a walkthrough" goes to `a `mailto:` link that opens an email to `SUPPORT_EMAIL` (`src/lib/contact.ts`) with a draft message, since no booking tool exists. Prices and plan names are read from `STATIC_PLANS`. The film and chapter thumbnails are in `public/marketing/film|shots/` and show practice data; replace them with demo-workspace captures before a public launch (strategy §8, §11). The fit section also says Windows only, which the concept omitted but strategy §6.8 requires.
 
 **Section order (`app/(marketing)/page.tsx`):**
 
-| # | id | Answers | Component |
-|---|----|---------|-----------|
-| 1 | — | What is this, in one line? | `home/HomeHero.tsx` (headline, "Book a demo" / "Read the docs", animated cursor trace across three app windows) |
-| 2 | `demo` | What does using it look like? | `sections/DemoStory.tsx` (click-to-play YouTube embed, unchanged) |
-| 3 | — | Why do the alternatives fail? | `home/Problem.tsx` (light band: scripts / integrations / guessing agents) |
-| 4 | `how-it-works` | How does it work? | `home/Steps.tsx` (Record / Compile / Publish / Run, each with a drawn mockup) |
-| 5 | — | What happens when the screen changes? | `home/SelfRepair.tsx` (full-cyan band, before/after redesign + clue ladder) |
-| 6 | `examples` | Does it work on my software? | `home/Processes.tsx` (process names with app chains) |
-| 7 | `security` | Where does it run, can I trust it? | `home/LocalFirst.tsx` (machine / cloud diagram) |
-| 8 | `pricing` | What does it cost? | `home/HomePricing.tsx` (rows; reads `STATIC_PLANS` / `TIER_CTA` exported from `sections/PricingTable.tsx`) |
-| 9 | `faq` | Everything else pre-demo | `home/HomeFaq.tsx` (native `<details>`) |
-| 10 | — | What now? | `home/HomeCta.tsx` |
+| # | id | Headline | Component |
+|---|----|----------|-----------|
+| 1 | — | Record a task once. Your AI repeats it. | `home/HomeHero.tsx` (16 s animation: record, five steps, AI repeats) |
+| 2 | `film` | See the real app. | `home/HomeFilm.tsx` (26 s film + five chapter buttons) |
+| 3 | `work` | What do you repeat? | `home/HomeWork.tsx` (four tabs, app-chain pictures) |
+| 4 | `trust` | Screens change. It doesn't guess. | `home/HomeTrust.tsx` (three repair scenes, a real quote, three safety scenes) |
+| 5 | `compare` | Same route, every run. | `home/HomeCompare.tsx` (two routes, icon table) |
+| 6 | `data` | What leaves your computer. | `home/HomeData.tsx` (build / run switch, fine print folded) |
+| 7 | `share` | Publish once. Every computer updates. | `home/HomeShare.tsx` |
+| 8 | `fit` | Will it fit? | `home/HomeFit.tsx` |
+| 9 | `pricing` | Running is free. | `home/HomePricing.tsx` |
+| 10 | `faq` | Questions. | `home/HomeFaq.tsx` (native `<details>`) |
+| 11 | `book` | Bring one task you repeat. | `home/HomeCta.tsx` |
+
+The v2 sections (`Problem`, `Steps`, `SelfRepair`, `Processes`, `LocalFirst`, `DemoStory`) and their `.hm-*` CSS were removed.
 
 `/pricing` still uses the original `PricingTable`, `Faq` and `FinalCta`. The homepage no longer uses the competitor matrix, the telemetry visuals or the product screenshots described below; the paragraphs are kept as history and for the copy constraints, which still apply. The "any agent" wording (MCP-compatible agents, including Claude) is intentional.
 

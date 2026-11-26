@@ -29,13 +29,13 @@ Counts are still-open items only.
 | Tier | When | Remaining |
 |---|---|---|
 | PILOT — P0 · Must fix | Before pilot | 1 |
-| PILOT — P1 · Should fix | Before pilot | 38 |
+| PILOT — P1 · Should fix | Before pilot | 39 |
 | PILOT — P2 · Verify live & polish | Before pilot | 37 |
 | LAUNCH — P1 · Required | Before launch | 12 |
 | LAUNCH — P2 · Should have | Before launch | 53 |
 | AFTER LAUNCH | After launch | 35 |
 | PARKED | Only if it starts to hurt | 18 |
-| **Total** | | **195** |
+| **Total** | | **196** |
 
 ---
 
@@ -71,9 +71,17 @@ All 13 original items below are kept word for word; this block only groups them,
 
 
 
-## PILOT — P1: Should fix before the pilot (38 remaining)
+## PILOT — P1: Should fix before the pilot (39 remaining)
 
 Real bugs and gaps a pilot customer is likely to hit in the first week, plus the legal and signing items a pilot installer needs. Do these once P0 is done.
+
+### CLOUD-30 — The live website says things that are untrue or broken (found 2026-11-26)
+- **Category:** Cloud / Frontend / Legal
+- **Description:** Found while planning the homepage redesign (`docs/Homepage-Strategy.md` §1). (1) The homepage "Book a demo" button links to the video; there is no booking tool. (2) `SUPPORT_EMAIL` is `noreplay@conxa.in`. (3) The privacy policy does not say that every recording video is uploaded and processed by TwelveLabs (`docs/Security.md` SG-21), nor name the decision model (SG-26), while the homepage says "Your data does not go to Conxa". (4) The self-repair picture shows a repair Conxa cannot make without AI (see EXEC-28). (5) The pricing page says Free is "forever" (it is a 30-day trial), shows 2M Starter AI credits (the backend gives 2.5M), and its model wording does not match the sample production settings. (6) The homepage claims "any software" and "any agent" and never says Windows.
+- **Why required:** a pilot customer or their security reviewer can catch (3) and (4) in the first meeting; (1) and (2) lose leads.
+- **Dependencies:** (3) needs founder/legal wording; do it with PROD-17.
+- **Complexity:** S–M.
+- **Success criteria:** the booking button books; a monitored support address is shown; the privacy policy names the video upload and the outside processors; no sentence on the site goes beyond `docs/Homepage-Strategy.md` §2.
 
 ### BUILD-22b — Reintroduce search-result-follows-input rebinding, gated correctly
 - **Category:** Builder

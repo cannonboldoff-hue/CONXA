@@ -43,6 +43,7 @@ Conxa is built first for non-technical people, and lets technical people go deep
 4. **Goal-driven.** Define success → implement → verify. Bug → reproduce → fix → verify. Refactor → ensure no behavior change.
 5. **Subagent model is one tier below the main agent.** When spawning any subagent (Agent tool), always pass `model` explicitly: main agent on Opus → `model: "sonnet"`; main agent on Sonnet → `model: "haiku"`. Never let a subagent inherit the main agent's model. Exception: if the prompt explicitly names a model for a subagent or role, use that model instead.
 6. **"Answer me" means explain everything in detail, in easy language.** When the user says "answer me", drop any terse or compressed style (caveman, ponytail brevity, etc.) for that reply. Explain the full picture step by step: what it is, why it works that way, and what it means for them. Use simple everyday words, short sentences, and an analogy where it helps. Define any technical term the first time you use it. Do not skip steps or assume background knowledge.
+7. **Never commit or push until the user tells you to.** Leave all changes uncommitted in the working tree. Only run `git commit` or `git push` after the user explicitly asks, and only for what they asked. Earlier approval does not carry over to later changes.
 
 - Don't read files over ~25 KB whole; use offset/limit or grep. Session artifacts under `data/sessions/` are huge — always scope reads.
 - When asked to create an artifact, also save a copy in `docs/artifacts/<artifact_name>`.

@@ -2,30 +2,14 @@
 
 > Rotated daily into `docs/archive/fix-log/` — see [INDEX.md](docs/archive/fix-log/INDEX.md) for older entries.
 
-**The cloud settings file is now tidy, with one main AI model per plan — 2026-11-26**
-The settings file for the live cloud was a long, jumbled list of AI model names. It is now split into clear sections: Free, Starter, Pro, and video. Each plan keeps just one main model for text and pictures and one backup, and video has its own model and backup. If the main video model fails, the backup now takes over, so recording does not stop.
-— 2026-11-26
+**The live home page now has the new design — 2026-11-27**
+The home page showed the old design, with a lot of text and a "Book a demo" button that did not book anything. It now has the new picture-first design: a short headline, a moving picture and a film of the real app in each part. The "Book a walkthrough" button opens an email to founder@conxa.in with a message already written, so people only press send, until a booking tool is added, and the page now says Conxa works on Windows computers.
+— 2026-11-27
 
-**The Build Studio version 1.0.0 now builds and publishes — 2026-11-26**
-The automatic checks that run before a Studio release were failing for small reasons: an old kind of test computer, a few unused bits of code, a test written only for Windows, and a video tool that some computers reject. All were fixed without switching any check off. The Studio, Execute, Runtime host and Runtime app are now all published as version 1.0.0.
-— 2026-11-26
+**The investor pitch now explains Conxa with a simple picture — 2026-11-27**
+The pitch said what Conxa does, but someone outside tech could miss why it matters. A new third slide compares it to a building site: the AI assistant is the architect who thinks and decides, and Conxa is the workers who do the same job the same way every time. It lands the point that you pay for thinking once, not for every click.
+— 2026-11-27
 
-**Every old version label was cleared and all four apps restarted at version 1.0.0 — 2026-11-26**
-GitHub held nearly 190 old version labels (tags) from past builds, which made it hard to see what was current. They were removed, today's work was merged into the main line, and the Studio, Execute, Runtime host and Runtime app were each published fresh as version 1.0.0. The Runtime app now only needs the 1.0.0 host, so the new pair works together. Two history labels were kept on purpose.
-— 2026-11-26
-
-**The two big test passes were closed out, with a fresh live check — 2026-11-26**
-The last big to-do item asked for two long rounds of manual testing. Almost all of that testing had already been done and passed in earlier weeks, so the item was closed using that record. To be sure today's app still works, the AI keys were tested again (all answered) and one new practice workflow was recorded, built, tested and approved in the Studio from start to finish. It passed.
-— 2026-11-26
-
-**The long three-tab practice workflow now runs all the way through — 2026-11-26**
-The long practice workflow that jumps between three browser tabs got stuck on its very last step, typing a number into a box on a practice page. That box sits next to the word "Number" but has no real name of its own, so the app judged it "not the right box" and gave up. It now accepts that box, and the whole workflow finishes on the released version of the app, not just on a test copy. It also means workflows with plain, unnamed input boxes finish instead of stopping near the end.
-— 2026-11-26
-
-**The three "LP" workflows were rebuilt from scratch — 2026-11-26**
-Three older practice workflows ("LP paste form", "LP delete customer" and "LP secure logout") had been lost from the Studio, so they could not be rebuilt. They were recorded again in the Studio and every question it asked was answered. Each is now ready to test, so the old, wrong re-check lists are gone. Deleting a customer is set to ask a person first.
-— 2026-11-26
-
-**The finished "rebuild the old workflows" job moved to the done list — 2026-11-26**
-The job of rebuilding the three old practice workflows was still sitting in the to-do list after it was finished. It is now in the done list with a note of what was done. A few small leftover problems that were listed with it went along too, so the to-do list no longer tracks them.
-— 2026-11-26
+**The support email is now a real address — 2026-11-27**
+The site listed a "no-reply" style address for questions, which looked like a typo and could lose messages. It now shows founder@conxa.in on the contact page and in the help pages. The legal pages still show the old address.
+— 2026-11-27
